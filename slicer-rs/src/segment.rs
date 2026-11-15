@@ -2257,9 +2257,16 @@ fn loops_of(pieces: &[Vec<Pt>]) -> Vec<geom::Contour> {
 /// `slice_mesh_slabs` for each state's `get_facets_strict`. Tops (`top`) from the triangles facing up, between the
 /// layer's plane and the next layer's (all above the last layer's); bottoms from those facing down, between the plane
 /// under the layer's and its own (all below the first layer's). A face lying on a plane is the top of the layer cut
-/// there and the bottom of the layer over it, as a slice takes it. Loops under 0.01 mm² go, as Orca drops them
-/// (`remove_small`): `[layer][state]`, the loops counter-clockwise round what is covered.
-fn slabs(facets: &[(i32, Corners)], states: usize, slice_z: &[f64], top: bool) -> Vec<Vec<Vec<geom::Contour>>> {
+/// there and the bottom of the layer over it, as a slice takes it. Loops under `min_area` mm² go (the segmentation's
+/// 0.01, as Orca's `remove_small` drops them there): `[layer][state]`, the loops counter-clockwise round what is
+/// covered.
+fn slabs(
+    facets: &[(i32, Corners)],
+    states: usize,
+    slice_z: &[f64],
+    top: bool,
+    min_area: f64,
+) -> Vec<Vec<Vec<geom::Contour>>> {
     let n = slice_z.len();
     let mut buckets: Vec<Vec<u32>> = vec![Vec::new(); n];
     for (i, (state, c)) in facets.iter().enumerate() {
@@ -2307,7 +2314,7 @@ fn slabs(facets: &[(i32, Corners)], states: usize, slice_z: &[f64], top: bool) -
             }
             pieces[*state as usize].push(p);
         }
-        let min_area2 = 2.0 * scaled(0.1) * scaled(0.1);
+        let min_area2 = 2.0 * min_area * geom::SCALE * geom::SCALE;
         pieces
             .iter()
             .map(|p| {
@@ -2317,6 +2324,89 @@ fn slabs(facets: &[(i32, Corners)], states: usize, slice_z: &[f64], top: bool) -
             })
             .collect()
     })
+}
+
+/// A painted enforcer triangle standing upright (its corners in a line seen from above, on Orca's nanometre grid),
+/// which Orca's trees give a tip of its own (`slice_mesh_slabs`' vertical points): its centre (x and y in plate
+/// nanometres, z in mm as a float, as Orca's slicing holds it), and which way it faces, by the file's corners as Orca
+/// takes them (its normal seen from above, a millimetre long, in nanometres): Orca's classic trees steer the tip that
+/// way (`skin_direction`).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Upright {
+    pub x: f64,
+    pub y: f64,
+    pub z: f32,
+    pub facing: (i64, i64),
+}
+
+/// The leaf `l` (corners by the file's order, in mm) as an upright triangle, if it is one: its three corners in a
+/// line seen from above on Orca's nanometre grid, none two the same.
+fn upright(l: &Corners) -> Option<Upright> {
+    let nm = l.map(|v| [(v[0] * 1e6) as i64, (v[1] * 1e6) as i64]);
+    let d = (nm[1][0] - nm[0][0]) * (nm[2][1] - nm[1][1]) - (nm[1][1] - nm[0][1]) * (nm[2][0] - nm[1][0]);
+    if d != 0 || l[0] == l[1] || l[0] == l[2] || l[1] == l[2] {
+        return None;
+    }
+    // Orca's slicing frame: x and y in nanometres, z in mm; the normal by its corners as they come.
+    let v = l.map(|c| [f64::from(c[0]) * 1e6, f64::from(c[1]) * 1e6, f64::from(c[2])]);
+    let (a, b) = (
+        [v[1][0] - v[0][0], v[1][1] - v[0][1], v[1][2] - v[0][2]],
+        [v[2][0] - v[0][0], v[2][1] - v[0][1], v[2][2] - v[0][2]],
+    );
+    let n = [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+    let len = (n[0] * n[0] + n[1] * n[1] + n[2] * n[2]).sqrt();
+    let facing = if len > 0.0 { ((n[0] / len * 1e6) as i64, (n[1] / len * 1e6) as i64) } else { (0, 0) };
+    Some(Upright {
+        x: (v[0][0] + v[1][0] + v[2][0]) / 3.0,
+        y: (v[0][1] + v[1][1] + v[2][1]) / 3.0,
+        z: (l[0][2] + l[1][2] + l[2][2]) / 3.0,
+        facing,
+    })
+}
+
+/// An object's triangles painted with supports, split into the leaves Orca's TriangleSelector makes, each enforcing
+/// (1) or blocking (2) support with its corners in its mesh's order, so that it faces out of the object (a turned
+/// triangle's code goes by the file's corners, its leaves turned back): Orca's `get_facets_strict` of each, less the
+/// splits it makes where a neighbour is split finer. And the enforcing leaves that stand upright (`Upright`).
+pub fn support_facets(meshes: &[(&crate::mesh::Mesh, &crate::paint::Paint)]) -> (Vec<(i32, Corners)>, Vec<Upright>) {
+    let mut out = Vec::new();
+    let mut uprights = Vec::new();
+    for (mesh, paint) in meshes {
+        for (t, code, turned) in paint.iter() {
+            let Some(tri) = mesh.triangles.get(t as usize) else { continue };
+            let c = tri.map(|v| mesh.vertices[v as usize]);
+            let corners = if turned { [c[0], c[2], c[1]] } else { c };
+            let Some(leaves) = crate::paint::leaves(code, corners) else { continue };
+            for (l, state) in leaves {
+                if state != 1 && state != 2 {
+                    continue;
+                }
+                if state == 1
+                    && let Some(u) = upright(&l)
+                {
+                    uprights.push(u);
+                }
+                out.push((state as i32, if turned { [l[0], l[2], l[1]] } else { l }));
+            }
+        }
+    }
+    (out, uprights)
+}
+
+/// An object's painted supports on each of its layers, as Orca's `project_and_append_custom_facets` makes them for its
+/// support generators: the leaves of its painted triangles (`facets` of its support paint) in each state, enforcers
+/// (1) and blockers (2), facing down and seen from above on each layer's slab (`slice_mesh_slabs`' bottoms, every
+/// loop kept), as `[layer]` shapes; none at all for a state no leaf is in, as Orca has none then.
+pub fn support_slabs(facets: &[(i32, Corners)], slice_z: &[f64]) -> (Vec<Shapes>, Vec<Shapes>) {
+    let slabs = slabs(facets, 3, slice_z, false, 0.0);
+    let shapes = |state: usize| -> Vec<Shapes> {
+        if facets.iter().any(|(s, _)| *s as usize == state) {
+            slabs.iter().map(|layer| geom::union_nonzero(&layer[state])).collect()
+        } else {
+            Vec::new()
+        }
+    };
+    (shapes(1), shapes(2))
 }
 
 /// `project_to_shells`: a top's (bottom's) `patch` on layer `l` carried into the `layers` under (over) it, nearest
@@ -2369,8 +2459,8 @@ fn tops_and_bottoms(
         return vec![vec![Vec::new(); states]; n];
     }
     let none = || vec![vec![Vec::new(); states]; n];
-    let tops = if shells.top > 0 { slabs(surfaces, states, slice_z, true) } else { none() };
-    let bottoms = if shells.bottom > 0 { slabs(surfaces, states, slice_z, false) } else { none() };
+    let tops = if shells.top > 0 { slabs(surfaces, states, slice_z, true, 0.01) } else { none() };
+    let bottoms = if shells.bottom > 0 { slabs(surfaces, states, slice_z, false, 0.01) } else { none() };
     // Each layer's own patches by state, and those it carries: (layer, state, shapes), under its tops and over its
     // bottoms.
     type Carried = Vec<(usize, usize, Shapes)>;
@@ -2473,6 +2563,20 @@ fn merge_layer(sides: &[Shapes], tops: &[Shapes]) -> Vec<Shapes> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn an_upright_enforced_triangle_is_a_tip_facing_the_way_its_corners_turn() {
+        // A pillar's left side (x = 115) as Orca slices it: upright, facing -x by its corners' order, its centre a
+        // third of the way along; a level face isn't upright, nor is a triangle with two corners the same.
+        let side = [[115.0, 123.0, 0.0], [115.0, 123.0, 20.0], [115.0, 133.0, 20.0]];
+        let u = upright(&side).expect("upright");
+        assert_eq!((u.x.round(), (u.y * 3.0).round(), u.z), (115e6, 379e6, 40.0 / 3.0));
+        assert_eq!(u.facing, (-1_000_000, 0));
+        let turned = [side[0], side[2], side[1]];
+        assert_eq!(upright(&turned).expect("upright").facing, (1_000_000, 0));
+        assert_eq!(upright(&[[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0]]), None);
+        assert_eq!(upright(&[side[0], side[0], side[2]]), None);
+    }
 
     fn square(x0: i32, y0: i32, size: i32) -> Shape {
         vec![vec![geom::pt(x0, y0), geom::pt(x0 + size, y0), geom::pt(x0 + size, y0 + size), geom::pt(x0, y0 + size)]]

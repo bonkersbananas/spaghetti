@@ -273,9 +273,22 @@ fn move_out(shapes: &Shapes, dilated: &Shapes, frame: &Frame, from: &mut P, max_
 }
 
 /// Whether a segment runs through the loops' area (Orca's `intersection_ln` of the line with the layer's contours
-/// and holes, non-empty): an end inside, or an edge crossed.
+/// and holes, non-empty): an end inside, or an edge crossed. An end on an edge is not inside: Clipper keeps nothing
+/// of a segment that only touches the area there.
 fn cut_by(loops: &[Vec<P>], a: P, b: P) -> bool {
+    let on_edge = |p: P| {
+        loops.iter().any(|l| {
+            (0..l.len()).any(|i| {
+                let (c, d) = (l[i], l[(i + 1) % l.len()]);
+                let cross = (d.0 - c.0) as i128 * (p.1 - c.1) as i128 - (d.1 - c.1) as i128 * (p.0 - c.0) as i128;
+                cross == 0 && p.0 >= c.0.min(d.0) && p.0 <= c.0.max(d.0) && p.1 >= c.1.min(d.1) && p.1 <= c.1.max(d.1)
+            })
+        })
+    };
     let inside = |p: P| {
+        if on_edge(p) {
+            return false;
+        }
         let mut odd = false;
         for l in loops {
             let n = l.len();
@@ -298,7 +311,7 @@ fn cut_by(loops: &[Vec<P>], a: P, b: P) -> bool {
         }
         odd
     };
-    if inside(a) || inside(b) {
+    if inside(a) || inside(b) || (on_edge(a) && on_edge(b) && inside(((a.0 + b.0) / 2, (a.1 + b.1) / 2))) {
         return true;
     }
     let cross = |o: P, p: P, q: P| -> i128 {
@@ -873,5 +886,23 @@ pub fn smooth_nodes(contacts: &[Vec<usize>], nodes: &mut Nodes) {
                 }
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_segment_that_only_touches_an_outline_is_not_cut_by_it() {
+        // A 10 mm square (nm): a move out from a point on its left side isn't cut, as Orca's `intersection_ln` keeps
+        // nothing of it; one into it, or across it from side to side, is.
+        let square = vec![vec![(0, 0), (10_000_000, 0), (10_000_000, 10_000_000), (0, 10_000_000)]];
+        assert!(!cut_by(&square, (0, 5_000_000), (-1_000_000, 5_000_000)));
+        assert!(!cut_by(&square, (0, 0), (-1_000_000, -1_000_000)));
+        assert!(cut_by(&square, (0, 5_000_000), (1_000_000, 5_000_000)));
+        assert!(cut_by(&square, (0, 5_000_000), (10_000_000, 5_000_000)));
+        assert!(cut_by(&square, (-1_000_000, 5_000_000), (11_000_000, 5_000_000)));
+        assert!(!cut_by(&square, (-1_000_000, 5_000_000), (-1_000_000, 6_000_000)));
     }
 }

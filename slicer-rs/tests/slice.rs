@@ -2230,3 +2230,58 @@ fn organic_trees_stand_on_a_raft_as_orcas_do() {
     );
     assert!(features[4].contains(&"Outer wall"));
 }
+
+/// The T of the support tests as four boxes (pillar, left arm, middle, right arm), its `painted` triangles' supports
+/// painted with `code` ("4" enforces, "8" blocks), sliced with `process`: its support and interface (mm³).
+fn painted_tee(painted: &[u32], code: u8, process: &str) -> (f64, f64) {
+    use spaghetti_slicer::{Plate, paint::Paint};
+    let tee = boxes_stl(&[
+        ([115., 123., 0.], [125., 133., 20.]),
+        ([100., 123., 20.], [115., 133., 25.]),
+        ([115., 123., 20.], [125., 133., 25.]),
+        ([125., 123., 20.], [140., 133., 25.]),
+    ]);
+    let settings = setup::read(&format!(r#"{{"process": {{"enable_support": "1", {process}}}}}"#)).unwrap().settings;
+    let mut bytes = (painted.len() as u32).to_le_bytes().to_vec();
+    for &t in painted {
+        bytes.extend_from_slice(&t.to_le_bytes());
+    }
+    for end in 1..=painted.len() as u32 {
+        bytes.extend_from_slice(&end.to_le_bytes());
+    }
+    bytes.extend(std::iter::repeat_n(code, painted.len()));
+    let mut plate = Plate::default();
+    plate.add_part(&Input { name: "tee.stl", bytes: &tee }, 0, true).expect("a model");
+    assert!(plate.paint_supports(&Paint::from_bytes(&bytes).expect("paint")));
+    let options = Options { arrange: false, thumbnail: false, ..Options::default() };
+    let out = plate.slice(&settings, &options).expect("sliced");
+    let volume = |role: Role| out.stats.features[Role::ALL.iter().position(|&r| r == role).unwrap()].volume;
+    (volume(Role::Support), volume(Role::SupportInterface))
+}
+
+#[test]
+fn painted_supports_enforce_and_block_support_as_orcas_do() {
+    // The T's left arm painted underneath to enforce support (its box's first two triangles, 12 and 13), or its right
+    // arm's to block it (36 and 37). Against native OrcaSlicer 2.5.0 (Nov 15), the same T as a project of four parts.
+    let near = |(support, interface): (f64, f64), want: (f64, f64), share: f64| {
+        assert!(
+            (support - want.0).abs() <= want.0 * share && (interface - want.1).abs() <= want.1 * share,
+            "{support} and {interface} mm³ against {want:?}"
+        );
+    };
+    let left = [12, 13];
+    // Normal supports only where painted: under the left arm alone, 681.94 mm³ and 45.37 of interface; and where
+    // needed but blocked under the right arm, the same.
+    near(painted_tee(&left, b'4', r#""support_type": "normal(manual)""#), (681.94, 45.37), 1e-3);
+    near(painted_tee(&[36, 37], b'8', r#""support_type": "normal(auto)""#), (681.94, 45.37), 1e-3);
+    // Snug: 610.67 and 37.18.
+    let snug = r#""support_type": "normal(manual)", "support_style": "snug""#;
+    near(painted_tee(&left, b'4', snug), (610.67, 37.18), 1e-3);
+    // Hybrid trees only where painted: 680.83 and 52.92; organic ones 449.33 and 33.77 (theirs as the trees' own
+    // differ from Orca's, section 3 of the proposal).
+    let hybrid = r#""support_type": "tree(manual)", "support_style": "tree_hybrid""#;
+    near(painted_tee(&left, b'4', hybrid), (680.83, 52.92), 1e-3);
+    near(painted_tee(&left, b'4', r#""support_type": "tree(manual)""#), (449.33, 33.77), 5e-3);
+    // Nothing painted where supports are only where painted: none.
+    near(painted_tee(&[36, 37], b'8', r#""support_type": "normal(manual)""#), (0.0, 0.0), 0.0);
+}

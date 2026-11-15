@@ -21,6 +21,9 @@ pub struct Model {
     pub groups: Vec<usize>,
     /// Each mesh's painted colours, when it has any: each painted triangle's `paint_color`, Orca's code.
     pub paints: Vec<Option<Paint>>,
+    /// Each mesh's painted supports, when it has any: each painted triangle's `paint_supports` (state 1 enforces
+    /// support there, 2 blocks it).
+    pub support_paints: Vec<Option<Paint>>,
 }
 
 type Matrix = [f64; 12];
@@ -91,6 +94,8 @@ struct ObjectDef {
     triangles: Vec<[u32; 3]>,
     /// Painted triangles (their index in `triangles`) and their codes.
     paint: Vec<(u32, String)>,
+    /// Triangles with painted supports (their index in `triangles`) and their codes.
+    support_paint: Vec<(u32, String)>,
     components: Vec<(String, String, Matrix)>,
 }
 
@@ -120,6 +125,7 @@ fn read_model_file(text: &str, file: &str) -> HashMap<String, ObjectDef> {
             vertices: Vec::new(),
             triangles: Vec::new(),
             paint: Vec::new(),
+            support_paint: Vec::new(),
             components: Vec::new(),
         };
         if body.contains("<mesh") {
@@ -135,6 +141,9 @@ fn read_model_file(text: &str, file: &str) -> HashMap<String, ObjectDef> {
                 if t.iter().all(|&i| i < count) {
                     if let Some(code) = attr(tag, "paint_color").filter(|c| !c.is_empty()) {
                         def.paint.push((def.triangles.len() as u32, code.to_string()));
+                    }
+                    if let Some(code) = attr(tag, "paint_supports").filter(|c| !c.is_empty()) {
+                        def.support_paint.push((def.triangles.len() as u32, code.to_string()));
                     }
                     def.triangles.push(t);
                 }
@@ -262,6 +271,7 @@ pub fn read(bytes: &[u8]) -> Result<Model, Error> {
     let mut filaments = Vec::new();
     let mut groups = Vec::new();
     let mut paints = Vec::new();
+    let mut support_paints = Vec::new();
     let mut objects = 0;
     for (id, transform) in items {
         if plate_objects.as_ref().is_some_and(|ids| !ids.contains(&id)) {
@@ -285,6 +295,7 @@ pub fn read(bytes: &[u8]) -> Result<Model, Error> {
         let mut triangle_part: Vec<usize> = Vec::new();
         // Painted triangles: their index in `triangles`, code, and whether their corners were turned (a mirrored part).
         let mut painted: Vec<(u32, String, bool)> = Vec::new();
+        let mut supported: Vec<(u32, String, bool)> = Vec::new();
         // Depth-first through components (at most 8 deep), loading other model files as they are named.
         let mut stack: Vec<(String, String, Matrix, usize, Option<String>)> =
             vec![(root_name.clone(), id.clone(), transform, 0, None)];
@@ -327,6 +338,7 @@ pub fn read(bytes: &[u8]) -> Result<Model, Error> {
                 triangle_part.push(part_index);
             }
             painted.extend(object.paint.iter().map(|(t, code)| (first + t, code.clone(), flip)));
+            supported.extend(object.support_paint.iter().map(|(t, code)| (first + t, code.clone(), flip)));
             for (path, child, ct) in object.components.iter().rev() {
                 if item_info.is_some_and(|i| i.skip_parts.contains(child)) {
                     continue;
@@ -383,6 +395,7 @@ pub fn read(bytes: &[u8]) -> Result<Model, Error> {
                         Mesh { name: name.clone(), vertices: part_vertices, triangles: part_triangles }.welded_moved();
                     meshes.push(mesh);
                     paints.push(paint_of(&painted, |t| in_part.get(&t).copied(), &moves));
+                    support_paints.push(paint_of(&supported, |t| in_part.get(&t).copied(), &moves));
                     filaments.push(filament(e));
                     groups.push(objects);
                 }
@@ -391,6 +404,7 @@ pub fn read(bytes: &[u8]) -> Result<Model, Error> {
                 let (mesh, moves) = Mesh { name, vertices, triangles }.welded_moved();
                 meshes.push(mesh);
                 paints.push(paint_of(&painted, Some, &moves));
+                support_paints.push(paint_of(&supported, Some, &moves));
                 filaments.push(filament(item_info.and_then(|i| i.extruder)));
                 groups.push(objects);
             }
@@ -400,7 +414,7 @@ pub fn read(bytes: &[u8]) -> Result<Model, Error> {
     if meshes.is_empty() {
         return Err(Error::NoModel);
     }
-    Ok(Model { meshes, project, filaments, groups, paints })
+    Ok(Model { meshes, project, filaments, groups, paints, support_paints })
 }
 
 /// A mesh's paint, from its object's painted triangles: `place` gives an object's triangle's place among the mesh's

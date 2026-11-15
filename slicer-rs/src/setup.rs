@@ -195,9 +195,14 @@ mod tests {
         assert!(read(&normal(r#", "support_critical_regions_only": "1""#)).is_ok());
         assert!(read(&normal(r#", "support_style": "snug""#)).is_ok());
         assert!(read(&normal(r#", "support_on_build_plate_only": "1""#)).is_ok());
-        assert_eq!(
-            read(r#"{"process": {"enable_support": "1", "support_type": "normal(manual)"}}"#).err(),
-            Some(Error::Unsupported("supports painted on"))
+        // Supports only where painted, normal or trees, slice: the paint enforces and blocks them (support.rs, tree/).
+        assert!(read(r#"{"process": {"enable_support": "1", "support_type": "normal(manual)"}}"#).is_ok());
+        assert!(read(r#"{"process": {"enable_support": "1", "support_type": "tree(manual)"}}"#).is_ok());
+        assert!(
+            read(
+                r#"{"process": {"enable_support": "1", "support_type": "tree(manual)", "support_style": "tree_slim"}}"#
+            )
+            .is_ok()
         );
         assert_eq!(
             refused(r#"{"process": {"brim_type": "painted"}}"#),

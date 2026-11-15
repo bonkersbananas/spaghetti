@@ -448,13 +448,18 @@ impl SupportSettings {
     /// Whether these are Orca's organic trees: tree supports made where they are needed, in the default style (which
     /// Orca makes organic, as it does the grid and snug styles of normal supports) or the organic one.
     pub fn organic(&self) -> bool {
-        self.kind == "tree(auto)" && matches!(self.style.as_str(), "default" | "grid" | "snug" | "organic" | "")
+        self.trees() && matches!(self.style.as_str(), "default" | "grid" | "snug" | "organic" | "")
+    }
+
+    /// Tree supports, automatic (`tree(auto)`) or only where painted (`tree(manual)`).
+    fn trees(&self) -> bool {
+        matches!(self.kind.as_str(), "tree(auto)" | "tree(manual)")
     }
 
     /// Orca's classic trees (its older tree code), in their slim, strong or hybrid style.
     pub fn classic(&self) -> Option<crate::tree::classic::Style> {
         use crate::tree::classic::Style;
-        if self.kind != "tree(auto)" {
+        if !self.trees() {
             return None;
         }
         match self.style.as_str() {
@@ -491,11 +496,14 @@ impl SupportSettings {
         // With supports off, only the settings a raft prints with matter.
         let on = s.enable_support;
         // Each by its name in the app's settings, as the app says "our own slicer can't do … yet".
-        if on && kind == "tree(auto)" && !self.organic() && self.classic().is_none() {
+        if on && self.trees() && !self.organic() && self.classic().is_none() {
             Some("this style of tree support")
-        } else if on && kind != "normal(auto)" && kind != "tree(auto)" {
-            Some("supports painted on")
-        } else if on && kind == "normal(auto)" && !matches!(self.style.as_str(), "default" | "grid" | "snug" | "") {
+        } else if on && !self.trees() && !matches!(kind, "normal(auto)" | "normal(manual)") {
+            Some("this kind of support")
+        } else if on
+            && matches!(kind, "normal(auto)" | "normal(manual)")
+            && !matches!(self.style.as_str(), "default" | "grid" | "snug" | "")
+        {
             Some("this style of support")
         } else if self.raft_layers > 0 && self.raft_maker() == RaftMaker::ClassicTrees {
             // Orca's classic trees build rafts of their own (`TreeSupport`), with supports on or off.
