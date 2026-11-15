@@ -1201,6 +1201,33 @@ async function unmockToday(page: Page) {
  * The screens `pnpm screenshots` captures, at 390×844 and 1440×900.
  * Add your feature's screens here.
  */
+/** The seed's Desk tidy-up as it was before a shot gave it long text, for the shot's cleanup. */
+let deskTidyBefore: { title: string; note: string } | undefined;
+async function giveDeskTidyLongText(page: Page) {
+  const headers = { Origin: new URL(page.url()).origin };
+  const item = (await (await page.request.get(`/api/items/${SEED_IDS.deskTidy}`)).json()) as {
+    item?: { title: string; note: string };
+    title?: string;
+    note?: string;
+  };
+  const current = item.item ?? item;
+  deskTidyBefore = { title: current.title ?? "Desk tidy-up", note: current.note ?? "" };
+  await page.request.patch(`/api/items/${SEED_IDS.deskTidy}`, {
+    headers,
+    data: {
+      title: "Supercalifragilisticexpialidocious desk tidy-up with clips, a drawer bin and a phone stand in blue PETG",
+      note: "See https://www.example.org/models/a-very-long-address-that-has-no-spaces-in-it-at-all/and-keeps-going/and-going/model-487213-drawer-bins-final-v7 for the grid.",
+    },
+  });
+}
+async function restoreDeskTidy(page: Page) {
+  if (!deskTidyBefore) return;
+  await page.request.patch(`/api/items/${SEED_IDS.deskTidy}`, {
+    headers: { Origin: new URL(page.url()).origin },
+    data: deskTidyBefore,
+  });
+}
+
 export const shots: Shot[] = [
   { name: "sign-in", path: "/sign-in", signedOut: true },
   { name: "link-code", path: "/link", signedOut: true, beforeShot: settle },
@@ -1477,15 +1504,7 @@ export const shots: Shot[] = [
     name: "ideas-long-text",
     path: "/ideas",
     prepare: async (page) => {
-      const headers = { Origin: new URL(page.url()).origin };
-      await page.request.patch(`/api/items/${SEED_IDS.deskTidy}`, {
-        headers,
-        data: {
-          title:
-            "Supercalifragilisticexpialidocious desk tidy-up with clips, a drawer bin and a phone stand in blue PETG",
-          note: "See https://www.example.org/models/a-very-long-address-that-has-no-spaces-in-it-at-all/and-keeps-going/and-going/model-487213-drawer-bins-final-v7 for the grid.",
-        },
-      });
+      await giveDeskTidyLongText(page);
       await page.reload();
       await page.getByRole("heading", { level: 2, name: /^Up next/ }).waitFor();
       await page.waitForTimeout(500);
@@ -1493,24 +1512,18 @@ export const shots: Shot[] = [
         for (const animation of document.getAnimations()) animation.finish();
       });
     },
+    cleanup: restoreDeskTidy,
   },
   {
     name: "idea-long-text",
     path: `/ideas/${SEED_IDS.deskTidy}`,
     prepare: async (page) => {
-      const headers = { Origin: new URL(page.url()).origin };
-      await page.request.patch(`/api/items/${SEED_IDS.deskTidy}`, {
-        headers,
-        data: {
-          title:
-            "Supercalifragilisticexpialidocious desk tidy-up with clips, a drawer bin and a phone stand in blue PETG",
-          note: "See https://www.example.org/models/a-very-long-address-that-has-no-spaces-in-it-at-all/and-keeps-going/and-going/model-487213-drawer-bins-final-v7 for the grid.",
-        },
-      });
+      await giveDeskTidyLongText(page);
       await page.reload();
       await page.getByRole("textbox", { name: "Title" }).waitFor();
       await page.waitForTimeout(500);
     },
+    cleanup: restoreDeskTidy,
   },
   { name: "ideas", path: "/ideas" },
   {
