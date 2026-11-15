@@ -57,8 +57,12 @@ function Shopping() {
   const tick = (item: ShoppingItem, next: boolean) => void setBought(queryClient, item, next, me?.id ?? null);
 
   // A tick a closed page left waiting for its thing's add goes out now that the list is the server's.
+  // Once per visit: later changes of the list are this page's own ticks, which are still on their way.
+  const replayed = useRef(false);
   useEffect(() => {
-    if (isFetchedAfterMount && data && canEdit()) replayTicks(queryClient, data, me?.id ?? null);
+    if (replayed.current || !isFetchedAfterMount || !data || !canEdit()) return;
+    replayed.current = true;
+    replayTicks(queryClient, data, me?.id ?? null);
   }, [isFetchedAfterMount, data, me?.id, queryClient]);
 
   const focusAdd = () => field.current?.focus();
