@@ -157,11 +157,8 @@ function Search() {
   };
 
   const total = list.length;
-  // The words the closest search ran on (filler dropped, as the server read them): one tap searches for just one.
-  const typedWords = useMemo(
-    () => [...new Set((shown?.terms ?? []).map((term) => term.text))].slice(0, 6),
-    [shown?.terms],
-  );
+  // The words the closest search ran on (filler dropped, no synonyms: the server lists them): one tap searches for just one.
+  const typedWords = shown?.closest ?? [];
   let index = -1;
   const row = (result: Result) => {
     index += 1;

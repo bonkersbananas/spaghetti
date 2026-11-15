@@ -254,11 +254,11 @@ describe("the closest results", () => {
     });
     const strict = await search("petg supports");
     expect(strict.attempts).toEqual([]);
-    expect(strict.closest).toBe(false);
+    expect(strict.closest).toBeNull();
     const near = await search("petg supports", { closest: "1" });
-    expect(near.closest).toBe(true);
+    expect(near.closest).toEqual(["petg", "supports"]);
     expect(ids(near.attempts).sort()).toEqual([blue.id, clean.id].sort());
     // Words with a whole match are answered as before.
-    expect((await search("clean supports", { closest: "1" })).closest).toBe(false);
+    expect((await search("clean supports", { closest: "1" })).closest).toBeNull();
   });
 });

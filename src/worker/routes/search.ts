@@ -639,13 +639,13 @@ export const searchRoutes = new Hono<AppEnv>()
       }
     }
     // Still nothing with every word: the closest are what has the most of them, one search per word, merged.
-    let closest = false;
+    let closest: string[] | null = null;
     if (wantClosest && !hasHits(result) && read.terms.length > 1) {
       const each = await Promise.all(read.terms.map((term) => ask([term])));
       if (each.some(hasHits)) {
         result = mergeClosest(each);
         terms = read.terms;
-        closest = true;
+        closest = read.terms.map((term) => term.text);
       }
     }
     return c.json<SearchResponse>({
