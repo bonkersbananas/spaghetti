@@ -201,7 +201,8 @@ export function useLiveFields<T extends Record<string, unknown>>(
   const saveRef = useRef(save);
   saveRef.current = save;
   // While held, autosave keeps seeing what it saw last, so nothing is sent until the hold ends.
-  const held = useRef(value);
+  // Text kept from an earlier visit isn't "seen" yet: the hold ends with it still to send.
+  const held = useRef(left ? server : value);
   if (!hold) held.current = value;
   const saveState = useAutosave(
     hold ? held.current : value,
@@ -215,7 +216,7 @@ export function useLiveFields<T extends Record<string, unknown>>(
       known.current = { ...known.current, ...changes };
       remember();
     },
-    { ...(delay === undefined ? {} : { delay }), from: hold ? held.current : server },
+    { ...(delay === undefined ? {} : { delay }), from: server },
   );
   return { value, change, saveState };
 }
