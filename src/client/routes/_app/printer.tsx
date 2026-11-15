@@ -105,11 +105,14 @@ function Setup({ initial }: { initial: PrinterSetup }) {
     }),
     [initial],
   );
-  const { value, change, saveState } = useLiveFields<SetupFields>(server, ({ main, auxiliary, ...rest }) =>
-    savePrinterSetup(queryClient, {
-      ...rest,
-      ...(main || auxiliary ? { nozzles: { ...(main && { main }), ...(auxiliary && { auxiliary }) } } : {}),
-    }),
+  const { value, change, saveState } = useLiveFields<SetupFields>(
+    server,
+    ({ main, auxiliary, ...rest }) =>
+      savePrinterSetup(queryClient, {
+        ...rest,
+        ...(main || auxiliary ? { nozzles: { ...(main && { main }), ...(auxiliary && { auxiliary }) } } : {}),
+      }),
+    { keepAs: "printer" },
   );
   const setup: PrinterSetup = {
     nozzles: { main: value.main, auxiliary: value.auxiliary },

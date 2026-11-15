@@ -160,15 +160,18 @@ function SpoolPage({ spool }: { spool: Spool }) {
     }),
     [spool],
   );
-  const { value, change, saveState } = useLiveFields<Editable>(server, (changes) =>
-    saveSpool(queryClient, spool.id, {
-      ...changes,
-      ...(changes.material !== undefined && { material: changes.material.trim() || spool.material }),
-      ...(changes.brand !== undefined && { brand: changes.brand?.trim() || null }),
-      ...(changes.line !== undefined && { line: changes.line?.trim() || null }),
-      ...(changes.colorName !== undefined && { colorName: changes.colorName?.trim() || null }),
-      ...(changes.productCode !== undefined && { productCode: changes.productCode?.trim() || null }),
-    }),
+  const { value, change, saveState } = useLiveFields<Editable>(
+    server,
+    (changes) =>
+      saveSpool(queryClient, spool.id, {
+        ...changes,
+        ...(changes.material !== undefined && { material: changes.material.trim() || spool.material }),
+        ...(changes.brand !== undefined && { brand: changes.brand?.trim() || null }),
+        ...(changes.line !== undefined && { line: changes.line?.trim() || null }),
+        ...(changes.colorName !== undefined && { colorName: changes.colorName?.trim() || null }),
+        ...(changes.productCode !== undefined && { productCode: changes.productCode?.trim() || null }),
+      }),
+    { keepAs: `spool:${spool.id}` },
   );
   const [placing, setPlacing] = useState(false);
   const [weighing, setWeighing] = useState(false);

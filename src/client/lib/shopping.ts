@@ -23,11 +23,34 @@ function patchList(queryClient: QueryClient, change: (items: ShoppingItem[]) => 
   queryClient.setQueryData<ShoppingItem[]>(shoppingQuery.queryKey, (items) => (items ? change(items) : items));
 }
 
-const patchOne = (queryClient: QueryClient, id: string, change: (item: ShoppingItem) => ShoppingItem) =>
-  patchList(queryClient, (items) => items.map((item) => (item.id === id ? change(item) : item)));
+/** How many times each thing was changed here: an answer to an older change mustn't overwrite a newer one. */
+const edits = new Map<string, number>();
 
-const keepServer = (queryClient: QueryClient, saved: ShoppingItem) =>
-  patchList(queryClient, (items) => items.map((item) => (item.id === saved.id ? saved : item)));
+const patchOne = (queryClient: QueryClient, id: string, change: (item: ShoppingItem) => ShoppingItem) => {
+  edits.set(id, (edits.get(id) ?? 0) + 1);
+  patchList(queryClient, (items) => items.map((item) => (item.id === id ? change(item) : item)));
+};
+
+/** What the server works out itself (the shop's picture, prices): safe to take from any answer. */
+const serverOwn = (saved: ShoppingItem) => ({
+  picture: saved.picture,
+  prices: saved.prices,
+  pricesTriedAt: saved.pricesTriedAt,
+  suggestion: saved.suggestion,
+  suggestState: saved.suggestState,
+});
+
+/**
+ * Keeps the server's answer to a change made at `edit` (what `edits` said right after it was shown). If the thing was
+ * changed again since, that newer change stays and only what the server works out is taken.
+ */
+const keepServer = (queryClient: QueryClient, saved: ShoppingItem, edit?: number) =>
+  patchList(queryClient, (items) =>
+    items.map((item) => {
+      if (item.id !== saved.id) return item;
+      return edit !== undefined && edits.get(saved.id) === edit ? saved : { ...item, ...serverOwn(saved) };
+    }),
+  );
 
 /** Adds still on their way to the server: an order waits for them, or it would name a thing the server doesn't have yet. */
 const adding = new Set<Promise<unknown>>();
@@ -138,11 +161,12 @@ export async function updateShopping(queryClient: QueryClient, id: string, chang
     ...(((changes.priceLink !== undefined && item.picture?.source === "prisjakt") ||
       (changes.link !== undefined && item.picture?.source === "shop")) && { picture: null }),
   }));
+  const edit = edits.get(id) ?? 0;
   const { shoppingItem } = await api<ShoppingItemResponse>(`/shopping-items/${id}`, {
     method: "PATCH",
     json: changes,
   });
-  keepServer(queryClient, shoppingItem);
+  keepServer(queryClient, shoppingItem, edit);
 }
 
 /** Ticks a thing off (bought) or puts it back on the list, at once. Back on the list goes to the top. */
@@ -156,6 +180,7 @@ export async function setBought(queryClient: QueryClient, item: ShoppingItem, bo
     boughtBy: bought ? userId : null,
     position,
   }));
+  const edit = edits.get(item.id) ?? 0;
   try {
     // A thing still being added isn't on the server yet: its tick follows the add, or it would answer "not found".
     if (adding.size > 0) await Promise.all(adding);
@@ -163,9 +188,17 @@ export async function setBought(queryClient: QueryClient, item: ShoppingItem, bo
       method: "PATCH",
       json: { bought },
     });
-    keepServer(queryClient, shoppingItem);
+    keepServer(queryClient, shoppingItem, edit);
   } catch {
-    if (before) queryClient.setQueryData(shoppingQuery.queryKey, before);
+    // Only this tick is undone: other things changed meanwhile stay as they are.
+    const was = before?.find((i) => i.id === item.id);
+    if (was)
+      patchOne(queryClient, item.id, (current) => ({
+        ...current,
+        boughtAt: was.boughtAt,
+        boughtBy: was.boughtBy,
+        position: was.position,
+      }));
     toast.error("Couldn't save that", "It's back the way it was. Try again in a moment.");
   }
 }
