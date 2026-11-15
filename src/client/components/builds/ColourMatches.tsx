@@ -311,7 +311,14 @@ function Picker({
   // The picked tile is in view when the row opens, though the row of tiles scrolls sideways.
   useEffect(() => {
     const picked = box.current?.querySelector<HTMLElement>("input:checked")?.parentElement;
-    picked?.scrollIntoView({ inline: "center", block: "nearest", behavior: scrollBehavior() });
+    // Only the row of tiles scrolls: scrollIntoView would also push the sheet's own clipped content sideways (WebKit at
+    // 375 px cut the first letters off every line).
+    const row = picked?.parentElement;
+    if (!picked || !row) return;
+    const at = picked.getBoundingClientRect();
+    const in_ = row.getBoundingClientRect();
+    const left = row.scrollLeft + (at.left - in_.left) - (row.clientWidth - at.width) / 2;
+    row.scrollTo({ left: Math.max(0, left), behavior: scrollBehavior() });
   }, []);
   const filament = colour.filament;
   // A stand-in in a colour of its own, not the model's: the palette is open under the tiles.
