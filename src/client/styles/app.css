@@ -118,6 +118,28 @@
     -webkit-tap-highlight-color: transparent;
   }
 
+  /* On an iPhone a long press on something tappable opens the browser's link preview or starts a text selection
+     with a magnifier, which reads as a web page, not an app. Controls and cards (what is `pressable`) keep their
+     press and drop both; text, inline links and photos keep theirs (copying a link, saving a picture). */
+  @media (pointer: coarse) {
+    :where(
+        button,
+        summary,
+        [role="button"],
+        [role="tab"],
+        [role="radio"],
+        [role="switch"],
+        [role="checkbox"],
+        [role="option"],
+        [role="menuitem"],
+        .pressable
+      ) {
+      -webkit-touch-callout: none;
+      -webkit-user-select: none;
+      user-select: none;
+    }
+  }
+
   /* A pointer says "this does something" on every enabled control, not only on links (Tailwind's reset leaves buttons on
      the arrow). Utilities such as cursor-grab and cursor-text still win. */
   :where(
