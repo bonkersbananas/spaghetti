@@ -121,7 +121,7 @@ export const AttemptEntry = forwardRef<HTMLLIElement, AttemptEntryProps>(functio
             "bg-cream shadow-soft hover:shadow-raised duration-fast relative rounded-lg transition-shadow",
             selected && "shadow-ring",
             // Only for an attempt logged on this device a moment ago (it is still being sent).
-            attempt.pending && attempt.outcome && ["sg-logged", `sg-logged-${attempt.outcome}`],
+            attempt.pending && attempt.outcome && `sg-logged sg-logged-${attempt.outcome}`,
           )}
         >
           <button
