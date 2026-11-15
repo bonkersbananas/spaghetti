@@ -42,7 +42,9 @@ export function CopiesRow({ value, made, onChange, disabled, className }: Copies
           disabled={disabled}
           onClick={() => onChange(fit ? (made && made > 1 ? made : undefined) : "fit")}
         >
-          Fill the plate
+          {/* A shorter word on phones, where the stepper and the chip share one line. */}
+          <span className="md:hidden">Fill plate</span>
+          <span className="hidden md:inline">Fill the plate</span>
         </ToggleChip>
       </div>
     </div>

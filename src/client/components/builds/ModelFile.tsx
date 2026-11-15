@@ -26,7 +26,9 @@ import { DEFAULT_PRINTER } from "@shared/spools";
 import { formatDuration } from "@shared/time";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
+  Children,
   type ComponentPropsWithRef,
+  isValidElement,
   lazy,
   type ReactNode,
   Suspense,
@@ -528,7 +530,7 @@ function statusOf(
             )}
             {!again && ahead && <span className="text-small text-ink-soft">Not sliced with its new settings yet.</span>}
             {!again && !ahead && quiet && !change && (
-              <span className="text-small text-ink-faint">Sliced with these settings.</span>
+              <span className="text-small text-ink-faint max-md:sr-only">Sliced with these settings.</span>
             )}
             {standIn && <span className="text-small text-ink-soft">{standIn}</span>}
             {floating && <Caution className="px-0">Parts of it float in the air.</Caution>}
@@ -735,6 +737,13 @@ export function SliceResult({
   const each = state.kind === "sliced" ? perPiece(prefill, made) : "";
   // Sliced again, the figures are the slice being replaced: quieter, so they don't read as the new settings'.
   const stale = state.kind === "sliced" && !!state.again;
+  // A phone's width puts the button that helps at the right of the row, so the tray stays two rows (the media
+  // query, not `phone`, which says what the device can slice).
+  const narrow = !useIsDesktop();
+  const parts = statusOf(state, { phone, quiet: true, ...actions });
+  const helps = isValidElement<{ children?: ReactNode }>(parts.primary)
+    ? Children.toArray(parts.primary.props.children).length > 0
+    : !!parts.primary;
   return (
     // A tray of its own, apart from the choices: what they give.
     <div className="bg-ink/4 flex flex-col gap-2.5 rounded-lg p-2.5">
@@ -757,8 +766,22 @@ export function SliceResult({
             </MetaList>
           ) : null}
           {each && !stale && <p className="text-small text-ink-soft tabular">{each}</p>}
-          <ModelStatus state={state} phone={phone} quiet {...actions} />
+          {narrow ? (
+            <>
+              {parts.lines}
+              {!helps && parts.quiet}
+            </>
+          ) : (
+            <ModelStatus state={state} phone={phone} quiet {...actions} />
+          )}
         </div>
+        {/* On a phone the button that helps sits at the right of the same row, so the tray stays two rows. */}
+        {narrow && helps && (
+          <div className="flex shrink-0 flex-col items-end gap-1 self-center">
+            {parts.primary}
+            {parts.quiet}
+          </div>
+        )}
       </div>
     </div>
   );
