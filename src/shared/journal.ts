@@ -4,6 +4,7 @@
  * the unit tests.
  */
 import type { Outcome } from "./attempts.ts";
+import { dateFormat } from "./date-format.ts";
 import type { OutcomeFilter } from "./outcomes.ts";
 
 /** What a journal entry records. */
@@ -100,27 +101,27 @@ export function dayLabel(start: number, now = Date.now()): string {
   const today = startOfDay(now);
   if (start === today) return "Today";
   if (start === addDays(today, -1)) return "Yesterday";
-  return new Date(start).toLocaleDateString(undefined, { weekday: "long" });
+  return dateFormat({ weekday: "long" }).format(start);
 }
 
 /** "5 Nov", the date beside a day heading. */
 export function shortDate(time: number): string {
-  return new Date(time).toLocaleDateString(undefined, { day: "numeric", month: "short" });
+  return dateFormat({ day: "numeric", month: "short" }).format(time);
 }
 
 /** "12–18 Oct" (or "Oct 12 – 18", as the locale writes it), one date for a single day. */
 export function weekLabel(start: number, end: number): string {
   if (startOfDay(start) === startOfDay(end)) return shortDate(start);
-  return new Intl.DateTimeFormat(undefined, { day: "numeric", month: "short" }).formatRange(start, end);
+  return dateFormat({ day: "numeric", month: "short" }).formatRange(start, end);
 }
 
 /** "November", or "November 2025" in another year. */
 export function monthLabel(start: number, now = Date.now()): string {
   const date = new Date(start);
-  return date.toLocaleDateString(undefined, {
+  return dateFormat({
     month: "long",
     ...(date.getFullYear() !== new Date(now).getFullYear() ? { year: "numeric" } : {}),
-  });
+  }).format(date);
 }
 
 /** One month in numbers, for its heading. */

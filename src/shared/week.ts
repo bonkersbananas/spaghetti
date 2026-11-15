@@ -4,6 +4,7 @@
  * and the words for the push). Pure and Intl-only, so the browser, the Worker and the unit tests agree.
  */
 import type { Outcome } from "./attempts.ts";
+import { dateFormat } from "./date-format.ts";
 
 /** The two of you live in one place: weeks begin and end by this clock, not by whoever's phone is asking. */
 export const WORKSPACE_TIME_ZONE = "Europe/Stockholm";
@@ -109,7 +110,7 @@ export function weekBounds(monday: string, timeZone: string = WORKSPACE_TIME_ZON
 
 /** "November 9 – 15, 2026", "January 5 – 11, 2026", and across New Year "December 29, 2025 – January 4, 2026". */
 export function weekRangeLabel(monday: string): string {
-  return new Intl.DateTimeFormat(undefined, {
+  return dateFormat({
     timeZone: "UTC",
     day: "numeric",
     month: "long",
