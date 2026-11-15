@@ -3,15 +3,22 @@ import { MAX_SLICER_FILE_BYTES } from "@shared/api";
 import type { AttemptSettings } from "@shared/attempts";
 import { layMeshDown, parseStl, scaleMesh } from "@shared/mesh";
 import { arrangeOnPlate, type Box, boundsOf, fitsAsPlaced, plateArea, translate } from "@shared/slicing/arrange.ts";
-import { type ColourUse, type ProjectFilament, planColours, planProject, slotKey } from "@shared/slicing/colours.ts";
-import { MissingPreset, mergedSettings, type PresetSet, type SliceSetup, sliceSetup } from "@shared/slicing/configs.ts";
+import { type ColourUse, type ProjectFilament, planColours, planProject } from "@shared/slicing/colours.ts";
+import {
+  filamentsNamed,
+  MissingPreset,
+  mergedSettings,
+  type PresetSet,
+  type SliceSetup,
+  sliceSetup,
+} from "@shared/slicing/configs.ts";
 import { withoutStandIns } from "@shared/slicing/filaments.ts";
 import { finiteTriangles, fitPercent, sizeOf } from "@shared/slicing/fit.ts";
 import type { Config } from "@shared/slicing/gcode3mf.ts";
 import { packGcode3mf, summarizeGcode } from "@shared/slicing/gcode3mf.ts";
 import { colourHex, type ModelColourRun, readModel3mf } from "@shared/slicing/model3mf.ts";
 import { presetRecord, STAND_IN_COLOURS } from "@shared/slicing/orca.ts";
-import { type ModelPaint, paintBetween, paintLeaves, paintWithin } from "@shared/slicing/paint.ts";
+import { type ModelPaint, paintBetween, paintLeaves, paintParts, paintWithin } from "@shared/slicing/paint.ts";
 import { renderPlate } from "@shared/slicing/render.ts";
 import { type SlicerId, type SlicingSettings, slicingFor } from "@shared/slicing/settings.ts";
 import { cautionsOf, rustEstimateMs, type SlicerWarning } from "@shared/slicing/slicers.ts";
@@ -88,9 +95,9 @@ interface Placed {
   /** Filament number, from 1. */
   extruder: number;
   /**
-   * A project's object made of parts in different filaments: each part's triangles of `positions` (`from` the first,
-   * `to` past the last) and its filament. Turning, scaling and placing keep the triangles in order; fins are added
-   * after the last part.
+   * An object made of parts in different filaments (a project's, or one whose colours were matched to filaments): each
+   * part's triangles of `positions` (`from` the first, `to` past the last) and its filament. Turning, scaling and
+   * placing keep the triangles in order; fins are added after the last part.
    */
   parts?: { from: number; to: number; extruder: number }[];
   /**
@@ -100,8 +107,6 @@ interface Placed {
   paint?: ModelPaint;
   /** The colours the model gives it, as runs of its triangles (a plain 3MF's, matched to filaments by `matchColours`). */
   colours?: ModelColourRun[];
-  /** Its parts print in the filaments its colours were matched to: the engine gets each part as an object. */
-  byColour?: boolean;
 }
 
 class Problem extends Error {
@@ -183,9 +188,11 @@ async function run(request: SliceRequest) {
 
     const presets = await fetchJson<PresetSet>(new URL("presets.json", engine.base));
     orca = presets.orca.version;
-    // The filaments the objects print in, and those painted on them.
+    // The filaments the objects and their parts print in, and those painted on them: either slicer prints each part
+    // of an object made of parts in its own (ours part by part, the engine the object whole with the parts painted).
     const filamentCount = Math.max(
       ...read.objects.map((object) => object.extruder),
+      ...read.objects.flatMap((object) => object.parts?.map((part) => part.extruder) ?? []),
       read.painted,
       matched?.filaments.length ?? 0,
     );
@@ -198,21 +205,6 @@ async function run(request: SliceRequest) {
     settings = setup.settings;
     slicing = withChoices(setup.slicing, chosen);
     const oursSlices = slicing.slicer === "spaghetti";
-    // Ours prints each part of an object made of parts in its own filament (add_part), so its setup has every
-    // filament the parts use; OrcaSlicer's engine gets each object whole, in the object's filament, as before.
-    const partFilaments = Math.max(
-      filamentCount,
-      ...read.objects.flatMap((object) => object.parts?.map((part) => part.extruder) ?? []),
-    );
-    const oursSetup =
-      oursSlices && partFilaments > filamentCount
-        ? sliceSetup(presets, {
-            settings: asked,
-            defaults,
-            ...(read.settings ? { project: { settings: read.settings } } : {}),
-            filaments: partFilaments,
-          })
-        : setup;
     const plate = plateArea(setup.machine.printable_area, first(setup.machine.printable_height));
     const volume: [number, number, number] = [plate.maxX - plate.minX, plate.maxY - plate.minY, plate.height];
 
@@ -223,14 +215,13 @@ async function run(request: SliceRequest) {
       // Scaled about the origin (shared/mesh.ts, as Twists scales): the plate's arrangement places it after.
       return { ...object, positions: scale === 100 ? turned : scaleMesh({ positions: turned }, scale / 100).positions };
     });
-    // Ours prints an object made of parts in different filaments part by part, so its picture shows the parts in their
-    // colours (the engine prints it whole: drawn again if it steps in).
-    const byParts = (oursSlices || !!matched) && objects.some((object) => partsOf(object));
+    // An object made of parts in different filaments prints each part in its own: so does its picture.
+    const byParts = objects.some((object) => partsOf(object));
     try {
       place(objects, plate, volume, read.project && scale === 100 && !down, scale);
     } catch (error) {
       // A model that doesn't fit still gets its picture, as it is.
-      png = await picture(objects, oursSetup, byParts);
+      png = await picture(objects, setup, byParts);
       throw error;
     }
     // Fins are the model's own walls: built on the part as it lies on the plate, appended to it.
@@ -244,34 +235,24 @@ async function run(request: SliceRequest) {
     }
     progress("reading", 1);
 
-    // The picture as it will print: with ours, an object's parts each in its filament's colour.
-    png = await picture(objects, oursSetup, byParts);
+    // The picture as it will print: an object's parts each in its filament's colour.
+    png = await picture(objects, setup, byParts);
     if (png) post({ type: "picture", png });
     if (matched) {
       const project = (matched as { originalColours?: string[] }).originalColours;
       originalPng = project
-        ? await picture(objects, { ...oursSetup, colours: project }, byParts)
-        : await originalPicture(objects, oursSetup);
+        ? await picture(objects, { ...setup, colours: project }, byParts)
+        : await originalPicture(objects, setup);
     }
 
-    for (const each of new Set([setup, oursSetup])) {
-      const tower = objects.length && each.filaments.length > 1 ? towerSpot(objects, plate, each) : null;
-      if (tower) {
-        each.process.wipe_tower_x = [String(Math.round(tower.x))];
-        each.process.wipe_tower_y = [String(Math.round(tower.y))];
-      }
+    const tower = objects.length && setup.filaments.length > 1 ? towerSpot(objects, plate, setup) : null;
+    if (tower) {
+      setup.process.wipe_tower_x = [String(Math.round(tower.x))];
+      setup.process.wipe_tower_y = [String(Math.round(tower.y))];
     }
     // Spaghetti's own slicer when it is asked for; OrcaSlicer's engine for what ours can't slice yet (decision 0055).
-    const ours = oursSlices ? await withOurs(request, oursSetup, objects, slicing) : null;
+    const ours = oursSlices ? await withOurs(request, setup, objects, slicing) : null;
     if (ours && !ours.ok) fallback = ours.fallback;
-    if (ours?.ok && oursSetup !== setup) {
-      settings = oursSetup.settings;
-      slicing = withChoices(oursSetup.slicing, chosen);
-    } else if (ours && !ours.ok && byParts && !matched) {
-      // The engine prints each object in its own filament: so does the picture.
-      png = await picture(objects, setup, false);
-      if (png) post({ type: "picture", png });
-    }
     let sliced: Uint8Array;
     let ms: number;
     let cautions: SliceCaution[] = [];
@@ -327,7 +308,7 @@ async function run(request: SliceRequest) {
           ...(ours?.ok && ours.notes.length ? { notes: ours.notes } : {}),
           ms: Math.round(ms),
         }),
-        prefill: withoutStandIns(settingsFromFile(reading, 1), (ours?.ok ? oursSetup : setup).chosen),
+        prefill: withoutStandIns(settingsFromFile(reading, 1), setup.chosen),
         objects: objects.map((object) => object.name),
         slicer: slicerName(reading) ?? null,
       },
@@ -469,10 +450,7 @@ function matchColours(objects: Placed[], spools: readonly SpoolLike[], chosen: S
       at = run.to;
     }
     push(at, object.positions.length / 9, object.extruder);
-    if (new Set(parts.map((part) => part.extruder)).size > 1) {
-      object.parts = parts;
-      object.byColour = true;
-    }
+    if (new Set(parts.map((part) => part.extruder)).size > 1) object.parts = parts;
   }
   const total = plan.groups.reduce((sum, group) => sum + group.area, 0) || 1;
   const rows: SliceColour[] = plan.groups.map((group) => {
@@ -531,10 +509,6 @@ function matchProject(
   }));
   // The project's own colours, for the picture of the plate as it has them.
   const originalColours = listed.map((filament) => filament.hex ?? NO_COLOUR);
-  // OrcaSlicer's engine takes an object made of parts in several filaments whole, its parts painted in theirs.
-  for (const object of objects) {
-    if (new Set(object.parts?.map((part) => part.extruder)).size > 1) object.byColour = true;
-  }
   return { filaments: plan.filaments, rows, originalColours };
 }
 
@@ -565,41 +539,17 @@ function withChoices(slicing: SlicingSettings, chosen: SliceOptions): SlicingSet
 }
 
 /**
- * What the engine is given: an object whose parts print in the filaments its colours were matched to goes in whole
- * (one object, so a part in the air still sits on what holds it), its parts painted in their filaments as a project's
- * painted colours are, which Orca's own segmentation prints. Triangles in the object's own filament stay unpainted.
+ * What the engine is given: an object made of parts in different filaments (a project's, or one whose colours were
+ * matched to filaments) goes in whole, one object, so a part in the air still sits on what holds it, its parts in other
+ * filaments than the object's painted in theirs as a project's painted colours are, which Orca's own segmentation
+ * prints (`paintParts`). Triangles in the object's own filament keep the paint they have.
  */
 function engineObjects(objects: Placed[]): Placed[] {
   return objects.map((object) => {
-    if (!object.byColour || !object.parts) return object;
-    const triangles: number[] = [];
-    const codes: string[] = [];
-    for (const part of object.parts) {
-      if (part.extruder === object.extruder) continue;
-      const code = paintCode(part.extruder);
-      for (let t = part.from; t < part.to; t++) {
-        triangles.push(t);
-        codes.push(code);
-      }
-    }
-    if (!triangles.length) return object;
-    const ends: number[] = [];
-    let length = 0;
-    for (const code of codes) {
-      length += code.length;
-      ends.push(length);
-    }
-    return {
-      ...object,
-      paint: { triangles: Uint32Array.from(triangles), codes: codes.join(""), ends: Uint32Array.from(ends) },
-    };
+    if (!object.parts || new Set(object.parts.map((part) => part.extruder)).size < 2) return object;
+    const paint = paintParts(object.paint, object.parts, object.extruder);
+    return paint ? { ...object, paint } : object;
   });
-}
-
-/** Orca's code for a whole triangle painted in a filament (paint.ts: states 1 and 2 are one digit, 3 and up two). */
-function paintCode(filament: number): string {
-  if (filament <= 2) return String(filament * 4);
-  return `${(filament - 3).toString(16).toUpperCase()}C`;
 }
 
 /** The objects of an .stl or a .3mf, each with its filament (and a project's object made of parts, theirs). */
@@ -621,15 +571,15 @@ function readModel(bytes: Uint8Array, name: string, plate?: number) {
   const model = readModel3mf(bytes, { plate });
   if (model === "not-3mf") throw new Problem("unreadable");
   if (model === "no-objects") throw new Problem("no-model");
-  // Filaments beyond what the project lists fall back to its first.
-  const listed = model.settings ? [model.settings.filament_type ?? []].flat().length : 0;
-  const filament = (extruder: number | undefined) => (extruder && extruder <= Math.max(1, listed) ? extruder : 1);
+  // Filaments beyond what the project lists fall back to its first; a file that lists none keeps those it names.
+  const named = filamentsNamed(model.settings);
+  const filament = (extruder: number | undefined) => (extruder && extruder <= named ? extruder : 1);
   // The highest filament painted on any object, of those the project lists.
   let painted = 0;
   return {
     objects: model.objects.map((object): Placed => {
       const extruder = filament(object.extruder);
-      const paint = object.paint ? paintWithin(object.paint, Math.max(1, listed)) : null;
+      const paint = object.paint ? paintWithin(object.paint, named) : null;
       if (paint) painted = Math.max(painted, paint.highest);
       return {
         name: object.name,

@@ -1,5 +1,6 @@
 import { expect, type Page, test } from "@playwright/test";
 import { strFromU8, unzipSync } from "fflate";
+import { bambuStudioProblems } from "../test/unit/slicing/bambu-rules";
 import {
   brimProject,
   paintedProject,
@@ -218,7 +219,7 @@ test("an object made of parts in two filaments is sliced by ours, each part in i
     expect(ourFile.gcode).toMatch(/^; model label id: 1$/m);
     expect(ourFile.gcode).toContain("; FEATURE: Prime tower");
 
-    // OrcaSlicer's engine, picked under More, gets the coaster whole, its two halves painted in their filaments.
+    // OrcaSlicer's engine, picked under More, prints each half in its own too: the coaster whole, its red half painted.
     await files.getByRole("button", { name: "Slice with…" }).click();
     const settings = page.getByRole("dialog", { name: "How to slice it" });
     await settings.getByRole("button", { name: /^More/ }).click();
@@ -231,9 +232,35 @@ test("an object made of parts in two filaments is sliced by ours, each part in i
     const engineFile = await slicedFile(engine.id);
     expect(engineFile.info.match(/<filament id="/g)).toHaveLength(2);
     expect(engineFile.info.match(/<object identify_id="/g)).toHaveLength(1);
+    expect(engineFile.gcode).toContain("; FEATURE: Prime tower");
+    expect([...(toolsByFeature(engineFile.gcode).get("Outer wall") ?? [])].sort()).toEqual(["T0", "T1"]);
   } finally {
     await setDefaults(page, null);
   }
+});
+
+test("a 3MF that names its parts' filaments but lists none prints each part in its own", async ({ page }) => {
+  test.setTimeout(2 * SLICED);
+  await signIn(page);
+  // Such a file as other programs write: Bambu's model_settings.config gives the coaster's halves filaments 1 and 2,
+  // and no project settings list them. OrcaSlicer's engine (the default) prints the red half in filament 2.
+  const { id } = await ideaWithModel(page, "Two-tone coaster", "two-tone.3mf", partsProject({ settings: false }));
+  await expect.poll(async () => (await fileOf(page, id))?.slice?.status, { timeout: SLICED }).toBe("sliced");
+  const file = await fileOf(page, id);
+  expect(file.slice.settings.slicer).toBe("orca");
+  // Filament 2 is a stand-in of filament 1's material, in a colour of its own, until someone picks a spool for it.
+  expect(file.slice.settings.filaments).toHaveLength(2);
+  const [first, second] = file.slice.settings.slicing.filaments;
+  expect(second).toEqual({ material: first.material });
+  const sliced = await page.request.get(`/api/files/${file.id}/sliced`);
+  const zip = unzipSync(new Uint8Array(await sliced.body()));
+  const info = strFromU8(zip["Metadata/slice_info.config"] ?? new Uint8Array());
+  const colours = [...info.matchAll(/<filament id="\d+"[^>]*\bcolor="(#[0-9A-Fa-f]{6})/g)].map((match) => match[1]);
+  expect(colours).toHaveLength(2);
+  expect(new Set(colours).size).toBe(2);
+  const gcode = strFromU8(zip["Metadata/plate_1.gcode"] ?? new Uint8Array());
+  expect(gcode).toContain("; FEATURE: Prime tower");
+  expect([...(toolsByFeature(gcode).get("Outer wall") ?? [])].sort()).toEqual(["T0", "T1"]);
 });
 
 test("an object made of parts in two filaments gets its supports from ours, each layer's in the filament it starts with", async ({
@@ -350,6 +377,8 @@ test("a plate in two colours is sliced by ours, each object in its own filament"
     // The file says which nozzle each of its two filaments prints with, as Orca's does for the printer.
     const sliced = await page.request.get(`/api/files/${file.id}/sliced`);
     expect(sliced.ok()).toBe(true);
+    // What Bambu Studio's own reader needs of a sliced file, from its source (test/unit/slicing/bambu-rules.ts).
+    expect(bambuStudioProblems(new Uint8Array(await sliced.body()))).toEqual([]);
     const zip = unzipSync(new Uint8Array(await sliced.body()));
     const info = strFromU8(zip["Metadata/slice_info.config"] ?? new Uint8Array());
     expect(/key="filament_maps" value="([^"]*)"/.exec(info)?.[1]?.split(" ")).toHaveLength(2);

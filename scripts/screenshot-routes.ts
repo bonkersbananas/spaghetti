@@ -432,6 +432,18 @@ async function ideaWithBigModel(page: Page, until: RegExp) {
   }
 }
 
+/** Compare lives in an attempt's options menu (the newest attempt's, here): open that, then its Compare row. */
+async function openCompare(page: Page) {
+  await page
+    .getByRole("button", { name: /^Options for attempt/ })
+    .first()
+    .click();
+  await page
+    .getByText(/^Compare/)
+    .first()
+    .click();
+}
+
 const FUSILLI = { name: "fusilli-knob.stl", bytes: fusilliStl() };
 const FUSILLI_IDEA = { title: "Fusilli jar knob", note: "A fusilli knob for the pasta jar lid: twist to open." };
 /**
@@ -2859,10 +2871,7 @@ export const shots: Shot[] = [
     name: "compare",
     path: `/builds/${SEED_BUILD_IDS.headphoneStand}`,
     prepare: async (page) => {
-      await page
-        .getByRole("button", { name: /^(Changed since attempt \d+: .*)?Compare/ })
-        .first()
-        .click();
+      await openCompare(page);
       await page.getByRole("dialog", { name: /^Attempt \d+ and attempt \d+$/ }).waitFor();
       await page.waitForTimeout(500);
     },
@@ -2877,10 +2886,7 @@ export const shots: Shot[] = [
     width: 1440,
     prepare: async (page) => {
       await page.setViewportSize({ width: 1280, height: 720 });
-      await page
-        .getByRole("button", { name: /^(Changed since attempt \d+: .*)?Compare/ })
-        .first()
-        .click();
+      await openCompare(page);
       await page.getByRole("dialog", { name: /^Attempt \d+ and attempt \d+$/ }).waitFor();
       await page.waitForTimeout(500);
     },
@@ -2894,10 +2900,7 @@ export const shots: Shot[] = [
     name: "compare-details",
     path: `/builds/${SEED_BUILD_IDS.headphoneStand}`,
     prepare: async (page) => {
-      await page
-        .getByRole("button", { name: /^(Changed since attempt \d+: .*)?Compare/ })
-        .first()
-        .click();
+      await openCompare(page);
       const sheet = page.getByRole("dialog", { name: /^Attempt \d+ and attempt \d+$/ });
       await sheet.waitFor();
       await sheet.getByRole("button", { name: /^Same in both/ }).click();
@@ -2914,10 +2917,7 @@ export const shots: Shot[] = [
     name: "compare-printing",
     path: `/builds/${SEED_BUILD_IDS.tugboat}`,
     prepare: async (page) => {
-      await page
-        .getByRole("button", { name: /^(Changed since attempt \d+: .*)?Compare/ })
-        .first()
-        .click();
+      await openCompare(page);
       await page.getByRole("dialog", { name: /^Attempt \d+ and attempt \d+$/ }).waitFor();
       await page.waitForTimeout(500);
     },
@@ -2931,10 +2931,7 @@ export const shots: Shot[] = [
     path: `/builds/${SEED_BUILD_IDS.headphoneStand}`,
     width: 1440,
     prepare: async (page) => {
-      await page
-        .getByRole("button", { name: /^(Changed since attempt \d+: .*)?Compare/ })
-        .first()
-        .click();
+      await openCompare(page);
       const sheet = page.getByRole("dialog", { name: /^Attempt \d+ and attempt \d+$/ });
       await sheet.waitFor();
       await sheet
