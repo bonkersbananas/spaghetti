@@ -102,9 +102,21 @@ const enqueue = <T>(job: () => Promise<T>): Promise<T> => {
   return run;
 };
 
+/**
+ * Resolves when the browser has nothing to do (or after 2 s). Trimming the cache measures it with JSON.stringify and
+ * the write clones it: tens of milliseconds on a phone, and the throttled save lands wherever the clock says, so a
+ * tap that changed the screen would wait for it. The snapshot is already taken; only the work waits.
+ */
+const idle = () =>
+  new Promise<void>((resolve) => {
+    if ("requestIdleCallback" in window) requestIdleCallback(() => resolve(), { timeout: 2000 });
+    else setTimeout(resolve, 500);
+  });
+
 export const persister: Persister = {
   persistClient: (client) =>
     enqueue(async () => {
+      await idle();
       const user = rememberedUser();
       // Signed out (or the session ended): nothing of theirs stays behind.
       if (!user) return store.clear();
