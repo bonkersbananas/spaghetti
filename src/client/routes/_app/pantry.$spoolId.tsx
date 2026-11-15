@@ -381,9 +381,11 @@ function SpoolPage({ spool }: { spool: Spool }) {
                     size="sm"
                     icon={SparkleIcon}
                     disabled={readOnly}
+                    aria-label="Read this photo"
                     onClick={() => void requestLabelRead(queryClient, spool.id)}
                   >
-                    Read this photo
+                    {/* Short, so the three buttons share one line on a phone. */}
+                    Read it
                   </Button>
                 )}
               </>
