@@ -12,6 +12,7 @@
  *   pnpm screenshots --built        # on the production build (service worker included): what offline screens really show
  *   pnpm screenshots --iphone       # as the Home Screen app on an iPhone: standalone, 59 px top and 34 px bottom safe area (files named ideas-iphone-390.png)
  *   pnpm screenshots --webkit       # in WebKit as Safari on an iPhone 17 Pro (402×874, the iPhone's insets; `pnpm exec playwright install webkit` first); phone only, files named ideas-webkit-402.png. --width 375 for the smallest iPhone
+ *                                   # a page too tall for WebKit (the styleguide) comes in parts: styleguide-webkit-402-part1.png …
  *   pnpm screenshots --out DIR      # write somewhere else (default ./screenshots)
  *   pnpm screenshots --width 1440   # one width only (a width under 768 is a phone, any other number a desktop window of that width, 900 tall)
  *   pnpm screenshots --scale 1      # device pixel ratio 1 at both widths (default 3 on the phone, 2 on the desktop)
@@ -69,6 +70,9 @@ const viewports: typeof allViewports = webkitRun
             hasTouch: widthArg < 768,
           },
         ];
+
+/** WebKit refuses a picture over 32767 px on a side; a page taller than this (device pixels) is shot in parts. */
+const MAX_PICTURE_PX = 30_000;
 
 const argv = process.argv.slice(2);
 const option = (name: string) => {
@@ -205,6 +209,7 @@ async function capture(page: Page, shot: (typeof shots)[number], width: number, 
   await page.waitForTimeout(600);
   const file = join(outDir, `${shot.name}${suffix(theme)}-${width}.png`);
   if (shot.selector) await page.locator(shot.selector).screenshot({ path: file });
+  else if (shot.fullPage && (await tooTall(page))) await captureInParts(page, file);
   else await page.screenshot({ path: file, fullPage: shot.fullPage ?? false });
   await shot.cleanup?.(page);
   console.log(`  ${shot.name}${suffix(theme)}-${width}.png`);
@@ -226,4 +231,27 @@ async function loadAllImages(page: Page, name: string) {
       .map((image) => image.src);
   });
   if (broken.length) throw new Error(`${name}: images failed to load:\n${broken.join("\n")}`);
+}
+
+/** WebKit refuses a picture over 32767 px on a side (the styleguide at 3× is longer): that page goes in parts. */
+function tooTall(page: Page) {
+  return page.evaluate(
+    (limit) => document.documentElement.scrollHeight * window.devicePixelRatio > limit,
+    MAX_PICTURE_PX,
+  );
+}
+
+/** name-1.png, name-2.png …, each a slice of the whole page, top to bottom. */
+async function captureInParts(page: Page, file: string) {
+  const { height, width, ratio } = await page.evaluate(() => ({
+    height: document.documentElement.scrollHeight,
+    width: document.documentElement.clientWidth,
+    ratio: window.devicePixelRatio,
+  }));
+  const slice = Math.floor(MAX_PICTURE_PX / ratio);
+  for (let part = 0, y = 0; y < height; part++, y += slice) {
+    const out = file.replace(/\.png$/, `-part${part + 1}.png`);
+    await page.screenshot({ path: out, fullPage: true, clip: { x: 0, y, width, height: Math.min(slice, height - y) } });
+    console.log(`  ${out}`);
+  }
 }
