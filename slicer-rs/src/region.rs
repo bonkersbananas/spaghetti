@@ -405,9 +405,10 @@ pub fn regions(
                         (geom::intersection(&internal, &shell), geom::difference(&internal, &shell))
                     }
                 };
-                // The first layer's bottom is on the plate; any other bottom is a bridge over air. Then each grows
-                // into the infill beside it, as the tops do.
-                let (bottom, bridge) = if i == 0 { (own_bottom, Vec::new()) } else { (Vec::new(), own_bottom) };
+                // The first layer's bottom is on the plate; any other bottom is a bridge over air, but where
+                // supports hold it without a gap. Then each grows into the infill beside it, as the tops do.
+                let held = i == 0 || s.bottoms_held();
+                let (bottom, bridge) = if held { (own_bottom, Vec::new()) } else { (Vec::new(), own_bottom) };
                 let grown = surfaces::grow_surfaces(
                     own_top,
                     bottom,

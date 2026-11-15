@@ -1923,6 +1923,34 @@ fn support_materials_interfaces_print_as_orcas_do() {
 }
 
 #[test]
+fn supports_without_a_gap_hold_the_object_as_orcas_do() {
+    // A support material's interface meets the object without a gap (`support_top_z_distance` 0): the contact is the
+    // object's layer right under the overhang, and the overhang prints as a bottom surface on it, not as a bridge.
+    let tee = boxes_stl(&[([115., 123., 0.], [125., 133., 20.]), ([100., 123., 20.], [140., 133., 25.])]);
+    let setup = r#"{"process": {"enable_support": "1", "support_type": "normal(auto)", "support_top_z_distance": "0",
+        "support_interface_spacing": "0", "support_interface_pattern": "rectilinear_interlaced"}}"#;
+    let settings = setup::read(setup).unwrap().settings;
+    let options = Options { arrange: false, thumbnail: false, ..Options::default() };
+    let out = slice(&[Input { name: "tee.stl", bytes: &tee }], &settings, &options).unwrap();
+    let volume = |role: Role| out.stats.features[Role::ALL.iter().position(|&r| r == role).unwrap()].volume;
+    // Native OrcaSlicer 2.5.0 (Nov 15), mm³.
+    for (role, orca) in [(Role::Support, 1377.00), (Role::SupportInterface, 165.66), (Role::BottomSurface, 62.13)] {
+        assert!((volume(role) / orca - 1.0).abs() < 1.5e-3, "{role:?}: {} mm³", volume(role));
+    }
+    assert_eq!(volume(Role::Bridge), 0.0);
+    let gcode = String::from_utf8(out.gcode).unwrap();
+    assert_eq!(feature_directions(&gcode, "Support interface"), [45, 135]);
+    // Its two layers are the object's last two under the overhang, which starts at 20 mm.
+    let layers: Vec<&str> = gcode
+        .split("; Z_HEIGHT: ")
+        .skip(1)
+        .filter(|layer| layer.contains("; FEATURE: Support interface"))
+        .map(|layer| layer.lines().next().unwrap())
+        .collect();
+    assert_eq!(layers, ["19.8", "20"]);
+}
+
+#[test]
 fn a_filament_change_flushes_into_the_supports_first() {
     // Three Ts in three filaments: two share a nozzle, and each layer's change between them flushes into the layer's
     // supports (`flush_into_support`), which then print right after the change in the filament flushed into, as
