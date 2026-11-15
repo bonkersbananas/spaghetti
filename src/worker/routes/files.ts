@@ -172,6 +172,12 @@ const fileSlice = z.object({
     .max(99)
     .optional()
     .describe("How many copies of the plate's objects this slice printed, each its own object; absent: one."),
+  size: z
+    .tuple([millimetres, millimetres, millimetres])
+    .optional()
+    .describe(
+      "What it prints, one copy: width (X), depth (Y) and height (Z) in mm, without brim, supports or prime tower.",
+    ),
   ms: z
     .number()
     .int()

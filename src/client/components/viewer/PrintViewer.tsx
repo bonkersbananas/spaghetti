@@ -1,5 +1,6 @@
 import type { Layer } from "@shared/gcode";
 import { LIVE_FRESH_MS } from "@shared/print-progress";
+import { mmWords, type Size, sizeSpoken } from "@shared/slicing/size";
 import { formatDuration } from "@shared/time";
 import { useQuery } from "@tanstack/react-query";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -23,6 +24,9 @@ export interface PrintViewerProps {
   /** Names the file for the "built up once" memory. */
   fileId: string;
   plate: number;
+  /** How many copies of the plate's objects the slice has, and what one prints (kept with the slice), for the size shown. */
+  copies?: number;
+  size?: Size;
   /** The matched spools' colours, for filaments the file doesn't colour. */
   fallbackColors?: (string | null | undefined)[];
   /** Each filament's colour in the model itself, for a model whose colours were matched to spools: the switch to them. */
@@ -63,6 +67,8 @@ export default function PrintViewer({
   url,
   fileId,
   plate,
+  copies,
+  size,
   fallbackColors,
   originalColors,
   names,
@@ -154,7 +160,7 @@ export default function PrintViewer({
       }
     };
     const stop = loadToolpaths(
-      { url, plate, fallbackColors: fallbackColors?.map((c) => c ?? null) },
+      { url, plate, copies, fallbackColors: fallbackColors?.map((c) => c ?? null) },
       {
         onLayers,
         onProgress: setProgress,
@@ -294,6 +300,8 @@ export default function PrintViewer({
       stage.current?.focus({ preventScroll: true });
   }, []);
 
+  // What one copy prints: kept with the slice, else read from the file's own model (older slices, dropped files).
+  const shownSize = size ?? summary?.size ?? undefined;
   const text = layerReadout(layer, count || 1, heights.current[layer], times.current[layer]);
   const printed = summary?.filaments ?? [];
   const filaments =
@@ -424,6 +432,21 @@ export default function PrintViewer({
               "\u00a0"
             )}
           </p>
+          {shownSize && (
+            <p
+              className="text-small text-ink-faint tabular order-1 w-full min-w-0 truncate md:w-auto md:shrink-0"
+              data-size
+            >
+              <span className="sr-only">{`${sizeSpoken(shownSize)}${copies && copies > 1 ? ", each copy" : ""}`}</span>
+              <span aria-hidden>
+                <SizeAxis letter="W" mm={shownSize[0]} />
+                <SizeAxis letter="D" mm={shownSize[1]} />
+                <SizeAxis letter="H" mm={shownSize[2]} last />
+                {" mm"}
+                {copies && copies > 1 ? " each" : ""}
+              </span>
+            </p>
+          )}
           <SegmentedControl
             label="Colour by"
             labelHidden
@@ -453,6 +476,16 @@ export default function PrintViewer({
         </div>
       </div>
     </div>
+  );
+}
+
+/** "W 29.96 ·": an axis's letter, faint, and its length in the ink colour. */
+function SizeAxis({ letter, mm, last }: { letter: string; mm: number; last?: boolean }) {
+  return (
+    <>
+      {letter} <span className="text-ink font-semibold">{mmWords(mm)}</span>
+      {last ? "" : " · "}
+    </>
   );
 }
 

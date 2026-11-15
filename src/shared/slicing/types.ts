@@ -132,6 +132,8 @@ export interface FileSlice {
   plate?: { index: number; count: number; height: number };
   /** How many copies of the plate's objects it printed together (2 or more; "as many as fit" is a number here). */
   copies?: number;
+  /** What it prints, one copy: width, depth and height in mm (shared/slicing/size.ts). Absent on a slice from before it. */
+  size?: [number, number, number];
   /** How long the slicer took, in ms, on the device that sliced it: from the placed model to the packed file. */
   ms?: number;
   /** When it was sliced or failed (epoch ms). */

@@ -12,6 +12,7 @@ import {
   slicingSummary,
   withNozzle,
 } from "@shared/slicing/settings.ts";
+import { readSize, sizeWords } from "@shared/slicing/size.ts";
 import { nameParts, slicedBy } from "@shared/slicing/slicers.ts";
 import type { FileSlice, SliceOptions } from "@shared/slicing/types.ts";
 import {
@@ -201,6 +202,12 @@ export function perPiece(
     .filter(Boolean)
     .join(" · ")
     .concat(prefill?.estimatedMinutes !== undefined || prefill?.weightGrams !== undefined ? " each" : "");
+}
+
+/** "29.96 × 11.5 × 11.35 mm" (each, with copies): what one copy measures, width × depth × height. */
+export function sizePiece(slice: Pick<FileSlice, "size" | "copies">): string {
+  const size = readSize(slice.size);
+  return size ? `${sizeWords(size)}${slice.copies && slice.copies > 1 ? " each" : ""}` : "";
 }
 
 const grams = (value: number) => `${value.toLocaleString("en", { maximumFractionDigits: 1 })} g`;
@@ -665,6 +672,7 @@ export function ModelCard({
           : details
             ? [
                 ...(perPiece(prefill, slice.copies) ? [perPiece(prefill, slice.copies)] : []),
+                ...(sizePiece(slice) ? [sizePiece(slice)] : []),
                 <NamesWhole key="by" words={slicedBy(slice)} />,
               ]
             : slicedPieces(slice)}

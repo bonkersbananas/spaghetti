@@ -18872,6 +18872,30 @@
                     "minimum": 2,
                     "maximum": 99
                   },
+                  "size": {
+                    "description": "What it prints, one copy: width (X), depth (Y) and height (Z) in mm, without brim, supports or prime tower.",
+                    "type": "array",
+                    "prefixItems": [
+                      {
+                        "type": "number",
+                        "minimum": 0,
+                        "maximum": 100000
+                      },
+                      {
+                        "type": "number",
+                        "minimum": 0,
+                        "maximum": 100000
+                      },
+                      {
+                        "type": "number",
+                        "minimum": 0,
+                        "maximum": 100000
+                      }
+                    ],
+                    "items": false,
+                    "minItems": 3,
+                    "maxItems": 3
+                  },
                   "ms": {
                     "description": "How long the slicer took on the device that sliced it, in ms.",
                     "type": "integer",
@@ -19269,6 +19293,30 @@
                         "type": "integer",
                         "minimum": 2,
                         "maximum": 99
+                      },
+                      "size": {
+                        "description": "What it prints, one copy: width (X), depth (Y) and height (Z) in mm, without brim, supports or prime tower.",
+                        "type": "array",
+                        "prefixItems": [
+                          {
+                            "type": "number",
+                            "minimum": 0,
+                            "maximum": 100000
+                          },
+                          {
+                            "type": "number",
+                            "minimum": 0,
+                            "maximum": 100000
+                          },
+                          {
+                            "type": "number",
+                            "minimum": 0,
+                            "maximum": 100000
+                          }
+                        ],
+                        "items": false,
+                        "minItems": 3,
+                        "maxItems": 3
                       },
                       "ms": {
                         "description": "How long the slicer took on the device that sliced it, in ms.",

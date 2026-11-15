@@ -1,4 +1,5 @@
 import { Unzip, UnzipInflate, UnzipPassThrough } from "fflate";
+import { sizeFromModelXml } from "../slicing/size.ts";
 import { GcodeReader, type ParseOptions } from "./parse.ts";
 import type { ToolpathFilament, Toolpaths } from "./types.ts";
 
@@ -12,6 +13,8 @@ import type { ToolpathFilament, Toolpaths } from "./types.ts";
 export interface ReadToolpathsOptions extends Pick<ParseOptions, "maxSegments" | "onLayer" | "keepLayers"> {
   /** The plate, counting from 1. Default: the first one with G-code. */
   plate?: number;
+  /** How many copies of the plate's objects the file has: its size is of one. */
+  copies?: number;
   /** Colours of the matched spools, by filament index, for filaments the file doesn't colour. */
   fallbackColors?: (string | null | undefined)[];
   /** 0–1 of the file read. */
@@ -19,8 +22,10 @@ export interface ReadToolpathsOptions extends Pick<ParseOptions, "maxSegments" |
   signal?: AbortSignal;
 }
 
-const SMALL = new Set(["Metadata/slice_info.config", "Metadata/project_settings.config"]);
+const SMALL = new Set(["Metadata/slice_info.config", "Metadata/project_settings.config", "3D/3dmodel.model"]);
 const MAX_SMALL = 8 * 1024 * 1024;
+/** The model's mesh can be bigger; one past this is left unread (no size) rather than read in part. */
+const MAX_MODEL = 24 * 1024 * 1024;
 const GCODE = /^Metadata\/plate_(\d+)\.gcode$/;
 
 export class ToolpathError extends Error {}
@@ -38,6 +43,7 @@ export async function readToolpaths(file: ToolpathSource, options: ReadToolpaths
   let plate = 0;
   let sawGcode = false;
   let failure: Error | null = null;
+  let tooBig = false;
 
   unzip.onfile = (entry) => {
     const name = entry.name.replace(/\\/g, "/").replace(/^\/+/, "");
@@ -49,7 +55,8 @@ export async function readToolpaths(file: ToolpathSource, options: ReadToolpaths
         if (err) failure = err;
         else {
           size += chunk.length;
-          if (size <= MAX_SMALL) parts.push(chunk);
+          if (size <= (name === "3D/3dmodel.model" ? MAX_MODEL : MAX_SMALL)) parts.push(chunk);
+          else if (name === "3D/3dmodel.model") tooBig = true;
         }
       };
       entry.start();
@@ -117,6 +124,8 @@ export async function readToolpaths(file: ToolpathSource, options: ReadToolpaths
   const result = (reader as GcodeReader).end(plate);
   result.stats.sourceBytes = total;
   if (result.totalSeconds == null && info.prediction) result.totalSeconds = info.prediction;
+  const model = text("3D/3dmodel.model");
+  result.size = model && !tooBig ? sizeFromModelXml(model, options.copies) : null;
   applyFilaments(
     result.filaments,
     parseProject(text("Metadata/project_settings.config")),

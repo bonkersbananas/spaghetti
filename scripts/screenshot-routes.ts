@@ -2465,6 +2465,33 @@ export const shots: Shot[] = [
     cleanup: closeSliceSettings,
   },
   {
+    // Four copies sliced: the 3D view says what one copy measures (width, depth, height), and the card too.
+    name: "idea-model-size-3d",
+    path: "/ideas",
+    prepare: async (page) => {
+      const settings = await openSliceSettings(page);
+      const copies = settings.getByRole("group", { name: "Copies" });
+      for (let i = 0; i < 3; i++) await copies.getByRole("button", { name: "Copies: one more" }).click();
+      await settings.getByText("× 4", { exact: false }).first().waitFor();
+      await page.getByRole("button", { name: "Undo" }).first().waitFor({ timeout: 120_000 });
+      await page.keyboard.press("Escape");
+      await settings.waitFor({ state: "hidden" });
+      await page.waitForTimeout(300);
+      await page
+        .getByRole("button", { name: /^See .* in 3D$/ })
+        .first()
+        .click();
+      await page.getByRole("dialog", { name: "3D view" }).locator("[data-viewer=ready]").waitFor({ timeout: 60_000 });
+    },
+    beforeShot: async (page) => {
+      await page.waitForTimeout(500);
+    },
+    cleanup: async (page) => {
+      await closeDialog(page);
+      await closeSliceSettings(page);
+    },
+  },
+  {
     // The card after the change, its settings closed: it leads with what the change did, and offers the undo.
     name: "idea-model-changed",
     path: "/ideas",

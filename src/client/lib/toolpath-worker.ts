@@ -12,6 +12,8 @@ export interface ToolpathRequest {
   fallbackColors?: (string | null | undefined)[];
   /** The most segments to keep: phones get fewer. */
   maxSegments?: number;
+  /** How many copies of the plate's objects the file has, for the size of one. */
+  copies?: number;
 }
 
 export type ToolpathMessage =
@@ -53,6 +55,7 @@ self.onmessage = async (event: MessageEvent<ToolpathRequest | "cancel">) => {
       { stream: response.body, size: size || 1 },
       {
         plate: request.plate,
+        copies: request.copies,
         fallbackColors: request.fallbackColors,
         maxSegments: request.maxSegments,
         signal: controller.signal,
