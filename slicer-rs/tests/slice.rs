@@ -1856,6 +1856,72 @@ fn supports_in_filaments_of_their_own_print_as_orcas_do() {
     assert!(near(s, 1403.94, 1e-3) && near(i, 45.37, 1e-3), "{s} and {i} mm³");
 }
 
+/// Each layer's main direction (degrees, 0 to 179, by length) of the lines of `feature`, from the bottom up.
+fn feature_directions(gcode: &str, feature: &str) -> Vec<i64> {
+    let mut out: Vec<std::collections::BTreeMap<i64, f64>> = Vec::new();
+    let (mut current, mut layer) = ("", None::<usize>);
+    let (mut x, mut y) = (f64::NAN, f64::NAN);
+    for line in gcode.lines() {
+        if line.starts_with("; CHANGE_LAYER") {
+            layer = None;
+        }
+        if let Some(f) = line.strip_prefix("; FEATURE: ") {
+            current = f;
+        }
+        if !(line.starts_with("G1 ") || line.starts_with("G0 ")) {
+            continue;
+        }
+        let code = line.split(';').next().unwrap_or("");
+        let value =
+            |axis: char| code.split_whitespace().find_map(|w| w.strip_prefix(axis).and_then(|v| v.parse::<f64>().ok()));
+        let (nx, ny) = (value('X').unwrap_or(x), value('Y').unwrap_or(y));
+        if current == feature && value('E').is_some_and(|e| e > 0.0) && (nx, ny) != (x, y) && x.is_finite() {
+            let k = *layer.get_or_insert_with(|| {
+                out.push(Default::default());
+                out.len() - 1
+            });
+            let angle = (ny - y).atan2(nx - x).to_degrees().rem_euclid(180.0).round() as i64 % 180;
+            *out[k].entry(angle).or_default() += (nx - x).hypot(ny - y);
+        }
+        (x, y) = (nx, ny);
+    }
+    out.iter().map(|d| d.iter().max_by(|a, b| a.1.total_cmp(b.1)).map_or(-1, |(a, _)| *a)).collect()
+}
+
+#[test]
+fn support_materials_interfaces_print_as_orcas_do() {
+    // A support material's interface as Bambu Studio sets it: dense (`support_interface_spacing` 0), in straight
+    // lines turned an eighth of a turn either way from one interface layer to the next (`rectilinear_interlaced`).
+    let tee = boxes_stl(&[([115., 123., 0.], [125., 133., 20.]), ([100., 123., 20.], [140., 133., 25.])]);
+    let options = Options { arrange: false, thumbnail: false, ..Options::default() };
+    let slice_with = |process: &str| {
+        let setup = format!(r#"{{"process": {{"enable_support": "1", {process}}}}}"#);
+        let settings = setup::read(&setup).unwrap().settings;
+        slice(&[Input { name: "tee.stl", bytes: &tee }], &settings, &options).unwrap()
+    };
+    let interface = |out: &spaghetti_slicer::Output| {
+        out.stats.features[Role::ALL.iter().position(|&r| r == Role::SupportInterface).unwrap()].volume
+    };
+    // Native OrcaSlicer 2.5.0 (Nov 15): the interface (mm³), and its two layers' lines at 45° and then 135°.
+    let interlaced = r#""support_interface_pattern": "rectilinear_interlaced", "support_interface_spacing": "0""#;
+    for (style, want) in [
+        (r#""support_type": "normal(auto)""#, 189.51),
+        (r#""support_type": "normal(auto)", "support_style": "snug""#, 153.35),
+        (r#""support_type": "tree(auto)""#, 112.60),
+        (r#""support_type": "tree(auto)", "support_style": "tree_hybrid""#, 175.97),
+    ] {
+        let out = slice_with(&format!("{style}, {interlaced}"));
+        let got = interface(&out);
+        assert!((got - want).abs() <= want * 1e-3, "{style}: {got} mm³ of interface");
+        let directions = feature_directions(&String::from_utf8(out.gcode).unwrap(), "Support interface");
+        assert_eq!(directions, [45, 135], "{style}");
+    }
+    // Dense interfaces in the auto pattern print in straight lines too, a quarter turn from the columns' (Orca:
+    // 185.89 mm³).
+    let out = slice_with(r#""support_type": "normal(auto)", "support_interface_spacing": "0""#);
+    assert!((interface(&out) - 185.89).abs() <= 0.19, "{} mm³ of interface", interface(&out));
+}
+
 #[test]
 fn a_filament_change_flushes_into_the_supports_first() {
     // Three Ts in three filaments: two share a nozzle, and each layer's change between them flushes into the layer's
