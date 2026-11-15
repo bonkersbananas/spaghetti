@@ -85,6 +85,7 @@ test("opens the 3D view of a sliced file, scrubs its layers and closes with Esca
   // Space after a pause carries on from where the slider is, not from the first layer.
   await slider.fill("199");
   await page.keyboard.press("Space");
+  await page.waitForTimeout(300); // long enough for a restart from the first layer to show
   expect(await readout.textContent()).toMatch(/^Layer (2\d\d|3\d\d) of 317/);
   await page.keyboard.press("Space");
   await expect(dialog.locator("[data-viewer=ready]")).toBeVisible();
