@@ -1,3 +1,5 @@
+import { useEffect, useRef } from "react";
+import { scrollBehavior } from "@/lib/motion";
 import { TagPicker } from "./TagPicker";
 
 /**
@@ -10,16 +12,23 @@ export default function FailureTags(props: {
   onChange: (slugs: string[]) => void;
   suggested?: string;
 }) {
+  const ref = useRef<HTMLDivElement>(null);
+  // It opens under the outcome row: bring all of it into view, so "Add your own" isn't left under the Finish bar.
+  useEffect(() => {
+    ref.current?.scrollIntoView({ block: "nearest", behavior: scrollBehavior() });
+  }, []);
   return (
-    <TagPicker
-      kind="failure"
-      label="What went wrong?"
-      hide={props.outcome === "failed" ? ["spaghetti"] : undefined}
-      value={props.value}
-      onChange={props.onChange}
-      suggested={props.suggested}
-      visible={5}
-      className="mt-2"
-    />
+    <div ref={ref}>
+      <TagPicker
+        kind="failure"
+        label="What went wrong?"
+        hide={props.outcome === "failed" ? ["spaghetti"] : undefined}
+        value={props.value}
+        onChange={props.onChange}
+        suggested={props.suggested}
+        visible={5}
+        className="mt-2"
+      />
+    </div>
   );
 }

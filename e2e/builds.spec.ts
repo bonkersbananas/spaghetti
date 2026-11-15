@@ -196,6 +196,14 @@ test("records what went wrong while finishing a print from the capture sheet", {
   await sheet.getByRole("button", { name: "Bed adhesion" }).click();
   // The tag question never gets the keyboard up on its own.
   await expect(sheet.getByRole("textbox", { name: "New failure tag" })).toHaveCount(0);
+  // Closing the sheet half-answered loses nothing: the answer is back when it reopens on this print.
+  await page.keyboard.press("Escape");
+  await expect(sheet).toBeHidden();
+  if (isMobile) await page.getByRole("button", { name: "New idea" }).click();
+  else await page.keyboard.press("c");
+  await sheet.getByRole("radio", { name: "This print" }).click();
+  await expect(sheet.getByRole("radio", { name: "Spaghetti" })).toBeChecked();
+  await expect(sheet.getByRole("button", { name: "Bed adhesion" })).toHaveAttribute("aria-pressed", "true");
   await sheet.getByRole("button", { name: "Finish print" }).click();
   await expect(sheet).toBeHidden();
 

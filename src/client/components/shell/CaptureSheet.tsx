@@ -76,7 +76,20 @@ function useCaptureTarget(): Target {
  * "This build" or "This print" (which can finish the print), one tap away.
  */
 export function CaptureSheet() {
-  const { open, setOpen, draft, setDraft, photos, addFiles, removePhoto, save, saveTo, aim } = useCapture();
+  const {
+    open,
+    setOpen,
+    draft,
+    setDraft,
+    photos,
+    addFiles,
+    removePhoto,
+    save,
+    saveTo,
+    aim,
+    printDraft,
+    setPrintDraft,
+  } = useCapture();
   const isDesktop = useIsDesktop();
   const navigate = useNavigate();
   const pathname = useLocation({ select: (location) => location.pathname });
@@ -98,18 +111,22 @@ export function CaptureSheet() {
       }
     : found;
   const [asIdea, setAsIdea] = useState(!aim);
-  const [outcome, setOutcome] = useState<Outcome | null>(null);
-  const [failureTags, setFailureTags] = useState<string[]>([]);
   // Each time it opens, it starts on "New idea" again.
   useEffect(() => {
     if (!open) {
       setAsIdea(true);
-      setOutcome(null);
-      setFailureTags([]);
       setPickedPrint(null);
     } else if (aim) setAsIdea(false);
   }, [open, aim]);
   const target: Target = asIdea ? { kind: "idea" } : auto;
+  // The answer picked for this print, kept in the capture's draft (closing the sheet doesn't lose it).
+  const mine = target.kind === "attempt" && printDraft?.attemptId === target.attemptId ? printDraft : null;
+  const outcome: Outcome | null = mine?.outcome ?? null;
+  const failureTags = mine?.failureTags ?? [];
+  const setAnswer = (next: Outcome | null, tags: string[]) => {
+    if (target.kind !== "attempt") return;
+    setPrintDraft(next || tags.length ? { attemptId: target.attemptId, outcome: next, failureTags: tags } : null);
+  };
   // What the printer thinks went wrong, offered first among the tags.
   const suggestedFailure =
     target.kind === "attempt"
@@ -301,9 +318,10 @@ export function CaptureSheet() {
               size="md"
               value={outcome}
               onChange={(next) => {
-                setOutcome((current) => (current === next ? null : next));
+                const picked = outcome === next ? null : next;
                 // The printer's guess starts picked (a tap takes it off), as in the attempt sheet.
-                if (next !== "success" && suggestedFailure && !failureTags.length) setFailureTags([suggestedFailure]);
+                const guess = picked && picked !== "success" && suggestedFailure && !failureTags.length;
+                setAnswer(picked, guess ? [suggestedFailure] : failureTags);
               }}
             />
             {/* The same question the attempt sheet asks, right here: a failure is recorded without a trip to the build. */}
@@ -312,7 +330,7 @@ export function CaptureSheet() {
                 <FailureTags
                   outcome={outcome}
                   value={failureTags}
-                  onChange={setFailureTags}
+                  onChange={(tags) => setAnswer(outcome, tags)}
                   suggested={suggestedFailure ?? undefined}
                 />
               </Suspense>

@@ -21,12 +21,22 @@ export interface DraftPhoto {
   processed?: ProcessedPhoto;
 }
 
+/** What was picked for one print in the capture sheet and not yet saved to it. */
+export interface PrintDraft {
+  attemptId: string;
+  outcome: Outcome | null;
+  failureTags: string[];
+}
+
 interface CaptureContextValue {
   open: boolean;
   setOpen: (open: boolean) => void;
   /** The unsaved note, kept when the sheet closes (and across reloads) so nothing is lost. */
   draft: string;
   setDraft: (draft: string) => void;
+  /** The answer picked for a print while finishing it from the sheet: kept with the draft until it is finished. */
+  printDraft: PrintDraft | null;
+  setPrintDraft: (draft: PrintDraft | null) => void;
   photos: DraftPhoto[];
   addFiles: (files: Iterable<File>) => void;
   removePhoto: (id: string) => void;
@@ -155,6 +165,7 @@ export function CaptureProvider({ children }: { children: ReactNode }) {
   const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
   const [draft, setDraftState] = useState(storedDraft);
+  const [printDraft, setPrintDraft] = useState<PrintDraft | null>(null);
   const { photos, photosRef, addFiles, removePhoto, clear: clearPhotos } = useDraftPhotos();
   // The idea or build on screen, which captures go to while it shows.
   const [pageItem, setPageItem] = useState<PageItem | null>(null);
@@ -300,6 +311,7 @@ export function CaptureProvider({ children }: { children: ReactNode }) {
           });
           setDraft("");
           clearPhotos();
+          setPrintDraft(null);
           setOpen(false);
           return true;
         }
@@ -319,6 +331,7 @@ export function CaptureProvider({ children }: { children: ReactNode }) {
       }
       setDraft("");
       clearPhotos();
+      if (target.kind === "attempt") setPrintDraft(null);
       setOpen(false);
       return true;
     },
@@ -360,6 +373,8 @@ export function CaptureProvider({ children }: { children: ReactNode }) {
       setOpen,
       draft,
       setDraft,
+      printDraft,
+      setPrintDraft,
       photos,
       addFiles,
       removePhoto,
@@ -379,6 +394,7 @@ export function CaptureProvider({ children }: { children: ReactNode }) {
       open,
       draft,
       setDraft,
+      printDraft,
       photos,
       addFiles,
       removePhoto,
