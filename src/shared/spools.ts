@@ -169,6 +169,7 @@ export const BRANDS = [
   "Prusament",
   "Overture",
   "Jayo",
+  "3DJAKE",
 ] as const;
 
 /** How makers spell their names, by what people type ("bambu", "Sunlu"): shown that way, whatever was saved. */
@@ -184,6 +185,7 @@ const BRAND_SPELLINGS: Record<string, string> = {
   prusament: "Prusament",
   overture: "Overture",
   jayo: "Jayo",
+  "3djake": "3DJAKE",
 };
 
 /** A brand as its maker spells it ("Bambu" → "Bambu Lab", "Sunlu" → "SUNLU"); anything else as it was typed. */
@@ -197,6 +199,7 @@ export const PRODUCT_LINES: ReadonlyArray<{ brand: string; line: string }> = [
   { brand: "Polymaker", line: "PolyTerra" },
   { brand: "Polymaker", line: "Panchroma" },
   { brand: "Polymaker", line: "PolyLite" },
+  { brand: "3DJAKE", line: "ecoPLA" },
 ];
 
 /** The lines to offer for a brand: its own, or every known one while no brand is typed. */
