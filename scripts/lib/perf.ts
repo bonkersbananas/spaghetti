@@ -86,7 +86,8 @@ export async function installProbe(context: BrowserContext, ready?: string) {
     }
     try {
       new PerformanceObserver((list) => {
-        for (const entry of list.getEntries()) probe.longTasks.push({ start: entry.startTime, duration: entry.duration });
+        for (const entry of list.getEntries())
+          probe.longTasks.push({ start: entry.startTime, duration: entry.duration });
       }).observe({ type: "longtask", buffered: true });
     } catch {}
     new PerformanceObserver((list) => {

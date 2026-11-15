@@ -9,8 +9,8 @@
  *   pnpm tap-table [--runs 6] [--only "capture,open an idea"] [--profile phone|desktop] [--json] [--md]
  */
 import { chromium, type Locator, type Page } from "@playwright/test";
-import { boxStl, fusilliStl } from "../e2e/fixtures/model-stl.ts";
 import { hotdogModel } from "../e2e/fixtures/model-3mf.ts";
+import { fusilliStl } from "../e2e/fixtures/model-stl.ts";
 import { launchOptions } from "./lib/browser.ts";
 import { SEED_PASSWORD, SEED_USERS } from "./lib/local-app.ts";
 import { installProbe, onScreen, PHONE, type TapResult, tapLatency } from "./lib/perf.ts";
@@ -86,7 +86,10 @@ async function ideaWithModel(env: Env, title: string, file: { name: string; mime
     buffer: Buffer.from(file.bytes),
   });
   const files = env.page.getByRole("region", { name: /^Files/ });
-  await files.getByText(/Sliced by Spaghetti/).first().waitFor({ timeout: 180_000 });
+  await files
+    .getByText(/Sliced by Spaghetti/)
+    .first()
+    .waitFor({ timeout: 180_000 });
   await files.locator("img").first().waitFor();
   // The slice reaches the server a moment later; the card must be settled before taps count.
   await env.page.waitForTimeout(3000);
