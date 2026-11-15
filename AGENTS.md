@@ -28,7 +28,7 @@ src/
       ui/                 the design system: Button, Field, Sheet, Toast, Card, Chip, Avatar, Skeleton, EmptyState, Kbd, icons
       illustrations/      empty-state spot illustrations and the app mark
       shell/              Sidebar, TabBar, PageHeader, CaptureSheet, DropOverlay, AccountSheet, CommandPalette, ShortcutOverlay, sections.ts (sections, the phone tabs and the workshop), NowPrinting (the sidebar's card)
-      pantry/             Ams (the AMS loadout and slot sheet), SpoolCard, SpoolRow, AddSpoolSheet, ToShoppingList (the lazy "Add to shopping list" button of Running low), SpoolGrams (the hero figure, what used it), WeightSheets (weigh it, set the weight), WeightPicker, RunningLow
+      pantry/             Ams (the AMS loadout and slot sheet), SpoolCard, SpoolRow, AddSpoolSheet, LowUnderBays (Running low on the Printer page, lazy), ToShoppingList (the lazy "Add to shopping list" button of Running low), SpoolGrams (the hero figure, what used it), WeightSheets (weigh it, set the weight), WeightPicker, RunningLow
       ideas/              IdeaCard, PhotoViewer, PhotoStrip, AddFirstPhotos
       wishlist/           WishList (yours, draggable; someone else's, read-only), WishPicker (the sheet of ideas to pick), WishlistLink (the way in on phones, atop Ideas)
       viewer/             the 3D view (lazy): ThreeDButton (the whole plate picture as the button that opens it, a "3D" pill as its cue; prefetches), PrintViewer (React: slider, legend, build-up), scene.ts (three.js: plate, instanced toolpaths), intro.ts; the G-code worker is lib/toolpath-worker.ts, loaded by lib/toolpaths.ts
