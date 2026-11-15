@@ -38,6 +38,7 @@ import { useIsDesktop } from "@/lib/use-media-query";
 import { useNow } from "@/lib/use-now";
 
 const UpkeepLine = lazy(() => import("@/components/today/UpkeepLine"));
+const SinceBlock = lazy(() => import("@/components/today/SinceBlock"));
 const CommentsLine = lazy(() => import("@/components/today/CommentsLine"));
 const ScoutSection = lazy(() => import("@/components/scout/ScoutSection"));
 
@@ -179,6 +180,9 @@ function Today() {
   return (
     <>
       <PageHeader title="Today" subtitle={subtitle} />
+      <Suspense fallback={null}>
+        <SinceBlock />
+      </Suspense>
       <div className="-mt-4 mb-6 empty:hidden">
         {hasDueUpkeep && (
           <Suspense fallback={null}>

@@ -260,6 +260,10 @@ Never edit a migration that has been merged; add a new one.
 - "for" stays free text, but the two people's own names are understood (`namesPerson` in `shared/people.ts`, `useForLine` in `lib/for-whom.ts`): a line that names the viewer reads "for you" on cards, Up next and wishlist rows (`ForLine`), and the idea and build pages offer a "For Sam" chip (`ForPersonChip`) beside "For someone".
 - `ForField` is the quiet "for …" line under a title (nobody named: it draws nothing, and the page offers a quiet "For someone" `ForChip` among its chips that opens it); `useItemFields` autosaves it with the title and note.
 
+### Since you were away
+
+- After a visit that follows 6 hours or more away, the phone's Journal and desktop Today open with a quiet "Since Thursday" group (`components/today/SinceBlock.tsx`): one sentence about what the other person did since, then their newest three things. It lasts 12 hours after that visit. The device keeps its own clock for it in localStorage (`sg-active`, `sg-since`; `lib/since.ts`, started from `_app.tsx`); the rules and wording are pure in `shared/since.ts`. It reads the journal's first page, so nothing new is stored or sent. Their comments stay Today's comment line.
+
 ### Wishlists
 
 - Each person's ranked top ideas ([0028](docs/decisions/0028-wishlists-per-person-shared-by-default.md)): `wishlist_entries (user_id, item_id, position, added_at)` and `users.wishlist_private`; routes in `worker/routes/wishlists.ts` (`/api/wishlists`, writes under `/me`, person-only), types and the pure `moveTo`/`moveBy` in `shared/wishlist.ts`. Entries whose item isn't a live idea are hidden by the server and keep their slot through reorders, so undoing a delete or a start brings them back in place.

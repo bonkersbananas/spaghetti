@@ -21,6 +21,7 @@ import { followUnresizedPhotos } from "@/lib/photo-resize";
 import { resyncPush, useServiceWorkerMessages } from "@/lib/push";
 import { rememberedUser, sessionQuery } from "@/lib/queries";
 import { focusSearch } from "@/lib/search";
+import { followActivity } from "@/lib/since";
 import { useIsDesktop } from "@/lib/use-media-query";
 import { forgetEndedSession, isSigningOut } from "@/lib/use-sign-out";
 import { useWhenIdle } from "@/lib/when-idle";
@@ -90,6 +91,7 @@ function Shell() {
   const dragging = useGlobalCapture();
   // Sends captures still waiting from this visit or an earlier one.
   useEffect(() => connectOutbox(queryClient), [queryClient]);
+  useEffect(() => followActivity(), []);
   // Follows what the other person does, while the app is open.
   useLiveUpdates();
   // After a password sign-in on a device with no passkey: one quiet offer.
