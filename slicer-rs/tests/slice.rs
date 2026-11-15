@@ -1498,6 +1498,37 @@ fn two_filaments_change_once_a_layer_over_a_prime_tower() {
         assert!(layer.contains("; FEATURE: Prime tower\n"), "layer {i} has no tower");
     }
     assert_eq!(s.tool_changes, 20);
+    // After each change the nozzle comes round the tower to the gap in its wall from where Orca's reader of the
+    // change G-code says it is: at the plate's left edge (x 0, as the change moves only Y) and the change's last Y.
+    // So where it reaches the tower's box lies on the line from there to where it goes in, round the box between.
+    let mut routed = 0;
+    let body = gcode.split("M981 S0 P20000 ; close spaghetti detector\n").next().unwrap();
+    for change in body.split("\nM621 S").skip(1) {
+        let (mut read_y, mut points) = (None, Vec::new());
+        for line in change.lines() {
+            let code = line.split(';').next().unwrap_or("").trim();
+            if !code.starts_with("G1 ") {
+                continue;
+            }
+            let (x, y) = (word(code, 'X'), word(code, 'Y'));
+            if word(code, 'E').is_some_and(|e| e > 0.0) && (x.is_some() || y.is_some()) {
+                break;
+            }
+            match (x, y) {
+                (None, Some(y)) if points.is_empty() => read_y = Some(y),
+                (Some(x), Some(y)) => points.push([x, y]),
+                _ => {}
+            }
+        }
+        let from = [0.0, read_y.expect("the change's last Y")];
+        if let [reach, .., enter, _purge] = points[..] {
+            let (a, b) = ([reach[0] - from[0], reach[1] - from[1]], [enter[0] - from[0], enter[1] - from[1]]);
+            let off = (a[0] * b[1] - a[1] * b[0]).abs() / b[0].hypot(b[1]);
+            assert!(off < 0.002, "{off} mm off the line from {from:?}: {points:?}");
+            routed += 1;
+        }
+    }
+    assert!(routed >= 10, "{routed} changes come round the tower");
     // To the tower and back, a lifted nozzle goes over at its height and comes down at the end.
     let (on_the_way, at_end) = travels_down(&gcode);
     assert_eq!(on_the_way, None);
