@@ -257,8 +257,10 @@ export default function PrintViewer({
       : printed;
   // The scene follows the switch (and the file's colours once it is read).
   useEffect(() => {
-    if (summary) scene.current?.setFilaments(filaments.map((f) => f.color));
-  }, [summary, palette]);
+    if (!summary) return;
+    const own = palette === "original" ? originalColors : undefined;
+    scene.current?.setFilaments(summary.filaments.map((f, i) => own?.[i] ?? f.color));
+  }, [summary, palette, originalColors]);
   const showFilaments = mode === "filament" && filaments.filter((f) => f.segments > 0).length > 1;
 
   return (
