@@ -91,6 +91,26 @@ export async function addToShopping(queryClient: QueryClient, text: string, user
   }
 }
 
+/**
+ * Puts the lines on the list that aren't there already (the same words, whatever the case), most urgent first, so the
+ * first one asked for ends on top. Resolves with how many it added.
+ */
+export async function addSpoolsToShopping(queryClient: QueryClient, names: string[], userId: string): Promise<number> {
+  if (!canEdit()) return 0;
+  let added = 0;
+  for (const name of [...names].reverse()) {
+    const onList = (queryClient.getQueryData<ShoppingItem[]>(shoppingQuery.queryKey) ?? []).some(
+      (item) => item.boughtAt === null && sameWords(item.name, name),
+    );
+    if (!onList && (await addToShopping(queryClient, name, userId))) added += 1;
+  }
+  return added;
+}
+
+/** Whether two lines say the same: case and spacing don't count. */
+export const sameWords = (a: string, b: string) =>
+  a.trim().replace(/\s+/g, " ").toLowerCase() === b.trim().replace(/\s+/g, " ").toLowerCase();
+
 /** A thing added with only a link takes its page's title as its name (without the shop's name after it). */
 async function nameFromPage(queryClient: QueryClient, item: ShoppingItem) {
   const url = item.link ?? item.priceLink;

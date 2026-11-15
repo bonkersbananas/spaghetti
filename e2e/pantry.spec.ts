@@ -271,3 +271,27 @@ test("AMS bays say what is left, and the desktop list view is remembered", async
   await page.getByRole("radio", { name: "Cards" }).click();
   expect(await page.evaluate(() => localStorage.getItem("sg-pantry-view"))).toBe("cards");
 });
+
+test("running-low spools go on the shopping list in one tap, and only once", { tag: "@phone" }, async ({ page }) => {
+  const headers = { Origin: origin(page) };
+  await addSpoolByApi(page, { material: "PLA", colorName: "Sunflower yellow", colorHex: "#f0b323", remaining: "low" });
+  await addSpoolByApi(page, { material: "PETG", colorName: "Teal", colorHex: "#1a8a8a", remaining: "empty" });
+
+  await page.goto("/pantry");
+  const low = page.getByRole("region", { name: "Running low" });
+  await low.getByRole("button", { name: "Add to shopping list" }).click();
+  await expect(low.getByRole("button", { name: "On the shopping list" })).toBeVisible();
+
+  const { shoppingItems } = await (await page.request.get("/api/shopping-items")).json();
+  expect(shoppingItems.map((item: { name: string }) => item.name).sort()).toEqual([
+    "Sunflower yellow, PLA",
+    "Teal, PETG",
+  ]);
+
+  // A second tap goes to the list instead of adding the spools again.
+  await low.getByRole("button", { name: "On the shopping list" }).click();
+  await expect(page).toHaveURL(/\/shopping$/);
+  const after = await (await page.request.get("/api/shopping-items")).json();
+  expect(after.shoppingItems).toHaveLength(2);
+  for (const item of after.shoppingItems) await page.request.delete(`/api/shopping-items/${item.id}`, { headers });
+});
