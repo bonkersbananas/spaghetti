@@ -38,8 +38,9 @@ describe("catchUp", () => {
 
   it("counts only the other person's entries since then, in a sentence", () => {
     const result = catchUp(entries, items, { me: "me", from: at(10), name: "Sam" });
-    expect(result?.sentence).toBe("Sam finished 1 build, had 1 spaghetti and added 2 ideas.");
-    expect(result?.total).toBe(4);
+    expect(result?.sentence).toBe("Sam had 1 spaghetti and added 2 ideas.");
+    expect(result?.total).toBe(3);
+    // A build finished is credited to its creator by the journal, so it is not counted for anyone.
     expect(result?.lines).toHaveLength(3);
   });
 

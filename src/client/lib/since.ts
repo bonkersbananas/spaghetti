@@ -49,15 +49,17 @@ export function markActive(now = Date.now()) {
 /** Starts following use of the app (once, from the signed-in shell). Returns its stop. */
 export function followActivity(): () => void {
   markActive();
-  const beat = () => write(ACTIVE, Date.now());
-  const visible = () => (document.visibilityState === "visible" ? markActive() : beat());
+  // Only while in view: a tab left open in the background all night is not use.
+  const beat = () => document.visibilityState === "visible" && write(ACTIVE, Date.now());
+  const visible = () => (document.visibilityState === "visible" ? markActive() : leave());
   const timer = window.setInterval(beat, 60_000);
   document.addEventListener("visibilitychange", visible);
-  window.addEventListener("pagehide", beat);
+  const leave = () => write(ACTIVE, Date.now());
+  window.addEventListener("pagehide", leave);
   return () => {
     window.clearInterval(timer);
     document.removeEventListener("visibilitychange", visible);
-    window.removeEventListener("pagehide", beat);
+    window.removeEventListener("pagehide", leave);
   };
 }
 

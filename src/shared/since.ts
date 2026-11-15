@@ -51,7 +51,7 @@ function listOf(parts: string[]): string {
 }
 
 /**
- * What the other person did since `from`, in a sentence ("finished 1 build, had 1 spaghetti and added 2 ideas") and as
+ * What the other person did since `from`, in a sentence ("had 1 spaghetti and added 2 ideas") and as
  * the newest few lines to open. Their entries only: yours you know.
  */
 export function catchUp(
@@ -59,9 +59,21 @@ export function catchUp(
   items: ReadonlyMap<string, Item>,
   { me, from, name, lines = 3 }: { me: string; from: number; name: string; lines?: number },
 ): { sentence: string; lines: SinceLine[]; total: number } | null {
-  const theirs = entries.filter((entry) => entry.by !== me && entry.at > from && items.has(entry.itemId));
+  // The journal credits a build's start, finish and shelving to whoever captured it, not whoever did it, so only
+  // ideas and attempts say who: an attempt by whoever gave it its outcome (else who logged it).
+  const doneBy = (entry: JournalEntry) =>
+    entry.kind === "attempt"
+      ? (items.get(entry.itemId)?.attempts.find((a) => a.id === entry.attemptId)?.finishedBy ?? entry.by)
+      : entry.by;
+  const theirs = entries.filter(
+    (entry) =>
+      (entry.kind === "idea" || entry.kind === "attempt") &&
+      doneBy(entry) !== me &&
+      entry.at > from &&
+      items.has(entry.itemId),
+  );
   if (theirs.length === 0) return null;
-  const tally = { finished: 0, started: 0, shelved: 0, worked: 0, failed: 0, partly: 0, printing: 0, ideas: 0 };
+  const tally = { worked: 0, failed: 0, partly: 0, printing: 0, ideas: 0 };
   const rows: SinceLine[] = [];
   for (const entry of theirs) {
     const item = items.get(entry.itemId);
@@ -69,9 +81,6 @@ export function catchUp(
     const outcome = entry.kind === "attempt" ? item.attempts.find((a) => a.id === entry.attemptId)?.outcome : null;
     let what = "captured";
     if (entry.kind === "idea") tally.ideas++;
-    else if (entry.kind === "finished") tally.finished++, (what = "finished");
-    else if (entry.kind === "started") tally.started++, (what = "started");
-    else if (entry.kind === "shelved") tally.shelved++, (what = "shelved");
     else if (outcome === "success") tally.worked++, (what = "worked");
     else if (outcome === "failed") tally.failed++, (what = "spaghetti");
     else if (outcome === "partial") tally.partly++, (what = "partly");
@@ -85,13 +94,10 @@ export function catchUp(
     });
   }
   const parts = [
-    tally.finished && `finished ${count(tally.finished, "build")}`,
     tally.worked && `${count(tally.worked, "print")} that worked`,
     tally.failed && `had ${count(tally.failed, "spaghetti", "spaghettis")}`,
     tally.partly && `${count(tally.partly, "print")} came out partly`,
     tally.printing && `started ${count(tally.printing, "print")}`,
-    tally.started && `started ${count(tally.started, "build")}`,
-    tally.shelved && `shelved ${count(tally.shelved, "build")}`,
     tally.ideas && `added ${count(tally.ideas, "idea")}`,
   ].filter((part): part is string => !!part);
   // Three things read in a breath; the rest is in the list and the journal.

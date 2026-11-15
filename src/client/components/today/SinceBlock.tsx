@@ -2,7 +2,7 @@ import { displayName } from "@shared/people";
 import { catchUp, sinceLabel } from "@shared/since";
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { useMemo } from "react";
+import { useEffect, useMemo } from "react";
 import { BuildsIcon, IdeasIcon } from "@/components/ui/icons";
 import { QuietRowContent, quietRowClass } from "@/components/ui/QuietRow";
 import { Section } from "@/components/ui/Section";
@@ -11,6 +11,8 @@ import { peopleQuery, sessionQuery } from "@/lib/queries";
 import { useSinceFrom } from "@/lib/since";
 
 const everything = new URLSearchParams();
+/** A catch-up reads this many pages of the journal at most. */
+const MAX_PAGES = 5;
 
 /**
  * "Since Thursday": after a few days away, what the other person did, at the top of Today (desktop) and of the
@@ -21,7 +23,24 @@ export default function SinceBlock() {
   const from = useSinceFrom();
   const { data: me } = useQuery(sessionQuery);
   const { data: people } = useQuery(peopleQuery);
-  const page = useInfiniteQuery(journalQuery(everything)).data?.pages[0];
+  const journal = useInfiniteQuery(journalQuery(everything));
+  // Newest first: read pages until one reaches back past the start (a few, at most), or the journal ends.
+  const { fetchNextPage, hasNextPage, isFetchingNextPage } = journal;
+  const pages = journal.data?.pages;
+  const oldest = pages?.at(-1)?.entries.at(-1)?.at;
+  const reaches = oldest !== undefined && from !== null && oldest <= from;
+  const enough = reaches || (pages?.length ?? 0) >= MAX_PAGES;
+  useEffect(() => {
+    if (from !== null && pages && !enough && hasNextPage && !isFetchingNextPage) void fetchNextPage();
+  }, [from, pages, enough, hasNextPage, isFetchingNextPage, fetchNextPage]);
+  const page = useMemo(
+    () =>
+      pages && {
+        entries: pages.flatMap((p) => p.entries),
+        items: pages.flatMap((p) => p.items),
+      },
+    [pages],
+  );
   const other = people?.find((person) => person.id !== me?.id);
   const summary = useMemo(() => {
     if (from === null || !me || !page) return null;
@@ -30,6 +49,7 @@ export default function SinceBlock() {
   }, [from, me, page, other]);
   if (from === null || !summary) return null;
   const more = summary.total - summary.lines.length;
+  const cut = !enough && hasNextPage;
   return (
     <Section id="since" title={sinceLabel(from, Date.now())} size="overline" className="mb-8">
       <p className="font-display text-title text-ink mb-2">{summary.sentence}</p>
@@ -52,7 +72,7 @@ export default function SinceBlock() {
           );
         })}
       </div>
-      {more > 0 && <p className="text-small text-ink-faint mt-1">and {more} more in the journal</p>}
+      {(more > 0 || cut) && <p className="text-small text-ink-faint mt-1">and {cut ? "more" : more} in the journal</p>}
     </Section>
   );
 }
