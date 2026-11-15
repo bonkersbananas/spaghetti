@@ -247,7 +247,7 @@ export function ColourMatches({
                       transition={{ duration: duration.base, ease: ease.out }}
                       className="col-span-2 overflow-hidden"
                     >
-                      <div className="bg-ink/4 relative mt-0.5 mb-2 rounded-md p-3">
+                      <div className="bg-ink/4 relative mt-1.5 mb-2 rounded-md p-3">
                         {/* A notch up to the header it belongs to: left half or right half of the panel. */}
                         <span
                           aria-hidden
