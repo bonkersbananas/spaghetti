@@ -169,7 +169,7 @@ function DesktopSheet({
                     ...content.querySelectorAll<HTMLInputElement>(
                       `input[type=radio][name="${CSS.escape(first.name)}"]`,
                     ),
-                  ].find((radio) => radio.checked)
+                  ].find((radio) => radio.checked && !radio.disabled)
                 : undefined;
             (picked ?? first).focus({ preventScroll: true });
           }}
