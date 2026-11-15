@@ -57,6 +57,8 @@ export interface Toolpaths {
   filaments: ToolpathFilament[];
   /** [minX, minY, minZ, maxX, maxY, maxZ] of everything kept, or null when nothing was. */
   bounds: [number, number, number, number, number, number] | null;
+  /** Width, depth and height of one copy of what the file prints (mm), from its model; null when it has none. */
+  size?: [number, number, number] | null;
   /** The slicer's estimate for the whole print, in seconds, when known. */
   totalSeconds: number | null;
   /** Layer count the slicer announced (`layer num/total_layer_count`), which can exceed `layers` for a truncated file. */

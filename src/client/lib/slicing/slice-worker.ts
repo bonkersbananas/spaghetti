@@ -31,6 +31,7 @@ import { presetRecord, STAND_IN_COLOURS } from "@shared/slicing/orca.ts";
 import { type ModelPaint, paintBetween, paintLeaves, paintParts, paintWithin } from "@shared/slicing/paint.ts";
 import { renderPlate } from "@shared/slicing/render.ts";
 import { COPIES_MAX, type SlicerId, type SlicingSettings, slicingFor } from "@shared/slicing/settings.ts";
+import { type Size, sizeOfBoxes } from "@shared/slicing/size.ts";
 import { cautionsOf, rustEstimateMs, type SlicerWarning } from "@shared/slicing/slicers.ts";
 import type {
   FileSlice,
@@ -173,12 +174,15 @@ async function run(request: SliceRequest) {
   let plateOf: FileSlice["plate"];
   // How many copies of the plate's objects are on it, when more than one.
   let copies: number | undefined;
+  // What one copy prints, measured before fins or anything else is added to the meshes.
+  let size: Size | undefined;
   const slice = (extra: Omit<FileSlice, "settings" | "at">): FileSlice => ({
     ...extra,
     ...(fallback ? { fallback } : {}),
     ...(colourRows ? { colours: colourRows, ...(originalPng ? { originalPicture: true } : {}) } : {}),
     ...(plateOf ? { plate: plateOf } : {}),
     ...(copies ? { copies } : {}),
+    ...(size ? { size } : {}),
     settings: {
       ...settings,
       scale,
@@ -268,6 +272,8 @@ async function run(request: SliceRequest) {
       png = await picture(objects, setup, byParts);
       throw error;
     }
+    size =
+      sizeOfBoxes(objects.slice(0, objects.length / total).map((object) => boundsOf(object.positions))) ?? undefined;
     // Fins are the model's own walls: built on the part as it lies on the plate, appended to it.
     if (slicing.supports === "fins") {
       for (const object of objects) {

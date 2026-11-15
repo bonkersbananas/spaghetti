@@ -161,6 +161,8 @@ export function ViewerSheet({
         url={fileUrl(file.id, file.kind === "model" ? "sliced" : "file")}
         fileId={file.id}
         plate={file.plate}
+        copies={file.kind === "model" ? file.slice?.copies : undefined}
+        size={file.kind === "model" ? file.slice?.size : undefined}
         fallbackColors={fallbackColors}
         printing={printing}
       />
