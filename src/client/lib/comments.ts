@@ -73,6 +73,22 @@ const withComments = (queryClient: QueryClient, itemId: string, change: (list: C
 
 const SEND_RETRIES = [1500, 4000];
 
+/** Comments whose first send failed and wait to be retried: their text is only in memory until they land. */
+const retrying = new Map<string, { itemId: string; body: string; restored?: boolean }>();
+
+if (typeof window !== "undefined") {
+  // A page that goes away between retries (a reload, a phone app switch) would lose them: back into the draft they go.
+  window.addEventListener("pagehide", () => {
+    for (const entry of retrying.values()) {
+      const { itemId, body } = entry;
+      const typed = readDraft(itemId);
+      if (entry.restored) continue;
+      setDraft(itemId, typed ? `${body}\n${typed}` : body);
+      entry.restored = true;
+    }
+  });
+}
+
 /**
  * Sends a comment: it is in the thread at once, the draft is cleared, and the request goes in the
  * background (retried twice). If it still can't be sent the text goes back into the draft, so nothing
@@ -92,6 +108,10 @@ export function sendComment(queryClient: QueryClient, itemId: string, me: string
           method: "POST",
           json: { id, body },
         });
+        const sent = retrying.get(id);
+        retrying.delete(id);
+        // The page came back (back/forward cache) and the retry landed: it is not unsent any more.
+        if (sent?.restored) setDraft(itemId, readDraft(itemId).replace(`${body}\n`, "").replace(body, ""));
         withComments(queryClient, itemId, (list) => list.map((c) => (c.id === id ? saved : c)));
         // Writing counts as reading the thread; the server did the same.
         queryClient.setQueryData<CommentsResponse>(commentsQuery(itemId).queryKey, (current) =>
@@ -103,13 +123,16 @@ export function sendComment(queryClient: QueryClient, itemId: string, me: string
         const wait = SEND_RETRIES[attempt];
         const final = (error as { status?: number }).status !== undefined && (error as { status: number }).status < 500;
         if (wait === undefined || final) {
+          const restored = retrying.get(id)?.restored;
+          retrying.delete(id);
           withComments(queryClient, itemId, (list) => list.filter((c) => c.id !== id));
           // Back in the box, ahead of anything typed since.
           const typed = readDraft(itemId);
-          setDraft(itemId, typed ? `${body}\n${typed}` : body);
+          if (!restored) setDraft(itemId, typed ? `${body}\n${typed}` : body);
           toast.error("Couldn't send that", "Your message is back in the box.");
           return;
         }
+        if (!retrying.has(id)) retrying.set(id, { itemId, body });
         await new Promise((resolve) => setTimeout(resolve, wait));
       }
     }

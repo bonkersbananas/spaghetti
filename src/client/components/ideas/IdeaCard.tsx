@@ -15,7 +15,7 @@ import { useForLine } from "@/lib/for-whom";
 import type { ItemView } from "@/lib/items";
 import { useOutbox } from "@/lib/outbox";
 import { fileThumbSrc, hasPreview, photoSrc } from "@/lib/previews";
-import { useUnreadCount } from "@/lib/unread-comments";
+import { useUnreadCount, useUnreadThreadSearch } from "@/lib/unread-comments";
 
 // The menu's code (popover, sheet) arrives after the first screen: it is only needed once a card is touched.
 const CardMenu = lazy(() => import("./CardMenu").then((m) => ({ default: m.CardMenu })));
@@ -90,6 +90,7 @@ export function IdeaCard({ item, person, via, landing, menu, headingLevel = 2, r
   const upload = useUploadState(item);
   const unread = useUnreadCount(item.id);
   const forLine = useForLine();
+  const toThread = useUnreadThreadSearch(item.id);
   const model = modelOf(item);
   // The photo swiped to: the idea's page opens on it.
   const [showing, setShowing] = useState<string>();
@@ -99,7 +100,11 @@ export function IdeaCard({ item, person, via, landing, menu, headingLevel = 2, r
     <m.li {...useReflow(landing)} ref={ref} className="group/idea relative list-none">
       <div className="h-full rounded-lg">
         <Card
-          link={{ to: "/ideas/$ideaId", params: { ideaId: item.id }, search: opensOn ? { photo: opensOn } : {} }}
+          link={{
+            to: "/ideas/$ideaId",
+            params: { ideaId: item.id },
+            search: { ...(opensOn ? { photo: opensOn } : {}), ...toThread } as never,
+          }}
           aspect="portrait"
           headingLevel={headingLevel}
           reserveEnd={!!menu && !item.pending}
