@@ -452,9 +452,10 @@ fn overhang_fan_overlap(threshold: &str) -> f64 {
 
 impl SupportSettings {
     /// Whether these are Orca's organic trees: tree supports made where they are needed, in the default style (which
-    /// Orca makes organic, as it does the grid and snug styles of normal supports) or the organic one.
+    /// Orca makes organic, as it does the grid and snug styles of normal supports) or the organic one, which Bambu
+    /// Studio names `tree_organic` (a name Orca doesn't know, so it takes the default: organic trees too).
     pub fn organic(&self) -> bool {
-        self.trees() && matches!(self.style.as_str(), "default" | "grid" | "snug" | "organic" | "")
+        self.trees() && matches!(self.style.as_str(), "default" | "grid" | "snug" | "organic" | "tree_organic" | "")
     }
 
     /// Tree supports, automatic (`tree(auto)`) or only where painted (`tree(manual)`).
@@ -527,7 +528,11 @@ impl SupportSettings {
             Some("this kind of support")
         } else if on
             && matches!(kind, "normal(auto)" | "normal(manual)")
-            && !matches!(self.style.as_str(), "default" | "grid" | "snug" | "")
+            // A tree's style on normal supports is their default, the grid, to Orca (`SupportParameters`).
+            && !matches!(
+                self.style.as_str(),
+                "default" | "grid" | "snug" | "organic" | "tree_organic" | "tree_slim" | "tree_strong" | "tree_hybrid" | ""
+            )
         {
             Some("this style of support")
         } else if self.raft_layers > 0 && self.raft_maker() == RaftMaker::ClassicTrees {
@@ -550,14 +555,12 @@ impl SupportSettings {
         {
             Some("this support pattern")
         } else if self.top_z_distance < 0.0
-            || self.top_interface_layers == 0
-            || self.bottom_interface_layers == 0
             // Without a gap, Orca prints contacts in the auto pattern as concentric loops, and its organic trees and
             // rafts meet the object otherwise, which ours doesn't yet.
             || (self.top_z_distance == 0.0
                 && (self.organic() || self.raft_layers > 0 || matches!(self.interface_pattern.as_str(), "auto" | "")))
         {
-            Some("supports without a gap or interface")
+            Some("supports without a gap")
         } else if self.enforce_layers > 0
             || self.expansion != 0.0
             || self.angle != 0.0
@@ -788,11 +791,9 @@ impl Settings {
                 remove_small_overhang: p.bool("support_remove_small_overhang"),
                 critical_regions_only: p.bool("support_critical_regions_only"),
                 top_z_distance: p.float("support_top_z_distance"),
-                bottom_z_distance: match p.float("support_bottom_z_distance") {
-                    // 0 is the top distance.
-                    d if d > 0.0 => d,
-                    _ => p.float("support_top_z_distance"),
-                },
+                // As set, as Orca 2.5 takes it: 0 is no gap (`zero_gap_interface_bottom` where there are bottom
+                // interfaces), not the top's distance as it once was.
+                bottom_z_distance: p.float("support_bottom_z_distance"),
                 zero_gap_bottom: (if p.int("support_interface_bottom_layers") < 0 {
                     p.int("support_interface_top_layers")
                 } else {

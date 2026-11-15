@@ -1963,7 +1963,38 @@ fn supports_without_a_gap_hold_the_object_as_orcas_do() {
         assert!((volume(role) / orca - 1.0).abs() < 1.5e-3, "hybrid {role:?}: {} mm³", volume(role));
     }
     assert_eq!(feature_directions(&String::from_utf8(out.gcode).unwrap(), "Support interface"), [45, 135]);
-    assert_eq!(setup::read(&trees).err(), Some(Error::Unsupported("supports without a gap or interface")));
+    assert_eq!(setup::read(&trees).err(), Some(Error::Unsupported("supports without a gap")));
+}
+
+#[test]
+fn contacts_without_interface_layers_print_as_base() {
+    // Without interface layers on its side, a contact is base support to Orca, merged into the base beside it
+    // (`generate_support_toolpaths`): on the step, the support standing on its lower step without bottom interfaces,
+    // and the one under its arm without top ones, come to Orca's to the line, in the grid and snug styles.
+    let step = boxes_stl(&[
+        ([110., 120., 0.], [120., 140., 30.]),
+        ([120., 120., 0.], [130., 140., 5.]),
+        ([120., 120., 20.], [136., 140., 24.]),
+    ]);
+    let options = Options { arrange: false, thumbnail: false, ..Options::default() };
+    // Native OrcaSlicer 2.5.0 (Nov 15): mm³ of support and of interface.
+    for (style, side, orca) in [
+        ("default", "bottom", (1204.70, 98.24)),
+        ("snug", "bottom", (947.59, 76.12)),
+        ("default", "top", (1224.55, 43.99)),
+        ("snug", "top", (960.92, 45.02)),
+    ] {
+        let setup = format!(
+            r#"{{"process": {{"enable_support": "1", "support_type": "normal(auto)", "support_style": "{style}",
+                "support_interface_{side}_layers": "0"}}}}"#
+        );
+        let settings = setup::read(&setup).unwrap().settings;
+        let out = slice(&[Input { name: "step.stl", bytes: &step }], &settings, &options).unwrap();
+        let volume = |role: Role| out.stats.features[Role::ALL.iter().position(|&r| r == role).unwrap()].volume;
+        let (support, interface) = (volume(Role::Support), volume(Role::SupportInterface));
+        assert!((support - orca.0).abs() < 0.05, "{style} {side}: {support} mm³ of support");
+        assert!((interface - orca.1).abs() < 0.05, "{style} {side}: {interface} mm³ of interface");
+    }
 }
 
 #[test]
