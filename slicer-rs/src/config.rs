@@ -483,6 +483,12 @@ impl SupportSettings {
         (of(self.filament), of(self.interface_filament))
     }
 
+    /// Whether the interfaces' lines turn an eighth of a turn either way from one interface layer to the next
+    /// (`rectilinear_interlaced`, which Bambu Studio sets for a support material's interface).
+    pub fn interlaced(&self) -> bool {
+        self.interface_pattern == "rectilinear_interlaced"
+    }
+
     /// Whether these are Orca's normal supports in their snug style, which follow the overhangs instead of the grid.
     pub fn snug(&self) -> bool {
         self.kind.starts_with("normal") && self.style == "snug"
@@ -531,8 +537,10 @@ impl SupportSettings {
             matches!(self.base_pattern.as_str(), "default" | "none" | "")
         } else {
             matches!(self.base_pattern.as_str(), "default" | "rectilinear" | "")
-        }) || !matches!(self.interface_pattern.as_str(), "auto" | "rectilinear" | "")
-            || (self.classic().is_some() && !matches!(self.interface_pattern.as_str(), "auto" | ""))
+        }) || !matches!(self.interface_pattern.as_str(), "auto" | "rectilinear" | "rectilinear_interlaced" | "")
+            || (self.classic().is_some() && !matches!(self.interface_pattern.as_str(), "auto" | "rectilinear_interlaced" | ""))
+            // An interlaced raft's interfaces would turn by ids its layers are counted from.
+            || (self.raft_layers > 0 && self.interlaced())
         {
             Some("this support pattern")
         } else if self.top_z_distance <= 0.0 || self.top_interface_layers == 0 || self.bottom_interface_layers == 0 {

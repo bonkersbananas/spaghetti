@@ -1636,8 +1636,8 @@ pub(crate) fn vertical_runs(
     Some(out)
 }
 
-/// Orca's rectilinear fill below full density (`FillRectilinear::fill_surface_by_lines` without `monotonic`), as
-/// normal supports' first layer prints: lines on a grid through `origin` (units), the region turned by `angle`
+/// Orca's rectilinear fill (`FillRectilinear::fill_surface_by_lines` without `monotonic`, not adjusting its spacing
+/// at full density), as normal supports' first layer and dense interfaces print: lines on a grid through `origin` (units), the region turned by `angle`
 /// (radians, Orca's `_infill_direction` angle), `spacing` mm wide at `density`, joined along the edge where they
 /// can in Orca's sweep from left to right (`traverse_graph_generate_polylines`), and printed in that order.
 pub fn rectilinear(shape: &Shape, angle: f64, origin: (f64, f64), spacing: f64, density: f64) -> Vec<Vec<Pt>> {
@@ -1671,7 +1671,16 @@ pub fn rectilinear(shape: &Shape, angle: f64, origin: (f64, f64), spacing: f64, 
     let Some(bb) = geom::bbox(&src) else { return Vec::new() };
     // Orca's spacing in whole nanometres (its float spacing over its float density).
     let ls_nm = (spacing * 1e6 / (density as f32 as f64)) as i64;
-    let positions = grid_lines(bb[0] as i64, bb[2] as i64, ox, ls_nm);
+    let positions = if density as f32 > 0.9999 {
+        // At full density Orca lays the lines half a spacing (and a hair) along from the grid's.
+        let base = (ox * 100.0).round() as i64;
+        let x0 = base + (bb[0] as i64 * 100 - base).div_euclid(ls_nm) * ls_nm;
+        let n = ((bb[2] as i64 * 100 - x0 + ls_nm - 1) / ls_nm).max(0);
+        let x0 = x0 + (ls_nm + 100) / 2;
+        (0..n).map(|i| ((x0 + i * ls_nm) as f64 / 100.0).round() as i64).collect()
+    } else {
+        grid_lines(bb[0] as i64, bb[2] as i64, ox, ls_nm)
+    };
     let Some(mut segs) = slice_at(&contours, n_outer, &positions) else { return Vec::new() };
     connect(&contours, &mut segs, true, 0);
     let mut lines = traverse(&contours, &mut segs);

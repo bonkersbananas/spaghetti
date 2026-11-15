@@ -118,6 +118,9 @@ pub struct Params {
     /// Radians added to the interfaces' direction: a quarter of a half turn back for snug supports whose interface
     /// pattern is set to rectilinear (Orca's `support_interface_angle`), else none.
     interface_turn: f64,
+    /// Interfaces in straight lines turned an eighth of a turn either way by their layer's interface id
+    /// (`rectilinear_interlaced`).
+    interlaced: bool,
     /// mm²: a tree branch's island larger than this gets a second wall (`tree_branch_diameter_double_wall_area`).
     double_wall_area: f64,
     /// Whether supports are on: with them off, the generator makes only the raft, if any.
@@ -195,6 +198,7 @@ impl Params {
             } else {
                 0.0
             },
+            interlaced: sp.interlaced(),
             double_wall_area: match sp.wall_count {
                 0 => 0.25 * 25.0 * std::f64::consts::PI,
                 1 => f64::MAX,
@@ -2086,7 +2090,10 @@ fn toolpaths(
             .unwrap()
             .then(arena[b].height.partial_cmp(&arena[a].height).unwrap())
     });
-    let mut groups: Vec<(f64, f64)> = Vec::new();
+    // Each layer's interface id too (Orca's `interface_id`, which interlaced interfaces turn by): each layer with an
+    // interface takes the next, and a layer of top contacts alone one more than the layer they stand on.
+    let mut groups: Vec<(f64, f64, usize)> = Vec::new();
+    let mut next_id = 0;
     let mut i = 0;
     while i < all.len() {
         let zmax = arena[all[i]].print_z + EPSILON;
@@ -2097,32 +2104,77 @@ fn toolpaths(
         let zavg = 0.5 * (arena[all[i]].print_z + arena[all[j - 1]].print_z);
         let mut height = arena[all[i]].height;
         let mut empty = true;
+        let (mut interfaces, mut contacts, mut contact_bottom) = (0, 0, 0.0);
         for &g in &all[i..j] {
-            empty &= arena[g].polygons.is_empty();
+            if !arena[g].polygons.is_empty() {
+                empty = false;
+                let kind = arena[g].kind;
+                interfaces += usize::from(matches!(
+                    kind,
+                    Kind::RaftInterface
+                        | Kind::BottomContact
+                        | Kind::BottomInterface
+                        | Kind::TopContact
+                        | Kind::TopInterface
+                        | Kind::BaseInterface
+                ));
+                if kind == Kind::TopContact {
+                    contacts += 1;
+                    contact_bottom = arena[g].bottom_z;
+                }
+            }
             arena[g].print_z = zavg;
             height = height.min(arena[g].height);
         }
         if !empty {
-            groups.push((zavg, height));
+            let contacts_only = contacts > 0 && contacts == interfaces;
+            let mut id = next_id;
+            if contacts_only {
+                for &(z, _, other) in groups.iter().rev() {
+                    if (z - contact_bottom).abs() < EPSILON {
+                        id = other + 1;
+                    }
+                }
+            }
+            groups.push((zavg, height, id));
+            if interfaces > 0 && !contacts_only {
+                next_id += 1;
+            }
         }
         i = j;
     }
     let arena = &*arena;
     let origin = o.origin;
     par::map_range(groups.len(), |k| {
-        let (z, height) = groups[k];
+        let (z, height, id) = groups[k];
         let at = |list: &[usize]| -> Option<usize> {
             let i = list.partition_point(|&g| arena[g].print_z < z - EPSILON);
             list.get(i).copied().filter(|&g| arena[g].print_z < z + EPSILON)
         };
         let found = [at(bottoms), at(tops), at(interfaces), at(base_interfaces), at(inter)];
-        layer_paths(arena, z, height, found, origin, p)
+        layer_paths(arena, (z, height, id), found, origin, p)
     })
 }
 
+/// Orca's `support_interface_angle` and the quarter turn its filler adds (radians, in single precision as Orca has
+/// them): the interfaces a quarter turn from the columns, turned back an eighth for snug supports set to rectilinear,
+/// or interlaced, an eighth of a turn either way by the layer's interface id.
+fn interface_direction(p: &Params, id: usize) -> f64 {
+    use std::f32::consts::{FRAC_PI_2, FRAC_PI_4};
+    let turn = if p.interlaced { if id & 1 == 1 { FRAC_PI_4 } else { -FRAC_PI_4 } } else { p.interface_turn as f32 };
+    (FRAC_PI_2 + turn + FRAC_PI_2) as f64
+}
+
 /// One support layer's extrusions from the generator layers at its height (bottom contact, top contact, interface,
-/// base interface, base).
-fn layer_paths(arena: &[Gen], z: f64, height: f64, found: [Option<usize>; 5], origin: (f64, f64), p: &Params) -> Layer {
+/// base interface, base), `layer` its height, thickness and interface id.
+fn layer_paths(
+    arena: &[Gen],
+    layer: (f64, f64, usize),
+    found: [Option<usize>; 5],
+    origin: (f64, f64),
+    p: &Params,
+) -> Layer {
+    let (z, height, id) = layer;
     // Each with its polygons (merges change them) and, where they were cut down, what is left to print.
     struct Item {
         layer: usize,
@@ -2184,7 +2236,11 @@ fn layer_paths(arena: &[Gen], z: f64, height: f64, found: [Option<usize>; 5], or
         height: h,
     };
     // Interfaces: the support pattern a quarter turn from the columns', denser.
-    let interface_angle = (std::f32::consts::FRAC_PI_2 + p.interface_turn as f32 + std::f32::consts::FRAC_PI_2) as f64;
+    let interface_angle = interface_direction(p, id);
+    // Orca's interface filler (`contact_fill_pattern`): the support pattern, or straight lines where the contact
+    // layers are denser than 95 % or interlaced.
+    let contact_density = if p.top_interfaces > 0 { p.top_interface_density } else { p.bottom_interface_density };
+    let straight = contact_density > 0.95 || p.interlaced;
     let extrude_interface = |item: &mut Option<Item>, density: f64, angle: f64| {
         let Some(item) = item.as_mut() else { return };
         let area = item.to_extrude.clone().unwrap_or_else(|| item.polygons.clone());
@@ -2193,7 +2249,12 @@ fn layer_paths(arena: &[Gen], z: f64, height: f64, found: [Option<usize>; 5], or
         }
         let g = &arena[item.layer];
         for shape in &geom::union_all(&[&area]) {
-            for line in base_support::fill(shape, angle, origin, p.spacing, density) {
+            let lines = if straight {
+                monotonic::rectilinear(shape, angle, origin, p.spacing, density)
+            } else {
+                base_support::fill(shape, angle, origin, p.spacing, density)
+            };
+            for line in lines {
                 item.paths.push(crate::support::Item::Path(path(Role::SupportInterface, line, p.width, g.height)));
             }
         }
@@ -2295,9 +2356,27 @@ pub fn classic_layers(
     use crate::tree::classic::draw::AreaType;
     // Orca's `_infill_direction` angles (the filler's and a quarter turn, in float): the interfaces' filler is at the
     // support angle and a quarter turn, the base's at the support angle.
-    let interface_angle = (std::f32::consts::FRAC_PI_2 + std::f32::consts::FRAC_PI_2) as f64;
     let base_angle = std::f32::consts::FRAC_PI_2 as f64;
+    let contact_density = if p.top_interfaces > 0 { p.top_interface_density } else { p.bottom_interface_density };
+    // Orca's interface filler: straight lines where the contact layers are denser than 95 % or interlaced.
+    let straight = contact_density > 0.95 || p.interlaced;
+    // Each layer's interface ids for its roofs and its floors, which interlaced interfaces turn by: the layers with
+    // roofs counted up from the first, and those with floors.
+    let ids: Vec<(usize, usize)> = {
+        let (mut roof, mut floor) = (0, 0);
+        drawn
+            .iter()
+            .map(|d| {
+                let ids = (roof, floor);
+                roof += usize::from(d.groups.iter().any(|g| matches!(g.kind, AreaType::Roof | AreaType::Roof1stLayer)));
+                floor += usize::from(d.groups.iter().any(|g| g.kind == AreaType::Floor));
+                ids
+            })
+            .collect()
+    };
     par::map_range(drawn.len(), |layer_id| {
+        let (roof_angle, floor_angle) =
+            (interface_direction(p, ids[layer_id].0), interface_direction(p, ids[layer_id].1));
         let d = &drawn[layer_id];
         let h = d.height;
         let sp = flow_spacing(p.width, h);
@@ -2365,7 +2444,7 @@ pub fn classic_layers(
                         }
                     }
                     for e in &geom::offset_square(&one_area, -sp) {
-                        for line in monotonic::rectilinear(e, interface_angle, origin, sp, p.top_interface_density) {
+                        for line in monotonic::rectilinear(e, roof_angle, origin, sp, p.top_interface_density) {
                             group.push(path(role, line));
                         }
                     }
@@ -2377,7 +2456,13 @@ pub fn classic_layers(
                     let density =
                         if g.kind == AreaType::Floor { p.bottom_interface_density } else { p.top_interface_density };
                     let role = if g.interface_as_base { Role::Support } else { Role::SupportInterface };
-                    for line in base_support::fill(&g.area, interface_angle, origin, sp, density) {
+                    let angle = if g.kind == AreaType::Floor { floor_angle } else { roof_angle };
+                    let lines = if straight {
+                        monotonic::rectilinear(&g.area, angle, origin, sp, density)
+                    } else {
+                        base_support::fill(&g.area, angle, origin, sp, density)
+                    };
+                    for line in lines {
                         items.push(Item::Path(path(role, line)));
                     }
                 }
