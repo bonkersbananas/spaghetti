@@ -162,7 +162,16 @@ function DesktopSheet({
             );
             if (!first) return;
             event.preventDefault();
-            first.focus({ preventScroll: true });
+            // A radio group is entered at the one that is picked (as Tab does), not at its first.
+            const picked =
+              first instanceof HTMLInputElement && first.type === "radio" && !first.checked
+                ? [
+                    ...content.querySelectorAll<HTMLInputElement>(
+                      `input[type=radio][name="${CSS.escape(first.name)}"]`,
+                    ),
+                  ].find((radio) => radio.checked)
+                : undefined;
+            (picked ?? first).focus({ preventScroll: true });
           }}
           onCloseAutoFocus={returnFocus}
           onInteractOutside={(event) => {
