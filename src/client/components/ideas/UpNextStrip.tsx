@@ -35,9 +35,18 @@ export function UpNextStrip({ queue, menuFor, landed, dragFor }: UpNextStripProp
   }, []);
   // biome-ignore lint/correctness/useExhaustiveDependencies: measure again when cards come or go.
   useEffect(() => {
-    measure();
+    // Reading the strip's width forces a layout, and the state it sets another render: do it a frame after the first
+    // paint, not inside the tap that opened the screen. The edges only decide which arrows and fades show.
+    let second = 0;
+    const first = requestAnimationFrame(() => {
+      second = requestAnimationFrame(measure);
+    });
     window.addEventListener("resize", measure);
-    return () => window.removeEventListener("resize", measure);
+    return () => {
+      cancelAnimationFrame(first);
+      cancelAnimationFrame(second);
+      window.removeEventListener("resize", measure);
+    };
   }, [measure, queue.length]);
   const page = (by: 1 | -1) =>
     scroller.current?.scrollBy({ left: by * scroller.current.clientWidth * 0.8, behavior: "smooth" });

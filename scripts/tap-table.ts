@@ -50,7 +50,8 @@ const heading = (title: string) =>
   `document.querySelector('h1')?.textContent === ${JSON.stringify(title)} && !document.querySelector('.sg-skeleton')`;
 const ideaOpen = `location.pathname.startsWith('/ideas/') && !document.querySelector('.sg-skeleton') && !!document.querySelector('textarea, input[type=text]')`;
 const buildOpen = `location.pathname.startsWith('/builds/') && !document.querySelector('.sg-skeleton') && !!document.querySelector('textarea, input[type=text]')`;
-const closed = `!document.querySelector('[role=dialog]')`;
+// A sheet counts as answered when it starts closing (its slide-out takes about 240 ms more).
+const closed = `!document.querySelector('[role=dialog][data-state=open]')`;
 
 async function goto(env: Env, path: string, wait: string | Locator) {
   await env.page.goto(path);
