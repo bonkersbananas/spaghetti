@@ -16,7 +16,7 @@ import { cn } from "@/lib/cn";
 import type { ItemView } from "@/lib/items";
 import { photoSrc } from "@/lib/previews";
 import { usePrintProgress } from "@/lib/print-progress";
-import { useUnreadCount } from "@/lib/unread-comments";
+import { useUnreadCount, useUnreadThreadSearch } from "@/lib/unread-comments";
 import { OutcomeChip } from "./Outcome";
 
 /** When anything last happened on a build: its newest attempt, or when it started. */
@@ -93,10 +93,11 @@ export function BuildCard({
   const photo = newestPhoto(item);
   const last = item.attempts.at(-1);
   const unread = useUnreadCount(item.id);
+  const toThread = useUnreadThreadSearch(item.id);
   return (
     <m.li {...useReflow(landing)} ref={ref} className="list-none">
       <Card
-        link={{ to: "/builds/$buildId", params: { buildId: item.id } }}
+        link={{ to: "/builds/$buildId", params: { buildId: item.id }, search: toThread as never }}
         aspect="portrait"
         photo={
           photo

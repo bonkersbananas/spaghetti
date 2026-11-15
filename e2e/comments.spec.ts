@@ -171,6 +171,8 @@ test("the other person's comment shows up live, with a new marker on the card an
 
   await card.click();
   await expect(thread(page).getByText("Started the hull tonight, first layer looks great.")).toBeVisible();
+  // The card leads to the thread itself: the new comment is in view without scrolling for it.
+  await expect(thread(page).getByText("Started the hull tonight, first layer looks great.")).toBeInViewport();
   await expect(thread(page).getByText("New", { exact: true })).toBeVisible();
 
   // Open on the thread: a second comment lands live, under the same divider.
