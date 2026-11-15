@@ -530,9 +530,10 @@ function matchProject(
   spools: readonly SpoolLike[],
   chosen: SliceOptions,
 ) {
-  if (!settings) return null;
-  const types = [settings.filament_type ?? []].flat();
-  const colours = [settings.filament_colour ?? []].flat();
+  // A project with no settings of its own (parts that only name their extruders) lists no filaments: it has as many as
+  // it uses, each a stand-in in PLA.
+  const types = [settings?.filament_type ?? []].flat();
+  const colours = [settings?.filament_colour ?? []].flat();
   const used = new Set<number>();
   for (const object of objects) {
     used.add(object.extruder);
@@ -547,18 +548,23 @@ function matchProject(
     listed.push({ slot, material: types[slot - 1] ?? types[0] ?? "PLA", ...(hex ? { hex } : {}) });
   }
   const plan = planProject(listed, used, spools, chosen.colours);
+  // A filament that names no colour is shown in the stand-in colour the slice gives it.
+  const standIn = (slot: number) => STAND_IN_COLOURS[(slot - 1) % STAND_IN_COLOURS.length] ?? NO_COLOUR;
   const rows: SliceColour[] = plan.rows.map((row) => ({
-    hex: row.hex ?? NO_COLOUR,
+    hex: row.hex ?? standIn(row.slot),
     name: `Filament ${row.slot}`,
     slot: row.slot,
     material: row.material,
     share: 0,
-    filament: row.match.filament,
+    filament:
+      row.match.filament.colorHex || row.match.filament.spoolId
+        ? row.match.filament
+        : { ...row.match.filament, colorHex: standIn(row.slot).toLowerCase() },
     inPantry: row.match.inPantry,
     ...(row.chosen ? { chosen: true } : {}),
   }));
   // The project's own colours, for the picture of the plate as it has them.
-  const originalColours = listed.map((filament) => filament.hex ?? NO_COLOUR);
+  const originalColours = listed.map((filament) => filament.hex ?? standIn(filament.slot));
   return { filaments: plan.filaments, rows, originalColours };
 }
 

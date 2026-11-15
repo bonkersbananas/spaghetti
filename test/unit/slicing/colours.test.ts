@@ -6,6 +6,7 @@ import {
   originalFilamentColours,
   planColours,
   planProject,
+  printedFilamentNames,
   simplifyColours,
   slotKey,
 } from "../../../src/shared/slicing/colours.ts";
@@ -169,5 +170,43 @@ describe("originalFilamentColours", () => {
       "#d2281e",
       "#f3e9d2",
     ]);
+  });
+});
+
+describe("a project that lists no colours (parts that only name their extruders)", () => {
+  const listed = [1, 2, 3].map((slot) => ({ slot, material: "PLA" }));
+  const pantry = [spool("orange", "#f2754e")];
+
+  it("keeps each filament a stand-in until one is chosen, however near a spool is", () => {
+    const plan = planProject(listed, new Set([1, 2, 3]), pantry);
+    expect(plan.rows.map((row) => row.match.inPantry)).toEqual([false, false, false]);
+    expect(plan.filaments).toEqual([{ material: "PLA" }, { material: "PLA" }, { material: "PLA" }]);
+  });
+
+  it("prints a colour that isn't in the Pantry as a stand-in, and a spool where one is picked", () => {
+    const plan = planProject(listed, new Set([1, 2, 3]), pantry, [
+      { from: slotKey(2), filament: { material: "PLA", colorHex: "#d2281e", colorName: "Red" } },
+      { from: slotKey(3), filament: { material: "PLA", spoolId: "orange", colorHex: "#f2754e" } },
+    ]);
+    expect(plan.rows.map((row) => row.match.inPantry)).toEqual([false, false, true]);
+    expect(plan.filaments[1]).toEqual({ material: "PLA", colorHex: "#d2281e", colorName: "Red" });
+    expect(plan.filaments[2]?.spoolId).toBe("orange");
+  });
+});
+
+describe("printedFilamentNames", () => {
+  it("names a project's filaments by number, and leaves the unnamed ones to the legend", () => {
+    const filament = (colorName: string | undefined) => ({ material: "PLA", ...(colorName ? { colorName } : {}) });
+    expect(
+      printedFilamentNames([
+        { slot: 1, filament: filament(undefined) },
+        { slot: 3, filament: filament("Jade") },
+      ]),
+    ).toEqual([undefined, undefined, "Jade PLA"]);
+  });
+
+  it("numbers a model's filaments in the order its rows first use them", () => {
+    const row = (spoolId: string, colorName: string) => ({ filament: { material: "PLA", spoolId, colorName } });
+    expect(printedFilamentNames([row("a", "Red"), row("b", "White"), row("a", "Red")])).toEqual(["Red PLA", "White PLA"]);
   });
 });
