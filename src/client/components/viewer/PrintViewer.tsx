@@ -27,6 +27,8 @@ export interface PrintViewerProps {
   fallbackColors?: (string | null | undefined)[];
   /** Each filament's colour in the model itself, for a model whose colours were matched to spools: the switch to them. */
   originalColors?: (string | undefined)[];
+  /** What each filament is called (the spool's name), for the legend, where the file says only "PLA". */
+  names?: (string | undefined)[];
   /** Set while the attempt prints: the viewer follows the printer's own layer while the bridge reports it. */
   printing?: { id: string } | null;
   className?: string;
@@ -63,6 +65,7 @@ export default function PrintViewer({
   plate,
   fallbackColors,
   originalColors,
+  names,
   printing,
   className,
 }: PrintViewerProps) {
@@ -334,7 +337,7 @@ export default function PrintViewer({
                     // biome-ignore lint/suspicious/noArrayIndexKey: filaments have no id; the list never reorders
                     key={`f${i}`}
                     color={f.color ?? undefined}
-                    label={filamentLabel(f.type, i, filaments.length)}
+                    label={names?.[i] ?? filamentLabel(f.type, i, filaments.length)}
                   />
                 ) : null,
               )}

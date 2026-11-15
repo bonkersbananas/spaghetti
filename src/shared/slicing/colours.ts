@@ -249,3 +249,31 @@ export function originalFilamentColours(
   }
   return out;
 }
+
+/**
+ * What each of a plate's filaments is called, filament 1 first, as `originalFilamentColours` numbers them: the spool's
+ * colour name ("Jade"), else its material when it has no colour name. For the 3D view's legend, which would
+ * otherwise say "PLA 2".
+ */
+export function printedFilamentNames(
+  rows: readonly {
+    slot?: number;
+    filament: { spoolId?: string; material: string; colorHex?: string; colorName?: string };
+  }[],
+): (string | undefined)[] {
+  const out: (string | undefined)[] = [];
+  const name = (filament: { colorName?: string; material: string }) =>
+    filament.colorName ? `${filament.colorName} ${filament.material}` : undefined;
+  if (rows.every((row) => row.slot)) {
+    for (const row of rows) out[(row.slot as number) - 1] = name(row.filament);
+    return out;
+  }
+  const keys: string[] = [];
+  for (const row of rows) {
+    const key = row.filament.spoolId ?? `${row.filament.material}${row.filament.colorHex}`;
+    let index = keys.indexOf(key);
+    if (index < 0) index = keys.push(key) - 1;
+    out[index] ??= name(row.filament);
+  }
+  return out;
+}

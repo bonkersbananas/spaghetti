@@ -657,6 +657,48 @@ async function settleSliceSettings(page: Page) {
   await page.waitForTimeout(400);
 }
 
+/**
+ * A model with parts in several filaments (SPAGHETTI_HOTDOG=the zipper pull's 3MF, whose filaments 1 and 2 are the
+ * body and the logo) with filament 1 tried in neon yellow and filament 2 in black from "Any colour…", sliced again.
+ * Leaves the settings sheet open at the Colours rows, every row folded.
+ */
+async function tryNeonAndBlack(page: Page) {
+  const settings = await openSliceSettings(page, { idea: HOTDOG_IDEA, file: HOTDOG });
+  await settings.getByText("Colours", { exact: true }).waitFor();
+  const tryColour = async (which: "first" | "second", colour: string) => {
+    if (which === "first") await openColour(page, settings, "first");
+    else {
+      // The Colours block is open: just the second row.
+      const row = settings.locator("li button[aria-expanded]").nth(1);
+      await row.evaluate((button) => button.scrollIntoView({ block: "center", behavior: "instant" }));
+      await row.click({ force: true });
+      await page.waitForTimeout(400);
+    }
+    await settings.getByText("Any colour…").first().click({ force: true });
+    await settings.locator(`button[role="radio"][aria-label="${colour}"]`).last().click({ force: true });
+    await settings.getByText("a stand-in to try").waitFor({ timeout: 30_000 });
+    await page.waitForTimeout(300);
+  };
+  await tryColour("first", "Neon yellow");
+  // The first row folds again as the second opens.
+  await tryColour("second", "Black");
+  // The pick slices again by itself after a moment; a tap on "Slice it" does not wait for that.
+  await settings
+    .getByRole("button", { name: "Slice it" })
+    .click({ timeout: 3000 })
+    .catch(() => undefined);
+  // Sliced again: the line says "Sliced with these settings", or what the change did, with its undo.
+  await settings
+    .getByText("Sliced with these settings")
+    .or(settings.getByRole("button", { name: "Undo" }))
+    .first()
+    .waitFor({ timeout: 120_000 });
+  const rows = settings.locator("li button[aria-expanded=true]");
+  for (let open = await rows.count(); open > 0; open--) await rows.first().click({ force: true });
+  await page.waitForTimeout(400);
+  return settings;
+}
+
 /** The settings scrolled back to their top (picking a tile lower down scrolls it into view). */
 async function scrollSheetToTop(settings: Locator) {
   await settings.evaluate((dialog) => {
@@ -2050,6 +2092,82 @@ export const shots: Shot[] = [
       const settings = await openSliceSettings(page, { idea: HOTDOG_IDEA, file: HOTDOG });
       await settings.getByText("Colours", { exact: true }).waitFor();
       await openColour(page, settings, "stand-in");
+    },
+    beforeShot: settleSliceSettings,
+    cleanup: closeSliceSettings,
+  },
+  {
+    // The zipper pull in neon yellow and black: the Colours rows, each a stand-in in its colour.
+    name: "zipper-colours",
+    path: "/ideas",
+    prepare: async (page) => {
+      const settings = await tryNeonAndBlack(page);
+      await settings
+        .getByRole("button", { name: /^Colours/ })
+        .evaluate((button) => button.scrollIntoView({ block: "center", behavior: "instant" }));
+    },
+    beforeShot: settleSliceSettings,
+    cleanup: closeSliceSettings,
+  },
+  {
+    // The same, the cover: the picture as it prints, with the switch to the model's own colours.
+    name: "zipper-cover",
+    path: "/ideas",
+    prepare: async (page) => {
+      await tryNeonAndBlack(page);
+      await page.keyboard.press("Escape");
+      await page.getByRole("radio", { name: "In our filaments" }).waitFor();
+      await page.waitForTimeout(800);
+    },
+    cleanup: removeModelItems,
+  },
+  {
+    // The same in 3D after slicing: the legend names the colours.
+    name: "zipper-3d",
+    path: "/ideas",
+    prepare: async (page) => {
+      await tryNeonAndBlack(page);
+      await page.keyboard.press("Escape");
+      await page.getByRole("button", { name: `See ${HOTDOG.name} in 3D` }).click();
+      await page.getByRole("dialog", { name: "3D view" }).locator("[data-viewer=ready]").waitFor({ timeout: 60_000 });
+    },
+    beforeShot: async (page) => {
+      await page.waitForTimeout(600);
+    },
+    cleanup: async (page) => {
+      await closeDialog(page);
+      await removeModelItems(page);
+    },
+  },
+  {
+    // A one-filament model's Filament choice with a colour from the palette picked.
+    name: "slice-settings-filament-any",
+    path: "/ideas",
+    prepare: async (page) => {
+      const settings = await openSliceSettings(page);
+      const group = settings.getByText("Any colour…");
+      await group.click({ force: true });
+      await settings.locator('button[role="radio"][aria-label="Neon yellow"]').click({ force: true });
+      await settings.getByText("a stand-in to try").waitFor({ timeout: 30_000 });
+      await settings
+        .getByRole("radiogroup", { name: "Any colour" })
+        .evaluate((element) => element.scrollIntoView({ block: "center", behavior: "instant" }));
+    },
+    beforeShot: settleSliceSettings,
+    cleanup: closeSliceSettings,
+  },
+  {
+    // Any colour…: the palette under a row's spools, a neon yellow picked as the stand-in to try.
+    name: "slice-settings-colours-any",
+    path: "/ideas",
+    prepare: async (page) => {
+      const settings = await openSliceSettings(page, { idea: HOTDOG_IDEA, file: HOTDOG });
+      await settings.getByText("Colours", { exact: true }).waitFor();
+      await openColour(page, settings, "first");
+      await settings.getByText("Any colour…").first().click({ force: true });
+      await settings.getByRole("radio", { name: "Neon yellow" }).click({ force: true });
+      // The pick is kept: the row says so once the settings have it.
+      await settings.getByText("a stand-in to try").waitFor({ timeout: 30_000 });
     },
     beforeShot: settleSliceSettings,
     cleanup: closeSliceSettings,

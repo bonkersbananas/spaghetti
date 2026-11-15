@@ -2,7 +2,7 @@ import { type ColourChoice, slotKey } from "@shared/slicing/colours.ts";
 import { filamentOfSpool, slicingSpools } from "@shared/slicing/pantry.ts";
 import { filamentWords } from "@shared/slicing/settings.ts";
 import type { SliceColour } from "@shared/slicing/types.ts";
-import { type SpoolLike, slotPlace } from "@shared/spools";
+import { nearestColorName, type SpoolLike, slotPlace } from "@shared/spools";
 import { AnimatePresence, m } from "motion/react";
 import { Fragment, useEffect, useRef, useState } from "react";
 import { type ChoiceTile, ChoiceTiles } from "@/components/ui/ChoiceTiles";
@@ -10,6 +10,7 @@ import { Disclosure } from "@/components/ui/Disclosure";
 import { ArrowRightIcon, ExpandIcon, PaletteIcon, UndoIcon } from "@/components/ui/icons";
 import { MetaList } from "@/components/ui/MetaList";
 import { SpoolDisc } from "@/components/ui/SpoolDisc";
+import { StandInPalette } from "@/components/ui/StandInPalette";
 import { Swatch } from "@/components/ui/Swatch";
 import { cn } from "@/lib/cn";
 import { duration, ease, scrollBehavior } from "@/lib/motion";
@@ -17,6 +18,7 @@ import { duration, ease, scrollBehavior } from "@/lib/motion";
 /** The Pantry's spools offered under a colour, at most: a pantry is rarely bigger. */
 const MAX_SPOOLS = 12;
 const STAND_IN = "stand-in";
+const ANY = "any";
 
 /** The short line under a spool's name: its material and where it is ("PLA · A2", "PLA · Ext"), or the shelf. */
 export function spoolDetail(spool: SpoolLike): string {
@@ -85,6 +87,17 @@ export function ColourMatches({
     const spool = offered.find((candidate) => candidate.id === id);
     if (spool) onChange([...others, { from: choiceKey(colour), filament: filamentOfSpool(spool) }]);
   };
+  // Any colour at all, in the row's material: a stand-in to try, kept like a spool pick.
+  const chooseColour = (colour: SliceColour, hex: string, name?: string) => {
+    const others = choices.filter((choice) => choice.from !== choiceKey(colour));
+    const named = name ?? nearestColorName(hex);
+    const filament = {
+      material: colour.material ?? colour.filament.material,
+      colorHex: hex,
+      ...(named ? { colorName: named } : {}),
+    };
+    onChange([...others, { from: choiceKey(colour), filament }]);
+  };
   const filaments = new Set(colours.map(keyOf));
   const shared = [...filaments].filter((key) => colours.filter((colour) => keyOf(colour) === key).length > 1).length;
   const projectRows = colours.every((colour) => !!colour.slot);
@@ -117,6 +130,7 @@ export function ColourMatches({
     <Picker
       colour={colour}
       spool={colour.filament.spoolId ? spools.find((s) => s.id === colour.filament.spoolId) : undefined}
+      onColour={(hex, name) => chooseColour(colour, hex, name)}
       offered={offered}
       wrapped={wrapped}
       onPick={(id) => choose(colour, id)}
@@ -128,11 +142,16 @@ export function ColourMatches({
       <span className="flex min-w-0 items-center gap-2.5">
         <Swatch color={colour.hex} size="md" />
         <span className="flex min-w-0 flex-col">
-          <span className="text-small text-ink font-semibold text-balance">
-            {[nameOf(colour), ...(colour.merged ?? [])].join(" & ")}
+          {/* The colour's own name takes the width; the colours merged into it are counted under it (and named on
+              hover), so a half-width row reads in two lines. */}
+          <span
+            className="text-small text-ink truncate font-semibold"
+            title={[nameOf(colour), ...(colour.merged ?? [])].join(" & ")}
+          >
+            {nameOf(colour)}
           </span>
           <MetaList className="text-caption text-ink-faint font-normal">
-            {colour.merged?.length ? `${colour.merged.length + 1} near colours` : ""}
+            {colour.merged?.length ? `+${colour.merged.length} near` : ""}
             {colour.slot ? (colour.material ?? "") : `${colour.share}%`}
           </MetaList>
         </span>
@@ -277,6 +296,7 @@ function Picker({
   offered,
   wrapped,
   onPick,
+  onColour,
   onBack,
 }: {
   colour: SliceColour;
@@ -284,6 +304,7 @@ function Picker({
   offered: readonly SpoolLike[];
   wrapped: boolean;
   onPick: (id: string) => void;
+  onColour: (hex: string, name?: string) => void;
   onBack: () => void;
 }) {
   const box = useRef<HTMLDivElement>(null);
@@ -293,8 +314,12 @@ function Picker({
     picked?.scrollIntoView({ inline: "center", block: "nearest", behavior: scrollBehavior() });
   }, []);
   const filament = colour.filament;
+  // A stand-in in a colour of its own, not the model's: the palette is open under the tiles.
+  const custom =
+    !filament.spoolId && !!filament.colorHex && filament.colorHex.toLowerCase() !== colour.hex.toLowerCase();
+  const [palette, setPalette] = useState(custom);
   return (
-    <div ref={box}>
+    <div ref={box} className="flex flex-col gap-3">
       <ChoiceTiles
         label={`Print ${nameOf(colour)} in`}
         {...(wrapped ? { layout: "grid" as const, columns: 4 as const, dense: true } : { layout: "scroll" as const })}
@@ -304,16 +329,31 @@ function Picker({
             value: STAND_IN,
             label: nameOf(colour),
             detail: "Not in the Pantry yet",
-            glyph: <Swatch color={colour.hex} size="md" />,
+            glyph: <SpoolDisc color={colour.hex} size="md" empty />,
+          },
+          {
+            value: ANY,
+            label: custom ? (filament.colorName ?? "Your colour") : "Any colour…",
+            detail: "Not in the Pantry",
+            glyph: custom ? (
+              <SpoolDisc color={filament.colorHex} size="md" empty />
+            ) : (
+              <PaletteIcon size={24} aria-hidden />
+            ),
           },
         ]}
-        value={filament.spoolId ?? STAND_IN}
-        onChange={onPick}
+        value={palette || custom ? ANY : (filament.spoolId ?? STAND_IN)}
+        onChange={(id) => {
+          setPalette(id === ANY);
+          if (id !== ANY) onPick(id);
+        }}
         caption={
           <>
             <span className="text-ink font-semibold">{filamentWords(filament)}</span> ·{" "}
             {!colour.inPantry
-              ? "a stand-in in the model's colour, not in the Pantry yet"
+              ? custom
+                ? "a stand-in to try, not in the Pantry"
+                : "a stand-in in the model's colour, not in the Pantry yet"
               : `${spool?.slot ? `loaded ${slotPlace(spool.slot)}` : "on the shelf"}${colour.chosen ? "" : " · the nearest in the Pantry"}`}
             {colour.chosen && (
               <button
@@ -327,6 +367,13 @@ function Picker({
           </>
         }
       />
+      {palette && (
+        <StandInPalette
+          value={custom ? filament.colorHex : undefined}
+          label={`A colour for ${nameOf(colour)}`}
+          onPick={onColour}
+        />
+      )}
     </div>
   );
 }
