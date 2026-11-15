@@ -3,11 +3,6 @@ import { afterPaint } from "./after-paint";
 import { CONTENT_ID, focusContent } from "./focus-content";
 
 /**
- * Runs `work` once the frame that follows the move has painted: focusing a card scrolls it into view and measures the
- * page, which inside the frame would hold the first paint of the new page back (the "Start building" budget).
- */
-
-/**
  * After the router moves to another page, a keyboard starts from the page and not from where the old one's focused
  * control used to be: the control that held focus is gone (`<body>`), or it is the sidebar link that was just used,
  * and either way the next Tab would start at the logo again. Focus that is somewhere real (a field the page
