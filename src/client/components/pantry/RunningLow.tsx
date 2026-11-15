@@ -1,6 +1,7 @@
 import { gramsText } from "@shared/ledger";
 import { spoolName } from "@shared/spools";
 import { Link } from "@tanstack/react-router";
+import { lazy, Suspense } from "react";
 import { Button } from "@/components/ui/Button";
 import { Chip } from "@/components/ui/Chip";
 import { CopyIcon } from "@/components/ui/icons";
@@ -10,6 +11,8 @@ import { SpoolDisc } from "@/components/ui/SpoolDisc";
 import { toast } from "@/components/ui/Toast";
 import { type LowSpool, shoppingList } from "@/lib/running-low";
 import { useIsDesktop } from "@/lib/use-media-query";
+
+const ToShoppingList = lazy(() => import("./ToShoppingList").then((m) => ({ default: m.ToShoppingList })));
 
 /** The phone's share sheet where there is one (so the list can go straight to a message), else the clipboard. */
 async function shareList(text: string, canShare: boolean) {
@@ -34,7 +37,7 @@ async function shareList(text: string, canShare: boolean) {
  * Spools to restock, under a threshold or short for a print on the bed, with the list to take to the shop.
  * One quiet surface; each row opens the spool.
  */
-export function RunningLow({ low }: { low: readonly LowSpool[] }) {
+export function RunningLow({ low, demo }: { low: readonly LowSpool[]; demo?: boolean }) {
   const isDesktop = useIsDesktop();
   if (!low.length) return null;
   return (
@@ -44,14 +47,19 @@ export function RunningLow({ low }: { low: readonly LowSpool[] }) {
       count={low.length}
       className="md:max-w-2xl xl:has-[li+li]:max-w-none"
       aside={
-        <Button
-          variant="secondary"
-          size="sm"
-          icon={CopyIcon}
-          onClick={() => void shareList(shoppingList(low), !isDesktop)}
-        >
-          {isDesktop ? "Copy list" : "Share list"}
-        </Button>
+        <span className="flex items-center gap-2">
+          <Suspense fallback={<span className="bg-ink/4 h-9 w-44 rounded-md" aria-hidden />}>
+            <ToShoppingList low={low} demo={demo} />
+          </Suspense>
+          <Button
+            variant="secondary"
+            size="sm"
+            icon={CopyIcon}
+            onClick={() => void shareList(shoppingList(low), !isDesktop)}
+          >
+            {isDesktop ? "Copy list" : "Share list"}
+          </Button>
+        </span>
       }
     >
       <ul

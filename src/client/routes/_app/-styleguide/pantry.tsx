@@ -222,6 +222,7 @@ export function PantrySection() {
           </div>
           <Label>Running low (phones say "Share list")</Label>
           <RunningLow
+            demo
             low={[
               { spool: { ...sampleSpool, gramsLeft: 40, remaining: "low" }, needs: 66 },
               {
