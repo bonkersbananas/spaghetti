@@ -416,8 +416,7 @@ test("a plate in two colours is sliced by ours, each object in its own filament"
     const sliced = await page.request.get(`/api/files/${file.id}/sliced`);
     expect(sliced.ok()).toBe(true);
     // What Bambu Studio's own reader needs of a sliced file, from its source (test/unit/slicing/bambu-rules.ts).
-    // TODO(pin): drop `model: false` once the pinned slicer release carries the model (pull request on pack.rs).
-    expect(bambuStudioProblems(new Uint8Array(await sliced.body()), { model: false })).toEqual([]);
+    expect(bambuStudioProblems(new Uint8Array(await sliced.body()))).toEqual([]);
     const zip = unzipSync(new Uint8Array(await sliced.body()));
     const info = strFromU8(zip["Metadata/slice_info.config"] ?? new Uint8Array());
     expect(/key="filament_maps" value="([^"]*)"/.exec(info)?.[1]?.split(" ")).toHaveLength(2);
