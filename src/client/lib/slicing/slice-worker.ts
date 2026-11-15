@@ -585,6 +585,7 @@ function withChoices(slicing: SlicingSettings, chosen: SliceOptions): SlicingSet
     ...slicing,
     ...(chosen.colours?.length ? { colours: chosen.colours } : {}),
     ...(chosen.modelPlate ? { modelPlate: chosen.modelPlate } : {}),
+    ...(chosen.copies !== undefined ? { copies: chosen.copies } : {}),
   };
 }
 
