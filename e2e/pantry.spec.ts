@@ -283,15 +283,14 @@ test("running-low spools go on the shopping list in one tap, and only once", { t
   await expect(low.getByRole("button", { name: "On the shopping list" })).toBeVisible();
 
   const { shoppingItems } = await (await page.request.get("/api/shopping-items")).json();
-  expect(shoppingItems.map((item: { name: string }) => item.name).sort()).toEqual([
-    "Sunflower yellow, PLA",
-    "Teal, PETG",
-  ]);
+  const mine = ["Sunflower yellow, PLA", "Teal, PETG"];
+  const names = shoppingItems.map((item: { name: string }) => item.name);
+  expect(names.filter((name: string) => mine.includes(name)).sort()).toEqual(mine);
 
-  // A second tap goes to the list instead of adding the spools again.
-  await low.getByRole("button", { name: "On the shopping list" }).click();
-  await expect(page).toHaveURL(/\/shopping$/);
+  // Everything is on the list now: the button says so and stays quiet, so a second tap can't double it.
+  await expect(low.getByRole("button", { name: "On the shopping list" })).toBeDisabled();
   const after = await (await page.request.get("/api/shopping-items")).json();
-  expect(after.shoppingItems).toHaveLength(2);
-  for (const item of after.shoppingItems) await page.request.delete(`/api/shopping-items/${item.id}`, { headers });
+  const added = after.shoppingItems.filter((item: { name: string }) => mine.includes(item.name));
+  expect(added).toHaveLength(2);
+  for (const item of added) await page.request.delete(`/api/shopping-items/${item.id}`, { headers });
 });

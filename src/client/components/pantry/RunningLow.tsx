@@ -1,19 +1,18 @@
 import { gramsText } from "@shared/ledger";
 import { spoolName } from "@shared/spools";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Link, useNavigate } from "@tanstack/react-router";
+import { Link } from "@tanstack/react-router";
+import { lazy, Suspense } from "react";
 import { Button } from "@/components/ui/Button";
 import { Chip } from "@/components/ui/Chip";
-import { CheckIcon, CopyIcon, ShoppingIcon } from "@/components/ui/icons";
+import { CopyIcon } from "@/components/ui/icons";
 import { RemainingMeter } from "@/components/ui/RemainingMeter";
 import { Section } from "@/components/ui/Section";
 import { SpoolDisc } from "@/components/ui/SpoolDisc";
 import { toast } from "@/components/ui/Toast";
-import { sessionQuery } from "@/lib/queries";
-import { useReadOnly } from "@/lib/read-only";
 import { type LowSpool, shoppingList } from "@/lib/running-low";
-import { addSpoolsToShopping, sameWords, useShopping } from "@/lib/shopping";
 import { useIsDesktop } from "@/lib/use-media-query";
+
+const ToShoppingList = lazy(() => import("./ToShoppingList").then((m) => ({ default: m.ToShoppingList })));
 
 /** The phone's share sheet where there is one (so the list can go straight to a message), else the clipboard. */
 async function shareList(text: string, canShare: boolean) {
@@ -38,37 +37,9 @@ async function shareList(text: string, canShare: boolean) {
  * Spools to restock, under a threshold or short for a print on the bed, with the list to take to the shop.
  * One quiet surface; each row opens the spool.
  */
-export function RunningLow({
-  low,
-  demo,
-}: {
-  low: readonly LowSpool[] /** Made-up spools (the styleguide): the shopping button stays quiet instead of writing to the real list. */;
-  demo?: boolean;
-}) {
-  const readOnly = useReadOnly();
+export function RunningLow({ low, demo }: { low: readonly LowSpool[]; demo?: boolean }) {
   const isDesktop = useIsDesktop();
-  const queryClient = useQueryClient();
-  const navigate = useNavigate();
-  const me = useQuery(sessionQuery).data?.id;
-  const { toBuy, isPending: shoppingPending } = useShopping();
   if (!low.length) return null;
-  // What each spool is called on the list, and which of them aren't on it yet.
-  const lines = low.map(({ spool }) => {
-    const name = spoolName(spool);
-    return [name.title, name.detail].filter(Boolean).join(", ");
-  });
-  const missing = lines.filter((line) => !toBuy.some((thing) => sameWords(thing.name, line)));
-  const allOnList = !shoppingPending && missing.length === 0;
-  const putOnList = async () => {
-    if (allOnList) return void navigate({ to: "/shopping" });
-    if (!me) return;
-    const added = await addSpoolsToShopping(queryClient, missing, me);
-    if (added)
-      toast.success(
-        added === 1 ? "On the shopping list" : `${added} spools on the shopping list`,
-        "Tick them off there when they arrive.",
-      );
-  };
   return (
     <Section
       id="running-low"
@@ -77,15 +48,9 @@ export function RunningLow({
       className="md:max-w-2xl xl:has-[li+li]:max-w-none"
       aside={
         <span className="flex items-center gap-2">
-          <Button
-            variant="secondary"
-            size="sm"
-            icon={allOnList ? CheckIcon : ShoppingIcon}
-            disabled={shoppingPending || demo || (readOnly && !allOnList)}
-            onClick={() => void putOnList()}
-          >
-            {allOnList ? "On the shopping list" : "Add to shopping list"}
-          </Button>
+          <Suspense fallback={<span className="bg-ink/4 h-9 w-44 rounded-md" aria-hidden />}>
+            <ToShoppingList low={low} demo={demo} />
+          </Suspense>
           <Button
             variant="secondary"
             size="sm"
