@@ -73,6 +73,19 @@ const withComments = (queryClient: QueryClient, itemId: string, change: (list: C
 
 const SEND_RETRIES = [1500, 4000];
 
+/** Comments whose first send failed and wait to be retried: their text is only in memory until they land. */
+const retrying = new Map<string, { itemId: string; body: string }>();
+
+if (typeof window !== "undefined") {
+  // A page that goes away between retries (a reload, a phone app switch) would lose them: back into the draft they go.
+  window.addEventListener("pagehide", () => {
+    for (const { itemId, body } of retrying.values()) {
+      const typed = readDraft(itemId);
+      if (!typed.includes(body)) setDraft(itemId, typed ? `${body}\n${typed}` : body);
+    }
+  });
+}
+
 /**
  * Sends a comment: it is in the thread at once, the draft is cleared, and the request goes in the
  * background (retried twice). If it still can't be sent the text goes back into the draft, so nothing
@@ -92,6 +105,7 @@ export function sendComment(queryClient: QueryClient, itemId: string, me: string
           method: "POST",
           json: { id, body },
         });
+        retrying.delete(id);
         withComments(queryClient, itemId, (list) => list.map((c) => (c.id === id ? saved : c)));
         // Writing counts as reading the thread; the server did the same.
         queryClient.setQueryData<CommentsResponse>(commentsQuery(itemId).queryKey, (current) =>
@@ -103,6 +117,7 @@ export function sendComment(queryClient: QueryClient, itemId: string, me: string
         const wait = SEND_RETRIES[attempt];
         const final = (error as { status?: number }).status !== undefined && (error as { status: number }).status < 500;
         if (wait === undefined || final) {
+          retrying.delete(id);
           withComments(queryClient, itemId, (list) => list.filter((c) => c.id !== id));
           // Back in the box, ahead of anything typed since.
           const typed = readDraft(itemId);
@@ -110,6 +125,7 @@ export function sendComment(queryClient: QueryClient, itemId: string, me: string
           toast.error("Couldn't send that", "Your message is back in the box.");
           return;
         }
+        retrying.set(id, { itemId, body });
         await new Promise((resolve) => setTimeout(resolve, wait));
       }
     }

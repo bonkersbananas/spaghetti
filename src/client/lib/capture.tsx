@@ -6,6 +6,7 @@ import { createContext, type ReactNode, useCallback, useContext, useEffect, useM
 import { toast } from "@/components/ui/Toast";
 import { queueFinish, saveAttemptChanges } from "./builds";
 import { isOnline } from "./connection";
+import { openStore } from "./idb";
 import { type ProcessedPhoto, processPhoto, UnreadablePhotoError } from "./images";
 import { cachedItem, type ItemView, ideasQuery, saveItemChanges } from "./items";
 import { outbox } from "./outbox";
@@ -98,6 +99,8 @@ export interface PageItem {
 
 const CaptureContext = createContext<CaptureContextValue | null>(null);
 const DRAFT_KEY = "spaghetti:capture-draft";
+/** The capture sheet's photos, kept on the device (their own database) until the capture is saved. */
+const keptPhotos = openStore<DraftPhoto>("spaghetti-capture", "photos", "id");
 const FIRST_KEY = "spaghetti:first-idea";
 
 function storedDraft(): string {
@@ -119,17 +122,13 @@ export function imageFiles(files: Iterable<File>): File[] {
  * Photos picked for something not saved yet (a capture, an attempt): shown
  * at once from the device and resized in the background while you type.
  */
-export function useDraftPhotos() {
+export function useDraftPhotos({ keep = false } = {}) {
   const [photos, setPhotos] = useState<DraftPhoto[]>([]);
   const photosRef = useRef(photos);
   photosRef.current = photos;
 
-  const addFiles = useCallback((files: Iterable<File>) => {
-    const added = imageFiles(files).map((file) => ({ id: crypto.randomUUID(), file }));
-    if (!added.length) return;
-    for (const photo of added) setPreview(photo.id, photo.file, photo.file);
-    setPhotos((current) => [...current, ...added]);
-    for (const photo of added) {
+  const resize = useCallback(
+    (photo: DraftPhoto) => {
       processPhoto(photo.file).then(
         (processed) => {
           setPreview(photo.id, processed.thumb, processed.large);
@@ -137,20 +136,62 @@ export function useDraftPhotos() {
         },
         (error) => {
           setPhotos((current) => current.filter((p) => p.id !== photo.id));
+          if (keep) void keptPhotos.delete(photo.id).catch(() => undefined);
           toast.error(
             "Couldn't open that photo",
             error instanceof UnreadablePhotoError ? error.message : "Try another one.",
           );
         },
       );
-    }
-  }, []);
+    },
+    [keep],
+  );
 
-  const removePhoto = useCallback((id: string) => {
-    setPhotos((current) => current.filter((photo) => photo.id !== id));
-  }, []);
+  const addFiles = useCallback(
+    (files: Iterable<File>) => {
+      const added = imageFiles(files).map((file) => ({ id: crypto.randomUUID(), file }));
+      if (!added.length) return;
+      for (const photo of added) setPreview(photo.id, photo.file, photo.file);
+      setPhotos((current) => [...current, ...added]);
+      // Kept on the device until saved: a page that is killed in the background (a phone, an app switch) brings them back.
+      if (keep) for (const photo of added) void keptPhotos.put(photo).catch(() => undefined);
+      for (const photo of added) resize(photo);
+    },
+    [keep, resize],
+  );
 
-  const clear = useCallback(() => setPhotos([]), []);
+  // Photos kept by an earlier visit (the page was closed or killed before they were saved).
+  useEffect(() => {
+    if (!keep) return;
+    let gone = false;
+    keptPhotos
+      .all()
+      .then((kept) => {
+        const known = new Set(photosRef.current.map((photo) => photo.id));
+        const back = kept.filter((photo) => !known.has(photo.id));
+        if (gone || !back.length) return;
+        for (const photo of back) setPreview(photo.id, photo.file, photo.file);
+        setPhotos((current) => [...back, ...current]);
+        for (const photo of back) resize(photo);
+      })
+      .catch(() => undefined);
+    return () => {
+      gone = true;
+    };
+  }, [keep, resize]);
+
+  const removePhoto = useCallback(
+    (id: string) => {
+      setPhotos((current) => current.filter((photo) => photo.id !== id));
+      if (keep) void keptPhotos.delete(id).catch(() => undefined);
+    },
+    [keep],
+  );
+
+  const clear = useCallback(() => {
+    setPhotos([]);
+    if (keep) void keptPhotos.clear().catch(() => undefined);
+  }, [keep]);
   return { photos, photosRef, addFiles, removePhoto, clear };
 }
 
@@ -166,7 +207,7 @@ export function CaptureProvider({ children }: { children: ReactNode }) {
   const [open, setOpen] = useState(false);
   const [draft, setDraftState] = useState(storedDraft);
   const [printDraft, setPrintDraft] = useState<PrintDraft | null>(null);
-  const { photos, photosRef, addFiles, removePhoto, clear: clearPhotos } = useDraftPhotos();
+  const { photos, photosRef, addFiles, removePhoto, clear: clearPhotos } = useDraftPhotos({ keep: true });
   // The idea or build on screen, which captures go to while it shows.
   const [pageItem, setPageItem] = useState<PageItem | null>(null);
   const [aim, setAim] = useState<PrintAim | null>(null);

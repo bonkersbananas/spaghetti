@@ -29,6 +29,7 @@ import {
 import { peopleQuery } from "./queries";
 import { canEdit } from "./read-only";
 import { forgetItem } from "./recent";
+import { unsent } from "./unsent";
 import { useAutosave, useFollowServer } from "./use-autosave";
 
 /** Ideas live in one list, builds (building, done, shelved) in the other. */
@@ -476,7 +477,8 @@ export async function saveItemChanges(
     // Finishes even if the page is closing.
     keepalive: true,
   });
-  patchCachedItem(queryClient, id, (cached) => ({ ...item, photos: cached.photos }));
+  // Only what the server works out itself: the words stay as they are here, which may be newer than this answer.
+  patchCachedItem(queryClient, id, (cached) => ({ ...cached, updatedAt: item.updatedAt }));
 }
 
 /**
@@ -488,9 +490,12 @@ export async function saveItemChanges(
  */
 export function useItemFields(item: Pick<ItemView, "id" | "title" | "note" | "forWhom">) {
   const queryClient = useQueryClient();
-  const [title, setTitle] = useState(item.title ?? "");
-  const [note, setNote] = useState(item.note);
-  const [forWhom, setForWhom] = useState(item.forWhom ?? "");
+  const name = `item:${item.id}`;
+  // Words left unsent by an earlier visit (the page died before the save went through) come back into the fields.
+  const [left] = useState(() => unsent<{ title: string; note: string; forWhom: string }>(name));
+  const [title, setTitle] = useState(left?.title ?? item.title ?? "");
+  const [note, setNote] = useState(left?.note ?? item.note);
+  const [forWhom, setForWhom] = useState(left?.forWhom ?? item.forWhom ?? "");
   // What the server is known to have (as far as this screen has seen or sent).
   const known = useRef({ title: item.title ?? "", note: item.note, forWhom: item.forWhom ?? "" });
   useFollowServer(item.forWhom ?? "", forWhom, setForWhom, (value) => {
@@ -502,15 +507,22 @@ export function useItemFields(item: Pick<ItemView, "id" | "title" | "note" | "fo
   useFollowServer(item.note, note, setNote, (value) => {
     known.current.note = value;
   });
-  const saveState = useAutosave({ title, note, forWhom }, async (value) => {
-    const changes: { title?: string | null; note?: string; forWhom?: string | null } = {};
-    if (value.title !== known.current.title) changes.title = value.title.trim() || null;
-    if (value.note !== known.current.note) changes.note = value.note;
-    if (value.forWhom !== known.current.forWhom) changes.forWhom = value.forWhom.trim() || null;
-    if (!Object.keys(changes).length) return;
-    await saveItemChanges(queryClient, item.id, changes);
-    known.current = { title: value.title, note: value.note, forWhom: value.forWhom };
-  });
+  const saveState = useAutosave(
+    { title, note, forWhom },
+    async (value) => {
+      const changes: { title?: string | null; note?: string; forWhom?: string | null } = {};
+      if (value.title !== known.current.title) changes.title = value.title.trim() || null;
+      if (value.note !== known.current.note) changes.note = value.note;
+      if (value.forWhom !== known.current.forWhom) changes.forWhom = value.forWhom.trim() || null;
+      if (!Object.keys(changes).length) return;
+      await saveItemChanges(queryClient, item.id, changes);
+      known.current = { title: value.title, note: value.note, forWhom: value.forWhom };
+    },
+    {
+      keepAs: name,
+      from: { title: item.title ?? "", note: item.note, forWhom: item.forWhom ?? "" },
+    },
+  );
   return { title, setTitle, note, setNote, forWhom, setForWhom, saveState };
 }
 
