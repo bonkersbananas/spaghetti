@@ -19,6 +19,7 @@ import { OpenNotebook } from "@/components/illustrations/OpenNotebook";
 import { Filters } from "@/components/journal/Filters";
 import { entryLink, JournalEntry } from "@/components/journal/JournalEntry";
 import { PageHeader } from "@/components/shell/PageHeader";
+import { Since } from "@/components/today/Since";
 import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { ArrowRightIcon } from "@/components/ui/icons";
@@ -137,9 +138,12 @@ function Journal() {
       />
       {/* Phones: what is happening now, above the notebook (desktop has Today for it). */}
       {!filtered && !isDesktop && (
-        <Suspense fallback={null}>
-          <Now />
-        </Suspense>
+        <>
+          <Since />
+          <Suspense fallback={null}>
+            <Now />
+          </Suspense>
+        </>
       )}
       {nothingAtAll ? (
         <EmptyState illustration={<OpenNotebook />} title="A clean notebook">

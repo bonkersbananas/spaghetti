@@ -1128,6 +1128,19 @@ type Slice = "all" | "none" | "young";
  * Shows Today with parts of the workspace missing, by answering the app's own requests with less: the ideas,
  * the builds, the journal and the spools it fetches. The real data stays in the database; unmockToday puts it back.
  */
+/** Came back after `days` away (the shots' clock is the seed's date): the catch-up the app keeps on this device. */
+async function catchUpFrom(page: Page, days: number) {
+  await page.evaluate(
+    ([from, until]) => localStorage.setItem("sg-since", JSON.stringify({ from, until })),
+    [SEED_NOW - days * 86_400_000, SEED_NOW + 3_600_000],
+  );
+  await page.reload();
+}
+
+async function forgetCatchUp(page: Page) {
+  await page.evaluate(() => localStorage.removeItem("sg-since"));
+}
+
 async function mockToday(
   page: Page,
   show: {
@@ -1470,6 +1483,19 @@ export const shots: Shot[] = [
         .first()
         .waitFor({ timeout: 20_000 });
     },
+  },
+  {
+    // Back after a few days: "Since Thursday", what Sam did meanwhile, at the top of Today (desktop).
+    name: "today-since",
+    path: "/today",
+    prepare: async (page) => {
+      await catchUpFrom(page, 4);
+      await page
+        .getByText(/^Since /)
+        .first()
+        .waitFor();
+    },
+    cleanup: forgetCatchUp,
   },
   {
     // The one quiet line for what Sam wrote and Alex hasn't read, under what is on the bed.
@@ -3258,6 +3284,19 @@ export const shots: Shot[] = [
   },
   { name: "build-done", path: `/builds/${SEED_BUILD_IDS.headphoneStand}`, fullPage: true },
   { name: "journal", path: "/journal" },
+  // The same catch-up at the top of the phone's Journal (above Now).
+  {
+    name: "journal-since",
+    path: "/journal",
+    prepare: async (page) => {
+      await catchUpFrom(page, 4);
+      await page
+        .getByText(/^Since /)
+        .first()
+        .waitFor();
+    },
+    cleanup: forgetCatchUp,
+  },
   // The year so far: figures, months, success by material and plate, what fixed each failure.
   { name: "year", path: "/year?year=2026", fullPage: true },
   // The week in Spaghetti. The shots' browser clock is the seed's date but the Worker's is the real one, so the

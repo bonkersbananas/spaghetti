@@ -13,6 +13,7 @@ import { BackBurner } from "@/components/today/BackBurner";
 import { InThePrinter } from "@/components/today/InThePrinter";
 import { Lately } from "@/components/today/Lately";
 import { PickUpAgain, pickUpAgain } from "@/components/today/PickUpAgain";
+import { Since } from "@/components/today/Since";
 import { UpNext, upNextIdeas } from "@/components/today/UpNext";
 import { AutoHeight } from "@/components/ui/AutoHeight";
 import { Button } from "@/components/ui/Button";
@@ -179,6 +180,7 @@ function Today() {
   return (
     <>
       <PageHeader title="Today" subtitle={subtitle} />
+      <Since />
       <div className="-mt-4 mb-6 empty:hidden">
         {hasDueUpkeep && (
           <Suspense fallback={null}>

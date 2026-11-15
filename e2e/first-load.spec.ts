@@ -25,13 +25,15 @@ import { SEED_PASSWORD, SEED_USERS } from "../scripts/lib/local-app.ts";
  * itemName no longer pulls the journal's cards into every screen, big uploads load when the first one goes), in gzip kB:
  *   /sign-in 179.8   /today 286.8   /ideas 253.5   /builds 261.4   /journal 270.4   /search 269.7   /pantry 252.0   /printer 253.8
  * Raise a screen's ceiling only for code that screen shows at once, and say why in the pull request.
+ * 2026-11-15: /today and /journal +2: the "Since Thursday" gate on both (the block itself loads only when there is a catch-up, but its
+ * lazy import adds its dependency list to the gate's chunk, about 1.5 kB gzip).
  */
 const CEILING_KB = {
   "/sign-in": 185,
-  "/today": 292,
+  "/today": 294,
   "/ideas": 259,
   "/builds": 267,
-  "/journal": 276,
+  "/journal": 278,
   "/search": 275,
   "/pantry": 257,
   "/printer": 259,

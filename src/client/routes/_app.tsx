@@ -90,6 +90,23 @@ function Shell() {
   const dragging = useGlobalCapture();
   // Sends captures still waiting from this visit or an earlier one.
   useEffect(() => connectOutbox(queryClient), [queryClient]);
+  // Keeps this device's clock for "Since Thursday" once the app is idle (its code is out of the first load); stops with the shell.
+  useEffect(() => {
+    let stop: (() => void) | undefined;
+    let off = false;
+    const start = () =>
+      void import("@/lib/since").then((since) => {
+        if (!off) stop = since.followActivity();
+      });
+    const idle = "requestIdleCallback" in window;
+    const id = idle ? requestIdleCallback(start, { timeout: 4000 }) : window.setTimeout(start, 1500);
+    return () => {
+      off = true;
+      stop?.();
+      if (idle) cancelIdleCallback(id);
+      else clearTimeout(id);
+    };
+  }, []);
   // Follows what the other person does, while the app is open.
   useLiveUpdates();
   // After a password sign-in on a device with no passkey: one quiet offer.
