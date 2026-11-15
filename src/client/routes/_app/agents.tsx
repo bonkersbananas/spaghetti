@@ -80,20 +80,6 @@ function Agents() {
           A helper with a key of its own, such as Claude or a bridge at home, that does only what you allow.
         </EmptyState>
       )}
-      {!isDesktop && mine.length > 0 && (
-        <ActionBar>
-          <Button
-            variant="floating"
-            size="lg"
-            icon={PlusIcon}
-            disabled={readOnly}
-            onClick={() => open()}
-            className="mx-auto"
-          >
-            New agent
-          </Button>
-        </ActionBar>
-      )}
       <ShareCard />
       <div className="mt-12 md:mt-16">
         <Suspense fallback={<div aria-hidden className="h-24" />}>
@@ -120,6 +106,21 @@ function Agents() {
         </a>
         : what a token can do, as OpenAPI.
       </p>
+      {/* Last in the page: the bar's spacer then sits under the API reference, not above it. */}
+      {!isDesktop && mine.length > 0 && (
+        <ActionBar>
+          <Button
+            variant="floating"
+            size="lg"
+            icon={PlusIcon}
+            disabled={readOnly}
+            onClick={() => open()}
+            className="mx-auto"
+          >
+            New agent
+          </Button>
+        </ActionBar>
+      )}
       <AgentSheet
         open={making.open}
         agent={making.agent}
