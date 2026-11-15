@@ -281,10 +281,11 @@ export default function PrintViewer({
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
-  // The viewer may mount after the sheet opened (its code loads lazily): take focus from the sheet's close button or the opener.
+  // The viewer mounts after the sheet opened (its code loads lazily), when focus has gone to the sheet itself, its Close
+  // button or the opener: it belongs on the stage, so Space plays. A field that took focus keeps it.
   useEffect(() => {
     const active = document.activeElement;
-    if (!active || active === document.body || active.closest("button, a, [data-autofocus]"))
+    if (!active || !active.closest("input, textarea, select, [contenteditable]"))
       stage.current?.focus({ preventScroll: true });
   }, []);
 
@@ -309,7 +310,7 @@ export default function PrintViewer({
     >
       <div
         ref={stage}
-        className="sg-stage focus-ring-inset relative min-h-0 flex-1 overflow-hidden"
+        className="sg-stage group relative min-h-0 flex-1 overflow-hidden outline-none"
         data-vaul-no-drag
         // Where focus lands when the view opens (the sheet looks for data-autofocus): not the close button, so Space plays.
         data-autofocus
@@ -320,6 +321,11 @@ export default function PrintViewer({
           className="absolute inset-0 block size-full"
           role="img"
           aria-label={state === "ready" ? `3D view of the print. ${text}` : "3D view of the print"}
+        />
+        {/* The stage's keyboard focus ring, drawn over the canvas (an inset shadow on the stage would sit under it). */}
+        <div
+          aria-hidden
+          className="group-focus-visible:ring-ink/20 pointer-events-none absolute inset-0 group-focus-visible:ring-2 group-focus-visible:ring-inset"
         />
         {state === "loading" && (
           <div className="bg-cream/90 shadow-soft text-small text-ink-soft absolute bottom-3 left-3 flex items-center gap-2 rounded-full py-1.5 pr-3.5 pl-3">
