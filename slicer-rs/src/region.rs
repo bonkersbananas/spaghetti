@@ -302,13 +302,17 @@ pub fn regions(
     }
     let print_z = |i: usize| layers.top[i];
     let bottom_z = |i: usize| layers.top[i] - layers.height[i];
+    // In spiral vase mode Orca finds shells on the bottom's layers only (its `discover_vertical_shells` stops there):
+    // every layer above is inside, sparse, and prints no infill.
+    let shelled_layers = if s.spiral_mode { s.bottom_shell_layers.min(n) } else { n };
     let fills: Vec<Vec<Fills>> = par::map_range(n, |i| {
         // The layers the shells reach: tops from above, as many as the top shells take with this one; bottoms from
         // below, likewise.
         let mut shell: Vec<&Shapes> = Vec::new();
         let mut reach: Vec<usize> = Vec::new();
         let mut anchor: Shapes = Vec::new();
-        if s.top_shell_layers > 0 {
+        let shells = i < shelled_layers;
+        if shells && s.top_shell_layers > 0 {
             let mut j = i + 1;
             while j < n && (j < i + s.top_shell_layers || print_z(j) - print_z(i) < s.top_shell_thickness - 1e-4) {
                 reach.push(j);
@@ -322,7 +326,7 @@ pub fn regions(
                 anchor.extend(geom::intersection(&geom::offset(&reaching[i].0, spacing), &slices[j]));
             }
         }
-        if s.bottom_shell_layers > 0 {
+        if shells && s.bottom_shell_layers > 0 {
             let mut j = i;
             while j > 0
                 && (j + s.bottom_shell_layers > i + 1
