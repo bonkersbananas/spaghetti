@@ -91,6 +91,11 @@ export const AttemptEntry = forwardRef<HTMLLIElement, AttemptEntryProps>(functio
   const results = summarizeResults(attempt.settings);
   const filaments = attempt.settings.filaments ?? [];
   const [lead, ...rest] = photos;
+  const showsDetails =
+    filaments.length > 0 ||
+    settings.length > 0 ||
+    results.length > 0 ||
+    (!printing && attempt.settings.estimatedMinutes !== undefined && attempt.settings.actualMinutes !== undefined);
 
   return (
     <m.li
@@ -177,7 +182,7 @@ export const AttemptEntry = forwardRef<HTMLLIElement, AttemptEntryProps>(functio
               </p>
             )}
 
-            {attempt.note && <p className="text-body text-ink break-words">{attempt.note}</p>}
+            {attempt.note && <p className="text-lead md:text-body text-ink break-words">{attempt.note}</p>}
 
             {lead && (
               // On desktop the lead is the same size in every entry (4:3, at most md); any more photos
@@ -210,36 +215,44 @@ export const AttemptEntry = forwardRef<HTMLLIElement, AttemptEntryProps>(functio
 
             <AttemptTags attempt={attempt} />
 
-            {attempt.file && (
-              // Above the open button, so its controls work; the card's width, so the download lines up with the
-              // attempt's menu above it. Between its controls a tap still opens the attempt.
-              <div className="relative z-10 [&_a]:pointer-events-auto [&_button]:pointer-events-auto">
-                <SavedFileCard
-                  compact
-                  file={attempt.file}
-                  owner={readOnly ? undefined : { itemId: attempt.itemId, attemptId: attempt.id }}
-                  filaments={attempt.settings.filaments}
-                  printing={attempt.outcome === null && attempt.endedAt === null ? { id: attempt.id } : undefined}
-                />
+            {/* The story ends with the tags; the file, how long it took and the settings are the details under it. */}
+            {(attempt.file || showsDetails) && (
+              <div className="before:bg-hairline relative flex flex-col gap-3 pt-3.5 before:absolute before:top-0 before:right-0 before:left-0 before:h-px">
+                {attempt.file && (
+                  // Above the open button, so its controls work; the card's width, so the download lines up with the
+                  // attempt's menu above it. Between its controls a tap still opens the attempt.
+                  <div className="relative z-10 [&_a]:pointer-events-auto [&_button]:pointer-events-auto">
+                    <SavedFileCard
+                      compact
+                      file={attempt.file}
+                      owner={readOnly ? undefined : { itemId: attempt.itemId, attemptId: attempt.id }}
+                      filaments={attempt.settings.filaments}
+                      printing={attempt.outcome === null && attempt.endedAt === null ? { id: attempt.id } : undefined}
+                    />
+                  </div>
+                )}
+
+                {!printing &&
+                  attempt.settings.estimatedMinutes !== undefined &&
+                  attempt.settings.actualMinutes !== undefined && (
+                    <EstimateLine
+                      estimated={attempt.settings.estimatedMinutes}
+                      actual={attempt.settings.actualMinutes}
+                    />
+                  )}
+
+                {(filaments.length > 0 || settings.length > 0 || results.length > 0) && (
+                  <SettingsLine
+                    filaments={filaments}
+                    parts={[...settings, ...results]}
+                    name={(filament) =>
+                      [filament.colorName, filament.type].filter(Boolean).join(" ") || filamentLabel(filament)
+                    }
+                    className="text-small text-ink-faint"
+                    filamentClassName="text-ink-soft"
+                  />
+                )}
               </div>
-            )}
-
-            {!printing &&
-              attempt.settings.estimatedMinutes !== undefined &&
-              attempt.settings.actualMinutes !== undefined && (
-                <EstimateLine estimated={attempt.settings.estimatedMinutes} actual={attempt.settings.actualMinutes} />
-              )}
-
-            {(filaments.length > 0 || settings.length > 0 || results.length > 0) && (
-              <SettingsLine
-                filaments={filaments}
-                parts={[...settings, ...results]}
-                name={(filament) =>
-                  [filament.colorName, filament.type].filter(Boolean).join(" ") || filamentLabel(filament)
-                }
-                className="text-small text-ink-faint"
-                filamentClassName="text-ink-soft"
-              />
             )}
 
             {attempt.coach && (
