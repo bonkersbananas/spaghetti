@@ -383,7 +383,8 @@ function SpoolPage({ spool }: { spool: Spool }) {
                     disabled={readOnly}
                     onClick={() => void requestLabelRead(queryClient, spool.id)}
                   >
-                    Read this photo
+                    {/* Short, so the three buttons share one line on a phone. */}
+                    Read it
                   </Button>
                 )}
               </>
