@@ -163,6 +163,7 @@ export const SEED_IDEAS: SeedIdea[] = [
     by: "sam",
     ago: 47 * DAY,
     note: "Bag clips for the coffee, with a little spoon holder on the side.",
+    forWhom: "Alex",
     photos: [],
   },
   {
