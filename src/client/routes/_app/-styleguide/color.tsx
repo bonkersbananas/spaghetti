@@ -10,6 +10,7 @@ const swatchGroups: Array<{ label: string; swatches: Array<[token: string, class
       ["cream", "bg-cream", "Cards, the tab bar, fields"],
       ["lifted", "bg-lifted", "Sheets, dialogs, menus"],
       ["well", "bg-well", "Photo placeholders, skeletons"],
+      ["channel", "bg-channel", "The channel behind a segmented control: the well by day, a softer step at night"],
     ],
   },
   {

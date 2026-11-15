@@ -18,6 +18,8 @@
   /* Floating surfaces (sheets, dialogs): the same cream by day, a step lighter at night, where lifting replaces shadow. */
   --sg-lifted: #fffcf7;
   --sg-well: #ebe3d5;
+  /* The channel behind a segmented control: the well by day; by night a softer step, so it doesn't outline on a lifted sheet. */
+  --sg-channel: #ebe3d5;
   /* The soft round behind a held tab bar icon. */
   --sg-pressed: #ece3d3;
   /* A note card's face: paper by day, a step lifted at night (an index card under the lamp, not a hole in the card). */
@@ -221,6 +223,7 @@
   --sg-cream: #25201c;
   --sg-lifted: #2e2823;
   --sg-well: #120f0d;
+  --sg-channel: #1d1915;
   --sg-pressed: #3a332c;
   --sg-note: #2e2823;
   --sg-tile: #38312b;
@@ -258,7 +261,7 @@
     0 1px 2px rgb(0 0 0 / 0.3), 0 8px 24px rgb(0 0 0 / 0.26), inset 0 1px 0 rgb(255 236 214 / 0.07),
     0 0 0 1px rgb(255 236 214 / 0.12);
   --sg-shadow-float: 0 2px 6px rgb(0 0 0 / 0.3), 0 20px 56px rgb(0 0 0 / 0.45), inset 0 1px 0 rgb(255 236 214 / 0.08);
-  --sg-shadow-well: inset 0 1px 3px rgb(0 0 0 / 0.45);
+  --sg-shadow-well: inset 0 1px 2px rgb(0 0 0 / 0.3);
   --sg-shadow-bar: 0 -1px 0 rgb(255 236 214 / 0.06), 0 -8px 24px rgb(0 0 0 / 0.3);
   --sg-ring: 0 0 0 2px var(--sg-paper), 0 0 0 4px rgb(236 228 217 / 0.72);
   --sg-ring-inset: inset 0 0 0 2px rgb(236 228 217 / 0.72), inset 0 0 0 4px var(--sg-paper);
@@ -288,6 +291,7 @@
   --color-cream: var(--sg-cream);
   --color-lifted: var(--sg-lifted);
   --color-well: var(--sg-well);
+  --color-channel: var(--sg-channel);
   --color-note: var(--sg-note);
   --color-tile: var(--sg-tile);
   --color-qr-bg: var(--sg-qr-bg);
