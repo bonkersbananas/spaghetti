@@ -35,14 +35,20 @@ export function modelSlicing(file: Pick<AttemptFile, "slicing" | "slice">, defau
 export function slicingAhead(file: Pick<AttemptFile, "slicing" | "slice">): SlicingSettings | null {
   if (!file.slicing || !file.slice) return null;
   const sliced = slicingOfSlice(file.slice);
-  return changedSlicing(sliced, asSliced(file.slicing, sliced)).length ? file.slicing : null;
+  return changedSlicing(sliced, asSliced(file.slicing, sliced, !!file.slice.colours?.length)).length
+    ? file.slicing
+    : null;
 }
 
 /**
  * Chosen settings as a slice made with them records them: a filament that names no colour of its own was sliced in
  * the colour the slice gave it (a project's for its place, else a stand-in's), which is no change of anyone's.
  */
-function asSliced(chosen: SlicingSettings, sliced: SlicingSettings): SlicingSettings {
+function asSliced(chosen: SlicingSettings, sliced: SlicingSettings, byRows = false): SlicingSettings {
+  // A model whose colours are matched to filaments (the Colours rows) has its filaments from its choices: a choice can
+  // add, drop, merge and reorder them, so the filaments of the settings (the last ones kept, stale) say nothing; the
+  // choices (`colours`) are what was asked for, and they are compared.
+  if (byRows) return { ...chosen, filaments: sliced.filaments };
   return {
     ...chosen,
     filaments: chosen.filaments.map((filament, index) => {
@@ -51,6 +57,23 @@ function asSliced(chosen: SlicingSettings, sliced: SlicingSettings): SlicingSett
       return { ...filament, colorHex: made.colorHex, ...(made.colorName ? { colorName: made.colorName } : {}) };
     }),
   };
+}
+
+/** "Jade white" for one colour's pick, "the nearest spools" for taking one back, else "the colours printed in other filaments". */
+function colourPickWords(before: SlicingSettings, after: SlicingSettings): string {
+  const had = before.colours ?? [];
+  const now = after.colours ?? [];
+  const picked = now.filter((choice) => {
+    const was = had.find((other) => other.from === choice.from);
+    return !was || JSON.stringify(was.filament) !== JSON.stringify(choice.filament);
+  });
+  const dropped = had.filter((choice) => !now.some((other) => other.from === choice.from));
+  if (picked.length === 1 && !dropped.length) {
+    const filament = (picked[0] as (typeof picked)[number]).filament;
+    return filament.colorName ?? filamentWords(filament);
+  }
+  if (!picked.length && dropped.length) return "the nearest spools";
+  return "the colours printed in other filaments";
 }
 
 /**
@@ -82,7 +105,7 @@ export function changeWords(before: SlicingSettings, after: SlicingSettings): st
     case "filaments":
       return after.filaments[0] ? filamentWords(after.filaments[0]) : "other filament";
     case "colours":
-      return "the colours printed in other filaments";
+      return colourPickWords(before, after);
     case "plate":
       return `the ${after.plate}`;
     case "nozzle":

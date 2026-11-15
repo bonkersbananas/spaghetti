@@ -50,14 +50,14 @@ const keyOf = (colour: SliceColour) =>
  * model's settings (`choices`). A flat dot is always a model colour and a disc is always a Pantry spool.
  */
 export function ColourMatches({
-  colours,
+  colours: sliced,
   choices,
   spools,
   onChange,
   wrapped,
   wide,
 }: {
-  /** What the last slice printed each colour in. */
+  /** What the last slice printed each colour in: a pick shows at once, the slice following it catches up. */
   colours: readonly SliceColour[];
   /** What was chosen; the rest print in the nearest spool. */
   choices: readonly ColourChoice[];
@@ -68,6 +68,12 @@ export function ColourMatches({
   /** Across a panel's whole width (under its two columns): the rows sit two to a line. */
   wide?: boolean;
 }) {
+  // What was chosen shows the moment it is tapped, not when the slice made with it is done.
+  const colours = sliced.map((colour): SliceColour => {
+    const choice = choices.find((candidate) => candidate.from === choiceKey(colour));
+    if (!choice) return colour;
+    return { ...colour, filament: choice.filament, inPantry: !!choice.filament.spoolId, chosen: true };
+  });
   const [open, setOpen] = useState<string | null>(null);
   // The rows are folded to one line until asked for: the panel and the sheet keep their room.
   const [all, setAll] = useState(false);
