@@ -47,7 +47,7 @@ export function MiniCard({ link, photo, note, title, corner, landing, id, drag, 
     <m.li
       {...useReflow(landing)}
       ref={ref}
-      className={cn("group/mini relative w-[6.125rem] shrink-0 snap-start list-none md:w-32", className)}
+      className={cn("group/mini relative w-[6.125rem] shrink-0 snap-start list-none md:w-32 xl:w-44", className)}
     >
       {/* biome-ignore lint/a11y/noStaticElementInteractions: dragging is a mouse extra; the card's menu has Move up and Move down for keyboards and phones. */}
       <div
