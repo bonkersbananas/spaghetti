@@ -1948,6 +1948,22 @@ fn supports_without_a_gap_hold_the_object_as_orcas_do() {
         .map(|layer| layer.lines().next().unwrap())
         .collect();
     assert_eq!(layers, ["19.8", "20"]);
+
+    // Classic trees too, here hybrid ones (Orca: 1286.15 mm³ of support, 175.27 of interface); organic trees, which
+    // Orca makes otherwise without a gap, are still refused.
+    let trees = setup.replace("normal(auto)", "tree(auto)");
+    let hybrid = setup::read(
+        &trees.replace(r#""support_top_z_distance""#, r#""support_style": "tree_hybrid", "support_top_z_distance""#),
+    )
+    .unwrap()
+    .settings;
+    let out = slice(&[Input { name: "tee.stl", bytes: &tee }], &hybrid, &options).unwrap();
+    let volume = |role: Role| out.stats.features[Role::ALL.iter().position(|&r| r == role).unwrap()].volume;
+    for (role, orca) in [(Role::Support, 1286.15), (Role::SupportInterface, 175.27), (Role::BottomSurface, 62.13)] {
+        assert!((volume(role) / orca - 1.0).abs() < 1.5e-3, "hybrid {role:?}: {} mm³", volume(role));
+    }
+    assert_eq!(feature_directions(&String::from_utf8(out.gcode).unwrap(), "Support interface"), [45, 135]);
+    assert_eq!(setup::read(&trees).err(), Some(Error::Unsupported("supports without a gap or interface")));
 }
 
 #[test]
