@@ -1,4 +1,5 @@
 import { Mark } from "@/components/illustrations";
+import { ClosedPot } from "@/components/illustrations/ClosedPot";
 import { EmptyBasket } from "@/components/illustrations/EmptyBasket";
 import { EmptyPot } from "@/components/illustrations/EmptyPot";
 import { NoodleSearch } from "@/components/illustrations/NoodleSearch";
@@ -27,6 +28,7 @@ export function EmptySection() {
           <OpenNotebook className="w-32" />
           <NoodleSearch className="w-32" />
           <EmptyBasket className="w-32" />
+          <ClosedPot className="w-32" />
           <Mark className="size-16" />
         </Panel>
       </div>
