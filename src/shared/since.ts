@@ -94,9 +94,9 @@ export function catchUp(
     });
   }
   const parts = [
-    tally.worked && `${count(tally.worked, "print")} that worked`,
+    tally.worked && `got ${count(tally.worked, "print")} that worked`,
     tally.failed && `had ${count(tally.failed, "spaghetti", "spaghettis")}`,
-    tally.partly && `${count(tally.partly, "print")} came out partly`,
+    tally.partly && `had ${count(tally.partly, "print")} come out partly`,
     tally.printing && `started ${count(tally.printing, "print")}`,
     tally.ideas && `added ${count(tally.ideas, "idea")}`,
   ].filter((part): part is string => !!part);
