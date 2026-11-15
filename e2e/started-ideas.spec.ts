@@ -219,6 +219,12 @@ test("a build asks before it goes: one press asks, Escape keeps it, Ctrl+Backspa
   await page.keyboard.press("Escape");
   await expect(page.getByText("Delete this build?")).toHaveCount(0);
   await expect(page).toHaveURL(new RegExp(`/builds/${id}$`));
+  // Enter on "Keep" keeps it.
+  await page.keyboard.press("Control+Backspace");
+  await page.getByRole("button", { name: "Keep" }).focus();
+  await page.keyboard.press("Enter");
+  await expect(page.getByText("Delete this build?")).toHaveCount(0);
+  expect((await page.request.get(`/api/items/${id}`)).status()).toBe(200);
   await page.keyboard.press("Control+Backspace");
   await page.keyboard.press("Control+Backspace");
   await expect(page.getByText("Build deleted")).toBeVisible();

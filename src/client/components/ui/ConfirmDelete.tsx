@@ -19,7 +19,7 @@ interface ConfirmDeleteProps {
 }
 
 /**
- * Deletes an idea or a build in two steps, in place (decision 0063, after 0054's photo X): the trash can turns into
+ * Deletes an idea or a build in two steps, in place (decision 0062, after 0054's photo X): the trash can turns into
  * "Delete this idea?" with a tomato "Delete" and a "Keep" to go back, where it sits. Enter confirms, Escape, a tap
  * elsewhere and "Keep" back out. No dialog; the Undo toast still follows. The page owns `asking`, so ⌘⌫ can ask too.
  */
@@ -35,6 +35,7 @@ export function ConfirmDelete({
 }: ConfirmDeleteProps) {
   const root = useRef<HTMLSpanElement>(null);
   const confirm = useRef<HTMLButtonElement>(null);
+  const keep = useRef<HTMLButtonElement>(null);
   const latest = useRef({ onConfirm, onAskingChange });
   latest.current = { onConfirm, onAskingChange };
 
@@ -49,7 +50,7 @@ export function ConfirmDelete({
       if (event.key === "Escape") {
         event.stopPropagation();
         latest.current.onAskingChange(false);
-      } else if (event.key === "Enter" && !event.isComposing) {
+      } else if (event.key === "Enter" && !event.isComposing && !keep.current?.contains(event.target as Node)) {
         event.stopPropagation();
         event.preventDefault();
         latest.current.onAskingChange(false);
@@ -81,7 +82,7 @@ export function ConfirmDelete({
       <span className="text-small text-ink font-semibold">
         {verb} this {what}?
       </span>
-      <Button size="sm" variant="quiet" onClick={() => onAskingChange(false)}>
+      <Button ref={keep} size="sm" variant="quiet" onClick={() => onAskingChange(false)}>
         Keep
       </Button>
       <Button
