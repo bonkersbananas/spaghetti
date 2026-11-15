@@ -109,7 +109,7 @@ test("edits the title and note with autosave", async ({ page, isMobile }) => {
   await expect(page.getByText("Spool holder for the shelf")).toBeVisible();
 });
 
-test("deletes an idea at once and brings it back with undo", async ({ page, isMobile }) => {
+test("asks before deleting an idea, then deletes it and brings it back with undo", async ({ page, isMobile }) => {
   const sheet = await openCapture(page, isMobile);
   await sheet.getByRole("textbox", { name: "Note" }).fill("Cable chain");
   await sheet.getByRole("button", { name: "Save idea" }).click();
@@ -118,8 +118,23 @@ test("deletes an idea at once and brings it back with undo", async ({ page, isMo
     .click();
   await expect(page.getByRole("textbox", { name: "Title" })).toBeVisible();
 
+  // Plain Backspace and Delete do nothing; one press of the trash can (or Ctrl/⌘+Backspace) only asks.
+  if (!isMobile) {
+    await page.keyboard.press("Backspace");
+    await page.keyboard.press("Delete");
+  }
+  await expect(page.getByText("Delete this idea?")).toHaveCount(0);
   if (isMobile) await page.getByRole("button", { name: "Delete idea" }).click();
-  else await page.keyboard.press("Backspace");
+  else await page.keyboard.press("Control+Backspace");
+  await expect(page.getByText("Delete this idea?")).toBeVisible();
+  await expect(page).toHaveURL(/\/ideas\/[\w-]+$/);
+  // Escape backs out, and the idea stays.
+  await page.keyboard.press("Escape");
+  await expect(page.getByText("Delete this idea?")).toHaveCount(0);
+  await expect(page).toHaveURL(/\/ideas\/[\w-]+$/);
+  // Asked again, "Delete" does it.
+  await page.getByRole("button", { name: "Delete idea" }).click();
+  await page.getByRole("button", { name: "Delete", exact: true }).click();
   await expect(page).toHaveURL(/\/ideas$/);
   await expect(page.getByRole("heading", { name: "Nothing simmering yet" })).toBeVisible();
   await expect.poll(async () => (await (await page.request.get("/api/items")).json()).items.length).toBe(0);

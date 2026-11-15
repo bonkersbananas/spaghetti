@@ -35,6 +35,7 @@ import { ActionBar } from "@/components/ui/ActionBar";
 import { Avatar } from "@/components/ui/Avatar";
 import { Button, IconButton } from "@/components/ui/Button";
 import { Chip } from "@/components/ui/Chip";
+import { ConfirmDelete } from "@/components/ui/ConfirmDelete";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { TextArea } from "@/components/ui/Field";
 import { ForChip, ForField } from "@/components/ui/ForField";
@@ -67,7 +68,7 @@ import { Skeleton } from "@/components/ui/Skeleton";
 import { useVia } from "@/lib/agents";
 import { deleteAttempt, finishBuild, heroPhoto, reopenBuild, shelveBuild, useTagOptions } from "@/lib/builds";
 import { useCaptureHere } from "@/lib/capture";
-import { shortcutCaps, useHotkeys } from "@/lib/hotkeys";
+import { ariaShortcuts, shortcutCaps, useHotkeys } from "@/lib/hotkeys";
 import {
   type AttemptView,
   addPhotosToItem,
@@ -327,6 +328,7 @@ function Build({ item }: { item: ItemView }) {
   );
   // A build that began as an idea goes back to Ideas when it is removed; any other is deleted.
   const scrapsToIdea = !item.pending && beganAsIdea(item);
+  const [deleting, setDeleting] = useState(false);
   function remove() {
     if (!canEdit(item.pending)) return;
     if (scrapsToIdea) {
@@ -344,7 +346,8 @@ function Build({ item }: { item: ItemView }) {
       if (!canEdit(attempt.pending)) return;
       deleteAttempt(queryClient, item.id, attempt);
       setSelected(null);
-    } else remove();
+    } else if (deleting) remove();
+    else if (canEdit(item.pending)) setDeleting(true);
   };
   // Counts up each time something asks to write a comment: the M key, the palette.
   const [writeAsk, setWriteAsk] = useState(0);
@@ -480,8 +483,8 @@ function Build({ item }: { item: ItemView }) {
       <article className="pb-6">
         <h1 className="sr-only">{title.trim() || "Untitled build"}</h1>
         <DetailBar back={back}>
-          <SaveStatus state={saveState} className="mr-2" />
-          {isDesktop ? (
+          {!deleting && <SaveStatus state={saveState} className="mr-2" />}
+          {deleting ? null : isDesktop ? (
             <span className="mr-2 flex items-center gap-2">{stageActions}</span>
           ) : (
             active && (
@@ -493,12 +496,15 @@ function Build({ item }: { item: ItemView }) {
               />
             )
           )}
-          <ShareLinkButton title={title.trim()} />
-          <IconButton
-            icon={TrashIcon}
-            label={scrapsToIdea ? "Scrap build" : "Delete build"}
+          {!deleting && <ShareLinkButton title={title.trim()} />}
+          <ConfirmDelete
+            asking={deleting}
+            onAskingChange={setDeleting}
+            onConfirm={remove}
+            what="build"
+            verb={scrapsToIdea ? "Scrap" : "Delete"}
             disabled={readOnly}
-            onClick={remove}
+            ariaKeyshortcuts={ariaShortcuts("buildDelete")}
           />
         </DetailBar>
 

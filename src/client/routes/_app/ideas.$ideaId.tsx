@@ -18,6 +18,7 @@ import { ActionBar } from "@/components/ui/ActionBar";
 import { Avatar, ViaText } from "@/components/ui/Avatar";
 import { Button, IconButton } from "@/components/ui/Button";
 import { ToggleChip } from "@/components/ui/Chip";
+import { ConfirmDelete } from "@/components/ui/ConfirmDelete";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { TextArea } from "@/components/ui/Field";
 import { ForChip, ForField } from "@/components/ui/ForField";
@@ -43,7 +44,7 @@ import { useVia } from "@/lib/agents";
 import { startBuild } from "@/lib/builds";
 import { useCaptureHere } from "@/lib/capture";
 import { announceDraft } from "@/lib/drafts";
-import { shortcutCaps, useHotkeys } from "@/lib/hotkeys";
+import { ariaShortcuts, shortcutCaps, useHotkeys } from "@/lib/hotkeys";
 import { addItemFile } from "@/lib/item-files";
 import { deleteItem, type ItemView, removePhoto, useItem, useItemFields } from "@/lib/items";
 import { whyNotMove } from "@/lib/move";
@@ -157,6 +158,8 @@ function Idea({ item }: { item: ItemView }) {
     if (photo) setSelectedId(photo.id);
   };
 
+  // Delete asks first, in place (ConfirmDelete); the key asks, and asks again to confirm.
+  const [deleting, setDeleting] = useState(false);
   function remove() {
     if (!canEdit(item.pending)) return;
     deleteItem(queryClient, item);
@@ -249,7 +252,7 @@ function Idea({ item }: { item: ItemView }) {
     ideaBack: () => void navigate({ to: "/ideas" }),
     ideaPhotoPrevious: () => select(selectedIndex - 1),
     ideaPhotoNext: () => select(selectedIndex + 1),
-    ideaDelete: remove,
+    ideaDelete: () => (deleting ? remove() : canEdit(item.pending) && setDeleting(true)),
     ideaBuild: build,
     ideaMove: move,
     ideaComment: item.pending ? undefined : comment,
@@ -280,15 +283,16 @@ function Idea({ item }: { item: ItemView }) {
       <article className="pb-6">
         <h1 className="sr-only">{title.trim() || "Untitled idea"}</h1>
         <DetailBar back={back}>
-          <SaveStatus state={saveState} className="mr-2" />
-          <ShareLinkButton title={title.trim()} />
-          <IconButton
-            icon={TrashIcon}
-            label="Delete idea"
-            title={`Delete idea (${shortcutCaps("ideaDelete").join("")})`}
-            onClick={remove}
+          {!deleting && <SaveStatus state={saveState} className="mr-2" />}
+          {!deleting && <ShareLinkButton title={title.trim()} />}
+          <ConfirmDelete
+            asking={deleting}
+            onAskingChange={setDeleting}
+            onConfirm={remove}
+            what="idea"
             disabled={readOnly}
-            aria-keyshortcuts="Backspace Delete"
+            title={`Delete idea (${shortcutCaps("ideaDelete").join("")})`}
+            ariaKeyshortcuts={ariaShortcuts("ideaDelete")}
           />
           {isDesktop && (
             <Button

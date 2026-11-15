@@ -96,7 +96,7 @@ export const SHORTCUTS = define([
   { id: "ideaPhotoPrevious", group: "idea", label: "Previous photo", keys: ["arrowleft"] },
   { id: "ideaPhotoNext", group: "idea", label: "Next photo", keys: ["arrowright"] },
   { id: "ideaComment", group: "idea", label: "Say something to the other person", keys: ["m"] },
-  { id: "ideaDelete", group: "idea", label: "Delete, with undo", keys: ["backspace", "delete"] },
+  { id: "ideaDelete", group: "idea", label: "Delete (asks first), with undo", keys: ["mod+backspace", "mod+delete"] },
 
   { id: "buildBack", group: "build", label: "Back to Builds, or let go of the attempt", keys: ["escape"] },
   { id: "buildLog", group: "build", label: "Log or finish an attempt", keys: ["a"] },
@@ -110,8 +110,8 @@ export const SHORTCUTS = define([
   {
     id: "buildDelete",
     group: "build",
-    label: "Delete the attempt, or the build",
-    keys: ["backspace", "delete"],
+    label: "Delete the attempt, or the build (asks first)",
+    keys: ["mod+backspace", "mod+delete"],
   },
 
   { id: "attemptWorked", group: "attempt", label: "Worked", keys: ["1"] },
@@ -135,7 +135,12 @@ export const SHORTCUTS = define([
   { id: "shoppingAdd", group: "shopping", label: "Add something to buy", keys: ["n"] },
 
   { id: "spoolBack", group: "spool", label: "Back to the Pantry", keys: ["escape"] },
-  { id: "spoolDelete", group: "spool", label: "Take it out of the pantry, with undo", keys: ["backspace", "delete"] },
+  {
+    id: "spoolDelete",
+    group: "spool",
+    label: "Take it out of the pantry, with undo",
+    keys: ["mod+backspace", "mod+delete"],
+  },
 ]);
 
 export type ShortcutId = (typeof SHORTCUTS)[number]["id"];

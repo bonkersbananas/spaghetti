@@ -1,9 +1,19 @@
+import { useState } from "react";
 import { OpenInStudio } from "@/components/builds/OpenInStudio";
 import { Button, ButtonLink, IconButton } from "@/components/ui/Button";
+import { ConfirmDelete } from "@/components/ui/ConfirmDelete";
 import * as Icons from "@/components/ui/icons";
 import { Kbd } from "@/components/ui/Kbd";
 import { ShareLinkButton } from "@/components/ui/ShareLinkButton";
-import { Panel, Section } from "./shared";
+import { toast } from "@/components/ui/Toast";
+import { Label, Panel, Section } from "./shared";
+
+function ConfirmDeleteDemo() {
+  const [asking, setAsking] = useState(false);
+  return (
+    <ConfirmDelete asking={asking} onAskingChange={setAsking} onConfirm={() => toast.message("Deleted")} what="idea" />
+  );
+}
 
 export function ButtonSection() {
   return (
@@ -30,6 +40,10 @@ export function ButtonSection() {
           <ButtonLink href="#buttons" variant="secondary" icon={Icons.DownloadIcon}>
             Download the original
           </ButtonLink>
+        </div>
+        <div className="flex flex-col items-start gap-2">
+          <Label>Delete an idea or build: asks first, in place</Label>
+          <ConfirmDeleteDemo />
         </div>
         <div className="flex flex-wrap items-center gap-3">
           <Button variant="primary" size="sm">
