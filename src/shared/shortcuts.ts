@@ -84,9 +84,9 @@ export const SHORTCUTS = define([
 
   { id: "listNext", group: "lists", label: "Next card", keys: ["j"] },
   { id: "listPrevious", group: "lists", label: "Previous card", keys: ["k"] },
-  { id: "listUpNext", group: "lists", label: "Up next, on or off, for the idea you're on", keys: ["u"] },
-  { id: "listMoveEarlier", group: "lists", label: "Move the Up next idea you're on earlier", keys: ["["] },
-  { id: "listMoveLater", group: "lists", label: "Move the Up next idea you're on later", keys: ["]"] },
+  { id: "listUpNext", group: "lists", label: "Up next on or off (Ideas)", keys: ["u"] },
+  { id: "listMoveEarlier", group: "lists", label: "Earlier in Up next", keys: ["["] },
+  { id: "listMoveLater", group: "lists", label: "Later in Up next", keys: ["]"] },
 
   { id: "twistBack", group: "twist", label: "Back to Twists", keys: ["escape"] },
   { id: "twistPrint", group: "twist", label: "Print it", keys: ["p"] },
@@ -96,7 +96,7 @@ export const SHORTCUTS = define([
   { id: "sliceSettings", group: "idea", label: "How to slice the model, if it has one", keys: ["s"] },
   { id: "sliceSettingsTwist", group: "twist", label: "How to slice the model, if it has one", keys: ["s"] },
   { id: "ideaMove", group: "idea", label: "Add to a build", keys: ["a"] },
-  { id: "ideaUpNext", group: "idea", label: "Up next, on or off", keys: ["u"] },
+  { id: "ideaUpNext", group: "idea", label: "Up next on or off", keys: ["u"] },
   { id: "ideaNext", group: "idea", label: "Next idea in the inbox", keys: ["j"] },
   { id: "ideaPrevious", group: "idea", label: "Previous idea in the inbox", keys: ["k"] },
   { id: "ideaPhotoPrevious", group: "idea", label: "Previous photo", keys: ["arrowleft"] },
