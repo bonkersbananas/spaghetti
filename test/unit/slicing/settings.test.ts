@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { DEFAULT_SLICING, STAND_IN_FILAMENT } from "../../../src/shared/slicing/defaults.ts";
 import {
   changedSlicing,
+  colourChoices,
   filamentWords,
   INFILL_PATTERNS,
   layerRange,
@@ -402,5 +403,58 @@ describe("the plate of a project (modelPlate)", () => {
   it("starts the card's summary with the plate chosen", () => {
     expect(slicingSummary({ ...DEFAULT_SLICING, modelPlate: 3 })[0]).toBe("Plate 3");
     expect(slicingSummary(DEFAULT_SLICING)[0]).not.toMatch(/^Plate/);
+  });
+});
+
+describe("a model's colour choices", () => {
+  const filament = { material: "PLA", spoolId: "spool-1" };
+
+  it("are kept for a model colour by its #rrggbb and for a project's filament by its number", () => {
+    const kept = colourChoices([
+      { from: "#D2281E", filament },
+      { from: "f2", filament },
+      { from: "F12", filament },
+    ]);
+    expect(kept.map((choice) => choice.from)).toEqual(["#d2281e", "f2", "f12"]);
+    expect(normalizeSlicing({ ...DEFAULT_SLICING, colours: [{ from: "f1", filament }] }).colours).toEqual([
+      { from: "f1", filament },
+    ]);
+  });
+
+  it("leave out what is neither, a repeat, or a filament without a material", () => {
+    expect(
+      colourChoices([
+        { from: "red", filament },
+        { from: "f", filament },
+        { from: "f100", filament },
+        { from: "f3", filament },
+        { from: "f3", filament },
+        { from: "f4", filament: {} },
+      ]).map((choice) => choice.from),
+    ).toEqual(["f3"]);
+  });
+
+  it("are checked as the settings are, a number as good as a colour", () => {
+    expect(slicingProblems({ ...DEFAULT_SLICING, colours: [{ from: "f2", filament }] })).toEqual([]);
+    expect(slicingProblems({ ...DEFAULT_SLICING, colours: [{ from: "filament 2", filament }] })).toHaveLength(1);
+  });
+
+  it("count as a change of settings, in any order", () => {
+    const a = {
+      ...DEFAULT_SLICING,
+      colours: [
+        { from: "f2", filament },
+        { from: "f1", filament },
+      ],
+    };
+    const b = {
+      ...DEFAULT_SLICING,
+      colours: [
+        { from: "f1", filament },
+        { from: "f2", filament },
+      ],
+    };
+    expect(sameSlicing(a, b)).toBe(true);
+    expect(changedSlicing(DEFAULT_SLICING, a)).toEqual(["colours"]);
   });
 });

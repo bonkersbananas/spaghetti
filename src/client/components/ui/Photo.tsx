@@ -59,7 +59,7 @@ export function Photo({
           decoding="async"
           className={cn(
             "absolute inset-0 size-full scale-125 object-cover opacity-0 blur-2xl",
-            loaded && "opacity-50 transition-opacity duration-slow",
+            loaded && "duration-slow opacity-50 transition-opacity",
           )}
         />
       )}

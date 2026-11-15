@@ -134,6 +134,8 @@ const fileSlice = z.object({
       z.object({
         hex: z.string().regex(/^#[0-9a-f]{6}$/),
         name: z.string().trim().min(1).max(80).optional(),
+        slot: z.number().int().min(1).max(32).optional(),
+        material: z.string().trim().min(1).max(40).optional(),
         merged: z.array(z.string().trim().min(1).max(80)).max(16).optional(),
         share: z.number().int().min(0).max(100),
         filament: z.object({
