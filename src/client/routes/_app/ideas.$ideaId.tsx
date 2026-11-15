@@ -40,6 +40,7 @@ import { SaveStatus } from "@/components/ui/SaveStatus";
 import { ShareLinkButton } from "@/components/ui/ShareLinkButton";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { toast } from "@/components/ui/Toast";
+import { useAfterPaint } from "@/lib/after-paint";
 import { useVia } from "@/lib/agents";
 import { startBuild } from "@/lib/builds";
 import { useCaptureHere } from "@/lib/capture";
@@ -122,6 +123,7 @@ const back = { to: "/ideas", label: "Ideas" } as const;
 
 function Idea({ item }: { item: ItemView }) {
   const stickyColumn = useStickyColumn();
+  const after = useAfterPaint("idea");
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const isDesktop = useIsDesktop();
@@ -467,7 +469,7 @@ function Idea({ item }: { item: ItemView }) {
                 )}
               </p>
             </div>
-            {!item.pending && (
+            {after && !item.pending && (
               <ItemReactions
                 itemId={item.id}
                 reactions={item.reactions}
@@ -477,7 +479,7 @@ function Idea({ item }: { item: ItemView }) {
               />
             )}
             {/* The conversation follows the words it is about, in the same column (as on a build). */}
-            {!item.pending && (
+            {after && !item.pending && (
               <CommentThread itemId={item.id} writeAsk={writeAsk} readOnly={readOnly} className="mt-9 md:mt-13" />
             )}
           </div>
