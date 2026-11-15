@@ -157,8 +157,8 @@ function Search() {
   };
 
   const total = list.length;
-  // The words as typed, once each, for "search for just one of them" when several found nothing.
-  const typedWords = useMemo(() => [...new Set(q.split(/\s+/).filter(Boolean))].slice(0, 4), [q]);
+  // The words search reads (letters and digits, once each), for "search for just one of them" when several found nothing.
+  const typedWords = terms.slice(0, 4).map((term) => term.text);
   let index = -1;
   const row = (result: Result) => {
     index += 1;
