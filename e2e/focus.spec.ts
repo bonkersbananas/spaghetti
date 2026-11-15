@@ -87,3 +87,23 @@ test("deleting an idea with Delete, then Undo, never leaves focus on the page's 
   await page.keyboard.press("Tab");
   await expect(page.getByRole("list", { name: "Ideas" }).getByRole("link").first()).toBeFocused();
 });
+
+test("backing out of 'Delete this idea?' puts focus back on the trash can", async ({ page }) => {
+  const id = await create(page, "Kept after all");
+  await page.goto(`/ideas/${id}`);
+  await expect(page.locator("main")).toBeVisible();
+  await page.waitForTimeout(500);
+  await focusPage(page);
+  const trash = page.getByRole("button", { name: "Delete idea" });
+  // Escape: the question goes, focus returns to where it began, and a second Escape is the page's own (back).
+  await page.keyboard.press("Control+Backspace");
+  await expect(page.getByRole("button", { name: "Delete", exact: true })).toBeFocused();
+  await page.keyboard.press("Escape");
+  await expect(trash).toBeFocused();
+  await expect(page).toHaveURL(new RegExp(`/ideas/${id}$`));
+  // Keep, by keyboard, the same.
+  await page.keyboard.press("Enter");
+  await page.getByRole("button", { name: "Keep" }).focus();
+  await page.keyboard.press("Enter");
+  await expect(trash).toBeFocused();
+});
