@@ -80,9 +80,10 @@ export function PartsSection({
   const [editing, setEditing] = useState(false);
   // A part's name or count that a killed tab left unsent is only sent by its row: open the editor so it can.
   const leftUnsent = item.parts.some((part) => unsent(`part:${part.id}`) !== undefined);
+  const cannotEdit = readOnly || item.pending;
   useEffect(() => {
-    if (leftUnsent) setEditing(true);
-  }, [leftUnsent]);
+    if (leftUnsent && !cannotEdit) setEditing(true);
+  }, [leftUnsent, cannotEdit]);
   const progress = useMemo(() => partProgress(item.parts, item.attempts), [item.parts, item.attempts]);
   const fromFile = useMemo(
     () =>
