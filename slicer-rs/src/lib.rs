@@ -233,12 +233,14 @@ fn retain_by(
     meshes: &mut Vec<Mesh>,
     filaments: &mut Vec<usize>,
     groups: &mut Vec<usize>,
-    paints: &mut Vec<Option<paint::Paint>>,
+    paints: [&mut Vec<Option<paint::Paint>>; 2],
     keep: &[bool],
 ) {
-    paints.resize(meshes.len(), None);
-    let mut k = keep.iter();
-    paints.retain(|_| k.next().copied().unwrap_or(true));
+    for paints in paints {
+        paints.resize(meshes.len(), None);
+        let mut k = keep.iter();
+        paints.retain(|_| k.next().copied().unwrap_or(true));
+    }
     let mut k = keep.iter();
     meshes.retain(|_| k.next().copied().unwrap_or(true));
     let mut k = keep.iter();
@@ -348,6 +350,8 @@ pub struct Plate {
     groups: Vec<usize>,
     /// Each mesh's painted colours (`paint.rs`), when it has any.
     paints: Vec<Option<paint::Paint>>,
+    /// Each mesh's painted supports (state 1 enforcing support, 2 blocking it), when it has any.
+    support_paints: Vec<Option<paint::Paint>>,
     /// The mesh an STL last added became, and where its triangles went: paint for it (`paint`) goes by the STL's.
     last_stl: Option<(usize, mesh::Moves)>,
     project: bool,
@@ -377,6 +381,8 @@ impl Plate {
             self.groups.extend(model.groups.iter().map(|&g| next + g));
             self.paints.resize(self.meshes.len(), None);
             self.paints.extend(model.paints);
+            self.support_paints.resize(self.meshes.len(), None);
+            self.support_paints.extend(model.support_paints);
             self.meshes.extend(model.meshes);
         } else {
             let (mut m, moves) = mesh::read_stl_moved(name, input.bytes)?;
@@ -401,15 +407,15 @@ impl Plate {
         let t0 = now();
         let name = input.name.rsplit(['/', '\\']).next().unwrap_or(input.name);
         self.last_stl = None;
-        let (meshes, paints, moves) = if input.bytes.starts_with(b"PK\x03\x04") {
+        let (meshes, paints, support_paints, moves) = if input.bytes.starts_with(b"PK\x03\x04") {
             let model = threemf::read(input.bytes)?;
-            (model.meshes, model.paints, None)
+            (model.meshes, model.paints, model.support_paints, None)
         } else {
             let (mut m, moves) = mesh::read_stl_moved(name, input.bytes)?;
             let n = m.vertices.len();
             // Its heights as Orca holds a part's, not dropped onto the bed on its own.
             mesh::settle_heights(&mut m.vertices, &[(0..n, 0.0)], false);
-            (vec![m], vec![None], Some(moves))
+            (vec![m], vec![None], vec![None], Some(moves))
         };
         let group = match self.groups.last() {
             Some(&g) if !first => g,
@@ -419,11 +425,13 @@ impl Plate {
             self.last_stl = Some((self.meshes.len(), moves));
         }
         self.paints.resize(self.meshes.len(), None);
-        for (m, paint) in meshes.into_iter().zip(paints) {
+        self.support_paints.resize(self.meshes.len(), None);
+        for ((m, paint), supports) in meshes.into_iter().zip(paints).zip(support_paints) {
             self.meshes.push(m);
             self.groups.push(group);
             self.filaments.push(filament);
             self.paints.push(paint);
+            self.support_paints.push(supports);
         }
         self.title.get_or_insert_with(|| name.to_string());
         self.read_ms += now() - t0;
@@ -433,6 +441,15 @@ impl Plate {
     /// Paints the mesh the last STL added became (`add`, `add_in`, `add_part`): `paint`'s triangles are the STL's,
     /// in its order. False when the last model added wasn't an STL, or the paint names triangles it doesn't have.
     pub fn paint(&mut self, paint: &paint::Paint) -> bool {
+        self.paint_kind(paint, false)
+    }
+
+    /// As `paint`, with painted supports (state 1 enforcing support, 2 blocking it).
+    pub fn paint_supports(&mut self, paint: &paint::Paint) -> bool {
+        self.paint_kind(paint, true)
+    }
+
+    fn paint_kind(&mut self, paint: &paint::Paint, supports: bool) -> bool {
         let Some((k, moves)) = &self.last_stl else { return false };
         let count = self.meshes[*k].triangles.len() as u32;
         let places = moves.new_places();
@@ -440,14 +457,26 @@ impl Plate {
             return false;
         }
         let moved = paint.moved(places);
-        self.paints.resize(self.meshes.len(), None);
-        self.paints[*k] = (!moved.is_empty()).then_some(moved);
+        let paints = if supports { &mut self.support_paints } else { &mut self.paints };
+        paints.resize(self.meshes.len(), None);
+        paints[*k] = (!moved.is_empty()).then_some(moved);
         true
     }
 
     /// Lays the models on the plate and slices them with `settings` into a `.gcode.3mf`.
     pub fn slice(self, settings: &Settings, options: &Options) -> Result<Output, Error> {
-        let Plate { mut meshes, mut filaments, mut groups, mut paints, project, unassigned, title, read_ms, .. } = self;
+        let Plate {
+            mut meshes,
+            mut filaments,
+            mut groups,
+            mut paints,
+            mut support_paints,
+            project,
+            unassigned,
+            title,
+            read_ms,
+            ..
+        } = self;
         filaments.resize(meshes.len(), 0);
         if groups.len() != meshes.len() {
             groups = (0..meshes.len()).collect();
@@ -467,13 +496,16 @@ impl Plate {
             return Err(Error::NoModel);
         }
         let keep: Vec<bool> = meshes.iter().map(|m| !m.triangles.is_empty()).collect();
-        retain_by(&mut meshes, &mut filaments, &mut groups, &mut paints, &keep);
+        retain_by(&mut meshes, &mut filaments, &mut groups, [&mut paints, &mut support_paints], &keep);
         let scaled = options.scale > 0.0 && (options.scale - 100.0).abs() > 1e-9;
         paints.resize(meshes.len(), None);
-        for (m, paint) in meshes.iter_mut().zip(&mut paints) {
+        support_paints.resize(meshes.len(), None);
+        for ((m, paint), supports) in meshes.iter_mut().zip(&mut paints).zip(&mut support_paints) {
             // A mesh turned right way out has its corners in the other order: its paint goes by the file's still.
-            if let Some(paint) = paint.as_mut().filter(|_| m.signed_volume() < 0.0) {
-                paint.turned.iter_mut().for_each(|t| *t = !*t);
+            if m.signed_volume() < 0.0 {
+                for paint in [paint, supports].into_iter().flatten() {
+                    paint.turned.iter_mut().for_each(|t| *t = !*t);
+                }
             }
             m.orient();
             if scaled {
@@ -497,7 +529,7 @@ impl Plate {
                 return Err(Error::OffPlate);
             }
             let keep: Vec<bool> = places.iter().map(|p| *p == mesh::OnPlate::Inside).collect();
-            retain_by(&mut meshes, &mut filaments, &mut groups, &mut paints, &keep);
+            retain_by(&mut meshes, &mut filaments, &mut groups, [&mut paints, &mut support_paints], &keep);
             if meshes.is_empty() {
                 return Err(Error::OffPlate);
             }
@@ -618,9 +650,19 @@ impl Plate {
         };
         drop((slices, owners));
         let t3 = now();
-        // A raft is support too, which Orca builds whether or not supports are on.
+        // A raft is support too, which Orca builds whether or not supports are on. Each object's painted supports,
+        // projected onto its layers, go with it while supports are on.
         let supports = if settings.enable_support || raft.is_some() {
-            object_supports(&regions, &layers, &centres, &sizes, &parts.group, settings)
+            let painted: Vec<Option<PaintedSupports>> = if settings.enable_support {
+                parts
+                    .members
+                    .iter()
+                    .map(|members| painted_supports(members, &meshes, &support_paints, &layers))
+                    .collect()
+            } else {
+                Vec::new()
+            };
+            object_supports(&regions, &layers, &centres, &sizes, &parts.group, &painted, settings)
         } else {
             Vec::new()
         };
@@ -1008,15 +1050,51 @@ fn support_warnings(
         .collect()
 }
 
+/// An object's painted supports on each of its layers (`segment::support_slabs`): enforced areas, blocked ones (each
+/// none where nothing is painted so), and its upright enforced leaves, each with the layer it is on.
+type PaintedSupports = (Vec<geom::Shapes>, Vec<geom::Shapes>, Vec<(usize, segment::Upright)>);
+
+/// The painted supports of the object made of the meshes `members`, as Orca projects its parts' onto its layers;
+/// None when none of them has any.
+fn painted_supports(
+    members: &[usize],
+    meshes: &[Mesh],
+    support_paints: &[Option<paint::Paint>],
+    layers: &section::Layers,
+) -> Option<PaintedSupports> {
+    let painted: Vec<(&Mesh, &paint::Paint)> = members
+        .iter()
+        .filter_map(|&m| support_paints.get(m).and_then(Option::as_ref).map(|p| (&meshes[m], p)))
+        .collect();
+    let (facets, upright) = segment::support_facets(&painted);
+    (!facets.is_empty()).then(|| {
+        let slice_z = layers.slice_z();
+        let (enforcers, blockers) = segment::support_slabs(&facets, &slice_z);
+        // An upright leaf is on the first layer sliced at or over its centre (Orca's `lower_bound` of the layers'
+        // slicing heights, as floats).
+        let upright = upright
+            .into_iter()
+            .filter_map(|u| {
+                let l = slice_z.partition_point(|&z| (z as f32) < u.z);
+                (l < slice_z.len()).then_some((l, u))
+            })
+            .collect();
+        (enforcers, blockers, upright)
+    })
+}
+
 /// Each object's supports (`support.rs`, `tree/`), from its slices and top surfaces up to its last layer. An object
 /// on the plate made of regions in different filaments (`group` gives each region's) has its supports worked out for
-/// all of it, as Orca works them out, and kept with its first region; its other regions have none.
+/// all of it, as Orca works them out, and kept with its first region; its other regions have none. Its painted supports
+/// (`painted`, by object) enforce and block support as Orca's do.
+#[allow(clippy::too_many_arguments)]
 fn object_supports(
     regions: &[region::LayerRegions],
     layers: &section::Layers,
     centres: &[(f64, f64)],
     sizes: &[(f64, f64)],
     group: &[u32],
+    painted: &[Option<PaintedSupports>],
     s: &Settings,
 ) -> Vec<Vec<support::Layer>> {
     let groups = group.iter().map(|&g| g as usize + 1).max().unwrap_or(0);
@@ -1044,6 +1122,12 @@ fn object_supports(
                     }
                 })
                 .collect();
+            // Up to its last layer (each kind none where nothing is painted so).
+            let upto = |v: &Vec<geom::Shapes>| v.iter().take(top + 1).cloned().collect::<Vec<_>>();
+            let (enforcers, blockers, upright) = match painted.get(g).and_then(Option::as_ref) {
+                Some((e, b, u)) => (upto(e), upto(b), u.iter().filter(|(l, _)| *l <= top).copied().collect()),
+                None => (Vec::new(), Vec::new(), Vec::new()),
+            };
             let object = support::Object {
                 print_z: &layers.top[..=top],
                 height: &layers.height[..=top],
@@ -1051,6 +1135,9 @@ fn object_supports(
                 tops,
                 origin: centres[o],
                 size: sizes[o],
+                enforcers,
+                blockers,
+                upright,
             };
             if !s.enable_support {
                 // Supports off: a raft alone, as the generator Orca takes for these supports makes it (`unsupported`
@@ -1063,7 +1150,7 @@ fn object_supports(
                 tree::classic::supports(&object, s, &params)
             } else if s.support.organic() {
                 // With nothing to hold up, a raft alone (Orca's `generate_raft_contact`), if there is one.
-                tree::supports(&object.slices, object.height, s, object.origin, s.bed).map_or_else(
+                tree::supports(&object.slices, object.height, s, object.origin, s.bed, &object.painted()).map_or_else(
                     || support::raft_alone(&object, &params),
                     |t| support::generate_tree(&object, &params, t),
                 )

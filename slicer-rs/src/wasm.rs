@@ -155,6 +155,19 @@ pub unsafe extern "C" fn paint(data: *const u8, len: usize) -> u32 {
     if PLATE.with(|p| p.borrow_mut().paint(&paint)) { 0 } else { 1 }
 }
 
+/// As `paint`, with a project's painted supports (state 1 enforces support there, 2 blocks it). Returns 0, or 1
+/// when the bytes aren't paint for that STL.
+///
+/// # Safety
+/// `data` must point at `len` readable bytes.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn paint_supports(data: *const u8, len: usize) -> u32 {
+    // SAFETY: the host wrote `len` bytes at `data`.
+    let bytes = unsafe { std::slice::from_raw_parts(data, len) };
+    let Some(paint) = crate::paint::Paint::from_bytes(bytes) else { return 1 };
+    if PLATE.with(|p| p.borrow_mut().paint_supports(&paint)) { 0 } else { 1 }
+}
+
 /// Slices the models added since the last `slice` or `clear`. Flags: bit 0 keeps the objects where the files put
 /// them; bit 1 leaves out the picture. Returns 0 when it made a file, else an error code (see `code`).
 #[unsafe(no_mangle)]

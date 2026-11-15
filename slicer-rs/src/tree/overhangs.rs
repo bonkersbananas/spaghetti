@@ -4,7 +4,9 @@
 //! layers are dropped while small (under 1.68 mm across), unless they start in the air ("sharp tails", any size
 //! here) or reach far from what holds them ("cantilevers"). A sharp tail is held up on its first layer and every
 //! half millimetre or so above, as far as it hangs out over the layer below. With supports only where needed
-//! (`support_critical_regions_only`), only cantilevers and sharp tails are held up.
+//! (`support_critical_regions_only`), only cantilevers and sharp tails are held up. A project's painted supports
+//! (`Painted`) block support where they are painted so, and enforce it under what they cover, with supports only
+//! where painted (`tree(manual)`) there alone (and under the first layer's sharp tails, as Orca's).
 
 use super::{Config, mm};
 use crate::fmath::Hyp;
@@ -15,11 +17,25 @@ use crate::par;
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Kind {
     Detected,
+    /// Where painted supports enforce support, held up as a detected one is.
+    Enforced,
     SharpTail,
 }
 
-/// Each layer's overhangs, in Orca's order: the detected ones by the cluster they belong to, then the sharp tails.
+/// Each layer's overhangs, in Orca's order: the detected ones by the cluster they belong to, then the enforced ones,
+/// then the sharp tails.
 pub type Overhangs = Vec<Vec<(Shape, Kind)>>;
+
+/// An object's painted supports on each of its layers, as the trees take them (`support::Object`'s): where they
+/// enforce support and where they block it, each empty for an object with none of that kind (Orca then has none, and
+/// leaves the overhangs as they are).
+#[derive(Clone, Copy, Default)]
+pub struct Painted<'a> {
+    pub enforcers: &'a [Shapes],
+    pub blockers: &'a [Shapes],
+    /// Its upright enforced triangles, each with the layer it is on (`segment::Upright`), which hold a tip each.
+    pub upright: &'a [(usize, crate::segment::Upright)],
+}
 
 /// nm: Orca's `scale_` of the process's line width, which detection measures in.
 fn extrusion_width(s: &crate::config::Settings) -> f64 {
@@ -79,6 +95,7 @@ fn scan(
     c: &Config,
     s: &crate::config::Settings,
     min_reach_nm: f64,
+    auto: bool,
 ) -> (Vec<Shapes>, Vec<Found>) {
     let n = slices.len();
     let ews = extrusion_width(s);
@@ -90,6 +107,10 @@ fn scan(
     let found: Vec<Found> = par::map_range(n, |l| {
         let mut f =
             Found { overhangs: Vec::new(), tails: Vec::new(), cantilevers: Vec::new(), reach_nm: 0.0, crowded: false };
+        // Supports only where painted look at the first layer alone (Orca's `enforce_support_layers`, refused above 0).
+        if !auto && l > 0 {
+            return f;
+        }
         if l == 0 {
             // Small islands of the first layer are sharp tails.
             for island in &extrudable[0] {
@@ -162,7 +183,8 @@ pub enum Necessity {
 /// Whether an object (its slices and layers' heights, as `detect` takes them) needs supports, by Orca's check: its
 /// first pass only. A layer with over a hundred overhangs turns the sharp tails off, as in `detect`.
 pub fn necessity(slices: &[Shapes], heights: &[f64], c: &Config, s: &crate::config::Settings) -> Option<Necessity> {
-    let (_, found) = scan(slices, heights, c, s, 6e6);
+    // Orca checks with automatic supports, whatever the settings ask.
+    let (_, found) = scan(slices, heights, c, s, 6e6, true);
     let crowded = found.iter().any(|f| f.crowded);
     if !crowded && found.iter().skip(1).any(|f| !f.tails.is_empty()) {
         return Some(Necessity::FloatingRegions);
@@ -171,11 +193,18 @@ pub fn necessity(slices: &[Shapes], heights: &[f64], c: &Config, s: &crate::conf
     (reach > 6e6).then_some(Necessity::FloatingCantilever)
 }
 
-/// Each layer's overhangs, from the object's slices (the first layer as sliced) and its layers' heights (mm).
-pub fn detect(slices: &[Shapes], heights: &[f64], c: &Config, s: &crate::config::Settings) -> Overhangs {
+/// Each layer's overhangs, from the object's slices (the first layer as sliced) and its layers' heights (mm), and
+/// its painted supports.
+pub fn detect(
+    slices: &[Shapes],
+    heights: &[f64],
+    c: &Config,
+    s: &crate::config::Settings,
+    painted: &Painted,
+) -> Overhangs {
     let n = slices.len();
     let ews = extrusion_width(s);
-    let (extrudable, found) = scan(slices, heights, c, s, 3e6);
+    let (extrudable, found) = scan(slices, heights, c, s, 3e6, c.auto);
     // A layer with over a hundred overhangs turns off sharp tails and the small overhangs' removal (Orca's guard,
     // which also stops at 30 s: there it depends on which layers were done first; here it holds for all).
     let crowded = found.iter().any(|f| f.crowded);
@@ -184,8 +213,9 @@ pub fn detect(slices: &[Shapes], heights: &[f64], c: &Config, s: &crate::config:
     if crowded {
         tails[0] = found[0].tails.clone();
     }
-    // Sharp tails grown upwards: an island resting on one below, as long as it stays small and under 16 mm.
-    if !crowded {
+    // Sharp tails grown upwards: an island resting on one below, as long as it stays small and under 16 mm (with
+    // automatic supports).
+    if !crowded && c.auto {
         for l in 1..n {
             let (below, above) = tails.split_at_mut(l);
             let lower = &below[l - 1];
@@ -262,7 +292,7 @@ pub fn detect(slices: &[Shapes], heights: &[f64], c: &Config, s: &crate::config:
         }
     }
     // Small clusters go, unless they hold up a sharp tail or a cantilever.
-    let remove_small = c.remove_small_overhangs && !crowded;
+    let remove_small = c.remove_small_overhangs && !crowded && c.auto;
     let mut out: Overhangs = vec![Vec::new(); n];
     for cluster in &clusters {
         if remove_small {
@@ -282,31 +312,47 @@ pub fn detect(slices: &[Shapes], heights: &[f64], c: &Config, s: &crate::config:
             out[l].push((found[l].overhangs[i].clone(), Kind::Detected));
         }
     }
-    // Supports only where needed: of the overhangs, only those that reach far from what holds them.
-    if c.critical_regions_only {
-        for (layer, f) in out.iter_mut().zip(&found) {
-            *layer = f.cantilevers.iter().map(|o| (o.clone(), Kind::Detected)).collect();
-        }
-    }
-    // Sharp tails: on their first layer whole, then where they hang out over the layer below, every so often.
-    for l in 0..n {
+    for (l, layer) in out.iter_mut().enumerate() {
+        // Sharp tails: on their first layer whole, then where they hang out over the layer below, every so often.
+        let mut tail_areas: Shapes = Vec::new();
         if l == 0 {
-            for (t, _) in &tails[0] {
-                out[0].push((t.clone(), Kind::SharpTail));
-            }
-            continue;
-        }
-        if tails[l].is_empty() {
-            continue;
-        }
-        let lower = grow(&extrudable[l - 1], 12_500.0);
-        for (t, h) in &tails[l] {
-            let mut areas = geom::difference(&one(t), &lower);
-            geom::clipper2_start(&mut areas, &[&one(t), &lower]);
-            if !areas.is_empty() && ((h * 10.0) as i32) % 5 == 0 {
-                out[l].extend(areas.into_iter().map(|a| (a, Kind::SharpTail)));
+            tail_areas.extend(tails[0].iter().map(|(t, _)| t.clone()));
+        } else if !tails[l].is_empty() {
+            let lower = grow(&extrudable[l - 1], 12_500.0);
+            for (t, h) in &tails[l] {
+                let mut areas = geom::difference(&one(t), &lower);
+                geom::clipper2_start(&mut areas, &[&one(t), &lower]);
+                if !areas.is_empty() && ((h * 10.0) as i32) % 5 == 0 {
+                    tail_areas.extend(areas);
+                }
             }
         }
+        // Painted blockers, grown by the trees' collision resolution (0.2 mm), cut the overhangs, the cantilevers and
+        // the sharp tails: on every layer of an object that has any, as Orca cuts them.
+        let mut cantilevers = std::borrow::Cow::Borrowed(&found[l].cantilevers);
+        if let Some(blocker) = painted.blockers.get(l) {
+            let blocker = grow(blocker, 200_000.0);
+            let detected: Shapes = layer.drain(..).map(|(o, _)| o).collect();
+            layer.extend(geom::difference(&detected, &blocker).into_iter().map(|o| (o, Kind::Detected)));
+            cantilevers = std::borrow::Cow::Owned(geom::difference(&found[l].cantilevers, &blocker));
+            tail_areas = geom::difference(&tail_areas, &blocker);
+        }
+        // Supports only where needed: of the overhangs, only those that reach far from what holds them.
+        if c.critical_regions_only && c.auto {
+            *layer = cantilevers.iter().map(|o| (o.clone(), Kind::Detected)).collect();
+        }
+        // Painted enforcers: what of the layer reaches beyond the one below there, grown by the tips' diameter
+        // (Orca's 0.8 mm) and less the layer below.
+        if l > 0
+            && let Some(enforcer) = painted.enforcers.get(l).filter(|e| !e.is_empty())
+        {
+            let enforced = geom::intersection(&geom::difference(&extrudable[l], &extrudable[l - 1]), enforcer);
+            if !enforced.is_empty() {
+                let enforced = geom::difference(&grow(&enforced, 800_000.0), &extrudable[l - 1]);
+                layer.extend(enforced.into_iter().map(|o| (o, Kind::Enforced)));
+            }
+        }
+        layer.extend(tail_areas.into_iter().map(|a| (a, Kind::SharpTail)));
     }
     out
 }
@@ -331,6 +377,27 @@ pub fn detected_nm(slices: &[Shapes], heights: &[f64], c: &Config, s: &crate::co
     out
 }
 
+/// Layer `l`'s enforced overhangs (above the first layer) to the nanometre, as Orca works them out: what of the layer's
+/// extrudable slices reaches beyond the layer below's under its painted enforcers (`enforcer`), grown by the tips'
+/// diameter and less the layer below, each loop started where Clipper2 starts it.
+pub fn enforced_nm(slices: &[Shapes], s: &crate::config::Settings, enforcer: &Shapes, l: usize) -> Shapes {
+    let ews = extrusion_width(s);
+    let extrudable = |k: usize| {
+        let opened = grow(&grow(&slices[k], (-ews / 2.0) as f32 as f64), ews as f32 as f64);
+        to_nm(&geom::intersection(&slices[k], &opened))
+    };
+    let (upper, lower) = (extrudable(l), extrudable(l - 1));
+    let enforced = geom::intersection(&geom::difference(&upper, &lower), &to_nm(enforcer));
+    if enforced.is_empty() {
+        return enforced;
+    }
+    // `offset_c2` takes millimetres in our units; in nanometres, a hundred times as many.
+    let grown = geom::offset_c2(&enforced, mm(800_000.0) * 100.0, Join::Miter(3.0));
+    let mut out = geom::difference(&grown, &lower);
+    geom::clipper2_start(&mut out, &[&grown, &lower]);
+    out
+}
+
 /// Shapes in our units (0.1 µm) as nanometres.
 pub fn to_nm(shapes: &Shapes) -> Shapes {
     shapes
@@ -348,7 +415,7 @@ pub fn areas(overhangs: &Overhangs) -> Vec<Shapes> {
             layer
                 .iter()
                 .flat_map(|(shape, kind)| match kind {
-                    Kind::Detected => vec![shape.clone()],
+                    Kind::Detected | Kind::Enforced => vec![shape.clone()],
                     Kind::SharpTail => grow(&one(shape), 200_000.0),
                 })
                 .collect()
@@ -383,7 +450,7 @@ mod tests {
                 })
                 .collect();
         let heights = vec![0.2; n];
-        let found = detect(&slices, &heights, &c, &s);
+        let found = detect(&slices, &heights, &c, &s, &Painted::default());
         for (l, layer) in found.iter().enumerate() {
             if l == 100 {
                 // The two arms beyond the pillar grown square by 0.333 mm (spec A §2.11).
@@ -405,6 +472,45 @@ mod tests {
     }
 
     #[test]
+    fn painted_supports_enforce_and_block_the_trees_overhangs() {
+        // The T, its left arm's underside painted to enforce support and its right arm's to block it (on the slab's
+        // first layer, as the slabs project them). Where needed (tree(auto)): the left arm alone, as detected, and
+        // the enforced overhang after it, the arm grown by the tips' 0.8 mm less the pillar below. Only where
+        // painted (tree(manual)): the enforced one alone.
+        let mut s = super::super::tests::tree_settings();
+        let n = 125;
+        let slices: Vec<Shapes> =
+            (0..n)
+                .map(|l| {
+                    if l < 100 {
+                        vec![rect(115.0, 123.0, 125.0, 133.0)]
+                    } else {
+                        vec![rect(100.0, 123.0, 140.0, 133.0)]
+                    }
+                })
+                .collect();
+        let heights = vec![0.2; n];
+        let on_slab = |shape: Shape| -> Vec<Shapes> {
+            (0..n).map(|l| if l == 100 { vec![shape.clone()] } else { Vec::new() }).collect()
+        };
+        let enforcers = on_slab(rect(100.0, 123.0, 115.0, 133.0));
+        let blockers = on_slab(rect(125.0, 123.0, 140.0, 133.0));
+        let painted = Painted { enforcers: &enforcers, blockers: &blockers, upright: &[] };
+        let kinds = |s: &crate::config::Settings| -> Vec<(Kind, [i32; 4])> {
+            let found = detect(&slices, &heights, &Config::new(s), s, &painted);
+            assert!(found.iter().enumerate().all(|(l, layer)| l == 100 || layer.is_empty()));
+            found[100].iter().map(|(shape, kind)| (*kind, geom::bbox_of(shape))).collect()
+        };
+        let enforced = (Kind::Enforced, [geom::sc(99.2), geom::sc(122.2), geom::sc(115.8), geom::sc(133.8)]);
+        assert_eq!(
+            kinds(&s),
+            [(Kind::Detected, [geom::sc(100.0), geom::sc(123.0), 1_146_671, geom::sc(133.0)]), enforced]
+        );
+        s.support.kind = "tree(manual)".into();
+        assert_eq!(kinds(&s), [enforced]);
+    }
+
+    #[test]
     fn where_needed_holds_up_only_what_reaches_far() {
         // A slab over a pillar, reaching 15 mm beyond it on one side and 2.5 mm on the other. Both arms are
         // overhangs; only the long one reaches more than 3 mm from what holds it, the one overhang the trees hold up
@@ -423,7 +529,7 @@ mod tests {
                 .collect();
         let heights = vec![0.2; n];
         let arms = |s: &crate::config::Settings| -> Vec<(i32, i32)> {
-            let found = detect(&slices, &heights, &Config::new(s), s);
+            let found = detect(&slices, &heights, &Config::new(s), s, &Painted::default());
             assert!(found.iter().enumerate().all(|(l, layer)| l == 100 || layer.is_empty()));
             let mut xs: Vec<(i32, i32)> = found[100]
                 .iter()

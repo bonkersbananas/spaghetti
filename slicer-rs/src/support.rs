@@ -119,6 +119,8 @@ pub struct Params {
     double_wall_area: f64,
     /// Whether supports are on: with them off, the generator makes only the raft, if any.
     enabled: bool,
+    /// Automatic supports (`normal(auto)`), or only where they are painted on (`normal(manual)`, Orca's `stNormal`).
+    auto: bool,
     /// Supports on the plate only (`support_on_build_plate_only`, with supports on): nothing stands on the object.
     plate_only: bool,
     /// The raft under the object (`raft.rs`), how far its contact layer reaches past the object's first layer, and
@@ -194,6 +196,7 @@ impl Params {
                 _ => 1e-13,
             },
             enabled: s.enable_support,
+            auto: !sp.kind.contains("manual"),
             plate_only: s.enable_support && sp.on_build_plate_only,
             raft: Raft::of(s),
             raft_expansion: sp.raft_expansion,
@@ -229,11 +232,27 @@ pub struct Object<'a> {
     pub origin: (f64, f64),
     /// mm: its bounding box's size, which the classic trees' grid of tips spans.
     pub size: (f64, f64),
+    /// Its painted supports on each layer (`segment::support_slabs`, Orca's `project_and_append_custom_facets`): where
+    /// they enforce support, and where they block it; each empty for an object with none of that kind.
+    pub enforcers: Vec<Shapes>,
+    pub blockers: Vec<Shapes>,
+    /// Its upright enforced triangles, each with the layer it is on, which Orca's trees give a tip each.
+    pub upright: Vec<(usize, crate::segment::Upright)>,
 }
 
 impl Object<'_> {
     fn bottom_z(&self, l: usize) -> f64 {
         self.print_z[l] - self.height[l]
+    }
+
+    /// Where layer `l`'s painted supports enforce support, if they do.
+    fn enforcer(&self, l: usize) -> Option<&Shapes> {
+        self.enforcers.get(l).filter(|e| !e.is_empty())
+    }
+
+    /// Its painted supports as the trees take them.
+    pub fn painted(&self) -> crate::tree::overhangs::Painted<'_> {
+        crate::tree::overhangs::Painted { enforcers: &self.enforcers, blockers: &self.blockers, upright: &self.upright }
     }
 }
 
@@ -355,11 +374,22 @@ struct Gen {
     /// A top contact's area as projected down, and the overhangs it holds up.
     contact: Shapes,
     overhang: Shapes,
+    /// What of a top contact painted supports enforce (Orca's `enforcer_polygons`), projected down on its own.
+    enforcer: Shapes,
 }
 
 impl Gen {
     fn new(kind: Kind, bottom_z: f64, print_z: f64, height: f64) -> Gen {
-        Gen { kind, print_z, bottom_z, height, polygons: Vec::new(), contact: Vec::new(), overhang: Vec::new() }
+        Gen {
+            kind,
+            print_z,
+            bottom_z,
+            height,
+            polygons: Vec::new(),
+            contact: Vec::new(),
+            overhang: Vec::new(),
+            enforcer: Vec::new(),
+        }
     }
 
     fn bottom_print_z(&self) -> f64 {
@@ -509,23 +539,33 @@ pub fn generate(o: &Object, p: &Params) -> Vec<Layer> {
     // On the plate only, what the layers below each layer cover, which no support may stand on.
     let covered = if p.plate_only { buildplate_covered(o) } else { Vec::new() };
     let covered_at = |l: usize| covered.get(l).filter(|c| !c.is_empty());
+    // Painted blockers, grown a little (Orca's `SupportAnnotations`): they come as strips between two slices, which
+    // would leave narrow scraps of the overhangs they cut.
+    let blockers: Vec<Shapes> = o
+        .blockers
+        .iter()
+        .map(|b| if b.is_empty() { Vec::new() } else { geom::offset_c2(b, 0.1, geom::Join::Miter(3.0)) })
+        .collect();
+    let blocker_at = |l: usize| blockers.get(l).filter(|b| !b.is_empty());
 
     // 1. Overhangs; on a raft, the first layer's whole slice, whose small islands are sharp tails.
     let mut detected: Vec<Detected> = par::map_range(n, |l| {
         if l == 0 {
             if p.raft.is_some() { raft_overhangs(o) } else { Detected::default() }
         } else if l < looked {
-            detect_overhangs(o, l, p, covered_at(l))
+            detect_overhangs(o, l, p, covered_at(l), blocker_at(l))
         } else {
             Detected::default()
         }
     });
-    if p.enabled {
-        grow_sharp_tails(o, &mut detected, p);
+    // Sharp tails grow up only with automatic supports.
+    if p.enabled && p.auto {
+        grow_sharp_tails(o, &mut detected, p, &blockers);
     }
     let mut present = vec![false; n];
     for (l, d) in detected.iter().enumerate() {
-        present[l] = !d.overhangs.is_empty();
+        // A layer with painted enforcers may get a contact of them alone.
+        present[l] = !d.overhangs.is_empty() || (l > 0 && l < looked && o.enforcer(l).is_some());
     }
     if p.remove_small_overhangs {
         remove_small_overhangs(&mut detected, p);
@@ -540,7 +580,7 @@ pub fn generate(o: &Object, p: &Params) -> Vec<Layer> {
         match (l, p.raft) {
             (0, Some(r)) => Some(raft_contact(o, &r, p, &gp)),
             (0, None) => None,
-            _ => contact_layer(o, l, &detected[l], p, &gp, covered_at(l)),
+            _ => contact_layer(o, l, &detected[l], p, &gp, covered_at(l), o.enforcer(l)),
         }
     });
     let mut tops: Vec<usize> = Vec::new();
@@ -793,12 +833,13 @@ fn buildplate_covered(o: &Object) -> Vec<Shapes> {
 /// Orca's `detect_overhangs` for layer `l`: the parts beyond the layer below by more than the support angle allows,
 /// with sharp tails (small islands with nothing under them) and cantilevers (overhangs reaching over 3 mm out). On
 /// the plate only (`covered`), nothing over what the layers below cover: that is cut before the overhang grows back
-/// to its full size.
-fn detect_overhangs(o: &Object, l: usize, p: &Params, covered: Option<&Shapes>) -> Detected {
+/// to its full size. Painted blockers (`blocker`) cut the overhangs and the sharp tails. Supports only where painted
+/// find none here: their painted enforcers come in with the contacts.
+fn detect_overhangs(o: &Object, l: usize, p: &Params, covered: Option<&Shapes>, blocker: Option<&Shapes>) -> Detected {
     let lower = &o.slices[l - 1];
     let region = &o.slices[l];
     let mut out = Detected::default();
-    if region.is_empty() {
+    if region.is_empty() || !p.auto {
         return out;
     }
     let fw = p.fw;
@@ -827,6 +868,14 @@ fn detect_overhangs(o: &Object, l: usize, p: &Params, covered: Option<&Shapes>) 
             out.tail_heights.push(o.height[l]);
             d.extend(geom::offset(&overhang, 0.05 * fw));
         }
+    }
+    if d.is_empty() {
+        return out;
+    }
+    if let Some(blocker) = blocker {
+        d = geom::difference(&d, blocker);
+        // The tails are cut too (their heights stay as they were, as Orca's do).
+        out.tails = geom::difference(&out.tails, blocker);
     }
     if d.is_empty() || geom::offset(&d, -0.1 * fw).is_empty() {
         return out;
@@ -858,8 +907,8 @@ fn detect_overhangs(o: &Object, l: usize, p: &Params, covered: Option<&Shapes>) 
 
 /// Sharp tails grown upwards (Orca's part of `top_contact_layers`): an island resting only on a sharp tail below,
 /// still small, not over 16 mm tall and not growing fast, is a sharp tail too, and what of it lies beyond the layer
-/// below is an overhang.
-fn grow_sharp_tails(o: &Object, detected: &mut [Detected], p: &Params) {
+/// below is an overhang, less what painted blockers (grown, `blockers`) cover.
+fn grow_sharp_tails(o: &Object, detected: &mut [Detected], p: &Params, blockers: &[Shapes]) {
     let width = p.extrusion_width;
     for l in 1..o.slices.len() {
         let (below, here) = detected.split_at_mut(l);
@@ -880,9 +929,10 @@ fn grow_sharp_tails(o: &Object, detected: &mut [Detected], p: &Params) {
                 continue;
             }
             let mut height = o.height[l];
-            for (i, tail) in lower.tails.iter().enumerate() {
-                if overlaps(&one(tail), &shape) {
-                    height += lower.tail_heights[i];
+            // By the heights, as Orca reads them: blockers can have cut a tail in pieces.
+            for (i, &h) in lower.tail_heights.iter().enumerate() {
+                if lower.tails.get(i).is_some_and(|tail| overlaps(&one(tail), &shape)) {
+                    height += h;
                     break;
                 }
             }
@@ -897,7 +947,11 @@ fn grow_sharp_tails(o: &Object, detected: &mut [Detected], p: &Params) {
             }
             here.tails.push(e.clone());
             here.tail_heights.push(height);
-            here.overhangs.extend(geom::difference(&shape, &o.slices[l - 1]));
+            let overhang = geom::difference(&shape, &o.slices[l - 1]);
+            match blockers.get(l).filter(|b| !b.is_empty()) {
+                Some(blocker) => here.overhangs.extend(geom::difference(&overhang, blocker)),
+                None => here.overhangs.extend(overhang),
+            }
         }
     }
 }
@@ -986,6 +1040,7 @@ fn synced_layer(o: &Object, l: usize, gap: f64, top: bool) -> usize {
 
 /// Orca's `detect_contacts`, `new_contact_layer` and `fill_contact_layer`: the top contact layer under layer `l`'s
 /// overhangs, the top gap below it.
+#[allow(clippy::too_many_arguments)]
 fn contact_layer(
     o: &Object,
     l: usize,
@@ -993,8 +1048,9 @@ fn contact_layer(
     p: &Params,
     gp: &grid::Params,
     covered: Option<&Shapes>,
+    enforcer: Option<&Shapes>,
 ) -> Option<Gen> {
-    let overhangs: Shapes = d.overhangs.iter().filter(|s| !s.is_empty()).cloned().collect();
+    let mut overhangs: Shapes = d.overhangs.iter().filter(|s| !s.is_empty()).cloned().collect();
     let lower = &o.slices[l - 1];
     // What the contact is trimmed by (Orca's `slices_margin`): the layer below, and on the plate only all the layers
     // below.
@@ -1006,11 +1062,25 @@ fn contact_layer(
         }
         None => lower,
     };
-    let contact = if overhangs.is_empty() {
+    let mut contact = if overhangs.is_empty() {
         Vec::new()
     } else {
         geom::difference(&geom::intersection(&overhangs, &o.slices[l]), margin)
     };
+    // Painted enforcers (Orca's `detect_contacts`): support as under a vertical overhang wherever the layer reaches
+    // beyond the one below (grown a hair, so as not to touch the object), its contact cut by the layer below alone,
+    // also on the plate only.
+    let enforced = match enforcer {
+        Some(e) => geom::difference(&geom::intersection(&o.slices[l], e), &square(lower, 0.05 * p.fw)),
+        None => Vec::new(),
+    };
+    if d.overhangs.is_empty() && enforced.is_empty() {
+        return None;
+    }
+    if !enforced.is_empty() {
+        overhangs = geom::union(&overhangs, &enforced);
+        contact = geom::union(&contact, &geom::difference(&enforced, lower));
+    }
     // In step with the object's layers, the contact is the layer the gap ends on, and as thick; else its height is
     // decided with the support's own layers.
     let (mut print_z, height) = if p.synchronize {
@@ -1028,12 +1098,18 @@ fn contact_layer(
     } else {
         Gen::new(Kind::TopContact, print_z - height, print_z, height)
     };
+    // On the plate only, the enforced areas print too, apart from the rest (which the layers below trim further).
+    let enforced_apart = covered.is_some() && !enforced.is_empty();
     if p.snug {
         // Snug: the contact closed and rounded off, the same to project down and to print; every overhang gets dense
         // interface.
         g.contact = snug(&contact, p);
         g.polygons = g.contact.clone();
+        if enforced_apart {
+            g.polygons = geom::union(&g.polygons, &snug(&enforced, p));
+        }
         g.overhang = overhangs;
+        g.enforcer = enforced;
         return Some(g);
     }
     g.contact = Grid::new(&contact, margin, gp).extract(grid::EXPANSION_TO_PROPAGATE, true);
@@ -1047,7 +1123,19 @@ fn contact_layer(
         let trimmed = geom::intersection(&dense, &g.contact);
         g.polygons = Grid::new(&trimmed, margin, gp).extract(gp.expansion_to_slice(), false);
     }
+    if enforced_apart {
+        // Gridded by themselves, trimmed by the layer below alone, with their own dense interface.
+        let gridded = Grid::new(&enforced, lower, gp).extract(grid::EXPANSION_TO_PROPAGATE, true);
+        let dense = geom::difference(&enforced, &held);
+        if !dense.is_empty() {
+            let dense = geom::difference(&geom::offset(&dense, 0.1 * nio), lower);
+            let trimmed = geom::intersection(&dense, &gridded);
+            let more = Grid::new(&trimmed, lower, gp).extract(gp.expansion_to_slice(), false);
+            g.polygons = if g.polygons.is_empty() { more } else { geom::union(&g.polygons, &more) };
+        }
+    }
     g.overhang = overhangs;
+    g.enforcer = enforced;
     Some(g)
 }
 
@@ -1061,6 +1149,7 @@ fn merge_contacts(arena: &mut [Gen], tops: &mut Vec<usize>, p: &Params) {
         d.polygons = geom::union(&d.polygons, &src.polygons);
         d.contact = geom::union(&d.contact, &src.contact);
         d.overhang = geom::union(&d.overhang, &src.overhang);
+        d.enforcer = geom::union(&d.enforcer, &src.enforcer);
     };
     let mut out: Vec<usize> = Vec::new();
     let mut j = 0;
@@ -1108,6 +1197,8 @@ fn columns(
     let mut areas: Vec<Shapes> = vec![Vec::new(); n];
     let mut bottoms: Vec<usize> = Vec::new();
     let mut projection: Shapes = Vec::new();
+    // What painted enforcers hold up, projected down on its own (never trimmed by the plate-only cover).
+    let mut enforced: Shapes = Vec::new();
     let mut contact_idx = tops.len() as isize - 1;
     for l in (0..n - 1).rev() {
         let z = o.print_z[l];
@@ -1115,16 +1206,20 @@ fn columns(
             let t = &arena[tops[contact_idx as usize]];
             let new = [t.contact.clone(), grow(&t.overhang, SCALED_EPSILON)].concat();
             projection.extend(geom::union_all(&[&new]));
+            enforced.extend(t.enforcer.iter().cloned());
             contact_idx -= 1;
         }
-        if projection.is_empty() {
+        if projection.is_empty() && enforced.is_empty() {
             continue;
         }
         let raw = geom::union_all(&[&projection]);
-        // A bottom contact where the projection lands on a top surface; none on the plate only.
+        let enforced_raw = if enforced.is_empty() { Vec::new() } else { geom::union_all(&[&enforced]) };
+        // A bottom contact where the projection lands on a top surface; on the plate only, where what enforcers hold
+        // up does.
         let top = &o.tops[l];
-        if !top.is_empty() && !p.plate_only {
-            let touching = geom::intersection(top, &raw);
+        let landing = if p.plate_only { &enforced_raw } else { &raw };
+        if !top.is_empty() && !landing.is_empty() {
+            let touching = geom::intersection(top, landing);
             if !touching.is_empty() {
                 // In step with the object's layers, the layer the gap up from this one ends on, and as thick.
                 let (mut height, mut print_z) = if p.synchronize {
@@ -1170,23 +1265,33 @@ fn columns(
             }
         }
         // The support near this layer, and the columns going on down: cut by the layer, or on the plate only by all
-        // the layers below it.
+        // the layers below it; what enforcers hold up, cut by the layer alone, joins it.
         let trimming = if p.plate_only { covered[l].clone() } else { grow(&o.slices[l], SCALED_EPSILON) };
-        let mut below = geom::difference(&raw, &trimming);
-        if p.snug {
-            // Snug: closed and rounded off, not cut by the object (its XY gap does that later), the same to print
-            // and to project on down.
-            remove_sticks(&mut below);
-            areas[l] = snug(&below, p);
-            projection = areas[l].clone();
-            continue;
+        let (area, next) = project_to_grid(&raw, &trimming, p, gp);
+        areas[l] = area;
+        projection = next;
+        if !enforced.is_empty() {
+            let (area, next) = project_to_grid(&enforced_raw, &grow(&o.slices[l], SCALED_EPSILON), p, gp);
+            areas[l] = if areas[l].is_empty() { area } else { geom::union(&areas[l], &area) };
+            enforced = next;
         }
-        let grid = Grid::new(&below, &trimming, gp);
-        areas[l] = grid.extract(gp.expansion_to_slice(), true);
-        projection = grid.extract(grid::EXPANSION_TO_PROPAGATE, true);
     }
     bottoms.reverse();
     (bottoms, areas)
+}
+
+/// Orca's `project_support_to_grid`: support projected onto a layer, less what `trimming` covers there: the area to
+/// print near the layer, and what goes on down. Snug: closed and rounded off, not cut by the object (its XY gap does
+/// that later), the same to print and to project on down.
+fn project_to_grid(raw: &Shapes, trimming: &Shapes, p: &Params, gp: &grid::Params) -> (Shapes, Shapes) {
+    let mut below = geom::difference(raw, trimming);
+    if p.snug {
+        remove_sticks(&mut below);
+        let area = snug(&below, p);
+        return (area.clone(), area);
+    }
+    let grid = Grid::new(&below, trimming, gp);
+    (grid.extract(gp.expansion_to_slice(), true), grid.extract(grid::EXPANSION_TO_PROPAGATE, true))
 }
 
 /// Orca's `raft_and_intermediate_support_layers`: between each pair of contacts (top contacts by their bottoms, bottom

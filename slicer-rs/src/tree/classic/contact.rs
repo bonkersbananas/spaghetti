@@ -196,11 +196,13 @@ pub struct Contacts {
 }
 
 /// `print_z` and `height` are the object layers' (mm); `object_size` the object's size in nm; `nm_overhangs` each
-/// layer's detected overhangs to the nanometre (`overhangs::detected_nm`), which the tips are spaced along.
+/// layer's detected overhangs to the nanometre (`overhangs::detected_nm`), which the tips are spaced along;
+/// `upright` the painted upright triangles (above the first layer) that hold a tip each, with their layers.
 #[allow(clippy::too_many_arguments)]
 pub fn contact_points(
     overhangs: &Overhangs,
     nm_overhangs: &[Shapes],
+    upright: &[(usize, crate::segment::Upright)],
     outlines_below: &[Shapes],
     print_z: &[f64],
     height: &[f64],
@@ -232,7 +234,7 @@ pub fn contact_points(
         let mut already_inserted: HashSet<P> = HashSet::new();
         let mut insert_point = |curr: &mut Vec<NewContact>,
                                 pt: P,
-                                overhang: &Arc<Shape>,
+                                overhang: Option<&Arc<Shape>>,
                                 radius: f64,
                                 force_add: bool,
                                 add_interface: bool,
@@ -245,10 +247,11 @@ pub fn contact_points(
                     position: pt,
                     roof_layers: if add_interface { p.top_interface_layers } else { 0 },
                     radius,
-                    overhang: overhang.clone(),
+                    overhang: overhang.cloned(),
                     is_sharp_tail,
                     is_corner: false,
                     polygon: false,
+                    skin_direction: (0, 0),
                 });
                 Some(curr.len() - 1)
             } else {
@@ -262,7 +265,7 @@ pub fn contact_points(
             // worked out again in nanometres as Orca has it, else the part as it is, started as Clipper2 would.
             let bounds_of = |s: &Shape| geom::bbox(&vec![s.clone()]);
             let part_nm = match (kind, bounds_of(part)) {
-                (Kind::Detected, Some(b)) => nm_overhangs[layer_nr]
+                (Kind::Detected | Kind::Enforced, Some(b)) => nm_overhangs[layer_nr]
                     .iter()
                     .filter_map(|o| {
                         let c = bounds_of(o)?;
@@ -275,7 +278,7 @@ pub fn contact_points(
             }
             .unwrap_or_else(|| {
                 let mut one = vec![shape_nm(part)];
-                if *kind == Kind::Detected {
+                if *kind != Kind::SharpTail {
                     geom::clipper2_start(&mut one, &[]);
                 }
                 one.remove(0)
@@ -299,7 +302,7 @@ pub fn contact_points(
                         let candidate = ((b.0.0 + b.1.0) / 2, (b.0.1 + b.1.1) / 2);
                         let overhang = Arc::new(shape_units(&overhang));
                         if let Some(i) =
-                            insert_point(&mut curr, candidate, &overhang, radius, true, true, is_sharp_tail)
+                            insert_point(&mut curr, candidate, Some(&overhang), radius, true, true, is_sharp_tail)
                         {
                             curr[i].polygon = true;
                         }
@@ -327,7 +330,7 @@ pub fn contact_points(
                     let v2 = unit((pt.0 - next.0, pt.1 - next.1));
                     if v1.0 * v2.0 + v1.1 * v2.1 > -0.7
                         && let Some(k) =
-                            insert_point(&mut curr, pt, &overhang, radius, false, add_interface, is_sharp_tail)
+                            insert_point(&mut curr, pt, Some(&overhang), radius, false, add_interface, is_sharp_tail)
                     {
                         curr[k].is_corner = true;
                     }
@@ -344,7 +347,7 @@ pub fn contact_points(
                     let mut distance = 0.0;
                     while distance < 1.0 {
                         let pt = cache.coords(distance);
-                        insert_point(&mut curr, pt, &overhang, radius, false, add_interface, is_sharp_tail);
+                        insert_point(&mut curr, pt, Some(&overhang), radius, false, add_interface, is_sharp_tail);
                         distance += step;
                     }
                 }
@@ -356,9 +359,25 @@ pub fn contact_points(
                 let inner = Areas::new(&inner);
                 for &candidate in &grid {
                     if bbox_contains(bounds, candidate) && inner.contain_nm(frame, candidate) {
-                        insert_point(&mut curr, candidate, &overhang, radius, false, add_interface, is_sharp_tail);
+                        insert_point(
+                            &mut curr,
+                            candidate,
+                            Some(&overhang),
+                            radius,
+                            false,
+                            add_interface,
+                            is_sharp_tail,
+                        );
                     }
                 }
+            }
+        }
+        // Painted upright triangles: a tip at each one's centre (in Orca's frame, truncated), with no overhang or
+        // radius of its own, as a sharp tail (no gap over it), steered the way the triangle faces.
+        for (_, u) in upright.iter().filter(|(l, _)| *l == layer_nr) {
+            let pt = ((u.x - frame.origin.0 as f64) as i64, (u.y - frame.origin.1 as f64) as i64);
+            if let Some(i) = insert_point(&mut curr, pt, None, 0.0, false, true, true) {
+                curr[i].skin_direction = u.facing;
             }
         }
         curr
@@ -386,7 +405,8 @@ pub fn contact_points(
                 radius: c.radius,
             });
             let node = &mut nodes.all[id];
-            node.overhang = Some(c.overhang);
+            node.overhang = c.overhang;
+            node.skin_direction = c.skin_direction;
             node.is_sharp_tail = c.is_sharp_tail;
             node.is_corner = c.is_corner;
             if c.polygon {
@@ -423,8 +443,9 @@ struct NewContact {
     position: P,
     roof_layers: i32,
     radius: f64,
-    overhang: Arc<Shape>,
+    overhang: Option<Arc<Shape>>,
     is_sharp_tail: bool,
     is_corner: bool,
     polygon: bool,
+    skin_direction: P,
 }
