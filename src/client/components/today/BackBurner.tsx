@@ -1,5 +1,4 @@
 import type { Person } from "@shared/api";
-import { displayName } from "@shared/people";
 import { ageWords } from "@shared/time";
 import { useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
@@ -13,9 +12,11 @@ import type { ItemView } from "@/lib/items";
 import { photoSrc } from "@/lib/previews";
 import { useReadOnly } from "@/lib/read-only";
 import { useIsDesktop } from "@/lib/use-media-query";
+import { useWho } from "@/lib/who";
 
 /** An old idea, with a way to start building it. Nothing is drawn when no idea is old enough. */
 export function BackBurner({ idea, person }: { idea: ItemView | undefined; person?: Person }) {
+  const who = useWho();
   const queryClient = useQueryClient();
   const readOnly = useReadOnly(idea?.pending);
   const isDesktop = useIsDesktop();
@@ -40,7 +41,7 @@ export function BackBurner({ idea, person }: { idea: ItemView | undefined; perso
         <div className="pointer-events-none relative flex min-w-0 flex-1 flex-col">
           <p className="text-body text-ink line-clamp-2 font-semibold">{name.text}</p>
           <p className="text-small text-ink-faint truncate">
-            {person ? `${displayName(person)} · ` : ""}
+            {person ? `${who(person)} · ` : ""}
             {ageWords(idea.createdAt)}
           </p>
         </div>

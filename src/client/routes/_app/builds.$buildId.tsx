@@ -90,6 +90,7 @@ import { useSlicerDropTarget } from "@/lib/slicer-drop";
 import { useStickyColumn } from "@/lib/sticky-column";
 import { twistFromBuild, useTwists } from "@/lib/twists";
 import { useIsDesktop } from "@/lib/use-media-query";
+import { useWho } from "@/lib/who";
 
 /** A build with more attempts than this shows only its newest few, with a line that unfolds the rest. */
 const FOLD_AFTER = 5;
@@ -169,6 +170,7 @@ function Build({ item }: { item: ItemView }) {
   const byId = new Map(people?.map((person) => [person.id, person]));
   useCaptureHere(item);
   const { data: user } = useQuery(sessionQuery);
+  const who = useWho();
   // A build from someone else's model can be kept as a twist, once (it then says it prints it).
   const model = modelOf({ note: item.note, draft: item.draft });
   // A twist made from this item while it was an idea has `fromItemId` but not the build's `twistId`: it counts too.
@@ -742,7 +744,16 @@ function Build({ item }: { item: ItemView }) {
                   {creator && <Avatar person={creator} size="xs" via={via(item.createdVia)} />}
                   {fromIdea && <IdeasIcon size={16} className="-mr-1.5 shrink-0" aria-hidden />}
                   <p>
-                    {fromIdea ? <>Captured as an idea {inlineTime(item.createdAt)}, building since </> : "Started "}
+                    {fromIdea ? (
+                      <>
+                        {creator ? `${who(creator)} captured` : "Captured"} as an idea {inlineTime(item.createdAt)},
+                        building since{" "}
+                      </>
+                    ) : creator ? (
+                      `${who(creator)} started `
+                    ) : (
+                      "Started "
+                    )}
                     <time dateTime={new Date(started).toISOString()} title={fullTime(started)}>
                       {inlineTime(started)}
                     </time>
