@@ -509,6 +509,7 @@ fn check_moves(gcode: &str, s: &Settings) -> Vec<Vec<u32>> {
             if moves_xy {
                 assert!((0.0..=s.bed[0]).contains(&nx) && (0.0..=s.bed[1]).contains(&ny), "on the plate: {}", at());
                 assert!(nz > layer_z || at_height(nz, layer_z), "never below the layer while moving: {}", at());
+                assert!(e > 0.0 || nz >= z - 1e-9, "a lifted travel comes down at its end, not on the way: {}", at());
             }
             if e > 0.0 && moves_xy {
                 assert!(at_height(nz, layer_z), "prints at the layer's height: {}", at());
@@ -542,6 +543,37 @@ fn check_moves(gcode: &str, s: &Settings) -> Vec<Vec<u32>> {
     }
     assert_eq!(label, None, "every label closed");
     layers
+}
+
+/// The first travel between the printer's start and end G-code that comes down on the way (a move across to a lower
+/// height that extrudes nothing), and how many travels come down at their end (across, then down): a lifted nozzle
+/// travels at its height and comes down where it's going, as Orca 2.5.1 has it (`descend_after_xy`, its #16933).
+fn travels_down(gcode: &str) -> (Option<&str>, usize) {
+    let body = gcode.split("M981 S1 P20000 ;open spaghetti detector\n").nth(1).expect("the start G-code's end");
+    let body = body.split("M981 S0 P20000 ; close spaghetti detector\n").next().expect("the end G-code's start");
+    let (mut z, mut across, mut at_end) = (f64::NAN, false, 0);
+    for line in body.lines() {
+        let code = line.split(';').next().unwrap_or("").trim();
+        if !["G0 ", "G1 ", "G2 ", "G3 "].iter().any(|g| code.starts_with(g)) {
+            continue;
+        }
+        let xy = word(code, 'X').is_some() || word(code, 'Y').is_some();
+        let travel =
+            xy && !word(code, 'E').is_some_and(|e| e > 0.0) && !code.starts_with("G2") && !code.starts_with("G3");
+        if let Some(nz) = word(code, 'Z') {
+            if nz < z - 1e-9 {
+                if travel {
+                    return (Some(line), at_end);
+                }
+                if !xy && across {
+                    at_end += 1;
+                }
+            }
+            z = nz;
+        }
+        across = travel;
+    }
+    (None, at_end)
 }
 
 #[test]
@@ -1466,6 +1498,10 @@ fn two_filaments_change_once_a_layer_over_a_prime_tower() {
         assert!(layer.contains("; FEATURE: Prime tower\n"), "layer {i} has no tower");
     }
     assert_eq!(s.tool_changes, 20);
+    // To the tower and back, a lifted nozzle goes over at its height and comes down at the end.
+    let (on_the_way, at_end) = travels_down(&gcode);
+    assert_eq!(on_the_way, None);
+    assert!(at_end >= 40, "{at_end} travels come down at their end");
     // Each object prints in its own filament (T0 the frame, T1 the square), and every move between the printer's start
     // and end G-code stays on the plate, tool changes and all.
     let mut printed = [0usize; 2];
@@ -2518,6 +2554,14 @@ fn a_vase_climbs_in_one_spiral_above_its_bottom_and_is_alone_on_its_plate() {
             assert!(zs[0] > top - 0.2 && (zs[zs.len() - 1] - top).abs() < 1e-9, "layer {i} at {top}: {zs:?}");
         }
     }
+    // An object that stands on two feet travels between them on its bottom layers, lifted: over at its height and
+    // down at the end, as Orca 2.5.1 does it (2.5.0 came down on the way there).
+    let feet = boxes_stl(&[([116., 116., 0.], [124., 140., 10.]), ([132., 116., 0.], [140., 140., 10.])]);
+    let out = slice(&[Input { name: "feet.stl", bytes: &feet }], &settings, &options).unwrap();
+    let gcode = String::from_utf8(out.gcode).unwrap();
+    let (on_the_way, at_end) = travels_down(&gcode);
+    assert_eq!(on_the_way, None);
+    assert!(at_end >= 1, "{at_end} travels come down at their end");
     // Orca prints one object in spiral vase mode, and stops the slice when there are more: so do we.
     let beside = boxes_stl(&[([150., 116., 0.], [160., 126., 10.])]);
     let two = [Input { name: "vase.stl", bytes: &block }, Input { name: "cup.stl", bytes: &beside }];
