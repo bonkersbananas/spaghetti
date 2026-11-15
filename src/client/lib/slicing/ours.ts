@@ -33,6 +33,11 @@ interface Exports {
    * for it. A module from before slicer-rs-v22 refuses a painted plate when it slices (code 8, "painted colours").
    */
   paint?(data: number, len: number): number;
+  /**
+   * As `paint`, with a project's painted supports (`paintBytes`; state 1 enforces support, 2 blocks it). No module has
+   * it yet: one without it can't print painted supports, which OrcaSlicer's engine then slices.
+   */
+  paint_supports?(data: number, len: number): number;
   slice(flags: number): number;
   output_ptr(): number;
   output_len(): number;
@@ -70,6 +75,8 @@ export interface OurObject {
   positions: Float32Array;
   filament?: number;
   paint?: ModelPaint;
+  /** Its painted supports, while supports are on (an object made of parts has each part's). */
+  supports?: ModelPaint;
   parts?: OurPart[];
 }
 
@@ -78,6 +85,7 @@ export interface OurPart {
   positions: Float32Array;
   filament: number;
   paint?: ModelPaint;
+  supports?: ModelPaint;
 }
 
 /**
@@ -116,11 +124,22 @@ export async function sliceOurs(
     if (!paintIt && objects.some((object) => object.paint || object.parts?.some((part) => part.paint))) {
       return { ok: false, fallback: { why: "unsupported", what: "painted colours" } };
     }
-    // Paints the STL added just before; paint it won't take is a slice that failed.
-    const painted = (paint: ModelPaint | undefined) => {
-      if (!paint || !paintIt) return 0;
-      const bytes = paintBytes(paint);
-      return withBytes(bytes, (ptr) => paintIt(ptr, bytes.length)) ? PAINT_REFUSED : 0;
+    // Painted supports likewise, in the words ours refuses a project's supports "painted on" with.
+    const supportIt = module.paint_supports;
+    if (!supportIt && objects.some((object) => object.supports || object.parts?.some((part) => part.supports))) {
+      return { ok: false, fallback: { why: "unsupported", what: "supports painted on" } };
+    }
+    // Paints the STL added just before (its colours, then its supports); paint it won't take is a slice that failed.
+    const painted = (paint: ModelPaint | undefined, supports?: ModelPaint) => {
+      if (paint && paintIt) {
+        const bytes = paintBytes(paint);
+        if (withBytes(bytes, (ptr) => paintIt(ptr, bytes.length))) return PAINT_REFUSED;
+      }
+      if (supports && supportIt) {
+        const bytes = paintBytes(supports);
+        if (withBytes(bytes, (ptr) => supportIt(ptr, bytes.length))) return PAINT_REFUSED;
+      }
+      return 0;
     };
     const settings = encoder.encode(setup);
     let code = withBytes(settings, (ptr) => module.setup(ptr, settings.length));
@@ -139,7 +158,7 @@ export async function sliceOurs(
               addPart(namePtr, name.length, stlPtr, stl.length, part.filament, index === 0 ? 1 : 0),
             ),
           );
-          if (!code) code = painted(part.paint);
+          if (!code) code = painted(part.paint, part.supports);
         }
         continue;
       }
@@ -154,7 +173,7 @@ export async function sliceOurs(
             : module.add(namePtr, name.length, stlPtr, stl.length),
         ),
       );
-      if (!code) code = painted(object.paint);
+      if (!code) code = painted(object.paint, object.supports);
     }
     if (code) return { ok: false, fallback: fallbackOf(code, said()) ?? { why: "failed" } };
     beforeSlice();

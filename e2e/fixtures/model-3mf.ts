@@ -4,9 +4,15 @@ type Vec = [number, number, number];
 
 /**
  * A box as a 3MF mesh, its lowest corner at `at`, its faces turned outward; `paint` gives some of its triangles
- * painted colours (`paint_color`, Orca's codes), by their index: 2 and 3 are the top.
+ * painted colours (`paint_color`, Orca's codes), by their index: 0 and 1 are the bottom, 2 and 3 the top; `supports`
+ * painted supports (`paint_supports`: "4" enforces support, "8" blocks it).
  */
-function boxMesh([x, y, z]: Vec, [w, d, h]: Vec, paint: Record<number, string> = {}): string {
+function boxMesh(
+  [x, y, z]: Vec,
+  [w, d, h]: Vec,
+  paint: Record<number, string> = {},
+  supports: Record<number, string> = {},
+): string {
   const corners: Vec[] = [
     [x, y, z],
     [x + w, y, z],
@@ -35,7 +41,9 @@ function boxMesh([x, y, z]: Vec, [w, d, h]: Vec, paint: Record<number, string> =
   const triangles = faces
     .map(([a, b, c], index) => {
       const code = paint[index];
-      return `<triangle v1="${a}" v2="${b}" v3="${c}"${code ? ` paint_color="${code}"` : ""}/>`;
+      const support = supports[index];
+      const painted = `${code ? ` paint_color="${code}"` : ""}${support ? ` paint_supports="${support}"` : ""}`;
+      return `<triangle v1="${a}" v2="${b}" v3="${c}"${painted}/>`;
     })
     .join("");
   return `<mesh><vertices>${vertices}</vertices><triangles>${triangles}</triangles></mesh>`;
@@ -214,6 +222,43 @@ export function paintedProject(): Uint8Array {
   </plate>
 </config>`;
   const project = { filament_type: ["PLA", "PLA"], filament_colour: ["#F2EEE4", "#C2412D"] };
+  return zipSync({
+    "3D/3dmodel.model": strToU8(model),
+    "Metadata/model_settings.config": strToU8(settings),
+    "Metadata/project_settings.config": strToU8(JSON.stringify(project)),
+  });
+}
+
+/**
+ * A Bambu Studio or OrcaSlicer project of a T, a slab 40 mm wide on a pillar 20 mm tall, whose supports are painted
+ * on: the slab's underside enforces support (`paint_supports`), and the project asks for supports only where painted
+ * (`normal(manual)`). Our own slicer can't print painted supports yet, so OrcaSlicer's engine slices it; until the app
+ * handed the engine the paint (Nov 15) it printed no support at all.
+ */
+export function paintedSupportsProject(): Uint8Array {
+  const model = `<?xml version="1.0" encoding="UTF-8"?>
+<model unit="millimeter" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02">
+<resources>
+<object id="1" type="model">${boxMesh([123, 123, 0], [10, 10, 20])}</object>
+<object id="2" type="model">${boxMesh([108, 123, 20], [40, 10, 5], {}, { 0: "4", 1: "4" })}</object>
+<object id="3" type="model"><components><component objectid="1"/><component objectid="2"/></components></object>
+</resources>
+<build><item objectid="3"/></build>
+</model>`;
+  const settings = `<?xml version="1.0" encoding="UTF-8"?>
+<config>
+  <object id="3">
+    <metadata key="name" value="Painted T"/>
+    <metadata key="extruder" value="1"/>
+    <part id="1" subtype="normal_part"><metadata key="name" value="Pillar"/></part>
+    <part id="2" subtype="normal_part"><metadata key="name" value="Slab"/></part>
+  </object>
+  <plate>
+    <metadata key="plater_id" value="1"/>
+    <model_instance><metadata key="object_id" value="3"/></model_instance>
+  </plate>
+</config>`;
+  const project = { enable_support: "1", support_type: "normal(manual)" };
   return zipSync({
     "3D/3dmodel.model": strToU8(model),
     "Metadata/model_settings.config": strToU8(settings),

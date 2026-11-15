@@ -4,6 +4,7 @@ import { bambuStudioProblems } from "../test/unit/slicing/bambu-rules";
 import {
   brimProject,
   paintedProject,
+  paintedSupportsProject,
   partsProject,
   patternProject,
   raftProject,
@@ -339,6 +340,29 @@ test("a painted project is sliced by ours in its colours, and by OrcaSlicer's en
     expect(engineFile.grams).toHaveLength(2);
     for (const grams of engineFile.grams) expect(grams).toBeGreaterThan(0);
     expect(engineFile.gcode).toContain("; FEATURE: Prime tower");
+  } finally {
+    await setDefaults(page, null);
+  }
+});
+
+test("a project's supports painted on are printed by OrcaSlicer's engine, ours stepping aside", async ({ page }) => {
+  test.setTimeout(2 * SLICED);
+  await signIn(page);
+  try {
+    await setDefaults(page, { slicer: "spaghetti" });
+    // A T whose slab's underside enforces support, in a project that asks for supports only where painted.
+    const { id, files } = await ideaWithModel(page, "Painted T", "painted-t.3mf", paintedSupportsProject());
+    await expect(files.getByText("Sliced by OrcaSlicer: our own slicer can't do supports painted on yet")).toBeVisible({
+      timeout: SLICED,
+    });
+    const file = await fileOf(page, id);
+    expect(file.slice.settings.slicer).toBe("orca");
+    expect(file.slice.fallback).toEqual({ why: "unsupported", what: "supports painted on" });
+    // The engine gets the paint, and supports the slab where it is painted: under its two arms.
+    const sliced = await page.request.get(`/api/files/${file.id}/sliced`);
+    const zip = unzipSync(new Uint8Array(await sliced.body()));
+    const gcode = strFromU8(zip["Metadata/plate_1.gcode"] ?? new Uint8Array());
+    expect(gcode).toContain("; FEATURE: Support");
   } finally {
     await setDefaults(page, null);
   }

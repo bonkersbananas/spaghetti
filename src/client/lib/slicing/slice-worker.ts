@@ -101,6 +101,11 @@ interface Placed {
    * are those of `positions`, which turning, scaling and placing keep in order (fins are added after them).
    */
   paint?: ModelPaint;
+  /**
+   * A project's supports painted on it (state 1 enforces support, 2 blocks it): either slicer gets them while supports
+   * are on. Its triangles are those of `positions`, as `paint`'s.
+   */
+  supports?: ModelPaint;
   /** The colours the model gives it, as runs of its triangles (a plain 3MF's, matched to filaments by `matchColours`). */
   colours?: ModelColourRun[];
 }
@@ -356,15 +361,18 @@ async function withOurs(
   });
   // On a plate in several filaments each object says which it prints in, as Orca's engine is told (`extruder`), and
   // an object made of parts in different filaments goes in part by part, each in its own. A project's painted colours
-  // go with the object, or with each part, as the engine gets them (`paint.filaments`).
+  // and, while supports are on, its painted supports go with the object, or with each part, as the engine gets them
+  // (`paint.filaments`, `paint.supports`).
   const several = setup.filaments.length > 1;
+  const supported = supportsOn(setup);
   const ours: OurObject[] = objects.map((object) => {
-    const parts = several ? partsOf(object) : null;
+    const parts = several ? partsOf(object, supported) : null;
     return {
       name: object.name,
       positions: object.positions,
       ...(several ? { filament: object.extruder } : {}),
       ...(object.paint ? { paint: object.paint } : {}),
+      ...(supported && object.supports && !parts ? { supports: object.supports } : {}),
       ...(parts ? { parts } : {}),
     };
   });
@@ -377,18 +385,21 @@ async function withOurs(
 }
 
 /**
- * An object's parts as meshes of their own, each with its filament and the paint on it, when they print in more than
- * one (else null): the triangles after the last part (its fins) print with the object's filament.
+ * An object's parts as meshes of their own, each with its filament and the paint on it (its painted supports too,
+ * with `supported`), when they print in more than one (else null): the triangles after the last part (its fins) print
+ * with the object's filament.
  */
-function partsOf(object: Placed): OurPart[] | null {
+function partsOf(object: Placed, supported = false): OurPart[] | null {
   const parts = object.parts;
   if (!parts?.length || new Set(parts.map((part) => part.extruder)).size < 2) return null;
   const out = parts.map((part): OurPart => {
     const paint = object.paint ? paintBetween(object.paint, part.from, part.to) : null;
+    const supports = supported && object.supports ? paintBetween(object.supports, part.from, part.to) : null;
     return {
       positions: object.positions.subarray(part.from * 9, part.to * 9),
       filament: part.extruder,
       ...(paint ? { paint } : {}),
+      ...(supports ? { supports } : {}),
     };
   });
   const end = Math.max(...parts.map((part) => part.to)) * 9;
@@ -496,6 +507,11 @@ function engineObjects(objects: Placed[]): Placed[] {
   });
 }
 
+/** Whether the setup prints supports: painted supports only mean something then (Orca ignores them otherwise). */
+function supportsOn(setup: SliceSetup): boolean {
+  return first(setup.process.enable_support) === "1";
+}
+
 /** The objects of an .stl or a .3mf, each with its filament (and a project's object made of parts, theirs). */
 function readModel(bytes: Uint8Array, name: string, plate?: number) {
   const zip = bytes[0] === 0x50 && bytes[1] === 0x4b && bytes[2] === 0x03 && bytes[3] === 0x04;
@@ -539,6 +555,7 @@ function readModel(bytes: Uint8Array, name: string, plate?: number) {
             }
           : {}),
         ...(paint ? { paint: paint.paint } : {}),
+        ...(object.supports ? { supports: object.supports } : {}),
         ...(object.colours ? { colours: object.colours } : {}),
       };
     }),
@@ -876,6 +893,7 @@ async function sliceWithEngine(engine: SliceRequest["engine"], setup: SliceSetup
   await call("load", { variant: "st" });
   progress("slicing", 0);
   const multi = setup.filaments.length > 1;
+  const supported = supportsOn(setup);
   const started = performance.now();
   const result = (await call(
     "slice",
@@ -885,8 +903,16 @@ async function sliceWithEngine(engine: SliceRequest["engine"], setup: SliceSetup
         name: object.name,
         mesh: { positions: object.positions },
         ...(multi ? { config: { extruder: String(object.extruder) } } : {}),
-        // A project's painted colours, as Orca reads them from it: Orca's own segmentation prints them.
-        ...(object.paint ? { paint: { filaments: object.paint } } : {}),
+        // A project's painted colours and supports, as Orca reads them from it: Orca's own segmentation prints the
+        // colours, its support generators take the painted supports (enforced and blocked).
+        ...(object.paint || (supported && object.supports)
+          ? {
+              paint: {
+                ...(object.paint ? { filaments: object.paint } : {}),
+                ...(supported && object.supports ? { supports: object.supports } : {}),
+              },
+            }
+          : {}),
       })),
       output: { toolpaths: false },
     },
