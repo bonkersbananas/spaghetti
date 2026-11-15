@@ -82,7 +82,7 @@ if (typeof window !== "undefined") {
     for (const entry of retrying.values()) {
       const { itemId, body } = entry;
       const typed = readDraft(itemId);
-      if (typed.includes(body)) continue;
+      if (entry.restored) continue;
       setDraft(itemId, typed ? `${body}\n${typed}` : body);
       entry.restored = true;
     }
@@ -123,15 +123,16 @@ export function sendComment(queryClient: QueryClient, itemId: string, me: string
         const wait = SEND_RETRIES[attempt];
         const final = (error as { status?: number }).status !== undefined && (error as { status: number }).status < 500;
         if (wait === undefined || final) {
+          const restored = retrying.get(id)?.restored;
           retrying.delete(id);
           withComments(queryClient, itemId, (list) => list.filter((c) => c.id !== id));
           // Back in the box, ahead of anything typed since.
           const typed = readDraft(itemId);
-          if (!typed.includes(body)) setDraft(itemId, typed ? `${body}\n${typed}` : body);
+          if (!restored) setDraft(itemId, typed ? `${body}\n${typed}` : body);
           toast.error("Couldn't send that", "Your message is back in the box.");
           return;
         }
-        retrying.set(id, { itemId, body });
+        if (!retrying.has(id)) retrying.set(id, { itemId, body });
         await new Promise((resolve) => setTimeout(resolve, wait));
       }
     }
