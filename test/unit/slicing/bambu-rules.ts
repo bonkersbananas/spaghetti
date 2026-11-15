@@ -7,9 +7,11 @@ import { md5Hex } from "../../../src/shared/slicing/md5.ts";
  * `_handle_start_config_nozzle` and `_extract_filament_sequence_from_archive` in bbs_3mf.cpp, `PartPlateList::load_from_3mf_structure`,
  * `PresetBundle::load_config_file_config` and `validate_presets`, `SelectMachineDialog`). Each rule says why.
  *
+ * `model: false` leaves out the rules for the objects' meshes (for a file from a slicer release that doesn't write them yet).
+ *
  * Returns what is wrong, none when Bambu Studio would open it in its preview, ready to print.
  */
-export function bambuStudioProblems(zip: Uint8Array): string[] {
+export function bambuStudioProblems(zip: Uint8Array, options: { model?: boolean } = {}): string[] {
   const problems: string[] = [];
   const files = unzipSync(zip);
   const names = Object.keys(files);
@@ -216,6 +218,52 @@ export function bambuStudioProblems(zip: Uint8Array): string[] {
       }
     } catch {
       problems.push("filament_sequence.json is not JSON");
+    }
+  }
+
+  // The model: Studio shows the sliced preview from the G-code, but a change (another filament, say) drops that
+  // slice and the plate is drawn from 3dmodel.model's objects: with none, it is empty. So each object on the plate
+  // is a mesh (or components of meshes) with a build item, `model_settings.config` names it, gives each part its
+  // filament and puts it on the plate by a `model_instance` whose `identify_id` is the id the G-code labels it by.
+  const settingsXml = text("Metadata/model_settings.config") ?? "";
+  const info = text("Metadata/slice_info.config") ?? "";
+  const infoObjects = [...info.matchAll(/<object\s[^>]*>/g)].map((m) => attr(m[0], "identify_id") ?? "");
+  if (infoObjects.length && options.model !== false) {
+    const meshes = new Set<string>();
+    const wrappers = new Map<string, string[]>();
+    for (const m of model.matchAll(/<object\s([^>]*)>([\s\S]*?)<\/object>/g)) {
+      const id = attr(` ${m[1]}`, "id") ?? "";
+      if (/<mesh>/.test(m[2] ?? "")) meshes.add(id);
+      else
+        wrappers.set(
+          id,
+          [...(m[2] ?? "").matchAll(/<component\s+objectid="([^"]*)"/g)].map((c) => c[1] ?? ""),
+        );
+    }
+    const items = [...model.matchAll(/<item\s[^>]*>/g)].map((m) => attr(m[0], "objectid") ?? "");
+    if (items.length !== infoObjects.length)
+      problems.push(`3dmodel.model builds ${items.length} objects, slice_info lists ${infoObjects.length}`);
+    for (const item of items) {
+      const parts = meshes.has(item) ? [item] : (wrappers.get(item) ?? []);
+      if (parts.length === 0 || parts.some((part) => !meshes.has(part)))
+        problems.push(`build item ${item} has no mesh (an empty plate once Studio drops the slice)`);
+      if (!new RegExp(`<object\\s+id="${item}"`).test(settingsXml))
+        problems.push(`model_settings.config has no <object id="${item}">`);
+      for (const part of parts)
+        if (!new RegExp(`<part\\s+id="${part}"`).test(settingsXml))
+          problems.push(`model_settings.config has no <part id="${part}"> for object ${item}`);
+    }
+    const instances = [...settingsXml.matchAll(/<model_instance>([\s\S]*?)<\/model_instance>/g)].map((m) => ({
+      object: /key="object_id"\s+value="([^"]*)"/.exec(m[1] ?? "")?.[1],
+      identify: /key="identify_id"\s+value="([^"]*)"/.exec(m[1] ?? "")?.[1],
+    }));
+    if (instances.map((i) => i.identify).join(",") !== infoObjects.join(","))
+      problems.push("the plate's model_instances aren't slice_info's objects (by identify_id)");
+    if (instances.some((i) => !i.object || !items.includes(i.object)))
+      problems.push("a model_instance points at an object that isn't built");
+    for (const m of settingsXml.matchAll(/<metadata key="extruder" value="(\d+)"/g)) {
+      if (Number(m[1]) < 1 || Number(m[1]) > filaments)
+        problems.push(`an object or part prints in filament ${m[1]}, not 1-${filaments}`);
     }
   }
   return problems;

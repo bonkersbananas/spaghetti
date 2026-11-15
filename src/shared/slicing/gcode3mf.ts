@@ -2,13 +2,15 @@ import { strToU8, type Zippable, zipSync } from "fflate";
 import type { Box } from "./arrange.ts";
 import { BAMBU_PRINTER_MODEL_IDS, bambuFilamentId } from "./bambu-ids.ts";
 import { md5Hex } from "./md5.ts";
+import { type ModelXmlObject, modelXml } from "./model-xml.ts";
 
 /**
  * Packs the engine's G-code for one plate into a `.gcode.3mf`, laid out the way OrcaSlicer's own export is
  * (`Metadata/plate_1.gcode` with its `.md5`, `slice_info.config`, `project_settings.config`,
  * `model_settings.config`, `plate_1.json`), so Spaghetti's reader, the 3D view, Bambu Studio and Orca read it as
- * a sliced file. It carries no meshes (the original file is kept beside it) and adds the plate picture Orca's
- * command line can't draw (`plate_1.png`).
+ * a sliced file. It carries the objects' meshes, as Bambu Studio's own files do (without them Studio shows the
+ * sliced preview, but a plate with nothing on it once a change drops it), and adds the plate picture Orca's command
+ * line can't draw (`plate_1.png`).
  */
 
 export type ConfigValue = string | string[];
@@ -38,7 +40,13 @@ export interface Gcode3mfInput {
   /** How many layers the G-code has, for the plate's list of filaments by layer. */
   layers?: number | null;
   /** The objects as placed on the plate. */
-  objects: { name: string; box: Box; id?: number }[];
+  objects: {
+    name: string;
+    box: Box;
+    id?: number;
+    /** Its triangles (nine floats each, plate coordinates), the filament and the parts it prints in: the model the file carries. */
+    mesh?: Pick<ModelXmlObject, "positions" | "extruder" | "parts">;
+  }[];
   /** Every setting the plate was sliced with (machine, process and filaments together), in Orca's text. */
   settings: Config;
   filaments: PackedFilament[];
@@ -105,6 +113,11 @@ export function packGcode3mf(input: Gcode3mfInput): Uint8Array {
       ]
     : [0, 0, 0, 0];
 
+  const model = modelXml(
+    input.objects.flatMap((object, index) =>
+      object.mesh ? [{ name: object.name, id: object.id ?? index + 1, ...object.mesh }] : [],
+    ),
+  );
   const files: Zippable = {
     "[Content_Types].xml": strToU8(
       [
@@ -140,8 +153,7 @@ export function packGcode3mf(input: Gcode3mfInput): Uint8Array {
         ` <metadata name="Application">${BAMBU_STUDIO_APPLICATION}</metadata>`,
         ' <metadata name="BambuStudio:3mfVersion">1</metadata>',
         ` <metadata name="Title">${xml(input.title)}</metadata>`,
-        " <resources/>",
-        " <build/>",
+        model.resources,
         "</model>",
         "",
       ].join("\n"),
@@ -161,12 +173,14 @@ export function packGcode3mf(input: Gcode3mfInput): Uint8Array {
       [
         '<?xml version="1.0" encoding="UTF-8"?>',
         "<config>",
+        ...(model.objects ? [model.objects] : []),
         "  <plate>",
         '    <metadata key="plater_id" value="1"/>',
         '    <metadata key="plater_name" value=""/>',
         '    <metadata key="locked" value="false"/>',
         '    <metadata key="gcode_file" value="Metadata/plate_1.gcode"/>',
         ...(input.thumbnail ? ['    <metadata key="thumbnail_file" value="Metadata/plate_1.png"/>'] : []),
+        ...(model.instances ? [model.instances] : []),
         "  </plate>",
         "</config>",
         "",
