@@ -8,6 +8,7 @@ import {
   filamentStandIn,
   machinePreset,
   orcaBedType,
+  pickFilamentPreset,
   presetRecord,
   processPreset,
   readSlicing,
@@ -58,7 +59,7 @@ describe("Orca's presets for the settings", () => {
     expect(filamentPreset({ material: "PLA" }, 0.2)).toBe("Bambu PLA Basic @BBL X2D 0.2 nozzle");
     expect(filamentPreset({ material: "PETG" }, 0.2)).toBe("Generic PETG @BBL X2D 0.2 nozzle");
     expect(filamentPreset({ material: "PETG" }, 0.6)).toBe("Generic PETG @BBL X2D");
-    expect(filamentPreset({ material: "PLA" }, 0.8)).toBe("Bambu PLA Basic @BBL X2D");
+    expect(filamentPreset({ material: "PLA" }, 0.8)).toBe("Bambu PLA Basic @BBL X2D 0.8 nozzle");
     expect(filamentPreset({ material: "TPU" }, 0.8)).toBe("Generic TPU @BBL X2D");
   });
 
@@ -225,7 +226,31 @@ describe("settings onto Orca's keys and back", () => {
     });
     expect(presetRecord({ ...DEFAULT_SLICING, nozzle: 0.8, layerHeight: 0.56 })).toMatchObject({
       process: "0.40mm Standard @BBL X2D 0.8 nozzle",
-      filaments: ["Bambu PLA Basic @BBL X2D"],
+      filaments: ["Bambu PLA Basic @BBL X2D 0.8 nozzle"],
     });
+  });
+
+  it("take Bambu's per-nozzle presets on the 0.6 and 0.8 mm when the engine has them, the shared one when it hasn't", () => {
+    const has = (...names: string[]) => ({ filament: Object.fromEntries(names.map((name) => [name, {}])) });
+    const pla = { material: "PLA" };
+    const fallback = "Bambu PLA Basic @BBL X2D 0.4 nozzle";
+    // Release 4 (OrcaSlicer 2.5.1): Basic per nozzle, the generics shared.
+    expect(pickFilamentPreset(has("Bambu PLA Basic @BBL X2D 0.6 nozzle"), pla, 0.6, fallback)).toBe(
+      "Bambu PLA Basic @BBL X2D 0.6 nozzle",
+    );
+    expect(pickFilamentPreset(has("Generic PETG @BBL X2D"), { material: "PETG" }, 0.8, fallback)).toBe(
+      "Generic PETG @BBL X2D",
+    );
+    // Release 3 (2.5.0-dev): one set for both.
+    expect(pickFilamentPreset(has("Bambu PLA Basic @BBL X2D"), pla, 0.8, fallback)).toBe("Bambu PLA Basic @BBL X2D");
+    // Bambu PLA Pure, which 2.5.1 has presets for on every nozzle.
+    expect(
+      pickFilamentPreset(
+        has("Bambu PLA Pure @BBL X2D 0.8 nozzle", "Bambu PLA Basic @BBL X2D 0.8 nozzle"),
+        { material: "PLA", brand: "Bambu Lab", finish: "pure" },
+        0.8,
+        fallback,
+      ),
+    ).toBe("Bambu PLA Pure @BBL X2D 0.8 nozzle");
   });
 });

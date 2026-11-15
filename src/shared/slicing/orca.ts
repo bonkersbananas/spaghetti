@@ -2,7 +2,7 @@
  * The one place that knows OrcaSlicer's names: which of its X2D presets a slice starts from (the engine's
  * presets.json, docs/slicer.md) and which of its config keys say each of Spaghetti's slicing settings (settings.ts),
  * both ways: settings onto the configs (`applySlicing`) and configs back to settings (`readSlicing`: what a 3MF
- * project says, and what a slice used). Every name and value here was tried on the engine (Orca 2.5.0-dev): "where
+ * project says, and what a slice used). Every name and value here was tried on the engine (Orca 2.5.1): "where
  * needed" is Orca's "support critical regions only" (floating parts and long ledges get supports, a steep slope
  * doesn't), "everywhere" its usual automatic supports. Pure.
  */
@@ -34,8 +34,8 @@ export const machinePreset = (nozzle: number) => `${ORCA_PRINTER} ${nozzle} nozz
 export const ENGINE_NOZZLES: readonly number[] = [0.2, 0.4, 0.6, 0.8];
 
 /**
- * The filament presets' suffix for a nozzle: "@BBL X2D 0.4 nozzle", "@BBL X2D 0.2 nozzle"; Bambu's presets for the
- * 0.6 and 0.8 mm nozzles are one set, "@BBL X2D".
+ * The filament presets' suffix for a nozzle: "@BBL X2D 0.4 nozzle", "@BBL X2D 0.2 nozzle"; the generic presets for the
+ * 0.6 and 0.8 mm nozzles are one set, "@BBL X2D" (OrcaSlicer 2.5.1 has per-nozzle ones for Bambu's own lines, below).
  */
 const filamentSuffix = (nozzle: number) =>
   nozzle === 0.6 || nozzle === 0.8 ? "@BBL X2D" : `@BBL X2D ${nozzle} nozzle`;
@@ -171,11 +171,16 @@ function bambuLine(filament: PresetFilament): string | undefined {
   }
 }
 
-/** The names a preset has on a nozzle: its own for the size, then the one the 0.6 and 0.8 mm share. */
-const onNozzle = (name: string, nozzle: number) =>
-  nozzle === 0.6 || nozzle === 0.8
-    ? [`${name} @BBL X2D ${nozzle} nozzle`, `${name} @BBL X2D`]
-    : [`${name} @BBL X2D ${nozzle} nozzle`];
+/**
+ * The names a preset has on a nozzle, the likelier first. Bambu's own lines have one of their own for the size
+ * (OrcaSlicer 2.5.1 added them for the 0.6 and 0.8 mm; before, one set served both); the generic ones are still one
+ * set for the two, "Generic PETG @BBL X2D". A release lacking the first form has the second.
+ */
+const onNozzle = (name: string, nozzle: number) => {
+  const own = `${name} @BBL X2D ${nozzle} nozzle`;
+  if (nozzle !== 0.6 && nozzle !== 0.8) return [own];
+  return name.startsWith("Generic") ? [`${name} @BBL X2D`, own] : [own, `${name} @BBL X2D`];
+};
 
 /**
  * The filament presets a filament may slice with on a nozzle, best first: Bambu's own line where it is one of
@@ -187,7 +192,7 @@ export function filamentPresetChoices(filament: PresetFilament, nozzle: number):
   // On the 0.2 mm nozzle, a material Bambu has no preset for slices with its nearest kin (`filamentStandIn`).
   const preset = nozzle === 0.2 ? (SMALL_NOZZLE_STAND_INS[kind]?.preset ?? kind) : kind;
   const named = bambuLine(filament);
-  return [...(named ? onNozzle(named, nozzle) : []), `${preset} ${filamentSuffix(nozzle)}`];
+  return [...(named ? onNozzle(named, nozzle) : []), ...onNozzle(preset, nozzle)];
 }
 
 /** The best filament preset for a filament on a nozzle, whether or not the engine's release has it. */
