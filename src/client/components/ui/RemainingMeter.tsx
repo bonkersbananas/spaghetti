@@ -18,6 +18,7 @@ export function RemainingMeter({
   remaining,
   gramsLeft,
   showLabel,
+  stacked,
   className,
 }: {
   remaining: Remaining;
@@ -25,13 +26,19 @@ export function RemainingMeter({
   gramsLeft?: number | null;
   /** The word beside the bars. "wide" shows it in a container 3xl wide or more (the AMS unit card) (screen readers always hear it). */
   showLabel?: boolean | "wide";
+  /** In a narrow tile (an AMS bay on a phone) the label sits under the bars, in one line, and goes beside them from a 3xl container. */
+  stacked?: boolean;
   className?: string;
 }) {
   const word = REMAINING_LABELS[remaining];
   const grams = gramsLeft === null || gramsLeft === undefined ? null : `about ${gramsText(gramsLeft)}`;
   return (
     <span
-      className={cn("text-small text-ink-faint tabular inline-flex items-center gap-1.5", className)}
+      className={cn(
+        "text-ink-faint tabular inline-flex items-center",
+        stacked ? "text-caption @3xl:text-small flex-col gap-0.5 @3xl:flex-row @3xl:gap-1.5" : "text-small gap-1.5",
+        className,
+      )}
       title={grams ? `${word}, ${grams}` : word}
     >
       <span className="inline-flex items-end gap-0.5" aria-hidden>
@@ -47,10 +54,10 @@ export function RemainingMeter({
         ))}
       </span>
       {showLabel === true ? (
-        <>
+        <span className={stacked ? "whitespace-nowrap" : undefined}>
           {grams ?? word}
           {grams && <span className="sr-only">, {word}</span>}
-        </>
+        </span>
       ) : (
         <span className={cn("sr-only", showLabel === "wide" && "@3xl:not-sr-only")}>{grams ?? word}</span>
       )}
