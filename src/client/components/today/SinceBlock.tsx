@@ -25,14 +25,15 @@ export default function SinceBlock() {
   const { data: people } = useQuery(peopleQuery);
   const journal = useInfiniteQuery(journalQuery(everything));
   // Newest first: read pages until one reaches back past the start (a few, at most), or the journal ends.
-  const { fetchNextPage, hasNextPage, isFetchingNextPage } = journal;
+  const { fetchNextPage, hasNextPage, isFetchingNextPage, isFetchNextPageError } = journal;
   const pages = journal.data?.pages;
   const oldest = pages?.at(-1)?.entries.at(-1)?.at;
   const reaches = oldest !== undefined && from !== null && oldest <= from;
   const enough = reaches || (pages?.length ?? 0) >= MAX_PAGES;
   useEffect(() => {
-    if (from !== null && pages && !enough && hasNextPage && !isFetchingNextPage) void fetchNextPage();
-  }, [from, pages, enough, hasNextPage, isFetchingNextPage, fetchNextPage]);
+    if (from !== null && pages && !enough && hasNextPage && !isFetchingNextPage && !isFetchNextPageError)
+      void fetchNextPage();
+  }, [from, pages, enough, hasNextPage, isFetchingNextPage, isFetchNextPageError, fetchNextPage]);
   const page = useMemo(
     () =>
       pages && {

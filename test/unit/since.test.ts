@@ -44,6 +44,19 @@ describe("catchUp", () => {
     expect(result?.lines).toHaveLength(3);
   });
 
+  it("credits an attempt to whoever gave it its outcome, not whoever logged it", () => {
+    const attempt = (id: string, createdBy: string, finishedBy: string | null) =>
+      ({ id, outcome: "success", createdBy, finishedBy }) as never;
+    const prints = new Map([
+      ["p", { ...item("p", "Hook", "building"), attempts: [attempt("a-p", "sam", "me")] }],
+      ["q", { ...item("q", "Clip", "building"), attempts: [attempt("a-q", "me", "sam")] }],
+    ] as [string, Item][]);
+    const logged = [entry("attempt", "p", at(14), "sam", "a-p"), entry("attempt", "q", at(14), "me", "a-q")];
+    const result = catchUp(logged, prints, { me: "me", from: at(10), name: "Sam" });
+    // Sam logged the hook but you finished it: yours. You logged the clip and Sam finished it: his.
+    expect(result?.lines.map((line) => line.itemId)).toEqual(["q"]);
+  });
+
   it("is nothing when they did nothing", () => {
     expect(catchUp(entries, items, { me: "me", from: at(15), name: "Sam" })).toBeNull();
   });
