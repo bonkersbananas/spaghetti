@@ -1,13 +1,11 @@
 import { expect, type Page, test } from "@playwright/test";
 import { boxStl } from "./fixtures/model-stl";
-import { clearIdeas, signIn } from "./helpers";
+import { clearIdeas, clearTwists, signIn } from "./helpers";
 
 const origin = (page: Page) => new URL(page.url()).origin;
 
 test.afterEach(async ({ page }) => {
-  const headers = { Origin: origin(page) };
-  const { twists } = await (await page.request.get("/api/twists")).json();
-  for (const twist of twists) await page.request.delete(`/api/twists/${twist.id}`, { headers });
+  await clearTwists(page);
   await clearIdeas(page);
 });
 

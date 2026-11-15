@@ -131,10 +131,16 @@ export async function slicingDefaults(queryClient: QueryClient): Promise<Slicing
 
 /** The workshop's defaults and the Pantry's spools they came from (the spools match a model's own colours). */
 export async function pantryAndDefaults(queryClient: QueryClient) {
-  // Offline or failing, what was seen last (or nothing: the stand-in, the stock plate).
+  // Asked afresh, not read from the cache (which may be a minute old, or the copy kept on the device): the other
+  // person's change of the workshop's slicer, nozzle or filaments counts from their next slice. Offline or failing,
+  // what was seen last (or nothing: the stand-in, the stock plate).
   const [spools, printer] = await Promise.all([
-    queryClient.ensureQueryData(spoolsQuery).catch(() => queryClient.getQueryData(spoolsQuery.queryKey) ?? []),
-    queryClient.ensureQueryData(printerQuery).catch(() => queryClient.getQueryData(printerQuery.queryKey)),
+    queryClient
+      .fetchQuery({ ...spoolsQuery, staleTime: 0 })
+      .catch(() => queryClient.getQueryData(spoolsQuery.queryKey) ?? []),
+    queryClient
+      .fetchQuery({ ...printerQuery, staleTime: 0 })
+      .catch(() => queryClient.getQueryData(printerQuery.queryKey)),
   ]);
   return { spools, defaults: workshopDefaults({ spools, setup: printer?.setup ?? DEFAULT_PRINTER }) };
 }

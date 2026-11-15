@@ -166,6 +166,9 @@ const testLine =
   /(?:✓|✘|ok|x)\s+\d+ \[([^\]]+)\] › (e2e\/[\w.-]+\.spec\.ts):\d+:\d+ › .*\((\d+(?:\.\d+)?)(ms|s|m)\)\s*$/;
 const unit = { ms: 0.001, s: 1, m: 60 } as const;
 const specSeconds = new Map<string, number>();
+/** Tests that failed first and passed on Playwright's retry (the run went green): "spec:line [project] › title" to the runs. */
+const retried = new Map<string, Set<number>>();
+const retryLine = /✓\s+\d+ \[([^\]]+)\] › (e2e\/[\w.-]+\.spec\.ts:\d+):\d+ › (.*?) \(retry #\d+\)/;
 const logRuns = successful.slice(0, Number(options.logs));
 const playwrightJobs = logRuns.flatMap((run) =>
   (jobsOf.get(run.id) ?? []).filter((job) => /playwright|e2e/i.test(job.name)),
@@ -191,6 +194,11 @@ await pool(playwrightJobs, async (job) => {
     phases.tests = seconds(at, work.completed_at);
   }
   for (const line of lines) {
+    const retry = retryLine.exec(line);
+    if (retry) {
+      const key = `${retry[2]} [${retry[1]}] ${retry[3]}`;
+      retried.set(key, (retried.get(key) ?? new Set()).add(job.id));
+    }
     const match = testLine.exec(line);
     if (!match) continue;
     const key = `${match[2]?.replace("e2e/", "")} [${match[1]}]`;
@@ -249,3 +257,14 @@ if (specSeconds.size) {
   for (const [key, s] of perRunSeconds.sort((a, b) => b[1] - a[1]).slice(0, 25))
     console.log(`| ${key} | ${Math.round(s)} |`);
 }
+
+// Tests that only pass on retry: each may be a real bug (a lost edit, a late answer undoing a newer one), which a green run hides.
+if (retried.size) {
+  console.log(
+    `\nPassed only on retry (the logs of the newest ${logRuns.length} runs; a job where this is most of the tests is a broken build):\n`,
+  );
+  console.log("| Jobs | Test |\n|---|---|");
+  for (const [key, jobs] of [...retried].sort((a, b) => b[1].size - a[1].size))
+    console.log(`| ${jobs.size} | ${key} |`);
+} else if (logRuns.length)
+  console.log(`\nNo test passed only on retry in the logs of the newest ${logRuns.length} runs.`);

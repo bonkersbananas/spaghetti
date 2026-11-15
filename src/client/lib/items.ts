@@ -71,12 +71,27 @@ function whileReading(items: Pick<Item, "attempts">[]): number | false {
   return false;
 }
 
+/**
+ * The words saved from this screen, by item. An answer to a request sent before such a save was answered may have been
+ * read by the server before the save landed: it carries the old words, and would put them back over the new ones (the
+ * field follows the cache, so the person's text vanishes, and the next save would send the old words to the server).
+ */
+const savedWords = new Map<string, { words: Partial<Item>; open: number; doneAt: number }>();
+
+/** Puts the words saved from here over an answer that may have been read before they landed. */
+function withSavedWords(id: string, item: Item, sentAt: number): Item {
+  const saved = savedWords.get(id);
+  if (!saved || (saved.open === 0 && saved.doneAt < sentAt)) return item;
+  return { ...item, ...saved.words };
+}
+
 export function itemQuery(id: string) {
   return queryOptions({
     queryKey: itemKeys.detail(id),
     queryFn: async () => {
+      const sentAt = performance.now();
       try {
-        return (await api<ItemResponse>(`/items/${id}`)).item;
+        return withSavedWords(id, (await api<ItemResponse>(`/items/${id}`)).item, sentAt);
       } catch (error) {
         if (error instanceof ApiError && error.status === 404) return null;
         throw error;
@@ -471,12 +486,22 @@ export async function saveItemChanges(
   const { forWhom: _forWhom, ...words } = changes;
   // An idea still in the outbox takes its words there; who it is for waits until the server has it.
   if (outbox.updatePending(id, words)) return;
-  const { item } = await api<ItemResponse>(`/items/${id}`, {
-    method: "PATCH",
-    json: changes,
-    // Finishes even if the page is closing.
-    keepalive: true,
-  });
+  const saved = savedWords.get(id) ?? { words: {}, open: 0, doneAt: 0 };
+  savedWords.set(id, saved);
+  Object.assign(saved.words, changes);
+  saved.open += 1;
+  let item: Item;
+  try {
+    ({ item } = await api<ItemResponse>(`/items/${id}`, {
+      method: "PATCH",
+      json: changes,
+      // Finishes even if the page is closing.
+      keepalive: true,
+    }));
+  } finally {
+    saved.open -= 1;
+    saved.doneAt = performance.now();
+  }
   // Only what the server works out itself: the words stay as they are here, which may be newer than this answer.
   patchCachedItem(queryClient, id, (cached) => ({ ...cached, updatedAt: item.updatedAt }));
 }
