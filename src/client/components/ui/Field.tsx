@@ -252,6 +252,7 @@ export const TextArea = forwardRef<HTMLTextAreaElement, TextAreaProps>(function 
   // Re-measure when the web fonts arrive (Safari measures with the fallback font first and kept a
   // two-line title's height for one line of text) and when the box's width changes (rotation, a sheet).
   useEffect(() => {
+    if (nativeSizing) return;
     let cancelled = false;
     document.fonts?.ready.then(() => {
       if (!cancelled) resize();
