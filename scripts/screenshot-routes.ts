@@ -2048,6 +2048,21 @@ export const shots: Shot[] = [
     cleanup: closeSliceSettings,
   },
   {
+    // Any colour…: the palette under a row's spools, a neon yellow picked as the stand-in to try.
+    name: "slice-settings-colours-any",
+    path: "/ideas",
+    prepare: async (page) => {
+      const settings = await openSliceSettings(page, { idea: HOTDOG_IDEA, file: HOTDOG });
+      await settings.getByText("Colours", { exact: true }).waitFor();
+      await openColour(page, settings, "first");
+      await settings.getByText("Any colour…").first().click({ force: true });
+      await settings.getByRole("radio", { name: "Neon yellow" }).click({ force: true });
+      await page.waitForTimeout(400);
+    },
+    beforeShot: settleSliceSettings,
+    cleanup: closeSliceSettings,
+  },
+  {
     // A model with colours of its own, on an idea with no photo: its picture as it prints in our filaments (the
     // Pantry's spools matched to each colour), with the switch to the model's own colours under it.
     name: "idea-model-colours",
