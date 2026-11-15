@@ -1,5 +1,6 @@
 import { expect, type Page, test } from "@playwright/test";
 import { strFromU8, unzipSync } from "fflate";
+import { bambuStudioProblems } from "../test/unit/slicing/bambu-rules";
 import {
   brimProject,
   paintedProject,
@@ -350,6 +351,8 @@ test("a plate in two colours is sliced by ours, each object in its own filament"
     // The file says which nozzle each of its two filaments prints with, as Orca's does for the printer.
     const sliced = await page.request.get(`/api/files/${file.id}/sliced`);
     expect(sliced.ok()).toBe(true);
+    // What Bambu Studio's own reader needs of a sliced file, from its source (test/unit/slicing/bambu-rules.ts).
+    expect(bambuStudioProblems(new Uint8Array(await sliced.body()))).toEqual([]);
     const zip = unzipSync(new Uint8Array(await sliced.body()));
     const info = strFromU8(zip["Metadata/slice_info.config"] ?? new Uint8Array());
     expect(/key="filament_maps" value="([^"]*)"/.exec(info)?.[1]?.split(" ")).toHaveLength(2);
