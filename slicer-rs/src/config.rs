@@ -516,10 +516,6 @@ impl SupportSettings {
             Some("this support pattern")
         } else if self.top_z_distance <= 0.0 || self.top_interface_layers == 0 || self.bottom_interface_layers == 0 {
             Some("supports without a gap or interface")
-        } else if on && !self.independent_layer_height && !self.organic() && self.classic().is_none() {
-            // Normal supports' layers in step with the object's (Orca's `synchronize_layers`), as several filaments
-            // have them.
-            Some(if s.prime_tower { "normal supports in several filaments" } else { "these support settings" })
         } else if self.enforce_layers > 0
             || self.expansion != 0.0
             || self.angle != 0.0
