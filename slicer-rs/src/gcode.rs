@@ -510,10 +510,14 @@ struct Builder<'a> {
     known: bool,
     lost: bool,
     change_from: (f64, f64),
+    /// Whether the layer has moved the nozzle yet: until it does, Orca's writer takes it at the layer's height (its
+    /// `change_layer`), whatever lift the layer before left it at, so a lift at once goes up from there.
+    fresh: bool,
 }
 
 impl<'a> Builder<'a> {
     fn push(&mut self, m: Move) {
+        self.fresh &= m.x == self.x && m.y == self.y && m.z == self.z;
         self.x = m.x;
         self.y = m.y;
         self.z = m.z;
@@ -719,7 +723,8 @@ impl<'a> Builder<'a> {
         let (cx, cy) = (self.x + r, self.y);
         let fits = cx.min(s.bed[0] - cx).min(cy).min(s.bed[1] - cy) >= r;
         let kind = if self.known && fits { Kind::Spiral { i: r, j: 0.0 } } else { Kind::Lift };
-        self.line(self.x, self.y, self.z + s.z_hop, 0.0, s.travel_speed, kind);
+        let from = if self.fresh { self.layer_z } else { self.z };
+        self.line(self.x, self.y, from + s.z_hop, 0.0, s.travel_speed, kind);
         self.lifted = true;
     }
 
@@ -870,7 +875,10 @@ impl<'a> Builder<'a> {
                     }
                     let a = if self.first_layer { self.s.first_layer_travel_accel } else { self.s.travel_accel };
                     self.set_accel(a);
-                    if d > 1e-9 || self.moves.is_empty() {
+                    // The layer's first travel goes where the layer before left the nozzle, whatever lifts came
+                    // before it on the layer.
+                    let travelled = self.moves.iter().any(|m| matches!(m.kind, Kind::Travel | Kind::TravelZ));
+                    if d > 1e-9 || !travelled {
                         self.travel(*x, *y, lazy && self.lifted);
                     }
                     if *lower && self.z > self.layer_z + 1e-6 {
@@ -910,6 +918,11 @@ impl<'a> Builder<'a> {
                 Step::Lost => {
                     self.known = false;
                     self.lost = true;
+                }
+                Step::Wrap => {
+                    self.retract();
+                    self.lift_again();
+                    self.known = false;
                 }
             }
         }
@@ -958,6 +971,15 @@ pub fn cooling_time(text: &str, from: [f64; 3], feed: f64) -> [f64; 2] {
         at = to;
     }
     secs
+}
+
+/// Whether custom G-code `text` moves at a speed of its own (an F word in a move).
+fn sets_feed(text: &str) -> bool {
+    text.lines().any(|line| {
+        let code = line.split(';').next().unwrap_or("");
+        ["G0 ", "G1 ", "G2 ", "G3 "].iter().any(|g| code.starts_with(g))
+            && code.split_whitespace().any(|w| w.starts_with('F'))
+    })
 }
 
 /// Custom G-code as Orca's cooling passes it on: a move's `F` that is the speed (whole mm/min) it moves at already left
@@ -1157,9 +1179,12 @@ fn build_layer<'a>(
         retracted_mm: s.retract_length,
         prior: 0.0,
         overhang: crate::plan::overhang_flow(first_layer, plan.height, s),
-        known: true,
+        // Orca's writer knows where the nozzle is when the layer starts unless the layer before took its timelapse
+        // photo last (after its paths: always with one filament), or this is the first layer (after the start G-code).
+        known: i > 0 && job.colours.is_some_and(|c| c.photo_in_layer(i - 1)),
         lost: false,
         change_from: (x0, y0),
+        fresh: true,
     };
     if course.is_some() {
         b.line(x0, y0, plan.z, 0.0, s.travel_speed, Kind::Lift);
@@ -1192,13 +1217,14 @@ fn build_layer<'a>(
         }
     }
     // The nozzle's wrapping detection, where the printer has no G-code for it: before the layer's first filament Orca
-    // retracts and lifts at once (its `retract` with `apply_instantly`), straight up from the layer's height as its
-    // writer doesn't know where the layer change left the nozzle, so the layer's first travel goes at that height and
-    // comes down at its end.
-    let wrapping = s.wrapping_detection && course.is_none() && s.z_hop > 0.0;
+    // retracts and lifts at once (its `retract` with `apply_instantly`), up from the layer's height (straight where
+    // its writer doesn't know where the nozzle is, as after the photo the layer before ended with), so the layer's
+    // first travel goes at that height and comes down at its end. On a layer that visits the prime tower it does so
+    // before the first visit instead (`Step::Wrap`).
+    let towered = job.colours.is_some_and(|c| c.towered) && !plan.visits.is_empty();
+    let wrapping = s.wrapping_detection && course.is_none() && s.z_hop > 0.0 && !towered;
     if wrapping {
-        b.line(x0, y0, plan.z + s.z_hop, 0.0, s.travel_speed, Kind::Lift);
-        b.lifted = true;
+        b.lift_again();
     }
     let labels = job.labels();
     let internal = Internal::new(&regions.islands, &regions.surfaces, &plan.support_islands);
@@ -1221,9 +1247,9 @@ fn build_layer<'a>(
             if let Some(o) = last.and_then(owner) {
                 b.note(Note::Stopped(o));
             }
-            if !photo_taken && visit.from != visit.to && colours.photo_head(visit.from) {
+            if !photo_taken && colours.photo_head(visit.from) {
                 b.retract();
-                b.lift(None);
+                b.lift_again();
                 if let Some(o) = open_label.take() {
                     b.note(Note::LabelEnd(o));
                 }
@@ -2351,9 +2377,14 @@ fn finish_layer(
                         b[1] += tower.volume;
                     }
                     // What the tower's G-code set, the writer doesn't know: it writes the next feature, width,
-                    // height and speed again, as Orca does after the tower.
+                    // height and speed again, as Orca does after the tower. A speed only where the G-code moves at one
+                    // (Orca's cooling leaves out an F the nozzle moves at already, which a tool change's head of
+                    // M-codes doesn't change).
                     if !tower.plain {
-                        (w.feature, w.width, w.height, w.feed) = (None, f64::NAN, f32::NAN, -1);
+                        (w.feature, w.width, w.height) = (None, f64::NAN, f32::NAN);
+                        if sets_feed(&tower.text) {
+                            w.feed = -1;
+                        }
                     }
                     if let Some(a) = tower.accel {
                         w.accel = a;
@@ -3186,6 +3217,7 @@ mod tests {
             known: true,
             lost: false,
             change_from: (0.0, 0.0),
+            fresh: false,
         };
         let p = |x: f64| geom::pt(geom::sc(x), 0);
         let speeds = [200.0, 120.0, 120.5, 199.5, 199.6, 50.0, 50.0];

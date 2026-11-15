@@ -215,6 +215,9 @@ pub struct Settings {
     /// printer has G-code for it (`wrapping_detection_gcode`), which Orca writes there.
     pub wrapping_detection: bool,
     pub wrapping_gcode: bool,
+    /// With wrapping detection, the first layers that print a prime tower whatever they print
+    /// (`wrapping_detection_layers`).
+    pub wrapping_layers: usize,
     /// How many filaments the plate prints in (0 until `for_filaments` says), and whether a prime tower prints then.
     pub used_filaments: usize,
     pub prime_tower: bool,
@@ -780,6 +783,7 @@ impl Settings {
             },
             wrapping_detection: p.bool("enable_wrapping_detection"),
             wrapping_gcode: !p.text("wrapping_detection_gcode").is_empty(),
+            wrapping_layers: p.int("wrapping_detection_layers").max(0) as usize,
             used_filaments: 0,
             prime_tower: false,
             ironing_type: text("ironing_type"),
@@ -986,10 +990,8 @@ impl Settings {
             Some("a raft with several filaments")
         } else if let Some(why) = self.tower_for_one.filter(|_| self.enable_prime_tower) {
             Some(why)
-        } else if self.wrapping_detection && (self.wrapping_gcode || self.used_filaments > 1 || self.spiral_mode) {
-            // The printer's own G-code for it isn't written yet; with several filaments it reshapes the prime tower
-            // (each of its first 20 layers prints one) and lifts before tool changes; and it lifts in spiral vase
-            // mode too.
+        } else if self.wrapping_detection && (self.wrapping_gcode || self.spiral_mode) {
+            // The printer's own G-code for it isn't written yet, and it lifts in spiral vase mode too.
             Some("wrapping detection")
         } else if self.print_sequence == "by object" {
             Some("printing one object after another")

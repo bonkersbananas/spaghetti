@@ -30,6 +30,8 @@ use std::sync::Arc;
 /// Orca's `EPSILON` (libslic3r.h) and the tower's own `WT_EPSILON`.
 const EPSILON: f64 = 1e-4;
 const WT_EPSILON: f32 = 1e-3;
+/// How deep the tower is with wrapping detection where nothing changes filament (`wrapping_wipe_tower_depth`), mm.
+const WRAPPING_DEPTH: f32 = 10.0;
 const WIDTH_TO_NOZZLE_RATIO: f32 = 1.25;
 /// Depth a tower keeps at least, by its height (`min_depth_per_height`).
 const MIN_DEPTH_PER_HEIGHT: [(f32, f32); 4] = [(5.0, 5.0), (100.0, 20.0), (250.0, 40.0), (350.0, 60.0)];
@@ -178,6 +180,10 @@ pub struct Params {
     pub shared_bed: [f64; 4],
     /// Each filament's extruder (0-based), which is also its nozzle on a printer with one nozzle per extruder.
     pub extruder_of: Vec<usize>,
+    /// The nozzle's wrapping detection (`enable_wrapping_detection`, Orca's `m_enable_wrapping_detection` here, which
+    /// doesn't ask for an area): every layer of the tower as deep as the deepest, and 10 mm deep where nothing changes
+    /// filament.
+    pub wrapping: bool,
 }
 
 /// One tool change on a layer of the plan (`WipeTowerInfo::ToolChange`).
@@ -1570,6 +1576,14 @@ impl WipeTower {
         !(self.last_layer_id[e] == layer_id as i64 && layer_z > self.params.printable_height[e])
     }
 
+    /// Leaves the last planned layer's sparse infill out (`set_last_layer_extruder_fill(false)`): Orca's planning does
+    /// so for a layer that prints the tower only for the nozzle's wrapping detection.
+    pub fn set_last_layer_extruder_fill(&mut self, fill: bool) {
+        if let Some(l) = self.plan.last_mut() {
+            l.extruder_fill = fill;
+        }
+    }
+
     /// Adds a tool change (or, `old == new`, a layer without one) to the plan (`plan_toolchange`). Volumes in mm³.
     #[allow(clippy::too_many_arguments)]
     pub fn plan_toolchange(
@@ -1725,7 +1739,7 @@ impl WipeTower {
         }
     }
 
-    fn update_all_layer_depth(&mut self) {
+    fn update_all_layer_depth(&mut self, max_depth: f32) {
         self.wipe_tower_depth = 0.0;
         let start_offset = self.perimeter_width;
         let mut start_depth = start_offset;
@@ -1745,6 +1759,15 @@ impl WipeTower {
         }
         if self.wipe_tower_depth > 0.0 {
             self.wipe_tower_depth += start_offset;
+        }
+        // With wrapping detection every layer is as deep as the tower.
+        if self.params.wrapping {
+            if self.wipe_tower_depth.abs() < EPSILON as f32 {
+                self.wipe_tower_depth = max_depth;
+            }
+            for info in &mut self.plan {
+                info.depth = self.wipe_tower_depth;
+            }
         }
     }
 
@@ -1971,8 +1994,14 @@ impl WipeTower {
             }
         }
         self.generate_wipe_tower_blocks(true);
-        let max_depth: f32 = self.blocks.iter().map(|b| b.depth).sum();
+        let mut max_depth: f32 = self.blocks.iter().map(|b| b.depth).sum();
         let min_depth = limit_depth_by_height(self.wipe_tower_height);
+        if self.params.wrapping && max_depth < EPSILON as f32 {
+            max_depth = WRAPPING_DEPTH;
+            if self.params.use_rib_wall {
+                self.wipe_tower_width = max_depth;
+            }
+        }
         if max_depth + (EPSILON as f32) < min_depth {
             if self.params.use_rib_wall {
                 self.rib_length = self.rib_length.max(min_depth * 2f32.sqrt());
@@ -2007,7 +2036,7 @@ impl WipeTower {
                 }
             }
         }
-        self.update_all_layer_depth();
+        self.update_all_layer_depth(max_depth);
         self.set_nozzle_last_layer_id();
         if self.params.use_gap_wall {
             self.get_all_wall_skip_points();
