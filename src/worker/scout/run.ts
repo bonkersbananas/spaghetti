@@ -172,7 +172,23 @@ export async function runScout(
       timeoutMs: options.timeoutMs,
     });
     const { outcome, ...diagnosis } = answer.diagnosis;
-    if (!answer.ok) return await settle("failed", { runOutcome: outcome, detail: JSON.stringify(diagnosis) });
+    if (!answer.ok) {
+      // A busy or unreachable Claude (overloaded, rate limited, timed out) is tried once more ten minutes on, rather
+      // than costing the two of them the whole week; a refusal or a bad answer would only come again.
+      const transient =
+        outcome === "timeout" ||
+        (outcome === "api_error" &&
+          (diagnosis.httpStatus === undefined || diagnosis.httpStatus === 429 || diagnosis.httpStatus >= 500));
+      const round = await db.select().from(scoutRounds).where(eq(scoutRounds.monday, monday)).get();
+      if (transient && round && round.tries < MAX_TRIES) {
+        await db
+          .update(scoutRounds)
+          .set({ claimedAt: new Date(now), runOutcome: outcome, detail: JSON.stringify(diagnosis) })
+          .where(eq(scoutRounds.monday, monday));
+        return "failed";
+      }
+      return await settle("failed", { runOutcome: outcome, detail: JSON.stringify(diagnosis) });
+    }
 
     // Links: well-formed, not seen before, not twice in one answer, and alive.
     const seen = new Set(notebook.seen);

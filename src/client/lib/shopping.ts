@@ -146,7 +146,7 @@ export async function updateShopping(queryClient: QueryClient, id: string, chang
 }
 
 /** Ticks a thing off (bought) or puts it back on the list, at once. Back on the list goes to the top. */
-export async function setBought(queryClient: QueryClient, item: ShoppingItem, bought: boolean, userId: string) {
+export async function setBought(queryClient: QueryClient, item: ShoppingItem, bought: boolean, userId: string | null) {
   if (!canEdit() || bought === (item.boughtAt !== null)) return;
   const before = queryClient.getQueryData<ShoppingItem[]>(shoppingQuery.queryKey);
   const position = bought ? item.position : topPosition(before ?? []);
@@ -157,6 +157,8 @@ export async function setBought(queryClient: QueryClient, item: ShoppingItem, bo
     position,
   }));
   try {
+    // A thing still being added isn't on the server yet: its tick follows the add, or it would answer "not found".
+    if (adding.size > 0) await Promise.all(adding);
     const { shoppingItem } = await api<ShoppingItemResponse>(`/shopping-items/${item.id}`, {
       method: "PATCH",
       json: { bought },

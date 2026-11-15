@@ -45,7 +45,8 @@ function Shopping() {
   const [allBought, setAllBought] = useState(false);
   const field = useRef<HTMLInputElement>(null);
   const byId = new Map(people?.map((person) => [person.id, person]));
-  const tick = (item: ShoppingItem, next: boolean) => me && void setBought(queryClient, item, next, me.id);
+  // Without the session yet the tick still counts: the server knows who it is, and its copy replaces this one.
+  const tick = (item: ShoppingItem, next: boolean) => void setBought(queryClient, item, next, me?.id ?? null);
 
   const focusAdd = () => field.current?.focus();
   useHotkeys({ shoppingAdd: readOnly ? undefined : focusAdd });
