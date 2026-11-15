@@ -48,8 +48,6 @@ interface AttemptEntryProps {
   onCompare?: () => void;
   /** An attempt that worked and isn't a recipe yet: keep its settings under a name. */
   onSaveRecipe?: () => void;
-  /** Some entry of this build has more photos: keep their column's room free in every entry, so the lead photos match. */
-  reserveExtras?: boolean;
   /** Offline (or a pending attempt): its model can't be sliced again from here. */
   readOnly?: boolean;
 }
@@ -77,7 +75,6 @@ export const AttemptEntry = forwardRef<HTMLLIElement, AttemptEntryProps>(functio
     onFinish,
     onCompare,
     onSaveRecipe,
-    reserveExtras,
     readOnly,
   },
   ref,
@@ -180,27 +177,24 @@ export const AttemptEntry = forwardRef<HTMLLIElement, AttemptEntryProps>(functio
             {attempt.note && <p className="text-body text-ink break-words">{attempt.note}</p>}
 
             {lead && (
-              // On desktop the lead is the same size in every entry (4:3, at most md); any more photos
-              // are a narrow column beside it, as tall as the lead, so the pictures line up down the story.
-              <div className="flex gap-2">
+              // The lead photo fills the card, as large as a print deserves; any more are small thumbnails under
+              // it (prints are physical, and a sliver of a second photo reads as cropped, not as more).
+              <div className="flex flex-col gap-2">
                 <EntryPhoto
                   photo={lead}
                   alt={`Attempt ${attempt.number}`}
                   variant="large"
-                  className="aspect-4/3 min-w-0 flex-3 md:max-w-md md:flex-1"
+                  className="aspect-4/3 w-full md:aspect-3/2"
                 />
-                {rest.length === 0 && reserveExtras && (
-                  <div className="hidden md:block md:w-32 md:flex-none" aria-hidden />
-                )}
                 {rest.length > 0 && (
-                  <div className="flex min-w-0 flex-1 flex-col gap-2 md:w-32 md:flex-none">
-                    {rest.slice(0, 2).map((photo, index) => (
+                  <div className="flex gap-2">
+                    {rest.slice(0, 4).map((photo, index) => (
                       <EntryPhoto
                         key={photo.id}
                         photo={photo}
                         alt={`Attempt ${attempt.number}, photo ${index + 2}`}
-                        className="min-h-0 flex-1"
-                        more={index === 1 && rest.length > 2 ? rest.length - 2 : 0}
+                        className="size-16 flex-none md:size-20"
+                        more={index === 3 && rest.length > 4 ? rest.length - 4 : 0}
                       />
                     ))}
                   </div>
