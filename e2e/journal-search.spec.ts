@@ -82,6 +82,18 @@ test("finds an attempt by a failure tag plus a material", { tag: "@phone" }, asy
   await expect(page.getByRole("region", { name: "Recent" }).getByRole("button", { name: "petg warp" })).toBeVisible();
 });
 
+test("a search of several words that finds nothing offers each word on its own", { tag: "@phone" }, async ({
+  page,
+}) => {
+  await build(page, "Swatch box", [{ outcome: "success", ago: 3 * HOUR, note: "Clean supports", settings: pla }]);
+  await page.goto("/search?q=petg%20supports");
+  await expect(page.getByRole("heading", { name: "Not a single strand" })).toBeVisible();
+  // One tap on "supports" runs that search and finds the PLA print.
+  await page.getByRole("button", { name: "supports", exact: true }).click();
+  await expect(page.getByRole("searchbox", { name: "Search" })).toHaveValue("supports");
+  await expect(page.getByRole("region", { name: "What worked" })).toBeVisible();
+});
+
 test("filters the journal to failures", async ({ page, isMobile }) => {
   await build(page, "Hook", [
     { outcome: "failed", ago: 5 * HOUR, note: "Nest of noodles", failureTags: ["spaghetti"], settings: pla },

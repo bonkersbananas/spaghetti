@@ -157,6 +157,8 @@ function Search() {
   };
 
   const total = list.length;
+  // The words as typed, once each, for "search for just one of them" when several found nothing.
+  const typedWords = useMemo(() => [...new Set(q.split(/\s+/).filter(Boolean))].slice(0, 4), [q]);
   let index = -1;
   const row = (result: Result) => {
     index += 1;
@@ -318,7 +320,23 @@ function Search() {
                   <RowSkeleton />
                 </div>
               ) : total === 0 ? (
-                <EmptyState className="py-8 md:py-14" illustration={<EmptyPot />} title="Not a single strand">
+                <EmptyState
+                  className="py-8 md:py-14"
+                  illustration={<EmptyPot />}
+                  title="Not a single strand"
+                  action={
+                    // Two or more words and no match: one tap searches for just one of them.
+                    typedWords.length > 1 && (
+                      <div className="flex flex-wrap justify-center gap-2">
+                        {typedWords.map((word) => (
+                          <ToggleChip key={word} icon={SearchIcon} onClick={() => pick(word)}>
+                            {word}
+                          </ToggleChip>
+                        ))}
+                      </div>
+                    )
+                  }
+                >
                   {terms.length
                     ? "Nothing matches all of those words. Try fewer, or the start of one."
                     : "Nothing matches these filters yet."}
