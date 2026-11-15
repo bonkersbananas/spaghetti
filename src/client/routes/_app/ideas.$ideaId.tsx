@@ -1,5 +1,4 @@
 import { modelOf } from "@shared/model-mark";
-import { displayName } from "@shared/people";
 import { fullTime, inlineTime } from "@shared/time";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
@@ -60,6 +59,7 @@ import { makeTwist, suggestedTwistName, useTwists } from "@/lib/twists";
 import { setUpNext, splitQueue } from "@/lib/up-next";
 import { useAfterPaint, useIsDesktop } from "@/lib/use-media-query";
 import { useSettled } from "@/lib/use-settled";
+import { useWho } from "@/lib/who";
 import { toggleWishlist, useWishlistIds } from "@/lib/wishlist";
 
 const ItemFiles = lazy(() => import("@/components/ideas/ItemFiles"));
@@ -131,6 +131,7 @@ function Idea({ item }: { item: ItemView }) {
   const offline = useReadOnly();
   const { data: people } = useQuery(peopleQuery);
   const { data: user } = useQuery(sessionQuery);
+  const who = useWho();
   const wished = useWishlistIds(user?.id).includes(item.id);
   useCaptureHere(item);
   const person = people?.find((p) => p.id === item.createdBy);
@@ -477,7 +478,7 @@ function Idea({ item }: { item: ItemView }) {
             <div className="text-small text-ink-faint mt-4 flex items-center gap-2.5">
               {person && <Avatar person={person} size="sm" via={via} />}
               <p>
-                {person ? `${displayName(person)} captured this` : "Captured"}{" "}
+                {person ? `${who(person)} captured this` : "Captured"}{" "}
                 <time dateTime={new Date(item.createdAt).toISOString()} title={fullTime(item.createdAt)}>
                   {inlineTime(item.createdAt)}
                 </time>
