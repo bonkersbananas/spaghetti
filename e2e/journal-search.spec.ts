@@ -82,16 +82,26 @@ test("finds an attempt by a failure tag plus a material", { tag: "@phone" }, asy
   await expect(page.getByRole("region", { name: "Recent" }).getByRole("button", { name: "petg warp" })).toBeVisible();
 });
 
-test("a search of several words that finds nothing offers each word on its own", { tag: "@phone" }, async ({
-  page,
-}) => {
-  await build(page, "Swatch box", [{ outcome: "success", ago: 3 * HOUR, note: "Clean supports", settings: pla }]);
+test("a search no print has every word of shows the closest, and a word on its own narrows it", {
+  tag: "@phone",
+}, async ({ page }) => {
+  await build(page, "Swatch box", [
+    { outcome: "success", ago: 3 * HOUR, note: "Clean supports", settings: pla },
+    { outcome: "failed", ago: 2 * HOUR, note: "Corners peeled up", failureTags: ["warping"], settings: petg(70) },
+  ]);
   await page.goto("/search?q=petg%20supports");
-  await expect(page.getByRole("heading", { name: "Not a single strand" })).toBeVisible();
-  // One tap on "supports" runs that search and finds the PLA print.
+  await expect(page.getByText("Nothing has both. Closest first:")).toBeVisible();
+  // Both prints are there at once: the one with the PETG and the one with the supports.
+  await expect(page.getByText("Corners peeled up")).toBeVisible();
+  await expect(page.getByText("Clean supports")).toBeVisible();
   await page.getByRole("button", { name: "supports", exact: true }).click();
   await expect(page.getByRole("searchbox", { name: "Search" })).toHaveValue("supports");
-  await expect(page.getByRole("region", { name: "What worked" })).toBeVisible();
+  await expect(page.getByText("Nothing has both")).toHaveCount(0);
+  await expect(page.getByText("Clean supports")).toBeVisible();
+  await expect(page.getByText("Corners peeled up")).toHaveCount(0);
+  // No word matches at all: the pot.
+  await page.goto("/search?q=zzzz%20qqqq");
+  await expect(page.getByRole("heading", { name: "Not a single strand" })).toBeVisible();
 });
 
 test("filters the journal to failures", async ({ page, isMobile }) => {

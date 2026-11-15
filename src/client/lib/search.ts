@@ -15,9 +15,10 @@ export function focusSearch() {
  * screen uses to mark what matched, and the last results stay on screen while
  * the next arrive.
  */
-export function searchQuery(q: string, params: URLSearchParams) {
+export function searchQuery(q: string, params: URLSearchParams, closest = false) {
   const all = new URLSearchParams(params);
   if (q) all.set("q", q);
+  if (closest) all.set("closest", "1");
   return queryOptions({
     queryKey: ["search", all.toString()] as const,
     queryFn: async ({ signal }) => ({ ...(await api<SearchResponse>(`/search?${all}`, { signal })), q }),

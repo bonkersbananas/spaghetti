@@ -3320,11 +3320,11 @@ export const shots: Shot[] = [
     },
   },
   {
-    // Two words and no match: each word on its own, one tap away.
+    // Two words and nothing has both: the closest results at once, each word on its own a tap away.
     name: "search-nothing",
     path: "/search?q=PETG%20supports",
     prepare: async (page) => {
-      await page.getByRole("heading", { name: "Not a single strand" }).waitFor();
+      await page.getByText("Closest first:").waitFor();
       await page.getByRole("searchbox", { name: "Search" }).blur();
     },
   },

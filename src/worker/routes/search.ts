@@ -64,6 +64,8 @@ export const filters = z.object({
 const whatWorkedQuery = z.object({ item: z.uuid(), material: material.optional() });
 const searchQuery = filters.extend({
   q: z.string().max(200).optional(),
+  /** "1": when nothing has every word, answer with what has the most of them (the app asks; agents get the strict answer). */
+  closest: z.literal("1").optional(),
   tag: z
     .string()
     .max(48)
@@ -261,6 +263,63 @@ const LIMIT = { items: 12, attempts: 30 };
 
 const hasHits = (r: SearchResponse) =>
   r.builds.length + r.ideas.length + r.attempts.length + r.recipes.length + r.twists.length + r.spools.length > 0;
+
+/**
+ * One search per word, merged: a hit that came up for more of the words comes first, then the word with the fewest
+ * hits (the more telling one), then each search's own order.
+ */
+function mergeClosest(each: SearchResponse[]): SearchResponse {
+  const ordered = [...each].sort(
+    (a, b) =>
+      b.builds.length + b.ideas.length + b.attempts.length - (a.builds.length + a.ideas.length + a.attempts.length),
+  );
+  ordered.reverse();
+  const merge = <T>(pick: (r: SearchResponse) => T[], id: (hit: T) => string, limit: number) => {
+    const seen = new Map<string, { hit: T; words: number }>();
+    for (const r of ordered)
+      for (const hit of pick(r)) {
+        const known = seen.get(id(hit));
+        if (known) known.words += 1;
+        else seen.set(id(hit), { hit, words: 1 });
+      }
+    return [...seen.values()]
+      .sort((a, b) => b.words - a.words) // stable: ties keep the order above
+      .slice(0, limit)
+      .map((entry) => entry.hit);
+  };
+  return {
+    builds: merge(
+      (r) => r.builds,
+      (h) => h.item.id,
+      LIMIT.items,
+    ),
+    ideas: merge(
+      (r) => r.ideas,
+      (h) => h.item.id,
+      LIMIT.items,
+    ),
+    attempts: merge(
+      (r) => r.attempts,
+      (h) => h.attempt.id,
+      LIMIT.attempts,
+    ),
+    recipes: merge(
+      (r) => r.recipes,
+      (h) => h.id,
+      LIMIT.items,
+    ),
+    twists: merge(
+      (r) => r.twists,
+      (h) => h.id,
+      LIMIT.items,
+    ),
+    spools: merge(
+      (r) => r.spools,
+      (h) => h.id,
+      LIMIT.items,
+    ),
+  };
+}
 
 interface SearchInput {
   terms: SearchTerm[];
@@ -533,7 +592,7 @@ export const searchRoutes = new Hono<AppEnv>()
   .get("/search", async (c) => {
     const parsed = searchQuery.safeParse(c.req.query());
     if (!parsed.success) return apiError(c, 400, "invalid", "That search couldn't be read.");
-    const { q = "", ...f } = parsed.data;
+    const { q = "", closest: wantClosest, ...f } = parsed.data;
     const db = c.var.db;
     const read = parseQuery(q, Date.now());
     const people = await db.select({ id: users.id, name: users.name }).from(users);
@@ -579,10 +638,21 @@ export const searchRoutes = new Hono<AppEnv>()
         }
       }
     }
+    // Still nothing with every word: the closest are what has the most of them, one search per word, merged.
+    let closest = false;
+    if (wantClosest && !hasHits(result) && read.terms.length > 1) {
+      const each = await Promise.all(read.terms.map((term) => ask([term])));
+      if (each.some(hasHits)) {
+        result = mergeClosest(each);
+        terms = read.terms;
+        closest = true;
+      }
+    }
     return c.json<SearchResponse>({
       ...result,
       terms: markTerms(terms),
       corrected,
+      closest,
       intent: read.intent,
       when: read.when ? { label: read.when.label, weekMonday: read.when.weekMonday } : null,
     });
