@@ -69,7 +69,7 @@ function Shopping() {
             <p className="text-body text-ink-soft">Nothing left to buy. Add the next thing when you run low.</p>
           ) : (
             <EmptyState
-              className="py-6 md:py-10"
+              size="inline"
               illustration={<EmptyBasket />}
               title="The cupboard is full"
               action={

@@ -81,7 +81,7 @@ function Workshop() {
 
   return (
     <>
-      <PageHeader title="Workshop" subtitle="The spools, the printer, what to buy and the models we twist." />
+      <PageHeader title="Workshop" subtitle="Spools, printer, shopping and twists." />
       <div className="grid grid-cols-2 gap-3 md:grid-cols-[repeat(auto-fit,minmax(15rem,1fr))] md:gap-5">
         <HubTile
           to="/pantry"

@@ -38,7 +38,7 @@ function Year() {
           <Skeleton className="h-44 w-full rounded-xl md:max-w-3xl" />
         </div>
       ) : data.prints === 0 ? (
-        <EmptyState className="py-10 md:py-20" illustration={<OpenNotebook />} title="Nothing printed yet this year">
+        <EmptyState illustration={<OpenNotebook />} title="Nothing printed yet this year">
           Once there are prints with a verdict, this page adds them up.
         </EmptyState>
       ) : (

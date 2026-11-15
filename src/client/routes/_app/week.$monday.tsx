@@ -72,7 +72,7 @@ function WeekPage({ monday }: { monday: string }) {
             {week.note && <Note note={week.note} />}
             {week.empty ? (
               <EmptyState
-                className="py-6 md:py-12"
+                size="inline"
                 illustration={<EmptyPot />}
                 title={week.current ? "Nothing simmering yet" : "Not a strand this week"}
                 action={

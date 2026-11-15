@@ -170,7 +170,6 @@ function Pantry() {
         </div>
       ) : !spools?.length ? (
         <EmptyState
-          className="py-10 md:py-20"
           illustration={<PantryJar />}
           title="The pantry's bare"
           action={

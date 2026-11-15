@@ -71,7 +71,7 @@ function Agents() {
         </ul>
       ) : (
         <EmptyState
-          className="py-6 md:py-12"
+          size="inline"
           illustration={<EmptyPot />}
           title="No sous-chefs in the kitchen yet"
           action={newAgent}

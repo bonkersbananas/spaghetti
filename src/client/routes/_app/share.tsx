@@ -58,7 +58,7 @@ function Share() {
   return (
     <>
       <h1 className="sr-only">Sharing to Spaghetti</h1>
-      <EmptyState className="py-10 md:py-20" illustration={<EmptyPot />} title="Catching it…">
+      <EmptyState illustration={<EmptyPot />} title="Catching it…">
         Putting what you shared in the pot.
       </EmptyState>
     </>

@@ -188,7 +188,6 @@ function Today() {
       </div>
       {brandNew ? (
         <EmptyState
-          className="py-10 md:py-20"
           illustration={<EmptyPot />}
           title="Nothing on the stove yet"
           action={
@@ -208,7 +207,6 @@ function Today() {
             </Suspense>
           </div>
           <EmptyState
-            className="py-10 md:py-20"
             illustration={<SpoolStrand />}
             title="All quiet in the kitchen"
             action={

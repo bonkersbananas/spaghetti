@@ -42,17 +42,17 @@ function RecentlyDeleted() {
           <RowSkeleton />
         </div>
       ) : error ? (
-        <EmptyState className="py-10 md:py-20" illustration={<EmptyPot />} title="The bin is out of reach">
+        <EmptyState illustration={<EmptyPot />} title="The bin is out of reach">
           The list needs the connection. Nothing is lost.
         </EmptyState>
       ) : empty ? (
-        <EmptyState className="py-10 md:py-20" illustration={<EmptyPot />} title="Nothing deleted lately">
+        <EmptyState illustration={<EmptyPot />} title="Nothing deleted lately">
           Whatever you delete waits here for a month first, so a missed Undo isn't the end.
         </EmptyState>
       ) : (
         <div className="flex max-w-2xl flex-col gap-10">
           {data && data.items.length > 0 && (
-            <Section id="deleted-items" title="Ideas and builds" size="title" count={data.items.length}>
+            <Section id="deleted-items" title="Ideas and builds" count={data.items.length}>
               <ul className="flex flex-col">
                 {data.items.map((entry) => {
                   const name = itemName(entry);
@@ -97,7 +97,7 @@ function RecentlyDeleted() {
             </Section>
           )}
           {data && data.attempts.length > 0 && (
-            <Section id="deleted-attempts" title="Attempts" size="title" count={data.attempts.length}>
+            <Section id="deleted-attempts" title="Attempts" count={data.attempts.length}>
               <ul className="flex flex-col">
                 {data.attempts.map((entry) => {
                   const of = entry.itemTitle?.trim() || "a build";

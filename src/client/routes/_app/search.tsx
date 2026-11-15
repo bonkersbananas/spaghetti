@@ -334,7 +334,7 @@ function Search() {
                   <RowSkeleton />
                 </div>
               ) : total === 0 ? (
-                <EmptyState className="py-8 md:py-14" illustration={<EmptyPot />} title="Not a single strand">
+                <EmptyState illustration={<EmptyPot />} title="Not a single strand">
                   {terms.length
                     ? "Nothing matches those words. Try the start of one, or another word."
                     : "Nothing matches these filters yet."}
@@ -408,7 +408,7 @@ function Suggestions({
   if (isPending && !recent.length) return null;
   if (!recent.length && !tags.length && !materials.length) {
     return (
-      <EmptyState className="py-8 md:py-16" illustration={<NoodleSearch />} title="Nothing to untangle yet">
+      <EmptyState illustration={<NoodleSearch />} title="Nothing to untangle yet">
         Once there are ideas and prints, one search finds them all: titles, notes, filaments and settings.
       </EmptyState>
     );
