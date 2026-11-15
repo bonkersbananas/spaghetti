@@ -3,12 +3,11 @@ import { Reorder } from "motion/react";
 import { useEffect, useState } from "react";
 import { CameraIcon, ImageIcon, PlusIcon } from "@/components/ui/icons";
 import { AddPhotoTile, PhotoThumb, useFilePicker } from "@/components/ui/PhotoTiles";
-import { useAfterPaint } from "@/lib/after-paint";
 import { cn } from "@/lib/cn";
 import { addPhotosToItem, type PhotoView, reorderPhotos } from "@/lib/items";
 import { photoSrc } from "@/lib/previews";
 import { useReadOnly } from "@/lib/read-only";
-import { useIsDesktop } from "@/lib/use-media-query";
+import { useAfterPaint, useIsDesktop } from "@/lib/use-media-query";
 
 interface PhotoStripProps {
   itemId: string;
@@ -33,7 +32,7 @@ export function PhotoStrip({ itemId, photos, selectedId, onSelect }: PhotoStripP
   const [order, setOrder] = useState(ids);
   const [dragging, setDragging] = useState(false);
   // Drag-to-reorder (motion's layout projection measures every thumbnail on mount) joins after the first paint.
-  const draggable = useAfterPaint("photo-strip");
+  const draggable = useAfterPaint();
   const key = ids.join();
 
   // Follow the server's order (and new photos) unless a drag is under way.

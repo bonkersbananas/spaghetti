@@ -40,7 +40,6 @@ import { SaveStatus } from "@/components/ui/SaveStatus";
 import { ShareLinkButton } from "@/components/ui/ShareLinkButton";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { toast } from "@/components/ui/Toast";
-import { useAfterPaint } from "@/lib/after-paint";
 import { useVia } from "@/lib/agents";
 import { startBuild } from "@/lib/builds";
 import { useCaptureHere } from "@/lib/capture";
@@ -58,7 +57,7 @@ import { SLICER_ACCEPT, useSlicerDropTarget } from "@/lib/slicer-drop";
 import { useStickyColumn } from "@/lib/sticky-column";
 import { makeTwist, suggestedTwistName, useTwists } from "@/lib/twists";
 import { setUpNext } from "@/lib/up-next";
-import { useIsDesktop } from "@/lib/use-media-query";
+import { useAfterPaint, useIsDesktop } from "@/lib/use-media-query";
 import { useSettled } from "@/lib/use-settled";
 import { toggleWishlist, useWishlistIds } from "@/lib/wishlist";
 
@@ -123,7 +122,7 @@ const back = { to: "/ideas", label: "Ideas" } as const;
 
 function Idea({ item }: { item: ItemView }) {
   const stickyColumn = useStickyColumn();
-  const after = useAfterPaint("idea");
+  const after = useAfterPaint();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const isDesktop = useIsDesktop();

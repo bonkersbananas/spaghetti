@@ -16,7 +16,6 @@ import { Reflow } from "@/components/ui/Reflow";
 import { Section } from "@/components/ui/Section";
 import { CardSkeleton } from "@/components/ui/Skeleton";
 import { useVia } from "@/lib/agents";
-import { useAfterPaint } from "@/lib/after-paint";
 import { useCapture } from "@/lib/capture";
 import { shortcutCaps } from "@/lib/hotkeys";
 import { useBuilds, useIdeas } from "@/lib/items";
@@ -24,7 +23,7 @@ import { useListPicker } from "@/lib/list-picker";
 import { useArrived } from "@/lib/live";
 import { peopleQuery, sessionQuery } from "@/lib/queries";
 import { dropUpNext, moveUpNext, setUpNext, splitQueue } from "@/lib/up-next";
-import { useIsDesktop } from "@/lib/use-media-query";
+import { useAfterPaint, useIsDesktop } from "@/lib/use-media-query";
 
 // The way to the wishlists on phones: on demand, so desktop (which has the sidebar) never loads it.
 const WishlistLink = lazy(() =>
@@ -43,7 +42,7 @@ const FIRST_SCREEN = { phone: 8, desktop: 12 };
 
 function Ideas() {
   useListPicker();
-  const after = useAfterPaint("ideas");
+  const after = useAfterPaint();
   const { items: all, isPending, error, refetch } = useIdeas();
   // "Has a model" / "Needs designing": one tap each, tap again to see everything. Only offered once an idea has a model.
   const [modelFilter, setModelFilter] = useState<"model" | "design" | null>(null);
