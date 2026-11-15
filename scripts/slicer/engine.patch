@@ -1,0 +1,250 @@
+diff --git a/engine/cmake/Dependencies.cmake b/engine/cmake/Dependencies.cmake
+index 66f4a8f..6f2b438 100644
+--- a/engine/cmake/Dependencies.cmake
++++ b/engine/cmake/Dependencies.cmake
+@@ -76,6 +76,7 @@ else ()
+     add_library(engine_tbb_serial INTERFACE)
+     target_include_directories(engine_tbb_serial SYSTEM INTERFACE "${ENGINE_DIR}/shims/tbb-serial")
+     add_library(engine_tbbmalloc_serial INTERFACE)
++    target_include_directories(engine_tbbmalloc_serial SYSTEM INTERFACE "${ENGINE_DIR}/shims/tbb-serial")
+     add_library(TBB::tbb ALIAS engine_tbb_serial)
+     add_library(TBB::tbbmalloc ALIAS engine_tbbmalloc_serial)
+ endif ()
+@@ -114,13 +115,14 @@ set(MCUT_BUILD_TUTORIALS OFF CACHE BOOL "" FORCE)
+ set(SLIC3R_STATIC ON)
+ 
+ set(ENGINE_DEPS_SRC_HEADER_ONLY agg ankerl earcut fast_float nanosvg nlohmann libigl)
+-set(ENGINE_DEPS_SRC_LIBRARIES admesh clipper clipper2 expat glu-libtess libnest2d mcut miniz qhull qoi semver)
++set(ENGINE_DEPS_SRC_LIBRARIES admesh clipper2 glu-libtess libnest2d mcut miniz qhull qoi semver)
+ foreach (dir IN LISTS ENGINE_DEPS_SRC_HEADER_ONLY ENGINE_DEPS_SRC_LIBRARIES)
+     add_subdirectory("${ORCA_SRC}/deps_src/${dir}" "${CMAKE_BINARY_DIR}/deps_src/${dir}")
+ endforeach ()
+-engine_silence_warnings(admesh clipper Clipper2 expat glu-libtess libnest2d mcut miniz_static qoi semver)
+-engine_without_tbbmalloc(clipper)
++engine_silence_warnings(admesh Clipper2 glu-libtess libnest2d mcut miniz_static qoi semver)
++engine_without_tbbmalloc(Clipper2)
+ 
+-# Orca's top-level CMakeLists falls back to the bundled expat the same way when no system expat exists.
+-set(EXPAT_INCLUDE_DIRS "${ORCA_SRC}/deps_src/expat")
+-set(EXPAT_LIBRARIES expat)
++# expat 2.10 is Orca 2.5.1's own pin (its deps_src/expat is gone): built by engine/deps/build-deps.sh into the prefix.
++find_package(expat 2.10 CONFIG REQUIRED)
++set(EXPAT_INCLUDE_DIRS "")
++set(EXPAT_LIBRARIES expat::expat)
+diff --git a/engine/cmake/Libslic3r.cmake b/engine/cmake/Libslic3r.cmake
+index 2d27a6c..b2445af 100644
+--- a/engine/cmake/Libslic3r.cmake
++++ b/engine/cmake/Libslic3r.cmake
+@@ -134,7 +134,6 @@ target_link_libraries(libslic3r
+         ${EXPAT_LIBRARIES}
+         boost_libs
+         cereal::cereal
+-        clipper
+         Clipper2
+         glu-libtess
+         JPEG::JPEG
+diff --git a/engine/deps/SHA256SUMS b/engine/deps/SHA256SUMS
+index e2f4885..3db5b44 100644
+--- a/engine/deps/SHA256SUMS
++++ b/engine/deps/SHA256SUMS
+@@ -9,3 +9,5 @@ a378e9a39e718e289102c20d45632f873bfdc58a7a5f924246ea4b176e185f1e  qhull-v8.0.2.z
+ d6d99e693366bc03897677650e8b2dfa76b5d6c54e2c9e70c03f0af821b0a52f  libjpeg-turbo-3.0.1.zip
+ eae9326beb4158c386e39a356818031bd28f3124cf915f8c5b1dc4c7a36b4d7c  gmp-6.2.1.tar.bz2
+ 9ad62c7dc910303cd384ff8f1f4767a655124980bb6d8650fe62c815a231bb7b  mpfr-4.2.2.tar.bz2
++eebd737d9b7f0199647ba5c1f9f6c7a3d0651aacef9c2fd4dedc52da6c25edbe  CGAL-6.2.1.zip
++5466a341f9c692ef7a958a6881311be597f8e1ce345984cf78414f54793dea4c  expat-2.10.0.tar.gz
+diff --git a/engine/deps/build-deps.sh b/engine/deps/build-deps.sh
+index 07679ec..50211cb 100644
+--- a/engine/deps/build-deps.sh
++++ b/engine/deps/build-deps.sh
+@@ -221,10 +221,21 @@ step_cgal() {     # CGAL 5.6.3 (Orca pin), header-only.
+   # does), CGAL::CGAL carries CGAL_DISABLE_GMP=1 and the exact number types come from Boost.Multiprecision
+   # (Boost >= 1.80). FFF slicing only evaluates exact predicates (Voronoi checks behind Arachne), whose
+   # results do not depend on the exact number type.
+-  cmake_dep cgal-5.6.3 "$SRC/CGAL-5.6.3"
++  cmake_dep cgal-6.2.1 "$SRC/CGAL-6.2.1"
++  # CGAL 6's Surface_sweep_2 includes Boost.Interval, whose hw_rounding.hpp stops with "Please specify rounding control
++  # mechanism" on wasm (no hardware rounding, and Boost's fenv.hpp refuses it). Keep Boost's own no-op rounding_control:
++  # the interval code behind it (an algebraic kernel) is never run by the engine, and CGAL's own intervals have
++  # CGAL_ALWAYS_ROUND_TO_NEAREST.
++  sed -i 's|^#  error Boost.Numeric.Interval: Please specify rounding control mechanism\.$|/* wasm: no rounding control (the engine) */|' \
++    "$PREFIX/include/boost/numeric/interval/hw_rounding.hpp"
+ }
+ 
+ # ---- 5. Small compiled libraries --------------------------------------------------------------------
++step_expat() {    # expat 2.10.0 (Orca 2.5.1 pins it; the bundled deps_src/expat is gone)
++  cmake_dep expat-2.10.0 "$SRC/expat-2.10.0" \
++    -DEXPAT_SHARED_LIBS=OFF -DEXPAT_DTD=ON -DEXPAT_GE=ON -DEXPAT_BUILD_TOOLS=OFF -DEXPAT_BUILD_EXAMPLES=OFF \
++    -DEXPAT_BUILD_TESTS=OFF -DEXPAT_BUILD_DOCS=OFF -DEXPAT_BUILD_FUZZERS=OFF -DEXPAT_BUILD_PKGCONFIG=OFF
++}
+ step_nlopt() {    # NLopt 2.5.0 (Orca pin), C only. Only the library: 2.5.0 always adds test/ (testopt).
+   cmake_dep nlopt-2.5.0 "$SRC/nlopt-2.5.0" --target nlopt \
+     -DNLOPT_CXX=OFF -DNLOPT_PYTHON=OFF -DNLOPT_OCTAVE=OFF -DNLOPT_MATLAB=OFF -DNLOPT_GUILE=OFF \
+@@ -404,7 +415,7 @@ step_verify() {
+   node "$BLD/smoke/smoke.js"
+ }
+ 
+-ALL=(ports boost eigen cereal cgal nlopt libnoise qhull jpeg tbb gmp mpfr handoff verify)
++ALL=(ports boost eigen cereal cgal expat nlopt libnoise qhull jpeg tbb gmp mpfr handoff verify)
+ STEPS=("$@"); [[ ${#STEPS[@]} -eq 0 ]] && STEPS=("${ALL[@]}")
+ for s in "${STEPS[@]}"; do
+   declare -F "step_$s" >/dev/null || { echo "unknown step '$s' (steps: ${ALL[*]})" >&2; exit 2; }
+diff --git a/engine/deps/fetch-deps.sh b/engine/deps/fetch-deps.sh
+index b7de3d0..e442b38 100644
+--- a/engine/deps/fetch-deps.sh
++++ b/engine/deps/fetch-deps.sh
+@@ -35,7 +35,8 @@ command -v "$BSDTAR" >/dev/null || { echo "bsdtar not found ($BSDTAR); set BSDTA
+ DEPS=(
+   "boost|1.84.0|https://github.com/boostorg/boost/releases/download/boost-1.84.0/boost-1.84.0.tar.gz|orca deps/Boost/Boost.cmake"
+   "oneTBB|2021.12.0|https://github.com/uxlfoundation/oneTBB/archive/refs/tags/v2021.12.0.zip|bump from orca deps/TBB/TBB.cmake (2021.5.0 has no wasm support; hash recorded here)"
+-  "CGAL|5.6.3|https://github.com/CGAL/cgal/releases/download/v5.6.3/CGAL-5.6.3.zip|orca deps/CGAL/CGAL.cmake"
++  "CGAL|6.2.1|https://github.com/CGAL/cgal/releases/download/v6.2.1/CGAL-6.2.1.zip|orca deps/CGAL/CGAL.cmake"
++  "expat|2.10.0|https://github.com/libexpat/libexpat/releases/download/R_2_10_0/expat-2.10.0.tar.gz|orca deps/EXPAT/EXPAT.cmake"
+   "eigen|5.0.1|https://gitlab.com/libeigen/eigen/-/archive/5.0.1/eigen-5.0.1.zip|orca deps/Eigen/Eigen.cmake"
+   "cereal|1.3.0|https://github.com/USCiLab/cereal/archive/refs/tags/v1.3.0.zip|orca deps/Cereal/Cereal.cmake"
+   "nlopt|2.5.0|https://github.com/stevengj/nlopt/archive/v2.5.0.tar.gz|orca deps/NLopt/NLopt.cmake"
+diff --git a/engine/shims/occt/Standard_Handle.hxx b/engine/shims/occt/Standard_Handle.hxx
+new file mode 100644
+index 0000000..3b3c669
+--- /dev/null
++++ b/engine/shims/occt/Standard_Handle.hxx
+@@ -0,0 +1,3 @@
++// OCCT stand-in for the browser engine: see occt_stub.hxx.
++#pragma once
++#include "occt_stub.hxx"
+diff --git a/engine/shims/occt/Standard_TypeDef.hxx b/engine/shims/occt/Standard_TypeDef.hxx
+new file mode 100644
+index 0000000..3b3c669
+--- /dev/null
++++ b/engine/shims/occt/Standard_TypeDef.hxx
+@@ -0,0 +1,3 @@
++// OCCT stand-in for the browser engine: see occt_stub.hxx.
++#pragma once
++#include "occt_stub.hxx"
+diff --git a/engine/shims/tbb-serial/oneapi/tbb.h b/engine/shims/tbb-serial/oneapi/tbb.h
+index 0099535..5909d0f 100644
+--- a/engine/shims/tbb-serial/oneapi/tbb.h
++++ b/engine/shims/tbb-serial/oneapi/tbb.h
+@@ -9,8 +9,10 @@
+ #include "tbb/global_control.h"
+ #include "tbb/parallel_for.h"
+ #include "tbb/parallel_for_each.h"
++#include "tbb/parallel_invoke.h"
+ #include "tbb/parallel_pipeline.h"
+ #include "tbb/parallel_reduce.h"
++#include "tbb/parallel_sort.h"
+ #include "tbb/partitioner.h"
+ #include "tbb/scalable_allocator.h"
+ #include "tbb/spin_mutex.h"
+diff --git a/engine/shims/tbb-serial/oneapi/tbb/parallel_invoke.h b/engine/shims/tbb-serial/oneapi/tbb/parallel_invoke.h
+new file mode 100644
+index 0000000..da5edf1
+--- /dev/null
++++ b/engine/shims/tbb-serial/oneapi/tbb/parallel_invoke.h
+@@ -0,0 +1,20 @@
++// Serial oneTBB shim: tbb::parallel_invoke runs its functions one after the other, in order.
++#pragma once
++
++#include <utility>
++
++#include "detail/_serial.h"
++
++namespace oneapi {
++namespace tbb {
++
++template<typename F> void parallel_invoke(F &&f) { std::forward<F>(f)(); }
++template<typename F, typename... Fs> void parallel_invoke(F &&f, Fs &&...fs)
++{
++    std::forward<F>(f)();
++    parallel_invoke(std::forward<Fs>(fs)...);
++}
++
++} // namespace tbb
++} // namespace oneapi
++
+diff --git a/engine/shims/tbb-serial/oneapi/tbb/parallel_sort.h b/engine/shims/tbb-serial/oneapi/tbb/parallel_sort.h
+new file mode 100644
+index 0000000..4255ea7
+--- /dev/null
++++ b/engine/shims/tbb-serial/oneapi/tbb/parallel_sort.h
+@@ -0,0 +1,27 @@
++// Serial oneTBB shim: tbb::parallel_sort is std::sort.
++#pragma once
++
++#include <algorithm>
++#include <functional>
++#include <iterator>
++
++#include "detail/_serial.h"
++
++namespace oneapi {
++namespace tbb {
++
++template<typename RandomIt, typename Compare> void parallel_sort(RandomIt first, RandomIt last, const Compare &comp)
++{
++    std::sort(first, last, comp);
++}
++template<typename RandomIt> void parallel_sort(RandomIt first, RandomIt last)
++{
++    std::sort(first, last);
++}
++template<typename Range> void parallel_sort(Range &&range)
++{
++    std::sort(std::begin(range), std::end(range));
++}
++
++} // namespace tbb
++} // namespace oneapi
+diff --git a/engine/shims/tbb-serial/oneapi/tbb/scalable_allocator.h b/engine/shims/tbb-serial/oneapi/tbb/scalable_allocator.h
+index 54df266..0bb1b1a 100644
+--- a/engine/shims/tbb-serial/oneapi/tbb/scalable_allocator.h
++++ b/engine/shims/tbb-serial/oneapi/tbb/scalable_allocator.h
+@@ -5,11 +5,16 @@
+ #pragma once
+ 
+ #include <cstddef>
++#include <cstdlib>
+ #include <new>
+ #include <type_traits>
+ 
+ #include "detail/_serial.h"
+ 
++// oneTBB's C allocator API, which Orca 2.5.1's Clipper2 uses for its nodes: plain malloc here.
++inline void *scalable_malloc(std::size_t size) { return std::malloc(size); }
++inline void  scalable_free(void *ptr) { std::free(ptr); }
++
+ namespace oneapi {
+ namespace tbb {
+ 
+diff --git a/engine/shims/tbb-serial/oneapi/tbb/task_group.h b/engine/shims/tbb-serial/oneapi/tbb/task_group.h
+index bfe0973..179ff43 100644
+--- a/engine/shims/tbb-serial/oneapi/tbb/task_group.h
++++ b/engine/shims/tbb-serial/oneapi/tbb/task_group.h
+@@ -17,6 +17,9 @@ enum task_group_status {
+     canceled,
+ };
+ 
++// Nothing is ever cancelled from outside in the serial engine.
++inline bool is_current_task_group_canceling() { return false; }
++
+ class task_group {
+ public:
+     task_group() = default;
+diff --git a/engine/shims/tbb-serial/tbb/parallel_invoke.h b/engine/shims/tbb-serial/tbb/parallel_invoke.h
+new file mode 100644
+index 0000000..0fbcabe
+--- /dev/null
++++ b/engine/shims/tbb-serial/tbb/parallel_invoke.h
+@@ -0,0 +1,3 @@
++// Serial oneTBB shim: forwards to oneapi/tbb/parallel_invoke.h, as oneTBB's tbb/ headers do.
++#pragma once
++#include "../oneapi/tbb/parallel_invoke.h"
+diff --git a/engine/shims/tbb-serial/tbb/parallel_sort.h b/engine/shims/tbb-serial/tbb/parallel_sort.h
+new file mode 100644
+index 0000000..ddb5cb8
+--- /dev/null
++++ b/engine/shims/tbb-serial/tbb/parallel_sort.h
+@@ -0,0 +1,3 @@
++// Serial oneTBB shim: forwards to oneapi/tbb/parallel_sort.h, as oneTBB's tbb/ headers do.
++#pragma once
++#include "../oneapi/tbb/parallel_sort.h"

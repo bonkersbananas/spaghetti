@@ -4,14 +4,14 @@ Spaghetti slices `.stl` and plain `.3mf` files in the browser with OrcaSlicer's 
 
 ## What it is
 
-The [Muon3D Slicer Engine](https://github.com/Muon-3D/muon3d-slicer-engine): OrcaSlicer's `src/libslic3r` built with Emscripten, with no edits to Orca's sources, plus a worker **host** that a page starts by URL and talks to with messages ([its protocol](https://github.com/Muon-3D/muon3d-slicer-engine/blob/main/docs/PROTOCOL.md): `hello`, `load`, `slice`, `profiles.resolve`, …). Spaghetti uses its single-threaded build (`engine-st`), which runs on any page; the multithreaded one would need cross-origin isolation headers on the whole app.
+The [Muon3D Slicer Engine](https://github.com/Muon-3D/muon3d-slicer-engine): OrcaSlicer's `src/libslic3r` built with Emscripten, with no edits to Orca's sources (OrcaSlicer's own release, v2.5.1; the engine's build is patched to fit it), plus a worker **host** that a page starts by URL and talks to with messages ([its protocol](https://github.com/Muon-3D/muon3d-slicer-engine/blob/main/docs/PROTOCOL.md): `hello`, `load`, `slice`, `profiles.resolve`, …). Spaghetti uses its single-threaded build (`engine-st`), which runs on any page; the multithreaded one would need cross-origin isolation headers on the whole app.
 
 | | |
 | --- | --- |
-| Pin | `scripts/slicer/pin.env`: the engine's tag and commit, OrcaSlicer's commit (2.5.0-dev), the hashes our build must reproduce |
-| Our change | `scripts/slicer/host.patch`: the host checked `instanceof SharedArrayBuffer`, which throws on a page that isn't cross-origin isolated |
+| Pin | `scripts/slicer/pin.env`: the engine's tag and commit, OrcaSlicer's release tag and commit (v2.5.1), the hashes our build must reproduce |
+| Our changes | `scripts/slicer/engine.patch`: what the engine's build needs to build against OrcaSlicer's 2.5.1 (CGAL 6.2.1, expat 2.10.0, a few more stand-ins in its TBB and OCCT shims; [proposals/orcaslicer-2-5-1.md](proposals/orcaslicer-2-5-1.md)); `scripts/slicer/host.patch`: the host checked `instanceof SharedArrayBuffer`, which throws on a page that isn't cross-origin isolated |
 | Presets | `presets.json` in the release: the X2D's machine for each nozzle size (0.2, 0.4, 0.6 and 0.8 mm), Bambu's processes for each, and a filament per material and nozzle (the 0.2 mm has fewer: no carbon fibre, TPU, PA, PP or PCTG), plus Bambu's own PLA Matte, Silk and Silk+ for Bambu's spools (decision 0060; since release 3), flattened by Orca's own loader in the engine (`scripts/slicer/resolve-presets.mjs`; since release 2) |
-| Size | `engine-st.wasm` 11.1 MB (3.4 MB gzip, 2.3 MB brotli); the host and loader 0.2 MB |
+| Size | `engine-st.wasm` 12.0 MB (3.7 MB gzip, 2.6 MB brotli); the host and loader 0.2 MB |
 | Licence | AGPL-3.0, like OrcaSlicer: the release carries the Corresponding Source and the engine is served with its LICENSE, NOTICE and SOURCE |
 
 ## Building and releasing it
@@ -19,7 +19,7 @@ The [Muon3D Slicer Engine](https://github.com/Muon-3D/muon3d-slicer-engine): Orc
 The engine is built by its own workflow, never by the normal CI. To release one:
 
 1. Change what needs changing (`pin.env`, `host.patch`, the preset list in `resolve-presets.mjs`) and merge it.
-2. Tag the commit `slicer-vN` (the next number) and push the tag. `.github/workflows/slicer-release.yml` runs `scripts/slicer/build.sh` (Emscripten 6.0.10, the dependencies and the engine from scratch, about 20 minutes on GitHub's runner), checks that `engine-st.wasm` is byte for byte the engine's own release of the same commits, slices a cube with it for each nozzle size (`scripts/slicer/smoke.mjs`), and publishes the release: `spaghetti-slicer-N.zip`, the engine's, OrcaSlicer's and the third-party libraries' source as the engine's release has them (checked against `pin.env`), `host.patch`, our build scripts, and `SHA256SUMS`.
+2. Tag the commit `slicer-vN` (the next number) and push the tag. `.github/workflows/slicer-release.yml` runs `scripts/slicer/build.sh` (Emscripten 6.0.10, the dependencies and the engine from scratch, about 20 minutes on GitHub's runner), checks that `engine-st.wasm` is byte for byte the build pinned in `pin.env`, slices a cube with it for each nozzle size (`scripts/slicer/smoke.mjs`), and publishes the release: `spaghetti-slicer-N.zip`, the engine's, OrcaSlicer's and the third-party libraries' source (bundled by the build itself), `engine.patch`, `host.patch`, our build scripts, and `SHA256SUMS`.
 3. Put the zip's URL and sha256 in `scripts/slicer/engine.json` (and the version: the app serves it at `/slicer/N/`) in the pull request that needs it.
 
 A pull request that changes the build (anything in `scripts/slicer/` but `engine.json`, or the workflow) builds and tests the engine without publishing it, and so does "Run workflow" on the Actions page. The same script runs on a Linux machine of your own:
@@ -33,7 +33,7 @@ It needs git, curl, python3, node, pnpm's `node_modules` (for `fflate`), bsdtar 
 
 ### Moving the pin
 
-To build a newer engine or OrcaSlicer: set the engine's new tag and commit in `pin.env`, with the Orca commit its `orca/` submodule pins and the hashes of its release (`variants.st.sha256` in its `manifest.json`, and its source assets from its `SHA256SUMS`), check that `host.patch` still applies (`git apply --check` in the engine's checkout; drop it once upstream has the fix), and release. OrcaSlicer 2.5.0 itself doesn't build in the engine yet: it moved to CGAL 6, where the engine's dependencies have 5.6.3.
+To build a newer OrcaSlicer: set its tag and commit in `pin.env` (it is a plain checkout of upstream's tag in the engine's `orca/`, not the engine's fork), build, and fix what `engine.patch` no longer covers (each release has moved a dependency or a header the engine has a stand-in for: 2.5.1 meant CGAL 6.2.1, expat 2.10.0 and a few TBB and OCCT stand-ins); the first build's hashes of `engine-st.wasm` and `engine-st.mjs` go in `pin.env` (the build prints them and stops), and CI must reproduce them. To build a newer engine: set its tag and commit, check that `host.patch` and `engine.patch` still apply (`git apply --check` in the engine's checkout; drop what upstream has fixed), and release. The Muon3D engine itself had no release on OrcaSlicer 2.5 when this was written ([the proposal](proposals/orcaslicer-2-5-1.md)).
 
 ## How the app gets it
 
