@@ -2053,8 +2053,7 @@ fn supports_without_a_gap_hold_the_object_as_orcas_do() {
         .collect();
     assert_eq!(layers, ["19.8", "20"]);
 
-    // Classic trees too, here hybrid ones (Orca: 1286.15 mm³ of support, 175.27 of interface); organic trees, which
-    // Orca makes otherwise without a gap, are still refused.
+    // Classic trees too, here hybrid ones (Orca: 1286.15 mm³ of support, 175.27 of interface).
     let trees = setup.replace("normal(auto)", "tree(auto)");
     let hybrid = setup::read(
         &trees.replace(r#""support_top_z_distance""#, r#""support_style": "tree_hybrid", "support_top_z_distance""#),
@@ -2067,7 +2066,112 @@ fn supports_without_a_gap_hold_the_object_as_orcas_do() {
         assert!((volume(role) / orca - 1.0).abs() < 1.5e-3, "hybrid {role:?}: {} mm³", volume(role));
     }
     assert_eq!(feature_directions(&String::from_utf8(out.gcode).unwrap(), "Support interface"), [45, 135]);
-    assert_eq!(setup::read(&trees).err(), Some(Error::Unsupported("supports without a gap")));
+
+    // And organic trees (Orca: 759.13 mm³ of support, 112.60 of interface): the same interface, under trees 1.2 %
+    // heavier than Orca's (1.9 % with a gap).
+    let organic = setup::read(&trees).unwrap().settings;
+    let out = slice(&[Input { name: "tee.stl", bytes: &tee }], &organic, &options).unwrap();
+    let volume = |role: Role| out.stats.features[Role::ALL.iter().position(|&r| r == role).unwrap()].volume;
+    assert!(
+        (volume(Role::SupportInterface) - 112.60).abs() < 0.05,
+        "organic interface: {}",
+        volume(Role::SupportInterface)
+    );
+    assert!((volume(Role::Support) / 759.13 - 1.0).abs() < 0.015, "organic support: {}", volume(Role::Support));
+    assert_eq!(feature_directions(&String::from_utf8(out.gcode).unwrap(), "Support interface"), [45, 135]);
+}
+
+/// A closed solid of these triangles, as an ASCII STL.
+fn solid_stl(vertices: &[[f32; 3]], faces: &[[usize; 3]]) -> Vec<u8> {
+    let mut out = String::from("solid mesh\n");
+    for face in faces {
+        out.push_str(" facet normal 0 0 0\n  outer loop\n");
+        for &v in face {
+            let [x, y, z] = vertices[v];
+            out.push_str(&format!("   vertex {x} {y} {z}\n"));
+        }
+        out.push_str("  endloop\n endfacet\n");
+    }
+    out.push_str("endsolid mesh\n");
+    out.into_bytes()
+}
+
+#[test]
+fn organic_trees_without_a_gap_end_in_roofs() {
+    // A block whose side leans out 70° from upright for 6 mm over a 4 mm foot: each layer overhangs the one below by
+    // a band 0.2 mm wide, too thin for a roof of its own. Without a gap, Orca forces every tip into a roof
+    // (`force_tip_to_roof`): a circle of the tip's radius on the layer under the overhang and the next one down, the
+    // tip a layer lower still. With a gap, the tips print as base, with no interface at all.
+    let lean = 2.0 * (70f32).to_radians().tan() * 3.0;
+    let vertices = [
+        [110., 110., 0.],
+        [120., 110., 0.],
+        [120., 130., 0.],
+        [110., 130., 0.],
+        [110., 110., 4.],
+        [120., 110., 4.],
+        [120., 130., 4.],
+        [110., 130., 4.],
+        [110., 110., 10.],
+        [120. + lean, 110., 10.],
+        [120. + lean, 130., 10.],
+        [110., 130., 10.],
+    ];
+    let faces = [
+        [0, 2, 1],
+        [0, 3, 2],
+        [0, 1, 5],
+        [0, 5, 4],
+        [1, 2, 6],
+        [1, 6, 5],
+        [2, 3, 7],
+        [2, 7, 6],
+        [3, 0, 4],
+        [3, 4, 7],
+        [4, 5, 9],
+        [4, 9, 8],
+        [5, 6, 10],
+        [5, 10, 9],
+        [6, 7, 11],
+        [6, 11, 10],
+        [7, 4, 8],
+        [7, 8, 11],
+        [8, 9, 10],
+        [8, 10, 11],
+    ];
+    let stl = solid_stl(&vertices, &faces);
+    let options = Options { arrange: false, thumbnail: false, ..Options::default() };
+    let organic = r#"{"process": {"enable_support": "1", "support_type": "tree(auto)", "support_style": "tree_organic",
+        "support_interface_spacing": "0", "support_interface_pattern": "rectilinear_interlaced"GAP}}"#;
+    let run = |gap: &str| {
+        let settings = setup::read(&organic.replace("GAP", gap)).unwrap().settings;
+        slice(&[Input { name: "lean.stl", bytes: &stl }], &settings, &options).unwrap()
+    };
+    let out = run(r#", "support_top_z_distance": "0""#);
+    let volume = |role: Role| out.stats.features[Role::ALL.iter().position(|&r| r == role).unwrap()].volume;
+    // Native OrcaSlicer 2.5.0 (Nov 15): 677.46 mm³ of support and 93.31 of interface, on the 30 layers from 4 mm to
+    // 9.8 mm, each turned as ours. Ours prints as much plastic, a little less of it as interface.
+    assert!((volume(Role::Support) / 677.46 - 1.0).abs() < 0.005, "support: {}", volume(Role::Support));
+    assert!(
+        (volume(Role::SupportInterface) / 93.31 - 1.0).abs() < 0.09,
+        "interface: {}",
+        volume(Role::SupportInterface)
+    );
+    let gcode = String::from_utf8(out.gcode).unwrap();
+    let layers: Vec<&str> = gcode
+        .split("; Z_HEIGHT: ")
+        .skip(1)
+        .filter(|layer| layer.contains("; FEATURE: Support interface"))
+        .map(|layer| layer.lines().next().unwrap())
+        .collect();
+    assert_eq!(layers.len(), 30, "{layers:?}");
+    assert_eq!((layers[0], layers[29]), ("4", "9.8"));
+
+    let out = run("");
+    let volume = |role: Role| out.stats.features[Role::ALL.iter().position(|&r| r == role).unwrap()].volume;
+    // Orca: 730.93 mm³ of support, no interface.
+    assert_eq!(volume(Role::SupportInterface), 0.0);
+    assert!((volume(Role::Support) / 730.93 - 1.0).abs() < 0.015, "with a gap: {}", volume(Role::Support));
 }
 
 #[test]

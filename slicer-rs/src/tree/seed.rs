@@ -6,10 +6,13 @@
 use super::grow::{Element, State};
 use super::util::{self, MITER};
 use super::volumes::{Avoid, Volumes};
-use super::{Config, mm};
+use super::{Config, RoofKind, mm};
 use crate::base_support;
 use crate::geom::{self, Pt, Shape, Shapes};
 use std::collections::HashSet;
+
+/// nm²: the smallest roof (Orca's `minimum_roof_area`, 1 mm²).
+const MINIMUM_ROOF_AREA: f64 = 1e12;
 
 /// Where a tip may go from its point: to the plate or the model, and whether through the "safe" avoidance.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -44,12 +47,15 @@ pub struct Seeder<'a> {
     pub roof_density: f64,
     min_xy: bool,
     roof_layers: usize,
-    /// The deepest roof layer that is interface; the ones under it, base interface (`InterfacePlacer`).
-    interface_threshold: usize,
+    /// Every tip is a roof too, as far down as its roofs go (`force_tip_to_roof`): where the support meets the
+    /// object without a gap, or a tip is wider than the smallest roof.
+    force_tip_to_roof: bool,
     connect_length: f64,
     out: Seeds,
     taken: Vec<HashSet<(i64, i64)>>,
     base_circle: geom::Contour,
+    /// The base circle in nanometres, as Orca makes it (`make_circle` of 10 µm to 25 nm).
+    base_circle_nm: Vec<(i64, i64)>,
 }
 
 impl<'a> Seeder<'a> {
@@ -64,11 +70,8 @@ impl<'a> Seeder<'a> {
             roof_density,
             min_xy: c.xy_distance > c.xy_min_distance,
             roof_layers: c.support_roof_layers,
-            interface_threshold: {
-                let base = c.support_roof_base_layers;
-                let only = c.support_roof_layers.saturating_sub(base);
-                if only > 0 && base > 0 { only - 1 } else { only }
-            },
+            force_tip_to_roof: c.support_roof_layers > 0
+                && (c.zero_gap_top || (c.min_radius as f64).powi(2) * std::f64::consts::PI > MINIMUM_ROOF_AREA),
             connect_length,
             out: Seeds {
                 layers: vec![Vec::new(); n],
@@ -78,6 +81,17 @@ impl<'a> Seeder<'a> {
             },
             taken: vec![HashSet::new(); n],
             base_circle: geom::make_circle(0.01, 25e-6),
+            base_circle_nm: {
+                let (radius, error) = (10_000.0f64, 25.0f64);
+                let n = (2.0 * std::f64::consts::PI / (2.0 * libm::acos(1.0 - error / radius))).ceil() as usize;
+                let step = 2.0 * std::f64::consts::PI / n as f64;
+                (0..n)
+                    .map(|i| {
+                        let a = step * i as f64;
+                        ((libm::cos(a) * radius) as i64, (libm::sin(a) * radius) as i64)
+                    })
+                    .collect()
+            },
         }
     }
 
@@ -210,18 +224,28 @@ impl<'a> Seeder<'a> {
     /// Roofs on their layers: the first a contact layer, the next ones interface, the deepest base interface where
     /// the interface has a filament of its own (`InterfacePlacer`).
     fn add_roof(&mut self, roof: &Shapes, layer: usize, depth: usize) {
-        let target = match depth {
-            0 => &mut self.out.contacts,
-            d if d <= self.interface_threshold => &mut self.out.interfaces,
-            _ => &mut self.out.base_interfaces,
+        let target = match self.c.roof_kind(depth) {
+            RoofKind::Contact => &mut self.out.contacts,
+            RoofKind::Interface => &mut self.out.interfaces,
+            RoofKind::BaseInterface => &mut self.out.base_interfaces,
         };
         if depth == 0 || depth <= self.roof_layers {
             target[layer].extend(roof.iter().cloned());
         }
     }
 
-    /// A tip on `layer` (`add_point_as_influence_area`): the first in each 40 µm cell of the layer.
-    fn add_point(&mut self, (p, s): (Pt, Status), layer: usize, dont_move_until: usize, roof: bool, skip_oval: bool) {
+    /// A tip on `layer` (`add_point_as_influence_area`): the first in each 40 µm cell of the layer. `recovery` is
+    /// the depth of the roof it would be on its layer, which a tip forced into a roof owes for the layers it may
+    /// not move.
+    fn add_point(
+        &mut self,
+        (p, s): (Pt, Status),
+        layer: usize,
+        dont_move_until: usize,
+        recovery: usize,
+        skip_oval: bool,
+    ) {
+        let roof = recovery > 0;
         let to_plate = matches!(s, Status::ToPlate | Status::ToPlateSafe);
         let gracious = to_plate || matches!(s, Status::ToModelGracious | Status::ToModelGraciousSafe);
         let safe = matches!(s, Status::ToPlateSafe | Status::ToModelGraciousSafe);
@@ -235,7 +259,7 @@ impl<'a> Seeder<'a> {
         if !self.taken[layer].insert(hash) {
             return;
         }
-        let state = State {
+        let mut state = State {
             target_height: layer,
             target_position: p,
             next_position: p,
@@ -250,18 +274,61 @@ impl<'a> Seeder<'a> {
             skip_ovalisation: skip_oval,
             ..State::default()
         };
+        state.set_pending_roof_recovery(if self.force_tip_to_roof { dont_move_until } else { 0 }, recovery);
         let circle: Shape = vec![self.base_circle.iter().map(|q| geom::pt(q.x + p.x, q.y + p.y)).collect()];
         self.out.layers[layer].push(Element { state, parents: Vec::new(), area: vec![circle] });
     }
 
-    /// Tips along the lines (`add_points_along_lines`, without tips forced into roofs).
-    fn add_points_along_lines(&mut self, lines: Vec<Line>, layer: usize, roof_layers: usize, dont_move_until: usize) {
+    /// Tips along the lines from `layer` down (`add_points_along_lines`), under `roofs_above` layers of roof.
+    /// Forced into roofs (`roof_tips` layers of them), each tip is first a roof of its own, a circle of the tip's
+    /// radius, a layer deeper each layer down for as long as the tip has its way down from there; a tip that
+    /// hasn't starts on that layer, its roof owed.
+    fn add_points_along_lines(
+        &mut self,
+        mut lines: Vec<Line>,
+        layer: usize,
+        roof_tips: usize,
+        roofs_above: usize,
+        dont_move_until: usize,
+    ) {
+        let mut dtt = 0;
+        while dtt < roof_tips && layer > dtt {
+            let here = layer - dtt;
+            let depth = dtt + roofs_above;
+            let (keep, free) = Self::split(&lines, |p| self.holds_below(here, p));
+            lines = keep;
+            for &p in free.iter().flatten() {
+                self.add_point(p, here, roof_tips - dtt, depth, false);
+            }
+            let roofs: Shapes = lines.iter().flatten().map(|&(p, _)| self.roof_circle(p)).collect();
+            self.add_roof(&roofs, here, depth);
+            dtt += 1;
+        }
+        let depth = dtt + roofs_above;
         for line in &lines {
-            let skip = self.c.min_radius < 3 * self.c.support_line_width && line.len() > 5;
+            let skip =
+                self.c.min_radius < 3 * self.c.support_line_width && roof_tips == 0 && dtt == 0 && line.len() > 5;
             for &p in line {
-                self.add_point(p, layer, dont_move_until, roof_layers > 0, skip);
+                self.add_point(p, layer - dtt, dont_move_until.saturating_sub(dtt), depth, skip);
             }
         }
+    }
+
+    /// A roof over a tip forced into one: its base circle widened to the tip's radius, by a whole factor in
+    /// nanometres, as Orca scales it.
+    fn roof_circle(&self, p: Pt) -> Shape {
+        let factor = self.c.min_radius / 10_000;
+        vec![
+            self.base_circle_nm
+                .iter()
+                .map(|&(x, y)| {
+                    geom::pt(
+                        p.x + ((x * factor) as f64 / 100.0).round() as i32,
+                        p.y + ((y * factor) as f64 / 100.0).round() as i32,
+                    )
+                })
+                .collect(),
+        ]
     }
 
     /// The roofs and tips under one part of an overhang on `layer` (`sample_overhang_area`).
@@ -277,7 +344,7 @@ impl<'a> Seeder<'a> {
             let mut last = area.clone();
             while dtt_roof < r && layer > dtt_roof {
                 let next = util::diff(&area, &self.forbidden(layer - dtt_roof - 1));
-                if util::area(&next) < 1e12 {
+                if util::area(&next) < MINIMUM_ROOF_AREA {
                     if dtt_roof > 0 {
                         let b = dtt_roof - 1;
                         let roof_lines = self.support_lines(&last, true, layer - b, roof_distance);
@@ -348,12 +415,13 @@ impl<'a> Seeder<'a> {
             self.add_roof(&area, 0, depth);
         } else {
             let dont_move = if r > 0 { r - dtt_roof } else { 0 };
-            self.add_points_along_lines(lines, layer - dtt_roof, dtt_roof, dont_move);
+            let roof_tips = if self.force_tip_to_roof { r - dtt_roof } else { 0 };
+            self.add_points_along_lines(lines, layer - dtt_roof, roof_tips, dtt_roof, dont_move);
         }
     }
 
     /// Roofs and tips under every overhang (`generate_initial_areas`): those of object layer `l + 2` (the top gap
-    /// and a layer) on support layer `l`, in ascending order.
+    /// and a layer; `l + 1` without a gap) on support layer `l`, in ascending order.
     pub fn seed(&mut self, overhangs: &[Shapes]) {
         let c = self.c;
         let delta = c.z_distance_top_layers + 1;
