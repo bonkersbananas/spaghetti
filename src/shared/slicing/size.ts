@@ -49,6 +49,21 @@ function matrixOf(attribute: string | undefined): Matrix {
   return values.length === 12 && values.every(Number.isFinite) ? values : IDENTITY;
 }
 
+/** The object ids that plate `plate` of a `model_settings.config` puts on it, or undefined when it doesn't say. */
+export function plateObjectIds(config: string | undefined, plate: number): Set<string> | undefined {
+  if (!config) return undefined;
+  for (const block of config.match(/<plate>[\s\S]*?<\/plate>/g) ?? []) {
+    const index = /key="plater_id"\s+value="(\d+)"/.exec(block)?.[1];
+    if (Number(index) !== plate) continue;
+    const ids = [...block.matchAll(/<model_instance>[\s\S]*?<\/model_instance>/g)].flatMap((m) => {
+      const id = /key="object_id"\s+value="(\d+)"/.exec(m[0])?.[1];
+      return id ? [id] : [];
+    });
+    return ids.length ? new Set(ids) : undefined;
+  }
+  return undefined;
+}
+
 /** `a` first, then `b` (3MF's row-vector convention). */
 function after(a: Matrix, b: Matrix): Matrix {
   const out: number[] = [];
@@ -84,7 +99,7 @@ interface ModelObject {
  * (and its components'), the first `1 / copies` of them (copies are appended after the originals, in order). Null
  * when the file has no mesh.
  */
-export function sizeFromModelXml(xml: string, copies = 1): Size | null {
+export function sizeFromModelXml(xml: string, copies = 1, only?: ReadonlySet<string>): Size | null {
   const objects = new Map<string, ModelObject>();
   for (const match of xml.matchAll(/<object\b([^>]*?)(?:\/>|>([\s\S]*?)<\/object>)/g)) {
     const id = attr(match[1] ?? "", "id");
@@ -103,6 +118,7 @@ export function sizeFromModelXml(xml: string, copies = 1): Size | null {
   }
   const items = [...xml.matchAll(/<item\b[^>]*>/g)].flatMap((item) => {
     const objectid = attr(item[0], "objectid");
+    if (attr(item[0], "printable") === "0" || (only && objectid && !only.has(objectid))) return [];
     return objectid ? [{ id: objectid, matrix: matrixOf(attr(item[0], "transform")) }] : [];
   });
   if (!items.length) return null;

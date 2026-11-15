@@ -3,7 +3,14 @@ import { describe, expect, it } from "vitest";
 import { layMeshDown } from "../../../src/shared/mesh.ts";
 import { boundsOf } from "../../../src/shared/slicing/arrange.ts";
 import { packGcode3mf } from "../../../src/shared/slicing/gcode3mf.ts";
-import { readSize, sizeFromModelXml, sizeOfBoxes, sizeSpoken, sizeWords } from "../../../src/shared/slicing/size.ts";
+import {
+  plateObjectIds,
+  readSize,
+  sizeFromModelXml,
+  sizeOfBoxes,
+  sizeSpoken,
+  sizeWords,
+} from "../../../src/shared/slicing/size.ts";
 import { box } from "./meshes.ts";
 
 /** A `.gcode.3mf` of these objects (one box each) as the app packs it, and its model. */
@@ -84,6 +91,26 @@ describe("sizeFromModelXml", () => {
     const xml = modelOf([{ name: "tag", min: [100, 100, 0], max: [120, 110, 10] }]);
     expect(xml).not.toContain("G1");
     expect(sizeFromModelXml(xml)).toEqual([20, 10, 10]);
+  });
+});
+
+describe("a file of several plates", () => {
+  const vertices = (x: number) => `<vertex x="${x}" y="0" z="0"/><vertex x="${x + 10}" y="5" z="3"/>`;
+  const xml = `<model><resources>
+    <object id="1"><mesh><vertices>${vertices(0)}</vertices></mesh></object>
+    <object id="2"><mesh><vertices>${vertices(300)}</vertices></mesh></object>
+  </resources><build><item objectid="1"/><item objectid="2"/><item objectid="1" printable="0"/></build></model>`;
+  const config = `<config><plate><metadata key="plater_id" value="1"/><model_instance><metadata key="object_id" value="1"/></model_instance></plate>
+    <plate><metadata key="plater_id" value="2"/><model_instance><metadata key="object_id" value="2"/></model_instance></plate></config>`;
+
+  it("measures only the plate on show", () => {
+    expect(sizeFromModelXml(xml, 1, plateObjectIds(config, 2))).toEqual([10, 5, 3]);
+    expect(sizeFromModelXml(xml, 1, plateObjectIds(config, 1))).toEqual([10, 5, 3]);
+    expect(plateObjectIds(config, 3)).toBeUndefined();
+  });
+
+  it("skips what is not printable", () => {
+    expect(sizeFromModelXml(xml.replace('<item objectid="2"/>', ""))).toEqual([10, 5, 3]);
   });
 });
 
