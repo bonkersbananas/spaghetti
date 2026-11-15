@@ -157,8 +157,11 @@ function Search() {
   };
 
   const total = list.length;
-  // The words search reads (letters and digits, once each), for "search for just one of them" when several found nothing.
-  const typedWords = terms.slice(0, 4).map((term) => term.text);
+  // The words the closest search ran on (filler dropped, as the server read them): one tap searches for just one.
+  const typedWords = useMemo(
+    () => [...new Set((shown?.terms ?? []).map((term) => term.text))].slice(0, 6),
+    [shown?.terms],
+  );
   let index = -1;
   const row = (result: Result) => {
     index += 1;
