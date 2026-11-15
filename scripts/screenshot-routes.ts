@@ -1472,6 +1472,46 @@ export const shots: Shot[] = [
     },
   },
   { name: "tabbar", path: "/today", width: 390, selector: 'nav[aria-label="Sections"].fixed' },
+  {
+    // Long words and long lines everywhere an idea shows: in the grid and on its own page.
+    name: "ideas-long-text",
+    path: "/ideas",
+    prepare: async (page) => {
+      const headers = { Origin: new URL(page.url()).origin };
+      await page.request.patch(`/api/items/${SEED_IDS.deskTidy}`, {
+        headers,
+        data: {
+          title:
+            "Supercalifragilisticexpialidocious desk tidy-up with clips, a drawer bin and a phone stand in blue PETG",
+          note: "See https://www.example.org/models/a-very-long-address-that-has-no-spaces-in-it-at-all/and-keeps-going/and-going/model-487213-drawer-bins-final-v7 for the grid.",
+        },
+      });
+      await page.reload();
+      await page.getByRole("heading", { level: 2, name: /^Up next/ }).waitFor();
+      await page.waitForTimeout(500);
+      await page.evaluate(() => {
+        for (const animation of document.getAnimations()) animation.finish();
+      });
+    },
+  },
+  {
+    name: "idea-long-text",
+    path: `/ideas/${SEED_IDS.deskTidy}`,
+    prepare: async (page) => {
+      const headers = { Origin: new URL(page.url()).origin };
+      await page.request.patch(`/api/items/${SEED_IDS.deskTidy}`, {
+        headers,
+        data: {
+          title:
+            "Supercalifragilisticexpialidocious desk tidy-up with clips, a drawer bin and a phone stand in blue PETG",
+          note: "See https://www.example.org/models/a-very-long-address-that-has-no-spaces-in-it-at-all/and-keeps-going/and-going/model-487213-drawer-bins-final-v7 for the grid.",
+        },
+      });
+      await page.reload();
+      await page.getByRole("textbox", { name: "Title" }).waitFor();
+      await page.waitForTimeout(500);
+    },
+  },
   { name: "ideas", path: "/ideas" },
   {
     // A photo tile with a long title: two lines, then cut.
