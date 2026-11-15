@@ -2,6 +2,15 @@ import { QUICK_COLORS } from "@shared/spools";
 import { cn } from "@/lib/cn";
 import { SwatchPicker } from "./Swatch";
 
+/** Colours to try that a spool isn't usually bought in at first: the ones people ask "how would it look in…" about. */
+const TRYOUT_COLOURS: ReadonlyArray<{ name: string; hex: string }> = [
+  { name: "Neon yellow", hex: "#e4f01c" },
+  { name: "Neon green", hex: "#39e75f" },
+  { name: "Neon pink", hex: "#ff4fa3" },
+  { name: "Sky blue", hex: "#5bb5e8" },
+];
+const COLOURS = [...QUICK_COLORS, ...TRYOUT_COLOURS];
+
 /**
  * A small palette of common filament colours and one of your own, for trying a model in a colour that isn't in the
  * Pantry. A tap picks; the colour that is picked wears a ring. Nothing here is a spool: the caller prints it as a
@@ -20,10 +29,10 @@ export function StandInPalette({
   label?: string;
   className?: string;
 }) {
-  const common = QUICK_COLORS.some((color) => color.hex === value);
+  const common = COLOURS.some((color) => color.hex === value);
   return (
     <div className={cn("flex flex-wrap items-center gap-2", className)} role="radiogroup" aria-label={label}>
-      {QUICK_COLORS.map((color) => {
+      {COLOURS.map((color) => {
         const selected = value === color.hex;
         return (
           // biome-ignore lint/a11y/useSemanticElements: a swatch, not a form radio.
