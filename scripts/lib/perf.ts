@@ -33,6 +33,10 @@ interface Probe {
   watch: (check: () => boolean) => Promise<number>;
   ready: number;
   firstScreen: number;
+  /** Clicks and key presses, each with the time until the page next painted (a frame, then a task after it). */
+  paints: Array<{ type: string; at: number; delay: number }>;
+  /** Tasks over 50 ms on the main thread. */
+  longTasks: Array<{ start: number; duration: number }>;
 }
 
 declare global {
@@ -51,6 +55,8 @@ export async function installProbe(context: BrowserContext, ready?: string) {
       events: [],
       ready: -1,
       firstScreen: -1,
+      paints: [],
+      longTasks: [],
       watch: (check) =>
         new Promise((resolve) => {
           const mark = performance.now();
@@ -66,6 +72,24 @@ export async function installProbe(context: BrowserContext, ready?: string) {
     for (const type of ["pointerdown", "keydown"]) {
       addEventListener(type, (event) => (probe.t0 = event.timeStamp), true);
     }
+    for (const type of ["click", "keydown"]) {
+      addEventListener(
+        type,
+        (event) => {
+          const at = event.timeStamp;
+          const channel = new MessageChannel();
+          channel.port1.onmessage = () => probe.paints.push({ type, at, delay: performance.now() - at });
+          requestAnimationFrame(() => channel.port2.postMessage(0));
+        },
+        true,
+      );
+    }
+    try {
+      new PerformanceObserver((list) => {
+        for (const entry of list.getEntries())
+          probe.longTasks.push({ start: entry.startTime, duration: entry.duration });
+      }).observe({ type: "longtask", buffered: true });
+    } catch {}
     new PerformanceObserver((list) => {
       for (const entry of list.getEntries()) {
         probe.events.push({ name: entry.name, start: entry.startTime, duration: entry.duration });
@@ -88,6 +112,11 @@ export interface TapResult {
   inp: number;
   /** From the finger going down to the result on screen (the next frame after `done` is true), ms; -1 if it never showed. */
   shown: number;
+  /** From the click or key press to the next paint, ms (a frame and a task after it). */
+  paint: number;
+  /** The main thread's tasks over 50 ms from the finger going down to 250 ms after the result: how many, and their total ms. */
+  longTasks: number;
+  longMs: number;
 }
 
 /**
@@ -97,6 +126,8 @@ export interface TapResult {
 export async function tapLatency(page: Page, act: () => Promise<unknown>, done: string): Promise<TapResult> {
   await page.evaluate(() => {
     window.__perf.events = [];
+    window.__perf.paints = [];
+    window.__perf.longTasks = [];
   });
   // The watch must be running before the tap or key press: its `mark` is taken when the page runs this, and a key
   // event stamped earlier (the page's main thread is slowed, so it can run this a moment after the press has been
@@ -110,7 +141,18 @@ export async function tapLatency(page: Page, act: () => Promise<unknown>, done: 
   await page.waitForTimeout(250);
   const events = await page.evaluate(() => window.__perf.events);
   const inp = events.reduce((max, event) => Math.max(max, event.duration), 0);
-  return { inp, shown: time };
+  const { paints, longTasks } = await page.evaluate(() => ({
+    paints: window.__perf.paints,
+    longTasks: window.__perf.longTasks,
+  }));
+  const paint = paints.reduce((max, p) => Math.max(max, p.delay), 0);
+  return {
+    inp,
+    shown: time,
+    paint,
+    longTasks: longTasks.length,
+    longMs: longTasks.reduce((sum, t) => sum + t.duration, 0),
+  };
 }
 
 export const median = (numbers: number[]) => {

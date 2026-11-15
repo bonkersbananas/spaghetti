@@ -25,6 +25,7 @@
     "screenshots:compare": "node scripts/screenshots-compare.ts",
     "landing:shots": "node scripts/landing-shots.ts",
     "perf": "node scripts/perf.ts",
+    "tap-table": "node scripts/tap-table.ts",
     "build:report": "SPAGHETTI_BUNDLE_REPORT=1 vite build",
     "new": "node scripts/new.ts",
     "icons": "node scripts/icons.ts",
