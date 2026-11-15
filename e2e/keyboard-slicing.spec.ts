@@ -64,3 +64,28 @@ test("the slicing panel works from the keyboard", async ({ page, isMobile }) => 
   await expect(settings).toBeHidden();
   await expect(open).toBeFocused();
 });
+
+test("S opens nothing on an idea with no model to slice, and the ? list says it needs one", async ({
+  page,
+  isMobile,
+}) => {
+  test.skip(isMobile, "a desktop keyboard");
+  await signIn(page);
+  const id = crypto.randomUUID();
+  await page.request.post("/api/items", {
+    headers: { Origin: new URL(page.url()).origin },
+    data: { id, title: "No model yet", note: "" },
+  });
+  await page.goto(`/ideas/${id}`);
+  await expect(page.locator("main")).toBeVisible();
+  await page.locator("main").evaluate((main) => {
+    main.tabIndex = -1;
+    main.focus();
+  });
+  await page.keyboard.press("s");
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await page.keyboard.press("?");
+  await expect(page.getByRole("dialog", { name: "Keyboard shortcuts" })).toContainText(
+    "How to slice the model, if it has one",
+  );
+});
