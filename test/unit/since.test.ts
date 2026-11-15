@@ -76,6 +76,19 @@ describe("catchUp", () => {
     expect(result?.sentence).toBe("Sam printed 1 (1 spaghetti).");
   });
 
+  it("still makes a sentence when they only started prints", () => {
+    const hook = {
+      ...item("h", "Hook", "building"),
+      attempts: [{ id: "h1", outcome: null, createdBy: "sam", finishedBy: null }],
+    } as unknown as Item;
+    const result = catchUp([entry("attempt", "h", at(14), "sam", "h1")], new Map([["h", hook]]), {
+      me: "me",
+      from: at(10),
+      name: "Sam",
+    });
+    expect(result?.sentence).toBe("Sam started 1 print.");
+  });
+
   it("is nothing when they did nothing", () => {
     expect(catchUp(entries, items, { me: "me", from: at(15), name: "Sam" })).toBeNull();
   });

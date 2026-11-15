@@ -96,8 +96,10 @@ export function catchUp(
     tally.failed && `${tally.failed} spaghetti`,
   ].filter(Boolean);
   const printed = prints ? `printed ${prints} (${breakdown.join(", ")})` : "";
+  // Prints still on the bed are only named when there is nothing else to say about prints.
+  const started = !printed && tally.printing ? `started ${count(tally.printing, "print")}` : "";
   const captured = tally.ideas ? `captured ${count(tally.ideas, "idea")}` : "";
-  const sentence = `${name} ${[printed, captured].filter(Boolean).join(" and ")}.`;
+  const sentence = `${name} ${[printed || started, captured].filter(Boolean).join(" and ")}.`;
   const rows: SinceLine[] = [];
   for (const id of order) {
     const item = items.get(id);
