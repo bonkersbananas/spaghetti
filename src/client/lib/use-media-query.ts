@@ -1,4 +1,4 @@
-import { useEffect, useState, useSyncExternalStore } from "react";
+import { startTransition, useEffect, useState, useSyncExternalStore } from "react";
 
 export function useMediaQuery(query: string): boolean {
   return useSyncExternalStore(
@@ -42,7 +42,7 @@ export function useAfterPaint() {
     if (after) return;
     let second = 0;
     const first = requestAnimationFrame(() => {
-      second = requestAnimationFrame(() => setAfter(true));
+      second = requestAnimationFrame(() => startTransition(() => setAfter(true)));
     });
     return () => {
       cancelAnimationFrame(first);
