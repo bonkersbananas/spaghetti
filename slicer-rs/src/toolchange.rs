@@ -41,6 +41,17 @@ pub enum Step {
     EndLabels,
     /// Filament `filament` from here on, with `prior` mm of it already pulled back (from its last change).
     Use { filament: usize, prior: f64 },
+    /// Without a tower: pull the filament back to `length` mm in all, as Orca's writer does (only what it isn't
+    /// pulled back by yet; wiping along the last path when it isn't pulled back at all).
+    RetractTo { length: f64 },
+    /// Without a tower: lift by the z-hop from where the nozzle is (Orca's eager lift before its change G-code), in a
+    /// spiral where Orca knows where the nozzle is, else straight up.
+    LiftAgain,
+    /// Without a tower: filament `filament` from here on, pulled back by `pulled_back` mm since it was left.
+    Switch { filament: usize, pulled_back: f64 },
+    /// Orca's writer no longer knows where the nozzle is (after its own change G-code): the travel to the next path
+    /// goes over, then down to the layer.
+    Lost,
 }
 
 /// G-code a visit writes as it is, and what it costs.
@@ -61,6 +72,13 @@ pub struct Text {
     pub volume: f64,
     /// mm travelled.
     pub travel: f64,
+    /// Custom G-code Orca's writer writes between its own moves (a change without a tower), which its cooling reads
+    /// through: an `F` it moves at already is left out, and its writer still knows the feature, width, height and
+    /// acceleration it last wrote. Else (the tower's G-code) the writer writes them all again after it.
+    pub plain: bool,
+    /// Seconds its moves take as Orca's cooling reckons a layer's time (length over speed), for a plain text: before
+    /// its tool change (`T…`), with the old filament, and after it, with the new one.
+    pub cooling: [f64; 2],
 }
 
 /// A visit to the prime tower between a layer's paths.
@@ -130,6 +148,21 @@ pub struct Colours {
     /// Each G-code layer, whether some of its support takes a flush (Orca's `is_anything_overridden`): then each
     /// filament prints what it flushes into first.
     flushing: Vec<bool>,
+    /// Whether a prime tower prints: without one each change happens where the nozzle is (`change_steps`).
+    pub towered: bool,
+    /// Without a tower, what each change finds, in the order of `flushes`.
+    untowered: Vec<Untowered>,
+    /// The way to the filament cutter the printer's change G-code may take (`get_path_of_change_filament`).
+    change_path: [[f64; 2]; 3],
+}
+
+/// What a change without a tower finds (`Colours::untowered`).
+#[derive(Clone, Copy, Debug, Default)]
+struct Untowered {
+    /// Whether the timelapse photo comes just before it, retracting and lifting the old filament.
+    photo: bool,
+    /// mm the new filament is pulled back by already.
+    prior: f64,
 }
 
 /// An object's support layer printed on a G-code layer, as `prepare` needs to know it.
@@ -378,7 +411,10 @@ impl Colours {
         for g in (0..layers.saturating_sub(1)).rev() {
             partitions[g] = partitions[g].max(partitions[g + 1]);
         }
-        let has_tower: Vec<bool> = partitions.iter().map(|&p| p > 0).collect();
+        // Without a prime tower (`enable_prime_tower` off on a plate in several filaments) Orca changes filament where
+        // the nozzle is (`GCode::set_extruder`).
+        let towered = !(settings.used_filaments > 1 && !settings.enable_prime_tower);
+        let has_tower: Vec<bool> = partitions.iter().map(|&p| towered && p > 0).collect();
 
         let p0 = &settings.profile;
         let mut params = tower_params(settings, &per_filament, &extruder_of);
@@ -412,6 +448,32 @@ impl Colours {
             changes_before[g] = changes;
             for &f in order {
                 first_use[f].get_or_insert(g);
+            }
+            if !towered {
+                // The printer flushes what the change into the new filament's nozzle takes, less what it pushes through
+                // grabbing the filament (`grab_length`), all in single precision as Orca's writer has it: nothing into a
+                // nozzle that holds no filament yet, nor into one that holds it already.
+                for &f in order {
+                    if f == current {
+                        continue;
+                    }
+                    let e = extruder_of[f];
+                    let pushed_out = in_nozzle[e].filter(|&prev| prev != f);
+                    let volume = pushed_out
+                        .map_or(0.0f32, |prev| (f64::from(flush.raw(e, prev, f) as f32) * flush.multiplier(e)) as f32);
+                    in_nozzle[e] = Some(f);
+                    let grab = (list_f(p0, "grab_length", e) * 2.4) as f32;
+                    let purge = f64::from((volume - grab).max(0.0));
+                    let out = pushed_out.map_or(0.0, |_| purge.min(filaments::nozzle_volume(p0, e)));
+                    if let Some(prev) = pushed_out {
+                        flushed[prev] += out;
+                    }
+                    flushed[f] += purge - out;
+                    flushes.push((g, current, f, purge));
+                    changes += 1;
+                    current = f;
+                }
+                continue;
             }
             if !has_tower[g] {
                 // Above the tower each layer still changes filament where it must (none do, by the tower's rule).
@@ -536,10 +598,44 @@ impl Colours {
                 most_used_extruder = e;
             }
         }
+        // Without a tower, what each change finds: whether the timelapse photo comes just before it (at the layer's
+        // first change from a filament on the camera's extruder, as `gcode.rs` takes it), and mm the new filament is
+        // pulled back by from when it was left: its tool change retraction, or its own retraction where that is longer
+        // and the photo's came first; nothing for one not printed yet. A printer whose nozzles each take several
+        // filaments (`single_extruder_multi_material`) keeps one retraction for each nozzle, whichever filament is in
+        // it (Orca's shared extruders): a change into the nozzle the old filament leaves finds what it left.
+        let mut untowered = Vec::new();
+        if !towered {
+            let shared = p0.bool("single_extruder_multi_material");
+            let slot = |f: usize| if shared { extruder_of[f] } else { f };
+            let mut left = vec![0.0f64; n.max(k)];
+            for (g, order) in orders.iter().enumerate() {
+                let mut current = starts[g];
+                let mut photo_pending = true;
+                for &f in order {
+                    if f == current {
+                        continue;
+                    }
+                    let photo = photo_pending && extruder_of[current] == most_used_extruder;
+                    photo_pending &= !photo;
+                    let so = &per_filament[current];
+                    let toolchange = list_f(&so.profile, "retract_length_toolchange", 0);
+                    left[slot(current)] = if photo { toolchange.max(so.retract_length) } else { toolchange };
+                    untowered.push(Untowered { photo, prior: left[slot(f)] });
+                    current = f;
+                }
+            }
+        }
         let origin = tower.position() + tower.rib_offset();
         let physical: Vec<i64> = p0.list("physical_extruder_map").iter().filter_map(|v| v.parse().ok()).collect();
-        let tower_size = [tower.width() as f64, tower.depth() as f64, tower.brim_width_printed() as f64, height as f64];
-        let first_layer_corners = {
+        let tower_size = if towered {
+            [tower.width() as f64, tower.depth() as f64, tower.brim_width_printed() as f64, height as f64]
+        } else {
+            [0.0; 4]
+        };
+        let first_layer_corners = if !towered {
+            Vec::new()
+        } else {
             let (b, rib) = (tower.bbx().map(f64::from), tower.rib_offset());
             let (w, d) = (b[2] - b[0], b[3] - b[1]);
             let p0 = [b[0] + rib.x as f64, b[1] + rib.y as f64];
@@ -580,6 +676,9 @@ impl Colours {
             extruders: k,
             support_passes,
             flushing,
+            towered,
+            untowered,
+            change_path: change_path(p0, plate.object_boxes),
         };
         match refusal {
             Some(what) => Err(what),
@@ -641,6 +740,21 @@ impl Colours {
                     out.support_islands.push((o, isl));
                 }
             }
+        }
+        if !self.towered {
+            // A change wherever the layer's next filament starts.
+            let mut current = self.starts[g];
+            let mut count = self.changes_before[g];
+            for &(f, at) in &runs {
+                if f == current {
+                    continue;
+                }
+                count += 1;
+                let steps = self.change_steps(g, &out, at, current, f, count, frame);
+                out.visits.push(Visit { at, from: current, to: f, steps });
+                current = f;
+            }
+            return out;
         }
         let pieces = &self.pieces[g];
         if pieces.is_empty() {
@@ -810,6 +924,98 @@ impl Colours {
         };
         steps.push(Step::Text(Box::new(timed(tail, [after_plate[0], after_plate[1], z], to, sn))));
         steps.push(Step::Retract { length: None, wipe: Some(self.wipe(&piece.wipe_path)), lift: true });
+        steps
+    }
+
+    /// The steps of a change from filament `from` to `to` on layer `g` without a tower, before the plan's path `at`,
+    /// the print's `count`th, as Orca's `GCode::set_extruder` makes it where the nozzle is: the old filament pulled
+    /// back by its tool change retraction (wiping, unless the timelapse photo just did), its end G-code, a lift by the
+    /// z-hop, the printer's change G-code, the new filament's temperature (a printer with one nozzle for several
+    /// filaments, as Orca sets it there without a tower) and its start G-code; after them Orca's writer doesn't know
+    /// where the nozzle is, which the travel to the next path minds.
+    #[allow(clippy::too_many_arguments)]
+    fn change_steps(
+        &self,
+        g: usize,
+        plan: &crate::plan::LayerPlan,
+        at: usize,
+        from: usize,
+        to: usize,
+        count: usize,
+        frame: &Frame,
+    ) -> Vec<Step> {
+        let mut steps = Vec::new();
+        let z = plan.z;
+        let (so, sn) = (&self.settings[from], &self.settings[to]);
+        let here = self.untowered.get(count - 1).copied().unwrap_or_default();
+        let purge = self.flushes.get(count - 1).map_or(0.0, |f| f.3);
+        steps.push(Step::RetractTo { length: list_f(&so.profile, "retract_length_toolchange", 0) });
+        // Where the nozzle is (the photo lifted it), as near as the plan knows: the end of the last path.
+        let end = at.checked_sub(1).and_then(|k| plan.paths.get(k)).and_then(|p| p.points.last());
+        let xy = end.map_or([0.0, 0.0], |q| [crate::geom::unsc(q.x), crate::geom::unsc(q.y)]);
+        let nozzle_z = z + if here.photo { so.z_hop } else { 0.0 };
+        let mut own = Vars::default();
+        own.int("layer_num", g as i64)
+            .float("layer_z", nozzle_z)
+            .float("max_layer_z", z)
+            .int("filament_extruder_id", self.extruder_of[from] as i64);
+        let end_text = with_eol(frame.process(so.profile.text("filament_end_gcode"), &own));
+        steps.push(Step::Text(Box::new(plain(timed(&end_text, [xy[0], xy[1], nozzle_z], from, so)))));
+        steps.push(Step::LiftAgain);
+        let lifted = nozzle_z + so.z_hop;
+        let mut vars = self.change_vars(g, z, from, to, count, xy, purge, false, frame);
+        let area = f64::from((std::f64::consts::PI / 4.0 * (sn.filament_diameter * sn.filament_diameter)) as f32);
+        let length = f64::from(purge as f32 / area as f32);
+        vars.float("x_after_toolchange", xy[0])
+            .float("y_after_toolchange", xy[1])
+            .float("z_after_toolchange", nozzle_z)
+            .float("first_flush_volume", length / 2.0)
+            .float("second_flush_volume", length / 2.0)
+            .float("flush_length", length)
+            .bool("wipe_avoid_perimeter", false)
+            .float("wipe_avoid_pos_x", 110.0)
+            .floats("filament_cooling_before_tower", &vec![0.0; self.settings.len()]);
+        for key in ["wipe_tower_wait_pos_x", "wipe_tower_wait_pos_y", "wipe_tower_wait_pos_valid"] {
+            vars.0.remove(key);
+        }
+        for (i, p) in self.change_path.iter().enumerate() {
+            vars.float(&format!("travel_point_{}_x", i + 1), f64::from(p[0] as f32))
+                .float(&format!("travel_point_{}_y", i + 1), f64::from(p[1] as f32));
+        }
+        let mut change = with_eol(frame.process(sn.profile.text("change_filament_gcode"), &vars));
+        change += ";_FORCE_RESUME_FAN_SPEED\n";
+        if sn.profile.bool("single_extruder_multi_material") {
+            let temp = if g == 0 { sn.first_layer_nozzle_temperature } else { sn.nozzle_temperature };
+            change += &format!("M104 S{} ; set nozzle temperature\n", temp as i64);
+        }
+        // The printer's time for the change itself, as at the tower.
+        let mut tool_secs = 0.0;
+        let (eo, en) = (self.extruder_of[from], self.extruder_of[to]);
+        if eo != en {
+            tool_secs += so.profile.float("machine_tool_change_time");
+        }
+        let held = self.in_nozzle_before(g, en, from, to);
+        if held != Some(to) {
+            if held.is_some() {
+                tool_secs += so.profile.float("machine_unload_filament_time");
+            }
+            tool_secs += so.profile.float("machine_load_filament_time");
+        }
+        let last = self.last_position(&change, [xy[0], xy[1], lifted]);
+        let mut t = plain(timed(&change, last.1, to, sn));
+        t.cooling = crate::gcode::cooling_time(&change, last.1, so.travel_speed);
+        t.secs += tool_secs;
+        t.end = Some(last.0);
+        steps.push(Step::Text(Box::new(t)));
+        steps.push(Step::Switch { filament: to, pulled_back: here.prior });
+        let mut own = Vars::default();
+        own.int("layer_num", g as i64)
+            .float("layer_z", last.0[2])
+            .float("max_layer_z", z)
+            .int("filament_extruder_id", to as i64);
+        let start_text = with_eol(frame.process(sn.profile.text("filament_start_gcode"), &own));
+        steps.push(Step::Text(Box::new(plain(timed(&start_text, last.0, to, sn)))));
+        steps.push(Step::Lost);
         steps
     }
 
@@ -1287,6 +1493,84 @@ impl Colours {
     }
 }
 
+/// The way to the filament cutter Orca hands the change G-code (`get_path_of_change_filament`), from the printer's
+/// `start_end_points` and its cutter's corner (`bed_exclude_area`): over to the nearest gap between the objects' x
+/// extents (2 mm out) at the end point's x or beyond, and back; (54, 0), (54, 0), (54, 245) when the printer gives
+/// neither (as the X2D, which has no excluded area).
+fn change_path(p: &crate::profile::Profile, boxes: &[[f64; 4]]) -> [[f64; 2]; 3] {
+    let fallback = [[54.0, 0.0], [54.0, 0.0], [54.0, 245.0]];
+    let points = |key: &str| -> Vec<[f64; 2]> {
+        p.list(key)
+            .iter()
+            .filter_map(|v| {
+                let (x, y) = v.split_once('x')?;
+                Some([x.trim().parse().ok()?, y.trim().parse().ok()?])
+            })
+            .collect()
+    };
+    let (ends, area) = (points("start_end_points"), points("bed_exclude_area"));
+    if ends.len() != 2 || area.len() != 4 {
+        return fallback;
+    }
+    let (start_x, end_x, end_y) = (ends[0][0], ends[1][0], ends[1][1]);
+    let cutter_y = area[2][1] + 2.0;
+    let mut from_left = true;
+    let mut intervals: Vec<(f64, f64)> = Vec::new();
+    for b in boxes {
+        if b[0] < start_x && b[1] < cutter_y {
+            from_left = false;
+        }
+        let scope = (b[0] - 2.0, b[2] + 2.0);
+        let mut merged: Option<(f64, f64)> = None;
+        let mut kept = Vec::new();
+        for &i in &intervals {
+            if i.1 >= scope.0 && i.0 <= scope.1 {
+                let m = merged.unwrap_or(scope);
+                merged = Some((i.0.min(m.0), i.1.max(m.1)));
+            } else {
+                kept.push(i);
+            }
+        }
+        match merged {
+            Some(m) => {
+                kept.push(m);
+                intervals = kept;
+            }
+            None => intervals.push(scope),
+        }
+    }
+    intervals.sort_by(|a, b| a.0.total_cmp(&b.0));
+    let mut free = Vec::new();
+    let mut at = 0.0;
+    for i in &intervals {
+        if i.0 > at {
+            free.push((at, i.0));
+        }
+        at = i.1;
+    }
+    free.push((at, 255.0));
+    let mut path = 255.0f64;
+    for f in free {
+        if f.0 > end_x {
+            let distance = f.0 - end_x;
+            path = if (end_x - path).abs() < distance { path } else { f.0 };
+            break;
+        } else if f.1 >= end_x {
+            path = end_x;
+            break;
+        } else if !from_left && f.1 < start_x {
+            continue;
+        } else {
+            path = f.1;
+        }
+    }
+    if path < start_x {
+        [[start_x, cutter_y], [path, cutter_y], [path, end_y]]
+    } else {
+        [[path, 0.0], [path, 0.0], [path, end_y]]
+    }
+}
+
 fn segment_cross(a: [f64; 2], b: [f64; 2], c: [f64; 2], d: [f64; 2]) -> Option<[f64; 2]> {
     let r = [b[0] - a[0], b[1] - a[1]];
     let s = [d[0] - c[0], d[1] - c[1]];
@@ -1307,6 +1591,18 @@ fn with_eol(mut s: String) -> String {
     s
 }
 
+/// `t` as custom G-code between Orca's own moves (`Text::plain`): its writer doesn't take the accelerations it sets,
+/// but forgets its own when the G-code sets one (`invalidate_acceleration`), so the next move sets it again.
+fn plain(mut t: Text) -> Text {
+    t.plain = true;
+    let sets = t.text.lines().any(|line| {
+        let cmd = line.split(';').next().unwrap_or("").split_whitespace().next().unwrap_or("");
+        ["M204", "M201", "M202"].iter().any(|c| cmd.eq_ignore_ascii_case(c))
+    });
+    t.accel = sets.then_some(f64::NAN);
+    t
+}
+
 /// `text` (from `from`) timed with `s`'s machine limits, its extrusions counted to `filament`.
 fn timed(text: &str, from: [f64; 3], filament: usize, s: &Settings) -> Text {
     let t = crate::gcode::time_text(text, from, s);
@@ -1320,6 +1616,8 @@ fn timed(text: &str, from: [f64; 3], filament: usize, s: &Settings) -> Text {
         mm: t.mm,
         volume: t.mm * s.filament_area(),
         travel: t.travel,
+        plain: false,
+        cooling: [0.0; 2],
     }
 }
 

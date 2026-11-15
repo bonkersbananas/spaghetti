@@ -264,10 +264,11 @@ mod tests {
         assert_eq!(s.for_filaments(2).unsupported(), None);
         // In one filament, normal supports in step with the object's layers slice too, as a project may ask.
         assert!(read(&normal(r#", "independent_support_layer_height": "0""#)).is_ok());
-        // Without a prime tower Orca changes filament where it is; with a smooth timelapse or wrapping detection it
-        // prints a tower for one filament too.
+        // Without a prime tower Orca changes filament where the nozzle is (`toolchange.rs`), and the supports keep
+        // their own layers; with a smooth timelapse or wrapping detection it prints a tower for one filament too.
         let untowered = read(r#"{"process": {"enable_prime_tower": "0"}, "filaments": [{}, {}]}"#).unwrap().settings;
-        assert_eq!(untowered.for_filaments(2).unsupported(), Some("several filaments without a prime tower"));
+        assert_eq!(untowered.for_filaments(2).unsupported(), None);
+        assert!(!untowered.for_filaments(2).prime_tower && untowered.for_filaments(2).support.independent_layer_height);
         assert_eq!(untowered.for_filaments(1).unsupported(), None);
         assert_eq!(refused(r#"{"process": {"timelapse_type": "1"}}"#), Some(Error::Unsupported("a smooth timelapse")));
         assert_eq!(

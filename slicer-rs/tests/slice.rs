@@ -1621,6 +1621,78 @@ fn two_filaments_on_one_nozzle_flush_between_them() {
     assert!(!gcode.contains(";Multi extruder pre"));
 }
 
+/// The speeds (mm/min) a layer's extrusions slowed down to, as `G1 F…` lines below the fastest speed Orca writes.
+fn slowed_speeds(layer: &str) -> Vec<i64> {
+    let mut speeds: Vec<i64> = layer
+        .lines()
+        .filter_map(|l| l.strip_prefix("G1 F").and_then(|f| f.parse::<f64>().ok()))
+        .filter(|&f| f.fract() == 0.0 && f < 12000.0 && ![3000.0, 6300.0, 1645.0, 1672.0].contains(&f))
+        .map(|f| f as i64)
+        .collect();
+    speeds.sort_unstable();
+    speeds.dedup();
+    speeds
+}
+
+#[test]
+fn two_filaments_without_a_prime_tower_change_where_the_nozzle_is() {
+    // Orca 2.5 on the X2D without a prime tower (`enable_prime_tower` off) changes filament where the nozzle is
+    // (`GCode::set_extruder`); its G-code for this project's frame and insert as two models is what this holds to.
+    let setup = |more: &str| {
+        format!(
+            r##"{{"process": {{"enable_prime_tower": "0"{more}}}, "filaments": [{{}}, {{}}], "colours": ["#F2754E", "#4F7FC7"]}}"##
+        )
+    };
+    let sliced = |more: &str| {
+        let settings = setup::read(&setup(more)).unwrap().settings;
+        let out = slice(&[Input { name: "two-colours.3mf", bytes: TWO_COLOURS }], &settings, &Options::default());
+        let out = out.unwrap();
+        let gcode = String::from_utf8(out.gcode.clone()).unwrap();
+        (out, gcode)
+    };
+    let (out, gcode) = sliced("");
+    // No tower: every layer changes filament once, in the printer's own change G-code where the frame ended.
+    assert!(!gcode.contains("; FEATURE: Prime tower") && !gcode.contains("; CP TOOLCHANGE START"));
+    assert_eq!(out.stats.tool_changes, 20);
+    assert_eq!(gcode.matches("\n======== X2D filament_change gcode ==========\n").count(), 20);
+    // Each filament on a nozzle of its own: a change into a nozzle that holds no filament yet, or holds it already,
+    // flushes nothing, as Orca's 20 changes say.
+    assert_eq!(gcode.matches("\nM620.10 A1 F523.843 L0 ").count(), 20);
+    assert!(out.stats.filaments.iter().all(|f| f.flush == 0.0));
+    // As Orca writes it: the timelapse photo before the change from the frame's filament (on the camera's nozzle), the
+    // filament's end G-code, a lift by the z-hop again (straight up, as Orca's writer doesn't know where the nozzle is
+    // after the photo), the change, the new filament's temperature and start G-code, and the travel to the insert at
+    // the change's height, down to the layer and down once more.
+    assert!(
+        gcode.contains("; filament end gcode \n\nG1 Z1\n======== X2D filament_change gcode"),
+        "no lift after the photo"
+    );
+    let after = gcode.split("M104 S220 ; set nozzle temperature\n; filament start gcode\n").nth(1).unwrap();
+    let travel = &after[..after.find("; FEATURE").unwrap()];
+    assert!(travel.contains(" F60000\nG1 Z.2\nG1 Z.2\nG1 E.4 F1800\n"), "{travel}");
+    // Orca's estimate is 14.18 min (in one filament ours is 1.2 % short, as here).
+    let minutes = out.stats.total_time / 60.0;
+    assert!((minutes / 14.18 - 1.0).abs() < 0.015, "{minutes} min");
+
+    // On one nozzle each change flushes, as Orca's volumes for the two say (36.0457 and 52.7589 mm of filament).
+    let (one, gcode) = sliced(r#", "filament_map_mode": "Manual", "filament_map": ["1", "1"]"#);
+    assert_eq!(gcode.matches("\nM620.10 A1 F523.843 L36.0457 ").count(), 10);
+    assert_eq!(gcode.matches("\nM620.10 A1 F523.843 L52.7589 ").count(), 10);
+    // The nozzle holds one retraction for both filaments, as Orca's shared extruders do: the photo's 0.4 mm topped up
+    // to the change's 2 mm, which the new filament then pushes back.
+    assert!(gcode.contains("M625\nG1 E-1.6 F1800\n; filament end gcode \n\nG1 Z1 F60000\n"), "no top-up");
+    assert!(gcode.contains("\nG1 Z.2\nG1 Z.2\nG1 E2 F1800\n"), "no push-back from the shared nozzle");
+    // Orca's cooling slows each filament on a short layer apart, the second it comes to once more by about its other
+    // moves' time: two speeds a layer, as Orca's.
+    let layers: Vec<&str> = gcode.split("; CHANGE_LAYER\n").skip(1).collect();
+    for (i, layer) in layers.iter().enumerate().take(11).skip(3) {
+        assert_eq!(slowed_speeds(layer).len(), 2, "layer {i}: {:?}", slowed_speeds(layer));
+    }
+    // Orca's estimate is 32.12 min.
+    let minutes = one.stats.total_time / 60.0;
+    assert!((minutes / 32.12 - 1.0).abs() < 0.01, "{minutes} min");
+}
+
 /// A project of one object, "two parts": two tetrahedra 10 mm on a side, the second 20 mm right of the first (or
 /// `overlap` mm less, into it), the first part in filament 1 and the second in filament 2.
 fn two_part_object(overlap: f32) -> Vec<u8> {

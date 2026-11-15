@@ -716,7 +716,8 @@ impl Flush {
         self.volumes.get(extruder).and_then(|m| m.get(from)).and_then(|r| r.get(to)).copied().unwrap_or(0.0)
     }
 
-    fn multiplier(&self, extruder: usize) -> f64 {
+    /// Extruder `extruder`'s flush multiplier.
+    pub fn multiplier(&self, extruder: usize) -> f64 {
         self.multipliers.get(extruder).copied().unwrap_or(1.0)
     }
 
