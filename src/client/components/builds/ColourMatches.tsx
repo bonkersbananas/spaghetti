@@ -141,6 +141,9 @@ export function ColourMatches({
                 className={cn(
                   "before:bg-hairline relative before:absolute before:top-0 before:right-0 before:left-0 before:h-px",
                   wide ? "nth-[-n+2]:before:hidden" : "first:before:hidden",
+                  // An open row takes the line to itself: its spools need the room, and the row beside it
+                  // doesn't stretch to the picker's height.
+                  wide && open === choiceKey(colour) && "col-span-2",
                 )}
               >
                 <Disclosure
