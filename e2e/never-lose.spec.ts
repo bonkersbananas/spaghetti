@@ -99,7 +99,7 @@ test("a title save that fails after leaving the screen is retried, not dropped",
   let fail = true;
   await page.route(`**/api/items/${id}`, (route) => {
     if (route.request().method() !== "PATCH") return route.continue();
-    if (fail) return route.abort("connectionreset");
+    if (fail) return route.fulfill({ status: 503, contentType: "application/json", body: "{}" });
     return route.continue();
   });
   await page.getByRole("textbox", { name: "Title" }).fill("Kept");
@@ -160,7 +160,7 @@ test("words typed while the connection is down come back after the page is kille
   await page.route(`**/api/items/${id}`, (route) => {
     if (route.request().method() !== "PATCH" || !down) return route.continue();
     refused += 1;
-    return route.abort("connectionreset");
+    return route.fulfill({ status: 503, contentType: "application/json", body: "{}" });
   });
   await page.getByRole("textbox", { name: "Note" }).fill("Typed with no signal");
   await expect.poll(() => refused).toBeGreaterThan(0);
@@ -221,7 +221,7 @@ test("a comment whose send failed is back in the box after a reload", async ({ p
   await page.route(`**/api/items/${id}/comments`, (route) => {
     if (route.request().method() !== "POST") return route.continue();
     refused += 1;
-    return route.abort("connectionreset");
+    return route.fulfill({ status: 503, contentType: "application/json", body: "{}" });
   });
   const field = page.getByRole("textbox", { name: /Say something to/ });
   await field.fill("Don't lose me");

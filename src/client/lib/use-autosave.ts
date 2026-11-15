@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { SaveState } from "@/components/ui/SaveStatus";
 import { ApiError } from "./api";
-import { keepUnsent } from "./unsent";
+import { keepUnsent, unsent } from "./unsent";
 
 const RETRY_MS = [2000, 5000, 10_000, 30_000];
 
@@ -150,14 +150,19 @@ export function useLiveFields<T extends Record<string, unknown>>(
   {
     delay,
     hold = false,
+    keepAs,
   }: {
     /** How long after the last change a save goes (`useAutosave`'s default otherwise). */
     delay?: number;
     /** Keep what is typed here without saving it (a print being finished with no connection waits for its button). */
     hold?: boolean;
+    /** A name to keep the fields typed here and not yet saved under, on this device (lib/unsent.ts). */
+    keepAs?: string;
   } = {},
 ) {
-  const [value, setValue] = useState<T>(server);
+  // What an earlier visit left unsent (the page died before the save went through): back in the fields, to be saved.
+  const [left] = useState(() => (keepAs ? unsent<Partial<T>>(keepAs) : undefined));
+  const [value, setValue] = useState<T>(left ? { ...server, ...left } : server);
   const latest = useRef(value);
   latest.current = value;
   // What the server is known to have (as far as this screen has seen or sent), and what it showed last time.
@@ -181,6 +186,18 @@ export function useLiveFields<T extends Record<string, unknown>>(
     setValue((current) => ({ ...current, ...(typeof next === "function" ? next(current) : next) }));
   }, []);
 
+  // Only the fields changed here are kept, never the ones beside them (the other person may have edited those).
+  const remember = () => {
+    if (!keepAs) return;
+    const changed: Partial<T> = {};
+    for (const key of Object.keys(latest.current) as Array<keyof T>) {
+      if (!same(latest.current[key], known.current[key])) changed[key] = latest.current[key];
+    }
+    keepUnsent(keepAs, Object.keys(changed).length ? changed : undefined);
+  };
+  // biome-ignore lint/correctness/useExhaustiveDependencies: value is the trigger; the rest lives in refs.
+  useEffect(remember, [value]);
+
   const saveRef = useRef(save);
   saveRef.current = save;
   // While held, autosave keeps seeing what it saw last, so nothing is sent until the hold ends.
@@ -196,8 +213,9 @@ export function useLiveFields<T extends Record<string, unknown>>(
       if (!Object.keys(changes).length) return;
       await saveRef.current(changes);
       known.current = { ...known.current, ...changes };
+      remember();
     },
-    delay === undefined ? undefined : { delay },
+    { ...(delay === undefined ? {} : { delay }), from: hold ? held.current : server },
   );
   return { value, change, saveState };
 }

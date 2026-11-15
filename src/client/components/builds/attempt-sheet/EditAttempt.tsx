@@ -68,7 +68,7 @@ export function EditAttempt({
       const { changes: send, settingsMerge } = toChanges(changes, latestSettings.current);
       return saveAttemptChanges(queryClient, item.id, attempt.id, send, settingsMerge);
     },
-    { delay: 500, hold: readOnly === "finish" },
+    { delay: 500, hold: readOnly === "finish", keepAs: `attempt:${attempt.id}` },
   );
   const value = useMemo(() => toValue(fields), [fields]);
   const change = (next: Partial<SheetValue>) => changeFields((current) => fieldsFor(current, next));

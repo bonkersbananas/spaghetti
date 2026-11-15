@@ -135,8 +135,27 @@ export async function saveSpool(queryClient: QueryClient, id: string, changes: U
   patchSpool(queryClient, id, (current) => ({ ...current, updatedAt: spool.updatedAt }));
 }
 
+/** What a weighing sets (and the server works out from it): the only part of a spool a weighing's answer or rollback touches. */
+const weightFields = (spool: Spool) => ({
+  netGrams: spool.netGrams,
+  tareGrams: spool.tareGrams,
+  gramsLeft: spool.gramsLeft,
+  gramsApproximate: spool.gramsApproximate,
+  weighedAt: spool.weighedAt,
+  remaining: spool.remaining,
+});
+
+/** The server's answer to a weighing: its grams. Edits made meanwhile to the spool's other fields stay. */
 const replaceSpool = (queryClient: QueryClient, stored: Spool) =>
-  patchSpool(queryClient, stored.id, (current) => ({ ...stored, photo: current.photo, slot: current.slot }));
+  patchSpool(queryClient, stored.id, (current) => ({
+    ...current,
+    ...weightFields(stored),
+    updatedAt: stored.updatedAt,
+  }));
+
+/** A weighing that didn't go through (or was undone) puts back the grams it had, not the whole spool. */
+const restoreWeight = (queryClient: QueryClient, spool: Spool) =>
+  patchSpool(queryClient, spool.id, (current) => ({ ...current, ...weightFields(spool) }));
 
 /**
  * Sets what the spool held when new (and optionally the empty spool's weight). Grams left follow at
@@ -162,7 +181,7 @@ export async function setSpoolWeight(
     replaceSpool(queryClient, stored);
     void queryClient.invalidateQueries({ queryKey: ["spools", spool.id, "usage"] });
   } catch {
-    patchSpool(queryClient, spool.id, () => spool);
+    restoreWeight(queryClient, spool);
     toast.error("Couldn't save the weight", "It's back the way it was.");
   }
 }
@@ -197,14 +216,14 @@ export async function weighSpool(
     replaceSpool(queryClient, stored);
     void queryClient.invalidateQueries({ queryKey: ["spools", spool.id, "usage"] });
   } catch {
-    patchSpool(queryClient, spool.id, () => spool);
+    restoreWeight(queryClient, spool);
     toast.error("Couldn't save the weighing", "It's back the way it was.");
     return;
   }
   toast.undo(`Weighed: about ${left} g`, {
     description: [spool.colorName, spool.material].filter(Boolean).join(" "),
     onUndo: async () => {
-      patchSpool(queryClient, spool.id, () => spool);
+      restoreWeight(queryClient, spool);
       try {
         const { spool: stored } = await api<SpoolResponse>(`/spools/${spool.id}/weighings/${id}`, { method: "DELETE" });
         replaceSpool(queryClient, stored);
@@ -242,14 +261,16 @@ export async function setSpoolPhoto(queryClient: QueryClient, spoolId: string, f
 
 /** Takes a spool out of the pantry at once, with Undo. Its slot empties, and fills again with Undo. */
 export function deleteSpool(queryClient: QueryClient, spool: Spool) {
-  const before = queryClient.getQueryData<Spool[]>(spoolsQuery.queryKey);
-  const printer = queryClient.getQueryData<PrinterResponse>(printerQuery.queryKey);
   patchSpools(queryClient, (spools) => spools.filter((s) => s.id !== spool.id));
   if (spool.slot) patchSlots(queryClient, (slots) => withoutSpool(slots, spool.id));
   const deleted = api(`/spools/${spool.id}`, { method: "DELETE" }).catch((error) => {
     if (error instanceof ApiError && error.status === 404) return;
-    if (before) queryClient.setQueryData(spoolsQuery.queryKey, before);
-    if (printer) queryClient.setQueryData(printerQuery.queryKey, printer);
+    // Back where it was, without undoing what was changed to other spools meanwhile.
+    patchSpools(queryClient, (spools) => (spools.some((s) => s.id === spool.id) ? spools : [spool, ...spools]));
+    if (spool.slot) {
+      const slot = spool.slot;
+      patchSlots(queryClient, (slots) => ({ ...slots, [slot]: spool.id }));
+    }
     toast.error("Couldn't take that spool out", "It's back in the pantry.");
   });
   toast.undo("Spool taken out", {
@@ -296,23 +317,34 @@ export async function loadSlot(
   /** Settles once a spool just added is on the server. */
   after?: Promise<boolean>,
 ) {
-  const before = queryClient.getQueryData<PrinterResponse>(printerQuery.queryKey);
+  const was = queryClient.getQueryData<PrinterResponse>(printerQuery.queryKey)?.slots ?? {};
+  const wasIn = spoolId ? Object.entries(was).find(([, id]) => id === spoolId)?.[0] : undefined;
   patchSlots(queryClient, (slots) => {
     const next = spoolId ? withoutSpool(slots, spoolId) : { ...slots };
     if (spoolId) next[slot] = spoolId;
     else delete next[slot];
     return next;
   });
+  const shown = queryClient.getQueryData<PrinterResponse>(printerQuery.queryKey)?.slots;
   try {
     if (after && !(await after)) throw new Error("The spool wasn't saved.");
     const saved = await api<PrinterResponse>(`/printer/slots/${slot}`, { method: "PUT", json: { spoolId } });
-    queryClient.setQueryData(printerQuery.queryKey, saved);
+    // The answer is the whole AMS as of the server: it replaces ours only if no other slot was changed here since.
+    const now = queryClient.getQueryData<PrinterResponse>(printerQuery.queryKey);
+    const untouched = !!shown && JSON.stringify(now?.slots) === JSON.stringify(shown);
+    queryClient.setQueryData<PrinterResponse>(printerQuery.queryKey, (printer) =>
+      printer ? { ...saved, setup: printer.setup, slots: untouched ? saved.slots : printer.slots } : saved,
+    );
     patchSlots(queryClient, (slots) => slots);
   } catch {
-    if (before) {
-      queryClient.setQueryData(printerQuery.queryKey, before);
-      patchSlots(queryClient, (slots) => slots);
-    }
+    // Only this change is undone: the two slots it touched go back, whatever was done to the others meanwhile.
+    patchSlots(queryClient, (slots) => {
+      const next = { ...slots };
+      if (was[slot]) next[slot] = was[slot];
+      else delete next[slot];
+      if (spoolId && wasIn) next[wasIn] = spoolId;
+      return next;
+    });
     toast.error("Couldn't change the AMS", "It's back the way it was.");
   }
 }
@@ -338,5 +370,23 @@ export async function savePrinterSetup(queryClient: QueryClient, changes: Update
       : printer,
   );
   const saved = await api<PrinterResponse>("/printer", { method: "PUT", json: changes, keepalive: true });
-  queryClient.setQueryData<PrinterResponse>(printerQuery.queryKey, saved);
+  // The server's copy settles what this save sent, unless that part was changed again here since (a newer save is on
+  // its way, and its answer settles it): the rest of the cache stays.
+  queryClient.setQueryData<PrinterResponse>(printerQuery.queryKey, (printer) => {
+    if (!printer) return saved;
+    const sameAs = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
+    const setup = { ...printer.setup };
+    for (const key of Object.keys(changes) as Array<keyof UpdatePrinterRequest>) {
+      if (key === "nozzles") {
+        const nozzles = { ...setup.nozzles };
+        for (const nozzle of Object.keys(changes.nozzles ?? {}) as Array<"main" | "auxiliary">) {
+          if (sameAs(nozzles[nozzle], changes.nozzles?.[nozzle])) nozzles[nozzle] = saved.setup.nozzles[nozzle];
+        }
+        setup.nozzles = nozzles;
+      } else if (sameAs(setup[key as keyof typeof setup], changes[key])) {
+        (setup as Record<string, unknown>)[key] = saved.setup[key as keyof typeof setup];
+      }
+    }
+    return { ...printer, setup };
+  });
 }
