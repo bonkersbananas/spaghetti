@@ -179,7 +179,7 @@ test("a new build with a title is kept", async ({ page }) => {
   const title = page.getByRole("textbox", { name: "Title" });
   await title.fill("Spool holder");
   const id = new URL(page.url()).pathname.split("/").pop() as string;
-  await expect.poll(async () => (await getItem(page, id)).title).toBe("Spool holder");
+  await expect.poll(async () => (await getItem(page, id))?.title).toBe("Spool holder");
   await page.getByRole("link", { name: "Builds" }).first().click();
   await expect(page).toHaveURL(/\/builds$/);
   await page.waitForTimeout(500);

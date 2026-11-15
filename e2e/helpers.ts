@@ -41,6 +41,15 @@ export async function clearIdeas(page: Page) {
   for (const item of items) await page.request.delete(`/api/items/${item.id}`, { headers: { Origin: origin } });
 }
 
+/** Removes every twist through the API: a test that makes one cleans up, since the next test in the worker shares its database and the Twists list. */
+export async function clearTwists(page: Page) {
+  const origin = new URL(page.url()).origin;
+  const response = await page.request.get("/api/twists");
+  if (!response.ok()) return;
+  const { twists } = await response.json();
+  for (const twist of twists) await page.request.delete(`/api/twists/${twist.id}`, { headers: { Origin: origin } });
+}
+
 /**
  * Controls drawn smaller than 44 px that have no 44 px hit area (`touch-target`), on the visible page or in a sheet.
  * Links inside running text are left out, as WCAG does.

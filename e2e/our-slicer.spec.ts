@@ -43,6 +43,24 @@ async function ideaWithModel(page: Page, title: string, name: string, model: Uin
 const fileOf = async (page: Page, id: string) =>
   (await (await page.request.get(`/api/items/${id}`)).json()).item.files?.[0];
 
+/**
+ * The file once the server holds its slice: the card shows a slice as soon as the browser made it, and sends it a
+ * moment later, so a read straight after the card says so may still find none.
+ */
+async function sliceOf(page: Page, id: string) {
+  let file: Awaited<ReturnType<typeof fileOf>>;
+  await expect
+    .poll(
+      async () => {
+        file = await fileOf(page, id);
+        return !!file?.slice;
+      },
+      { timeout: SLICED },
+    )
+    .toBe(true);
+  return file;
+}
+
 /** The workspace's slicing defaults (the Printer page's), with these over Spaghetti's; `null` puts Spaghetti's back. */
 async function setDefaults(page: Page, change: Record<string, unknown> | null) {
   const response = await page.request.put("/api/printer", {
@@ -72,7 +90,7 @@ test("a model picked for Spaghetti's own slicer is sliced by it in the browser, 
   // OrcaSlicer's engine is the default, for now.
   await expect(files.getByText(/Sliced by Spaghetti$/)).toBeVisible({ timeout: SLICED });
   await expect.poll(async () => (await fileOf(page, id))?.slice?.status, { timeout: SLICED }).toBe("sliced");
-  const orca = (await fileOf(page, id)).slice;
+  const orca = (await sliceOf(page, id)).slice;
   expect(orca.settings.slicer).toBe("orca");
 
   // Picked under More: the model keeps it and is sliced again, by ours.
@@ -92,7 +110,7 @@ test("a model picked for Spaghetti's own slicer is sliced by it in the browser, 
     .poll(async () => (await fileOf(page, id))?.slice?.settings.slicer, { timeout: SLICED })
     .toBe("spaghetti");
   await expect(files.getByText(/Spaghetti's own slicer: /)).toBeVisible();
-  const ours = (await fileOf(page, id)).slice;
+  const ours = (await sliceOf(page, id)).slice;
   expect(ours.settings.rust).toMatch(/^\d+$/);
   expect(ours.fallback).toBeUndefined();
   expect(ours.ms).toBeGreaterThan(0);
@@ -102,7 +120,7 @@ test("a model picked for Spaghetti's own slicer is sliced by it in the browser, 
     /releases\/tag\/slicer-rs-v/,
   );
   // The same print: a 20 mm cube is 100 layers by both, and about the same time and weight.
-  const after = await fileOf(page, id);
+  const after = await sliceOf(page, id);
   expect(after.prefill.estimatedMinutes).toBeGreaterThan(0);
   expect(after.prefill.weightGrams).toBeGreaterThan(0);
   console.log(`a 20 mm cube: OrcaSlicer ${orca.ms} ms, Spaghetti's own ${ours.ms} ms`);
@@ -138,7 +156,7 @@ test("ours slices every style of supports; what it can't slice yet, OrcaSlicer's
     await setDefaults(page, { slicer: "spaghetti", supports: "where-needed", supportStyle: "tree-slim" });
     const { id, files } = await ideaWithModel(page, "Drying rack", "rack.stl", RACK());
     await expect(files.getByText("Sliced by Spaghetti's own slicer")).toBeVisible({ timeout: SLICED });
-    const slim = (await fileOf(page, id)).slice;
+    const slim = (await sliceOf(page, id)).slice;
     expect(slim.settings.slicer).toBe("spaghetti");
     expect(slim.settings.slicing.supportStyle).toBe("tree-slim");
     expect(slim.fallback).toBeUndefined();
@@ -161,7 +179,7 @@ test("ours slices every style of supports; what it can't slice yet, OrcaSlicer's
       await expect
         .poll(async () => (await fileOf(page, id))?.slice?.settings.slicing.supportStyle, { timeout: SLICED })
         .toBe(style);
-      const slice = (await fileOf(page, id)).slice;
+      const slice = (await sliceOf(page, id)).slice;
       expect(slice.settings.slicer, style).toBe("spaghetti");
       expect(slice.settings.slicing.supports).toBe("where-needed");
       expect(slice.fallback, style).toBeUndefined();
@@ -181,7 +199,7 @@ test("ours slices every style of supports; what it can't slice yet, OrcaSlicer's
     await expect(
       raft.files.getByText("Sliced by OrcaSlicer: our own slicer can't do a raft in this style of tree support yet"),
     ).toBeVisible({ timeout: SLICED });
-    const fallback = (await fileOf(page, raft.id)).slice;
+    const fallback = (await sliceOf(page, raft.id)).slice;
     expect(fallback.settings.slicer).toBe("orca");
     expect(fallback.fallback).toEqual({ why: "unsupported", what: "a raft in this style of tree support" });
     // What was asked for stays: the next slice asks ours again.
@@ -200,7 +218,7 @@ test("an object made of parts in two filaments is sliced by ours, each part in i
     // A Bambu Studio project: one coaster, its left half in filament 1 and its right half in filament 2.
     const { id, files } = await ideaWithModel(page, "Two-tone coaster", "two-tone.3mf", partsProject());
     await expect(files.getByText("Sliced by Spaghetti's own slicer")).toBeVisible({ timeout: SLICED });
-    const ours = await fileOf(page, id);
+    const ours = await sliceOf(page, id);
     expect(ours.slice.settings.slicer).toBe("spaghetti");
     expect(ours.slice.fallback).toBeUndefined();
     expect(ours.slice.settings.filaments).toHaveLength(2);
@@ -227,7 +245,7 @@ test("an object made of parts in two filaments is sliced by ours, each part in i
     await settings.getByRole("group", { name: "Slicer" }).getByRole("radio", { name: "OrcaSlicer" }).click();
     await expect.poll(async () => (await fileOf(page, id))?.slice?.settings.slicer, { timeout: SLICED }).toBe("orca");
     await page.keyboard.press("Escape");
-    const engine = await fileOf(page, id);
+    const engine = await sliceOf(page, id);
     expect(engine.slice.status).toBe("sliced");
     expect(engine.slice.settings.filaments).toHaveLength(2);
     const engineFile = await slicedFile(engine.id);
@@ -247,7 +265,7 @@ test("a 3MF that names its parts' filaments but lists none prints each part in i
   // and no project settings list them. OrcaSlicer's engine (the default) prints the red half in filament 2.
   const { id } = await ideaWithModel(page, "Two-tone coaster", "two-tone.3mf", partsProject({ settings: false }));
   await expect.poll(async () => (await fileOf(page, id))?.slice?.status, { timeout: SLICED }).toBe("sliced");
-  const file = await fileOf(page, id);
+  const file = await sliceOf(page, id);
   expect(file.slice.settings.slicer).toBe("orca");
   // Filament 2 is a stand-in of filament 1's material, in a colour of its own, until someone picks a spool for it.
   expect(file.slice.settings.filaments).toHaveLength(2);
@@ -275,7 +293,7 @@ test("an object made of parts in two filaments gets its supports from ours, each
     await setDefaults(page, { slicer: "spaghetti", supports: "where-needed" });
     const { id, files } = await ideaWithModel(page, "Two-tone T", "two-tone-t.3mf", tPartsProject());
     await expect(files.getByText("Sliced by Spaghetti's own slicer")).toBeVisible({ timeout: SLICED });
-    const ours = await fileOf(page, id);
+    const ours = await sliceOf(page, id);
     expect(ours.slice.settings.slicer).toBe("spaghetti");
     expect(ours.slice.fallback).toBeUndefined();
     expect(ours.slice.settings.filaments).toHaveLength(2);
@@ -302,7 +320,7 @@ test("a painted project is sliced by ours in its colours, and by OrcaSlicer's en
     // A Bambu Studio project: a white coaster with a red bow tie painted on its top.
     const { id, files } = await ideaWithModel(page, "Farfalle coaster", "farfalle.3mf", paintedProject());
     await expect(files.getByText("Sliced by Spaghetti's own slicer")).toBeVisible({ timeout: SLICED });
-    const ours = await fileOf(page, id);
+    const ours = await sliceOf(page, id);
     expect(ours.slice.settings.slicer).toBe("spaghetti");
     expect(ours.slice.fallback).toBeUndefined();
     expect(ours.slice.settings.filaments).toHaveLength(2);
@@ -333,7 +351,7 @@ test("a painted project is sliced by ours in its colours, and by OrcaSlicer's en
     await settings.getByRole("group", { name: "Slicer" }).getByRole("radio", { name: "OrcaSlicer" }).click();
     await expect.poll(async () => (await fileOf(page, id))?.slice?.settings.slicer, { timeout: SLICED }).toBe("orca");
     await page.keyboard.press("Escape");
-    const engine = await fileOf(page, id);
+    const engine = await sliceOf(page, id);
     expect(engine.slice.status).toBe("sliced");
     expect(engine.slice.settings.filaments).toHaveLength(2);
     const engineFile = await slicedFile(engine.id);
@@ -356,7 +374,7 @@ test("a project's supports painted on are printed by ours, and by OrcaSlicer's e
     // supports the slab where it is painted, under its two arms (since release 26).
     const { id, files } = await ideaWithModel(page, "Painted T", "painted-t.3mf", paintedSupportsProject());
     await expect(files.getByText("Sliced by Spaghetti's own slicer")).toBeVisible({ timeout: SLICED });
-    const ours = await fileOf(page, id);
+    const ours = await sliceOf(page, id);
     expect(ours.slice.settings.slicer).toBe("spaghetti");
     expect(ours.slice.fallback).toBeUndefined();
     const gcodeOf = async (fileId: string) => {
@@ -374,7 +392,7 @@ test("a project's supports painted on are printed by ours, and by OrcaSlicer's e
     await settings.getByRole("group", { name: "Slicer" }).getByRole("radio", { name: "OrcaSlicer" }).click();
     await expect.poll(async () => (await fileOf(page, id))?.slice?.settings.slicer, { timeout: SLICED }).toBe("orca");
     await page.keyboard.press("Escape");
-    const engine = await fileOf(page, id);
+    const engine = await sliceOf(page, id);
     expect(engine.slice.status).toBe("sliced");
     expect(await gcodeOf(engine.id)).toContain("; FEATURE: Support");
   } finally {
@@ -408,7 +426,7 @@ test("a plate in two colours is sliced by ours, each object in its own filament"
     // A Bambu Studio project: a white coaster in filament 1, a red one in filament 2.
     const { id, files } = await ideaWithModel(page, "Coasters", "coasters.3mf", twoColourProject());
     await expect(files.getByText("Sliced by Spaghetti's own slicer")).toBeVisible({ timeout: SLICED });
-    const file = await fileOf(page, id);
+    const file = await sliceOf(page, id);
     expect(file.slice.settings.slicer).toBe("spaghetti");
     expect(file.slice.fallback).toBeUndefined();
     expect(file.slice.settings.filaments).toHaveLength(2);
@@ -460,7 +478,7 @@ test("with a 0.2 mm as the main nozzle, ours slices with its presets, bridges wi
     await fitMain(0.2);
     const { id, files } = await ideaWithModel(page, "Beam", "beam.stl", BEAM());
     await expect(files.getByText("Sliced by Spaghetti's own slicer")).toBeVisible({ timeout: SLICED });
-    const file = await fileOf(page, id);
+    const file = await sliceOf(page, id);
     expect(file.slice.settings.slicer).toBe("spaghetti");
     expect(file.slice.fallback).toBeUndefined();
     const sliced = await page.request.get(`/api/files/${file.id}/sliced`);
@@ -493,7 +511,7 @@ test("a part that floats is sliced by ours, which warns of it as OrcaSlicer's en
     await expect
       .poll(async () => (await fileOf(page, id))?.slice?.settings.slicer, { timeout: SLICED })
       .toBe("spaghetti");
-    const floating = (await fileOf(page, id)).slice;
+    const floating = (await sliceOf(page, id)).slice;
     expect(floating.fallback).toBeUndefined();
     expect(floating.cautions).toEqual(["floating"]);
 
@@ -502,7 +520,7 @@ test("a part that floats is sliced by ours, which warns of it as OrcaSlicer's en
     await expect
       .poll(async () => (await fileOf(page, id))?.slice?.settings.slicing?.supports, { timeout: SLICED })
       .toBe("where-needed");
-    const held = (await fileOf(page, id)).slice;
+    const held = (await sliceOf(page, id)).slice;
     expect(held.settings.slicer).toBe("spaghetti");
     expect(held.fallback).toBeUndefined();
     expect(held.cautions).toBeUndefined();
@@ -524,7 +542,7 @@ test("a project's triangles, tri-hexagon or quarter cubic infill is sliced by ou
       await expect
         .poll(async () => (await fileOf(page, id))?.slice?.settings.slicer, { timeout: SLICED })
         .toBe("spaghetti");
-      const slice = (await fileOf(page, id)).slice;
+      const slice = (await sliceOf(page, id)).slice;
       expect(slice.settings.slicing.pattern, pattern).toBe(pattern);
       expect(slice.fallback, pattern).toBeUndefined();
       // Until release 11 ours printed these as straight lines, and said so: "triangles sparse infill printed as
@@ -545,7 +563,7 @@ test("a project in spiral vase mode is sliced by ours", async ({ page }) => {
     await expect
       .poll(async () => (await fileOf(page, id))?.slice?.settings.slicer, { timeout: SLICED })
       .toBe("spaghetti");
-    const slice = (await fileOf(page, id)).slice;
+    const slice = (await sliceOf(page, id)).slice;
     // Until release 12 ours refused it, and Orca's engine sliced it: { why: "unsupported", what: "spiral vase mode" }.
     expect(slice.fallback).toBeUndefined();
     expect(slice.notes ?? []).toEqual([]);
@@ -569,7 +587,7 @@ test("a project on a raft is sliced by ours, with supports off, normal ones or o
       await expect
         .poll(async () => (await fileOf(page, id))?.slice?.settings.slicer, { timeout: SLICED })
         .toBe("spaghetti");
-      const slice = (await fileOf(page, id)).slice;
+      const slice = (await sliceOf(page, id)).slice;
       // Until release 17 ours refused it, and Orca's engine sliced it: { why: "unsupported", what: "a raft" }.
       expect(slice.fallback, label).toBeUndefined();
       expect(slice.notes ?? [], label).toEqual([]);
@@ -589,7 +607,7 @@ test("a project's brim ears or brim inside holes is sliced by ours", async ({ pa
       await expect
         .poll(async () => (await fileOf(page, id))?.slice?.settings.slicer, { timeout: SLICED })
         .toBe("spaghetti");
-      const slice = (await fileOf(page, id)).slice;
+      const slice = (await sliceOf(page, id)).slice;
       // Until release 14 ours refused them, and Orca's engine sliced them: { why: "unsupported", what: "brim ears" }.
       expect(slice.fallback, brim).toBeUndefined();
       expect(slice.notes ?? [], brim).toEqual([]);
@@ -608,7 +626,7 @@ test("a project's nearest seams are sliced by ours as aligned ones, which it not
     await expect
       .poll(async () => (await fileOf(page, id))?.slice?.settings.slicer, { timeout: SLICED })
       .toBe("spaghetti");
-    const slice = (await fileOf(page, id)).slice;
+    const slice = (await sliceOf(page, id)).slice;
     expect(slice.fallback).toBeUndefined();
     // Until release 13 ours started every wall at the back, whatever the project asked for, and said nothing; now it
     // places Orca's aligned seams.
@@ -634,7 +652,7 @@ test("a generic filament slices with ours, which lifts the nozzle as Orca's Auto
     await expect
       .poll(async () => (await fileOf(page, id))?.slice?.settings.slicer, { timeout: SLICED })
       .toBe("spaghetti");
-    const slice = (await fileOf(page, id)).slice;
+    const slice = (await sliceOf(page, id)).slice;
     // The Pantry's likeliest spool is the filament: a PLA another spec left behind would come before this PETG.
     expect(slice.settings.filaments, "the Pantry holds only this test's PETG spool").toEqual([
       expect.stringMatching(/^Generic PETG @/),

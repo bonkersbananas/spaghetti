@@ -6,6 +6,7 @@ import { ApiError, api } from "./api";
 import { featuresQuery } from "./drafts";
 import { linkPreviewQuery } from "./queries";
 import { canEdit } from "./read-only";
+import { keepUnsent, unsent } from "./unsent";
 
 /** The shopping list: what's still to buy in its order, then what was bought, the latest first. */
 export const shoppingQuery = queryOptions({
@@ -169,6 +170,29 @@ export async function updateShopping(queryClient: QueryClient, id: string, chang
   keepServer(queryClient, shoppingItem, edit);
 }
 
+const TICKS = "shopping-ticks";
+
+/** Ticks that wait for their thing to be added, by id, kept on the device until sent (`undefined` forgets one). */
+function keepTick(id: string, bought: boolean | undefined) {
+  const ticks = { ...unsent<Record<string, boolean>>(TICKS) };
+  if (bought === undefined) delete ticks[id];
+  else ticks[id] = bought;
+  keepUnsent(TICKS, Object.keys(ticks).length ? ticks : undefined);
+}
+
+/**
+ * Sends the ticks a closed page left waiting for their thing's add (see setBought), once the list is fresh from the
+ * server: the add has landed by then, or the thing is gone and its tick is dropped.
+ */
+export function replayTicks(queryClient: QueryClient, items: ShoppingItem[], userId: string | null) {
+  const ticks = unsent<Record<string, boolean>>(TICKS) ?? {};
+  for (const [id, bought] of Object.entries(ticks)) {
+    const item = items.find((candidate) => candidate.id === id);
+    if (item && bought !== (item.boughtAt !== null)) void setBought(queryClient, item, bought, userId);
+    else keepTick(id, undefined);
+  }
+}
+
 /** Ticks a thing off (bought) or puts it back on the list, at once. Back on the list goes to the top. */
 export async function setBought(queryClient: QueryClient, item: ShoppingItem, bought: boolean, userId: string | null) {
   if (!canEdit() || bought === (item.boughtAt !== null)) return;
@@ -183,13 +207,20 @@ export async function setBought(queryClient: QueryClient, item: ShoppingItem, bo
   const edit = edits.get(item.id) ?? 0;
   try {
     // A thing still being added isn't on the server yet: its tick follows the add, or it would answer "not found".
-    if (adding.size > 0) await Promise.all(adding);
+    // The page may go before the add is answered (a reload): the tick is kept on this device then, and sent on the
+    // next visit to the list (replayTicks).
+    if (adding.size > 0) {
+      keepTick(item.id, bought);
+      await Promise.all(adding);
+    }
     const { shoppingItem } = await api<ShoppingItemResponse>(`/shopping-items/${item.id}`, {
       method: "PATCH",
       json: { bought },
     });
+    keepTick(item.id, undefined);
     keepServer(queryClient, shoppingItem, edit);
   } catch {
+    keepTick(item.id, undefined);
     // Only this tick is undone: other things changed meanwhile stay as they are.
     const was = before?.find((i) => i.id === item.id);
     if (was)

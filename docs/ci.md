@@ -40,4 +40,4 @@ node scripts/ci-report.ts                      # the last 30 successful runs: wa
 node scripts/ci-report.ts --runs 50 --logs 10 --since 2026-11-12T08:00Z --event pull_request
 ```
 
-It reads GitHub's record of the runs (`gh` must be signed in) and prints Markdown: per run the wall clock from the push to the last job's end, the wait for the first runner and the runner minutes; per job the time queued, setting up, building and starting the servers, testing and tearing down; and from the Playwright jobs' logs the seconds each spec took in each project.
+It reads GitHub's record of the runs (`gh` must be signed in) and prints Markdown: per run the wall clock from the push to the last job's end, the wait for the first runner and the runner minutes; per job the time queued, setting up, building and starting the servers, testing and tearing down; and from the Playwright jobs' logs the seconds each spec took in each project, and the tests that failed first and passed only on Playwright's retry (a green run hides them; each may be a real bug, so read its first error in the log before calling it flaky).

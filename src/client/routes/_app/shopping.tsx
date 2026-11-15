@@ -20,8 +20,16 @@ import { tap } from "@/lib/haptics";
 import { shortcutCaps, useHotkeys } from "@/lib/hotkeys";
 import { useScreenActions } from "@/lib/palette";
 import { peopleQuery, sessionQuery } from "@/lib/queries";
-import { useReadOnly } from "@/lib/read-only";
-import { addToShopping, moveShopping, removeShopping, reorderShopping, setBought, useShopping } from "@/lib/shopping";
+import { canEdit, useReadOnly } from "@/lib/read-only";
+import {
+  addToShopping,
+  moveShopping,
+  removeShopping,
+  reorderShopping,
+  replayTicks,
+  setBought,
+  useShopping,
+} from "@/lib/shopping";
 
 // Opened with a tap: its own chunk.
 const ShoppingSheet = lazy(() =>
@@ -39,7 +47,7 @@ function Shopping() {
   const queryClient = useQueryClient();
   const { data: me } = useQuery(sessionQuery);
   const { data: people } = useQuery(peopleQuery);
-  const { toBuy, bought, isPending, data } = useShopping();
+  const { toBuy, bought, isPending, data, isFetchedAfterMount } = useShopping();
   const readOnly = useReadOnly();
   const [openId, setOpenId] = useState<string | null>(null);
   const [allBought, setAllBought] = useState(false);
@@ -47,6 +55,11 @@ function Shopping() {
   const byId = new Map(people?.map((person) => [person.id, person]));
   // Without the session yet the tick still counts: the server knows who it is, and its copy replaces this one.
   const tick = (item: ShoppingItem, next: boolean) => void setBought(queryClient, item, next, me?.id ?? null);
+
+  // A tick a closed page left waiting for its thing's add goes out now that the list is the server's.
+  useEffect(() => {
+    if (isFetchedAfterMount && data && canEdit()) replayTicks(queryClient, data, me?.id ?? null);
+  }, [isFetchedAfterMount, data, me?.id, queryClient]);
 
   const focusAdd = () => field.current?.focus();
   useHotkeys({ shoppingAdd: readOnly ? undefined : focusAdd });

@@ -1,7 +1,7 @@
 import { expect, type Page, test } from "@playwright/test";
 import { strFromU8, unzipSync } from "fflate";
 import { boxStl } from "./fixtures/model-stl";
-import { clearIdeas, signIn } from "./helpers";
+import { clearIdeas, clearTwists, signIn } from "./helpers";
 
 // Slicing for another nozzle (decision 0056). The engine prints every slice with the main nozzle, so a slice is for
 // the size fitted there: with a 0.2 mm as the main nozzle, models slice with Bambu's 0.2 mm presets (Standard is
@@ -19,6 +19,7 @@ async function fitNozzles(page: Page, nozzles: typeof STOCK) {
 test.afterEach(async ({ page }) => {
   await fitNozzles(page, STOCK);
   await clearIdeas(page);
+  await clearTwists(page);
 });
 
 /** An idea with a 10 mm cube, sliced. Returns the files' region. */
