@@ -21,6 +21,7 @@ import { entryLink, JournalEntry } from "@/components/journal/JournalEntry";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { ArrowRightIcon } from "@/components/ui/icons";
 import { Kbd } from "@/components/ui/Kbd";
 import { Overline } from "@/components/ui/Overline";
 import { Skeleton } from "@/components/ui/Skeleton";
@@ -296,9 +297,10 @@ function Group({
         <Link
           to="/week/$monday"
           params={{ monday: weekOf(group.start) ?? "" }}
-          className="text-small text-ink-faint hover:text-ink focus-ring touch-target relative mt-1 inline-block rounded-sm py-2"
+          className="text-small text-ink-soft hover:text-ink focus-ring touch-target relative mt-1 inline-flex items-center gap-1 rounded-sm py-2 font-medium"
         >
           The week<span className="sr-only"> of {weekRangeLabel(weekOf(group.start) ?? "")}</span>
+          <ArrowRightIcon size={14} weight="bold" aria-hidden />
         </Link>
       )}
     </section>
