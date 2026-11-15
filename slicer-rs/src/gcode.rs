@@ -861,13 +861,17 @@ impl<'a> Builder<'a> {
                 }
                 Step::Travel { x, y, lift, lower } => {
                     let d = (x - self.x).hyp(y - self.y);
-                    if *lift && !self.lifted {
+                    // Lifting here (Orca's lazy lift), the travel names the lifted height, as Orca's writer does;
+                    // lifted already, it travels at that height without naming it and comes down at its end (Orca
+                    // 2.5.1's `descend_after_xy`, its #16933).
+                    let lazy = *lift && !self.lifted;
+                    if lazy {
                         self.lift(Some((*x, *y)));
                     }
                     let a = if self.first_layer { self.s.first_layer_travel_accel } else { self.s.travel_accel };
                     self.set_accel(a);
                     if d > 1e-9 || self.moves.is_empty() {
-                        self.travel(*x, *y, self.lifted && *lift);
+                        self.travel(*x, *y, lazy && self.lifted);
                     }
                     if *lower && self.z > self.layer_z + 1e-6 {
                         self.lift_to(self.layer_z);
@@ -1329,8 +1333,8 @@ fn build_layer<'a>(
                 };
                 let d = (x - b.x).hyp(y - b.y);
                 if d > 1e-6 && course.is_some() {
-                    // Spiral vase mode: a retraction lifts straight up at once; the layer's first travel to its
-                    // height comes down as it goes, any other at the lifted height.
+                    // Spiral vase mode: a retraction lifts straight up at once; the layer's first travel goes to its
+                    // height, any other at the lifted height.
                     b.set_accel(b.travel_accel(path, d));
                     let here = geom::pt(geom::sc(b.x), geom::sc(b.y));
                     if retracts(prev, path, d, here, to, &internal, s) {
@@ -1339,8 +1343,15 @@ fn build_layer<'a>(
                     }
                     relabel(&mut b);
                     if force_z {
-                        b.z = plan.z;
-                        b.travel(x, y, true);
+                        if b.lifted && plan.z < b.z - 1e-6 {
+                            // Lifted, it goes over at its height and comes down at the end (Orca 2.5.1's
+                            // `descend_after_xy`, #16933), not on the way.
+                            b.travel(x, y, false);
+                            b.lift_to(plan.z);
+                        } else {
+                            b.z = plan.z;
+                            b.travel(x, y, true);
+                        }
                         b.lifted = false;
                         force_z = false;
                     } else {
