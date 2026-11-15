@@ -3,15 +3,16 @@ import { filamentOfSpool, slicingSpools } from "@shared/slicing/pantry.ts";
 import { filamentWords } from "@shared/slicing/settings.ts";
 import type { SliceColour } from "@shared/slicing/types.ts";
 import { type SpoolLike, slotPlace } from "@shared/spools";
-import { useEffect, useRef, useState } from "react";
+import { AnimatePresence, m } from "motion/react";
+import { Fragment, useEffect, useRef, useState } from "react";
 import { type ChoiceTile, ChoiceTiles } from "@/components/ui/ChoiceTiles";
 import { Disclosure } from "@/components/ui/Disclosure";
-import { ArrowRightIcon, PaletteIcon, UndoIcon } from "@/components/ui/icons";
+import { ArrowRightIcon, ExpandIcon, PaletteIcon, UndoIcon } from "@/components/ui/icons";
 import { MetaList } from "@/components/ui/MetaList";
 import { SpoolDisc } from "@/components/ui/SpoolDisc";
 import { Swatch } from "@/components/ui/Swatch";
 import { cn } from "@/lib/cn";
-import { scrollBehavior } from "@/lib/motion";
+import { duration, ease, scrollBehavior } from "@/lib/motion";
 
 /** The Pantry's spools offered under a colour, at most: a pantry is rarely bigger. */
 const MAX_SPOOLS = 12;
@@ -112,6 +113,59 @@ export function ColourMatches({
       </span>
     </span>
   );
+  const pickerFor = (colour: SliceColour) => (
+    <Picker
+      colour={colour}
+      spool={colour.filament.spoolId ? spools.find((s) => s.id === colour.filament.spoolId) : undefined}
+      offered={offered}
+      wrapped={wrapped}
+      onPick={(id) => choose(colour, id)}
+      onBack={() => onChange(choices.filter((choice) => choice.from !== choiceKey(colour)))}
+    />
+  );
+  const rowTitle = (colour: SliceColour, spool: SpoolLike | undefined, sharing: SliceColour[]) => (
+    <span className="grid grid-cols-1 items-center gap-2.5 md:grid-cols-[1fr_auto_1fr] md:gap-2">
+      <span className="flex min-w-0 items-center gap-2.5">
+        <Swatch color={colour.hex} size="md" />
+        <span className="flex min-w-0 flex-col">
+          <span className="text-small text-ink font-semibold text-balance">
+            {[nameOf(colour), ...(colour.merged ?? [])].join(" & ")}
+          </span>
+          <MetaList className="text-caption text-ink-faint font-normal">
+            {colour.merged?.length ? `${colour.merged.length + 1} near colours` : ""}
+            {colour.slot ? (colour.material ?? "") : `${colour.share}%`}
+          </MetaList>
+        </span>
+      </span>
+      <ArrowRightIcon size={14} aria-hidden className="text-ink-faint hidden md:block" />
+      <span className="flex min-w-0 items-center gap-2.5 pl-9.5 md:pl-0">
+        <SpoolDisc
+          color={colour.filament.colorHex}
+          colors={colour.filament.colors}
+          size="sm"
+          empty={!colour.inPantry}
+        />
+        <span className="flex min-w-0 flex-col">
+          <span className="text-small text-ink font-semibold text-balance">
+            {colour.filament.colorName || colour.filament.material}
+          </span>
+          <span className="text-caption text-ink-faint font-normal">
+            {!colour.inPantry
+              ? "Not in the Pantry yet"
+              : spool
+                ? spoolDetail(spool)
+                : filamentWords({ ...colour.filament, colorHex: undefined })}
+          </span>
+          {sharing.length > 0 && (
+            <span className="text-caption text-ink-soft font-normal">
+              Same spool as {nameOf(sharing[0] as SliceColour)}
+              {sharing.length > 1 ? ` and ${sharing.length - 1} more` : ""}
+            </span>
+          )}
+        </span>
+      </span>
+    </span>
+  );
   return (
     <div ref={box}>
       <Disclosure
@@ -132,75 +186,82 @@ export function ColourMatches({
             : "Each colour in the model, and the spool that prints it."}
         </p>
         <ul className={wide ? "grid grid-cols-2 gap-x-6 gap-y-0" : "flex flex-col"}>
-          {colours.map((colour) => {
+          {colours.map((colour, index) => {
             const spool = colour.filament.spoolId ? spools.find((s) => s.id === colour.filament.spoolId) : undefined;
             const sharing = colours.filter((other) => other !== colour && keyOf(other) === keyOf(colour));
-            return (
-              <li
-                key={choiceKey(colour)}
-                className={cn(
-                  "before:bg-hairline relative before:absolute before:top-0 before:right-0 before:left-0 before:h-px",
-                  wide ? "nth-[-n+2]:before:hidden" : "first:before:hidden",
-                )}
-              >
-                <Disclosure
-                  appearance="plain"
-                  open={open === choiceKey(colour)}
-                  onOpenChange={(next) => setOpen(next ? choiceKey(colour) : null)}
-                  title={
-                    <span className="grid grid-cols-1 items-center gap-2.5 md:grid-cols-[1fr_auto_1fr] md:gap-2">
-                      <span className="flex min-w-0 items-center gap-2.5">
-                        <Swatch color={colour.hex} size="md" />
-                        <span className="flex min-w-0 flex-col">
-                          <span className="text-small text-ink font-semibold text-balance">
-                            {[nameOf(colour), ...(colour.merged ?? [])].join(" & ")}
-                          </span>
-                          <MetaList className="text-caption text-ink-faint font-normal">
-                            {colour.merged?.length ? `${colour.merged.length + 1} near colours` : ""}
-                            {colour.slot ? (colour.material ?? "") : `${colour.share}%`}
-                          </MetaList>
-                        </span>
-                      </span>
-                      <ArrowRightIcon size={14} aria-hidden className="text-ink-faint hidden md:block" />
-                      <span className="flex min-w-0 items-center gap-2.5 pl-9.5 md:pl-0">
-                        <SpoolDisc
-                          color={colour.filament.colorHex}
-                          colors={colour.filament.colors}
-                          size="sm"
-                          empty={!colour.inPantry}
-                        />
-                        <span className="flex min-w-0 flex-col">
-                          <span className="text-small text-ink font-semibold text-balance">
-                            {colour.filament.colorName || colour.filament.material}
-                          </span>
-                          <span className="text-caption text-ink-faint font-normal">
-                            {!colour.inPantry
-                              ? "Not in the Pantry yet"
-                              : spool
-                                ? spoolDetail(spool)
-                                : filamentWords({ ...colour.filament, colorHex: undefined })}
-                          </span>
-                          {sharing.length > 0 && (
-                            <span className="text-caption text-ink-soft font-normal">
-                              Same spool as {nameOf(sharing[0] as SliceColour)}
-                              {sharing.length > 1 ? ` and ${sharing.length - 1} more` : ""}
-                            </span>
-                          )}
-                        </span>
-                      </span>
-                    </span>
-                  }
+            const key = choiceKey(colour);
+            if (!wide) {
+              return (
+                <li
+                  key={key}
+                  className="before:bg-hairline relative before:absolute before:top-0 before:right-0 before:left-0 before:h-px first:before:hidden"
                 >
-                  <Picker
-                    colour={colour}
-                    spool={spool}
-                    offered={offered}
-                    wrapped={wrapped}
-                    onPick={(id) => choose(colour, id)}
-                    onBack={() => onChange(choices.filter((choice) => choice.from !== choiceKey(colour)))}
-                  />
-                </Disclosure>
-              </li>
+                  <Disclosure
+                    appearance="plain"
+                    open={open === key}
+                    onOpenChange={(next) => setOpen(next ? key : null)}
+                    title={rowTitle(colour, spool, sharing)}
+                  >
+                    {pickerFor(colour)}
+                  </Disclosure>
+                </li>
+              );
+            }
+            // Two to a line: every header keeps its own half; the open row's picker is a cell of its own, right
+            // after the line that holds the row, so nothing moves and no cell is left empty.
+            const openIndex = colours.findIndex((other) => choiceKey(other) === open);
+            const endsLine = index % 2 === 1 || index === colours.length - 1;
+            const pickerHere = endsLine && openIndex >= 0 && openIndex >> 1 === index >> 1;
+            const openColour = colours[openIndex];
+            return (
+              <Fragment key={key}>
+                <li className="before:bg-hairline relative before:absolute before:top-0 before:right-0 before:left-0 before:h-px nth-[-n+2]:before:hidden">
+                  <button
+                    type="button"
+                    aria-expanded={open === key}
+                    onClick={() => setOpen(open === key ? null : key)}
+                    className={cn(
+                      "pressable focus-ring relative my-0.5 flex min-h-14 w-full items-center gap-3 rounded-md px-3 py-2 text-left",
+                      open === key ? "bg-ink/6" : "hover:bg-ink/4",
+                    )}
+                  >
+                    <span className="min-w-0 flex-1">{rowTitle(colour, spool, sharing)}</span>
+                    <ExpandIcon
+                      size={18}
+                      weight="bold"
+                      className={cn(
+                        "text-ink-faint duration-base shrink-0 transition-transform ease-out",
+                        open === key && "rotate-180",
+                      )}
+                      aria-hidden
+                    />
+                  </button>
+                </li>
+                <AnimatePresence initial={false}>
+                  {pickerHere && openColour && (
+                    <m.li
+                      key={`${key}-picker`}
+                      initial={{ height: 0, opacity: 0 }}
+                      animate={{ height: "auto", opacity: 1 }}
+                      exit={{ height: 0, opacity: 0 }}
+                      transition={{ duration: duration.base, ease: ease.out }}
+                      className="col-span-2 overflow-hidden"
+                    >
+                      <div className="bg-ink/4 relative mt-1.5 mb-2 rounded-md p-3">
+                        {/* A notch up to the header it belongs to: left half or right half of the panel. */}
+                        <span
+                          aria-hidden
+                          className={cn(
+                            "bg-ink/4 absolute -top-1 size-2 rotate-45",
+                            openIndex % 2 === 0 ? "left-[25%]" : "left-[75%]",
+                          )}
+                        />
+                        {pickerFor(openColour)}
+                      </div>
+                    </m.li>
+                  )}
+                </AnimatePresence>
+              </Fragment>
             );
           })}
         </ul>
