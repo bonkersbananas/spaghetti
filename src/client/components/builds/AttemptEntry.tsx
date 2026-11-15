@@ -48,8 +48,6 @@ interface AttemptEntryProps {
   onCompare?: () => void;
   /** An attempt that worked and isn't a recipe yet: keep its settings under a name. */
   onSaveRecipe?: () => void;
-  /** Some entry of this build has more photos: keep their column's room free in every entry, so the lead photos match. */
-  reserveExtras?: boolean;
   /** Offline (or a pending attempt): its model can't be sliced again from here. */
   readOnly?: boolean;
 }
@@ -77,7 +75,6 @@ export const AttemptEntry = forwardRef<HTMLLIElement, AttemptEntryProps>(functio
     onFinish,
     onCompare,
     onSaveRecipe,
-    reserveExtras,
     readOnly,
   },
   ref,
@@ -91,6 +88,11 @@ export const AttemptEntry = forwardRef<HTMLLIElement, AttemptEntryProps>(functio
   const results = summarizeResults(attempt.settings);
   const filaments = attempt.settings.filaments ?? [];
   const [lead, ...rest] = photos;
+  const showsDetails =
+    filaments.length > 0 ||
+    settings.length > 0 ||
+    results.length > 0 ||
+    (!printing && attempt.settings.estimatedMinutes !== undefined && attempt.settings.actualMinutes !== undefined);
 
   return (
     <m.li
@@ -120,6 +122,8 @@ export const AttemptEntry = forwardRef<HTMLLIElement, AttemptEntryProps>(functio
           className={cn(
             "bg-cream shadow-soft hover:shadow-raised duration-fast relative rounded-lg transition-shadow",
             selected && "shadow-ring",
+            // Only for an attempt logged on this device a moment ago (it is still being sent).
+            attempt.pending && attempt.outcome && `sg-logged sg-logged-${attempt.outcome}`,
           )}
         >
           <button
@@ -177,30 +181,27 @@ export const AttemptEntry = forwardRef<HTMLLIElement, AttemptEntryProps>(functio
               </p>
             )}
 
-            {attempt.note && <p className="text-body text-ink break-words">{attempt.note}</p>}
+            {attempt.note && <p className="text-lead md:text-body text-ink break-words">{attempt.note}</p>}
 
             {lead && (
-              // On desktop the lead is the same size in every entry (4:3, at most md); any more photos
-              // are a narrow column beside it, as tall as the lead, so the pictures line up down the story.
-              <div className="flex gap-2">
+              // The lead photo fills the card, as large as a print deserves; any more are small thumbnails under
+              // it (prints are physical, and a sliver of a second photo reads as cropped, not as more).
+              <div className="flex flex-col gap-2">
                 <EntryPhoto
                   photo={lead}
                   alt={`Attempt ${attempt.number}`}
                   variant="large"
-                  className="aspect-4/3 min-w-0 flex-3 md:max-w-md md:flex-1"
+                  className="aspect-4/3 w-full md:aspect-3/2"
                 />
-                {rest.length === 0 && reserveExtras && (
-                  <div className="hidden md:block md:w-32 md:flex-none" aria-hidden />
-                )}
                 {rest.length > 0 && (
-                  <div className="flex min-w-0 flex-1 flex-col gap-2 md:w-32 md:flex-none">
-                    {rest.slice(0, 2).map((photo, index) => (
+                  <div className="flex gap-2">
+                    {rest.slice(0, 4).map((photo, index) => (
                       <EntryPhoto
                         key={photo.id}
                         photo={photo}
                         alt={`Attempt ${attempt.number}, photo ${index + 2}`}
-                        className="min-h-0 flex-1"
-                        more={index === 1 && rest.length > 2 ? rest.length - 2 : 0}
+                        className="size-16 flex-none md:size-20"
+                        more={index === 3 && rest.length > 4 ? rest.length - 4 : 0}
                       />
                     ))}
                   </div>
@@ -210,36 +211,44 @@ export const AttemptEntry = forwardRef<HTMLLIElement, AttemptEntryProps>(functio
 
             <AttemptTags attempt={attempt} />
 
-            {attempt.file && (
-              // Above the open button, so its controls work; the card's width, so the download lines up with the
-              // attempt's menu above it. Between its controls a tap still opens the attempt.
-              <div className="relative z-10 [&_a]:pointer-events-auto [&_button]:pointer-events-auto">
-                <SavedFileCard
-                  compact
-                  file={attempt.file}
-                  owner={readOnly ? undefined : { itemId: attempt.itemId, attemptId: attempt.id }}
-                  filaments={attempt.settings.filaments}
-                  printing={attempt.outcome === null && attempt.endedAt === null ? { id: attempt.id } : undefined}
-                />
+            {/* The story ends with the tags; the file, how long it took and the settings are the details under it. */}
+            {(attempt.file || showsDetails) && (
+              <div className="before:bg-hairline relative flex flex-col gap-3 pt-3.5 before:absolute before:top-0 before:right-0 before:left-0 before:h-px">
+                {attempt.file && (
+                  // Above the open button, so its controls work; the card's width, so the download lines up with the
+                  // attempt's menu above it. Between its controls a tap still opens the attempt.
+                  <div className="relative z-10 [&_a]:pointer-events-auto [&_button]:pointer-events-auto">
+                    <SavedFileCard
+                      compact
+                      file={attempt.file}
+                      owner={readOnly ? undefined : { itemId: attempt.itemId, attemptId: attempt.id }}
+                      filaments={attempt.settings.filaments}
+                      printing={attempt.outcome === null && attempt.endedAt === null ? { id: attempt.id } : undefined}
+                    />
+                  </div>
+                )}
+
+                {!printing &&
+                  attempt.settings.estimatedMinutes !== undefined &&
+                  attempt.settings.actualMinutes !== undefined && (
+                    <EstimateLine
+                      estimated={attempt.settings.estimatedMinutes}
+                      actual={attempt.settings.actualMinutes}
+                    />
+                  )}
+
+                {(filaments.length > 0 || settings.length > 0 || results.length > 0) && (
+                  <SettingsLine
+                    filaments={filaments}
+                    parts={[...settings, ...results]}
+                    name={(filament) =>
+                      [filament.colorName, filament.type].filter(Boolean).join(" ") || filamentLabel(filament)
+                    }
+                    className="text-small text-ink-faint"
+                    filamentClassName="text-ink-soft"
+                  />
+                )}
               </div>
-            )}
-
-            {!printing &&
-              attempt.settings.estimatedMinutes !== undefined &&
-              attempt.settings.actualMinutes !== undefined && (
-                <EstimateLine estimated={attempt.settings.estimatedMinutes} actual={attempt.settings.actualMinutes} />
-              )}
-
-            {(filaments.length > 0 || settings.length > 0 || results.length > 0) && (
-              <SettingsLine
-                filaments={filaments}
-                parts={[...settings, ...results]}
-                name={(filament) =>
-                  [filament.colorName, filament.type].filter(Boolean).join(" ") || filamentLabel(filament)
-                }
-                className="text-small text-ink-faint"
-                filamentClassName="text-ink-soft"
-              />
             )}
 
             {attempt.coach && (

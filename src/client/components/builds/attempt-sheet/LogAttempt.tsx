@@ -271,25 +271,34 @@ export function LogAttempt({
             />
           }
           photos={
-            <div className="-mx-5 flex gap-2.5 overflow-x-auto px-5 py-1 md:-mx-6 md:px-6">
-              {photos.map((photo, index) => (
-                <PhotoThumb
-                  key={photo.id}
-                  src={photoSrc(photo.id, "thumb")}
-                  alt={`Attempt photo ${index + 1}`}
-                  color={photo.processed?.color}
-                  busy={!photo.processed}
-                  onRemove={() => removeDraftPhoto(photo.id)}
+            !isDesktop && photos.length === 0 ? (
+              // One-handed at the printer: two wide, short tiles across the sheet, easy to hit with a thumb, and the
+              // note comes sooner than under the old pair of squares.
+              <div className="grid grid-cols-2 gap-2.5">
+                <AddPhotoTile size="row" icon={CameraIcon} label="Take photo" onClick={camera.open} />
+                <AddPhotoTile size="row" icon={ImageIcon} label="Library" onClick={library.open} />
+              </div>
+            ) : (
+              <div className="-mx-5 flex gap-2.5 overflow-x-auto px-5 py-1 md:-mx-6 md:px-6">
+                {photos.map((photo, index) => (
+                  <PhotoThumb
+                    key={photo.id}
+                    src={photoSrc(photo.id, "thumb")}
+                    alt={`Attempt photo ${index + 1}`}
+                    color={photo.processed?.color}
+                    busy={!photo.processed}
+                    onRemove={() => removeDraftPhoto(photo.id)}
+                  />
+                ))}
+                {!isDesktop && <AddPhotoTile size="md" icon={CameraIcon} label="Take photo" onClick={camera.open} />}
+                <AddPhotoTile
+                  size="md"
+                  icon={isDesktop ? PlusIcon : ImageIcon}
+                  label={isDesktop ? "Add photos" : "Library"}
+                  onClick={library.open}
                 />
-              ))}
-              {!isDesktop && <AddPhotoTile size="md" icon={CameraIcon} label="Take photo" onClick={camera.open} />}
-              <AddPhotoTile
-                size="md"
-                icon={isDesktop ? PlusIcon : ImageIcon}
-                label={isDesktop ? "Add photos" : "Library"}
-                onClick={library.open}
-              />
-            </div>
+              </div>
+            )
           }
         />
       </form>

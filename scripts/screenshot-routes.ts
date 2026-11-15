@@ -2285,6 +2285,20 @@ export const shots: Shot[] = [
     cleanup: closeSliceSettings,
   },
   {
+    // Copies (#366): ×4 asked for at the foot of the settings; the plate shows four, and the result says each one's time.
+    name: "slice-settings-copies",
+    path: "/ideas",
+    prepare: async (page) => {
+      const settings = await openSliceSettings(page);
+      const copies = settings.getByRole("group", { name: "Copies" });
+      for (let i = 0; i < 3; i++) await copies.getByRole("button", { name: "Copies: one more" }).click();
+      await settings.getByText("× 4", { exact: false }).first().waitFor();
+      await page.getByRole("button", { name: "Undo" }).first().waitFor({ timeout: 120_000 });
+    },
+    beforeShot: settleSliceSettings,
+    cleanup: closeSliceSettings,
+  },
+  {
     // The card after the change, its settings closed: it leads with what the change did, and offers the undo.
     name: "idea-model-changed",
     path: "/ideas",

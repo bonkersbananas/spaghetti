@@ -87,6 +87,9 @@ pub struct Params {
     remove_small_overhangs: bool,
     top_interfaces: usize,
     bottom_interfaces: usize,
+    /// How many of those print as base interface (`Settings::base_interface_layers`).
+    top_base_interfaces: usize,
+    bottom_base_interfaces: usize,
     /// The support line: width and spacing (mm, Orca's float flow), its density in the columns and the interfaces.
     width: f64,
     spacing: f64,
@@ -119,6 +122,8 @@ pub struct Params {
     double_wall_area: f64,
     /// Whether supports are on: with them off, the generator makes only the raft, if any.
     enabled: bool,
+    /// Automatic supports (`normal(auto)`), or only where they are painted on (`normal(manual)`, Orca's `stNormal`).
+    auto: bool,
     /// Supports on the plate only (`support_on_build_plate_only`, with supports on): nothing stands on the object.
     plate_only: bool,
     /// The raft under the object (`raft.rs`), how far its contact layer reaches past the object's first layer, and
@@ -158,6 +163,8 @@ impl Params {
             remove_small_overhangs: sp.remove_small_overhang,
             top_interfaces: sp.top_interface_layers,
             bottom_interfaces: sp.bottom_interface_layers,
+            top_base_interfaces: s.base_interface_layers().0,
+            bottom_base_interfaces: s.base_interface_layers().1,
             width: sp.line_width,
             spacing,
             density,
@@ -194,6 +201,7 @@ impl Params {
                 _ => 1e-13,
             },
             enabled: s.enable_support,
+            auto: !sp.kind.contains("manual"),
             plate_only: s.enable_support && sp.on_build_plate_only,
             raft: Raft::of(s),
             raft_expansion: sp.raft_expansion,
@@ -229,11 +237,27 @@ pub struct Object<'a> {
     pub origin: (f64, f64),
     /// mm: its bounding box's size, which the classic trees' grid of tips spans.
     pub size: (f64, f64),
+    /// Its painted supports on each layer (`segment::support_slabs`, Orca's `project_and_append_custom_facets`): where
+    /// they enforce support, and where they block it; each empty for an object with none of that kind.
+    pub enforcers: Vec<Shapes>,
+    pub blockers: Vec<Shapes>,
+    /// Its upright enforced triangles, each with the layer it is on, which Orca's trees give a tip each.
+    pub upright: Vec<(usize, crate::segment::Upright)>,
 }
 
 impl Object<'_> {
     fn bottom_z(&self, l: usize) -> f64 {
         self.print_z[l] - self.height[l]
+    }
+
+    /// Where layer `l`'s painted supports enforce support, if they do.
+    fn enforcer(&self, l: usize) -> Option<&Shapes> {
+        self.enforcers.get(l).filter(|e| !e.is_empty())
+    }
+
+    /// Its painted supports as the trees take them.
+    pub fn painted(&self) -> crate::tree::overhangs::Painted<'_> {
+        crate::tree::overhangs::Painted { enforcers: &self.enforcers, blockers: &self.blockers, upright: &self.upright }
     }
 }
 
@@ -339,6 +363,9 @@ enum Kind {
     Base,
     TopInterface,
     BottomInterface,
+    /// The support pattern at the interface's spacing, in the base's filament (Orca's base interface layers), where
+    /// the interface has a filament of its own.
+    BaseInterface,
     /// A raft's layers under its contact layer: its base (the first layer among them), and its interface.
     RaftBase,
     RaftInterface,
@@ -355,11 +382,22 @@ struct Gen {
     /// A top contact's area as projected down, and the overhangs it holds up.
     contact: Shapes,
     overhang: Shapes,
+    /// What of a top contact painted supports enforce (Orca's `enforcer_polygons`), projected down on its own.
+    enforcer: Shapes,
 }
 
 impl Gen {
     fn new(kind: Kind, bottom_z: f64, print_z: f64, height: f64) -> Gen {
-        Gen { kind, print_z, bottom_z, height, polygons: Vec::new(), contact: Vec::new(), overhang: Vec::new() }
+        Gen {
+            kind,
+            print_z,
+            bottom_z,
+            height,
+            polygons: Vec::new(),
+            contact: Vec::new(),
+            overhang: Vec::new(),
+            enforcer: Vec::new(),
+        }
     }
 
     fn bottom_print_z(&self) -> f64 {
@@ -509,23 +547,33 @@ pub fn generate(o: &Object, p: &Params) -> Vec<Layer> {
     // On the plate only, what the layers below each layer cover, which no support may stand on.
     let covered = if p.plate_only { buildplate_covered(o) } else { Vec::new() };
     let covered_at = |l: usize| covered.get(l).filter(|c| !c.is_empty());
+    // Painted blockers, grown a little (Orca's `SupportAnnotations`): they come as strips between two slices, which
+    // would leave narrow scraps of the overhangs they cut.
+    let blockers: Vec<Shapes> = o
+        .blockers
+        .iter()
+        .map(|b| if b.is_empty() { Vec::new() } else { geom::offset_c2(b, 0.1, geom::Join::Miter(3.0)) })
+        .collect();
+    let blocker_at = |l: usize| blockers.get(l).filter(|b| !b.is_empty());
 
     // 1. Overhangs; on a raft, the first layer's whole slice, whose small islands are sharp tails.
     let mut detected: Vec<Detected> = par::map_range(n, |l| {
         if l == 0 {
             if p.raft.is_some() { raft_overhangs(o) } else { Detected::default() }
         } else if l < looked {
-            detect_overhangs(o, l, p, covered_at(l))
+            detect_overhangs(o, l, p, covered_at(l), blocker_at(l))
         } else {
             Detected::default()
         }
     });
-    if p.enabled {
-        grow_sharp_tails(o, &mut detected, p);
+    // Sharp tails grow up only with automatic supports.
+    if p.enabled && p.auto {
+        grow_sharp_tails(o, &mut detected, p, &blockers);
     }
     let mut present = vec![false; n];
     for (l, d) in detected.iter().enumerate() {
-        present[l] = !d.overhangs.is_empty();
+        // A layer with painted enforcers may get a contact of them alone.
+        present[l] = !d.overhangs.is_empty() || (l > 0 && l < looked && o.enforcer(l).is_some());
     }
     if p.remove_small_overhangs {
         remove_small_overhangs(&mut detected, p);
@@ -540,7 +588,7 @@ pub fn generate(o: &Object, p: &Params) -> Vec<Layer> {
         match (l, p.raft) {
             (0, Some(r)) => Some(raft_contact(o, &r, p, &gp)),
             (0, None) => None,
-            _ => contact_layer(o, l, &detected[l], p, &gp, covered_at(l)),
+            _ => contact_layer(o, l, &detected[l], p, &gp, covered_at(l), o.enforcer(l)),
         }
     });
     let mut tops: Vec<usize> = Vec::new();
@@ -579,18 +627,18 @@ pub fn generate(o: &Object, p: &Params) -> Vec<Layer> {
             }
         }
     }
-    let interfaces = interface_layers(&mut arena, &tops, &bottoms, &inter, p);
+    let (interfaces, base_interfaces) = interface_layers(&mut arena, &tops, &bottoms, &inter, p);
     let rafts = match p.raft {
-        Some(r) if r.layers() > 1 => raft_base(&mut arena, &tops, &interfaces, &inter, &r, p),
+        Some(r) if r.layers() > 1 => raft_base(&mut arena, &tops, &interfaces, &base_interfaces, &inter, &r, p),
         _ => {
-            flange(o, &mut arena, &tops, &interfaces, &inter, p);
+            flange(o, &mut arena, &tops, &interfaces, &base_interfaces, &inter, p);
             Vec::new()
         }
     };
 
     // 6. Layers and toolpaths: the raft's layers under its contact layer, then the rest.
     let mut layers = raft_paths(&arena, &rafts, &[], o.origin, p);
-    layers.extend(toolpaths(o, &mut arena, &tops, &bottoms, &inter, &interfaces, p));
+    layers.extend(toolpaths(o, &mut arena, &tops, &bottoms, &inter, &interfaces, &base_interfaces, p));
     mark_raft(&mut layers, p);
     layers
 }
@@ -618,9 +666,9 @@ pub fn raft_alone(o: &Object, p: &Params) -> Vec<Layer> {
     };
     let mut arena = vec![g];
     let tops = [0];
-    let rafts = if r.layers() > 1 { raft_base(&mut arena, &tops, &[], &[], &r, p) } else { Vec::new() };
+    let rafts = if r.layers() > 1 { raft_base(&mut arena, &tops, &[], &[], &[], &r, p) } else { Vec::new() };
     let mut layers = raft_paths(&arena, &rafts, &[], o.origin, p);
-    layers.extend(toolpaths(o, &mut arena, &tops, &[], &[], &[], p));
+    layers.extend(toolpaths(o, &mut arena, &tops, &[], &[], &[], &[], p));
     mark_raft(&mut layers, p);
     layers
 }
@@ -633,6 +681,7 @@ pub struct TreeLayers {
     pub bottom_contacts: Vec<Shapes>,
     pub contacts: Vec<Shapes>,
     pub interfaces: Vec<Shapes>,
+    pub base_interfaces: Vec<Shapes>,
     /// mm: each layer's bottom and top.
     pub z: Vec<(f64, f64)>,
 }
@@ -642,6 +691,7 @@ pub struct TreeLayers {
 pub fn generate_tree(o: &Object, p: &Params, t: TreeLayers) -> Vec<Layer> {
     let mut arena: Vec<Gen> = Vec::new();
     let (mut tops, mut bottoms, mut inter, mut placed) = (Vec::new(), Vec::new(), Vec::new(), Vec::new());
+    let mut placed_base = Vec::new();
     for (l, &(bottom_z, print_z)) in t.z.iter().enumerate() {
         let height = print_z - bottom_z;
         let mut add = |kind: Kind, polygons: Option<&Shapes>, list: &mut Vec<usize>| {
@@ -657,27 +707,30 @@ pub fn generate_tree(o: &Object, p: &Params, t: TreeLayers) -> Vec<Layer> {
         add(Kind::BottomContact, t.bottom_contacts.get(l), &mut bottoms);
         add(Kind::TopContact, t.contacts.get(l), &mut tops);
         add(Kind::TopInterface, t.interfaces.get(l), &mut placed);
+        add(Kind::BaseInterface, t.base_interfaces.get(l), &mut placed_base);
         add(Kind::Base, t.base.get(l), &mut inter);
     }
-    if tops.is_empty() && inter.is_empty() && placed.is_empty() {
+    if tops.is_empty() && inter.is_empty() && placed.is_empty() && placed_base.is_empty() {
         return Vec::new();
     }
-    let interfaces = tree_interface_layers(&mut arena, &tops, &bottoms, &inter, &placed, p);
+    let (interfaces, base_interfaces) =
+        tree_interface_layers(&mut arena, &tops, &bottoms, &inter, &placed, &placed_base, p);
     if let Some(r) = p.raft.filter(|r| r.layers() > 1) {
         // On a raft (Orca's `generate_raft_base`, then `generate_support_toolpaths`): the raft's layers under its
         // contact, the trees cutting through them, then the rest from the contact layer up, as without a raft.
-        let rafts = raft_base(&mut arena, &tops, &interfaces, &inter, &r, p);
+        let rafts = raft_base(&mut arena, &tops, &interfaces, &base_interfaces, &inter, &r, p);
         let mut layers = raft_paths(&arena, &rafts, &inter, o.origin, p);
         let above = |list: &[usize]| -> Vec<usize> {
             list.iter().copied().filter(|&g| arena[g].print_z > r.interface_top_z + EPSILON).collect()
         };
-        let (tops, bottoms, inter, interfaces) = (above(&tops), above(&bottoms), above(&inter), above(&interfaces));
-        layers.extend(toolpaths(o, &mut arena, &tops, &bottoms, &inter, &interfaces, p));
+        let (tops, bottoms, inter) = (above(&tops), above(&bottoms), above(&inter));
+        let (interfaces, base_interfaces) = (above(&interfaces), above(&base_interfaces));
+        layers.extend(toolpaths(o, &mut arena, &tops, &bottoms, &inter, &interfaces, &base_interfaces, p));
         mark_raft(&mut layers, p);
         return layers;
     }
-    flange(o, &mut arena, &tops, &interfaces, &inter, p);
-    let mut layers = toolpaths(o, &mut arena, &tops, &bottoms, &inter, &interfaces, p);
+    flange(o, &mut arena, &tops, &interfaces, &base_interfaces, &inter, p);
+    let mut layers = toolpaths(o, &mut arena, &tops, &bottoms, &inter, &interfaces, &base_interfaces, p);
     mark_raft(&mut layers, p);
     layers
 }
@@ -685,97 +738,144 @@ pub fn generate_tree(o: &Object, p: &Params, t: TreeLayers) -> Vec<Layer> {
 /// Orca's `generate_interface_layers` for organic trees: a base layer prints as interface where the contacts on its
 /// own layer and the next one up lie, and where the bottom contacts of the two layers below lie (which print
 /// nothing themselves), each grown and rounded off; the roofs' own interface layers take in what falls on their
-/// layer. With no base layer at all, there are no interfaces either.
+/// layer. Where the interface has a filament of its own, the farthest of those layers from the contacts print as
+/// base interface instead (`Params::top_base_interfaces`), into the roofs' own base interface layers, cut back from
+/// the interface on their layer. With no base layer at all, there are no interfaces either. Returns the interface
+/// layers and the base interface layers.
 fn tree_interface_layers(
     arena: &mut Vec<Gen>,
     tops: &[usize],
     bottoms: &[usize],
     inter: &[usize],
     placed: &[usize],
+    placed_base: &[usize],
     p: &Params,
-) -> Vec<usize> {
+) -> (Vec<usize>, Vec<usize>) {
     let num_top = p.top_interfaces.saturating_sub(1);
     let num_bottom = p.bottom_interfaces;
     if inter.is_empty() || (p.top_interfaces == 0 && p.bottom_interfaces == 0) {
-        return Vec::new();
+        return (Vec::new(), Vec::new());
     }
+    let num_top_base = p.top_base_interfaces.min(num_top);
+    let num_bottom_base = p.bottom_base_interfaces.min(num_bottom);
+    let (num_top_only, num_bottom_only) = (num_top - num_top_base, num_bottom - num_bottom_base);
     let ni = inter.len();
-    let made: Vec<Option<(Option<Gen>, Shapes, Shapes)>> = {
+    // Each of the two: a new layer (none where it went into the roofs' own) and its polygons.
+    type Made = Option<(Option<Gen>, Shapes)>;
+    let made: Vec<Option<(Made, Made, Shapes)>> = {
         let arena = &*arena;
+        let same_in = |list: &[usize], z: f64| {
+            list.iter().copied().find(|&q| (arena[q].print_z - z).abs() < EPSILON && !arena[q].polygons.is_empty())
+        };
         par::map_range(ni, |i| {
             let it = &arena[inter[i]];
-            let mut top_set: Shapes = Vec::new();
-            let mut bottom_set: Shapes = Vec::new();
+            let (mut top_interface, mut top_base) = (Vec::new(), Vec::new());
+            let (mut bottom_interface, mut bottom_base) = (Vec::new(), Vec::new());
             if num_top > 0 {
                 let top_z = arena[inter[(i + num_top - 1).min(ni - 1)]].print_z;
+                let top_interface_z = match (num_top_base, num_top_only) {
+                    (0, _) => f64::MAX,
+                    (_, 0) => f64::MIN,
+                    (_, only) => arena[inter[(i + only - 1).min(ni - 1)]].print_z,
+                };
                 let first = tops.partition_point(|&t| arena[t].print_z < it.print_z);
                 for &t in &tops[first..] {
                     if arena[t].bottom_z - EPSILON > top_z {
                         break;
                     }
-                    top_set.extend(arena[t].polygons.iter().cloned());
+                    let into =
+                        if arena[t].bottom_z - EPSILON > top_interface_z { &mut top_base } else { &mut top_interface };
+                    into.extend(arena[t].polygons.iter().cloned());
                 }
             }
             if num_bottom > 0 {
                 let bottom_z = arena[inter[(i + 1).saturating_sub(num_bottom)]].bottom_z;
+                let bottom_interface_z = match (num_bottom_base, num_bottom_only) {
+                    (0, _) => f64::MIN,
+                    (_, 0) => f64::MAX,
+                    (_, only) => arena[inter[i.saturating_sub(only)]].bottom_z,
+                };
                 let first = bottoms.partition_point(|&b| arena[b].print_z < bottom_z - EPSILON);
                 for &b in &bottoms[first..] {
                     if arena[b].print_z - EPSILON > it.bottom_z {
                         break;
                     }
-                    bottom_set.extend(arena[b].polygons.iter().cloned());
+                    let into = if arena[b].print_z - EPSILON > bottom_interface_z {
+                        &mut bottom_interface
+                    } else {
+                        &mut bottom_base
+                    };
+                    into.extend(arena[b].polygons.iter().cloned());
                 }
             }
-            let same = placed
-                .iter()
-                .copied()
-                .find(|&q| (arena[q].print_z - it.print_z).abs() < EPSILON && !arena[q].polygons.is_empty());
-            if top_set.is_empty() && bottom_set.is_empty() && same.is_none() {
+            let mut rest = it.polygons.clone();
+            // Orca's `insert_layer`: what of the contacts falls on this base layer, with the roofs' own layer here.
+            let mut insert = |bottom: Shapes, top: Shapes, same: Option<usize>, subtract: Option<&Shapes>, kind| {
+                if bottom.is_empty() && top.is_empty() && same.is_none() {
+                    return None;
+                }
+                let mut both = regularize(bottom, p.bottom_interface_density, p);
+                both.extend(regularize(top, p.top_interface_density, p));
+                let mut poly = if both.is_empty() { Vec::new() } else { geom::intersection(&both, &rest) };
+                if let Some(q) = same {
+                    poly = geom::union(&arena[q].polygons, &poly);
+                }
+                if poly.is_empty() {
+                    return None;
+                }
+                rest = geom::difference(&rest, &poly);
+                if let Some(cut) = subtract {
+                    poly = geom::difference(&poly, cut);
+                }
+                // Into the roofs' own layer where there is one, else a new one.
+                let g = same.is_none().then(|| {
+                    let mut g = Gen::new(kind, it.bottom_z, it.print_z, it.height);
+                    g.polygons = poly.clone();
+                    g
+                });
+                Some((g, poly))
+            };
+            let kind = if top_interface.is_empty() { Kind::BottomInterface } else { Kind::TopInterface };
+            let interface = insert(bottom_interface, top_interface, same_in(placed, it.print_z), None, kind);
+            let cut = interface.as_ref().map(|(_, poly)| poly.clone());
+            let same_base = same_in(placed_base, it.print_z);
+            let base = insert(bottom_base, top_base, same_base, cut.as_ref(), Kind::BaseInterface);
+            if interface.is_none() && base.is_none() {
                 return None;
             }
-            let kind = if top_set.is_empty() { Kind::BottomInterface } else { Kind::TopInterface };
-            let mut both = regularize(bottom_set, p.bottom_interface_density, p);
-            both.extend(regularize(top_set, p.top_interface_density, p));
-            let mut poly = if both.is_empty() { Vec::new() } else { geom::intersection(&both, &it.polygons) };
-            if let Some(q) = same {
-                poly = geom::union(&arena[q].polygons, &poly);
-            }
-            if poly.is_empty() {
-                return None;
-            }
-            let rest = geom::difference(&it.polygons, &poly);
-            // Into the roofs' own interface layer where there is one, else a new one.
-            let g = same.is_none().then(|| {
-                let mut g = Gen::new(kind, it.bottom_z, it.print_z, it.height);
-                g.polygons = poly.clone();
-                g
-            });
-            Some((g, poly, rest))
+            Some((interface, base, rest))
         })
     };
-    let mut out = Vec::new();
+    let (mut out, mut out_base) = (Vec::new(), Vec::new());
     for (i, m) in made.into_iter().enumerate() {
-        let Some((g, poly, rest)) = m else { continue };
+        let Some((interface, base, rest)) = m else { continue };
         arena[inter[i]].polygons = rest;
-        match g {
-            Some(g) => {
-                out.push(arena.len());
-                arena.push(g);
-            }
-            None => {
-                let z = arena[inter[i]].print_z;
-                if let Some(&q) = placed.iter().find(|&&q| (arena[q].print_z - z).abs() < EPSILON) {
-                    arena[q].polygons = poly;
-                    arena[q].bottom_z = arena[inter[i]].bottom_z;
-                    arena[q].height = arena[inter[i]].height;
+        let (z, bottom_z, height) = (arena[inter[i]].print_z, arena[inter[i]].bottom_z, arena[inter[i]].height);
+        for (made, list, own) in [(interface, &mut out, placed), (base, &mut out_base, placed_base)] {
+            match made {
+                Some((Some(g), _)) => {
+                    if !g.polygons.is_empty() {
+                        list.push(arena.len());
+                        arena.push(g);
+                    }
                 }
+                Some((None, poly)) => {
+                    if let Some(&q) = own.iter().find(|&&q| (arena[q].print_z - z).abs() < EPSILON) {
+                        arena[q].polygons = poly;
+                        arena[q].bottom_z = bottom_z;
+                        arena[q].height = height;
+                    }
+                }
+                None => {}
             }
         }
     }
-    out.extend(placed.iter().copied().filter(|&q| !arena[q].polygons.is_empty()));
-    out.sort_by(|&a, &b| arena[a].print_z.partial_cmp(&arena[b].print_z).unwrap());
-    out.dedup();
-    out
+    for (list, own) in [(&mut out, placed), (&mut out_base, placed_base)] {
+        list.extend(own.iter().copied().filter(|&q| !arena[q].polygons.is_empty()));
+        list.sort_by(|&a, &b| arena[a].print_z.partial_cmp(&arena[b].print_z).unwrap());
+        list.dedup();
+    }
+    (out, out_base)
 }
 
 /// Orca's `buildplate_covered`, for supports on the plate only: on each layer, the union of every layer below it,
@@ -793,12 +893,13 @@ fn buildplate_covered(o: &Object) -> Vec<Shapes> {
 /// Orca's `detect_overhangs` for layer `l`: the parts beyond the layer below by more than the support angle allows,
 /// with sharp tails (small islands with nothing under them) and cantilevers (overhangs reaching over 3 mm out). On
 /// the plate only (`covered`), nothing over what the layers below cover: that is cut before the overhang grows back
-/// to its full size.
-fn detect_overhangs(o: &Object, l: usize, p: &Params, covered: Option<&Shapes>) -> Detected {
+/// to its full size. Painted blockers (`blocker`) cut the overhangs and the sharp tails. Supports only where painted
+/// find none here: their painted enforcers come in with the contacts.
+fn detect_overhangs(o: &Object, l: usize, p: &Params, covered: Option<&Shapes>, blocker: Option<&Shapes>) -> Detected {
     let lower = &o.slices[l - 1];
     let region = &o.slices[l];
     let mut out = Detected::default();
-    if region.is_empty() {
+    if region.is_empty() || !p.auto {
         return out;
     }
     let fw = p.fw;
@@ -827,6 +928,14 @@ fn detect_overhangs(o: &Object, l: usize, p: &Params, covered: Option<&Shapes>) 
             out.tail_heights.push(o.height[l]);
             d.extend(geom::offset(&overhang, 0.05 * fw));
         }
+    }
+    if d.is_empty() {
+        return out;
+    }
+    if let Some(blocker) = blocker {
+        d = geom::difference(&d, blocker);
+        // The tails are cut too (their heights stay as they were, as Orca's do).
+        out.tails = geom::difference(&out.tails, blocker);
     }
     if d.is_empty() || geom::offset(&d, -0.1 * fw).is_empty() {
         return out;
@@ -858,8 +967,8 @@ fn detect_overhangs(o: &Object, l: usize, p: &Params, covered: Option<&Shapes>) 
 
 /// Sharp tails grown upwards (Orca's part of `top_contact_layers`): an island resting only on a sharp tail below,
 /// still small, not over 16 mm tall and not growing fast, is a sharp tail too, and what of it lies beyond the layer
-/// below is an overhang.
-fn grow_sharp_tails(o: &Object, detected: &mut [Detected], p: &Params) {
+/// below is an overhang, less what painted blockers (grown, `blockers`) cover.
+fn grow_sharp_tails(o: &Object, detected: &mut [Detected], p: &Params, blockers: &[Shapes]) {
     let width = p.extrusion_width;
     for l in 1..o.slices.len() {
         let (below, here) = detected.split_at_mut(l);
@@ -880,9 +989,10 @@ fn grow_sharp_tails(o: &Object, detected: &mut [Detected], p: &Params) {
                 continue;
             }
             let mut height = o.height[l];
-            for (i, tail) in lower.tails.iter().enumerate() {
-                if overlaps(&one(tail), &shape) {
-                    height += lower.tail_heights[i];
+            // By the heights, as Orca reads them: blockers can have cut a tail in pieces.
+            for (i, &h) in lower.tail_heights.iter().enumerate() {
+                if lower.tails.get(i).is_some_and(|tail| overlaps(&one(tail), &shape)) {
+                    height += h;
                     break;
                 }
             }
@@ -897,7 +1007,11 @@ fn grow_sharp_tails(o: &Object, detected: &mut [Detected], p: &Params) {
             }
             here.tails.push(e.clone());
             here.tail_heights.push(height);
-            here.overhangs.extend(geom::difference(&shape, &o.slices[l - 1]));
+            let overhang = geom::difference(&shape, &o.slices[l - 1]);
+            match blockers.get(l).filter(|b| !b.is_empty()) {
+                Some(blocker) => here.overhangs.extend(geom::difference(&overhang, blocker)),
+                None => here.overhangs.extend(overhang),
+            }
         }
     }
 }
@@ -986,6 +1100,7 @@ fn synced_layer(o: &Object, l: usize, gap: f64, top: bool) -> usize {
 
 /// Orca's `detect_contacts`, `new_contact_layer` and `fill_contact_layer`: the top contact layer under layer `l`'s
 /// overhangs, the top gap below it.
+#[allow(clippy::too_many_arguments)]
 fn contact_layer(
     o: &Object,
     l: usize,
@@ -993,8 +1108,9 @@ fn contact_layer(
     p: &Params,
     gp: &grid::Params,
     covered: Option<&Shapes>,
+    enforcer: Option<&Shapes>,
 ) -> Option<Gen> {
-    let overhangs: Shapes = d.overhangs.iter().filter(|s| !s.is_empty()).cloned().collect();
+    let mut overhangs: Shapes = d.overhangs.iter().filter(|s| !s.is_empty()).cloned().collect();
     let lower = &o.slices[l - 1];
     // What the contact is trimmed by (Orca's `slices_margin`): the layer below, and on the plate only all the layers
     // below.
@@ -1006,11 +1122,25 @@ fn contact_layer(
         }
         None => lower,
     };
-    let contact = if overhangs.is_empty() {
+    let mut contact = if overhangs.is_empty() {
         Vec::new()
     } else {
         geom::difference(&geom::intersection(&overhangs, &o.slices[l]), margin)
     };
+    // Painted enforcers (Orca's `detect_contacts`): support as under a vertical overhang wherever the layer reaches
+    // beyond the one below (grown a hair, so as not to touch the object), its contact cut by the layer below alone,
+    // also on the plate only.
+    let enforced = match enforcer {
+        Some(e) => geom::difference(&geom::intersection(&o.slices[l], e), &square(lower, 0.05 * p.fw)),
+        None => Vec::new(),
+    };
+    if d.overhangs.is_empty() && enforced.is_empty() {
+        return None;
+    }
+    if !enforced.is_empty() {
+        overhangs = geom::union(&overhangs, &enforced);
+        contact = geom::union(&contact, &geom::difference(&enforced, lower));
+    }
     // In step with the object's layers, the contact is the layer the gap ends on, and as thick; else its height is
     // decided with the support's own layers.
     let (mut print_z, height) = if p.synchronize {
@@ -1028,12 +1158,18 @@ fn contact_layer(
     } else {
         Gen::new(Kind::TopContact, print_z - height, print_z, height)
     };
+    // On the plate only, the enforced areas print too, apart from the rest (which the layers below trim further).
+    let enforced_apart = covered.is_some() && !enforced.is_empty();
     if p.snug {
         // Snug: the contact closed and rounded off, the same to project down and to print; every overhang gets dense
         // interface.
         g.contact = snug(&contact, p);
         g.polygons = g.contact.clone();
+        if enforced_apart {
+            g.polygons = geom::union(&g.polygons, &snug(&enforced, p));
+        }
         g.overhang = overhangs;
+        g.enforcer = enforced;
         return Some(g);
     }
     g.contact = Grid::new(&contact, margin, gp).extract(grid::EXPANSION_TO_PROPAGATE, true);
@@ -1047,7 +1183,19 @@ fn contact_layer(
         let trimmed = geom::intersection(&dense, &g.contact);
         g.polygons = Grid::new(&trimmed, margin, gp).extract(gp.expansion_to_slice(), false);
     }
+    if enforced_apart {
+        // Gridded by themselves, trimmed by the layer below alone, with their own dense interface.
+        let gridded = Grid::new(&enforced, lower, gp).extract(grid::EXPANSION_TO_PROPAGATE, true);
+        let dense = geom::difference(&enforced, &held);
+        if !dense.is_empty() {
+            let dense = geom::difference(&geom::offset(&dense, 0.1 * nio), lower);
+            let trimmed = geom::intersection(&dense, &gridded);
+            let more = Grid::new(&trimmed, lower, gp).extract(gp.expansion_to_slice(), false);
+            g.polygons = if g.polygons.is_empty() { more } else { geom::union(&g.polygons, &more) };
+        }
+    }
     g.overhang = overhangs;
+    g.enforcer = enforced;
     Some(g)
 }
 
@@ -1061,6 +1209,7 @@ fn merge_contacts(arena: &mut [Gen], tops: &mut Vec<usize>, p: &Params) {
         d.polygons = geom::union(&d.polygons, &src.polygons);
         d.contact = geom::union(&d.contact, &src.contact);
         d.overhang = geom::union(&d.overhang, &src.overhang);
+        d.enforcer = geom::union(&d.enforcer, &src.enforcer);
     };
     let mut out: Vec<usize> = Vec::new();
     let mut j = 0;
@@ -1108,6 +1257,8 @@ fn columns(
     let mut areas: Vec<Shapes> = vec![Vec::new(); n];
     let mut bottoms: Vec<usize> = Vec::new();
     let mut projection: Shapes = Vec::new();
+    // What painted enforcers hold up, projected down on its own (never trimmed by the plate-only cover).
+    let mut enforced: Shapes = Vec::new();
     let mut contact_idx = tops.len() as isize - 1;
     for l in (0..n - 1).rev() {
         let z = o.print_z[l];
@@ -1115,16 +1266,20 @@ fn columns(
             let t = &arena[tops[contact_idx as usize]];
             let new = [t.contact.clone(), grow(&t.overhang, SCALED_EPSILON)].concat();
             projection.extend(geom::union_all(&[&new]));
+            enforced.extend(t.enforcer.iter().cloned());
             contact_idx -= 1;
         }
-        if projection.is_empty() {
+        if projection.is_empty() && enforced.is_empty() {
             continue;
         }
         let raw = geom::union_all(&[&projection]);
-        // A bottom contact where the projection lands on a top surface; none on the plate only.
+        let enforced_raw = if enforced.is_empty() { Vec::new() } else { geom::union_all(&[&enforced]) };
+        // A bottom contact where the projection lands on a top surface; on the plate only, where what enforcers hold
+        // up does.
         let top = &o.tops[l];
-        if !top.is_empty() && !p.plate_only {
-            let touching = geom::intersection(top, &raw);
+        let landing = if p.plate_only { &enforced_raw } else { &raw };
+        if !top.is_empty() && !landing.is_empty() {
+            let touching = geom::intersection(top, landing);
             if !touching.is_empty() {
                 // In step with the object's layers, the layer the gap up from this one ends on, and as thick.
                 let (mut height, mut print_z) = if p.synchronize {
@@ -1170,23 +1325,33 @@ fn columns(
             }
         }
         // The support near this layer, and the columns going on down: cut by the layer, or on the plate only by all
-        // the layers below it.
+        // the layers below it; what enforcers hold up, cut by the layer alone, joins it.
         let trimming = if p.plate_only { covered[l].clone() } else { grow(&o.slices[l], SCALED_EPSILON) };
-        let mut below = geom::difference(&raw, &trimming);
-        if p.snug {
-            // Snug: closed and rounded off, not cut by the object (its XY gap does that later), the same to print
-            // and to project on down.
-            remove_sticks(&mut below);
-            areas[l] = snug(&below, p);
-            projection = areas[l].clone();
-            continue;
+        let (area, next) = project_to_grid(&raw, &trimming, p, gp);
+        areas[l] = area;
+        projection = next;
+        if !enforced.is_empty() {
+            let (area, next) = project_to_grid(&enforced_raw, &grow(&o.slices[l], SCALED_EPSILON), p, gp);
+            areas[l] = if areas[l].is_empty() { area } else { geom::union(&areas[l], &area) };
+            enforced = next;
         }
-        let grid = Grid::new(&below, &trimming, gp);
-        areas[l] = grid.extract(gp.expansion_to_slice(), true);
-        projection = grid.extract(grid::EXPANSION_TO_PROPAGATE, true);
     }
     bottoms.reverse();
     (bottoms, areas)
+}
+
+/// Orca's `project_support_to_grid`: support projected onto a layer, less what `trimming` covers there: the area to
+/// print near the layer, and what goes on down. Snug: closed and rounded off, not cut by the object (its XY gap does
+/// that later), the same to print and to project on down.
+fn project_to_grid(raw: &Shapes, trimming: &Shapes, p: &Params, gp: &grid::Params) -> (Shapes, Shapes) {
+    let mut below = geom::difference(raw, trimming);
+    if p.snug {
+        remove_sticks(&mut below);
+        let area = snug(&below, p);
+        return (area.clone(), area);
+    }
+    let grid = Grid::new(&below, trimming, gp);
+    (grid.extract(gp.expansion_to_slice(), true), grid.extract(grid::EXPANSION_TO_PROPAGATE, true))
 }
 
 /// Orca's `raft_and_intermediate_support_layers`: between each pair of contacts (top contacts by their bottoms, bottom
@@ -1402,28 +1567,48 @@ fn base_layers(o: &Object, arena: &mut [Gen], tops: &[usize], bottoms: &[usize],
 }
 
 /// Orca's `generate_interface_layers`: the base layers right under a top contact and right over a bottom contact (as
-/// many as the interface layers asked for, less the contact itself) print as interface where the contact is.
+/// many as the interface layers asked for, less the contact itself) print as interface where the contact is; the
+/// base interface layers among them (`Params::top_base_interfaces`, the farthest from the contact) print as base
+/// interface there instead, cut back from the interface on their layer. Returns the interface layers and the base
+/// interface layers.
 fn interface_layers(
     arena: &mut Vec<Gen>,
     tops: &[usize],
     bottoms: &[usize],
     inter: &[usize],
     p: &Params,
-) -> Vec<usize> {
+) -> (Vec<usize>, Vec<usize>) {
     let num_top = p.top_interfaces.saturating_sub(1);
     let num_bottom = p.bottom_interfaces.saturating_sub(1);
     if inter.is_empty() || (num_top == 0 && num_bottom == 0) {
-        return Vec::new();
+        return (Vec::new(), Vec::new());
     }
+    let num_top_base = p.top_base_interfaces.min(num_top);
+    let num_bottom_base = p.bottom_base_interfaces.min(num_bottom);
+    let (num_top_only, num_bottom_only) = (num_top - num_top_base, num_bottom - num_bottom_base);
     let ni = inter.len();
-    let made: Vec<Option<(Gen, Shapes)>> = {
+    // The contacts' areas as Orca's `insert_layer` takes them: rounded off for snug supports, else as they are.
+    let regularized = |bottom: Shapes, top: Shapes| -> Shapes {
+        let mut both =
+            if p.snug { regularize(bottom, p.bottom_interface_density, p) } else { geom::union_all(&[&bottom]) };
+        both.extend(if p.snug { regularize(top, p.top_interface_density, p) } else { geom::union_all(&[&top]) });
+        both
+    };
+    type Made = (Option<Gen>, Option<Gen>, Shapes);
+    let made: Vec<Option<Made>> = {
         let arena = &*arena;
         par::map_range(ni, |i| {
             let it = &arena[inter[i]];
-            let mut top_set: Shapes = Vec::new();
-            let mut bottom_set: Shapes = Vec::new();
+            let (mut top_interface, mut top_base) = (Vec::new(), Vec::new());
+            let (mut bottom_interface, mut bottom_base) = (Vec::new(), Vec::new());
             if num_top > 0 {
                 let top_z = arena[inter[(i + num_top - 1).min(ni - 1)]].print_z;
+                // Contacts over this height make base interface here.
+                let top_interface_z = match (num_top_base, num_top_only) {
+                    (0, _) => f64::MAX,
+                    (_, 0) => f64::MIN,
+                    (_, only) => arena[inter[(i + only - 1).min(ni - 1)]].print_z,
+                };
                 let first = tops.partition_point(|&t| arena[t].print_z < it.print_z);
                 for &t in &tops[first..] {
                     if arena[t].bottom_z - EPSILON > top_z {
@@ -1432,62 +1617,98 @@ fn interface_layers(
                     // Snug supports project the whole overhang, so that the interfaces meet the support of the
                     // layers round them without a gap.
                     let projected = if p.snug { &arena[t].overhang } else { &arena[t].polygons };
-                    top_set.extend(projected.iter().cloned());
+                    let into =
+                        if arena[t].bottom_z - EPSILON > top_interface_z { &mut top_base } else { &mut top_interface };
+                    into.extend(projected.iter().cloned());
                 }
             }
             if num_bottom > 0 {
                 let bottom_z = arena[inter[(i + 1).saturating_sub(num_bottom)]].bottom_z;
+                // Bottom contacts under this height make base interface here.
+                let bottom_interface_z = match (num_bottom_base, num_bottom_only) {
+                    (0, _) => f64::MIN,
+                    (_, 0) => f64::MAX,
+                    (_, only) => arena[inter[i.saturating_sub(only)]].bottom_z,
+                };
                 let first = bottoms.partition_point(|&b| arena[b].print_z < bottom_z - EPSILON);
                 for &b in &bottoms[first..] {
                     if arena[b].print_z - EPSILON > it.bottom_z {
                         break;
                     }
-                    bottom_set.extend(arena[b].polygons.iter().cloned());
+                    let into = if arena[b].print_z - EPSILON > bottom_interface_z {
+                        &mut bottom_interface
+                    } else {
+                        &mut bottom_base
+                    };
+                    into.extend(arena[b].polygons.iter().cloned());
                 }
             }
-            if top_set.is_empty() && bottom_set.is_empty() {
+            let mut rest = it.polygons.clone();
+            let mut interface = None;
+            if !top_interface.is_empty() || !bottom_interface.is_empty() {
+                let kind = if top_interface.is_empty() { Kind::BottomInterface } else { Kind::TopInterface };
+                let poly =
+                    geom::intersection(&geom::union_all(&[&regularized(bottom_interface, top_interface)]), &rest);
+                if !poly.is_empty() {
+                    rest = geom::difference(&rest, &poly);
+                    let mut g = Gen::new(kind, it.bottom_z, it.print_z, it.height);
+                    g.polygons = poly;
+                    interface = Some(g);
+                }
+            }
+            let mut base_interface = None;
+            if !top_base.is_empty() || !bottom_base.is_empty() {
+                let poly = geom::intersection(&geom::union_all(&[&regularized(bottom_base, top_base)]), &rest);
+                if !poly.is_empty() {
+                    rest = geom::difference(&rest, &poly);
+                    let poly = match &interface {
+                        Some(g) => geom::difference(&poly, &g.polygons),
+                        None => poly,
+                    };
+                    if !poly.is_empty() {
+                        let mut g = Gen::new(Kind::BaseInterface, it.bottom_z, it.print_z, it.height);
+                        g.polygons = poly;
+                        base_interface = Some(g);
+                    }
+                }
+            }
+            if interface.is_none() && base_interface.is_none() {
                 return None;
             }
-            let kind = if top_set.is_empty() { Kind::BottomInterface } else { Kind::TopInterface };
-            let mut both = if p.snug {
-                regularize(bottom_set.clone(), p.bottom_interface_density, p)
-            } else {
-                geom::union_all(&[&bottom_set])
-            };
-            both.extend(if p.snug {
-                regularize(top_set.clone(), p.top_interface_density, p)
-            } else {
-                geom::union_all(&[&top_set])
-            });
-            let poly = geom::intersection(&geom::union_all(&[&both]), &it.polygons);
-            if poly.is_empty() {
-                return None;
-            }
-            let rest = geom::difference(&it.polygons, &poly);
-            let mut g = Gen::new(kind, it.bottom_z, it.print_z, it.height);
-            g.polygons = poly;
-            Some((g, rest))
+            Some((interface, base_interface, rest))
         })
     };
-    let mut out = Vec::new();
+    let (mut interfaces, mut base_interfaces) = (Vec::new(), Vec::new());
     for (i, m) in made.into_iter().enumerate() {
-        if let Some((g, rest)) = m {
-            arena[inter[i]].polygons = rest;
-            out.push(arena.len());
-            arena.push(g);
+        let Some((interface, base_interface, rest)) = m else { continue };
+        arena[inter[i]].polygons = rest;
+        for (g, list) in [(interface, &mut interfaces), (base_interface, &mut base_interfaces)] {
+            if let Some(g) = g {
+                list.push(arena.len());
+                arena.push(g);
+            }
         }
     }
-    out
+    (interfaces, base_interfaces)
 }
 
 /// Orca's `generate_raft_base` without a raft: the support's first layer grown 2 mm past the columns, in steps,
 /// kept off the object's first layer by the first layer's gap, and off the contacts and interfaces printed there.
-fn flange(o: &Object, arena: &mut [Gen], tops: &[usize], interfaces: &[usize], inter: &[usize], p: &Params) {
+fn flange(
+    o: &Object,
+    arena: &mut [Gen],
+    tops: &[usize],
+    interfaces: &[usize],
+    base_interfaces: &[usize],
+    inter: &[usize],
+    p: &Params,
+) {
     let contacts = tops.first().copied().filter(|&t| arena[t].print_z <= p.first_layer_height + EPSILON);
     let first_interface = interfaces.first().copied().filter(|&i| arena[i].bottom_print_z() <= EPSILON);
+    let first_base_interface = base_interfaces.first().copied().filter(|&i| arena[i].bottom_print_z() <= EPSILON);
     let base = inter.first().copied().filter(|&i| arena[i].bottom_print_z() <= EPSILON);
     let mut interface_polygons: Shapes = Vec::new();
-    for g in [contacts, first_interface].into_iter().flatten() {
+    for g in [contacts, first_interface, first_base_interface].into_iter().flatten() {
         if !arena[g].polygons.is_empty() {
             interface_polygons.extend(square(&arena[g].polygons, SCALED_EPSILON));
         }
@@ -1524,7 +1745,7 @@ fn flange(o: &Object, arena: &mut [Gen], tops: &[usize], interfaces: &[usize], i
             (false, true) => geom::difference(&outlines, &geom::offset_round(&holes, -gap, 0.1)),
             (false, false) => footprint,
         };
-        for g in [base, contacts, first_interface].into_iter().flatten() {
+        for g in [base, contacts, first_interface, first_base_interface].into_iter().flatten() {
             if !arena[g].polygons.is_empty() {
                 arena[g].polygons = geom::difference(&arena[g].polygons, &brim);
             }
@@ -1580,6 +1801,7 @@ fn raft_base(
     arena: &mut Vec<Gen>,
     tops: &[usize],
     interfaces: &[usize],
+    base_interfaces: &[usize],
     inter: &[usize],
     r: &Raft,
     p: &Params,
@@ -1590,9 +1812,11 @@ fn raft_base(
         tops.first().copied().filter(|&t| arena[t].print_z <= p.first_layer_height.max(r.contact_top_z) + EPSILON);
     let first_interface =
         interfaces.first().copied().filter(|&i| arena[i].bottom_print_z() <= r.interface_top_z + EPSILON);
+    let first_base_interface =
+        base_interfaces.first().copied().filter(|&i| arena[i].bottom_print_z() <= r.interface_top_z + EPSILON);
     let columns_base = inter.first().copied().filter(|&i| arena[i].bottom_print_z() <= r.interface_top_z + EPSILON);
     let mut interface_polygons: Shapes = Vec::new();
-    for g in [contacts, first_interface].into_iter().flatten() {
+    for g in [contacts, first_interface, first_base_interface].into_iter().flatten() {
         if !arena[g].polygons.is_empty() {
             interface_polygons.extend(square(&arena[g].polygons, FINE));
         }
@@ -1840,6 +2064,7 @@ fn sheath_paths(
 
 /// Orca's `generate_support_layers` and `generate_support_toolpaths`: the generator's layers grouped by height into
 /// the support's layers, merged where they print alike, and filled.
+#[allow(clippy::too_many_arguments)]
 fn toolpaths(
     o: &Object,
     arena: &mut [Gen],
@@ -1847,11 +2072,13 @@ fn toolpaths(
     bottoms: &[usize],
     inter: &[usize],
     interfaces: &[usize],
+    base_interfaces: &[usize],
     p: &Params,
 ) -> Vec<Layer> {
     // Grouped by height: within 0.1 µm of the group's lowest, at their average height and the thinnest one's
     // thickness; groups with nothing in them leave no layer.
-    let mut all: Vec<usize> = bottoms.iter().chain(tops).chain(inter).chain(interfaces).copied().collect();
+    let mut all: Vec<usize> =
+        bottoms.iter().chain(tops).chain(inter).chain(interfaces).chain(base_interfaces).copied().collect();
     all.sort_by(|&a, &b| {
         arena[a]
             .print_z
@@ -1888,13 +2115,14 @@ fn toolpaths(
             let i = list.partition_point(|&g| arena[g].print_z < z - EPSILON);
             list.get(i).copied().filter(|&g| arena[g].print_z < z + EPSILON)
         };
-        layer_paths(arena, z, height, [at(bottoms), at(tops), at(interfaces), at(inter)], origin, p)
+        let found = [at(bottoms), at(tops), at(interfaces), at(base_interfaces), at(inter)];
+        layer_paths(arena, z, height, found, origin, p)
     })
 }
 
 /// One support layer's extrusions from the generator layers at its height (bottom contact, top contact, interface,
-/// base).
-fn layer_paths(arena: &[Gen], z: f64, height: f64, found: [Option<usize>; 4], origin: (f64, f64), p: &Params) -> Layer {
+/// base interface, base).
+fn layer_paths(arena: &[Gen], z: f64, height: f64, found: [Option<usize>; 5], origin: (f64, f64), p: &Params) -> Layer {
     // Each with its polygons (merges change them) and, where they were cut down, what is left to print.
     struct Item {
         layer: usize,
@@ -1910,7 +2138,7 @@ fn layer_paths(arena: &[Gen], z: f64, height: f64, found: [Option<usize>; 4], or
             paths: Vec::new(),
         })
     };
-    let [mut bottom, mut top, mut interface, base] = found.map(make);
+    let [mut bottom, mut top, mut interface, mut base_interface, base] = found.map(make);
     let could_merge = |a: &Option<Item>, b: &Option<Item>| match (a, b) {
         (Some(a), Some(b)) => (arena[a.layer].height - arena[b.layer].height).abs() < EPSILON,
         _ => false,
@@ -1984,6 +2212,28 @@ fn layer_paths(arena: &[Gen], z: f64, height: f64, found: [Option<usize>; 4], or
     let interface_bottom = interface.as_ref().is_some_and(|i| arena[i.layer].kind == Kind::BottomInterface);
     let density = if interface_bottom { p.bottom_interface_density } else { p.top_interface_density };
     extrude_interface(&mut interface, density, interface_angle);
+    // Base interface: the support pattern (straight lines over 95 %, and under organic trees, which print with a
+    // sheath) at the interface's spacing and density, turned as the interface, in the base's line (Orca's
+    // `filler_base_interface`).
+    let base_interface_density = if p.top_interfaces > 0 || p.bottom_interfaces == 0 {
+        p.top_interface_density
+    } else {
+        p.bottom_interface_density
+    };
+    if let Some(item) = base_interface.as_mut() {
+        let area = item.to_extrude.clone().unwrap_or_else(|| item.polygons.clone());
+        let g = &arena[item.layer];
+        for shape in &geom::union_all(&[&area]) {
+            let lines = if base_interface_density > 0.95 || p.raft_sheath {
+                monotonic::rectilinear(shape, interface_angle, origin, p.spacing, base_interface_density)
+            } else {
+                base_support::fill(shape, interface_angle, origin, p.spacing, base_interface_density)
+            };
+            for line in lines {
+                item.paths.push(crate::support::Item::Path(path(Role::Support, line, p.width, g.height)));
+            }
+        }
+    }
     let mut base = base;
     // A raft of one layer is its contact layer, on the plate.
     let mut first = raft_contact.is_some_and(|r| r.layers() == 1);
@@ -2008,8 +2258,19 @@ fn layer_paths(arena: &[Gen], z: f64, height: f64, found: [Option<usize>; 4], or
             }
         }
     }
+    // The base interface goes in with the base, after it, where both print.
+    let printed =
+        |item: &Option<Item>| item.as_ref().is_some_and(|i| !i.to_extrude.as_ref().unwrap_or(&i.polygons).is_empty());
+    if printed(&base) && printed(&base_interface) && could_merge(&base, &base_interface) {
+        let mut from = base_interface.take();
+        let paths = from.as_mut().map(|f| std::mem::take(&mut f.paths)).unwrap_or_default();
+        merge(&mut base, &mut from);
+        if let Some(b) = base.as_mut() {
+            b.paths.extend(paths);
+        }
+    }
     // Thickest first, as Orca prints them; their areas are where travels needn't retract.
-    let mut nonempty: Vec<Item> = [bottom, top, interface, base].into_iter().flatten().collect();
+    let mut nonempty: Vec<Item> = [bottom, top, interface, base_interface, base].into_iter().flatten().collect();
     nonempty.sort_by(|a, b| arena[b.layer].height.partial_cmp(&arena[a.layer].height).unwrap());
     let mut polys: Shapes = Vec::new();
     let mut items = Vec::new();
@@ -2090,7 +2351,8 @@ pub fn classic_layers(
                     }
                 }
                 AreaType::Roof1stLayer => {
-                    // A loop half a line in, then dense lines inside it.
+                    // A loop half a line in, then dense lines inside it; as support where it is base interface.
+                    let role = if g.interface_as_base { Role::Support } else { Role::SupportInterface };
                     let mut group: Vec<Path> = Vec::new();
                     for e in &geom::offset_square(&one_area, -0.5 * sp) {
                         for (k, contour) in e.iter().enumerate() {
@@ -2099,12 +2361,12 @@ pub fn classic_layers(
                                 pl.reverse();
                             }
                             pl.push(pl[0]);
-                            group.push(path(Role::SupportInterface, pl));
+                            group.push(path(role, pl));
                         }
                     }
                     for e in &geom::offset_square(&one_area, -sp) {
                         for line in monotonic::rectilinear(e, interface_angle, origin, sp, p.top_interface_density) {
-                            group.push(path(Role::SupportInterface, line));
+                            group.push(path(role, line));
                         }
                     }
                     if !group.is_empty() {

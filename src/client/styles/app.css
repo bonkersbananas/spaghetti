@@ -443,6 +443,28 @@
 .sg-fade-in {
   animation: sg-fade-in var(--sg-duration-fast) var(--sg-ease-out);
 }
+/* A logged attempt settles into the story: a ring in its outcome's colour that fades (worked: basil, partly:
+   semolina). Spaghetti gets a soft ink hush instead, never tomato: a failure is a note, not an error. */
+@keyframes sg-logged {
+  from {
+    box-shadow: 0 0 0 5px var(--sg-logged-ring);
+  }
+  to {
+    box-shadow: 0 0 0 5px transparent;
+  }
+}
+.sg-logged {
+  animation: sg-logged var(--sg-duration-slow) var(--sg-ease-out);
+}
+.sg-logged-success {
+  --sg-logged-ring: color-mix(in srgb, var(--color-basil) 40%, transparent);
+}
+.sg-logged-partial {
+  --sg-logged-ring: color-mix(in srgb, var(--color-semolina) 45%, transparent);
+}
+.sg-logged-failed {
+  --sg-logged-ring: color-mix(in srgb, var(--color-ink) 12%, transparent);
+}
 /* "Reading the page": the little sparkle breathes while Claude is on it. */
 @keyframes sg-pulse {
   50% {

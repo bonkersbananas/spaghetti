@@ -3,6 +3,7 @@ import type { ColourChoice } from "@shared/slicing/colours.ts";
 import { DEFAULT_SLICING } from "@shared/slicing/defaults.ts";
 import { filamentOfSpool } from "@shared/slicing/pantry.ts";
 import { renderPlate } from "@shared/slicing/render.ts";
+import type { Copies } from "@shared/slicing/settings.ts";
 import {
   QUALITIES,
   type QualityId,
@@ -21,6 +22,7 @@ import { ModelCard, type ModelState, SliceResult } from "@/components/builds/Mod
 import { SliceSettingsPanel, WorkspaceSlicing } from "@/components/builds/SliceSettings";
 import { BeforeAfter } from "@/components/ui/BeforeAfter";
 import { ChoiceTiles } from "@/components/ui/ChoiceTiles";
+import { CopiesRow } from "@/components/ui/CopiesRow";
 import { MetaList } from "@/components/ui/MetaList";
 import { type PlateOption, PlatePicker, plateParts } from "@/components/ui/PlatePicker";
 import { LayersGlyph, NozzleGlyph, StrengthGlyph, SupportsGlyph } from "@/components/ui/SlicingGlyphs";
@@ -352,6 +354,7 @@ export function SlicingSection() {
   const [quality, setQuality] = useState<QualityId>("fine");
   const [settings, setSettings] = useState(SETTINGS);
   const [defaults, setDefaults] = useState<SlicingDefaults | undefined>(undefined);
+  const [copies, setCopies] = useState<Copies | undefined>(12);
   const lying = useBracketLying(ORANGE);
   const plates = usePlateOptions(GREY);
   const many = usePlateOptions(GREY, 7);
@@ -662,6 +665,13 @@ export function SlicingSection() {
             couldn't slice
           </Label>
           <Panel className="flex max-w-md flex-col gap-5">
+            <SliceResult
+              state={sliced({ slice: { ...SAMPLE_SLICE, copies: 12 } })}
+              prefill={{ estimatedMinutes: 252, weightGrams: 336 }}
+              phone={false}
+              copies={{ value: copies, onChange: setCopies }}
+            />
+            <CopiesRow value={undefined} onChange={noop} />
             <SliceResult
               state={sliced({ again: { fraction: 0.42, words: "Fine" } })}
               prefill={{ estimatedMinutes: 72, weightGrams: 14 }}

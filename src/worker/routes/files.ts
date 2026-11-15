@@ -110,6 +110,7 @@ const fileSlice = z.object({
   dimensions: z.tuple([millimetres, millimetres, millimetres]).optional(),
   volume: z.tuple([millimetres, millimetres, millimetres]).optional(),
   fitScale: z.number().int().min(1).max(1000).optional(),
+  fitCopies: z.number().int().min(1).max(99).optional(),
   device: z.enum(["phone", "computer"]).optional(),
   fallback: z
     .object({
@@ -164,6 +165,13 @@ const fileSlice = z.object({
     })
     .optional()
     .describe("A 3MF project with several plates: the plate this slice is of, how many it has, and its height in mm."),
+  copies: z
+    .number()
+    .int()
+    .min(2)
+    .max(99)
+    .optional()
+    .describe("How many copies of the plate's objects this slice printed, each its own object; absent: one."),
   ms: z
     .number()
     .int()

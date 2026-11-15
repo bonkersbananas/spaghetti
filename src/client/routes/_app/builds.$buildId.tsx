@@ -305,11 +305,6 @@ function Build({ item }: { item: ItemView }) {
     bringIntoView(attemptId);
   };
 
-  // When any attempt has more than one photo, every entry keeps room for their column so the lead photos match.
-  const reserveExtras = story.some(
-    (attempt) => item.photos.filter((photo) => photo.attemptId === attempt.id).length > 1,
-  );
-
   const active = item.stage === "building";
   // A new build left empty removes itself when you leave it. Deferred a tick: React's dev double mount runs this cleanup too,
   // and the page is still the build's own then.
@@ -707,7 +702,6 @@ function Build({ item }: { item: ItemView }) {
                             openSheet(attempt.id);
                           }}
                           onFinish={(outcome) => openSheet(attempt.id, outcome)}
-                          reserveExtras={reserveExtras}
                           onCompare={comparePredecessor(attempt.id) ? () => openCompare(attempt.id) : undefined}
                           onSaveRecipe={
                             recipeSource(attempt) &&

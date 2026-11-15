@@ -99,6 +99,7 @@ export {
   SlidersHorizontal as SettingsIcon,
   Smiley as ReactIcon,
   Sparkle as SparkleIcon,
+  SquaresFour as GridIcon,
   Stack as LayersIcon,
   Star as WishIcon,
   Sun as SunIcon,

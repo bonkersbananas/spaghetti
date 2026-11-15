@@ -63,6 +63,8 @@ pub struct Config {
     pub support_top_distance: i64,
     pub support_bottom_distance: i64,
     pub support_roof_layers: usize,
+    /// How many of the roof's layers print as base interface (`Settings::base_interface_layers`).
+    pub support_roof_base_layers: usize,
     pub support_floor_layers: usize,
     pub support_line_spacing: i64,
     pub support_wall_count: i64,
@@ -78,6 +80,8 @@ pub struct Config {
     pub remove_small_overhangs: bool,
     /// Only cantilevers and sharp tails are held up (`support_critical_regions_only`).
     pub critical_regions_only: bool,
+    /// Automatic supports (`tree(auto)`), or only where painted (`tree(manual)`).
+    pub auto: bool,
     // `TreeSupportSettings`.
     pub branch_radius: i64,
     pub min_radius: i64,
@@ -196,6 +200,7 @@ impl Config {
             support_top_distance,
             support_bottom_distance,
             support_roof_layers: sp.top_interface_layers,
+            support_roof_base_layers: s.base_interface_layers().0,
             support_floor_layers: bottom_layers,
             support_line_spacing: scaled(sp.base_spacing),
             support_wall_count: sp.wall_count.max(1),
@@ -209,6 +214,7 @@ impl Config {
             tip_diameter,
             remove_small_overhangs: sp.remove_small_overhang,
             critical_regions_only: sp.critical_regions_only,
+            auto: !sp.kind.contains("manual"),
             branch_radius,
             min_radius,
             maximum_move_distance: move_distance(tree_angle),
@@ -272,9 +278,10 @@ impl Config {
 /// One object's trees before they are drawn: each support layer's branches, placed, and the roofs over them.
 pub struct Branches {
     pub layers: Vec<Vec<grow::Element>>,
-    /// Each support layer's contact roofs (right under the model) and interface roofs.
+    /// Each support layer's contact roofs (right under the model), interface roofs and base interface roofs.
     pub contacts: Vec<Shapes>,
     pub interfaces: Vec<Shapes>,
+    pub base_interfaces: Vec<Shapes>,
 }
 
 /// The trees grown for an object whose layers' slices are `slices` (`heights` thick), about `origin` (units, the
@@ -286,10 +293,19 @@ fn grown(
     s: &Settings,
     origin: (f64, f64),
     bed: [f64; 2],
+    painted: &overhangs::Painted,
 ) -> Option<(Config, volumes::Volumes, Branches)> {
     let c = Config::new(s);
-    let found = overhangs::detect(slices, heights, &c, s);
+    let found = overhangs::detect(slices, heights, &c, s, painted);
     let mut areas = overhangs::areas(&found);
+    // Each upright enforced triangle above the first layer holds a tip of its own, a circle 0.5 mm round its centre.
+    for (l, u) in painted.upright {
+        if *l > 0 && *l < areas.len() {
+            let at = geom::pt((u.x as i64 as f64 / 100.0).round() as i32, (u.y as i64 as f64 / 100.0).round() as i32);
+            let circle = geom::make_circle(0.5, 25e-6).into_iter().map(|q| geom::pt(q.x + at.x, q.y + at.y)).collect();
+            areas[*l].push(vec![circle]);
+        }
+    }
     // On a raft the support's layers start with the raft's, which hold nothing of the model.
     let raft = c.raft_layers.len();
     let raft_slices: Vec<Shapes>;
@@ -348,7 +364,8 @@ fn grown(
     let mut layers = seeds.layers;
     grow::grow(&c, &v, &mut layers);
     grow::place(&c, &v, &mut layers);
-    Some((c, v, Branches { layers, contacts: seeds.contacts, interfaces: seeds.interfaces }))
+    let (contacts, interfaces, base_interfaces) = (seeds.contacts, seeds.interfaces, seeds.base_interfaces);
+    Some((c, v, Branches { layers, contacts, interfaces, base_interfaces }))
 }
 
 /// Whether `p` lies within `reach` units of an edge of `area`.
@@ -374,7 +391,7 @@ pub fn branches(
     origin: (f64, f64),
     bed: [f64; 2],
 ) -> Option<Branches> {
-    grown(slices, heights, s, origin, bed).map(|(_, _, b)| b)
+    grown(slices, heights, s, origin, bed, &overhangs::Painted::default()).map(|(_, _, b)| b)
 }
 
 /// Whether an object sliced without supports needs them, as Orca checks it whatever the support settings
@@ -384,15 +401,17 @@ pub fn necessity(slices: &[Shapes], heights: &[f64], s: &Settings) -> Option<ove
 }
 
 /// An object's organic trees, drawn into the support's layers: each layer's branches, bottom contacts, and the
-/// roofs' contact and interface layers, for `support::generate_tree` to print.
+/// roofs' contact and interface layers, for `support::generate_tree` to print. Its painted supports (`painted`)
+/// enforce and block them as Orca's do.
 pub fn supports(
     slices: &[Shapes],
     heights: &[f64],
     s: &Settings,
     origin: (f64, f64),
     bed: [f64; 2],
+    painted: &overhangs::Painted,
 ) -> Option<crate::support::TreeLayers> {
-    let (c, v, mut b) = grown(slices, heights, s, origin, bed)?;
+    let (c, v, mut b) = grown(slices, heights, s, origin, bed, painted)?;
     let drawn = draw::draw(&c, &v, &mut b.layers, &b.contacts, origin);
     let z = (0..b.layers.len()).map(|l| (if l > 0 { c.layer_z(l - 1) } else { 0.0 }, c.layer_z(l))).collect();
     Some(crate::support::TreeLayers {
@@ -400,6 +419,7 @@ pub fn supports(
         bottom_contacts: drawn.bottom_contacts,
         contacts: b.contacts,
         interfaces: b.interfaces,
+        base_interfaces: b.base_interfaces,
         z,
     })
 }

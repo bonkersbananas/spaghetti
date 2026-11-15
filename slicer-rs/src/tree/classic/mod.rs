@@ -193,17 +193,27 @@ pub fn supports(
         return Vec::new();
     }
     let config = crate::tree::Config::new(s);
-    let found = crate::tree::overhangs::detect(&o.slices, o.height, &config, s);
-    if found.iter().all(|layer| layer.is_empty()) {
+    let found = crate::tree::overhangs::detect(&o.slices, o.height, &config, s, &o.painted());
+    // Painted upright triangles above the first layer hold a tip each, overhangs or not.
+    let upright: Vec<(usize, crate::segment::Upright)> =
+        o.upright.iter().filter(|(l, _)| *l > 0 && *l < o.slices.len()).copied().collect();
+    if found.iter().all(|layer| layer.is_empty()) && upright.is_empty() {
         return Vec::new();
     }
-    // The detected overhangs to the nanometre, which the tips are spaced along.
+    // The detected and enforced overhangs to the nanometre, which the tips are spaced along.
     let nm_overhangs: Vec<crate::geom::Shapes> = crate::par::map_range(found.len(), |l| {
-        if l > 0 && found[l].iter().any(|(_, k)| *k == crate::tree::overhangs::Kind::Detected) {
-            crate::tree::overhangs::detected_nm(&o.slices, o.height, &config, s, l)
-        } else {
-            Vec::new()
+        use crate::tree::overhangs::{Kind, detected_nm, enforced_nm};
+        let mut out = Vec::new();
+        if l > 0 && found[l].iter().any(|(_, k)| *k == Kind::Detected) {
+            out = detected_nm(&o.slices, o.height, &config, s, l);
         }
+        if l > 0
+            && found[l].iter().any(|(_, k)| *k == Kind::Enforced)
+            && let Some(enforcer) = o.enforcers.get(l)
+        {
+            out.extend(enforced_nm(&o.slices, s, enforcer, l));
+        }
+        out
     });
     let (min_layer_height, max_layer_height) = params.layer_bounds();
     // Orca keeps the top gap as a float, at least the thinnest layer.
@@ -224,6 +234,7 @@ pub fn supports(
     let contacts = contact::contact_points(
         &found,
         &nm_overhangs,
+        &upright,
         &data.outlines_below,
         o.print_z,
         o.height,
@@ -295,6 +306,8 @@ pub fn supports(
             first_layer_gap: sp.first_layer_xy_distance,
             top_interface_layers: sp.top_interface_layers,
             bottom_interface_layers: sp.bottom_interface_layers,
+            top_base_interface_layers: s.base_interface_layers().0,
+            bottom_base_interface_layers: s.base_interface_layers().1,
             layer_height: s.layer_height,
             line_width: sp.line_width,
             support_extrusion_width: sp.line_width,

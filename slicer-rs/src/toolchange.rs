@@ -163,26 +163,34 @@ pub struct Plate<'a> {
     pub object_tops: &'a [f64],
 }
 
-/// Orca's `mark_wiping_extrusions` for supports (`flush_into_support`): a change to filament `to` flushes `volume`
-/// (mm³) into the supports on its layer that nothing has flushed into yet, object by object in the plate's order, each
-/// one's base before its interface, but only where the object has a layer there; `taken` keeps the filament that
-/// flushed into each. Returns what is left to flush on the tower, in single precision as Orca counts it down.
+/// Orca's `mark_wiping_extrusions` for supports (`flush_into_support`): a change from filament `from` to `to` flushes
+/// `volume` (mm³) into the supports on its layer that nothing has flushed into yet, object by object in the plate's
+/// order, each one's base before its interface, but only where the object has a layer there and only what prints in
+/// "don't care" filament (`own`: the base's and the interface's own filaments, if any; with the interface's kept out
+/// of the base, no change to or from it flushes into the base); `taken` keeps the filament that flushed into each.
+/// Returns what is left to flush on the tower, in single precision as Orca counts it down.
+#[allow(clippy::too_many_arguments)]
 fn flush_into_support(
     here: &[SupportHere],
     taken: &mut [(Option<usize>, Option<usize>)],
+    from: usize,
     to: usize,
     volume: f32,
+    own: (Option<usize>, Option<usize>),
+    interface_not_for_body: bool,
 ) -> f32 {
     if volume <= 0.0 || here.is_empty() {
         return volume.max(0.0);
     }
+    let base_open = own.0.is_none() && !(interface_not_for_body && own.1.is_some_and(|i| i == to || i == from));
+    let interface_open = own.1.is_none();
     let mut left = volume;
     for (support, (base, interface)) in here.iter().zip(taken.iter_mut()) {
         if !support.with_layer {
             continue;
         }
-        for (into, part) in [(base, Part::Base), (interface, Part::Interface)] {
-            if into.is_some() {
+        for (into, part, open) in [(base, Part::Base, base_open), (interface, Part::Interface, interface_open)] {
+            if into.is_some() || !open {
                 continue;
             }
             *into = Some(to);
@@ -243,33 +251,81 @@ impl Colours {
                 f
             })
             .collect();
+        let flush = Flush::of(palette);
+        let flag = |key: &str| -> Vec<bool> {
+            palette.profiles.iter().map(|p| p.list(key).first().copied() == Some("1")).collect()
+        };
+        let (soluble, for_support) = (flag("filament_soluble"), flag("filament_is_support"));
+        // The supports' own filaments, where they have them (Orca's `collect_extruders`): a layer with support base
+        // or interface prints in them too. A layer of support alone whose base is in "don't care" filament and whose
+        // interface has its own prints the base in the filament that flushes least from the interface's (not the
+        // interface's own, when it keeps out of the base), of all the plate prints in.
+        let own = settings.support.filaments(n);
+        // The first layer's objects' filaments, which its order starts with.
+        let first_objects: Vec<usize> = layer_filaments.first().cloned().unwrap_or_default();
+        if own != (None, None) {
+            let mut all: Vec<usize> = layer_filaments.iter().flatten().copied().chain(own.0).chain(own.1).collect();
+            all.sort_unstable();
+            all.dedup();
+            for (g, filaments) in layer_filaments.iter_mut().enumerate() {
+                let has_object = !plate.layer_objects[g].is_empty();
+                for here in supports_on(g) {
+                    let has_base = here.items.iter().any(|i| i.0 != Part::Interface);
+                    let has_interface = here.items.iter().any(|i| i.0 != Part::Base);
+                    if has_base {
+                        match (own.0, own.1) {
+                            (Some(b), _) => filaments.push(b),
+                            (None, Some(i)) if has_interface && !has_object => {
+                                let current = settings.support.interface_not_for_body.then_some(i);
+                                let mut next = current;
+                                let mut least = f32::MAX;
+                                for &f in &all {
+                                    if soluble[f] || Some(f) == current {
+                                        continue;
+                                    }
+                                    let v = flush.raw(0, i, f) as f32;
+                                    if v < least {
+                                        (next, least) = (Some(f), v);
+                                    }
+                                }
+                                filaments.extend(next);
+                            }
+                            _ => {}
+                        }
+                    }
+                    if has_interface && let Some(i) = own.1 {
+                        filaments.push(i);
+                    }
+                }
+                filaments.sort_unstable();
+                filaments.dedup();
+            }
+        }
         let mut used: Vec<usize> = layer_filaments.iter().flatten().copied().collect();
         used.sort_unstable();
         used.dedup();
-        let flush = Flush::of(palette);
         let objects: Vec<(usize, [f64; 4], f64)> = (0..object_filament.len())
             .map(|o| (object_filament[o], plate.object_reach[o], plate.object_tops[o]))
             .collect();
         let unprintable = filaments::unprintable(palette, &used, &objects);
 
-        // The first layer: the filament whose smallest island is largest first.
+        // The first layer: its objects' filaments (Orca's `generate_first_layer_tool_order`), the filament whose
+        // smallest island is largest first.
         let mut first_order: Vec<usize> = Vec::new();
-        if let Some(first) = layer_filaments.first() {
-            let mut min_area: Vec<(usize, f64)> = Vec::new();
-            for &f in first {
-                let area = (0..object_filament.len())
-                    .filter(|&o| object_filament[o] == f && plate.layer_objects[0].contains(&o))
-                    .map(|o| plate.first_island.get(o).copied().unwrap_or(0.0))
-                    .fold(f64::INFINITY, f64::min);
-                min_area.push((f, area));
-            }
-            for &(f, area) in &min_area {
-                let at = first_order
-                    .iter()
-                    .position(|g| min_area.iter().find(|m| m.0 == *g).is_some_and(|m| m.1 < area))
-                    .unwrap_or(first_order.len());
-                first_order.insert(at, f);
-            }
+        let mut min_area: Vec<(usize, f64)> = Vec::new();
+        for &f in &first_objects {
+            let area = (0..object_filament.len())
+                .filter(|&o| object_filament[o] == f && plate.layer_objects[0].contains(&o))
+                .map(|o| plate.first_island.get(o).copied().unwrap_or(0.0))
+                .fold(f64::INFINITY, f64::min);
+            min_area.push((f, area));
+        }
+        for &(f, area) in &min_area {
+            let at = first_order
+                .iter()
+                .position(|g| min_area.iter().find(|m| m.0 == *g).is_some_and(|m| m.1 < area))
+                .unwrap_or(first_order.len());
+            first_order.insert(at, f);
         }
         // Each layer's filaments as Orca's tool ordering lists them when it groups and orders them
         // (`handle_dontcare_extruder`): the first layer in its order, every later one ascending but for the filament
@@ -279,6 +335,8 @@ impl Colours {
         let mut listed = layer_filaments.clone();
         if let Some(l0) = listed.first_mut() {
             *l0 = first_order.clone();
+            // The supports' own filaments that no object prints in on it, after the objects', ascending.
+            l0.extend(layer_filaments[0].iter().copied().filter(|f| !first_order.contains(f)));
             if l0.is_empty() && !supports_on(0).is_empty() {
                 let first_used = layer_filaments.iter().find_map(|l| l.first().copied()).unwrap_or(0);
                 l0.push(first_used);
@@ -302,7 +360,9 @@ impl Colours {
         let extruder_of = filaments::group(palette, &listed, &used, &flush, &unprintable);
         let per_filament = filaments::settings_for(palette, &extruder_of);
         let k = filaments::extruders(&palette.profiles[0]);
-        let orders = order_layers(&layer_filaments, &first_order, &extruder_of, &flush, k);
+        // The first layer as listed: its objects' filaments, then the supports' own.
+        let first_listed = listed.first().cloned().unwrap_or_default();
+        let orders = order_layers(&layer_filaments, &first_listed, &extruder_of, &flush, k);
         let first = orders.iter().find_map(|o| o.first().copied()).unwrap_or(0);
 
         // The tower stands up to the last layer that changes filament.
@@ -338,10 +398,6 @@ impl Colours {
         in_nozzle[extruder_of[first]] = Some(first);
         // What each layer's supports took of the flushes (Orca's `mark_wiping_extrusions`): the filament flushed
         // into each one's base and into its interface. Soluble filament and support filament flush into nothing.
-        let flag = |key: &str| -> Vec<bool> {
-            palette.profiles.iter().map(|p| p.list(key).first().copied() == Some("1")).collect()
-        };
-        let (soluble, for_support) = (flag("filament_soluble"), flag("filament_is_support"));
         let mut taken: Vec<Vec<(Option<usize>, Option<usize>)>> =
             (0..layers).map(|g| vec![(None, None); supports_on(g).len()]).collect();
         let mut refusal = None;
@@ -381,7 +437,8 @@ impl Colours {
                     }
                     let unflushable = |f: usize| soluble[f] || for_support[f];
                     if settings.support.flush_into && !unflushable(current) && !unflushable(f) {
-                        purge = flush_into_support(supports_on(g), &mut taken[g], f, purge);
+                        let not_for_body = settings.support.interface_not_for_body;
+                        purge = flush_into_support(supports_on(g), &mut taken[g], current, f, purge, own, not_for_body);
                     }
                 }
                 in_nozzle[e] = Some(f);
@@ -413,9 +470,11 @@ impl Colours {
                 // Orca stops planning the tower once no layer above changes filament.
             }
         }
-        // Each support's filaments, as Orca's writer picks them (`process_layer`): what a flush went into prints in
-        // the filament flushed, the rest in the layer's first (the first neither soluble nor for support, if that
-        // is), the base apart from the interface where they differ.
+        // Each support's filaments, as Orca's writer picks them (`process_layer`): the base and the interface in
+        // their own filaments where they have them, else what a flush went into in the filament flushed, the rest in
+        // the layer's first (the first neither soluble nor for support, if that is; a base in "don't care" filament
+        // under an interface in its own, in the layer's first that is neither soluble nor the interface's), the base
+        // apart from the interface where they differ.
         let mut support_passes = vec![Vec::new(); layers];
         let mut flushing = vec![false; layers];
         for (g, order) in orders.iter().enumerate() {
@@ -427,7 +486,7 @@ impl Colours {
                     continue;
                 };
                 let (has_base, has_interface) = (whole != Part::Interface, whole != Part::Base);
-                let (base, interface) = match (base_to, interface_to) {
+                let (base, interface) = match (own.0.or(base_to), own.1.or(interface_to)) {
                     (Some(b), Some(i)) => (b, i),
                     (None, Some(i)) => (order.iter().copied().find(|&f| !soluble[f] && f != i).unwrap_or(first_f), i),
                     _ => {
@@ -438,7 +497,7 @@ impl Colours {
                         if for_support[d] {
                             d = order.iter().copied().find(|&f| !for_support[f]).unwrap_or(d);
                         }
-                        (base_to.unwrap_or(d), interface_to.unwrap_or(d))
+                        (own.0.or(base_to).unwrap_or(d), own.1.or(interface_to).unwrap_or(d))
                     }
                 };
                 // Both in one filament: all of it in one go, as a flush into its base took it.

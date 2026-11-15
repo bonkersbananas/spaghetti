@@ -711,7 +711,8 @@ pub struct Flush {
 pub const MIN_PURGE_VOLUME: f64 = 100.0;
 
 impl Flush {
-    fn raw(&self, extruder: usize, from: usize, to: usize) -> f64 {
+    /// The table's volume for extruder `extruder` from `from` to `to`, before the multiplier.
+    pub fn raw(&self, extruder: usize, from: usize, to: usize) -> f64 {
         self.volumes.get(extruder).and_then(|m| m.get(from)).and_then(|r| r.get(to)).copied().unwrap_or(0.0)
     }
 
