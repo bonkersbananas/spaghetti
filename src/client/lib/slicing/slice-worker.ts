@@ -549,7 +549,7 @@ function matchProject(
   }
   const plan = planProject(listed, used, spools, chosen.colours);
   // A filament that names no colour is shown in the stand-in colour the slice gives it.
-  const standIn = (slot: number) => STAND_IN_COLOURS[(slot - 1) % STAND_IN_COLOURS.length] ?? NO_COLOUR;
+  const standIn = (slot: number) => (STAND_IN_COLOURS[(slot - 1) % STAND_IN_COLOURS.length] ?? NO_COLOUR).toLowerCase();
   const rows: SliceColour[] = plan.rows.map((row) => ({
     hex: row.hex ?? standIn(row.slot),
     name: `Filament ${row.slot}`,
@@ -559,7 +559,7 @@ function matchProject(
     filament:
       row.match.filament.colorHex || row.match.filament.spoolId
         ? row.match.filament
-        : { ...row.match.filament, colorHex: standIn(row.slot).toLowerCase() },
+        : { ...row.match.filament, colorHex: standIn(row.slot) },
     inPantry: row.match.inPantry,
     ...(row.chosen ? { chosen: true } : {}),
   }));

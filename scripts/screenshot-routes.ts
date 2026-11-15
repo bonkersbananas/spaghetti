@@ -2057,7 +2057,8 @@ export const shots: Shot[] = [
       await openColour(page, settings, "first");
       await settings.getByText("Any colour…").first().click({ force: true });
       await settings.getByRole("radio", { name: "Neon yellow" }).click({ force: true });
-      await page.waitForTimeout(400);
+      // The pick is kept: the row says so once the settings have it.
+      await settings.getByText("a stand-in to try").waitFor({ timeout: 30_000 });
     },
     beforeShot: settleSliceSettings,
     cleanup: closeSliceSettings,
