@@ -10,9 +10,9 @@ How the numbers in [docs/proposals/rust-slicer.md](../../docs/proposals/rust-sli
 | `rust-native-1t` | The same on one thread (`RAYON_NUM_THREADS=1`) |
 | `rust-wasm-node` | The WebAssembly build (`cargo rustc --release --lib --crate-type cdylib --target wasm32-unknown-unknown --no-default-features`) in Node, through `wasm-node.mjs` |
 | `rust-wasm-chromium` | The same in headless Chromium, on the page's main thread (`wasm-browser.mjs`, `web/index.html`) |
-| `orca-wasm-node` | The OrcaSlicer engine the app runs today (Muon3D v0.6.1, single-threaded, OrcaSlicer 2.5.0-dev) in Node |
+| `orca-wasm-node` | The OrcaSlicer engine the app runs (Muon3D's engine, single-threaded) in Node: on OrcaSlicer 2.5.1 since the engine's release 4 (Nov 15); the proposal's speed tables ran it before then, Muon3D v0.6.1 on OrcaSlicer 2.5.0-dev |
 | `orca-wasm-chromium` | The same engine in headless Chromium, in a Web Worker as in the app |
-| `orca-native` | OrcaSlicer 2.5.0's own command line (the Linux AppImage), pinned to 4 cores |
+| `orca-native` | OrcaSlicer's own command line (the Linux AppImage), pinned to 4 cores: 2.5.0 where the proposal names 2.5.0, 2.5.1 where it names 2.5.1 |
 
 Every runner slices the same placed models with the same settings (the app's defaults: Bambu Lab X2D, 0.4 mm nozzle, 0.20 mm Standard, Bambu PLA Basic, Textured PEI). The Orca runners take them from the flattened presets the app's engine uses; this crate has the same presets built in (`profiles/x2d/`, read by Orca's keys in `src/config.rs`).
 
@@ -32,7 +32,7 @@ python3 -I bench/run.py --runs 3                                          # all 
 python3 -I bench/run.py --runs 3 --only rust-native --models benchy       # one of each
 ```
 
-The Orca runners need the engine and the native command line, which are not in the repository: `ORCA_SPIKE` points at the slicing spike's folder (the engine's release zip, its Node and browser runners and the flattened presets), `ORCA_NATIVE` at an extracted OrcaSlicer 2.5.0 AppImage. Runners whose tools are missing are skipped. Native Orca reads its presets from `ORCA_PRESETS` (default: the spike's); for the Textured PEI plate, as the app slices, add `"curr_bed_type": "Textured PEI Plate"` to a copy of the machine preset. It leaves the models where the files put them (`--arrange 0`), as ours does (`--keep-placement`), so both slice the same placement.
+The Orca runners need the engine and the native command line, which are not in the repository: `ORCA_SPIKE` points at the slicing spike's folder (the engine's release zip, its Node and browser runners and the flattened presets), `ORCA_NATIVE` at an extracted OrcaSlicer AppImage (2.5.1, as the app's engine since its release 4). Runners whose tools are missing are skipped. Native Orca reads its presets from `ORCA_PRESETS` (default: the spike's); for the Textured PEI plate, as the app slices, add `"curr_bed_type": "Textured PEI Plate"` to a copy of the machine preset. It leaves the models where the files put them (`--arrange 0`), as ours does (`--keep-placement`), so both slice the same placement.
 
 ## Other settings
 
