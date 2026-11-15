@@ -87,7 +87,7 @@ function Search() {
   const terms = searchTerms(q);
   const searching = terms.length > 0 || hasFilters(filters);
   const results = useQuery({
-    ...searchQuery(q.trim(), filterParams(filters, personId)),
+    ...searchQuery(q.trim(), filterParams(filters, personId), true),
     enabled: searching && (!filters.person || !!people),
   });
   const shown = searching ? results.data : undefined;
@@ -157,6 +157,8 @@ function Search() {
   };
 
   const total = list.length;
+  // The words the closest search ran on (filler dropped, no synonyms: the server lists them): one tap searches for just one.
+  const typedWords = shown?.closest ?? [];
   let index = -1;
   const row = (result: Result) => {
     index += 1;
@@ -311,6 +313,20 @@ function Search() {
                   <Extra part="understood" shown={shown} />
                 </Suspense>
               )}
+              {shown?.closest && typedWords.length > 1 && (
+                <div className="flex flex-col gap-3">
+                  <p className="text-body text-ink-soft">
+                    {typedWords.length === 2 ? "Nothing has both." : "Nothing has all of them."} Closest first:
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {typedWords.map((word) => (
+                      <ToggleChip key={word} icon={SearchIcon} onClick={() => pick(word)}>
+                        {word}
+                      </ToggleChip>
+                    ))}
+                  </div>
+                </div>
+              )}
               {!shown ? (
                 <div aria-hidden>
                   <RowSkeleton />
@@ -320,7 +336,7 @@ function Search() {
               ) : total === 0 ? (
                 <EmptyState className="py-8 md:py-14" illustration={<EmptyPot />} title="Not a single strand">
                   {terms.length
-                    ? "Nothing matches all of those words. Try fewer, or the start of one."
+                    ? "Nothing matches those words. Try the start of one, or another word."
                     : "Nothing matches these filters yet."}
                 </EmptyState>
               ) : (

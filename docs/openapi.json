@@ -17421,6 +17421,15 @@
             }
           },
           {
+            "name": "closest",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "const": "1"
+            }
+          },
+          {
             "name": "tag",
             "in": "query",
             "required": false,

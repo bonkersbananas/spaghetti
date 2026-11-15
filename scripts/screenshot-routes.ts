@@ -3320,6 +3320,15 @@ export const shots: Shot[] = [
     },
   },
   {
+    // Two words and nothing has both: the closest results at once, each word on its own a tap away.
+    name: "search-nothing",
+    path: "/search?q=PETG%20supports",
+    prepare: async (page) => {
+      await page.getByText("Closest first:").waitFor();
+      await page.getByRole("searchbox", { name: "Search" }).blur();
+    },
+  },
+  {
     // A build found by what Sam said in its thread: the comment is the snippet, with who and when.
     name: "search-comment",
     path: "/search?q=chunkier",

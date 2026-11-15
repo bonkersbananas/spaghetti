@@ -545,6 +545,8 @@ export interface SearchResponse {
   terms?: Array<{ text: string; prefix: boolean }>;
   /** The question with its mistyped words mended ("petgg" → "petg") when nothing matched as typed. */
   corrected?: string | null;
+  /** Nothing had every word: these have the most of them, best first (each word searched alone, merged). The words it ran on, filler dropped. */
+  closest?: string[] | null;
   /** "what worked" or "what failed" in the question: attempts that did are first. */
   intent?: "worked" | "failed" | null;
   /** A time phrase in the question ("last week"); `weekMonday` is set for weeks, to link the week's page. */

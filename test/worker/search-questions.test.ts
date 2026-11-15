@@ -242,3 +242,23 @@ describe("people by name", () => {
     expect((await search("Sam's")).builds.map((hit) => hit.item.id)).toEqual([coaster.id]);
   });
 });
+
+describe("the closest results", () => {
+  it("come only when asked, when nothing has every word, with the most-matching first", async () => {
+    const box = await createItem({ title: "Filament box", stage: "building" });
+    const blue = await logAttempt(box.id, { outcome: "failed", note: "Corners lifted", settings: petg() });
+    const clean = await logAttempt(box.id, {
+      outcome: "success",
+      note: "Clean supports",
+      settings: { filaments: [{ type: "PLA", brand: "Bambu" }] },
+    });
+    const strict = await search("petg supports");
+    expect(strict.attempts).toEqual([]);
+    expect(strict.closest).toBeNull();
+    const near = await search("petg supports", { closest: "1" });
+    expect(near.closest).toEqual(["petg", "supports"]);
+    expect(ids(near.attempts).sort()).toEqual([blue.id, clean.id].sort());
+    // Words with a whole match are answered as before.
+    expect((await search("clean supports", { closest: "1" })).closest).toBeNull();
+  });
+});
