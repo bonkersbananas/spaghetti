@@ -72,7 +72,11 @@ export default function SinceBlock() {
           );
         })}
       </div>
-      {(more > 0 || cut) && <p className="text-small text-ink-faint mt-1">and {cut ? "more" : more} in the journal</p>}
+      {(more > 0 || cut) && (
+        <p className="text-small text-ink-faint mt-1">
+          {cut ? "and more in the journal" : `and ${more} more in the journal`}
+        </p>
+      )}
     </Section>
   );
 }
