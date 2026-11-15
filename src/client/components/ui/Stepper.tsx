@@ -72,11 +72,11 @@ export function Stepper({
         aria-disabled={disabled || undefined}
         onKeyDown={(event) => {
           if (disabled) return;
-          if (event.key === "ArrowUp" || event.key === "ArrowRight") {
+          if (event.key === "ArrowUp" || event.key === "ArrowRight" || event.key === "+" || event.key === "=") {
             event.preventDefault();
             up();
           }
-          if (event.key === "ArrowDown" || event.key === "ArrowLeft") {
+          if (event.key === "ArrowDown" || event.key === "ArrowLeft" || event.key === "-") {
             event.preventDefault();
             down();
           }
