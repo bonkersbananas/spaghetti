@@ -891,7 +891,11 @@ impl Colours {
         let gaps =
             sn.profile.bool("prime_tower_skip_points") && !(nozzle_change && !piece.nozzle_change.is_extruder_change);
         if changing && gaps {
-            let route = self.route(last.0, after_plate, frame);
+            // From where Orca's reader of the change G-code says it leaves the nozzle: its last X and Y, and 0 for one
+            // it never moves (Orca reads them into a vector it never sets first, `gcode_last_pos` in `append_tcr`,
+            // which comes out 0 natively and in the app's engine alike). The X2D's change only moves Y.
+            let read = self.last_position(&change, [0.0; 3]).0;
+            let route = self.route(read, after_plate, frame);
             for (i, p) in route.iter().enumerate().take(route.len().saturating_sub(1)) {
                 if i == 0 {
                     steps.push(Step::Retract { length: None, wipe: None, lift: false });
