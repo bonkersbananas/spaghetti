@@ -7,9 +7,11 @@ import { md5Hex } from "../../../src/shared/slicing/md5.ts";
  * `_handle_start_config_nozzle` and `_extract_filament_sequence_from_archive` in bbs_3mf.cpp, `PartPlateList::load_from_3mf_structure`,
  * `PresetBundle::load_config_file_config` and `validate_presets`, `SelectMachineDialog`). Each rule says why.
  *
+ * `model: false` leaves out the rules for the objects' meshes (for a file from a slicer release that doesn't write them yet).
+ *
  * Returns what is wrong, none when Bambu Studio would open it in its preview, ready to print.
  */
-export function bambuStudioProblems(zip: Uint8Array): string[] {
+export function bambuStudioProblems(zip: Uint8Array, options: { model?: boolean } = {}): string[] {
   const problems: string[] = [];
   const files = unzipSync(zip);
   const names = Object.keys(files);
@@ -226,7 +228,7 @@ export function bambuStudioProblems(zip: Uint8Array): string[] {
   const settingsXml = text("Metadata/model_settings.config") ?? "";
   const info = text("Metadata/slice_info.config") ?? "";
   const infoObjects = [...info.matchAll(/<object\s[^>]*>/g)].map((m) => attr(m[0], "identify_id") ?? "");
-  if (infoObjects.length) {
+  if (infoObjects.length && options.model !== false) {
     const meshes = new Set<string>();
     const wrappers = new Map<string, string[]>();
     for (const m of model.matchAll(/<object\s([^>]*)>([\s\S]*?)<\/object>/g)) {
