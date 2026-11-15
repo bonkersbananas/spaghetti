@@ -53,6 +53,45 @@ test("J and K walk Up next first, then the inbox", async ({ page }) => {
   await expect(strip.first()).toBeFocused();
 });
 
+test("U queues the idea you're on, [ and ] reorder the queue, J and K walk ideas on an idea's page", async ({
+  page,
+}) => {
+  const headers = { Origin: new URL(page.url()).origin };
+  for (const title of ["Third", "Second", "First"]) {
+    await page.request.post("/api/items", { headers, data: { id: crypto.randomUUID(), title } });
+  }
+  await page.goto("/ideas");
+  const strip = page.getByRole("list", { name: "Up next" }).getByRole("link");
+  const inbox = page.getByRole("list", { name: "Ideas" }).getByRole("link");
+  await expect(inbox).toHaveCount(3);
+
+  // Queue the second card, then the first: the queue is Second, First.
+  await page.keyboard.press("j");
+  await page.keyboard.press("j");
+  await page.keyboard.press("u");
+  await expect(strip).toHaveCount(1);
+  await expect(inbox).toHaveCount(2);
+  await page.keyboard.press("j");
+  await expect(inbox.first()).toBeFocused();
+  await page.keyboard.press("u");
+  await expect(strip).toHaveCount(2);
+  // The card keeps the focus where it landed, and "[" moves it ahead of the other.
+  await expect(strip.nth(1)).toBeFocused();
+  await page.keyboard.press("[");
+  await expect(strip.nth(0)).toBeFocused();
+
+  // On an idea's page J goes to the next idea in the same order, K back, U takes it off the queue.
+  await page.keyboard.press("Enter");
+  await expect(page).toHaveURL(/\/ideas\/[0-9a-f-]+$/);
+  const first = page.url();
+  await page.keyboard.press("j");
+  await expect(page).not.toHaveURL(first);
+  await page.keyboard.press("k");
+  await expect(page).toHaveURL(first);
+  await page.keyboard.press("u");
+  await expect(page.getByRole("button", { name: "Up next" })).toHaveAttribute("aria-pressed", "false");
+});
+
 test("J and K also walk Today's cards", async ({ page }) => {
   const headers = { Origin: new URL(page.url()).origin };
   const id = crypto.randomUUID();

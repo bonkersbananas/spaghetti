@@ -46,7 +46,7 @@ import { useCaptureHere } from "@/lib/capture";
 import { announceDraft } from "@/lib/drafts";
 import { ariaShortcuts, shortcutCaps, useHotkeys } from "@/lib/hotkeys";
 import { addItemFile } from "@/lib/item-files";
-import { deleteItem, type ItemView, removePhoto, useItem, useItemFields } from "@/lib/items";
+import { deleteItem, type ItemView, removePhoto, useIdeas, useItem, useItemFields } from "@/lib/items";
 import { whyNotMove } from "@/lib/move";
 import { useScreenActions } from "@/lib/palette";
 import { photoSrc } from "@/lib/previews";
@@ -56,7 +56,7 @@ import { itemName, useRememberItem } from "@/lib/recent";
 import { SLICER_ACCEPT, useSlicerDropTarget } from "@/lib/slicer-drop";
 import { useStickyColumn } from "@/lib/sticky-column";
 import { makeTwist, suggestedTwistName, useTwists } from "@/lib/twists";
-import { setUpNext } from "@/lib/up-next";
+import { setUpNext, splitQueue } from "@/lib/up-next";
 import { useAfterPaint, useIsDesktop } from "@/lib/use-media-query";
 import { useSettled } from "@/lib/use-settled";
 import { toggleWishlist, useWishlistIds } from "@/lib/wishlist";
@@ -249,7 +249,22 @@ function Idea({ item }: { item: ItemView }) {
     photo: photos[0] ? { id: photos[0].id, color: photos[0].color } : null,
   });
 
+  // J and K walk the inbox in the order its page shows it (Up next first), so a Monday's triage never goes back to the grid.
+  const { items: inbox } = useIdeas();
+  const { queue, rest } = splitQueue(inbox);
+  const order = [...queue, ...rest];
+  const place = order.findIndex((idea) => idea.id === item.id);
+  const neighbour = (by: number) => {
+    const next = place < 0 ? undefined : order[place + by];
+    return next && !next.pending
+      ? () => void navigate({ to: "/ideas/$ideaId", params: { ideaId: next.id } })
+      : undefined;
+  };
   useHotkeys({
+    ideaUpNext:
+      canEdit(item.pending) && !item.pending ? () => setUpNext(queryClient, item, item.upNext === null) : undefined,
+    ideaNext: neighbour(1),
+    ideaPrevious: neighbour(-1),
     ideaBack: () => void navigate({ to: "/ideas" }),
     ideaPhotoPrevious: () => select(selectedIndex - 1),
     ideaPhotoNext: () => select(selectedIndex + 1),
