@@ -452,9 +452,10 @@ fn overhang_fan_overlap(threshold: &str) -> f64 {
 
 impl SupportSettings {
     /// Whether these are Orca's organic trees: tree supports made where they are needed, in the default style (which
-    /// Orca makes organic, as it does the grid and snug styles of normal supports) or the organic one.
+    /// Orca makes organic, as it does the grid and snug styles of normal supports) or the organic one, which Bambu
+    /// Studio names `tree_organic` (a name Orca doesn't know, so it takes the default: organic trees too).
     pub fn organic(&self) -> bool {
-        self.trees() && matches!(self.style.as_str(), "default" | "grid" | "snug" | "organic" | "")
+        self.trees() && matches!(self.style.as_str(), "default" | "grid" | "snug" | "organic" | "tree_organic" | "")
     }
 
     /// Tree supports, automatic (`tree(auto)`) or only where painted (`tree(manual)`).
@@ -527,7 +528,11 @@ impl SupportSettings {
             Some("this kind of support")
         } else if on
             && matches!(kind, "normal(auto)" | "normal(manual)")
-            && !matches!(self.style.as_str(), "default" | "grid" | "snug" | "")
+            // A tree's style on normal supports is their default, the grid, to Orca (`SupportParameters`).
+            && !matches!(
+                self.style.as_str(),
+                "default" | "grid" | "snug" | "organic" | "tree_organic" | "tree_slim" | "tree_strong" | "tree_hybrid" | ""
+            )
         {
             Some("this style of support")
         } else if self.raft_layers > 0 && self.raft_maker() == RaftMaker::ClassicTrees {

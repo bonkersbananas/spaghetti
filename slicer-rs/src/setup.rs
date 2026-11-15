@@ -172,6 +172,17 @@ mod tests {
         for style in ["tree_slim", "tree_strong", "tree_hybrid"] {
             assert!(read(&tree(&format!(r#", "support_style": "{style}""#))).is_ok(), "{style}");
         }
+        // Bambu Studio's name for organic trees, and a tree's style on normal supports, which Orca prints in the grid.
+        let organic = read(&tree(r#", "support_style": "tree_organic""#)).unwrap().settings;
+        assert!(organic.support.organic());
+        for style in ["organic", "tree_organic", "tree_hybrid"] {
+            let more = format!(r#", "support_type": "normal(auto)", "support_style": "{style}""#);
+            let normal = read(&tree(&more)).unwrap().settings;
+            assert!(
+                !normal.support.organic() && !normal.support.snug() && normal.support.classic().is_none(),
+                "{style}"
+            );
+        }
         assert_eq!(
             refused(&tree(r#", "support_style": "tree_unknown""#)),
             Some(Error::Unsupported("this style of tree support"))
