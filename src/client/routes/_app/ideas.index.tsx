@@ -17,7 +17,7 @@ import { Section } from "@/components/ui/Section";
 import { CardSkeleton } from "@/components/ui/Skeleton";
 import { useVia } from "@/lib/agents";
 import { useCapture } from "@/lib/capture";
-import { shortcutCaps } from "@/lib/hotkeys";
+import { shortcutCaps, useHotkeys } from "@/lib/hotkeys";
 import { useBuilds, useIdeas } from "@/lib/items";
 import { useListPicker } from "@/lib/list-picker";
 import { useArrived } from "@/lib/live";
@@ -73,6 +73,31 @@ function Ideas() {
     onMoveUp: index > 0 ? () => moveUpNext(queryClient, queue, item.id, -1) : undefined,
     onMoveDown: index >= 0 && index < queue.length - 1 ? () => moveUpNext(queryClient, queue, item.id, 1) : undefined,
     wish: item,
+  });
+  // U, [ and ] act on the card J and K stopped on: the keyboard's way to the card's menu. A moved card keeps the focus.
+  const picked = () => {
+    const href = document.activeElement?.closest("main [data-picks] a[href^='/ideas/']")?.getAttribute("href");
+    const id = href?.split("/").pop();
+    return id ? items.find((idea) => idea.id === id) : undefined;
+  };
+  const onPicked = (act: (idea: (typeof items)[number]) => void) => () => {
+    const idea = picked();
+    if (!idea || idea.pending) return;
+    act(idea);
+    // The card lands elsewhere in the page: the focused node is replaced, so find it again once it has.
+    requestAnimationFrame(() =>
+      setTimeout(
+        () => document.querySelector<HTMLElement>(`main [data-picks] a[href="/ideas/${idea.id}"]`)?.focus(),
+        0,
+      ),
+    );
+  };
+  useHotkeys({
+    listUpNext: isDesktop
+      ? onPicked((idea) => setUpNext(queryClient, idea, !queue.some((queued) => queued.id === idea.id)))
+      : undefined,
+    listMoveEarlier: isDesktop ? onPicked((idea) => moveUpNext(queryClient, queue, idea.id, -1)) : undefined,
+    listMoveLater: isDesktop ? onPicked((idea) => moveUpNext(queryClient, queue, idea.id, 1)) : undefined,
   });
   const card = (item: (typeof items)[number]) => (
     <IdeaCard
