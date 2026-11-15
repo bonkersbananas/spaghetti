@@ -1,8 +1,8 @@
+import type { Item } from "@shared/api";
 import { displayName } from "@shared/people";
 import { catchUp, sinceLabel } from "@shared/since";
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { useEffect, useMemo } from "react";
-import { photoAlt, plateAlt, plateCover } from "@/components/ideas/IdeaCard";
 import { MiniCard } from "@/components/ui/MiniCard";
 import { Reflow } from "@/components/ui/Reflow";
 import { Section } from "@/components/ui/Section";
@@ -15,6 +15,16 @@ import { useSinceFrom } from "@/lib/since";
 const everything = new URLSearchParams();
 /** A catch-up reads this many pages of the journal at most. */
 const MAX_PAGES = 5;
+
+/** The picture of a thing with no photo: its newest file's plate, else its newest attempt's (the card is named by its title beside it). */
+function plateOf(item: Item) {
+  const files = (item.files ?? []).filter((file) => file.hasThumb);
+  const newest = files.reduce<(typeof files)[number] | undefined>(
+    (best, file) => (!best || file.createdAt >= best.createdAt ? file : best),
+    undefined,
+  );
+  return newest ?? item.attempts.findLast((attempt) => attempt.file?.hasThumb)?.file ?? undefined;
+}
 
 /**
  * "Since Thursday": after a few days away, what the other person did, at the top of Today (desktop) and of the
@@ -61,9 +71,7 @@ export default function SinceBlock() {
             const cover =
               line.stage === "idea" ? item.photos[0] : (heroPhoto(item as never) ?? newestPhoto(item as never));
             // A build with no photo yet shows its newest plate picture, as the cards do.
-            const plate = cover
-              ? undefined
-              : (plateCover(item as never) ?? item.attempts.findLast((attempt) => attempt.file)?.file);
+            const plate = cover ? undefined : plateOf(item);
             return (
               <MiniCard
                 key={line.itemId}
@@ -75,9 +83,9 @@ export default function SinceBlock() {
                 }
                 photo={
                   cover
-                    ? { src: photoSrc(cover.id, "thumb"), alt: photoAlt(item as never), color: cover.color }
+                    ? { src: photoSrc(cover.id, "thumb"), alt: "", color: cover.color }
                     : plate
-                      ? { src: fileThumbSrc(plate), alt: plateAlt(item as never), fit: "contain" }
+                      ? { src: fileThumbSrc(plate), alt: "", fit: "contain" }
                       : undefined
                 }
                 note={line.stage === "idea" ? item.note : undefined}

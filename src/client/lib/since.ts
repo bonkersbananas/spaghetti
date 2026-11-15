@@ -1,4 +1,4 @@
-import { AWAY_MS, CATCH_UP_MS } from "@shared/since";
+import { AWAY_MS, CATCH_UP_MS } from "@shared/since-times";
 import { useSyncExternalStore } from "react";
 
 // This device's own record of when the app was last in use, for "Since Thursday". Not data: no server, no outbox.
@@ -47,7 +47,11 @@ export function markActive(now = Date.now()) {
 }
 
 /** Starts following use of the app (once, from the signed-in shell). Returns its stop. */
+let following = false;
+
 export function followActivity(): () => void {
+  if (following) return () => {};
+  following = true;
   markActive();
   // Only while in view: a tab left open in the background all night is not use.
   const beat = () => document.visibilityState === "visible" && write(ACTIVE, Date.now());
@@ -57,6 +61,7 @@ export function followActivity(): () => void {
   const leave = () => write(ACTIVE, Date.now());
   window.addEventListener("pagehide", leave);
   return () => {
+    following = false;
     window.clearInterval(timer);
     document.removeEventListener("visibilitychange", visible);
     window.removeEventListener("pagehide", leave);
