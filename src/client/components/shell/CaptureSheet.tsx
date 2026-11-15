@@ -1,6 +1,6 @@
 import type { Outcome } from "@shared/attempts";
 import { useLocation, useNavigate } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
 import { OutcomePicker } from "@/components/builds/Outcome";
 import { Button } from "@/components/ui/Button";
 import { ToggleChip } from "@/components/ui/Chip";
@@ -17,6 +17,9 @@ import { type CaptureTarget, useCapture } from "@/lib/capture";
 import { useBuilds } from "@/lib/items";
 import { photoSrc } from "@/lib/previews";
 import { useIsDesktop } from "@/lib/use-media-query";
+
+/** Only a print that went wrong asks what, so the tags load then. */
+const FailureTags = lazy(() => import("@/components/builds/FailureTags"));
 
 type Target =
   | { kind: "idea" }
@@ -96,15 +99,22 @@ export function CaptureSheet() {
     : found;
   const [asIdea, setAsIdea] = useState(!aim);
   const [outcome, setOutcome] = useState<Outcome | null>(null);
+  const [failureTags, setFailureTags] = useState<string[]>([]);
   // Each time it opens, it starts on "New idea" again.
   useEffect(() => {
     if (!open) {
       setAsIdea(true);
       setOutcome(null);
+      setFailureTags([]);
       setPickedPrint(null);
     } else if (aim) setAsIdea(false);
   }, [open, aim]);
   const target: Target = asIdea ? { kind: "idea" } : auto;
+  // What the printer thinks went wrong, offered first among the tags.
+  const suggestedFailure =
+    target.kind === "attempt"
+      ? builds.flatMap((b) => b.attempts).find((a) => a.id === target.attemptId)?.suggestedFailureTag
+      : null;
   const canSave = !!draft.trim() || photos.length > 0 || (target.kind === "attempt" && !!outcome);
 
   function onSave() {
@@ -120,7 +130,13 @@ export function CaptureSheet() {
     }
     const to: Exclude<CaptureTarget, { kind: "idea" }> =
       target.kind === "attempt"
-        ? { kind: "attempt", itemId: target.itemId, attemptId: target.attemptId, outcome }
+        ? {
+            kind: "attempt",
+            itemId: target.itemId,
+            attemptId: target.attemptId,
+            outcome,
+            failureTags: outcome === "success" ? [] : failureTags,
+          }
         : { kind: "item", itemId: target.itemId };
     if (!saveTo(to)) return;
     const here = pathname.endsWith(target.itemId);
@@ -284,8 +300,23 @@ export function CaptureSheet() {
             <OutcomePicker
               size="md"
               value={outcome}
-              onChange={(next) => setOutcome((current) => (current === next ? null : next))}
+              onChange={(next) => {
+                setOutcome((current) => (current === next ? null : next));
+                // The printer's guess starts picked (a tap takes it off), as in the attempt sheet.
+                if (next !== "success" && suggestedFailure && !failureTags.length) setFailureTags([suggestedFailure]);
+              }}
             />
+            {/* The same question the attempt sheet asks, right here: a failure is recorded without a trip to the build. */}
+            {(outcome === "failed" || outcome === "partial") && (
+              <Suspense fallback={null}>
+                <FailureTags
+                  outcome={outcome}
+                  value={failureTags}
+                  onChange={setFailureTags}
+                  suggested={suggestedFailure ?? undefined}
+                />
+              </Suspense>
+            )}
           </div>
         )}
       </div>

@@ -148,7 +148,7 @@ export function useDraftPhotos() {
 export type CaptureTarget =
   | { kind: "idea" }
   | { kind: "item"; itemId: string }
-  | { kind: "attempt"; itemId: string; attemptId: string; outcome?: Outcome | null };
+  | { kind: "attempt"; itemId: string; attemptId: string; outcome?: Outcome | null; failureTags?: string[] };
 
 /** Holds the capture sheet's state, so any screen can open it. */
 export function CaptureProvider({ children }: { children: ReactNode }) {
@@ -295,7 +295,7 @@ export function CaptureProvider({ children }: { children: ReactNode }) {
           queueFinish(target.itemId, attempt, {
             outcome: target.outcome,
             note: note ? (before ? `${before} ${note}` : note) : before,
-            failureTags: attempt.failureTags,
+            failureTags: target.failureTags?.length ? target.failureTags : attempt.failureTags,
             successNotes: attempt.successNotes,
           });
           setDraft("");
@@ -306,6 +306,10 @@ export function CaptureProvider({ children }: { children: ReactNode }) {
         const changes = {
           ...(note ? { note: before ? `${before} ${note}` : note } : {}),
           ...(target.outcome ? { outcome: target.outcome } : {}),
+          // What went wrong, picked in the sheet: only with a failure's outcome, and only when something was picked.
+          ...(target.outcome && target.outcome !== "success" && target.failureTags?.length
+            ? { failureTags: target.failureTags }
+            : {}),
         };
         if (Object.keys(changes).length) {
           void saveAttemptChanges(queryClient, target.itemId, target.attemptId, changes).catch(() =>

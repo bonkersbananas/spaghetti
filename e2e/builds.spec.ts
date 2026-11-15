@@ -174,6 +174,43 @@ test("adds a capture to the print that's running and finishes it", async ({ page
     .toEqual(["success", "Looks clean so far"]);
 });
 
+test("records what went wrong while finishing a print from the capture sheet", { tag: "@phone" }, async ({
+  page,
+  isMobile,
+}) => {
+  const id = crypto.randomUUID();
+  const headers = { Origin: origin(page) };
+  await page.request.post("/api/items", { headers, data: { id, title: "Tugboat", stage: "building" } });
+  await page.request.post(`/api/items/${id}/attempts`, { headers, data: { id: crypto.randomUUID(), outcome: null } });
+
+  await page.goto("/ideas");
+  await expect(page.getByRole("heading", { level: 1, name: "Ideas" })).toBeVisible();
+  if (isMobile) await page.getByRole("button", { name: "New idea" }).click();
+  else await page.keyboard.press("c");
+  const sheet = page.getByRole("dialog");
+  await sheet.getByRole("radio", { name: "This print" }).click();
+  // Nothing to answer yet: no tags until it went wrong.
+  await expect(sheet.getByText("What went wrong?")).toHaveCount(0);
+  await sheet.getByRole("radio", { name: "Spaghetti" }).click();
+  await expect(sheet.getByText("What went wrong?")).toBeVisible();
+  await sheet.getByRole("button", { name: "Bed adhesion" }).click();
+  // The tag question never gets the keyboard up on its own.
+  await expect(sheet.getByRole("textbox", { name: "New failure tag" })).toHaveCount(0);
+  await sheet.getByRole("button", { name: "Finish print" }).click();
+  await expect(sheet).toBeHidden();
+
+  await expect
+    .poll(async () => {
+      const [attempt] = (await getItem(page, id)).attempts;
+      return [attempt.outcome, attempt.failureTags];
+    })
+    .toEqual(["failed", ["bed-adhesion"]]);
+
+  // Found where failures are looked up.
+  await page.goto("/journal?outcome=failures");
+  await expect(page.getByText("Tugboat").first()).toBeVisible();
+});
+
 test("capture opens on a new idea on an idea's page, with this idea one tap away", async ({ page, isMobile }) => {
   const id = crypto.randomUUID();
   const headers = { Origin: origin(page) };
