@@ -103,6 +103,25 @@ describe("a model's picture in its own colours", () => {
     expect((await request(`/api/files/${id}/original-thumb`, { cookie })).status).toBe(404);
   });
 
+  it("keeps a project's filament rows (its number and type) with the slice", async () => {
+    const item = await idea();
+    const id = uuid();
+    await putModel(item.id, id);
+    const row = {
+      hex: "#c2412d",
+      name: "Filament 2",
+      slot: 2,
+      material: "PLA",
+      share: 0,
+      filament: { material: "PLA", spoolId: "spool-1" },
+      inPantry: true,
+      chosen: true,
+    };
+    const response = await putSliced(id, slicedForm({ colours: [row] }));
+    expect(response.status).toBe(200);
+    expect((await itemOf(item.id)).files?.[0]?.slice?.colours).toEqual([row]);
+  });
+
   it("is not claimed by a slice that comes back from an undo", async () => {
     const item = await idea();
     const id = uuid();
