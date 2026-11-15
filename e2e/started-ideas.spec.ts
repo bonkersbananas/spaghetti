@@ -175,6 +175,7 @@ test("a new build with a title is kept", async ({ page }) => {
     .getByRole("button", { name: /^(New build|Start a build)$/ })
     .first()
     .click();
+  await expect(page).toHaveURL(/\/builds\/[0-9a-f-]+/);
   const title = page.getByRole("textbox", { name: "Title" });
   await title.fill("Spool holder");
   const id = new URL(page.url()).pathname.split("/").pop() as string;
