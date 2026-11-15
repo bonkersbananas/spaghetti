@@ -96,6 +96,11 @@ export function PhotoViewer({ photos, index, onIndexChange, alt, onRemove, class
   // swiped to) is there at once, so it can travel from its card.
   const placed = useRef(false);
   useEffect(() => {
+    // Opening on the first photo: the strip is at its start already, so there is nothing to measure.
+    if (!placed.current && index === 0) {
+      placed.current = true;
+      return;
+    }
     const el = scroller.current;
     if (!el?.clientWidth) return;
     const target = index * el.clientWidth;

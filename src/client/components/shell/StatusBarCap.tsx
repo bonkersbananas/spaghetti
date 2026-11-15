@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { afterPaint } from "@/lib/after-paint";
 import { cn } from "@/lib/cn";
 
 /**
@@ -11,9 +12,13 @@ export function StatusBarCap() {
   const [scrolled, setScrolled] = useState(false);
   useEffect(() => {
     const update = () => setScrolled(window.scrollY > 4);
-    update();
+    // The first read waits for the paint: a page opens at its top (or the cap catches up a frame later).
+    const first = afterPaint(update);
     window.addEventListener("scroll", update, { passive: true });
-    return () => window.removeEventListener("scroll", update);
+    return () => {
+      first();
+      window.removeEventListener("scroll", update);
+    };
   }, []);
   return (
     <div

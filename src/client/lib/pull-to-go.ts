@@ -2,6 +2,7 @@ import { useRouter } from "@tanstack/react-router";
 import { animate, type MotionValue, useMotionValue } from "motion/react";
 import { useEffect, useRef, useState } from "react";
 import { sections, workshop } from "@/components/shell/sections";
+import { afterPaint } from "./after-paint";
 import { tick } from "./haptics";
 import { duration, spring } from "./motion";
 import { previousPlace } from "./previous-path";
@@ -171,7 +172,7 @@ export function usePullToGo(list: { to: string; label: string }, reduced: boolea
     const sync = () => {
       root.style.touchAction = window.scrollY <= 0 && window.matchMedia(PHONE).matches ? "pan-x pan-up" : "";
     };
-    sync();
+    const first = afterPaint(sync);
     window.addEventListener("scroll", sync, { passive: true });
     window.addEventListener("resize", sync);
     window.addEventListener("touchstart", onStart, { passive: true });
@@ -179,6 +180,7 @@ export function usePullToGo(list: { to: string; label: string }, reduced: boolea
     window.addEventListener("touchend", onEnd);
     window.addEventListener("touchcancel", onCancel);
     return () => {
+      first();
       root.style.touchAction = "";
       window.removeEventListener("scroll", sync);
       window.removeEventListener("resize", sync);
