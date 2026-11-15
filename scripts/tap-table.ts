@@ -349,7 +349,7 @@ const scenarios: Scenario[] = [
       const back = await tapLatency(
         env.page,
         () => env.press(undo),
-        `!!document.querySelector('main a[href="/ideas/${id}"]') || location.pathname.startsWith('/ideas')`,
+        `!!document.querySelector('main a[href="/ideas/${id}"]')`,
       );
       return { "delete: confirm → toast": del, "delete: Undo": back };
     },
@@ -490,6 +490,9 @@ try {
             "inp" in result && "shown" in result
               ? { [scenario.name]: result as TapResult }
               : (result as Record<string, TapResult>);
+          // A result that never showed (tapLatency says -1) is a failed run, not a fast one.
+          const missing = Object.entries(named).find(([, tap]) => tap.shown < 0);
+          if (missing) throw new Error(`"${missing[0]}": the result never showed`);
           for (const [name, tap] of Object.entries(named)) {
             const key = `${profile}|${name}`;
             const row = rows.get(key) ?? { profile, name, paint: [], shown: [], longTasks: [], longMs: [] };
