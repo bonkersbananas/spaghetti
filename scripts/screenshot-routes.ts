@@ -2251,6 +2251,18 @@ export const shots: Shot[] = [
     cleanup: closeSliceSettings,
   },
   {
+    // The panel opened by the key: focus starts on the picked tile of the first group, with its ring.
+    name: "slice-settings-focus",
+    path: "/ideas",
+    prepare: async (page) => {
+      const settings = await openSliceSettings(page, { idea: HOTDOG_IDEA, file: HOTDOG });
+      await page.keyboard.press("Shift");
+      await settings.getByRole("group", { name: "Strength" }).getByRole("radio").nth(1).focus();
+    },
+    beforeShot: settleSliceSettings,
+    cleanup: closeSliceSettings,
+  },
+  {
     // Lay it down (decision 0050): the faces a bracket can rest on, each a plate picture of it lying so, "As designed"
     // first and picked. A phone's sheet is scrolled to them.
     name: "slice-settings-lay",
