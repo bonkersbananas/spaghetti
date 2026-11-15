@@ -245,7 +245,7 @@ export function ColourMatches({
                       animate={{ height: "auto", opacity: 1 }}
                       exit={{ height: 0, opacity: 0 }}
                       transition={{ duration: duration.base, ease: ease.out }}
-                      className="col-span-2"
+                      className="col-span-2 overflow-hidden"
                     >
                       <div className="bg-ink/4 relative mt-0.5 mb-2 rounded-md p-3">
                         {/* A notch up to the header it belongs to: left half or right half of the panel. */}
