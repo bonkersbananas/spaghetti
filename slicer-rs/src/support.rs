@@ -151,6 +151,10 @@ pub struct Params {
     /// Whether the raft's base layers print a loop round their lines (Orca's `with_sheath`, which its organic trees
     /// turn on).
     raft_sheath: bool,
+    /// Organic trees with a base pattern that fills their branches (`support_base_pattern` rectilinear): each branch
+    /// island a loop round lines of the support pattern, straight ones where the trees have walls (Orca's
+    /// `base_fill_pattern`), rather than the loops alone (`tree_paths`).
+    organic_lines: Option<bool>,
 }
 
 impl Params {
@@ -250,6 +254,7 @@ impl Params {
             raft_expansion: sp.raft_expansion,
             raft_interface_density: (spacing / (sp.interface_spacing + spacing)).min(1.0),
             raft_sheath: if s.enable_support { sp.organic() } else { sp.raft_maker() == RaftMaker::OrganicTrees },
+            organic_lines: (sp.organic() && sp.base_pattern == "rectilinear").then_some(sp.wall_count > 0),
         }
     }
 
@@ -2537,6 +2542,19 @@ fn layer_paths(
                 first = true;
                 let angle = (std::f32::consts::FRAC_PI_2 + std::f32::consts::FRAC_PI_2) as f64;
                 item.paths.extend(flange_paths(&area, angle, origin, p));
+            } else if let Some(straight) = p.organic.then_some(p.organic_lines).flatten() {
+                // Orca's organic trees print with a sheath (`with_sheath`, which they turn on), so with a base pattern
+                // that fills them each island is a loop round the pattern's lines (`fill_expolygons_with_sheath_
+                // generate_paths`): the support's own pattern, or straight lines where the trees have walls.
+                let angle = std::f32::consts::FRAC_PI_2 as f64;
+                let line = Line { width: p.width, height: g.height, spacing: p.spacing };
+                item.paths.extend(sheath_paths(&area, line, Role::Support, false, |inner: &Shape| {
+                    if straight {
+                        monotonic::rectilinear(inner, angle, origin, p.spacing, p.density)
+                    } else {
+                        base_support::fill(inner, angle, origin, p.spacing, p.density)
+                    }
+                }));
             } else if p.organic {
                 item.paths.extend(tree_paths(&area, g.height, p));
             } else {

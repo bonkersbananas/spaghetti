@@ -200,8 +200,15 @@ mod tests {
             refused(&tree(r#", "support_style": "tree_hybrid", "support_base_pattern": "lightning""#)),
             Some(Error::Unsupported("this support pattern"))
         );
+        // A rectilinear base fills organic trees' branches inside their loops (support.rs); other patterns don't
+        // slice yet, nor any on classic trees.
+        assert!(read(r#"{"process": {"enable_support": "1", "support_base_pattern": "rectilinear"}}"#).is_ok());
+        for base in ["honeycomb", "rectilinear-grid", "lightning"] {
+            let json = format!(r#"{{"process": {{"enable_support": "1", "support_base_pattern": "{base}"}}}}"#);
+            assert_eq!(refused(&json), Some(Error::Unsupported("this support pattern")), "{base}");
+        }
         assert_eq!(
-            refused(r#"{"process": {"enable_support": "1", "support_base_pattern": "rectilinear"}}"#),
+            refused(&tree(r#", "support_style": "tree_slim", "support_base_pattern": "rectilinear""#)),
             Some(Error::Unsupported("this support pattern"))
         );
         let normal =

@@ -1319,12 +1319,14 @@ fn supports_on_the_plate_only_never_stand_on_the_object() {
     assert!(near(support, 512.82, 0.005) && near(interface, 32.28, 0.005), "{support} and {interface} mm³");
     // Organic trees lean out round the block to the plate (Orca: 2066.94 and 55.43, without plate-only 1334.63 and
     // 202.38); slim trees too (Orca: 2519.50 and 50.03, without it 3263.33 and 324.29). Just over the block's top
-    // no branch stands on it: those beside it reach a little over its edge, as Orca's do, none further in.
-    for (style, want_support, want_interface, share) in
-        [("tree_organic", 2066.94, 55.43, 0.03), ("tree_slim", 2519.50, 50.03, 0.01)]
-    {
-        let style_json =
-            if style == "tree_organic" { String::new() } else { format!(r#", "support_style": "{style}""#) };
+    // no branch stands on it: those beside it reach a little over its edge, as Orca's do, none further in. With a
+    // rectilinear base, organic trees print each branch as a loop round the support's lines (Orca 2.5.1, Nov 15:
+    // 2908.09 and 55.43, without plate-only 1859.90 and 202.38).
+    for (style, style_json, want_support, want_interface, share) in [
+        ("tree_organic", "", 2066.94, 55.43, 0.03),
+        ("tree_slim", r#", "support_style": "tree_slim""#, 2519.50, 50.03, 0.01),
+        ("rectilinear", r#", "support_base_pattern": "rectilinear""#, 2908.09, 55.43, 0.03),
+    ] {
         let (support, interface, lines) =
             sliced(&table, &on_plate(&format!(r#", "support_type": "tree(auto)"{style_json}"#)));
         assert!(near(support, want_support, share), "{style}: {support} mm³ of support");

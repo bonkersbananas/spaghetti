@@ -543,8 +543,12 @@ impl SupportSettings {
         } else if !on && self.wall_count > 0 {
             // A raft's base would print in walled columns.
             Some("these support settings")
-        } else if !(if on && (self.organic() || self.classic().is_some()) {
-            // Other patterns fill trees' branches rather than drawing them as loops.
+        } else if !(if on && self.organic() {
+            // Rectilinear fills organic trees' branches inside their loops (`support.rs`); other patterns fill them
+            // otherwise.
+            matches!(self.base_pattern.as_str(), "default" | "none" | "rectilinear" | "")
+        } else if on && self.classic().is_some() {
+            // Other patterns fill classic trees' branches rather than drawing them as walls.
             matches!(self.base_pattern.as_str(), "default" | "none" | "")
         } else {
             matches!(self.base_pattern.as_str(), "default" | "rectilinear" | "")
