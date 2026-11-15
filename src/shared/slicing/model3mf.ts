@@ -55,6 +55,11 @@ export interface ModelObject {
    */
   paint?: ModelPaint;
   /**
+   * A project's supports painted on it (each painted triangle's `paint_supports`: state 1 enforces support there, 2
+   * blocks it), when it has any; codes that aren't ones, or paint nothing or a state past 2, are left out.
+   */
+  supports?: ModelPaint;
+  /**
    * The colours the model gives it, as runs of its triangles in order (one run covering all of them when it is one
    * colour; triangles in none have no colour of their own). From the 3MF core's `basematerials` an object (or the
    * component it comes through) points at, or, in a Bambu or Orca project, from the colour of the filament it prints
@@ -172,6 +177,8 @@ interface Mesh {
   triangles: Float64Array;
   /** Painted triangles' codes (`paint_color`), by their index in the mesh. */
   paint?: Map<number, string>;
+  /** Triangles' painted supports' codes (`paint_supports`), by their index in the mesh. */
+  supports?: Map<number, string>;
 }
 
 interface ObjectDef {
@@ -242,20 +249,28 @@ function readMesh(body: string): Mesh {
     }
   };
   const paint = new Map<number, string>();
+  const supports = new Map<number, string>();
+  /** The code a triangle's `name` attribute holds, if it has one. */
+  const code = (tag: string, name: string) => {
+    const at = tag.indexOf(` ${name}="`);
+    if (at < 0) return "";
+    const from = at + name.length + 3;
+    return tag.slice(from, tag.indexOf('"', from));
+  };
   each("vertex", (tag) => vertices.push(number(tag, "x"), number(tag, "y"), number(tag, "z")));
   each("triangle", (tag) => {
-    // Bambu Studio and Orca write a painted triangle's colours in its `paint_color`.
-    const at = tag.indexOf(' paint_color="');
-    if (at >= 0) {
-      const code = tag.slice(at + 14, tag.indexOf('"', at + 14));
-      if (code) paint.set(triangles.length / 3, code);
-    }
+    // Bambu Studio and Orca write a painted triangle's colours in its `paint_color`, its supports in `paint_supports`.
+    const colour = code(tag, "paint_color");
+    if (colour) paint.set(triangles.length / 3, colour);
+    const support = code(tag, "paint_supports");
+    if (support) supports.set(triangles.length / 3, support);
     triangles.push(number(tag, "v1"), number(tag, "v2"), number(tag, "v3"));
   });
   return {
     vertices: Float64Array.from(vertices),
     triangles: Float64Array.from(triangles),
     ...(paint.size ? { paint } : {}),
+    ...(supports.size ? { supports } : {}),
   };
 }
 
@@ -394,6 +409,7 @@ export function readModel3mf(input: Uint8Array, options: ReadOptions = {}): Mode
     // Which part each run of triangles is of: the object's own component it comes through (null: the object's own).
     const runs: { part: string | null; from: number; to: number; colour?: ModelColour }[] = [];
     const painted: Painted = { triangles: [], codes: [] };
+    const supported: Painted = { triangles: [], codes: [] };
     const visit = (
       object: ObjectDef,
       transform: Matrix,
@@ -406,7 +422,7 @@ export function readModel3mf(input: Uint8Array, options: ReadOptions = {}): Mode
       const colour = object.colour ?? inherited;
       if (object.mesh) {
         const from = triangles.length / 9;
-        appendMesh(object.mesh, transform, scale.value, triangles, painted);
+        appendMesh(object.mesh, transform, scale.value, triangles, painted, supported);
         if (triangles.length / 9 > from)
           runs.push({ part, from, to: triangles.length / 9, ...(colour ? { colour } : {}) });
       }
@@ -422,6 +438,7 @@ export function readModel3mf(input: Uint8Array, options: ReadOptions = {}): Mode
     if (!triangles.length) continue;
     const parts = partsOf(runs, info);
     const paint = paintOf(painted);
+    const supports = paintOf(supported, SUPPORT_STATES);
     const plate = plateList.find((candidate) => candidate.index === plateIndex);
     const positions = Float32Array.from(triangles);
     if (plate) {
@@ -446,6 +463,7 @@ export function readModel3mf(input: Uint8Array, options: ReadOptions = {}): Mode
       ...(info?.extruder ? { extruder: info.extruder } : {}),
       ...(parts ? { parts } : {}),
       ...(paint ? { paint } : {}),
+      ...(supports ? { supports } : {}),
       ...(colours ? { colours } : {}),
     });
   }
@@ -533,8 +551,11 @@ interface Painted {
   codes: string[];
 }
 
-/** The paint of an object, its codes checked (none: undefined). */
-function paintOf(painted: Painted): ModelPaint | undefined {
+/** The states painted supports have: 1 enforces support, 2 blocks it. */
+const SUPPORT_STATES = 2;
+
+/** The paint of an object, its codes checked (none: undefined): states past `highest` aren't its kind's. */
+function paintOf(painted: Painted, highest?: number): ModelPaint | undefined {
   const triangles: number[] = [];
   const ends: number[] = [];
   let codes = "";
@@ -542,6 +563,7 @@ function paintOf(painted: Painted): ModelPaint | undefined {
     const states = paintCodeStates(code);
     // A code Orca can't read, or one that paints nothing (state 0 only): the triangle is the object's own.
     if (states === null || states <= 1) continue;
+    if (highest !== undefined && states >= 2 ** (highest + 1)) continue;
     triangles.push(painted.triangles[index] as number);
     codes += code;
     ends.push(codes.length);
@@ -550,7 +572,7 @@ function paintOf(painted: Painted): ModelPaint | undefined {
   return { triangles: Uint32Array.from(triangles), codes, ends: Uint32Array.from(ends) };
 }
 
-function appendMesh(mesh: Mesh, m: Matrix, scale: number, out: number[], painted?: Painted) {
+function appendMesh(mesh: Mesh, m: Matrix, scale: number, out: number[], painted?: Painted, supported?: Painted) {
   const v = mesh.vertices;
   const t = mesh.triangles;
   const count = v.length / 3;
@@ -564,6 +586,11 @@ function appendMesh(mesh: Mesh, m: Matrix, scale: number, out: number[], painted
     if (code !== undefined && painted) {
       painted.triangles.push(out.length / 9);
       painted.codes.push(code);
+    }
+    const support = mesh.supports?.get(i / 3);
+    if (support !== undefined && supported) {
+      supported.triangles.push(out.length / 9);
+      supported.codes.push(support);
     }
     for (const index of [a, b, c]) {
       const x = (v[index * 3] as number) * scale;

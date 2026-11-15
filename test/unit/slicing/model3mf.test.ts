@@ -176,6 +176,43 @@ describe("readModel3mf", () => {
     expect(plain?.paint).toBeUndefined();
   });
 
+  it("reads a project's painted supports beside its colours, with only the states supports have", () => {
+    // Each triangle's `paint_supports` (1 enforces support, 2 blocks it) and `paint_color`, in the mesh's order.
+    const painted = (attributes: (string | null)[]) =>
+      MESH.replace(/<triangle ([^/]*)\/>/g, (tag, inner: string) => {
+        const extra = attributes.shift();
+        return extra ? `<triangle ${inner} ${extra}/>` : tag;
+      });
+    const read = readModel3mf(
+      zip({
+        "3D/3dmodel.model": model(
+          `<resources>
+             <object id="1" type="model">${painted([
+               'paint_supports="4"',
+               'paint_supports="8" paint_color="8"',
+               'paint_supports="0C"',
+               'paint_supports="481"',
+             ])}</object>
+             <object id="2" type="model">${painted(['paint_color="4"', null, 'paint_supports="0"', null])}</object>
+           </resources>
+           <build><item objectid="1"/><item objectid="2" transform="1 0 0 0 1 0 0 0 1 60 0 0"/></build>`,
+        ),
+        "Metadata/model_settings.config": `<?xml version="1.0" encoding="UTF-8"?>
+<config><object id="1"><metadata key="name" value="Enforced"/></object></config>`,
+      }),
+    );
+    if (typeof read === "string") throw new Error(read);
+    const [enforced, coloured] = read.objects;
+    // An enforcer, a blocker and a triangle split between the two; state 3 is no support's (Orca refuses it).
+    expect([...(enforced?.supports?.triangles ?? [])]).toEqual([0, 1, 3]);
+    expect(enforced?.supports?.codes).toBe("48481");
+    expect([...(enforced?.supports?.ends ?? [])]).toEqual([1, 2, 5]);
+    expect([...(enforced?.paint?.triangles ?? [])]).toEqual([1]);
+    // A code that paints nothing is no support paint.
+    expect(coloured?.supports).toBeUndefined();
+    expect(coloured?.paint?.codes).toBe("4");
+  });
+
   it("knows a sliced file, and says what it can't read", () => {
     const sliced = readModel3mf(
       zip({
