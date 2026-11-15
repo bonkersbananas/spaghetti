@@ -352,7 +352,7 @@ function ColourMatchesDemo() {
 }
 
 function StandInPaletteDemo() {
-  const [hex, setHex] = useState<string | undefined>("#e4f01c");
+  const [hex, setHex] = useState<string | undefined>("#e4f01c"); // design-lint-ignore: a filament colour is data
   return <StandInPalette value={hex} onPick={setHex} />;
 }
 

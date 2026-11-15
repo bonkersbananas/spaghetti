@@ -4,10 +4,10 @@ import { SwatchPicker } from "./Swatch";
 
 /** Colours to try that a spool isn't usually bought in at first: the ones people ask "how would it look in…" about. */
 const TRYOUT_COLOURS: ReadonlyArray<{ name: string; hex: string }> = [
-  { name: "Neon yellow", hex: "#e4f01c" },
-  { name: "Neon green", hex: "#39e75f" },
-  { name: "Neon pink", hex: "#ff4fa3" },
-  { name: "Sky blue", hex: "#5bb5e8" },
+  { name: "Neon yellow", hex: "#e4f01c" }, // design-lint-ignore: a filament colour is data
+  { name: "Neon green", hex: "#39e75f" }, // design-lint-ignore: a filament colour is data
+  { name: "Neon pink", hex: "#ff4fa3" }, // design-lint-ignore: a filament colour is data
+  { name: "Sky blue", hex: "#5bb5e8" }, // design-lint-ignore: a filament colour is data
 ];
 const COLOURS = [...QUICK_COLORS, ...TRYOUT_COLOURS];
 
