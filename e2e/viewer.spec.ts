@@ -48,6 +48,7 @@ async function buildWithTugboat(page: Page, printing = false): Promise<string> {
 }
 
 test("opens the 3D view of a sliced file, scrubs its layers and closes with Escape", async ({ page }) => {
+  test.setTimeout(90_000); // the first open reads 317 layers in a worker, slow on a shared runner
   await signIn(page);
   const itemId = await buildWithTugboat(page);
   await page.goto(`/builds/${itemId}`);
@@ -69,6 +70,31 @@ test("opens the 3D view of a sliced file, scrubs its layers and closes with Esca
   await expect(dialog.getByText(/^Layer 101 of 317/)).toBeVisible();
   await page.keyboard.press("Shift+ArrowLeft");
   await expect(dialog.getByText(/^Layer 91 of 317/)).toBeVisible();
+  await page.keyboard.press("End");
+  await expect(dialog.getByText("Layer 317 of 317")).toBeVisible();
+
+  // Space plays and pauses the build-up from anywhere (not from a focused button); the readout moves only while it plays.
+  const readout = dialog.locator("p.tabular").first();
+  await slider.focus();
+  await page.keyboard.press("Space");
+  await expect(dialog.locator("[data-viewer=busy]")).toBeVisible();
+  await page.keyboard.press("Space");
+  await expect(dialog.locator("[data-viewer=ready]")).toBeVisible();
+  const paused = await readout.textContent();
+  await page.waitForTimeout(400);
+  expect(await readout.textContent()).toBe(paused);
+  // Space after a pause carries on from where the slider is, not from the first layer.
+  await slider.fill("199");
+  await page.keyboard.press("Space");
+  await page.waitForTimeout(300); // long enough for a restart from the first layer to show
+  expect(await readout.textContent()).toMatch(/^Layer (2\d\d|3\d\d) of 317/);
+  await page.keyboard.press("Space");
+  await expect(dialog.locator("[data-viewer=ready]")).toBeVisible();
+  // A step key while playing pauses.
+  await page.keyboard.press("Space");
+  await expect(dialog.locator("[data-viewer=busy]")).toBeVisible();
+  await page.keyboard.press("ArrowRight");
+  await expect(dialog.locator("[data-viewer=ready]")).toBeVisible();
   await page.keyboard.press("End");
   await expect(dialog.getByText("Layer 317 of 317")).toBeVisible();
 

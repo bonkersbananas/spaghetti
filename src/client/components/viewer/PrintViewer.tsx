@@ -187,20 +187,39 @@ export default function PrintViewer({ url, fileId, plate, fallbackColors, printi
     follow.current = false;
     const start = performance.now();
     const last = count - 1;
+    // Resuming after a pause carries on from the layer reached, in proportion of the time.
+    const from = Math.min(resumeFrom.current, last);
+    resumeFrom.current = 0;
+    const duration = Math.max(400, INTRO_MS * ((last - from) / last));
     const tick = (now: number) => {
-      const t = Math.min(1, (now - start) / INTRO_MS);
+      const t = Math.min(1, (now - start) / duration);
       const eased = t < 0.5 ? 2 * t * t : 1 - (-2 * t + 2) ** 2 / 2;
-      setLayer(Math.round(eased * last));
+      setLayer(Math.round(from + eased * (last - from)));
       if (t < 1) animation.current = requestAnimationFrame(tick);
       else {
         follow.current = true;
         setBuilding(false);
       }
     };
-    setLayer(0);
+    setLayer(from);
     animation.current = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(animation.current);
   }, [replays, state, count, setLayer]);
+
+  const resumeFrom = useRef(0);
+  const replay = (from = 0) => {
+    if (prefersReducedMotion()) return;
+    resumeFrom.current = from;
+    setBuilding(true);
+    setReplays((n) => n + 1);
+  };
+
+  // Pause where it is: the slider stays on the layer it reached.
+  const pause = () => {
+    cancelAnimationFrame(animation.current);
+    setBuilding(false);
+    follow.current = layer >= count - 1;
+  };
 
   const scrub = (index: number) => {
     cancelAnimationFrame(animation.current);
@@ -222,6 +241,16 @@ export default function PrintViewer({ url, fileId, plate, fallbackColors, printi
     if (tag === "INPUT" && type !== "range") return;
     const step = event.shiftKey ? 10 : 1;
     const key = event.key;
+    if (key === " ") {
+      // Space activates a focused button, link or radio, as it does everywhere.
+      if (target?.closest("button, a, summary, [role=button], [role=radio], [role=tab], [role=menuitem]")) return;
+      event.preventDefault();
+      if (!event.repeat && count > 1) {
+        if (building) pause();
+        else replay(layer < count - 1 ? layer : 0);
+      }
+      return;
+    }
     let next: number | null = null;
     if (key === "ArrowRight" || key === "ArrowUp") next = layer + step;
     else if (key === "ArrowLeft" || key === "ArrowDown") next = layer - step;
@@ -297,11 +326,7 @@ export default function PrintViewer({ url, fileId, plate, fallbackColors, printi
             label="Build it up again"
             size="sm"
             className="bg-cream/90 shadow-soft absolute right-3 bottom-3"
-            onClick={() => {
-              if (prefersReducedMotion()) return;
-              setBuilding(true);
-              setReplays((n) => n + 1);
-            }}
+            onClick={() => replay()}
           />
         )}
         {state === "ready" && summary?.stats.decimated && (
@@ -351,6 +376,8 @@ export default function PrintViewer({ url, fileId, plate, fallbackColors, printi
             step layers
             <Kbd keys={["Shift"]} className="ml-2" />
             ten at a time
+            <Kbd keys={["Space"]} className="ml-2" />
+            play or pause
           </p>
         </div>
       </div>
