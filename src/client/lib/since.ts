@@ -1,9 +1,6 @@
-import { AWAY_MS, CATCH_UP_MS } from "@shared/since-times";
 import { useSyncExternalStore } from "react";
-
-// This device's own record of when the app was last in use, for "Since Thursday". Not data: no server, no outbox.
-const ACTIVE = "sg-active";
-const SINCE = "sg-since";
+import * as clock from "./since-clock";
+import { ACTIVE, read, SINCE, write } from "./since-clock";
 
 interface Since {
   from: number;
@@ -11,22 +8,6 @@ interface Since {
 }
 
 const listeners = new Set<() => void>();
-
-function read(key: string): unknown {
-  try {
-    return JSON.parse(localStorage.getItem(key) ?? "null");
-  } catch {
-    return null;
-  }
-}
-
-function write(key: string, value: unknown) {
-  try {
-    localStorage.setItem(key, JSON.stringify(value));
-  } catch {
-    // Private mode or full: there is just no catch-up.
-  }
-}
 
 let current: Since | null = load();
 
@@ -37,13 +18,9 @@ function load(): Since | null {
 
 /** The app is in use now: after a long away that starts a catch-up from when it was last in use. */
 export function markActive(now = Date.now()) {
-  const last = read(ACTIVE);
-  if (typeof last === "number" && now - last >= AWAY_MS) {
-    current = { from: last, until: now + CATCH_UP_MS };
-    write(SINCE, current);
-    for (const listener of listeners) listener();
-  }
-  write(ACTIVE, now);
+  if (!clock.markActive(now)) return;
+  current = load();
+  for (const listener of listeners) listener();
 }
 
 /** Starts following use of the app (once, from the signed-in shell). Returns its stop. */
