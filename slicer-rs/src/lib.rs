@@ -1,3 +1,4 @@
+#![cfg_attr(feature = "wasm-threads", feature(stdarch_wasm_atomic_wait))]
 //! Spaghetti's experimental slicer: STL and plain 3MF in, a Bambu-flavoured `.gcode.3mf` out, with the defaults of
 //! decision 0046. Built for speed: layers are sliced, walled and filled in parallel (one thread in WebAssembly), on
 //! exact integer geometry. See `docs/proposals/rust-slicer.md` for what it does, how fast, and what it lacks.
@@ -48,10 +49,12 @@ pub mod toolchange;
 pub mod tree;
 #[cfg(target_arch = "wasm32")]
 mod wasm;
+#[cfg(feature = "wasm-threads")]
+pub mod pool;
 
 /// In WebAssembly, Talc's allocator rather than Rust's own (dlmalloc): about as fast on a Benchy, a little faster
 /// with trees, and a smaller module.
-#[cfg(target_arch = "wasm32")]
+#[cfg(all(target_arch = "wasm32", not(feature = "wasm-threads")))]
 #[global_allocator]
 static ALLOCATOR: talc::wasm::WasmDynamicTalc = talc::wasm::new_wasm_dynamic_allocator();
 pub mod wipe_tower;
@@ -1352,35 +1355,43 @@ impl std::error::Error for Error {}
 
 /// Runs work on every core where there are threads (rayon), else one item after the other.
 pub mod par {
-    #[cfg(feature = "parallel")]
+    #[cfg(feature = "wasm-threads")]
+    pub use crate::pool::{join, map_range};
+
+    #[cfg(feature = "wasm-threads")]
+    pub fn map_vec<T: Send, R: Send, F: Fn(T) -> R + Sync + Send>(items: Vec<T>, f: F) -> Vec<R> {
+        let cells: Vec<std::sync::Mutex<Option<T>>> = items.into_iter().map(|t| std::sync::Mutex::new(Some(t))).collect();
+        map_range(cells.len(), |i| f(cells[i].lock().unwrap().take().unwrap()))
+    }
+    #[cfg(all(feature = "parallel", not(feature = "wasm-threads")))]
     pub fn map_range<T: Send, F: Fn(usize) -> T + Sync + Send>(n: usize, f: F) -> Vec<T> {
         use rayon::prelude::*;
         (0..n).into_par_iter().map(f).collect()
     }
 
-    #[cfg(not(feature = "parallel"))]
+    #[cfg(all(not(feature = "parallel"), not(feature = "wasm-threads")))]
     pub fn map_range<T, F: Fn(usize) -> T>(n: usize, f: F) -> Vec<T> {
         (0..n).map(f).collect()
     }
 
     /// Each item's result, in order (on every core where there are threads).
-    #[cfg(feature = "parallel")]
+    #[cfg(all(feature = "parallel", not(feature = "wasm-threads")))]
     pub fn map_vec<T: Send, R: Send, F: Fn(T) -> R + Sync + Send>(items: Vec<T>, f: F) -> Vec<R> {
         use rayon::prelude::*;
         items.into_par_iter().map(f).collect()
     }
 
-    #[cfg(not(feature = "parallel"))]
+    #[cfg(all(not(feature = "parallel"), not(feature = "wasm-threads")))]
     pub fn map_vec<T, R, F: Fn(T) -> R>(items: Vec<T>, f: F) -> Vec<R> {
         items.into_iter().map(f).collect()
     }
 
-    #[cfg(feature = "parallel")]
+    #[cfg(all(feature = "parallel", not(feature = "wasm-threads")))]
     pub fn join<A: Send, B: Send>(a: impl FnOnce() -> A + Send, b: impl FnOnce() -> B + Send) -> (A, B) {
         rayon::join(a, b)
     }
 
-    #[cfg(not(feature = "parallel"))]
+    #[cfg(all(not(feature = "parallel"), not(feature = "wasm-threads")))]
     pub fn join<A, B>(a: impl FnOnce() -> A, b: impl FnOnce() -> B) -> (A, B) {
         (a(), b())
     }

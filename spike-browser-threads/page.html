@@ -1,0 +1,43 @@
+<!doctype html><meta charset=utf-8><title>threads</title>
+<script type="module">
+// Orca engine host driver
+function readStl(buf) {
+  const dv = new DataView(buf); const n = dv.getUint32(80, true); const out = new Float32Array(n * 9);
+  for (let t = 0; t < n; t++) for (let k = 0; k < 9; k++) out[t * 9 + k] = dv.getFloat32(84 + t * 50 + 12 + k * 4, true);
+  return out;
+}
+window.info = () => ({ coi: self.crossOriginIsolated, sab: typeof SharedArrayBuffer, cores: navigator.hardwareConcurrency });
+window.runOrca = async ({ base, variant, threads, models, runs }) => {
+  const manifest = await (await fetch(base + "manifest.json")).json();
+  const presets = await (await fetch(base + "presets.json")).json();
+  const meshes = await Promise.all(models.map(async (m) => readStl(await (await fetch(m)).arrayBuffer())));
+  const results = [];
+  const worker = new Worker(new URL(manifest.host.file, new URL(base, location.href)), { type: "module", name: "engine" });
+  let next = 1; const pending = new Map();
+  worker.onmessage = (ev) => { const d = ev.data; if (d?.v !== 2) return; const w = pending.get(d.id); if (!w) return;
+    if (d.kind === "result") { pending.delete(d.id); w.resolve(d.result); } else if (d.kind === "error") { pending.delete(d.id); w.reject(new Error(JSON.stringify(d.error))); } };
+  worker.onerror = (e) => { for (const w of pending.values()) w.reject(new Error("worker error " + e.message)); };
+  const call = (op, params) => new Promise((resolve, reject) => { const id = next++; pending.set(id, { resolve, reject }); worker.postMessage({ v: 2, id, op, params }); });
+  const t0 = performance.now();
+  await call("hello", { protocol: { major: 2 }, client: { name: "bench", version: "1" } });
+  await call("load", { variant, base: new URL(base, location.href).href, ...(threads ? { threads } : {}) });
+  const loadMs = performance.now() - t0;
+  const machine = presets.machine["Bambu Lab X2D 0.4 nozzle"], proc = presets.process["0.20mm Standard @BBL X2D"], fil = presets.filament["Bambu PLA Basic @BBL X2D 0.4 nozzle"];
+  window.__sliceStart = null;
+  for (let r = 0; r < runs; r++) {
+    const t1 = performance.now();
+    const res = await call("slice", { configs: { machine, process: { ...proc, curr_bed_type: "Textured PEI Plate" }, filaments: [fil] },
+      objects: meshes.map((positions, i) => ({ name: `m${i}.stl`, mesh: { positions: positions.slice() } })), output: { toolpaths: false } });
+    results.push({ ms: Math.round(performance.now() - t1), layers: res.stats.layers, est: res.stats.printTimeText, g: res.stats.filamentG, gcodeLen: (res.gcode.length ?? res.gcode.byteLength) });
+  }
+  const st = await call("status", {}).catch(() => null);
+  worker.terminate();
+  return { loadMs: Math.round(loadMs), results, status: st };
+};
+// slicer-rs threaded prototype
+window.runRs = async ({ wasm, threads, models, runs }) => {
+  const w = new Worker("/rs-worker.js", { type: "module" });
+  return new Promise((resolve, reject) => { w.onmessage = (e) => { w.terminate(); resolve(e.data); }; w.onerror = (e) => reject(new Error(e.message));
+    w.postMessage({ wasm, threads, models, runs }); });
+};
+</script>

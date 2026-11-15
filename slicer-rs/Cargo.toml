@@ -18,6 +18,7 @@ path = "src/main.rs"
 default = ["parallel"]
 # Slices layers on every core (rayon). Off for the WebAssembly build, which runs on one thread like the Orca engine.
 parallel = ["dep:rayon"]
+wasm-threads = []
 
 [dependencies]
 boostvoronoi = "0.12.1"
