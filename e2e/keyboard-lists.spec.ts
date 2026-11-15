@@ -84,10 +84,14 @@ test("U queues the idea you're on, [ and ] reorder the queue, J and K walk ideas
   await page.keyboard.press("Enter");
   await expect(page).toHaveURL(/\/ideas\/[0-9a-f-]+$/);
   const first = page.url();
+  // The page's own keys exist once the idea has drawn.
+  await expect(page.getByRole("button", { name: "Up next" })).toBeVisible();
   await page.keyboard.press("j");
   await expect(page).not.toHaveURL(first);
+  await expect(page.getByRole("button", { name: "Up next" })).toBeVisible();
   await page.keyboard.press("k");
   await expect(page).toHaveURL(first);
+  await expect(page.getByRole("button", { name: "Up next" })).toBeVisible();
   await page.keyboard.press("u");
   await expect(page.getByRole("button", { name: "Up next" })).toHaveAttribute("aria-pressed", "false");
 });

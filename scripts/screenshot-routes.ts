@@ -3481,6 +3481,20 @@ export const shots: Shot[] = [
     },
   },
   {
+    // Spaghetti picked in the same sheet: "What went wrong?" opens under the outcome, one tag tapped.
+    name: "capture-print-went-wrong",
+    path: `/builds/${SEED_BUILD_IDS.towelHook}`,
+    prepare: async (page) => {
+      await page.getByRole("button", { name: "New idea" }).first().click();
+      const sheet = page.getByRole("dialog");
+      await sheet.waitFor();
+      await sheet.getByRole("radio", { name: "This print" }).click();
+      await sheet.getByRole("radio", { name: "Spaghetti" }).click();
+      await sheet.getByRole("button", { name: "Bed adhesion" }).click();
+      await page.waitForTimeout(500);
+    },
+  },
+  {
     // A model link typed into the capture sheet: saving is the same one tap, Claude drafts after.
     name: "draft-capture",
     path: "/ideas",

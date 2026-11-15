@@ -271,3 +271,26 @@ test("AMS bays say what is left, and the desktop list view is remembered", async
   await page.getByRole("radio", { name: "Cards" }).click();
   expect(await page.evaluate(() => localStorage.getItem("sg-pantry-view"))).toBe("cards");
 });
+
+test("running-low spools go on the shopping list in one tap, and only once", { tag: "@phone" }, async ({ page }) => {
+  const headers = { Origin: origin(page) };
+  await addSpoolByApi(page, { material: "PLA", colorName: "Sunflower yellow", colorHex: "#f0b323", remaining: "low" });
+  await addSpoolByApi(page, { material: "PETG", colorName: "Teal", colorHex: "#1a8a8a", remaining: "empty" });
+
+  await page.goto("/pantry");
+  const low = page.getByRole("region", { name: "Running low" });
+  await low.getByRole("button", { name: "Add to shopping list" }).click();
+  await expect(low.getByRole("button", { name: "On the shopping list" })).toBeVisible();
+
+  const { shoppingItems } = await (await page.request.get("/api/shopping-items")).json();
+  const mine = ["Sunflower yellow, PLA", "Teal, PETG"];
+  const names = shoppingItems.map((item: { name: string }) => item.name);
+  expect(names.filter((name: string) => mine.includes(name)).sort()).toEqual(mine);
+
+  // Everything is on the list now: the button says so and stays quiet, so a second tap can't double it.
+  await expect(low.getByRole("button", { name: "On the shopping list" })).toBeDisabled();
+  const after = await (await page.request.get("/api/shopping-items")).json();
+  const added = after.shoppingItems.filter((item: { name: string }) => mine.includes(item.name));
+  expect(added).toHaveLength(2);
+  for (const item of added) await page.request.delete(`/api/shopping-items/${item.id}`, { headers });
+});
