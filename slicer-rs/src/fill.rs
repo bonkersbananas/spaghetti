@@ -104,6 +104,52 @@ pub fn sparse(area: &Shapes, grow: f64, p: &Sparse) -> Vec<Contour> {
     out
 }
 
+/// Orca's grid (`FillGrid`) on one shape of support, as its support generator fills interfaces in that pattern
+/// (`fill_expolygons_generate_paths`): lines two ways a quarter turn apart, each way at half the `density`, across the
+/// shape's box on a grid through `origin` (units), cut to the shape drawn in by half a spacing (all its parts at once,
+/// or the shape itself where nothing is left), joined along that edge with anchors as long as it is (`FillParams`'
+/// 1000 mm), and each then reversed, as the filler's layer is never set (`size_t(-1)`, odd). `angle` (radians) is
+/// Orca's `_infill_direction`, the filler's angle and a quarter turn, as `base_support::fill` takes it; `spacing` mm.
+///
+/// The shape is drawn in as Clipper2 draws it in (`offset_c2`), whose loops start where Orca's do: a grid's lines are
+/// evenly spaced, so many stretches of edge between them are equally long, and `connect` takes those in the order
+/// they come along the edge where that joins more lines. Where the equal stretches already join as many either way,
+/// Orca's order among them comes from nanometre rounding and an unstable sort, so a few joins and anchors differ.
+pub fn support_grid(shape: &Shape, angle: f64, origin: (f64, f64), spacing: f64, density: f64) -> Vec<Vec<Pt>> {
+    let density = density as f32 as f64;
+    if shape.first().is_none_or(|outer| outer.len() < 3) || density <= 0.0 || spacing <= 0.0 {
+        return Vec::new();
+    }
+    let p = Sparse {
+        pattern: Pattern::Grid,
+        origin,
+        z: 0.0,
+        layer: 0,
+        angle: 0.0,
+        spacing,
+        density,
+        anchor: 1000.0,
+        anchor_max: 1000.0,
+        trees: &[],
+        lattice_angles: [0.0; 2],
+    };
+    // Orca's box is the shape's own here: its support filler has no overlap with walls.
+    let lines = multilines_across(&shape[0], 0, angle as f32, &p);
+    let drawn_in = geom::offset_c2(&vec![shape.clone()], -0.5 * spacing, geom::Join::Miter(3.0));
+    let area: Shape = if drawn_in.is_empty() { shape.clone() } else { drawn_in.into_iter().flatten().collect() };
+    let grid = EdgeGrid::new(&area, 2.0 * geom::SCALE, 0.0);
+    let pieces: Vec<Piece> = clip(&lines, &grid).into_iter().filter(|c| c.points.len() >= 2).collect();
+    if pieces.is_empty() {
+        return Vec::new();
+    }
+    let anchor = p.anchor * geom::SCALE;
+    let mut joined = connect(pieces, &area, spacing * geom::SCALE, anchor, anchor);
+    for line in &mut joined {
+        line.reverse();
+    }
+    joined
+}
+
 fn fill_part(part: &Shape, p: &Sparse) -> Vec<Vec<Pt>> {
     if part.first().is_none_or(|outer| outer.len() < 3) || p.density <= 0.0 || p.spacing <= 0.0 {
         return Vec::new();
@@ -217,6 +263,14 @@ fn align(v: i64, step: i64) -> i64 {
 fn multilines(part: &Shape, p: &Sparse) -> Vec<Vec<(f64, f64)>> {
     // Orca's `_infill_direction` (floats): the infill angle and a quarter turn; no pattern here turns layer by layer.
     let base = p.angle.to_radians() as f32 + std::f32::consts::FRAC_PI_2;
+    // Orca's box is the area's before it is drawn in by half a spacing, which `part` is.
+    let half = (0.5 * p.spacing * 1e6).round() as i64;
+    multilines_across(&part[0], half, base, p)
+}
+
+/// `multilines` across the box of `outline` (units) grown by `grow` (nm) in each direction's frame, the directions
+/// turned from `base` (radians, Orca's `_infill_direction`).
+fn multilines_across(outline: &[Pt], grow: i64, base: f32, p: &Sparse) -> Vec<Vec<(f64, f64)>> {
     // Each way's angle from that, and how far it is shifted across (mm): the patterns' `SweepParams`.
     let (third, two_thirds) = (std::f32::consts::FRAC_PI_3, (std::f64::consts::PI * 2.0 / 3.0) as f32);
     let sweeps: Vec<(f32, f32)> = match p.pattern {
@@ -247,16 +301,15 @@ fn multilines(part: &Shape, p: &Sparse) -> Vec<Vec<(f64, f64)>> {
     }
     // Orca's lines run as far as the area before it is drawn in by half a spacing, less a spacing and a hair.
     let margin = (p.spacing * 1e6) as i64 + 100;
-    let half = (0.5 * p.spacing * 1e6).round() as i64;
     let mut out = Vec::new();
     for (angle_base, shift) in sweeps {
         let angle = (base + angle_base) as f64;
         let frame = Frame::new(p.origin, angle);
         let mut bb = [i64::MAX, i64::MAX, i64::MIN, i64::MIN];
-        for &q in &part[0] {
+        for &q in outline {
             let (x, y) = frame.to(q);
             let (x, y) = (x.round() as i64, y.round() as i64);
-            bb = [bb[0].min(x - half), bb[1].min(y - half), bb[2].max(x + half), bb[3].max(y + half)];
+            bb = [bb[0].min(x - grow), bb[1].min(y - grow), bb[2].max(x + grow), bb[3].max(y + grow)];
         }
         let (x_min, x_max) = (bb[0] + margin, bb[2] - margin);
         // The grid's reference: the object's centre, less the pattern's shift (Orca's `align_to_grid`).

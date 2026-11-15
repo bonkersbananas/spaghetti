@@ -123,12 +123,15 @@ pub struct Params {
     /// Orca's snug style of normal supports (`smsSnug`): the support follows the overhangs, closed and rounded off,
     /// rather than snapping to the grid; its interfaces are rounded off too, and none is left out under gentle slopes.
     snug: bool,
-    /// Radians added to the interfaces' direction: a quarter of a half turn back for snug supports whose interface
-    /// pattern is set to rectilinear (Orca's `support_interface_angle`), else none.
+    /// Radians added to the interfaces' direction (Orca's `support_interface_angle`): a quarter of a half turn back for
+    /// snug supports whose interface pattern is set to rectilinear, a quarter turn back for the grid, which runs at
+    /// the base's angle, else none.
     interface_turn: f64,
     /// Interfaces in straight lines turned an eighth of a turn either way by their layer's interface id
     /// (`rectilinear_interlaced`).
     interlaced: bool,
+    /// Interfaces in Orca's grid (`support_interface_pattern` grid), also where a contact prints as base.
+    grid: bool,
     /// The support meets the object above it without a gap (Orca's `zero_gap_interface_top`): each contact layer is
     /// the object's layer under its overhang.
     zero_gap_top: bool,
@@ -236,10 +239,13 @@ impl Params {
             snug: sp.snug(),
             interface_turn: if sp.snug() && sp.interface_pattern == "rectilinear" {
                 -(std::f32::consts::FRAC_PI_4 as f64)
+            } else if sp.interface_pattern == "grid" {
+                -(std::f32::consts::FRAC_PI_2 as f64)
             } else {
                 0.0
             },
             interlaced: sp.interlaced(),
+            grid: sp.interface_pattern == "grid",
             zero_gap_top: sp.zero_gap_top(),
             zero_gap_bottom: sp.zero_gap_bottom,
             double_wall_area: match sp.wall_count {
@@ -2329,8 +2335,9 @@ fn toolpaths(
 }
 
 /// Orca's `support_interface_angle` and the quarter turn its filler adds (radians, in single precision as Orca has
-/// them): the interfaces a quarter turn from the columns, turned back an eighth for snug supports set to rectilinear,
-/// or interlaced, an eighth of a turn either way by the layer's interface id.
+/// them): the interfaces a quarter turn from the columns, turned back an eighth for snug supports set to rectilinear
+/// and a quarter for the grid (the columns' angle), or interlaced, an eighth of a turn either way by the layer's
+/// interface id.
 fn interface_direction(p: &Params, id: usize) -> f64 {
     use std::f32::consts::{FRAC_PI_2, FRAC_PI_4};
     let turn = if p.interlaced { if id & 1 == 1 { FRAC_PI_4 } else { -FRAC_PI_4 } } else { p.interface_turn as f32 };
@@ -2458,8 +2465,8 @@ fn layer_paths(
     };
     // Interfaces: the support pattern a quarter turn from the columns', denser.
     let interface_angle = interface_direction(p, id);
-    // Orca's interface filler (`contact_fill_pattern`): the support pattern, or straight lines where the contact
-    // layers are denser than 95 % or interlaced.
+    // Orca's interface filler (`contact_fill_pattern`): the grid where it is set, else the support pattern, or
+    // straight lines where the contact layers are denser than 95 % or interlaced.
     let contact_density = if p.top_interfaces > 0 { p.top_interface_density } else { p.bottom_interface_density };
     let straight = contact_density > 0.95 || p.interlaced;
     let fill_interface = |item: &mut Option<Item>, density: f64, angle: f64, role: Role| {
@@ -2470,7 +2477,9 @@ fn layer_paths(
         }
         let g = &arena[item.layer];
         for shape in &geom::union_all(&[&area]) {
-            let lines = if straight {
+            let lines = if p.grid {
+                crate::fill::support_grid(shape, angle, origin, p.spacing, density)
+            } else if straight {
                 monotonic::rectilinear(shape, angle, origin, p.spacing, density)
             } else {
                 base_support::fill(shape, angle, origin, p.spacing, density)
