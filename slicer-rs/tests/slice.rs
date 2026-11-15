@@ -1029,6 +1029,38 @@ fn normal_supports() -> Settings {
 }
 
 #[test]
+fn normal_supports_leave_bridges_unsupported_as_orca_does() {
+    // Orca 2.5's "don't support bridges" (`bridge_no_support`): its normal supports leave out of the overhangs what
+    // the layer bridges (`remove_bridges_from_contacts`): its bottom bridges, and its walls where they span a gap
+    // straight and are held up at both ends. Its trees don't read the setting.
+    let options = Options { arrange: false, thumbnail: false, ..Options::default() };
+    let settings = |style: &str, off: &str| {
+        let json = format!(
+            r#"{{"process": {{"enable_support": "1", "support_type": "normal(auto)", "support_style": "{style}", "bridge_no_support": "{off}"}}}}"#
+        );
+        setup::read(&json).unwrap().settings
+    };
+    let volumes = |s: &Settings, name: &str, bytes: &[u8]| -> (f64, f64) {
+        let out = slice(&[Input { name, bytes }], s, &options).unwrap();
+        let feature = |role: Role| out.stats.features[Role::ALL.iter().position(|&r| r == role).unwrap()].volume;
+        (feature(Role::Support), feature(Role::SupportInterface))
+    };
+    // Two pillars under a beam: Orca holds the beam up (437 mm³ of support) unless bridges go unsupported, then
+    // prints no support at all.
+    let bridge: &[u8] = include_bytes!("models/bridge.stl");
+    assert!(volumes(&settings("default", "0"), "bridge.stl", bridge).0 > 400.0);
+    assert_eq!(volumes(&settings("default", "1"), "bridge.stl", bridge), (0.0, 0.0));
+    // The T: the slab's bottom bridges go unsupported; its walls, held up at one end only, keep their support. Orca's
+    // support and interface (mm³): 1193.25 and 63.54, snug 1031.57 and 24.79 (1358.6 and 90.7 with bridges held up).
+    let tee = boxes_stl(&[([115., 123., 0.], [125., 133., 20.]), ([100., 123., 20.], [140., 133., 25.])]);
+    for (style, support, interface) in [("default", 1193.25, 63.54), ("snug", 1031.57, 24.79)] {
+        let (got, got_interface) = volumes(&settings(style, "1"), "tee.stl", &tee);
+        assert!((got - support).abs() < 0.05, "{style}: {got} mm³ of support");
+        assert!((got_interface - interface).abs() < 0.05, "{style}: {got_interface} mm³ of interface");
+    }
+}
+
+#[test]
 fn normal_supports_hold_up_a_slab_from_layers_of_their_own() {
     // A T: a 10 mm pillar 20 mm tall under a 40 × 10 mm slab, 15 mm out on each side.
     let tee = boxes_stl(&[([115., 123., 0.], [125., 133., 20.]), ([100., 123., 20.], [140., 133., 25.])]);

@@ -187,6 +187,10 @@ mod tests {
             refused(&tree(r#", "support_style": "tree_unknown""#)),
             Some(Error::Unsupported("this style of tree support"))
         );
+        // Bridges left unsupported: normal supports leave them out (`support.rs`), and Orca's trees don't read it.
+        for more in [r#", "support_type": "normal(auto)", "bridge_no_support": "1""#, r#", "bridge_no_support": "1""#] {
+            assert!(read(&tree(more)).is_ok_and(|r| r.settings.unsupported().is_none()), "{more}");
+        }
         // Classic trees draw their branches as walls and their interfaces in the default pattern only.
         assert_eq!(
             refused(&tree(r#", "support_style": "tree_slim", "support_interface_pattern": "rectilinear""#)),
