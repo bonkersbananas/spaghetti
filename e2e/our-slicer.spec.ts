@@ -345,24 +345,38 @@ test("a painted project is sliced by ours in its colours, and by OrcaSlicer's en
   }
 });
 
-test("a project's supports painted on are printed by OrcaSlicer's engine, ours stepping aside", async ({ page }) => {
-  test.setTimeout(2 * SLICED);
+test("a project's supports painted on are printed by ours, and by OrcaSlicer's engine when it is picked", async ({
+  page,
+}) => {
+  test.setTimeout(3 * SLICED);
   await signIn(page);
   try {
     await setDefaults(page, { slicer: "spaghetti" });
-    // A T whose slab's underside enforces support, in a project that asks for supports only where painted.
+    // A T whose slab's underside enforces support, in a project that asks for supports only where painted: ours
+    // supports the slab where it is painted, under its two arms (since release 26).
     const { id, files } = await ideaWithModel(page, "Painted T", "painted-t.3mf", paintedSupportsProject());
-    await expect(files.getByText("Sliced by OrcaSlicer: our own slicer can't do supports painted on yet")).toBeVisible({
-      timeout: SLICED,
-    });
-    const file = await fileOf(page, id);
-    expect(file.slice.settings.slicer).toBe("orca");
-    expect(file.slice.fallback).toEqual({ why: "unsupported", what: "supports painted on" });
-    // The engine gets the paint, and supports the slab where it is painted: under its two arms.
-    const sliced = await page.request.get(`/api/files/${file.id}/sliced`);
-    const zip = unzipSync(new Uint8Array(await sliced.body()));
-    const gcode = strFromU8(zip["Metadata/plate_1.gcode"] ?? new Uint8Array());
-    expect(gcode).toContain("; FEATURE: Support");
+    await expect(files.getByText("Sliced by Spaghetti's own slicer")).toBeVisible({ timeout: SLICED });
+    const ours = await fileOf(page, id);
+    expect(ours.slice.settings.slicer).toBe("spaghetti");
+    expect(ours.slice.fallback).toBeUndefined();
+    const gcodeOf = async (fileId: string) => {
+      const sliced = await page.request.get(`/api/files/${fileId}/sliced`);
+      expect(sliced.ok()).toBe(true);
+      const zip = unzipSync(new Uint8Array(await sliced.body()));
+      return strFromU8(zip["Metadata/plate_1.gcode"] ?? new Uint8Array());
+    };
+    expect(await gcodeOf(ours.id)).toContain("; FEATURE: Support");
+
+    // OrcaSlicer's engine, picked under More, gets the paint too.
+    await files.getByRole("button", { name: "Slice with…" }).click();
+    const settings = page.getByRole("dialog", { name: "How to slice it" });
+    await settings.getByRole("button", { name: /^More/ }).click();
+    await settings.getByRole("group", { name: "Slicer" }).getByRole("radio", { name: "OrcaSlicer" }).click();
+    await expect.poll(async () => (await fileOf(page, id))?.slice?.settings.slicer, { timeout: SLICED }).toBe("orca");
+    await page.keyboard.press("Escape");
+    const engine = await fileOf(page, id);
+    expect(engine.slice.status).toBe("sliced");
+    expect(await gcodeOf(engine.id)).toContain("; FEATURE: Support");
   } finally {
     await setDefaults(page, null);
   }
