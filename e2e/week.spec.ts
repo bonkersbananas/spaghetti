@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { expect, type Page, test } from "@playwright/test";
 import { SEED_PASSWORD, SEED_USERS } from "../scripts/lib/local-app.ts";
-import { addWeeks, mondayOf } from "../src/shared/week.ts";
+import { addWeeks, mondayOf, weekIsReadyToWrite } from "../src/shared/week.ts";
 
 const user = SEED_USERS[0];
 const origin = (page: Page) => new URL(page.url()).origin;
@@ -61,8 +61,9 @@ test("shows the week's prints as photos, then a few lines, and turns to the week
   await expect(lines).toContainText(/\d+ prints?:/);
   await expect(lines.getByRole("link", { name: "Week test boat" })).toHaveAttribute("href", `/builds/${itemId}`);
   await expect(lines).toContainText(/About \d+ g of filament/);
-  // No paragraph by Claude: it isn't written until the week is over, and nothing about the page needs it.
-  await expect(page.getByLabel("Claude on the week")).toHaveCount(0);
+  // No paragraph by Claude: it isn't written until the week is over (or from Sunday 19:00, when this test, run on a
+  // Sunday evening, finds it written), and nothing about the page needs it.
+  if (!weekIsReadyToWrite(thisWeek(), Date.now())) await expect(page.getByLabel("Claude on the week")).toHaveCount(0);
 
   // This week is the last one: nothing after it.
   await expect(page.getByRole("button", { name: /^Next/ })).toHaveCount(0);
