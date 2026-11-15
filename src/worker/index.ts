@@ -9,6 +9,7 @@ import { pruneOauth } from "./oauth/grants.ts";
 import { oauthEndpoints } from "./oauth/index.ts";
 import { resumeReads } from "./photo-read/run.ts";
 import { purgeDeleted } from "./photos.ts";
+import { previewImage, previewPage, previewTarget } from "./previews.ts";
 import { sendNudges, sendUpkeepNudge } from "./push/nudges.ts";
 import { sendWeekPush } from "./push/week.ts";
 import { openRoutes } from "./routes/open.ts";
@@ -42,6 +43,10 @@ export default {
   fetch: (request, env, ctx) => {
     const { pathname } = new URL(request.url);
     if (pathname === "/" && (request.method === "GET" || request.method === "HEAD")) return home(request, env);
+    const read = request.method === "GET" || request.method === "HEAD";
+    if (read && pathname.startsWith("/og/")) return previewImage(request, env);
+    const target = read ? previewTarget(pathname) : null;
+    if (target) return previewPage(request, env, target);
     if (pathname === "/mcp") return mcpRoutes.fetch(request, env, ctx);
     if (pathname.startsWith("/.well-known/oauth-") || pathname.startsWith("/oauth/")) {
       return oauthEndpoints.fetch(request, env, ctx);
