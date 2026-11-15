@@ -969,8 +969,6 @@ impl Settings {
             // With a prime tower Orca turns the support's own layer heights off, which rounds the raft's gap to a
             // layer, and prints the tower through that gap on layers of its own.
             Some("a raft with several filaments")
-        } else if self.used_filaments > 1 && !self.enable_prime_tower {
-            Some("several filaments without a prime tower")
         } else if let Some(why) = self.tower_for_one.filter(|_| self.enable_prime_tower) {
             Some(why)
         } else if self.print_sequence == "by object" {

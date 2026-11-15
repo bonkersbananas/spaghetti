@@ -258,12 +258,35 @@ pub fn layers(group: &[(&LayerPlan, &LayerRegions, f64)], job: &Job) -> Vec<Laye
             (moves, notes, start, first, turn)
         })
         .collect();
-    let (factor, cooling_time) = slowdown(built.iter().map(|b| (b.0.as_slice(), b.2)), s);
-    if let Some(k) = factor {
-        for b in &mut built {
-            slow_down(&mut b.0, k, s);
+    let cooling_time = match job.colours.filter(|c| !c.towered) {
+        // Without a prime tower, each filament's moves apart, as Orca's cooling slows them.
+        Some(c) => {
+            let layers: Vec<CoolingLayer> = group
+                .iter()
+                .zip(&built)
+                .map(|(g, b)| (b.0.as_slice(), b.1.as_slice(), b.2, c.start(g.0.index)))
+                .collect();
+            let (slows, time) = slowdown_by_filament(&layers, c);
+            let starts: Vec<usize> = group.iter().map(|g| c.start(g.0.index)).collect();
+            for (b, start) in built.iter_mut().zip(starts) {
+                for_each_filament(&mut b.0, &b.1, start, |moves, f| {
+                    if let Some(k) = slows.get(f).copied().flatten() {
+                        slow_down(moves, k, &c.settings[f]);
+                    }
+                });
+            }
+            time
         }
-    }
+        None => {
+            let (factor, time) = slowdown(built.iter().map(|b| (b.0.as_slice(), b.2)), s);
+            if let Some(k) = factor {
+                for b in &mut built {
+                    slow_down(&mut b.0, k, s);
+                }
+            }
+            time
+        }
+    };
     let fans = layer_fans(group.last().map_or(0, |g| g.0.id), cooling_time, s);
     group
         .iter()
@@ -482,6 +505,11 @@ struct Builder<'a> {
     prior: f64,
     /// An overhang wall's width, mm³ per mm, speed and acceleration on this layer.
     overhang: (f64, f64, f64, f64),
+    /// Whether Orca's writer knows where the nozzle is (not after the timelapse photo, until the next travel), and
+    /// whether it lost it to a tool change's G-code without a tower, with where the old filament stopped.
+    known: bool,
+    lost: bool,
+    change_from: (f64, f64),
 }
 
 impl<'a> Builder<'a> {
@@ -526,6 +554,7 @@ impl<'a> Builder<'a> {
     fn travel(&mut self, x: f64, y: f64, with_z: bool) {
         let kind = if with_z { Kind::TravelZ } else { Kind::Travel };
         self.line(x, y, self.z, 0.0, self.s.travel_speed, kind);
+        self.known = true;
     }
 
     /// Travels to (`x`, `y`) with the nozzle lifting by the z-hop on the way, as Orca's slope lift does: up the travel
@@ -661,6 +690,36 @@ impl<'a> Builder<'a> {
             return;
         }
         self.line(self.x, self.y, self.z + self.s.z_hop, 0.0, self.s.travel_speed, Kind::Lift);
+        self.lifted = true;
+    }
+
+    /// Pulls the filament back to `length` mm in all, as Orca's writer does: as `retract_by` when it isn't pulled back
+    /// at all, else straight back by what it isn't pulled back by yet (a wipe takes up its path).
+    fn retract_to(&mut self, length: f64) {
+        if !self.retracted {
+            self.retract_by(length);
+            return;
+        }
+        let more = e_units(length) - e_units(self.retracted_mm);
+        if more > 0 {
+            self.line(self.x, self.y, self.z, -from_units(more), self.s.retract_speed, Kind::Retract);
+            self.retracted_mm = length;
+        }
+    }
+
+    /// Lifts the nozzle by the z-hop from where it is, lifted already or not, as Orca's eager lift does before its
+    /// change G-code: one turn round a point to the right of the nozzle where its writer knows where the nozzle is and
+    /// the turn stays on the plate, else straight up.
+    fn lift_again(&mut self) {
+        let s = self.s;
+        if s.z_hop <= 0.0 {
+            return;
+        }
+        let r = s.z_hop / (2.0 * PI * (s.travel_slope.to_radians()).atan());
+        let (cx, cy) = (self.x + r, self.y);
+        let fits = cx.min(s.bed[0] - cx).min(cy).min(s.bed[1] - cy) >= r;
+        let kind = if self.known && fits { Kind::Spiral { i: r, j: 0.0 } } else { Kind::Lift };
+        self.line(self.x, self.y, self.z + s.z_hop, 0.0, s.travel_speed, kind);
         self.lifted = true;
     }
 
@@ -828,9 +887,102 @@ impl<'a> Builder<'a> {
                     self.wipe = None;
                     self.note(Note::Tool(*filament));
                 }
+                Step::RetractTo { length } => {
+                    self.retract_to(*length);
+                    self.change_from = (self.x, self.y);
+                }
+                Step::LiftAgain => self.lift_again(),
+                Step::Switch { filament, pulled_back } => {
+                    if let Some(s) = colours.settings.get(*filament) {
+                        self.s = s;
+                        self.overhang = crate::plan::overhang_flow(self.first_layer, self.layer_height, s);
+                    }
+                    self.retracted = *pulled_back > 0.0;
+                    self.retracted_mm = *pulled_back;
+                    self.prior = 0.0;
+                    self.wipe = None;
+                    self.note(Note::Tool(*filament));
+                }
+                Step::Lost => {
+                    self.known = false;
+                    self.lost = true;
+                }
             }
         }
     }
+}
+
+/// Seconds the moves of custom G-code `text` take as Orca's cooling reckons a layer's time: each move's length (its
+/// arc's, a full turn for a lift's; the extruder's travel for one that only extrudes) over its speed, from `from` at
+/// `feed` mm/s.
+pub fn cooling_time(text: &str, from: [f64; 3], feed: f64) -> [f64; 2] {
+    let (mut at, mut feed, mut secs) = (from, feed, [0.0; 2]);
+    let mut side = 0;
+    for line in text.lines() {
+        // The tool change: what follows is the new filament's.
+        if line.starts_with('T') && line[1..].starts_with(|c: char| c.is_ascii_digit()) {
+            side = 1;
+        }
+        let code = line.split(';').next().unwrap_or("");
+        let mut words = code.split_whitespace();
+        let Some(cmd) = words.next().filter(|c| matches!(*c, "G0" | "G1" | "G2" | "G3")) else { continue };
+        let (mut to, mut e, mut ij, mut turn) = (at, 0.0f64, [0.0f64; 2], false);
+        for w in words {
+            let Ok(v) = w[1..].parse::<f64>() else { continue };
+            match w.as_bytes()[0] {
+                b'X' => to[0] = v,
+                b'Y' => to[1] = v,
+                b'Z' => to[2] = v,
+                b'E' => e = v,
+                b'F' => feed = v / 60.0,
+                b'I' => ij[0] = v,
+                b'J' => ij[1] = v,
+                b'P' => turn = v == 1.0,
+                _ => {}
+            }
+        }
+        let xy = if cmd != "G0" && cmd != "G1" && turn {
+            2.0 * PI * ij[0].hyp(ij[1])
+        } else {
+            (to[0] - at[0]).hyp(to[1] - at[1])
+        };
+        let d = xy.hyp(to[2] - at[2]);
+        let d = if d > 1e-9 { d } else { e.abs() };
+        if feed > 0.0 {
+            secs[side] += d / feed;
+        }
+        at = to;
+    }
+    secs
+}
+
+/// Custom G-code as Orca's cooling passes it on: a move's `F` that is the speed (whole mm/min) it moves at already left
+/// out (a line left with nothing but `G1` dropped), the speed it moves at after it in `feed`.
+fn drop_repeated_feeds(text: &str, feed: &mut i64) -> String {
+    let mut out = String::with_capacity(text.len());
+    for line in text.split_inclusive('\n') {
+        let is_move = ["G0 ", "G1 ", "G2 ", "G3 "].iter().any(|g| line.starts_with(g));
+        let code_end = line.find(';').unwrap_or(line.trim_end_matches('\n').len());
+        let Some(at) = line.get(2..code_end).filter(|_| is_move).and_then(|code| code.find(" F")).map(|k| k + 2) else {
+            out.push_str(line);
+            continue;
+        };
+        let digits: String = line[at + 2..].chars().take_while(|c| c.is_ascii_digit() || *c == '-').collect();
+        let value: i64 = digits.parse().unwrap_or(0);
+        if value != *feed {
+            *feed = value;
+            out.push_str(line);
+            continue;
+        }
+        let word_end = line[at + 2..].find([' ', ';', '\n']).map_or(line.len(), |k| at + 2 + k);
+        let head = line[..at].trim_end();
+        if (head == "G1" || head == "G0") && line[word_end..code_end.max(word_end)].trim().is_empty() {
+            continue;
+        }
+        out.push_str(head);
+        out.push_str(&line[word_end..]);
+    }
+    out
 }
 
 /// mm of filament in the hundred-thousandths of a millimetre the G-code writes.
@@ -1001,6 +1153,9 @@ fn build_layer<'a>(
         retracted_mm: s.retract_length,
         prior: 0.0,
         overhang: crate::plan::overhang_flow(first_layer, plan.height, s),
+        known: true,
+        lost: false,
+        change_from: (x0, y0),
     };
     if course.is_some() {
         b.line(x0, y0, plan.z, 0.0, s.travel_speed, Kind::Lift);
@@ -1037,6 +1192,8 @@ fn build_layer<'a>(
     // The object a path prints inside the labels of: none for a brim, which Orca prints before it starts the object.
     let owner = |p: &Path| (p.role != Role::Brim).then_some(p.object);
     let mut last: Option<&Path> = None;
+    // The last path before a tool change without a tower, which decides whether the travel after it retracts.
+    let mut before_change: Option<&Path> = None;
     // With several filaments: the visits to the prime tower between the filaments' paths, and the timelapse photo,
     // which Orca takes before the tower when the camera's extruder is about to stop printing.
     let mut next_visit = 0;
@@ -1059,6 +1216,7 @@ fn build_layer<'a>(
                 }
                 let photo = photo_note(&b);
                 b.note(photo);
+                b.known = false;
                 photo_taken = true;
             }
             let mut end = |b: &mut Builder<'a>| {
@@ -1067,10 +1225,44 @@ fn build_layer<'a>(
                 }
             };
             b.visit(&visit.steps, colours, &mut end);
+            before_change = last.or(before_change);
             last = None;
         }
         let to = path.points[0];
         let (x, y) = (geom::unsc(to.x), geom::unsc(to.y));
+        if b.lost {
+            // After a change without a tower Orca's writer doesn't know where the nozzle is: the travel from where the
+            // old filament stopped pulls the new one back as such a travel would (no wipe), goes over at the height
+            // the change left the nozzle at and down to the layer, which Orca then makes sure of once more.
+            b.lost = false;
+            if let Some(o) = owner(path) {
+                b.note(Note::Printing(o));
+            }
+            let (fx, fy) = b.change_from;
+            let d = (x - fx).hyp(y - fy);
+            b.set_accel(b.travel_accel(path, d));
+            let here = geom::pt(geom::sc(fx), geom::sc(fy));
+            if before_change.is_none_or(|prev| retracts(prev, path, d, here, to, &internal, b.s)) {
+                b.retract_to(b.s.retract_length);
+            }
+            if labels {
+                if let Some(o) = open_label.take() {
+                    b.note(Note::LabelEnd(o));
+                }
+                if let Some(o) = owner(path) {
+                    b.note(Note::LabelStart(o));
+                    open_label = Some(o);
+                }
+            }
+            b.travel(x, y, false);
+            b.line(x, y, plan.z, 0.0, b.s.travel_speed, Kind::Lift);
+            b.line(x, y, plan.z, 0.0, b.s.travel_speed, Kind::Lift);
+            b.lifted = false;
+            b.extrude(path);
+            last = Some(path);
+            before_change = None;
+            continue;
+        }
         match last {
             None if course.is_some() => {
                 // Spiral vase mode: from where the layer before ended, retracting and lifting straight up for a
@@ -1376,6 +1568,276 @@ fn slowdown<'m>(layers: impl Iterator<Item = (&'m [Move], [f64; 3])>, s: &Settin
         }
     }
     (Some(Slow::To(min)), slowest)
+}
+
+/// Calls `each` with each stretch of a layer's `moves` and the filament printing them, from `start` and as its notes
+/// change it (`Note::Tool`).
+fn for_each_filament(
+    moves: &mut [Move],
+    notes: &[(usize, Note)],
+    start: usize,
+    mut each: impl FnMut(&mut [Move], usize),
+) {
+    let (mut from, mut f) = (0, start);
+    for (k, note) in notes {
+        if let Note::Tool(next) = note {
+            let k = (*k).min(moves.len());
+            if k > from {
+                each(&mut moves[from..k], f);
+            }
+            (from, f) = (k.max(from), *next);
+        }
+    }
+    if from < moves.len() {
+        each(&mut moves[from..], f);
+    }
+}
+
+/// A layer as `slowdown_by_filament` takes it: its moves and notes, where the nozzle comes from, and the filament it
+/// starts with.
+type CoolingLayer<'m> = (&'m [Move], &'m [(usize, Note)], [f64; 3], usize);
+
+/// A filament's moves on a layer (or the layers cooled with it), as Orca's cooling slows them
+/// (`PerExtruderAdjustments`).
+#[derive(Clone, Debug, Default)]
+struct Share {
+    /// Seconds of moves it can't slow: travels, retractions, its tool change's G-code, extrusions at or below its
+    /// minimum speed.
+    fixed: f64,
+    /// The extrusions it can slow: (seconds, mm/s), fastest first.
+    lines: Vec<(f64, f64)>,
+    /// Orca's `time_total`, which its slowing down to a speed leaves at the extrusions' time alone.
+    total: f64,
+    /// Its seconds with every extrusion at its minimum speed.
+    max: f64,
+    min: f64,
+    layer_time: f64,
+    any: bool,
+    slowed: Option<Slow>,
+}
+
+impl Share {
+    fn elapsed(&self) -> f64 {
+        self.fixed + self.adjustable()
+    }
+
+    fn adjustable(&self) -> f64 {
+        self.lines.iter().map(|l| l.0).sum()
+    }
+
+    fn maximum(&self) -> f64 {
+        if self.min <= 0.0 && !self.lines.is_empty() {
+            return f64::INFINITY;
+        }
+        self.fixed + self.lines.iter().map(|&(t, v)| (t * v / self.min).max(t)).sum::<f64>()
+    }
+
+    /// Seconds slowing every extrusion faster than `f` down to it adds.
+    fn stretch_to(&self, f: f64) -> f64 {
+        self.lines.iter().filter(|l| l.1 > f).map(|&(t, v)| t * (v / f - 1.0)).sum()
+    }
+
+    fn slow_to(&mut self, f: f64) {
+        for l in &mut self.lines {
+            if l.1 > f {
+                l.0 *= (l.1 / f).max(1.0);
+                l.1 = f;
+            }
+        }
+        self.total = self.adjustable();
+        self.slowed = Some(match self.slowed {
+            Some(Slow::To(g)) => Slow::To(g.min(f)),
+            _ => Slow::To(f),
+        });
+    }
+
+    fn slow_to_minimum(&mut self) {
+        for l in &mut self.lines {
+            let t = (l.0 * l.1 / self.min).max(l.0);
+            l.1 = l.0 * l.1 / t;
+            l.0 = t;
+        }
+        self.total = self.elapsed();
+        self.slowed = Some(Slow::To(self.min));
+    }
+
+    fn proportional(&mut self, factor: f64) {
+        for l in &mut self.lines {
+            let t = l.0 * factor;
+            l.1 = l.0 * l.1 / t;
+            l.0 = t;
+        }
+        self.total = self.elapsed();
+        self.slowed = Some(Slow::By(factor));
+    }
+}
+
+/// Orca's `new_feedrate_to_reach_time_stretch`: the speed the extrusions of `shares` faster than `min` come down to so
+/// that they take `stretch` seconds longer.
+fn feed_for_stretch(shares: &[Share], range: &[usize], mut min: f64, stretch: f64) -> f64 {
+    const EPS: f64 = 1e-4;
+    let mut f = min;
+    for _ in 0..20 {
+        let (mut nomin, mut denom) = (0.0, stretch);
+        for &g in range {
+            for &(t, v) in &shares[g].lines {
+                if v > min {
+                    nomin += t * v;
+                    denom += t;
+                }
+            }
+        }
+        if denom < 0.0 {
+            return min;
+        }
+        f = nomin / denom;
+        if f < min + EPS {
+            return f;
+        }
+        if !range.iter().any(|&g| shares[g].lines.iter().any(|&(_, v)| v > min && v < f)) {
+            return f;
+        }
+        min = f;
+    }
+    f
+}
+
+/// Orca's `extruder_range_slow_down_non_proportional`: the fastest extrusions of the `range` of shares down first, all
+/// to one speed, until they take `stretch` seconds longer, none below a share's minimum speed (those with the higher
+/// minimum first).
+fn slow_range(shares: &mut [Share], range: &[usize], mut stretch: f64) {
+    const EPS: f64 = 1e-4;
+    let mut begin = vec![0usize; shares.len()];
+    let mut feed = range.iter().filter_map(|&g| shares[g].lines.first().map(|l| l.1)).fold(0.0, f64::max);
+    let mut by_min = range.to_vec();
+    by_min.sort_by(|a, b| shares[*b].min.total_cmp(&shares[*a].min));
+    loop {
+        let mut end = begin.clone();
+        for &g in &by_min {
+            let lines = &shares[g].lines;
+            let mut e = begin[g];
+            while e < lines.len() && lines[e].1 > feed - EPS {
+                e += 1;
+            }
+            end[g] = e;
+        }
+        let next = by_min.iter().filter_map(|&g| shares[g].lines.get(end[g]).map(|l| l.1)).fold(0.0, f64::max);
+        let mut a = 0;
+        while a < by_min.len() {
+            let rest = by_min[a..].to_vec();
+            let min = shares[by_min[a]].min;
+            if min == 0.0 {
+                let adjustable: f64 = rest.iter().map(|&g| shares[g].adjustable()).sum();
+                let rate = (adjustable + stretch) / adjustable;
+                for &g in &rest {
+                    shares[g].proportional(rate);
+                }
+                return;
+            }
+            let mut limit = next.max(min);
+            let most: f64 = rest.iter().map(|&g| shares[g].stretch_to(limit)).sum();
+            let done = most >= stretch;
+            if done {
+                limit = feed_for_stretch(shares, &rest, limit, stretch);
+            } else {
+                stretch -= most;
+            }
+            for &g in &rest {
+                shares[g].slow_to(limit);
+            }
+            if done {
+                return;
+            }
+            a += 1;
+            while a < by_min.len() && shares[by_min[a]].min > min - EPS {
+                a += 1;
+            }
+        }
+        if next == 0.0 {
+            break;
+        }
+        begin = end;
+        feed = next;
+    }
+}
+
+/// How Orca's cooling slows a layer printed in several filaments without a tower (`calculate_layer_slowdown`), and
+/// how long the layer takes then: each filament's moves apart (its tool change's G-code reckoned in), the filaments in
+/// turn, those with the shortest slow-down time first, each pass over a filament and those after it. As Orca does, a
+/// pass slows the filaments it reaches to one speed and leaves each one's total at its extrusions' time alone, so the
+/// pass over the next filament finds it short by its other moves' time and slows it again by that much.
+fn slowdown_by_filament(layers: &[CoolingLayer], c: &crate::toolchange::Colours) -> (Vec<Option<Slow>>, f64) {
+    let n = c.settings.len();
+    let mut shares: Vec<Share> = c
+        .settings
+        .iter()
+        .map(|s| Share { min: s.slow_down_min_speed, layer_time: s.slow_down_layer_time, ..Default::default() })
+        .collect();
+    for &(moves, notes, start, first) in layers {
+        let (mut at, mut f) = (start, first.min(n - 1));
+        let mut next_note = 0;
+        for k in 0..=moves.len() {
+            while let Some((at_k, note)) = notes.get(next_note).filter(|(i, _)| *i <= k) {
+                let _ = at_k;
+                match note {
+                    Note::Tool(g) => f = (*g).min(n - 1),
+                    Note::Tower(t) if t.plain => {
+                        shares[f].fixed += t.cooling[0];
+                        shares[t.filament.min(n - 1)].fixed += t.cooling[1];
+                        shares[f].any = true;
+                        if let Some(e) = t.end {
+                            at = e;
+                        }
+                    }
+                    _ => {}
+                }
+                next_note += 1;
+            }
+            let Some(m) = moves.get(k) else { break };
+            let t = simple_time(m, at);
+            at = [m.x, m.y, m.z];
+            let share = &mut shares[f];
+            share.any = true;
+            match m.kind {
+                Kind::Extrude(_) if m.f > share.min => share.lines.push((t, m.f)),
+                _ => share.fixed += t,
+            }
+        }
+    }
+    let mut elapsed = 0.0;
+    let mut order = Vec::new();
+    for (g, s) in shares.iter_mut().enumerate() {
+        s.lines.sort_by(|a, b| b.1.total_cmp(&a.1));
+        s.total = s.elapsed();
+        s.max = s.maximum();
+        if s.layer_time > 0.0 && s.any {
+            order.push(g);
+        } else {
+            elapsed += s.elapsed();
+        }
+    }
+    if order.iter().all(|&g| shares[g].lines.is_empty()) {
+        let total = elapsed + order.iter().map(|&g| shares[g].elapsed()).sum::<f64>();
+        return (vec![None; n], total);
+    }
+    order.sort_by(|a, b| shares[*a].layer_time.total_cmp(&shares[*b].layer_time));
+    for k in 0..order.len() {
+        let g = order[k];
+        let total = elapsed + order[k..].iter().map(|&h| shares[h].total).sum::<f64>();
+        let target = shares[g].layer_time * 1.001;
+        if total <= target {
+            let max = elapsed + order[k..].iter().map(|&h| shares[h].max).sum::<f64>();
+            if max > target {
+                slow_range(&mut shares, &order[k..], target - total);
+            } else {
+                for &h in &order[k..] {
+                    shares[h].slow_to_minimum();
+                }
+            }
+        }
+        elapsed += shares[g].elapsed();
+    }
+    (shares.iter().map(|s| s.slowed).collect(), elapsed)
 }
 
 /// Slows the layer's extrusions as `slowdown` says; like Orca's cooling, a slowed speed is a whole number of mm/min.
@@ -1843,10 +2305,13 @@ fn finish_layer(
         while next_note < notes.len() && notes[next_note].0 == k {
             match &notes[next_note].1 {
                 Note::Tower(tower) => {
-                    let text = tower.text.replace(
+                    let mut text = tower.text.replace(
                         ";_FORCE_RESUME_FAN_SPEED\n",
                         &format!("M106 P2 S{}\n{}", (255.0 * fans[1] / 100.0) as i64, fan_line(fans[0])),
                     );
+                    if tower.plain {
+                        text = drop_repeated_feeds(&text, &mut w.feed);
+                    }
                     t.extend_from_slice(text.as_bytes());
                     out.time += tower.secs;
                     out.travel_time += tower.secs - tower.extruding;
@@ -1861,7 +2326,9 @@ fn finish_layer(
                     }
                     // What the tower's G-code set, the writer doesn't know: it writes the next feature, width,
                     // height and speed again, as Orca does after the tower.
-                    (w.feature, w.width, w.height, w.feed) = (None, f64::NAN, f32::NAN, -1);
+                    if !tower.plain {
+                        (w.feature, w.width, w.height, w.feed) = (None, f64::NAN, f32::NAN, -1);
+                    }
                     if let Some(a) = tower.accel {
                         w.accel = a;
                     }
@@ -2690,6 +3157,9 @@ mod tests {
             retracted_mm: 0.0,
             prior: 0.0,
             overhang,
+            known: true,
+            lost: false,
+            change_from: (0.0, 0.0),
         };
         let p = |x: f64| geom::pt(geom::sc(x), 0);
         let speeds = [200.0, 120.0, 120.5, 199.5, 199.6, 50.0, 50.0];
