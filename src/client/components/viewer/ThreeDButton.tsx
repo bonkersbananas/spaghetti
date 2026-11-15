@@ -46,7 +46,8 @@ function LoadedViewer(props: import("./PrintViewer").PrintViewerProps) {
       </div>
     );
   }
-  return <div className="sg-stage size-full" />;
+  // Focus lands here while the code loads (not on Close), and moves on to the viewer's stage.
+  return <div className="sg-stage size-full outline-none" data-autofocus tabIndex={-1} />;
 }
 
 /** A sliced file (one with G-code) that the server kept can be opened in 3D: a model once it is sliced. */

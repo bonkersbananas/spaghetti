@@ -281,6 +281,13 @@ export default function PrintViewer({
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
+  // The viewer may mount after the sheet opened (its code loads lazily): take focus from the sheet's close button or the opener.
+  useEffect(() => {
+    const active = document.activeElement;
+    if (!active || active === document.body || active.closest("button, a, [data-autofocus]"))
+      stage.current?.focus({ preventScroll: true });
+  }, []);
+
   const text = layerReadout(layer, count || 1, heights.current[layer], times.current[layer]);
   const printed = summary?.filaments ?? [];
   const filaments =
@@ -300,7 +307,14 @@ export default function PrintViewer({
       className={cn("flex h-full min-h-0 flex-col", className)}
       data-viewer={state === "ready" && !building ? "ready" : state === "error" ? "error" : "busy"}
     >
-      <div ref={stage} className="sg-stage relative min-h-0 flex-1 overflow-hidden" data-vaul-no-drag>
+      <div
+        ref={stage}
+        className="sg-stage focus-ring-inset relative min-h-0 flex-1 overflow-hidden"
+        data-vaul-no-drag
+        // Where focus lands when the view opens (the sheet looks for data-autofocus): not the close button, so Space plays.
+        data-autofocus
+        tabIndex={-1}
+      >
         <canvas
           ref={canvas}
           className="absolute inset-0 block size-full"

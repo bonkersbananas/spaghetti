@@ -157,9 +157,12 @@ function DesktopSheet({
             if (!content) return;
             if (content.contains(document.activeElement)) return event.preventDefault();
             // The first one that is drawn: hidden file inputs and collapsed controls can't take focus.
-            const first = [...content.querySelectorAll<HTMLElement>(FOCUSABLE)].find(
-              (element) => element.getClientRects().length > 0,
-            );
+            // A body can name its own landing place with data-autofocus (the 3D view's stage).
+            const first =
+              content.querySelector<HTMLElement>("[data-autofocus]") ??
+              [...content.querySelectorAll<HTMLElement>(FOCUSABLE)].find(
+                (element) => element.getClientRects().length > 0,
+              );
             if (!first) return;
             event.preventDefault();
             // A radio group is entered at the one that is picked (as Tab does), not at its first.
