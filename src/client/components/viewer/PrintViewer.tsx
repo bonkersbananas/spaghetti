@@ -187,23 +187,29 @@ export default function PrintViewer({ url, fileId, plate, fallbackColors, printi
     follow.current = false;
     const start = performance.now();
     const last = count - 1;
+    // Resuming after a pause carries on from the layer reached, in proportion of the time.
+    const from = Math.min(resumeFrom.current, last);
+    resumeFrom.current = 0;
+    const duration = Math.max(400, INTRO_MS * ((last - from) / last));
     const tick = (now: number) => {
-      const t = Math.min(1, (now - start) / INTRO_MS);
+      const t = Math.min(1, (now - start) / duration);
       const eased = t < 0.5 ? 2 * t * t : 1 - (-2 * t + 2) ** 2 / 2;
-      setLayer(Math.round(eased * last));
+      setLayer(Math.round(from + eased * (last - from)));
       if (t < 1) animation.current = requestAnimationFrame(tick);
       else {
         follow.current = true;
         setBuilding(false);
       }
     };
-    setLayer(0);
+    setLayer(from);
     animation.current = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(animation.current);
   }, [replays, state, count, setLayer]);
 
-  const replay = () => {
+  const resumeFrom = useRef(0);
+  const replay = (from = 0) => {
     if (prefersReducedMotion()) return;
+    resumeFrom.current = from;
     setBuilding(true);
     setReplays((n) => n + 1);
   };
@@ -241,7 +247,7 @@ export default function PrintViewer({ url, fileId, plate, fallbackColors, printi
       event.preventDefault();
       if (!event.repeat && count > 1) {
         if (building) pause();
-        else replay();
+        else replay(layer < count - 1 ? layer : 0);
       }
       return;
     }
@@ -320,7 +326,7 @@ export default function PrintViewer({ url, fileId, plate, fallbackColors, printi
             label="Build it up again"
             size="sm"
             className="bg-cream/90 shadow-soft absolute right-3 bottom-3"
-            onClick={replay}
+            onClick={() => replay()}
           />
         )}
         {state === "ready" && summary?.stats.decimated && (

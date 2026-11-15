@@ -82,6 +82,12 @@ test("opens the 3D view of a sliced file, scrubs its layers and closes with Esca
   const paused = await readout.textContent();
   await page.waitForTimeout(400);
   expect(await readout.textContent()).toBe(paused);
+  // Space after a pause carries on from where the slider is, not from the first layer.
+  await slider.fill("199");
+  await page.keyboard.press("Space");
+  expect(await readout.textContent()).toMatch(/^Layer (2\d\d|3\d\d) of 317/);
+  await page.keyboard.press("Space");
+  await expect(dialog.locator("[data-viewer=ready]")).toBeVisible();
   // A step key while playing pauses.
   await page.keyboard.press("Space");
   await expect(dialog.locator("[data-viewer=busy]")).toBeVisible();
