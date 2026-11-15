@@ -635,7 +635,10 @@ test("a generic filament slices with ours, which lifts the nozzle as Orca's Auto
       .poll(async () => (await fileOf(page, id))?.slice?.settings.slicer, { timeout: SLICED })
       .toBe("spaghetti");
     const slice = (await fileOf(page, id)).slice;
-    expect(slice.settings.filaments).toEqual([expect.stringMatching(/^Generic PETG @/)]);
+    // The Pantry's likeliest spool is the filament: a PLA another spec left behind would come before this PETG.
+    expect(slice.settings.filaments, "the Pantry holds only this test's PETG spool").toEqual([
+      expect.stringMatching(/^Generic PETG @/),
+    ]);
     expect(slice.fallback).toBeUndefined();
     // Until release 6 ours lifted in spirals instead, and said so: "Auto Lift printed as spiral lifts".
     expect(slice.notes ?? []).toEqual([]);
