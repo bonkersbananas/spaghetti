@@ -87,6 +87,13 @@ pub struct Params {
     remove_small_overhangs: bool,
     top_interfaces: usize,
     bottom_interfaces: usize,
+    /// The support's base and interface filaments as Orca's object config holds them (1-based, 0 for none of their
+    /// own, one past the plate's as the first, `clamp_exturder_to_default`).
+    support_filaments: (usize, usize),
+    /// Whether a contact without interface layers of its own merges into the base beside it (Orca's
+    /// `can_merge_support_regions`): base and interface in one filament, or one of them left to the object's
+    /// (`Params::for_object`).
+    can_merge: bool,
     /// How many of those print as base interface (`Settings::base_interface_layers`).
     top_base_interfaces: usize,
     bottom_base_interfaces: usize,
@@ -146,8 +153,29 @@ pub struct Params {
 }
 
 impl Params {
+    /// The parameters for an object printed in `filaments` (0-based, its regions' own): where one of the support's
+    /// filaments is left to it, Orca merges the support's regions for an object of one filament whose 0-based number
+    /// is the other one's 1-based number (`can_merge_support_regions`, compared as Orca compares them).
+    pub fn for_object(&self, filaments: &[usize]) -> Params {
+        let mut p = self.clone();
+        let (base, interface) = self.support_filaments;
+        if !p.can_merge && (base == 0 || interface == 0) {
+            let mut own = filaments.to_vec();
+            own.sort_unstable();
+            own.dedup();
+            p.can_merge = own.len() == 1 && own[0] == base.max(interface);
+        }
+        p
+    }
+
     pub fn new(s: &Settings) -> Params {
         let sp = &s.support;
+        let loaded = s.palette.as_ref().map_or(1, |p| p.profiles.len());
+        let one_based = |f: Option<usize>| f.map_or(0, |f| f + 1);
+        let support_filaments = {
+            let (base, interface) = sp.filaments(loaded);
+            (one_based(base), one_based(interface))
+        };
         let spacing = flow_spacing(sp.line_width, s.layer_height);
         let first_spacing = flow_spacing(s.first_layer_width, s.first_layer_height);
         let support_spacing = sp.base_spacing + spacing;
@@ -172,6 +200,8 @@ impl Params {
             remove_small_overhangs: sp.remove_small_overhang,
             top_interfaces: sp.top_interface_layers,
             bottom_interfaces: sp.bottom_interface_layers,
+            support_filaments,
+            can_merge: support_filaments.0 == support_filaments.1,
             top_base_interfaces: s.base_interface_layers().0,
             bottom_base_interfaces: s.base_interface_layers().1,
             width: sp.line_width,
@@ -2231,7 +2261,7 @@ fn layer_paths(
             paths: Vec::new(),
         })
     };
-    let [mut bottom, mut top, mut interface, mut base_interface, base] = found.map(make);
+    let [mut bottom, mut top, mut interface, mut base_interface, mut base] = found.map(make);
     let could_merge = |a: &Option<Item>, b: &Option<Item>| match (a, b) {
         (Some(a), Some(b)) => (arena[a.layer].height - arena[b.layer].height).abs() < EPSILON,
         _ => false,
@@ -2252,22 +2282,52 @@ fn layer_paths(
         a.polygons.extend(b.polygons);
         a.polygons = geom::union_all(&[&a.polygons]);
     };
-    if p.top_interfaces > 0 && could_merge(&top, &interface) && raft_contact.is_none() {
+    // What of `item` prints, less what `other` prints.
+    let cut = |item: &mut Option<Item>, other: &Option<Item>| {
+        if let (Some(a), Some(b)) = (item.as_mut(), other.as_ref()) {
+            let mine = a.to_extrude.take().unwrap_or_else(|| a.polygons.clone());
+            let theirs = b.to_extrude.clone().unwrap_or_else(|| b.polygons.clone());
+            a.to_extrude = Some(geom::difference(&mine, &theirs));
+        }
+    };
+    let (top_on, bottom_on) = (p.top_interfaces > 0, p.bottom_interfaces > 0);
+    if !top_on {
+        // Without top interface layers the contact is base support: it joins the base beside it, or is the base where
+        // there is none, where base and interface may merge (Orca's `generate_support_toolpaths`); not the raft's.
+        if p.can_merge && raft_contact.is_none() {
+            if could_merge(&base, &top) {
+                merge(&mut base, &mut top);
+            } else if base.is_none() {
+                base = top.take();
+            }
+        }
+    } else if could_merge(&top, &interface) && raft_contact.is_none() {
         merge(&mut top, &mut interface);
     }
     // Organic trees' bottom contacts print nothing: nothing merges into them.
     if p.organic {
+    } else if !bottom_on && p.can_merge {
+        // Without bottom interface layers, the same for the bottom contact.
+        if could_merge(&base, &bottom) {
+            merge(&mut base, &mut bottom);
+        } else if base.is_none() {
+            base = bottom.take();
+        }
     } else if could_merge(&bottom, &top) && raft_contact.is_none() {
-        let mut b = bottom.take();
-        merge(&mut top, &mut b);
+        if top_on && bottom_on {
+            let mut b = bottom.take();
+            merge(&mut top, &mut b);
+        } else if bottom_on {
+            cut(&mut top, &bottom);
+        } else {
+            cut(&mut bottom, &top);
+        }
     } else if could_merge(&bottom, &interface) {
         let bottom_kind = interface.as_ref().map(|i| arena[i.layer].kind) == Some(Kind::BottomInterface);
-        if bottom_kind {
+        if bottom_on && bottom_kind {
             merge(&mut bottom, &mut interface);
-        } else if let (Some(b), Some(i)) = (bottom.as_mut(), interface.as_ref()) {
-            let mine = b.to_extrude.take().unwrap_or_else(|| b.polygons.clone());
-            let theirs = i.to_extrude.clone().unwrap_or_else(|| i.polygons.clone());
-            b.to_extrude = Some(geom::difference(&mine, &theirs));
+        } else {
+            cut(&mut bottom, &interface);
         }
     }
     let path = |role: Role, points: Vec<Pt>, width: f64, h: f64| Path {
@@ -2282,7 +2342,7 @@ fn layer_paths(
     // layers are denser than 95 % or interlaced.
     let contact_density = if p.top_interfaces > 0 { p.top_interface_density } else { p.bottom_interface_density };
     let straight = contact_density > 0.95 || p.interlaced;
-    let extrude_interface = |item: &mut Option<Item>, density: f64, angle: f64| {
+    let fill_interface = |item: &mut Option<Item>, density: f64, angle: f64, role: Role| {
         let Some(item) = item.as_mut() else { return };
         let area = item.to_extrude.clone().unwrap_or_else(|| item.polygons.clone());
         if area.is_empty() {
@@ -2296,24 +2356,39 @@ fn layer_paths(
                 base_support::fill(shape, angle, origin, p.spacing, density)
             };
             for line in lines {
-                item.paths.push(crate::support::Item::Path(path(Role::SupportInterface, line, p.width, g.height)));
+                item.paths.push(crate::support::Item::Path(path(role, line, p.width, g.height)));
             }
         }
     };
+    let extrude_interface = |item: &mut Option<Item>, density: f64, angle: f64| {
+        fill_interface(item, density, angle, Role::SupportInterface)
+    };
+    // A contact without interface layers of its own that joined nothing prints as base support, in the interface's
+    // pattern at the base's angle and density (Orca's `InterfaceAsBase`).
+    let base_angle = std::f32::consts::FRAC_PI_2 as f64;
+    let as_base = |item: &mut Option<Item>| fill_interface(item, p.density, base_angle, Role::Support);
     match raft_contact {
         // The raft's contact layer: its interface's density, turned as Orca turns it by its interface id.
         Some(r) => {
             let angle = direction(RaftAngles::of(&r).interface(raft_contact_id(&r)));
             extrude_interface(&mut top, p.raft_interface_density, angle);
         }
-        None => extrude_interface(&mut top, p.top_interface_density, interface_angle),
+        None if top_on => extrude_interface(&mut top, p.top_interface_density, interface_angle),
+        None => as_base(&mut top),
     }
-    if !p.organic {
+    if p.organic {
+    } else if bottom_on {
         extrude_interface(&mut bottom, p.bottom_interface_density, interface_angle);
+    } else {
+        as_base(&mut bottom);
     }
     let interface_bottom = interface.as_ref().is_some_and(|i| arena[i.layer].kind == Kind::BottomInterface);
     let density = if interface_bottom { p.bottom_interface_density } else { p.top_interface_density };
-    extrude_interface(&mut interface, density, interface_angle);
+    if if interface_bottom { bottom_on } else { top_on } {
+        extrude_interface(&mut interface, density, interface_angle);
+    } else {
+        as_base(&mut interface);
+    }
     // Base interface: the support pattern (straight lines over 95 %, and under organic trees, which print with a
     // sheath) at the interface's spacing and density, turned as the interface, in the base's line (Orca's
     // `filler_base_interface`).
@@ -2336,7 +2411,6 @@ fn layer_paths(
             }
         }
     }
-    let mut base = base;
     // A raft of one layer is its contact layer, on the plate.
     let mut first = raft_contact.is_some_and(|r| r.layers() == 1);
     if let Some(item) = base.as_mut() {

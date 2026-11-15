@@ -667,7 +667,7 @@ impl Plate {
             } else {
                 Vec::new()
             };
-            object_supports(&regions, &layers, &centres, &sizes, &parts.group, &painted, settings)
+            object_supports(&regions, &layers, &centres, &sizes, &parts.group, &parts.filament, &painted, settings)
         } else {
             Vec::new()
         };
@@ -1099,6 +1099,7 @@ fn object_supports(
     centres: &[(f64, f64)],
     sizes: &[(f64, f64)],
     group: &[u32],
+    filament: &[usize],
     painted: &[Option<PaintedSupports>],
     s: &Settings,
 ) -> Vec<Vec<support::Layer>> {
@@ -1112,6 +1113,10 @@ fn object_supports(
     let mut by_group: Vec<Vec<support::Layer>> = (0..groups)
         .map(|g| {
             let (Some(top), Some(o)) = (last[g], first_region[g]) else { return Vec::new() };
+            // The filaments the object's regions print in.
+            let own: Vec<usize> =
+                group.iter().zip(filament).filter(|(r, _)| **r as usize == g).map(|(_, &f)| f).collect();
+            let params = params.for_object(&own);
             let slices: Vec<geom::Shapes> = regions[..=top].iter().map(|r| r.slice_of(g as u32)).collect();
             // The layers' top surfaces, each object's own.
             let tops = regions[..=top]
