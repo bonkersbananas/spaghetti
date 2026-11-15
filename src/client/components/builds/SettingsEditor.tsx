@@ -152,19 +152,14 @@ function SpoolChoices({ spools, index, onPick }: { spools: Spool[]; index: numbe
       {sorted.map((spool) => {
         const name = spoolName(spool);
         return (
-          <button
-            key={spool.id}
-            type="button"
-            onClick={() => onPick(spool)}
-            className="pressable focus-ring bg-cream text-small text-ink-soft shadow-soft hover:text-ink rounded-pill inline-flex h-9 max-w-full items-center gap-2 pr-3.5 pl-1.5 font-semibold md:h-8"
-          >
+          <ToggleChip key={spool.id} lead onClick={() => onPick(spool)} className="max-w-full font-semibold">
             <SpoolDisc color={spool.colorHex} colors={spool.colors} size="sm" />
             {spool.slot && <span className="text-ink-faint tabular">{spool.slot === "Ext" ? "Ext" : spool.slot}</span>}
             <span className="truncate">
               {name.title}
               {spool.colorName ? ` ${spool.material}` : ""}
             </span>
-          </button>
+          </ToggleChip>
         );
       })}
     </div>

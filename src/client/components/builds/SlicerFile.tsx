@@ -4,6 +4,7 @@ import type { Plate } from "@shared/threemf/types.ts";
 import { lazy, type ReactNode, Suspense, useMemo } from "react";
 import { Button, IconButton } from "@/components/ui/Button";
 import { Caution } from "@/components/ui/Caution";
+import { ToggleChip } from "@/components/ui/Chip";
 import { CloseIcon, DownloadIcon, PlusIcon, SlicerFileIcon } from "@/components/ui/icons";
 import { MetaList } from "@/components/ui/MetaList";
 import { ProgressRing } from "@/components/ui/ProgressRing";
@@ -410,19 +411,14 @@ export function UnknownFilaments({
       </span>
       <div className="flex flex-wrap gap-2">
         {filaments.map(({ index, filament }) => (
-          <button
-            key={index}
-            type="button"
-            onClick={() => onAdd(index)}
-            className="pressable focus-ring bg-cream text-small text-ink-soft shadow-soft hover:text-ink rounded-pill inline-flex h-9 items-center gap-2 pr-3.5 pl-2.5 font-semibold md:h-8"
-          >
+          <ToggleChip key={index} lead onClick={() => onAdd(index)}>
             <Swatch color={filament.colorHex} />
             {[filament.type, filament.profile && filament.profile !== filament.type ? `(${filament.profile})` : ""]
               .filter(Boolean)
               .join(" ")}
             <PlusIcon size={14} weight="bold" className="text-ink-faint" aria-hidden />
             <span className="sr-only">Add to the pantry</span>
-          </button>
+          </ToggleChip>
         ))}
       </div>
     </div>
