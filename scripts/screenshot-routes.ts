@@ -4206,6 +4206,7 @@ export const shots: Shot[] = [
       await page.waitForTimeout(700);
     },
   },
+  { name: "styleguide-controls", path: "/styleguide", selector: "#controls" },
   { name: "styleguide-buttons", path: "/styleguide", selector: "#buttons" },
   { name: "styleguide-builds", path: "/styleguide", selector: "#builds" },
   { name: "styleguide-spools", path: "/styleguide", selector: "#pantry" },
