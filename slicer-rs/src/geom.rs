@@ -415,6 +415,28 @@ pub fn clip_clipper2(
     }
 }
 
+/// The parts of open paths outside an area (Clipper's `diff_pl`), with Clipper2's boolean of open subjects.
+pub fn difference_open(lines: &[Vec<Pt>], area: &Shapes) -> Vec<Vec<Pt>> {
+    let paths = |contours: &mut dyn Iterator<Item = &Vec<Pt>>| -> clipper2_rs::Paths64 {
+        contours.map(|c| c.iter().map(|p| clipper2_rs::Point64::new(p.x as i64, p.y as i64)).collect()).collect()
+    };
+    let mut clipper = clipper2_rs::Clipper64::new();
+    clipper.add_open_subject(&paths(&mut lines.iter()));
+    let clips: Vec<&Contour> = area.iter().flatten().collect();
+    if !clips.is_empty() {
+        clipper.add_clip(&paths(&mut clips.into_iter()));
+    }
+    match clipper.execute(clipper2_rs::ClipType::Difference, clipper2_rs::FillRule::NonZero) {
+        Ok(solution) => solution
+            .open
+            .iter()
+            .map(|path| path.iter().map(|p| pt(p.x as i32, p.y as i32)).collect::<Vec<Pt>>())
+            .filter(|l| l.len() >= 2)
+            .collect(),
+        Err(_) => Vec::new(),
+    }
+}
+
 /// `clip_clipper2` as shapes, Clipper2's tree read as Orca reads it (`shapes_of_tree`).
 pub fn clip_clipper2_shapes(
     op: clipper2_rs::ClipType,

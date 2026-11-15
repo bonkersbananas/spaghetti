@@ -568,7 +568,6 @@ impl SupportSettings {
             || self.interface_loops
             || (self.wall_count > 0 && !self.organic() && self.classic().is_none())
             // These change how overhangs are found and supported, not a raft.
-            || (on && self.bridge_no_support)
             || (on && s.thick_bridges)
         {
             Some("these support settings")

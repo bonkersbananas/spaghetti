@@ -1138,6 +1138,39 @@ fn object_supports(
                 Some((e, b, u)) => (upto(e), upto(b), u.iter().filter(|(l, _)| *l <= top).copied().collect()),
                 None => (Vec::new(), Vec::new(), Vec::new()),
             };
+            // With `bridge_no_support`, what each layer bridges, which Orca's normal supports leave unsupported (its
+            // trees don't read the setting).
+            let normal = s.enable_support && s.support.classic().is_none() && !s.support.organic();
+            let bridging = if normal && s.support.bridge_no_support {
+                regions[..=top]
+                    .iter()
+                    .zip(&layers.height[..=top])
+                    .map(|(r, &h)| {
+                        let mut b = support::Bridging::default();
+                        for (k, island) in r.islands.iter().enumerate().filter(|(_, i)| i.group == g as u32) {
+                            b.walls.extend(island.walls.iter().flatten().cloned());
+                            // Orca's fill surfaces reach into the innermost wall by the overlap (ours get it when
+                            // planned): the bridges with their share of that band.
+                            if let Some(f) = r.fills.get(k).filter(|f| !f.bridge.is_empty()) {
+                                if island.overlap > 0.0 {
+                                    let band =
+                                        geom::difference(&geom::offset(&island.inner, island.overlap), &island.inner);
+                                    let reach = geom::intersection(&geom::offset(&f.bridge, island.overlap), &band);
+                                    b.fills.extend(geom::union(&f.bridge, &reach));
+                                } else {
+                                    b.fills.extend(f.bridge.iter().cloned());
+                                }
+                            }
+                        }
+                        let flow = s.overhang_wall_flow(h);
+                        b.half_width = 0.5 * (flow.width as f32).max(flow.spacing as f32) as f64 + 0.001;
+                        b.nozzle = s.nozzle_diameter;
+                        b
+                    })
+                    .collect()
+            } else {
+                Vec::new()
+            };
             let object = support::Object {
                 print_z: &layers.top[..=top],
                 height: &layers.height[..=top],
@@ -1148,6 +1181,7 @@ fn object_supports(
                 enforcers,
                 blockers,
                 upright,
+                bridging,
             };
             if !s.enable_support {
                 // Supports off: a raft alone, as the generator Orca takes for these supports makes it (`unsupported`

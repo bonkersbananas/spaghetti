@@ -39,6 +39,7 @@ use crate::monotonic;
 use crate::par;
 use crate::raft::Raft;
 use crate::region::Role;
+use std::f64::consts::PI;
 
 const EPSILON: f64 = 1e-4;
 /// Orca's `SCALED_EPSILON` (100 nm), in mm.
@@ -285,6 +286,23 @@ pub struct Object<'a> {
     pub blockers: Vec<Shapes>,
     /// Its upright enforced triangles, each with the layer it is on, which Orca's trees give a tip each.
     pub upright: Vec<(usize, crate::segment::Upright)>,
+    /// With `bridge_no_support`, what each layer bridges (none without it): Orca's normal supports hold up none of it.
+    pub bridging: Vec<Bridging>,
+}
+
+/// What a layer of an object bridges, which Orca's normal supports leave unsupported with `bridge_no_support`
+/// (`remove_bridges_from_contacts`): its walls where they span a gap, and its bottom bridges.
+#[derive(Clone, Debug, Default)]
+pub struct Bridging {
+    /// The layer's wall loops.
+    pub walls: Vec<geom::Contour>,
+    /// Its bottom bridges (Orca's `stBottomBridge` fill surfaces), each with the direction Orca found for it.
+    pub fills: Shapes,
+    /// mm: half the width of a wall bridging (the larger of its width and spacing, as Orca's float flow has them),
+    /// and a micron.
+    pub half_width: f64,
+    /// mm: the nozzle's diameter, half of which counts the layer below as holding a wall up.
+    pub nozzle: f64,
 }
 
 impl Object<'_> {
@@ -996,6 +1014,12 @@ fn detect_overhangs(o: &Object, l: usize, p: &Params, covered: Option<&Shapes>, 
         // The tails are cut too (their heights stay as they were, as Orca's do).
         out.tails = geom::difference(&out.tails, blocker);
     }
+    if let Some(b) = o.bridging.get(l) {
+        let bridges = bridged(b, lower, fw);
+        if !bridges.is_empty() {
+            d = difference_safe(&d, &bridges);
+        }
+    }
     if d.is_empty() || geom::offset(&d, -0.1 * fw).is_empty() {
         return out;
     }
@@ -1022,6 +1046,78 @@ fn detect_overhangs(o: &Object, l: usize, p: &Params, covered: Option<&Shapes>, 
     }
     out.overhangs = overhangs;
     out
+}
+
+/// What a layer bridges, as Orca's `remove_bridges_from_contacts` finds it over the layer below (`lower`): each piece
+/// of its walls beyond the layer below grown by half the nozzle that runs straight, lengthened by the outer wall's
+/// width `fw` at both ends, and then held up at both by the layer below, as a strip a bridging wall wide; and its bottom
+/// bridges.
+fn bridged(b: &Bridging, lower: &Shapes, fw: f64) -> Shapes {
+    let grown = square(lower, 0.5 * b.nozzle);
+    let loops: Vec<Vec<Pt>> = b
+        .walls
+        .iter()
+        .filter(|w| w.len() >= 2)
+        .map(|w| {
+            let mut l = w.clone();
+            l.push(w[0]);
+            l
+        })
+        .collect();
+    let mut strips: Shapes = Vec::new();
+    for mut piece in geom::difference_open(&loops, &grown) {
+        if !is_straight(&piece) {
+            continue;
+        }
+        extend(&mut piece, fw);
+        let (first, last) = (piece[0], piece[piece.len() - 1]);
+        if geom::contains(lower, first) && geom::contains(lower, last) {
+            strips.extend(geom::offset_open(&piece, b.half_width));
+        }
+    }
+    let mut bridges = geom::union_all(&[&strips]);
+    bridges.extend(b.fills.iter().cloned());
+    geom::union_all(&[&bridges])
+}
+
+/// Whether every segment of a polyline runs the way from its first point to its last does, within Orca's
+/// `EPSILON` of an angle (`Polyline::is_straight`).
+fn is_straight(points: &[Pt]) -> bool {
+    const EPSILON: f64 = 1e-4;
+    let direction = |a: Pt, b: Pt| -> f64 {
+        let t = ((b.y - a.y) as f64).atan2((b.x - a.x) as f64);
+        if (t - PI).abs() < EPSILON {
+            0.0
+        } else if t < 0.0 {
+            t + PI
+        } else {
+            t
+        }
+    };
+    let dir = direction(points[0], points[points.len() - 1]);
+    points.windows(2).all(|w| {
+        let diff = (direction(w[0], w[1]) - dir).abs();
+        diff < EPSILON || (diff - PI).abs() < EPSILON
+    })
+}
+
+/// A polyline lengthened by `d` mm at both ends, along its first and last segments (`extend_start`, `extend_end`:
+/// the new points truncated to whole units).
+fn extend(points: &mut Vec<Pt>, d: f64) {
+    let d = d * geom::SCALE;
+    let out = |from: Pt, to: Pt| -> Pt {
+        let (dx, dy) = ((to.x - from.x) as f64, (to.y - from.y) as f64);
+        let n = dx.hyp(dy);
+        if n == 0.0 {
+            return to;
+        }
+        geom::pt(to.x + (dx / n * d) as i32, to.y + (dy / n * d) as i32)
+    };
+    let n = points.len();
+    let end = out(points[n - 2], points[n - 1]);
+    points.push(end);
+    let start = out(points[1], points[0]);
+    points.insert(0, start);
 }
 
 /// Sharp tails grown upwards (Orca's part of `top_contact_layers`): an island resting only on a sharp tail below,
