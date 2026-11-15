@@ -1647,6 +1647,13 @@ export const shots: Shot[] = [
     // A card with several photos swiped to its second (and hovered, where a mouse shows the arrows).
     name: "ideas-swiped",
     path: "/ideas",
+    // Desk tidy-up is the one idea with several photos, and it sits in Up next (small cards, one photo): take the queue off first.
+    prepare: async (page) => {
+      await setQueue(page, 0);
+      await page.reload();
+      await page.getByRole("heading", { level: 2, name: "The rest" }).waitFor();
+    },
+    cleanup: (page) => setQueue(page, 2),
     beforeShot: async (page) => {
       const card = page.getByRole("listitem").filter({ hasText: "Desk tidy-up" });
       await card.scrollIntoViewIfNeeded();
@@ -3828,6 +3835,8 @@ export const shots: Shot[] = [
     prepare: async (page) => {
       await page.goto(`/ideas/${SEED_IDS.deskTidy}`);
       await page.getByRole("button", { name: "Delete idea" }).first().click();
+      // Deleting an idea asks in place first (decision 0062): confirm.
+      await page.getByRole("button", { name: "Delete", exact: true }).click();
       await page.getByText("Idea deleted").waitFor();
       await page.locator("h1").first().waitFor();
     },
@@ -3863,8 +3872,11 @@ export const shots: Shot[] = [
     path: "/ideas",
     width: 390,
     prepare: async (page) => {
-      await page.getByRole("button", { name: "Account" }).click();
-      await page.getByRole("dialog").getByRole("button", { name: "Change password" }).click();
+      await openAccountRow(page, 390, "Passkeys and password");
+      await page
+        .getByRole("dialog", { name: "Passkeys and password" })
+        .getByRole("button", { name: "Change password" })
+        .click();
       const sheet = page.getByRole("dialog", { name: "Change password" });
       await sheet.waitFor();
       await sheet.getByLabel("Current password").fill("pasta-al-dente");
@@ -3879,8 +3891,11 @@ export const shots: Shot[] = [
     path: "/ideas",
     width: 1440,
     prepare: async (page) => {
-      await page.getByRole("button", { name: "Account menu" }).click();
-      await page.getByRole("dialog", { name: "Account" }).getByRole("button", { name: "Change password" }).click();
+      await openAccountRow(page, 1440, "Passkeys and password");
+      await page
+        .getByRole("dialog", { name: "Passkeys and password" })
+        .getByRole("button", { name: "Change password" })
+        .click();
       const sheet = page.getByRole("dialog", { name: "Change password" });
       await sheet.waitFor();
       await sheet.getByLabel("Current password").fill("pasta-al-dente");
