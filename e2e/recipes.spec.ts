@@ -111,3 +111,19 @@ test("saves an attempt as a recipe, finds it on the spool page and in search, st
   await page.getByRole("button", { name: "Undo" }).click();
   await expect(page.getByRole("region", { name: /Recipes for silk PLA/ })).toBeVisible();
 });
+
+test("R saves the attempt that worked as a recipe", async ({ page, isMobile }) => {
+  test.skip(isMobile, "A keyboard thing");
+  await signIn(page);
+  const { buildId } = await seed(page);
+  await page.goto(`/builds/${buildId}`);
+  await expect(page.getByRole("textbox", { name: "Title" })).toHaveValue("Recipe tugboat");
+  await page.keyboard.press("r");
+  const save = page.getByRole("dialog", { name: "Save as a recipe" });
+  await expect(save).toBeVisible();
+  await save.getByRole("button", { name: "Save recipe" }).click();
+  await expect(page.getByRole("region", { name: "What worked" }).getByText("Saved as a recipe")).toBeVisible();
+  // Saved already: R has nothing more to do.
+  await page.keyboard.press("r");
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+});

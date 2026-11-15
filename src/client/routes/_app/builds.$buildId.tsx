@@ -445,6 +445,13 @@ function Build({ item }: { item: ItemView }) {
     canBeRecipe(attempt) && !attempt.pending && !readOnly
       ? { id: attempt.id, itemId: item.id, number: attempt.number, title: item.title, settings: attempt.settings }
       : undefined;
+  // R keeps the picked attempt as a recipe, else the newest one that worked, unless it is one already.
+  const recipeTarget = selected ? story[selectedIndex] : worked;
+  const recipeFrom =
+    recipeTarget && !allRecipes.some((recipe) => recipe.source?.attemptId === recipeTarget.id)
+      ? recipeSource(recipeTarget)
+      : undefined;
+  useHotkeys({ buildRecipe: recipeFrom ? () => setSavingRecipe(recipeFrom) : undefined });
   const alt = photoAlt({ title, note });
   const creator = byId.get(item.createdBy);
   const via = useVia();
