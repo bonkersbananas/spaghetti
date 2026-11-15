@@ -282,10 +282,15 @@ export default function PrintViewer({
   }, []);
 
   // The viewer mounts after the sheet opened (its code loads lazily), when focus has gone to the sheet itself, its Close
-  // button or the opener: it belongs on the stage, so Space plays. A field that took focus keeps it.
+  // button or the opener: it belongs on the stage, so Space plays. Anything else that took focus keeps it.
   useEffect(() => {
     const active = document.activeElement;
-    if (!active || !active.closest("input, textarea, select, [contenteditable]"))
+    if (
+      !active ||
+      active === document.body ||
+      active.closest("button, a, [data-autofocus]") ||
+      active.matches("[role=dialog]")
+    )
       stage.current?.focus({ preventScroll: true });
   }, []);
 
