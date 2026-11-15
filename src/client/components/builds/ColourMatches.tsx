@@ -141,11 +141,16 @@ export function ColourMatches({
       <span className="flex min-w-0 items-center gap-2.5">
         <Swatch color={colour.hex} size="md" />
         <span className="flex min-w-0 flex-col">
-          <span className="text-small text-ink font-semibold text-balance">
-            {[nameOf(colour), ...(colour.merged ?? [])].join(" & ")}
+          {/* The colour's own name takes the width; the colours merged into it are counted under it (and named on
+              hover), so a half-width row reads in two lines. */}
+          <span
+            className="text-small text-ink truncate font-semibold"
+            title={[nameOf(colour), ...(colour.merged ?? [])].join(" & ")}
+          >
+            {nameOf(colour)}
           </span>
           <MetaList className="text-caption text-ink-faint font-normal">
-            {colour.merged?.length ? `${colour.merged.length + 1} near colours` : ""}
+            {colour.merged?.length ? `+${colour.merged.length} near` : ""}
             {colour.slot ? (colour.material ?? "") : `${colour.share}%`}
           </MetaList>
         </span>
