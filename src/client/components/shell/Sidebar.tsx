@@ -1,7 +1,7 @@
 import type { Person } from "@shared/api";
 import { useSuspenseQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { Suspense, useState } from "react";
+import { lazy, Suspense, useState } from "react";
 import { Mark } from "@/components/illustrations";
 import { Button } from "@/components/ui/Button";
 import { PlusIcon, SearchIcon } from "@/components/ui/icons";
@@ -14,8 +14,25 @@ import { sessionQuery } from "@/lib/queries";
 import { useWhenIdle } from "@/lib/when-idle";
 import { AccountButton } from "./AccountButton";
 import { AccountMenu, loadAccountMenu } from "./lazy-account";
-import { NowPrinting } from "./NowPrinting";
 import { type Section, sections, workshop } from "./sections";
+
+/** The print on the bed: its code (builds, progress, photos) loads once the browser is idle, not with the first screen. */
+const loadNowPrinting = () => import("./NowPrinting").then((module) => ({ default: module.NowPrinting }));
+const NowPrinting = lazy(loadNowPrinting);
+
+/** Mounts the lazy NowPrinting once its code has arrived; nothing shows before (it only shows when a print is on). */
+function LateNowPrinting() {
+  const [ready, setReady] = useState(false);
+  useWhenIdle(() => {
+    void loadNowPrinting().then(() => setReady(true));
+  });
+  if (!ready) return null;
+  return (
+    <Suspense fallback={null}>
+      <NowPrinting />
+    </Suspense>
+  );
+}
 
 const itemClass =
   "pressable focus-ring group flex h-9 items-center gap-3 rounded-sm px-3 text-body font-medium text-ink-soft hover:bg-ink/5 hover:text-ink data-[status=active]:bg-cream data-[status=active]:text-ink data-[status=active]:shadow-soft";
@@ -90,7 +107,7 @@ export function Sidebar() {
       </nav>
 
       <div className="mt-auto flex flex-col">
-        <NowPrinting />
+        <LateNowPrinting />
         {user && <SidebarAccount user={user} />}
       </div>
     </aside>
