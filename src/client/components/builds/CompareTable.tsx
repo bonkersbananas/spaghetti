@@ -61,13 +61,13 @@ function Rows({
       {/* Phones show one photo at a time, so the columns are named; on desktop the headers above them do it. */}
       <thead className="block md:sr-only">
         <tr className="text-caption text-ink-faint mb-2 grid grid-cols-2 gap-x-4 text-left font-semibold md:gap-x-6">
-          <th scope="col" className="flex gap-3 text-left font-semibold">
+          <th scope="col" className="flex gap-3 text-left font-semibold whitespace-nowrap">
             <span className="w-24 shrink-0 md:w-36">
               <span className="sr-only">Setting</span>
             </span>
             Attempt {older.number}
           </th>
-          <th scope="col" className="text-left font-semibold">
+          <th scope="col" className="text-left font-semibold whitespace-nowrap">
             Attempt {newer.number}
           </th>
         </tr>
