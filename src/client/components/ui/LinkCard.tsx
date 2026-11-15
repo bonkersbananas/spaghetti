@@ -1,5 +1,6 @@
 import { shortUrl } from "@shared/links";
 import { type ModelMark, modelLetter, modelPlace } from "@shared/model-mark";
+import { softSlashes } from "@shared/spools";
 import { useQuery } from "@tanstack/react-query";
 import { useRef } from "react";
 import { cn } from "@/lib/cn";
@@ -25,9 +26,6 @@ const fileName = (url: string) => {
     return name;
   }
 };
-
-/** An address with no title wraps after a slash, not in the middle of a word. */
-const breakAtSlashes = (text: string) => text.replaceAll("/", "/\u200b");
 
 /**
  * A link in a note as a card: the site's first letter on a tile, the page's
@@ -88,7 +86,7 @@ export function LinkCard({
             title && waited.current && "sg-fade-in",
           )}
         >
-          {title ?? breakAtSlashes(shortUrl(url))}
+          {title ?? softSlashes(shortUrl(url))}
         </span>
         <span className="text-small text-ink-faint truncate">
           {site}
