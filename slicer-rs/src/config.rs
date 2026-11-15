@@ -483,6 +483,18 @@ impl SupportSettings {
         (of(self.filament), of(self.interface_filament))
     }
 
+    /// Whether the support meets the object above it without a gap (Orca's `zero_gap_interface_top`, which a support
+    /// material's interface asks for).
+    pub fn zero_gap_top(&self) -> bool {
+        self.top_interface_layers > 0 && self.top_z_distance == 0.0
+    }
+
+    /// Whether the interfaces' lines turn an eighth of a turn either way from one interface layer to the next
+    /// (`rectilinear_interlaced`, which Bambu Studio sets for a support material's interface).
+    pub fn interlaced(&self) -> bool {
+        self.interface_pattern == "rectilinear_interlaced"
+    }
+
     /// Whether these are Orca's normal supports in their snug style, which follow the overhangs instead of the grid.
     pub fn snug(&self) -> bool {
         self.kind.starts_with("normal") && self.style == "snug"
@@ -531,11 +543,20 @@ impl SupportSettings {
             matches!(self.base_pattern.as_str(), "default" | "none" | "")
         } else {
             matches!(self.base_pattern.as_str(), "default" | "rectilinear" | "")
-        }) || !matches!(self.interface_pattern.as_str(), "auto" | "rectilinear" | "")
-            || (self.classic().is_some() && !matches!(self.interface_pattern.as_str(), "auto" | ""))
+        }) || !matches!(self.interface_pattern.as_str(), "auto" | "rectilinear" | "rectilinear_interlaced" | "")
+            || (self.classic().is_some() && !matches!(self.interface_pattern.as_str(), "auto" | "rectilinear_interlaced" | ""))
+            // An interlaced raft's interfaces would turn by ids its layers are counted from.
+            || (self.raft_layers > 0 && self.interlaced())
         {
             Some("this support pattern")
-        } else if self.top_z_distance <= 0.0 || self.top_interface_layers == 0 || self.bottom_interface_layers == 0 {
+        } else if self.top_z_distance < 0.0
+            || self.top_interface_layers == 0
+            || self.bottom_interface_layers == 0
+            // Without a gap, Orca prints contacts in the auto pattern as concentric loops, and its trees and rafts
+            // meet the object otherwise, which ours doesn't yet.
+            || (self.top_z_distance == 0.0
+                && (self.trees() || self.raft_layers > 0 || matches!(self.interface_pattern.as_str(), "auto" | "")))
+        {
             Some("supports without a gap or interface")
         } else if self.enforce_layers > 0
             || self.expansion != 0.0
@@ -923,6 +944,20 @@ impl Settings {
         (count(sp.top_interface_layers, zero_gap_top), count(sp.bottom_interface_layers, sp.zero_gap_bottom))
     }
 
+    /// Whether an object's overhangs print as bottom surfaces rather than bridges (Orca's `bottom_is_fully_supported`):
+    /// automatic supports meet them without a gap, all of them (normal supports leaving no bridge unsupported, or
+    /// trees with a roof under every overhang, `max_bridge_length` 0, not where needed only).
+    pub fn bottoms_held(&self) -> bool {
+        let sp = &self.support;
+        (self.enable_support || sp.enforce_layers > 0)
+            && sp.top_z_distance == 0.0
+            && match sp.kind.as_str() {
+                "normal(auto)" => !sp.bridge_no_support,
+                "tree(auto)" => sp.top_interface_layers > 0 && sp.max_bridge_length == 0.0 && !sp.critical_regions_only,
+                _ => false,
+            }
+    }
+
     /// What this can't slice yet, which the caller should slice elsewhere (the app: with Orca's engine).
     pub fn unsupported(&self) -> Option<&'static str> {
         if (self.enable_support || self.support.raft_layers > 0)
@@ -1033,7 +1068,10 @@ impl Settings {
                 (set / self.layer_height + 1e-4).round() * self.layer_height
             }
         };
-        (gap(sp.top_z_distance), gap(sp.bottom_z_distance))
+        // Without a gap above or below as set, the support stands on the object without one too (Orca's
+        // `zero_gap_interface_bottom`).
+        let bottom = if sp.zero_gap_bottom { 0.0 } else { gap(sp.bottom_z_distance) };
+        (gap(sp.top_z_distance), bottom)
     }
 
     /// Whether an object's layer prints on the plate, as the print's first layer: its first one, unless a raft is

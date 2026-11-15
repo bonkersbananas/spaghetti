@@ -118,6 +118,15 @@ pub struct Params {
     /// Radians added to the interfaces' direction: a quarter of a half turn back for snug supports whose interface
     /// pattern is set to rectilinear (Orca's `support_interface_angle`), else none.
     interface_turn: f64,
+    /// Interfaces in straight lines turned an eighth of a turn either way by their layer's interface id
+    /// (`rectilinear_interlaced`).
+    interlaced: bool,
+    /// The support meets the object above it without a gap (Orca's `zero_gap_interface_top`): each contact layer is
+    /// the object's layer under its overhang.
+    zero_gap_top: bool,
+    /// The support stands on the object without a gap (Orca's `zero_gap_interface_bottom`): each bottom contact is the
+    /// object's layer over the surface it stands on.
+    zero_gap_bottom: bool,
     /// mm²: a tree branch's island larger than this gets a second wall (`tree_branch_diameter_double_wall_area`).
     double_wall_area: f64,
     /// Whether supports are on: with them off, the generator makes only the raft, if any.
@@ -195,6 +204,9 @@ impl Params {
             } else {
                 0.0
             },
+            interlaced: sp.interlaced(),
+            zero_gap_top: sp.zero_gap_top(),
+            zero_gap_bottom: sp.zero_gap_bottom,
             double_wall_area: match sp.wall_count {
                 0 => 0.25 * 25.0 * std::f64::consts::PI,
                 1 => f64::MAX,
@@ -444,6 +456,23 @@ fn overlaps(a: &Shapes, b: &Shapes) -> bool {
 
 fn size(shapes: &Shapes) -> (f64, f64) {
     geom::bbox(shapes).map_or((0.0, 0.0), |b| (geom::unsc(b[2] - b[0]), geom::unsc(b[3] - b[1])))
+}
+
+/// Orca's difference with a safety offset (`ApplySafetyOffset::Yes`, what is taken away grown by 10 nm first),
+/// which leaves nothing of the hairlines a difference leaves along an edge the two share. Our points lie 0.1 µm
+/// apart, ten times as far, so this drops the shapes that an opening by that much takes away instead, and keeps the
+/// others whole. Such a hairline prints nothing, but a layer it alone stands on counts as one with support (or with
+/// an interface, which interlaced interfaces turn by).
+fn difference_safe(a: &Shapes, b: &Shapes) -> Shapes {
+    let unit = 1.0 / geom::SCALE;
+    let mut out = geom::difference(a, b);
+    out.retain(|shape| {
+        // Only a shape thinner on average than two units can be one (area over perimeter), and only those are opened.
+        let area: i128 = shape.iter().map(|c| geom::area2(c)).sum::<i128>().abs() / 2;
+        let perimeter: f64 = shape.iter().map(|c| geom::length_mm(c, true)).sum::<f64>() * geom::SCALE;
+        area as f64 >= perimeter || !geom::opening(&vec![shape.clone()], unit).is_empty()
+    });
+    out
 }
 
 /// Orca's interfaces with smooth supports (snug ones and trees, `regularize` in `generate_interface_layers`): the
@@ -1141,22 +1170,28 @@ fn contact_layer(
         overhangs = geom::union(&overhangs, &enforced);
         contact = geom::union(&contact, &geom::difference(&enforced, lower));
     }
-    // In step with the object's layers, the contact is the layer the gap ends on, and as thick; else its height is
-    // decided with the support's own layers.
-    let (mut print_z, height) = if p.synchronize {
-        let k = synced_layer(o, l, p.gap_top, true);
-        (o.print_z[k], o.height[k])
+    let mut g = if p.zero_gap_top {
+        // Without a gap, the contact is the object's layer under the overhang, and as thick.
+        let bottom = if l == 1 { 0.0 } else { o.print_z[l - 2] };
+        Gen::new(Kind::TopContact, bottom, o.print_z[l - 1], o.height[l - 1])
     } else {
-        (o.bottom_z(l) - p.gap_top, 0.0)
-    };
-    if print_z < p.first_layer_height - EPSILON {
-        return None;
-    }
-    let mut g = if print_z < p.first_layer_height + p.min_height {
-        print_z = p.first_layer_height;
-        Gen::new(Kind::TopContact, 0.0, print_z, p.first_layer_height)
-    } else {
-        Gen::new(Kind::TopContact, print_z - height, print_z, height)
+        // In step with the object's layers, the contact is the layer the gap ends on, and as thick; else its height
+        // is decided with the support's own layers.
+        let (mut print_z, height) = if p.synchronize {
+            let k = synced_layer(o, l, p.gap_top, true);
+            (o.print_z[k], o.height[k])
+        } else {
+            (o.bottom_z(l) - p.gap_top, 0.0)
+        };
+        if print_z < p.first_layer_height - EPSILON {
+            return None;
+        }
+        if print_z < p.first_layer_height + p.min_height {
+            print_z = p.first_layer_height;
+            Gen::new(Kind::TopContact, 0.0, print_z, p.first_layer_height)
+        } else {
+            Gen::new(Kind::TopContact, print_z - height, print_z, height)
+        }
     };
     // On the plate only, the enforced areas print too, apart from the rest (which the layers below trim further).
     let enforced_apart = covered.is_some() && !enforced.is_empty();
@@ -1174,11 +1209,13 @@ fn contact_layer(
     }
     g.contact = Grid::new(&contact, margin, gp).extract(grid::EXPANSION_TO_PROPAGATE, true);
     // Dense interface only under overhangs steep enough to need it: beyond the layer below, its thin parts opened
-    // away and the rest grown by 60 % of a wall.
+    // away and the rest grown by 60 % of a wall; without a gap, under all of them.
     let nio = p.fw;
     let held = square(&square(lower, -0.5 * nio), 1.1 * nio);
     let dense = geom::difference(&overhangs, &held);
-    if !dense.is_empty() {
+    if p.zero_gap_top {
+        g.polygons = Grid::new(&contact, margin, gp).extract(gp.expansion_to_slice(), true);
+    } else if !dense.is_empty() {
         let dense = geom::difference(&geom::offset(&dense, 0.1 * nio), margin);
         let trimmed = geom::intersection(&dense, &g.contact);
         g.polygons = Grid::new(&trimmed, margin, gp).extract(gp.expansion_to_slice(), false);
@@ -1281,14 +1318,19 @@ fn columns(
         if !top.is_empty() && !landing.is_empty() {
             let touching = geom::intersection(top, landing);
             if !touching.is_empty() {
-                // In step with the object's layers, the layer the gap up from this one ends on, and as thick.
+                // In step with the object's layers, the layer the gap up from this one ends on, and as thick;
+                // without a gap, the layer over this one.
                 let (mut height, mut print_z) = if p.synchronize {
                     let k = synced_layer(o, l, p.gap_bottom, false);
+                    (o.height[k], o.print_z[k])
+                } else if p.zero_gap_bottom {
+                    let k = (l + 1).min(n - 1);
                     (o.height[k], o.print_z[k])
                 } else {
                     (p.bottom_contact_height, z + p.bottom_contact_height + p.gap_bottom)
                 };
-                let mut t = contact_idx.max(0) as usize;
+                // Moved onto a top contact close to it, but where it stands on the object without a gap.
+                let mut t = if p.zero_gap_bottom { tops.len() } else { contact_idx.max(0) as usize };
                 while t < tops.len() && arena[tops[t]].print_z < print_z + p.min_height + EPSILON {
                     let tz = arena[tops[t]].print_z;
                     if tz > print_z - p.min_height - EPSILON {
@@ -1439,7 +1481,8 @@ fn intermediate_layers(o: &Object, arena: &mut Vec<Gen>, tops: &[usize], bottoms
             }
             step = dist / n as f64;
         }
-        if arena[e2].kind == Kind::TopContact {
+        // A top contact's height is decided here, but where the support meets the object without a gap.
+        if !p.zero_gap_top && arena[e2].kind == Kind::TopContact {
             arena[e2].height = step;
             arena[e2].bottom_z = arena[e2].print_z - step;
             z2 = arena[e2].bottom_z;
@@ -1502,7 +1545,9 @@ fn trim_by_object(o: &Object, arena: &mut [Gen], layers: &[usize], tails: &[&Vec
                     trimming.extend(square(&shape, d));
                 }
             }
-            if trimming.is_empty() { s.polygons.clone() } else { geom::difference(&s.polygons, &trimming) }
+            // Not the hairlines the difference can leave where an edge of the support runs along one of the cut
+            // (at Orca's finer resolution, most often none).
+            if trimming.is_empty() { s.polygons.clone() } else { difference_safe(&s.polygons, &trimming) }
         })
     };
     for (k, polygons) in todo.into_iter().zip(trimmed) {
@@ -1556,7 +1601,7 @@ fn base_layers(o: &Object, arena: &mut [Gen], tops: &[usize], bottoms: &[usize],
             if trimming.is_empty() {
                 geom::union_all(&[&new])
             } else {
-                geom::difference(&geom::union_all(&[&new]), &trimming)
+                difference_safe(&geom::union_all(&[&new]), &trimming)
             }
         })
     };
@@ -2086,7 +2131,10 @@ fn toolpaths(
             .unwrap()
             .then(arena[b].height.partial_cmp(&arena[a].height).unwrap())
     });
-    let mut groups: Vec<(f64, f64)> = Vec::new();
+    // Each layer's interface id too (Orca's `interface_id`, which interlaced interfaces turn by): each layer with an
+    // interface takes the next, and a layer of top contacts alone one more than the layer they stand on.
+    let mut groups: Vec<(f64, f64, usize)> = Vec::new();
+    let mut next_id = 0;
     let mut i = 0;
     while i < all.len() {
         let zmax = arena[all[i]].print_z + EPSILON;
@@ -2097,32 +2145,77 @@ fn toolpaths(
         let zavg = 0.5 * (arena[all[i]].print_z + arena[all[j - 1]].print_z);
         let mut height = arena[all[i]].height;
         let mut empty = true;
+        let (mut interfaces, mut contacts, mut contact_bottom) = (0, 0, 0.0);
         for &g in &all[i..j] {
-            empty &= arena[g].polygons.is_empty();
+            if !arena[g].polygons.is_empty() {
+                empty = false;
+                let kind = arena[g].kind;
+                interfaces += usize::from(matches!(
+                    kind,
+                    Kind::RaftInterface
+                        | Kind::BottomContact
+                        | Kind::BottomInterface
+                        | Kind::TopContact
+                        | Kind::TopInterface
+                        | Kind::BaseInterface
+                ));
+                if kind == Kind::TopContact {
+                    contacts += 1;
+                    contact_bottom = arena[g].bottom_z;
+                }
+            }
             arena[g].print_z = zavg;
             height = height.min(arena[g].height);
         }
         if !empty {
-            groups.push((zavg, height));
+            let contacts_only = contacts > 0 && contacts == interfaces;
+            let mut id = next_id;
+            if contacts_only {
+                for &(z, _, other) in groups.iter().rev() {
+                    if (z - contact_bottom).abs() < EPSILON {
+                        id = other + 1;
+                    }
+                }
+            }
+            groups.push((zavg, height, id));
+            if interfaces > 0 && !contacts_only {
+                next_id += 1;
+            }
         }
         i = j;
     }
     let arena = &*arena;
     let origin = o.origin;
     par::map_range(groups.len(), |k| {
-        let (z, height) = groups[k];
+        let (z, height, id) = groups[k];
         let at = |list: &[usize]| -> Option<usize> {
             let i = list.partition_point(|&g| arena[g].print_z < z - EPSILON);
             list.get(i).copied().filter(|&g| arena[g].print_z < z + EPSILON)
         };
         let found = [at(bottoms), at(tops), at(interfaces), at(base_interfaces), at(inter)];
-        layer_paths(arena, z, height, found, origin, p)
+        layer_paths(arena, (z, height, id), found, origin, p)
     })
 }
 
+/// Orca's `support_interface_angle` and the quarter turn its filler adds (radians, in single precision as Orca has
+/// them): the interfaces a quarter turn from the columns, turned back an eighth for snug supports set to rectilinear,
+/// or interlaced, an eighth of a turn either way by the layer's interface id.
+fn interface_direction(p: &Params, id: usize) -> f64 {
+    use std::f32::consts::{FRAC_PI_2, FRAC_PI_4};
+    let turn = if p.interlaced { if id & 1 == 1 { FRAC_PI_4 } else { -FRAC_PI_4 } } else { p.interface_turn as f32 };
+    (FRAC_PI_2 + turn + FRAC_PI_2) as f64
+}
+
 /// One support layer's extrusions from the generator layers at its height (bottom contact, top contact, interface,
-/// base interface, base).
-fn layer_paths(arena: &[Gen], z: f64, height: f64, found: [Option<usize>; 5], origin: (f64, f64), p: &Params) -> Layer {
+/// base interface, base), `layer` its height, thickness and interface id.
+fn layer_paths(
+    arena: &[Gen],
+    layer: (f64, f64, usize),
+    found: [Option<usize>; 5],
+    origin: (f64, f64),
+    p: &Params,
+) -> Layer {
+    let (z, height, id) = layer;
     // Each with its polygons (merges change them) and, where they were cut down, what is left to print.
     struct Item {
         layer: usize,
@@ -2184,7 +2277,11 @@ fn layer_paths(arena: &[Gen], z: f64, height: f64, found: [Option<usize>; 5], or
         height: h,
     };
     // Interfaces: the support pattern a quarter turn from the columns', denser.
-    let interface_angle = (std::f32::consts::FRAC_PI_2 + p.interface_turn as f32 + std::f32::consts::FRAC_PI_2) as f64;
+    let interface_angle = interface_direction(p, id);
+    // Orca's interface filler (`contact_fill_pattern`): the support pattern, or straight lines where the contact
+    // layers are denser than 95 % or interlaced.
+    let contact_density = if p.top_interfaces > 0 { p.top_interface_density } else { p.bottom_interface_density };
+    let straight = contact_density > 0.95 || p.interlaced;
     let extrude_interface = |item: &mut Option<Item>, density: f64, angle: f64| {
         let Some(item) = item.as_mut() else { return };
         let area = item.to_extrude.clone().unwrap_or_else(|| item.polygons.clone());
@@ -2193,7 +2290,12 @@ fn layer_paths(arena: &[Gen], z: f64, height: f64, found: [Option<usize>; 5], or
         }
         let g = &arena[item.layer];
         for shape in &geom::union_all(&[&area]) {
-            for line in base_support::fill(shape, angle, origin, p.spacing, density) {
+            let lines = if straight {
+                monotonic::rectilinear(shape, angle, origin, p.spacing, density)
+            } else {
+                base_support::fill(shape, angle, origin, p.spacing, density)
+            };
+            for line in lines {
                 item.paths.push(crate::support::Item::Path(path(Role::SupportInterface, line, p.width, g.height)));
             }
         }
@@ -2295,9 +2397,27 @@ pub fn classic_layers(
     use crate::tree::classic::draw::AreaType;
     // Orca's `_infill_direction` angles (the filler's and a quarter turn, in float): the interfaces' filler is at the
     // support angle and a quarter turn, the base's at the support angle.
-    let interface_angle = (std::f32::consts::FRAC_PI_2 + std::f32::consts::FRAC_PI_2) as f64;
     let base_angle = std::f32::consts::FRAC_PI_2 as f64;
+    let contact_density = if p.top_interfaces > 0 { p.top_interface_density } else { p.bottom_interface_density };
+    // Orca's interface filler: straight lines where the contact layers are denser than 95 % or interlaced.
+    let straight = contact_density > 0.95 || p.interlaced;
+    // Each layer's interface ids for its roofs and its floors, which interlaced interfaces turn by: the layers with
+    // roofs counted up from the first, and those with floors.
+    let ids: Vec<(usize, usize)> = {
+        let (mut roof, mut floor) = (0, 0);
+        drawn
+            .iter()
+            .map(|d| {
+                let ids = (roof, floor);
+                roof += usize::from(d.groups.iter().any(|g| matches!(g.kind, AreaType::Roof | AreaType::Roof1stLayer)));
+                floor += usize::from(d.groups.iter().any(|g| g.kind == AreaType::Floor));
+                ids
+            })
+            .collect()
+    };
     par::map_range(drawn.len(), |layer_id| {
+        let (roof_angle, floor_angle) =
+            (interface_direction(p, ids[layer_id].0), interface_direction(p, ids[layer_id].1));
         let d = &drawn[layer_id];
         let h = d.height;
         let sp = flow_spacing(p.width, h);
@@ -2365,7 +2485,7 @@ pub fn classic_layers(
                         }
                     }
                     for e in &geom::offset_square(&one_area, -sp) {
-                        for line in monotonic::rectilinear(e, interface_angle, origin, sp, p.top_interface_density) {
+                        for line in monotonic::rectilinear(e, roof_angle, origin, sp, p.top_interface_density) {
                             group.push(path(role, line));
                         }
                     }
@@ -2377,7 +2497,13 @@ pub fn classic_layers(
                     let density =
                         if g.kind == AreaType::Floor { p.bottom_interface_density } else { p.top_interface_density };
                     let role = if g.interface_as_base { Role::Support } else { Role::SupportInterface };
-                    for line in base_support::fill(&g.area, interface_angle, origin, sp, density) {
+                    let angle = if g.kind == AreaType::Floor { floor_angle } else { roof_angle };
+                    let lines = if straight {
+                        monotonic::rectilinear(&g.area, angle, origin, sp, density)
+                    } else {
+                        base_support::fill(&g.area, angle, origin, sp, density)
+                    };
+                    for line in lines {
                         items.push(Item::Path(path(role, line)));
                     }
                 }
@@ -2691,5 +2817,21 @@ mod tests {
         let mut stick: Shapes = vec![vec![vec![p(0, 0), p(5, 0), p(10, 0), p(5, 0)]]];
         remove_sticks(&mut stick);
         assert!(stick.is_empty());
+    }
+
+    #[test]
+    fn a_safe_difference_leaves_no_hairline_along_an_edge_it_shares() {
+        let p = geom::pt;
+        let square: Shapes = vec![vec![vec![p(0, 0), p(100_000, 0), p(100_000, 100_000), p(0, 100_000)]]];
+        // A cut over all of the square but a strip a unit wide along its top edge.
+        let cut: Shapes =
+            vec![vec![vec![p(-1_000, -1_000), p(101_000, -1_000), p(101_000, 99_999), p(-1_000, 99_999)]]];
+        assert!(!geom::difference(&square, &cut).is_empty());
+        assert!(difference_safe(&square, &cut).is_empty());
+        // What a cut leaves that is wider than that stays as it is.
+        let half: Shapes =
+            vec![vec![vec![p(-1_000, -1_000), p(50_000, -1_000), p(50_000, 101_000), p(-1_000, 101_000)]]];
+        assert_eq!(difference_safe(&square, &half), geom::difference(&square, &half));
+        assert!((geom::area_mm2(&difference_safe(&square, &half)) - 50.0).abs() < 1e-9);
     }
 }
