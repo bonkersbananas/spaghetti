@@ -45,6 +45,8 @@ pub struct Seeder<'a> {
     pub spacing: f64,
     /// The roofs' density (Orca's float).
     pub roof_density: f64,
+    /// The support pattern's base and interface angles (radians in float, `support::pattern_angles`).
+    pub angles: (f32, f32),
     min_xy: bool,
     roof_layers: usize,
     /// Every tip is a roof too, as far down as its roofs go (`force_tip_to_roof`): where the support meets the
@@ -59,7 +61,15 @@ pub struct Seeder<'a> {
 }
 
 impl<'a> Seeder<'a> {
-    pub fn new(c: &'a Config, v: &'a Volumes, origin: (f64, f64), spacing: f64, roof_density: f64, n: usize) -> Self {
+    pub fn new(
+        c: &'a Config,
+        v: &'a Volumes,
+        origin: (f64, f64),
+        spacing: f64,
+        roof_density: f64,
+        angles: (f32, f32),
+        n: usize,
+    ) -> Self {
         let lw = c.support_line_width as f64;
         let connect_length = (lw * 100.0 / c.top_rate + (2.0 * c.min_radius as f64 - lw).max(0.0)) as i64 as f64;
         Seeder {
@@ -68,6 +78,7 @@ impl<'a> Seeder<'a> {
             origin,
             spacing,
             roof_density,
+            angles,
             min_xy: c.xy_distance > c.xy_min_distance,
             roof_layers: c.support_roof_layers,
             force_tip_to_roof: c.support_roof_layers > 0
@@ -127,8 +138,10 @@ impl<'a> Seeder<'a> {
     fn support_lines(&self, polygons: &Shapes, roof: bool, layer: usize, distance: i64) -> Vec<Vec<Pt>> {
         let half_pi = std::f32::consts::FRAC_PI_2;
         let quarter = std::f32::consts::FRAC_PI_4;
+        let (base, interface) = self.angles;
         let angle =
-            if roof { (half_pi + if layer & 1 == 1 { -quarter } else { quarter }) + half_pi } else { half_pi } as f64;
+            if roof { (interface + if layer & 1 == 1 { -quarter } else { quarter }) + half_pi } else { base + half_pi }
+                as f64;
         let density = if roof {
             self.roof_density as f32 as f64
         } else {

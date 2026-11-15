@@ -228,6 +228,16 @@ mod tests {
         ] {
             assert_eq!(refused(&tree(more)), Some(Error::Unsupported("this support pattern")), "{more}");
         }
+        // The support pattern turned (`support_angle`) on organic trees (support.rs, `pattern_angles`); not yet on
+        // normal supports, which would turn their grid too, on classic trees, or with a raft.
+        assert!(read(&tree(r#", "support_angle": "45""#)).is_ok_and(|r| r.settings.unsupported().is_none()));
+        for more in [
+            r#", "support_angle": "45", "support_type": "normal(auto)""#,
+            r#", "support_angle": "45", "support_style": "tree_hybrid""#,
+            r#", "support_angle": "45", "raft_layers": "2""#,
+        ] {
+            assert_eq!(refused(&tree(more)), Some(Error::Unsupported("these support settings")), "{more}");
+        }
         let normal =
             |more: &str| format!(r#"{{"process": {{"enable_support": "1", "support_type": "normal(auto)"{more}}}}}"#);
         assert!(read(&normal("")).is_ok());

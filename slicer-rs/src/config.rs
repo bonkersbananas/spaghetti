@@ -568,7 +568,9 @@ impl SupportSettings {
             Some("supports without a gap")
         } else if self.enforce_layers > 0
             || self.expansion != 0.0
-            || self.angle != 0.0
+            // Organic trees turn their interfaces, their tips' lines and their flange by the pattern's angle
+            // (`support.rs`, `pattern_angles`); normal supports would turn their grid too, and a raft its layers.
+            || (self.angle != 0.0 && !(on && self.organic() && self.raft_layers == 0))
             || self.ironing
             || self.interface_loops
             || (self.wall_count > 0 && !self.organic() && self.classic().is_none())
