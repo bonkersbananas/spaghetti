@@ -410,6 +410,46 @@ test("finishes a print that is printing with no signal: outcome, note and photo 
   await expect(notice).toBeHidden();
 });
 
+// The finish carries only what was added to the note, so the server can merge it with what the other person wrote.
+// While the finished sheet is still on screen (its closing animation is frozen here) the held note must not also go
+// out as a plain edit of the whole note, which would overwrite Sam's line.
+test("a finish queued offline adds its note to the one on the server, even with the sheet still showing", async ({
+  page,
+  context,
+  baseURL,
+}) => {
+  await signIn(page);
+  await waitForServiceWorker(page);
+  const { buildId, printing } = await printingBuild(page);
+
+  await context.setOffline(true);
+  await page.reload();
+  await page.getByRole("button", { name: "Finish attempt 2" }).click();
+  const sheet = page.getByRole("dialog", { name: "Finish attempt 2" });
+  await sheet.getByRole("radio", { name: "Worked" }).click();
+  await sheet.getByRole("textbox", { name: "Note" }).press("End");
+  await sheet.getByRole("textbox", { name: "Note" }).pressSequentially(" and a hotter bed");
+  await page.clock.install();
+  await page.clock.pauseAt(new Date(Date.now() + 1000));
+  await sheet.getByRole("button", { name: "Finish attempt" }).click();
+  // Long enough for autosave's pause to pass while the sheet is still there.
+  await page.clock.runFor(3000);
+  await page.clock.resume();
+
+  const sam = await request.newContext({ baseURL, extraHTTPHeaders: { Origin: baseURL ?? "" } });
+  expect(
+    (await sam.post("/api/session", { data: { username: SEED_USERS[1].username, password: SEED_PASSWORD } })).ok(),
+  ).toBe(true);
+  expect((await sam.patch(`/api/attempts/${printing}`, { data: { note: "Sam's line" } })).ok()).toBe(true);
+  await sam.dispose();
+
+  await context.setOffline(false);
+  await expect.poll(async () => (await serverAttempt(page, buildId, printing)).outcome).toBe("success");
+  const landed = await serverAttempt(page, buildId, printing);
+  expect(landed.note).toContain("Sam's line");
+  expect(landed.note).toContain("and a hotter bed");
+});
+
 test("a finish queued offline keeps the other person's outcome, adds the photo and note, and says so", async ({
   page,
   context,

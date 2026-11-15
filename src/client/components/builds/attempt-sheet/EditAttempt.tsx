@@ -56,6 +56,10 @@ export function EditAttempt({
   // merged into the server's latest settings. While finishing offline nothing autosaves: what was typed waits for
   // the finish button (or for the connection, when it comes back and the usual autosave takes over).
   const server = useMemo(() => toFields(attempt), [attempt]);
+  // The finish is queued (the button was pressed): what was typed goes out inside it, as what was added to the note,
+  // so it stays held. Once the finish shows as done the attempt isn't "printing" any more, and without this the held
+  // text would be sent again as a plain edit of the whole note, overwriting what the other person wrote meanwhile.
+  const finishQueued = useRef(false);
   const latestSettings = useRef(attempt.settings);
   latestSettings.current = attempt.settings;
   const {
@@ -68,7 +72,7 @@ export function EditAttempt({
       const { changes: send, settingsMerge } = toChanges(changes, latestSettings.current);
       return saveAttemptChanges(queryClient, item.id, attempt.id, send, settingsMerge);
     },
-    { delay: 500, hold: readOnly === "finish", keepAs: `attempt:${attempt.id}` },
+    { delay: 500, hold: readOnly === "finish" || finishQueued.current, keepAs: `attempt:${attempt.id}` },
   );
   const value = useMemo(() => toValue(fields), [fields]);
   const change = (next: Partial<SheetValue>) => changeFields((current) => fieldsFor(current, next));
@@ -160,8 +164,10 @@ export function EditAttempt({
         variant={printing && !value.outcome ? "secondary" : "primary"}
         size={isDesktop ? "md" : "lg"}
         onClick={() => {
-          if (readOnly === "finish" && value.outcome)
+          if (readOnly === "finish" && value.outcome) {
+            finishQueued.current = true;
             queueFinish(item.id, attempt, { ...value, outcome: value.outcome });
+          }
           onOpenChange(false);
         }}
       >
