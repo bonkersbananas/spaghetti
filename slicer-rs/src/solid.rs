@@ -414,15 +414,95 @@ impl Beading {
     }
 }
 
+/// The degrees by which Arachne's skeleton may widen along an edge for the edge to be central
+/// (`wall_transition_angle`, as `FillConcentricInternal` sets it).
+const TRANSITION_ANGLE: f64 = 10.0;
+
+/// How many beads the band holds at each point of its middle line. Arachne counts beads only on the central part of
+/// its skeleton (`updateIsCentral`): where the band widens by less than `sin(TRANSITION_ANGLE / 2)` of the length
+/// along it, and is at least as wide as the narrowest feature. Elsewhere, as round a corner of a band, where the
+/// middle meets the corner's bisector and the band seems wider for a moment, there is no transition (only central
+/// edges have them, `generateTransitionMids`), so a stretch that isn't central between two central ones holding the
+/// same count holds that count too, and so does one at a junction (where the line meets others) the count beside
+/// it; one at a free end, or between different counts, keeps its own.
+fn counts_along(line: &medial::ThickLine, beading: &Beading, free: [bool; 2], closed: bool) -> Vec<usize> {
+    let n = line.points.len();
+    let own: Vec<usize> = line.widths.iter().map(|&t| beading.count(t)).collect();
+    let cap = (TRANSITION_ANGLE.to_radians() / 2.0).sin();
+    let central: Vec<bool> = (1..n)
+        .map(|k| {
+            let (tp, tq) = (line.widths[k - 1], line.widths[k]);
+            let length = geom::dist(line.points[k - 1], line.points[k]) / geom::SCALE;
+            tp.max(tq) >= beading.min_feature && (tq - tp).abs() / 2.0 < length * cap
+        })
+        .collect();
+    // A point is central when a central segment ends there.
+    let known: Vec<bool> = (0..n)
+        .map(|k| {
+            (k > 0 && central[k - 1])
+                || (k + 1 < n && central[k])
+                || (closed && k == 0 && central[n - 2])
+                || (closed && k == n - 1 && central[0])
+        })
+        .collect();
+    if known.iter().all(|&c| c) || !known.iter().any(|&c| c) {
+        return own;
+    }
+    let mut counts = own.clone();
+    // The points of a ring go round: its last is its first.
+    let m = if closed { n - 1 } else { n };
+    let mut k = 0;
+    while k < m {
+        if known[k] {
+            k += 1;
+            continue;
+        }
+        let start = k;
+        while k < m && !known[k] {
+            k += 1;
+        }
+        let end = k;
+        let before = if start > 0 {
+            Some(own[start - 1])
+        } else if closed {
+            (0..m).rev().find(|&j| known[j]).map(|j| own[j])
+        } else {
+            None
+        };
+        let after = if end < m {
+            Some(own[end])
+        } else if closed {
+            (0..m).find(|&j| known[j]).map(|j| own[j])
+        } else {
+            None
+        };
+        // At a junction (an end of the line that isn't free) the skeleton goes on: the stretch takes the count
+        // beside it, as nothing changes the count off the central part.
+        let before = before.or(if start == 0 && !free[0] { after } else { None });
+        let after = after.or(if end == m && !free[1] { before } else { None });
+        if let (Some(a), Some(b)) = (before, after)
+            && a == b
+        {
+            for c in &mut counts[start..end] {
+                *c = a;
+            }
+        }
+    }
+    if closed {
+        counts[n - 1] = counts[0];
+    }
+    counts
+}
+
 /// A middle line cut where its band's bead count changes (at the width where it does), each run with its count.
-fn cut_by_count(line: &medial::ThickLine, beading: &Beading) -> Vec<(ThickPath, usize)> {
+fn cut_by_count(line: &medial::ThickLine, beading: &Beading, free: [bool; 2], closed: bool) -> Vec<(ThickPath, usize)> {
+    let counts = counts_along(line, beading, free, closed);
     let mut runs: Vec<(ThickPath, usize)> = Vec::new();
-    let mut count = beading.count(line.widths[0]);
+    let mut count = counts[0];
     let mut run = ThickPath { points: vec![line.points[0]], widths: vec![line.widths[0]] };
-    for k in 1..line.points.len() {
+    for (k, &target) in counts.iter().enumerate().skip(1) {
         let (p, q) = (line.points[k - 1], line.points[k]);
         let (tp, tq) = (line.widths[k - 1], line.widths[k]);
-        let target = beading.count(tq);
         while count != target {
             let next = if target > count { count + 1 } else { count - 1 };
             let t = beading.threshold(count.max(next));
@@ -566,7 +646,7 @@ impl Axis {
             .map(|line| {
                 let (first, last) = (line.points[0], *line.points.last().unwrap());
                 let closed = line.points.len() > 2 && first == last;
-                let mut runs = cut_by_count(line, beading);
+                let mut runs = cut_by_count(line, beading, [free(first), free(last)], closed);
                 if closed {
                     runs = ring_runs(runs);
                 }
@@ -1258,5 +1338,44 @@ mod tests {
         assert!(start > 14.5 && start < 16.0, "{start}");
         let area = geom::area_mm2(&vec![band]);
         assert!((laid(&paths) / area - 1.0).abs() < 0.05, "{} of {area}", laid(&paths));
+    }
+
+    /// The 0.4 mm nozzle's solid line spacing at 0.2 mm layers, as the colour benchmark's block slices with.
+    const SPACING: f64 = 0.37707963267948963;
+
+    #[test]
+    fn an_s_shaped_band_three_beads_wide_keeps_its_middle_round_its_corners() {
+        // A band 1.3 mm wide bent into an S, as the letter of bench/colour.py: three beads all along. Round each
+        // corner the middle seems wide enough for four (1.53 mm where it meets the corner's bisector), but that part
+        // of Arachne's skeleton widens too fast to be central, so the count stays three and the middle runs on.
+        let arms = [
+            rect(0.0, 0.0, 13.3, 1.3),
+            rect(12.0, 0.0, 13.3, 6.0),
+            rect(0.0, 4.7, 13.3, 6.0),
+            rect(0.0, 4.7, 1.3, 10.7),
+            rect(0.0, 9.4, 13.3, 10.7),
+        ];
+        let band = geom::union_all(&[&arms.to_vec()]);
+        assert_eq!(band.len(), 1);
+        let paths = narrow_loops(&band, SPACING, 0.4, 0.2, geom::pt(0, 0));
+        let (loops, lines): (Vec<&ThickPath>, Vec<&ThickPath>) = paths.iter().partition(|p| is_loop(p));
+        assert_eq!((loops.len(), lines.len()), (1, 1), "{paths:?}");
+        let middle = geom::length_mm(&lines[0].points, false);
+        assert!(middle > 40.0, "{middle}");
+        let area = geom::area_mm2(&band);
+        assert!((laid(&paths) / area - 1.0).abs() < 0.03, "{} of {area}", laid(&paths));
+    }
+
+    #[test]
+    fn a_band_three_beads_wide_keeps_its_middle_through_a_junction() {
+        // A T of 1.3 mm bands: where the arms meet the band is 1.63 mm across, four beads' worth, but the junction
+        // isn't central, so all three arms keep their middle beads up to it.
+        let band = geom::union(&vec![rect(0.0, 0.0, 20.0, 1.3)], &vec![rect(9.35, 0.0, 10.65, 10.0)]);
+        assert_eq!(band.len(), 1);
+        let paths = narrow_loops(&band, SPACING, 0.4, 0.2, geom::pt(0, 0));
+        let middles: f64 = paths.iter().filter(|p| !is_loop(p)).map(|p| geom::length_mm(&p.points, false)).sum();
+        assert!(middles > 25.0, "{middles}: {paths:?}");
+        let area = geom::area_mm2(&band);
+        assert!((laid(&paths) / area - 1.0).abs() < 0.04, "{} of {area}", laid(&paths));
     }
 }
