@@ -1,5 +1,6 @@
 import { shortUrl } from "@shared/links";
 import { type ModelMark, modelLetter, modelPlace } from "@shared/model-mark";
+import { softSlashes } from "@shared/spools";
 import { useQuery } from "@tanstack/react-query";
 import { useRef } from "react";
 import { cn } from "@/lib/cn";
@@ -85,7 +86,7 @@ export function LinkCard({
             title && waited.current && "sg-fade-in",
           )}
         >
-          {title ?? shortUrl(url)}
+          {title ?? softSlashes(shortUrl(url))}
         </span>
         <span className="text-small text-ink-faint truncate">
           {site}
