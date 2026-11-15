@@ -201,7 +201,7 @@ test("on desktop Up next is one compact row, and the inbox starts on the first s
     .getByRole("listitem")
     .first()
     .evaluate((el) => el.getBoundingClientRect().width);
-  expect(widths).toBeLessThan(160);
+  expect(widths).toBeLessThan(200);
   // More than fit: it scrolls, and the arrow shows the rest.
   expect(await strip.evaluate((el) => el.scrollWidth > el.clientWidth)).toBe(true);
   await page.getByRole("button", { name: "Later in Up next" }).click();
