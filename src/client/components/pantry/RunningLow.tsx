@@ -10,6 +10,7 @@ import { Section } from "@/components/ui/Section";
 import { SpoolDisc } from "@/components/ui/SpoolDisc";
 import { toast } from "@/components/ui/Toast";
 import { sessionQuery } from "@/lib/queries";
+import { useReadOnly } from "@/lib/read-only";
 import { type LowSpool, shoppingList } from "@/lib/running-low";
 import { addSpoolsToShopping, sameWords, useShopping } from "@/lib/shopping";
 import { useIsDesktop } from "@/lib/use-media-query";
@@ -37,7 +38,14 @@ async function shareList(text: string, canShare: boolean) {
  * Spools to restock, under a threshold or short for a print on the bed, with the list to take to the shop.
  * One quiet surface; each row opens the spool.
  */
-export function RunningLow({ low }: { low: readonly LowSpool[] }) {
+export function RunningLow({
+  low,
+  demo,
+}: {
+  low: readonly LowSpool[] /** Made-up spools (the styleguide): the shopping button stays quiet instead of writing to the real list. */;
+  demo?: boolean;
+}) {
+  const readOnly = useReadOnly();
   const isDesktop = useIsDesktop();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
@@ -73,7 +81,7 @@ export function RunningLow({ low }: { low: readonly LowSpool[] }) {
             variant="secondary"
             size="sm"
             icon={allOnList ? CheckIcon : ShoppingIcon}
-            disabled={shoppingPending}
+            disabled={shoppingPending || demo || (readOnly && !allOnList)}
             onClick={() => void putOnList()}
           >
             {allOnList ? "On the shopping list" : "Add to shopping list"}
