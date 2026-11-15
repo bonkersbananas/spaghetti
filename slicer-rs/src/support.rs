@@ -121,6 +121,12 @@ pub struct Params {
     /// Interfaces in straight lines turned an eighth of a turn either way by their layer's interface id
     /// (`rectilinear_interlaced`).
     interlaced: bool,
+    /// The support meets the object above it without a gap (Orca's `zero_gap_interface_top`): each contact layer is
+    /// the object's layer under its overhang.
+    zero_gap_top: bool,
+    /// The support stands on the object without a gap (Orca's `zero_gap_interface_bottom`): each bottom contact is the
+    /// object's layer over the surface it stands on.
+    zero_gap_bottom: bool,
     /// mm²: a tree branch's island larger than this gets a second wall (`tree_branch_diameter_double_wall_area`).
     double_wall_area: f64,
     /// Whether supports are on: with them off, the generator makes only the raft, if any.
@@ -199,6 +205,8 @@ impl Params {
                 0.0
             },
             interlaced: sp.interlaced(),
+            zero_gap_top: sp.zero_gap_top(),
+            zero_gap_bottom: sp.zero_gap_bottom,
             double_wall_area: match sp.wall_count {
                 0 => 0.25 * 25.0 * std::f64::consts::PI,
                 1 => f64::MAX,
@@ -1162,22 +1170,28 @@ fn contact_layer(
         overhangs = geom::union(&overhangs, &enforced);
         contact = geom::union(&contact, &geom::difference(&enforced, lower));
     }
-    // In step with the object's layers, the contact is the layer the gap ends on, and as thick; else its height is
-    // decided with the support's own layers.
-    let (mut print_z, height) = if p.synchronize {
-        let k = synced_layer(o, l, p.gap_top, true);
-        (o.print_z[k], o.height[k])
+    let mut g = if p.zero_gap_top {
+        // Without a gap, the contact is the object's layer under the overhang, and as thick.
+        let bottom = if l == 1 { 0.0 } else { o.print_z[l - 2] };
+        Gen::new(Kind::TopContact, bottom, o.print_z[l - 1], o.height[l - 1])
     } else {
-        (o.bottom_z(l) - p.gap_top, 0.0)
-    };
-    if print_z < p.first_layer_height - EPSILON {
-        return None;
-    }
-    let mut g = if print_z < p.first_layer_height + p.min_height {
-        print_z = p.first_layer_height;
-        Gen::new(Kind::TopContact, 0.0, print_z, p.first_layer_height)
-    } else {
-        Gen::new(Kind::TopContact, print_z - height, print_z, height)
+        // In step with the object's layers, the contact is the layer the gap ends on, and as thick; else its height
+        // is decided with the support's own layers.
+        let (mut print_z, height) = if p.synchronize {
+            let k = synced_layer(o, l, p.gap_top, true);
+            (o.print_z[k], o.height[k])
+        } else {
+            (o.bottom_z(l) - p.gap_top, 0.0)
+        };
+        if print_z < p.first_layer_height - EPSILON {
+            return None;
+        }
+        if print_z < p.first_layer_height + p.min_height {
+            print_z = p.first_layer_height;
+            Gen::new(Kind::TopContact, 0.0, print_z, p.first_layer_height)
+        } else {
+            Gen::new(Kind::TopContact, print_z - height, print_z, height)
+        }
     };
     // On the plate only, the enforced areas print too, apart from the rest (which the layers below trim further).
     let enforced_apart = covered.is_some() && !enforced.is_empty();
@@ -1195,11 +1209,13 @@ fn contact_layer(
     }
     g.contact = Grid::new(&contact, margin, gp).extract(grid::EXPANSION_TO_PROPAGATE, true);
     // Dense interface only under overhangs steep enough to need it: beyond the layer below, its thin parts opened
-    // away and the rest grown by 60 % of a wall.
+    // away and the rest grown by 60 % of a wall; without a gap, under all of them.
     let nio = p.fw;
     let held = square(&square(lower, -0.5 * nio), 1.1 * nio);
     let dense = geom::difference(&overhangs, &held);
-    if !dense.is_empty() {
+    if p.zero_gap_top {
+        g.polygons = Grid::new(&contact, margin, gp).extract(gp.expansion_to_slice(), true);
+    } else if !dense.is_empty() {
         let dense = geom::difference(&geom::offset(&dense, 0.1 * nio), margin);
         let trimmed = geom::intersection(&dense, &g.contact);
         g.polygons = Grid::new(&trimmed, margin, gp).extract(gp.expansion_to_slice(), false);
@@ -1302,14 +1318,19 @@ fn columns(
         if !top.is_empty() && !landing.is_empty() {
             let touching = geom::intersection(top, landing);
             if !touching.is_empty() {
-                // In step with the object's layers, the layer the gap up from this one ends on, and as thick.
+                // In step with the object's layers, the layer the gap up from this one ends on, and as thick;
+                // without a gap, the layer over this one.
                 let (mut height, mut print_z) = if p.synchronize {
                     let k = synced_layer(o, l, p.gap_bottom, false);
+                    (o.height[k], o.print_z[k])
+                } else if p.zero_gap_bottom {
+                    let k = (l + 1).min(n - 1);
                     (o.height[k], o.print_z[k])
                 } else {
                     (p.bottom_contact_height, z + p.bottom_contact_height + p.gap_bottom)
                 };
-                let mut t = contact_idx.max(0) as usize;
+                // Moved onto a top contact close to it, but where it stands on the object without a gap.
+                let mut t = if p.zero_gap_bottom { tops.len() } else { contact_idx.max(0) as usize };
                 while t < tops.len() && arena[tops[t]].print_z < print_z + p.min_height + EPSILON {
                     let tz = arena[tops[t]].print_z;
                     if tz > print_z - p.min_height - EPSILON {
@@ -1460,7 +1481,8 @@ fn intermediate_layers(o: &Object, arena: &mut Vec<Gen>, tops: &[usize], bottoms
             }
             step = dist / n as f64;
         }
-        if arena[e2].kind == Kind::TopContact {
+        // A top contact's height is decided here, but where the support meets the object without a gap.
+        if !p.zero_gap_top && arena[e2].kind == Kind::TopContact {
             arena[e2].height = step;
             arena[e2].bottom_z = arena[e2].print_z - step;
             z2 = arena[e2].bottom_z;
