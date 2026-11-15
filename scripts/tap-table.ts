@@ -381,6 +381,43 @@ const scenarios: Scenario[] = [
     },
   },
   {
+    name: "J / K on a list",
+    profiles: ["desktop"],
+    run: async (env) => {
+      const out: Record<string, TapResult> = {};
+      for (const [path, label] of [["/builds", "builds"]] as const) {
+        await goto(env, path, "main [data-picks] a[href]");
+        await env.page.locator("body").click({ position: { x: 5, y: 5 } });
+        // Done when focus sits on a list link other than the one it was on before the key.
+        const moved = async () => {
+          const before = await env.page.evaluate(() => document.activeElement?.getAttribute("href") ?? "");
+          return `(() => { const el = document.activeElement; return !!el?.closest('main [data-picks]') && (el.getAttribute('href') ?? '') !== ${JSON.stringify(before)}; })()`;
+        };
+        out[`${label}: J (first)`] = await tapLatency(env.page, () => env.page.keyboard.press("j"), await moved());
+        await env.settle();
+        out[`${label}: J (next)`] = await tapLatency(env.page, () => env.page.keyboard.press("j"), await moved());
+        await env.settle();
+        out[`${label}: K`] = await tapLatency(env.page, () => env.page.keyboard.press("k"), await moved());
+      }
+      return out;
+    },
+  },
+  {
+    name: "3D view sheet",
+    prepare: async (env) =>
+      ideaWithModel(env, "Tap table 3D", { name: "fusilli-knob.stl", mimeType: "model/stl", bytes: fusilliStl() }),
+    run: async (env, id) => {
+      await goto(env, `/ideas/${id}`, env.page.getByRole("region", { name: /^Files/ }));
+      const button = env.page.getByRole("button", { name: /in 3D$/ }).first();
+      await button.evaluate((b) => b.scrollIntoView({ block: "center" }));
+      await env.settle();
+      const tap = await tapLatency(env.page, () => env.press(button), onScreen("[role=dialog]"));
+      await env.page.waitForTimeout(1500);
+      await closeDialog(env.page);
+      return tap;
+    },
+  },
+  {
     name: "open a colour row",
     prepare: async (env) =>
       ideaWithModel(env, "Tap table hotdog", { name: "hotdog-hero.3mf", mimeType: "model/3mf", bytes: hotdogModel() }),
