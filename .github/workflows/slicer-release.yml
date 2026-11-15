@@ -40,7 +40,7 @@ jobs:
           if [ "${GITHUB_REF_TYPE}" = "tag" ]; then v="${GITHUB_REF_NAME#slicer-v}"; else v="0-${GITHUB_SHA::7}"; fi
           echo "value=$v" >> "$GITHUB_OUTPUT"
       # Emscripten, the dependencies and the engine from scratch: about 20 minutes. It stops if engine-st.wasm isn't
-      # byte for byte the engine's own release of the same commits.
+      # byte for byte the build pinned in pin.env.
       - name: Build the engine
         env:
           SLICER_VERSION: ${{ steps.version.outputs.value }}
@@ -67,20 +67,14 @@ jobs:
         with:
           name: slicer
           path: assets
-      # The AGPL asks that the source of the object code be offered from where it is: the engine's own release has
-      # it for exactly this build, so the same files go into ours, checked against the hashes pinned in pin.env.
+      # The AGPL asks that the source of the object code be offered from where it is: the build's own source bundles
+      # (engine, OrcaSlicer, third-party libraries) are in the artifact, with the patches and the build scripts.
       - name: The Corresponding Source
         run: |
           set -euo pipefail
-          source scripts/slicer/pin.env
-          for entry in $ENGINE_SOURCE_ASSETS; do
-            name=${entry%%:*}; sum=${entry#*:}
-            curl -fsSL --retry 3 -o "assets/$name" "$ENGINE_RELEASE/$name"
-            echo "$sum  assets/$name" | sha256sum -c -
-          done
-          cp scripts/slicer/host.patch assets/host.patch
+          cp scripts/slicer/host.patch scripts/slicer/engine.patch assets/
           git archive --format=tar.gz --prefix=spaghetti-slicer-scripts/ -o assets/spaghetti-slicer-scripts.tar.gz HEAD scripts/slicer
-          (cd assets && sha256sum -- *.zip *.tar.gz *.tar.xz *.tar host.patch > SHA256SUMS && cat SHA256SUMS)
+          (cd assets && sha256sum -- *.zip *.tar.gz *.tar.xz *.tar host.patch engine.patch > SHA256SUMS && cat SHA256SUMS)
       - name: Create the release
         env:
           GH_TOKEN: ${{ github.token }}
@@ -90,4 +84,4 @@ jobs:
           gh release create "$GITHUB_REF_NAME" assets/* \
             --repo "$GITHUB_REPOSITORY" \
             --title "Spaghetti slicing engine $version" \
-            --notes "OrcaSlicer's slicing core in WebAssembly, for slicing .stl and .3mf files in the browser (docs/slicer.md). The Muon3D Slicer Engine $ENGINE_TAG (${ENGINE_COMMIT::10}), OrcaSlicer $ORCA_VERSION (${ORCA_COMMIT::10}), single-threaded, built by CI from source with one change (host.patch). Free software under the AGPL-3.0: the engine's, OrcaSlicer's and the third-party libraries' source of this build are attached, with Spaghetti's build scripts. The app pins spaghetti-slicer-$version.zip by sha256 in scripts/slicer/engine.json; check a download with \`sha256sum -c SHA256SUMS\`."
+            --notes "OrcaSlicer's slicing core in WebAssembly, for slicing .stl and .3mf files in the browser (docs/slicer.md). The Muon3D Slicer Engine $ENGINE_TAG (${ENGINE_COMMIT::10}) built against OrcaSlicer $ORCA_VERSION (${ORCA_COMMIT::10}), single-threaded, built by CI from source with two patches (engine.patch, host.patch). Free software under the AGPL-3.0: the engine's, OrcaSlicer's and the third-party libraries' source of this build are attached, with Spaghetti's build scripts. The app pins spaghetti-slicer-$version.zip by sha256 in scripts/slicer/engine.json; check a download with \`sha256sum -c SHA256SUMS\`."

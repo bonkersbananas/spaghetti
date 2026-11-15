@@ -55,6 +55,7 @@ delete engineManifest.variants.mt64;
 files["manifest.json"] = new TextEncoder().encode(`${JSON.stringify(engineManifest, null, 2)}\n`);
 files["presets.json"] = new Uint8Array(fs.readFileSync(path.join(extra, "presets.json")));
 files["host.patch"] = new Uint8Array(fs.readFileSync(path.join(here, "host.patch")));
+files["engine.patch"] = new Uint8Array(fs.readFileSync(path.join(here, "engine.patch")));
 
 const release = `https://github.com/bonkersbananas/spaghetti/releases/tag/slicer-v${version}`;
 const ours = {
@@ -69,13 +70,13 @@ const ours = {
     tag: pin.ENGINE_TAG,
     commit: pin.ENGINE_COMMIT,
     license: "AGPL-3.0-only",
-    changes: "host.patch",
+    changes: ["engine.patch", "host.patch"],
   },
   orca: {
     version: pin.ORCA_VERSION,
     repository: pin.ORCA_REPO,
     commit: pin.ORCA_COMMIT,
-    upstream: { repository: "https://github.com/OrcaSlicer/OrcaSlicer", commit: pin.ORCA_UPSTREAM_COMMIT },
+    tag: pin.ORCA_TAG,
   },
   files: {},
 };
@@ -89,7 +90,9 @@ files["SPAGHETTI.md"] = new TextEncoder().encode(
     "",
     "It is free software under the GNU Affero General Public License, version 3 (LICENSE; NOTICE and",
     "THIRD-PARTY-NOTICES.md name the copyright holders and the libraries in it). Spaghetti built it from that source",
-    `with one change, host.patch (the host checked SharedArrayBuffer where a page has none). The Corresponding Source`,
+    "with two patches: engine.patch (the engine's build, made for OrcaSlicer's release: newer dependencies and the",
+    "stand-ins for what that release uses) and host.patch (the host checked SharedArrayBuffer where a page has none).",
+    `The Corresponding Source`,
     `of this exact build is attached to ${release}: the engine's source, OrcaSlicer's, the third-party`,
     "libraries', and the build scripts (scripts/slicer in Spaghetti's repository at the commit in spaghetti-slicer.json).",
     "",

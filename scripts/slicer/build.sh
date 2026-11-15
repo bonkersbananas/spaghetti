@@ -45,12 +45,22 @@ if [[ ! -d $ENGINE/.git ]]; then
   git clone --quiet --depth 1 --branch "$ENGINE_TAG" "$ENGINE_REPO" "$ENGINE"
 fi
 [[ $(git -C "$ENGINE" rev-parse HEAD) == "$ENGINE_COMMIT" ]] || fail "$ENGINE is not at $ENGINE_COMMIT"
-# A rebuild starts from the pinned sources: our one patch is applied again below.
-git -C "$ENGINE" checkout --quiet -- host/src
+# A rebuild starts from the pinned sources: our patches are applied again below.
+git -C "$ENGINE" checkout --quiet -- . && git -C "$ENGINE" clean --quiet -fd -- engine host
 
-step "OrcaSlicer $ORCA_COMMIT"
-(cd "$ENGINE" && bash engine/scripts/get-orca.sh)
-[[ $(git -C "$ENGINE/orca" rev-parse HEAD) == "$ORCA_COMMIT" ]] || fail "the engine's orca/ is not at $ORCA_COMMIT"
+step "OrcaSlicer $ORCA_VERSION ($ORCA_COMMIT)"
+# Upstream's release, in the engine's orca/ (its own is the Muon3D fork's 2.5.0-dev): a plain checkout of the tag.
+if [[ ! -d $ENGINE/orca/.git ]]; then
+  rm -rf "$ENGINE/orca" && git init --quiet "$ENGINE/orca"
+fi
+if [[ $(git -C "$ENGINE/orca" rev-parse HEAD 2> /dev/null || true) != "$ORCA_COMMIT" ]]; then
+  git -C "$ENGINE/orca" fetch --quiet --depth 1 "$ORCA_REPO" "refs/tags/$ORCA_TAG"
+  git -C "$ENGINE/orca" checkout --quiet --force FETCH_HEAD
+fi
+[[ $(git -C "$ENGINE/orca" rev-parse HEAD) == "$ORCA_COMMIT" ]] || fail "the engine's orca/ is not at $ORCA_COMMIT ($ORCA_TAG)"
+# What the engine needs to build against it: dependencies (CGAL 6.2.1, expat 2.10.0), sources that moved, and
+# the shims for what Orca 2.5.1 uses of TBB, OCCT and Boost.Interval that the engine's own tree has no stand-in for.
+git -C "$ENGINE" apply "$HERE/engine.patch"
 
 step "toolchain in $ORCA_WASM_ROOT"
 if [[ ${SLICER_SYSTEM_TOOLS:-0} == 1 ]]; then
@@ -82,11 +92,11 @@ step "engine (single-threaded)"
 wasm_sha=$(sha256sum "$ENGINE/dist/engine-st.wasm" | cut -d' ' -f1)
 mjs_sha=$(sha256sum "$ENGINE/dist/engine-st.mjs" | cut -d' ' -f1)
 if [[ $wasm_sha != "$ENGINE_ST_WASM_SHA256" || $mjs_sha != "$ENGINE_ST_MJS_SHA256" ]]; then
-  echo "engine-st.wasm $wasm_sha, engine-st.mjs $mjs_sha: not the engine's own release" \
+  echo "engine-st.wasm $wasm_sha, engine-st.mjs $mjs_sha: not the pinned build" \
     "($ENGINE_ST_WASM_SHA256, $ENGINE_ST_MJS_SHA256)" >&2
   [[ ${SLICER_ALLOW_DIFFERENT:-0} == 1 ]] || exit 1
 else
-  step "engine-st.wasm is byte for byte the engine's release ($wasm_sha)"
+  step "engine-st.wasm is byte for byte the pinned build ($wasm_sha)"
 fi
 
 step "host, with scripts/slicer/host.patch"
@@ -99,4 +109,21 @@ node "$HERE/resolve-presets.mjs" "$ENGINE/dist" "$ENGINE/orca/resources/profiles
 
 step "pack"
 node "$HERE/pack.mjs" "$ENGINE/dist" "$RUNTIME" "$OUT" "$VERSION"
+
+step "source of this build"
+SOURCE_DATE=${SOURCE_DATE_EPOCH:-$(git -C "$REPO" log -1 --format=%ct 2> /dev/null || date +%s)}
+TAR=(tar --sort=name --owner=0 --group=0 --numeric-owner --mtime="@$SOURCE_DATE" --format=gnu)
+# The engine at its tag (the patches are separate files), OrcaSlicer at its release, and every third-party archive the
+# build fetched, with the Emscripten ports (zlib, libpng) it compiled in.
+git -C "$ENGINE" archive --format=tar --prefix="muon3d-slicer-engine-${ENGINE_TAG#v}/" "$ENGINE_COMMIT" | gzip -n -9 \
+  > "$OUT/muon3d-slicer-engine-${ENGINE_TAG#v}-source.tar.gz"
+git -C "$ENGINE/orca" archive --format=tar --prefix=orca/ "$ORCA_COMMIT" | xz -9e -T1 > "$OUT/orcaslicer-${ORCA_COMMIT::10}-source.tar.xz"
+THIRD=$WORK/third-party-sources
+rm -rf "$THIRD" && mkdir -p "$THIRD/deps" "$THIRD/emscripten-ports"
+cp "$ORCA_WASM_ROOT"/deps-src/_archives/* "$THIRD/deps/"
+cp "$ORCA_WASM_ROOT"/emsdk/upstream/emscripten/cache/ports/*.tar.gz "$THIRD/emscripten-ports/"
+printf '%s\n' "Third-party sources built into Spaghetti's slicing engine (docs/slicer.md): the archives scripts/slicer/engine.patch" \
+  "and the engine's own fetch-deps.sh name (checked against their SHA256SUMS), and the Emscripten ports zlib and libpng." > "$THIRD/README.md"
+(cd "$THIRD" && sha256sum deps/* emscripten-ports/* > SHA256SUMS)
+"${TAR[@]}" -C "$WORK" -cf "$OUT/third-party-sources-${ORCA_COMMIT::10}.tar" third-party-sources
 step "done: $OUT"

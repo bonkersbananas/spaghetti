@@ -83,12 +83,25 @@ const BAMBU_LINES = [
   "Bambu PLA Silk @BBL X2D 0.4 nozzle",
   "Bambu PLA Silk @BBL X2D",
 ];
-const FILAMENTS = [
-  ...MATERIALS.map((name) => `${name} @BBL X2D 0.4 nozzle`),
-  ...MATERIALS.map((name) => `${name} @BBL X2D`),
-  ...MATERIALS_0_2.map((name) => `${name} @BBL X2D 0.2 nozzle`),
-  ...BAMBU_LINES,
+/** OrcaSlicer 2.5.1's own presets of those lines (and Pure, which it has now) for the 0.6 and 0.8 mm nozzles. */
+const BAMBU_LINES_NOZZLES = ["Bambu PLA Matte", "Bambu PLA Silk+", "Bambu PLA Silk", "Bambu PLA Pure"].flatMap((name) =>
+  ["0.2", "0.4", "0.6", "0.8"].map((nozzle) => `${name} @BBL X2D ${nozzle} nozzle`),
+);
+/**
+ * Bambu's presets for the 0.6 and 0.8 mm nozzles were one set per filament ("Generic PLA @BBL X2D"); OrcaSlicer 2.5.1
+ * has one of their own for most of Bambu's ("Bambu PLA Basic @BBL X2D 0.6 nozzle") and keeps the shared one for the
+ * rest. Both forms are asked for, the ones Orca doesn't have are left out (orca.ts `pickFilamentPreset` takes the first
+ * the release has), and the build stops when a material has neither on a nozzle.
+ */
+const forNozzle = (name, nozzle) =>
+  nozzle === "0.6" || nozzle === "0.8"
+    ? [`${name} @BBL X2D ${nozzle} nozzle`, `${name} @BBL X2D`]
+    : [`${name} @BBL X2D ${nozzle} nozzle`];
+const REQUIRED = [
+  ...MATERIALS.flatMap((name) => ["0.4", "0.6", "0.8"].map((nozzle) => forNozzle(name, nozzle))),
+  ...MATERIALS_0_2.map((name) => forNozzle(name, "0.2")),
 ];
+const FILAMENTS = [...new Set([...REQUIRED.flat(), ...BAMBU_LINES, ...BAMBU_LINES_NOZZLES])];
 
 const [dist, profiles, out] = process.argv.slice(2);
 if (!dist || !profiles || !out) {
@@ -112,14 +125,21 @@ function folder(id) {
 const host = await startHost(dist);
 try {
   await host.request("load", { variant: "st" });
+  const bbl = folder("BBL");
+  const library = folder("OrcaFilamentLibrary");
+  const listed = new Set(
+    [bbl, library].flatMap((vendor) => (vendor.index.filament_list ?? []).map((entry) => entry.name)),
+  );
+  const stranded = REQUIRED.filter((names) => !names.some((name) => listed.has(name)));
+  if (stranded.length) throw new Error(`no preset on a nozzle: ${JSON.stringify(stranded)}`);
   const wanted = [
     ...MACHINES.map((name) => ({ type: "machine", name })),
     ...PROCESSES.map((name) => ({ type: "process", name })),
-    ...FILAMENTS.map((name) => ({ type: "filament", name })),
+    ...FILAMENTS.filter((name) => listed.has(name)).map((name) => ({ type: "filament", name })),
   ];
   const result = await host.request("profiles.resolve", {
-    vendor: folder("BBL"),
-    library: folder("OrcaFilamentLibrary"),
+    vendor: bbl,
+    library,
     presets: wanted,
   });
   if (result.missing.length) throw new Error(`not in Orca's profiles: ${JSON.stringify(result.missing)}`);
