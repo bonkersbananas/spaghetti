@@ -207,6 +207,9 @@ describe("printedFilamentNames", () => {
 
   it("numbers a model's filaments in the order its rows first use them", () => {
     const row = (spoolId: string, colorName: string) => ({ filament: { material: "PLA", spoolId, colorName } });
-    expect(printedFilamentNames([row("a", "Red"), row("b", "White"), row("a", "Red")])).toEqual(["Red PLA", "White PLA"]);
+    expect(printedFilamentNames([row("a", "Red"), row("b", "White"), row("a", "Red")])).toEqual([
+      "Red PLA",
+      "White PLA",
+    ]);
   });
 });

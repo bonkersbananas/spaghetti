@@ -49,7 +49,15 @@ import { ToggleChip } from "@/components/ui/Chip";
 import { type ChoiceTile, ChoiceTiles } from "@/components/ui/ChoiceTiles";
 import { Disclosure } from "@/components/ui/Disclosure";
 import { ChipDivider, ChipRow } from "@/components/ui/FilterChips";
-import { DownloadIcon, ExternalIcon, LayersIcon, RecipeIcon, SettingsIcon, UndoIcon } from "@/components/ui/icons";
+import {
+  DownloadIcon,
+  ExternalIcon,
+  LayersIcon,
+  PaletteIcon,
+  RecipeIcon,
+  SettingsIcon,
+  UndoIcon,
+} from "@/components/ui/icons";
 import { MetaList } from "@/components/ui/MetaList";
 import { type PlateOption, PlatePicker, plateParts } from "@/components/ui/PlatePicker";
 import { PulseDot } from "@/components/ui/PulseDot";
@@ -58,6 +66,7 @@ import { Sheet } from "@/components/ui/Sheet";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { LayersGlyph, NozzleGlyph, PlatePicture, StrengthGlyph, SupportsGlyph } from "@/components/ui/SlicingGlyphs";
 import { SpoolDisc } from "@/components/ui/SpoolDisc";
+import { StandInPalette } from "@/components/ui/StandInPalette";
 import { Stepper } from "@/components/ui/Stepper";
 import { toast } from "@/components/ui/Toast";
 import { cn } from "@/lib/cn";
@@ -547,6 +556,8 @@ function FilamentChoice({
   wrapped: boolean;
 }) {
   const [index, setIndex] = useState(0);
+  // "Any colour…" open: the palette for a stand-in that isn't in the Pantry.
+  const [anyColour, setAnyColour] = useState(false);
   const slot = Math.min(index, settings.filaments.length - 1);
   const filament = settings.filaments[slot] ?? settings.filaments[0];
   const offered = slicingSpools(spools).slice(0, MAX_SPOOLS);
@@ -580,10 +591,22 @@ function FilamentChoice({
   );
   // A filament the nozzle has no preset for slices as its nearest kin: said under the tiles, after what is picked.
   const standIn = standInSentence(settings);
+  const replace = (next: SlicingFilament) =>
+    onChange(settings.filaments.map((current, at) => (at === slot ? next : current)));
   const choose = (id: string) => {
+    if (id === "any") {
+      setAnyColour(true);
+      return;
+    }
+    setAnyColour(false);
     const spool = offered.find((candidate) => candidate.id === id);
-    if (!spool) return;
-    onChange(settings.filaments.map((current, at) => (at === slot ? filamentOfSpool(spool) : current)));
+    if (spool) replace(filamentOfSpool(spool));
+  };
+  const anyTile: ChoiceTile<string> = {
+    value: "any",
+    label: "Any colour…",
+    detail: "Not in the Pantry",
+    glyph: <PaletteIcon size={24} aria-hidden />,
   };
   return (
     <div className="flex flex-col gap-3">
@@ -599,8 +622,8 @@ function FilamentChoice({
       <ChoiceTiles
         label={settings.filaments.length > 1 ? `Filament ${slot + 1}` : "Filament"}
         {...(wrapped ? { layout: "grid" as const, columns: 4 as const, dense: true } : { layout: "scroll" as const })}
-        options={own ? [own, ...offered.map(spoolTile)] : offered.map(spoolTile)}
-        value={picked ? picked.id : "own"}
+        options={[...(own ? [own] : []), ...offered.map(spoolTile), anyTile]}
+        value={anyColour ? "any" : picked ? picked.id : "own"}
         onChange={choose}
         caption={
           standIn ? (
@@ -613,6 +636,14 @@ function FilamentChoice({
           )
         }
       />
+      {anyColour && filament && (
+        <StandInPalette
+          value={picked ? undefined : filament.colorHex}
+          onPick={(hex, name) =>
+            replace({ material: filament.material, colorHex: hex, ...(name ? { colorName: name } : {}) })
+          }
+        />
+      )}
     </div>
   );
 }
