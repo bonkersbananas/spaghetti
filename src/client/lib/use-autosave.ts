@@ -62,7 +62,7 @@ export function useAutosave<T>(
         if (dirty()) {
           // Typed since: a mounted field waits for a pause in the typing, one that is gone sends at once.
           if (mounted.current) timer.current = setTimeout(() => void flush.current(), delay);
-          else queueMicrotask(() => void flush.current());
+          // (sent below, once this save has settled: it is still "running" here)
         } else if (mounted.current) setState("saved");
       } catch (error) {
         // A request the server answered with a refusal won't succeed by repeating it, and nobody is left to see it.
@@ -75,6 +75,7 @@ export function useAutosave<T>(
       }
     })().finally(() => {
       running.current = null;
+      if (!mounted.current && dirty()) void flush.current();
     });
     running.current = run;
     return run;

@@ -74,14 +74,17 @@ const withComments = (queryClient: QueryClient, itemId: string, change: (list: C
 const SEND_RETRIES = [1500, 4000];
 
 /** Comments whose first send failed and wait to be retried: their text is only in memory until they land. */
-const retrying = new Map<string, { itemId: string; body: string }>();
+const retrying = new Map<string, { itemId: string; body: string; restored?: boolean }>();
 
 if (typeof window !== "undefined") {
   // A page that goes away between retries (a reload, a phone app switch) would lose them: back into the draft they go.
   window.addEventListener("pagehide", () => {
-    for (const { itemId, body } of retrying.values()) {
+    for (const entry of retrying.values()) {
+      const { itemId, body } = entry;
       const typed = readDraft(itemId);
-      if (!typed.includes(body)) setDraft(itemId, typed ? `${body}\n${typed}` : body);
+      if (typed.includes(body)) continue;
+      setDraft(itemId, typed ? `${body}\n${typed}` : body);
+      entry.restored = true;
     }
   });
 }
@@ -105,7 +108,10 @@ export function sendComment(queryClient: QueryClient, itemId: string, me: string
           method: "POST",
           json: { id, body },
         });
+        const sent = retrying.get(id);
         retrying.delete(id);
+        // The page came back (back/forward cache) and the retry landed: it is not unsent any more.
+        if (sent?.restored) setDraft(itemId, readDraft(itemId).replace(`${body}\n`, "").replace(body, ""));
         withComments(queryClient, itemId, (list) => list.map((c) => (c.id === id ? saved : c)));
         // Writing counts as reading the thread; the server did the same.
         queryClient.setQueryData<CommentsResponse>(commentsQuery(itemId).queryKey, (current) =>
