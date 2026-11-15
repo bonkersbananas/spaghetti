@@ -38,6 +38,7 @@ export const PRODUCTS: readonly Product[] = [
     nozzle: [190, 230],
     bed: [25, 60],
   },
+  { id: "3djake-ecopla", brand: "3DJAKE", line: "ecoPLA", material: "PLA", nozzle: [195, 215], bed: [0, 60] },
   {
     id: "anycubic-silk-dual",
     brand: "Anycubic",

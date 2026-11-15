@@ -1,5 +1,5 @@
 /**
- * The first twelve spools Carl Oscar and Marie ordered, entered the way a person describes them from the label: how
+ * The first thirteen spools Carl Oscar and Marie ordered, entered the way a person describes them from the label: how
  * each reads, what colours it has and how it is drawn, how a colour match treats it, and which preset slices it.
  */
 import { describe, expect, it } from "vitest";
@@ -39,7 +39,7 @@ let n = 0;
 const spool = (fields: Omit<SpoolLike, "id">): SpoolLike => ({ id: `s${++n}`, remaining: "full", ...fields });
 const on = (name: string) => `${name} @BBL X2D 0.4 nozzle`;
 
-const twelve: Entered[] = [
+const ordered: Entered[] = [
   {
     spool: spool({
       brand: "Anycubic",
@@ -166,24 +166,32 @@ const twelve: Entered[] = [
     preset: on("Bambu PLA Pure"),
     nozzle: [190, 230],
   },
+  {
+    // The hex is an estimate of a neon yellow (the shop's page gives no value); 3DJAKE's own line, printed on 195-215 °C.
+    spool: spool({ brand: "3DJAKE", line: "ecoPLA", material: "PLA", colorName: "Neon Yellow", colorHex: "#e6ef2e" }),
+    label: "3DJAKE ecoPLA PLA · Neon Yellow",
+    kind: "single",
+    preset: on("Generic PLA"),
+    nozzle: [195, 215],
+  },
 ];
 
-describe("the twelve first spools", () => {
-  it.each(twelve.map((entry) => [entry.label, entry] as const))("%s reads like its label", (label, entry) => {
+describe("the thirteen first spools", () => {
+  it.each(ordered.map((entry) => [entry.label, entry] as const))("%s reads like its label", (label, entry) => {
     expect(spoolLabel(entry.spool)).toBe(label);
   });
 
   it("splits a label into a name and what it is, saying how many colours a silk has", () => {
-    expect(spoolName(twelve[0]!.spool)).toEqual({ title: "Black/Purple", detail: "Anycubic PLA Silk · dual colour" });
-    expect(spoolName(twelve[9]!.spool)).toEqual({
+    expect(spoolName(ordered[0]!.spool)).toEqual({ title: "Black/Purple", detail: "Anycubic PLA Silk · dual colour" });
+    expect(spoolName(ordered[9]!.spool)).toEqual({
       title: "Black/Gold/Purple",
       detail: "SUNLU PLA+ Silk · tri-colour",
     });
-    expect(spoolName(twelve[5]!.spool)).toEqual({ title: "Forest Green", detail: "Polymaker PolyTerra PLA" });
+    expect(spoolName(ordered[5]!.spool)).toEqual({ title: "Forest Green", detail: "Polymaker PolyTerra PLA" });
   });
 
   it("stores a multi-colour spool as its colours and no single colour, so nothing matches it as one", () => {
-    for (const { spool: s, kind } of twelve) {
+    for (const { spool: s, kind } of ordered) {
       expect(colourKind(s)).toBe(kind);
       expect(spoolColors(s)).toHaveLength(kind === "single" ? 1 : kind === "dual" ? 2 : 3);
       if (kind !== "single") expect(s.colorHex).toBeNull();
@@ -191,7 +199,7 @@ describe("the twelve first spools", () => {
   });
 
   it("never offers a multi-colour spool for a single model colour or a file's single filament", () => {
-    const multi = twelve.filter((entry) => entry.kind !== "single").map((entry) => entry.spool);
+    const multi = ordered.filter((entry) => entry.kind !== "single").map((entry) => entry.spool);
     for (const s of multi) {
       for (const colour of spoolColors(s)) {
         expect(matchColour({ hex: colour, name: undefined }, [s]).inPantry).toBe(false);
@@ -199,12 +207,12 @@ describe("the twelve first spools", () => {
       }
     }
     // The single-colour spools still match their own colour.
-    const teal = twelve[4]!.spool;
+    const teal = ordered[4]!.spool;
     expect(matchColour({ hex: "#3fa6a0", name: undefined }, [teal]).inPantry).toBe(true);
   });
 
   it("slices each with the best preset the X2D has, in the colour of its first stripe", () => {
-    for (const { spool: s, preset, label } of twelve) {
+    for (const { spool: s, preset, label } of ordered) {
       const setup = sliceSetup(presets, { settings: { filaments: [filamentOfSpool(s)] } });
       expect(setup.settings.filaments, label).toEqual([preset]);
       expect(setup.colours[0], label).toBe(spoolColors(s)[0]?.toUpperCase());
@@ -212,7 +220,7 @@ describe("the twelve first spools", () => {
   });
 
   it("keeps each slice's nozzle temperature inside its maker's range", () => {
-    for (const { spool: s, nozzle, label } of twelve) {
+    for (const { spool: s, nozzle, label } of ordered) {
       const setup = sliceSetup(presets, { settings: { filaments: [filamentOfSpool(s)] } });
       const temps = (setup.filaments[0] as { nozzle_temperature: string[] }).nozzle_temperature;
       const temp = Number(temps[0]);
@@ -238,7 +246,7 @@ describe("the twelve first spools", () => {
         Object.entries(presets.filament).filter(([name]) => !/Matte|Silk\+|Pure/.test(name)),
       ),
     };
-    const matte = twelve[7]!.spool;
+    const matte = ordered[7]!.spool;
     expect(sliceSetup(bare, { settings: { filaments: [filamentOfSpool(matte)] } }).settings.filaments).toEqual([
       on("Bambu PLA Basic"),
     ]);
@@ -250,11 +258,18 @@ describe("the ordered products, as the new-spool sheet offers them", () => {
     const fields = (id: string) => spoolFieldsOf(PRODUCTS.find((product) => product.id === id)!);
     expect(fields("polyterra")).toMatchObject({ brand: "Polymaker", line: "PolyTerra", material: "PLA", finish: null });
     expect(fields("sunlu-silk-tri")).toMatchObject({ brand: "SUNLU", material: "PLA+", finish: "silk" });
+    expect(fields("3djake-ecopla")).toMatchObject({
+      brand: "3DJAKE",
+      line: "ecoPLA",
+      material: "PLA",
+      nozzleTempMin: 195,
+      nozzleTempMax: 215,
+    });
     expect(fields("bambu-silk-plus")).toMatchObject({ finish: "silk+", nozzleTempMin: 210, nozzleTempMax: 240 });
   });
 
   it("recognises a spool's product whatever the colour, and old spellings of the brand", () => {
-    for (const { spool: s } of twelve) expect(productOf(s), spoolLabel(s)).toBeDefined();
+    for (const { spool: s } of ordered) expect(productOf(s), spoolLabel(s)).toBeDefined();
     expect(productOf({ brand: "Bambu", material: "PLA", finish: "matte" })?.id).toBe("bambu-matte");
     expect(productOf({ brand: "Sunlu", material: "PLA+", finish: "silk" })?.id).toBe("sunlu-silk-tri");
   });
@@ -271,6 +286,7 @@ describe("brands as makers spell them", () => {
     expect(brandLabel("Sunlu")).toBe("SUNLU");
     expect(brandLabel("bambu lab")).toBe("Bambu Lab");
     expect(brandLabel("Eryone")).toBe("Eryone");
+    expect(brandLabel("3djake")).toBe("3DJAKE");
     expect(spoolLabel({ brand: "Bambu", material: "PLA", finish: "matte", colorName: "Jade white" })).toBe(
       "Bambu Lab PLA Matte · Jade white",
     );
@@ -279,7 +295,7 @@ describe("brands as makers spell them", () => {
 
 describe("a spool picked by colour match", () => {
   it("is the same filament as one picked from the Pantry, with its line and range", () => {
-    const teal = twelve[4]!.spool;
+    const teal = ordered[4]!.spool;
     const matched = matchColour({ hex: "#3fa6a0", name: undefined }, [teal]);
     expect(matched.filament).toEqual(filamentOfSpool(teal));
     expect(matched.filament).toMatchObject({ line: "Panchroma", nozzleTempMin: 190, nozzleTempMax: 230 });
