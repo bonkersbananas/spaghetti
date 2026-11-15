@@ -119,24 +119,31 @@
   }
 
   /* On an iPhone a long press on something tappable opens the browser's link preview or starts a text selection
-     with a magnifier, which reads as a web page, not an app. Controls and cards (what is `pressable`) keep their
-     press and drop both; text, inline links and photos keep theirs (copying a link, saving a picture). */
+     with a magnifier, which reads as a web page, not an app. Controls lose both, and a `pressable` card loses the
+     link preview; text inside a card stays selectable and its photos keep the save menu. Inline links keep theirs. */
   @media (pointer: coarse) {
     :where(
-        button,
-        summary,
-        [role="button"],
-        [role="tab"],
-        [role="radio"],
-        [role="switch"],
-        [role="checkbox"],
-        [role="option"],
-        [role="menuitem"],
-        .pressable
-      ) {
+      button,
+      summary,
+      [role="button"],
+      [role="tab"],
+      [role="radio"],
+      [role="switch"],
+      [role="checkbox"],
+      [role="option"],
+      [role="menuitem"]
+    ) {
       -webkit-touch-callout: none;
       -webkit-user-select: none;
       user-select: none;
+    }
+
+    :where(.pressable) {
+      -webkit-touch-callout: none;
+    }
+
+    :where(.pressable) img {
+      -webkit-touch-callout: default;
     }
   }
 
