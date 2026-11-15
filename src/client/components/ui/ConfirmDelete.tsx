@@ -36,8 +36,22 @@ export function ConfirmDelete({
   const root = useRef<HTMLSpanElement>(null);
   const confirm = useRef<HTMLButtonElement>(null);
   const keep = useRef<HTMLButtonElement>(null);
+  const trash = useRef<HTMLButtonElement>(null);
+  const wasAsking = useRef(false);
+  const confirmed = useRef(false);
   const latest = useRef({ onConfirm, onAskingChange });
   latest.current = { onConfirm, onAskingChange };
+
+  // Backing out (Escape, Keep, a tap elsewhere) takes the question away with the button that had focus: it goes back
+  // to the trash can, where the question began, instead of to the page. Confirming leaves the screen or shows Undo.
+  useEffect(() => {
+    if (wasAsking.current && !asking && !confirmed.current) {
+      const active = document.activeElement;
+      if (!active || active === document.body) trash.current?.focus({ preventScroll: true });
+    }
+    if (asking) confirmed.current = false;
+    wasAsking.current = asking;
+  }, [asking]);
 
   useEffect(() => {
     if (!asking) return;
@@ -53,6 +67,7 @@ export function ConfirmDelete({
       } else if (event.key === "Enter" && !event.isComposing && !keep.current?.contains(event.target as Node)) {
         event.stopPropagation();
         event.preventDefault();
+        confirmed.current = true;
         latest.current.onAskingChange(false);
         latest.current.onConfirm();
       }
@@ -71,6 +86,7 @@ export function ConfirmDelete({
         icon={TrashIcon}
         label={`${verb} ${what}`}
         title={title ?? `${verb} ${what}`}
+        ref={trash}
         onClick={() => onAskingChange(true)}
         disabled={disabled}
         aria-keyshortcuts={ariaKeyshortcuts}
@@ -91,6 +107,7 @@ export function ConfirmDelete({
         variant="primary"
         icon={TrashIcon}
         onClick={() => {
+          confirmed.current = true;
           onAskingChange(false);
           onConfirm();
         }}
