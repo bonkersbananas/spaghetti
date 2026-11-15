@@ -43,7 +43,9 @@ export function RunningLow({
   copy = true,
 }: {
   low: readonly LowSpool[];
-  demo?: boolean /** False on the Printer page: no copy button, and the block fills its column. */;
+  /** Made-up spools (the styleguide): the shopping button stays quiet instead of writing to the real list. */
+  demo?: boolean;
+  /** Whether to offer "Copy list" / "Share list" (the Pantry does). Without it, as on the Printer page, the block also drops its width cap and fills its column. */
   copy?: boolean;
 }) {
   const isDesktop = useIsDesktop();
