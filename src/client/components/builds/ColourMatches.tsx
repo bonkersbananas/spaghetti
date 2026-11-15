@@ -112,6 +112,29 @@ export function ColourMatches({
       </span>
     </span>
   );
+  // Which grid line each row lands on (an open row takes a whole line): only rows below the first get a hairline.
+  const lines: number[] = [];
+  {
+    let line = 0;
+    let column = 0;
+    for (const colour of colours) {
+      const span = wide && open === choiceKey(colour) ? 2 : 1;
+      if (!wide) {
+        lines.push(line++);
+        continue;
+      }
+      if (span === 2 && column === 1) {
+        line++;
+        column = 0;
+      }
+      lines.push(line);
+      column += span;
+      if (column >= 2) {
+        line++;
+        column = 0;
+      }
+    }
+  }
   return (
     <div ref={box}>
       <Disclosure
@@ -132,7 +155,7 @@ export function ColourMatches({
             : "Each colour in the model, and the spool that prints it."}
         </p>
         <ul className={wide ? "grid grid-cols-2 gap-x-6 gap-y-0" : "flex flex-col"}>
-          {colours.map((colour) => {
+          {colours.map((colour, index) => {
             const spool = colour.filament.spoolId ? spools.find((s) => s.id === colour.filament.spoolId) : undefined;
             const sharing = colours.filter((other) => other !== colour && keyOf(other) === keyOf(colour));
             return (
@@ -140,7 +163,7 @@ export function ColourMatches({
                 key={choiceKey(colour)}
                 className={cn(
                   "before:bg-hairline relative before:absolute before:top-0 before:right-0 before:left-0 before:h-px",
-                  wide ? "nth-[-n+2]:before:hidden" : "first:before:hidden",
+                  !lines[index] && "before:hidden",
                   // An open row takes the line to itself: its spools need the room, and the row beside it
                   // doesn't stretch to the picker's height.
                   wide && open === choiceKey(colour) && "col-span-2",
