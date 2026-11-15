@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { SaveState } from "@/components/ui/SaveStatus";
+import { ApiError } from "./api";
+import { keepUnsent } from "./unsent";
 
 const RETRY_MS = [2000, 5000, 10_000, 30_000];
 
@@ -8,9 +10,23 @@ const RETRY_MS = [2000, 5000, 10_000, 30_000];
  * Returns the state for <SaveStatus>. Failed saves retry on their own; a
  * change still waiting is sent when the component unmounts or the page hides.
  */
-export function useAutosave<T>(value: T, save: (value: T) => Promise<void>, { delay = 600 } = {}): SaveState {
+export function useAutosave<T>(
+  value: T,
+  save: (value: T) => Promise<void>,
+  {
+    delay = 600,
+    from,
+    keepAs,
+  }: {
+    delay?: number;
+    /** What the server has when the field opens, if that isn't `value` (text kept from an earlier visit is unsent). */
+    from?: T;
+    /** A name to keep an unsent change under on this device, until it is saved (see lib/unsent.ts). */
+    keepAs?: string;
+  } = {},
+): SaveState {
   const [state, setState] = useState<SaveState>("idle");
-  const saved = useRef(value);
+  const saved = useRef(from ?? value);
   const latest = useRef(value);
   const saveRef = useRef(save);
   saveRef.current = save;
@@ -20,30 +36,56 @@ export function useAutosave<T>(value: T, save: (value: T) => Promise<void>, { de
   const mounted = useRef(true);
 
   const dirty = () => JSON.stringify(latest.current) !== JSON.stringify(saved.current);
+  // A change not yet saved is also on the device: a page killed in the background (a phone, no signal) loses nothing.
+  const keepRef = useRef(keepAs);
+  keepRef.current = keepAs;
+  const remember = () => {
+    if (keepRef.current) keepUnsent(keepRef.current, dirty() ? latest.current : undefined);
+  };
 
-  const flush = useRef(async () => {
+  // One save at a time: a second request sent while the first is still on its way can reach the server first,
+  // and the older text would then win. The next one starts when the one in flight has settled.
+  const running = useRef<Promise<void> | null>(null);
+
+  const flush = useRef((): Promise<void> => {
     clearTimeout(timer.current);
-    if (!dirty()) return;
-    const sending = latest.current;
-    if (mounted.current) setState("saving");
-    try {
-      await saveRef.current(sending);
-      saved.current = sending;
-      attempt.current = 0;
-      if (!mounted.current) return;
-      if (dirty()) timer.current = setTimeout(() => void flush.current(), delay);
-      else setState("saved");
-    } catch {
-      if (!mounted.current) return;
-      setState("error");
-      const wait = RETRY_MS[Math.min(attempt.current, RETRY_MS.length - 1)];
-      attempt.current += 1;
-      timer.current = setTimeout(() => void flush.current(), wait);
-    }
+    if (running.current) return running.current;
+    if (!dirty()) return Promise.resolve();
+    // Typed during a save that went through, with the screen gone: sent once the save has settled.
+    let again = false;
+    const run = (async () => {
+      const sending = latest.current;
+      if (mounted.current) setState("saving");
+      try {
+        await saveRef.current(sending);
+        saved.current = sending;
+        attempt.current = 0;
+        remember();
+        if (dirty()) {
+          // Typed since: a mounted field waits for a pause in the typing, one that is gone sends at once.
+          if (mounted.current) timer.current = setTimeout(() => void flush.current(), delay);
+          else again = true;
+        } else if (mounted.current) setState("saved");
+      } catch (error) {
+        // A request the server answered with a refusal won't succeed by repeating it, and nobody is left to see it.
+        if (!mounted.current && error instanceof ApiError && error.status < 500 && error.status !== 429) return;
+        if (mounted.current) setState("error");
+        const wait = RETRY_MS[Math.min(attempt.current, RETRY_MS.length - 1)];
+        attempt.current += 1;
+        // Also after the screen is gone: what was typed there is only in this closure, so it keeps trying.
+        timer.current = setTimeout(() => void flush.current(), wait);
+      }
+    })().finally(() => {
+      running.current = null;
+      if (again) void flush.current();
+    });
+    running.current = run;
+    return run;
   });
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: value is the trigger; the rest lives in refs.
   useEffect(() => {
+    remember();
     if (!dirty()) return;
     clearTimeout(timer.current);
     timer.current = setTimeout(() => void flush.current(), delay);
