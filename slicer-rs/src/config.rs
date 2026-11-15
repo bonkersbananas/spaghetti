@@ -552,10 +552,11 @@ impl SupportSettings {
             matches!(self.base_pattern.as_str(), "default" | "none" | "")
         } else {
             matches!(self.base_pattern.as_str(), "default" | "rectilinear" | "")
-        }) || !matches!(self.interface_pattern.as_str(), "auto" | "rectilinear" | "rectilinear_interlaced" | "")
+        }) || !matches!(self.interface_pattern.as_str(), "auto" | "rectilinear" | "rectilinear_interlaced" | "grid" | "")
             || (self.classic().is_some() && !matches!(self.interface_pattern.as_str(), "auto" | "rectilinear_interlaced" | ""))
-            // An interlaced raft's interfaces would turn by ids its layers are counted from.
-            || (self.raft_layers > 0 && self.interlaced())
+            // An interlaced raft's interfaces would turn by ids its layers are counted from, and a raft's contact
+            // layer would print in the grid too.
+            || (self.raft_layers > 0 && (self.interlaced() || self.interface_pattern == "grid"))
         {
             Some("this support pattern")
         } else if self.top_z_distance < 0.0

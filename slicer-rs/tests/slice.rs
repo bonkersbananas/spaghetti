@@ -2031,6 +2031,12 @@ fn supports_in_filaments_of_their_own_print_as_orcas_do() {
 
 /// Each layer's main direction (degrees, 0 to 179, by length) of the lines of `feature`, from the bottom up.
 fn feature_directions(gcode: &str, feature: &str) -> Vec<i64> {
+    let out = feature_direction_lengths(gcode, feature);
+    out.iter().map(|d| d.iter().max_by(|a, b| a.1.total_cmp(b.1)).map_or(-1, |(a, _)| *a)).collect()
+}
+
+/// Each layer's length (mm) of the lines of `feature` by their direction (degrees, 0 to 179), from the bottom up.
+fn feature_direction_lengths(gcode: &str, feature: &str) -> Vec<std::collections::BTreeMap<i64, f64>> {
     let mut out: Vec<std::collections::BTreeMap<i64, f64>> = Vec::new();
     let (mut current, mut layer) = ("", None::<usize>);
     let (mut x, mut y) = (f64::NAN, f64::NAN);
@@ -2058,7 +2064,7 @@ fn feature_directions(gcode: &str, feature: &str) -> Vec<i64> {
         }
         (x, y) = (nx, ny);
     }
-    out.iter().map(|d| d.iter().max_by(|a, b| a.1.total_cmp(b.1)).map_or(-1, |(a, _)| *a)).collect()
+    out
 }
 
 #[test]
@@ -2093,6 +2099,35 @@ fn support_materials_interfaces_print_as_orcas_do() {
     // 185.89 mm³).
     let out = slice_with(r#""support_type": "normal(auto)", "support_interface_spacing": "0""#);
     assert!((interface(&out) - 185.89).abs() <= 0.19, "{} mm³ of interface", interface(&out));
+}
+
+#[test]
+fn grid_interfaces_print_as_orcas_do() {
+    // Support interfaces in Orca's grid (`support_interface_pattern` grid): each interface layer's lines run both ways,
+    // at the columns' angle, joined along the edge.
+    let tee = boxes_stl(&[([115., 123., 0.], [125., 133., 20.]), ([100., 123., 20.], [140., 133., 25.])]);
+    let options = Options { arrange: false, thumbnail: false, ..Options::default() };
+    // Native OrcaSlicer 2.5.1 (Nov 15), mm³ of interface.
+    for (style, orca) in [
+        (r#""support_type": "normal(auto)""#, 90.404),
+        (r#""support_type": "normal(auto)", "support_style": "snug""#, 68.790),
+        (r#""support_type": "tree(auto)""#, 50.970),
+    ] {
+        let setup =
+            format!(r#"{{"process": {{"enable_support": "1", {style}, "support_interface_pattern": "grid"}}}}"#);
+        let settings = setup::read(&setup).unwrap().settings;
+        let out = slice(&[Input { name: "tee.stl", bytes: &tee }], &settings, &options).unwrap();
+        let got = out.stats.features[Role::ALL.iter().position(|&r| r == Role::SupportInterface).unwrap()].volume;
+        assert!((got / orca - 1.0).abs() < 1e-3, "{style}: {got} mm³ of interface");
+        let layers = feature_direction_lengths(&String::from_utf8(out.gcode).unwrap(), "Support interface");
+        assert_eq!(layers.len(), 2, "{style}");
+        for layer in layers {
+            let total: f64 = layer.values().sum();
+            for angle in [0, 90] {
+                assert!(layer.get(&angle).copied().unwrap_or(0.0) > 0.3 * total, "{style}: {layer:?}");
+            }
+        }
+    }
 }
 
 #[test]

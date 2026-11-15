@@ -211,6 +211,23 @@ mod tests {
             refused(&tree(r#", "support_style": "tree_slim", "support_base_pattern": "rectilinear""#)),
             Some(Error::Unsupported("this support pattern"))
         );
+        // Interfaces in Orca's grid (fill.rs, `support_grid`) under organic trees and normal supports; not yet under
+        // classic trees, nor with a raft, whose contact layer would print in it too.
+        for more in [
+            r#", "support_interface_pattern": "grid""#,
+            r#", "support_interface_pattern": "grid", "support_type": "normal(auto)""#,
+            r#", "support_interface_pattern": "grid", "support_type": "normal(auto)", "support_style": "snug""#,
+            r#", "support_interface_pattern": "grid", "support_interface_top_layers": "0""#,
+        ] {
+            assert!(read(&tree(more)).is_ok_and(|r| r.settings.unsupported().is_none()), "{more}");
+        }
+        for more in [
+            r#", "support_interface_pattern": "grid", "support_style": "tree_hybrid""#,
+            r#", "support_interface_pattern": "grid", "raft_layers": "2""#,
+            r#", "support_interface_pattern": "grid", "support_type": "normal(auto)", "raft_layers": "2""#,
+        ] {
+            assert_eq!(refused(&tree(more)), Some(Error::Unsupported("this support pattern")), "{more}");
+        }
         let normal =
             |more: &str| format!(r#"{{"process": {{"enable_support": "1", "support_type": "normal(auto)"{more}}}}}"#);
         assert!(read(&normal("")).is_ok());
