@@ -262,7 +262,7 @@ Never edit a migration that has been merged; add a new one.
 
 ### Since you were away
 
-- After a visit that follows 6 hours or more away, the phone's Journal and desktop Today open with a quiet "Since Thursday" group (`components/today/SinceBlock.tsx`): one sentence about what the other person did since, then their newest three things. It lasts 12 hours after that visit. The device keeps its own clock for it in localStorage (`sg-active`, `sg-since`; `lib/since.ts`, started from `_app.tsx`); the rules and wording are pure in `shared/since.ts`. It reads the journal's first page, so nothing new is stored or sent. Their comments stay Today's comment line.
+- After a visit that follows 6 hours or more away, the phone's Journal and desktop Today open with a quiet "Since Thursday" group (`components/today/Since.tsx` is the small gate in the screens' first load; it lazy-loads `SinceBlock.tsx` only when there is a catch-up): one sentence about what the other person did since, then their newest three things. It lasts 12 hours after that visit. The device keeps its own clock for it in localStorage (`sg-active`, `sg-since`; `lib/since.ts`, started from `_app.tsx`); the rules and wording are pure in `shared/since.ts`. It reads up to five pages of the journal, so nothing new is stored or sent; the cards are `MiniCard` with `sub` and `fill`. Their comments stay Today's comment line.
 
 ### Wishlists
 
