@@ -23,7 +23,10 @@ interface SpoolDiscProps {
    */
   colors?: readonly string[] | null;
   size?: keyof typeof sizes;
-  /** An empty slot: a dashed ring where a spool would sit. */
+  /**
+   * Not a spool from the Pantry: a dashed ring. With no `color` an empty slot; with one a stand-in, the colour it prints
+   * in as a flat disc inside the ring, so the disc is always the colour and the dashed ring always "not from the Pantry".
+   */
   empty?: boolean;
   label?: string;
   className?: string;
@@ -48,7 +51,15 @@ export function SpoolDisc({ color, colors, size = "md", empty, label, className 
           sizes[size],
           className,
         )}
-      />
+      >
+        {(color || many) && (
+          <span
+            className="absolute inset-[14%] rounded-full ring-1 ring-(--spool-rim) ring-inset"
+            data-tone={many ? colorsTone(many) : color ? colorTone(color) : undefined}
+            style={color || many ? { backgroundColor: color ?? many?.[0] } : undefined} // design-lint-ignore: a filament's color is data
+          />
+        )}
+      </span>
     );
   }
   return (

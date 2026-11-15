@@ -41,7 +41,7 @@ import {
 import { durationWords, fallbackWords, slicerOf } from "@shared/slicing/slicers.ts";
 import type { FileSlice } from "@shared/slicing/types.ts";
 import { standInSentence } from "@shared/slicing/words.ts";
-import { type PrinterSetup, type SpoolLike, slotPlace } from "@shared/spools";
+import { nearestColorName, type PrinterSetup, type SpoolLike, slotPlace } from "@shared/spools";
 import { formatDuration, formatDurationShort } from "@shared/time";
 import { Fragment, type ReactNode, useMemo, useState } from "react";
 import { Button, ButtonLink } from "@/components/ui/Button";
@@ -558,6 +558,8 @@ function FilamentChoice({
   const [index, setIndex] = useState(0);
   // "Any colour…" open: the palette for a stand-in that isn't in the Pantry.
   const [anyColour, setAnyColour] = useState(false);
+  // The colour last picked from the palette: its tile reads as that colour, and a tap on it opens the palette again.
+  const [paletteHex, setPaletteHex] = useState<string | null>(null);
   const slot = Math.min(index, settings.filaments.length - 1);
   const filament = settings.filaments[slot] ?? settings.filaments[0];
   const offered = slicingSpools(spools).slice(0, MAX_SPOOLS);
@@ -568,7 +570,14 @@ function FilamentChoice({
           value: "own",
           label: filament.colorName || filament.material,
           detail: filament.colorHex ? (filament.colorName ? filament.material : "From the file") : "Stand-in",
-          glyph: <SpoolDisc color={filament.colorHex} colors={filament.colors} size="md" />,
+          glyph: (
+            <SpoolDisc
+              color={filament.colorHex}
+              colors={filament.colors}
+              size="md"
+              empty={!!filament.colorHex && !filament.spoolId}
+            />
+          ),
         }
       : null;
   const caption = !filament ? null : picked ? (
@@ -578,7 +587,8 @@ function FilamentChoice({
     </>
   ) : filament.colorHex ? (
     <>
-      <span className="text-ink font-semibold">{filamentWords(filament)}</span> · as the file has it
+      <span className="text-ink font-semibold">{filamentWords(filament)}</span> ·{" "}
+      {filament.colorHex === paletteHex ? "a stand-in to try, not in the Pantry" : "as the file has it"}
     </>
   ) : spools.length ? (
     <>
@@ -602,12 +612,21 @@ function FilamentChoice({
     const spool = offered.find((candidate) => candidate.id === id);
     if (spool) replace(filamentOfSpool(spool));
   };
-  const anyTile: ChoiceTile<string> = {
-    value: "any",
-    label: "Any colour…",
-    detail: "Not in the Pantry",
-    glyph: <PaletteIcon size={24} aria-hidden />,
-  };
+  const custom = !picked && !!filament?.colorHex && filament.colorHex === paletteHex;
+  const anyTile: ChoiceTile<string> =
+    custom && filament
+      ? {
+          value: "any",
+          label: filament.colorName ?? "Your colour",
+          detail: "Not in the Pantry",
+          glyph: <SpoolDisc color={filament.colorHex} size="md" empty />,
+        }
+      : {
+          value: "any",
+          label: "Any colour…",
+          detail: "Not in the Pantry",
+          glyph: <PaletteIcon size={24} aria-hidden />,
+        };
   return (
     <div className="flex flex-col gap-3">
       {settings.filaments.length > 1 && (
@@ -619,14 +638,15 @@ function FilamentChoice({
           onChange={(value) => {
             setIndex(Number(value));
             setAnyColour(false);
+            setPaletteHex(null);
           }}
         />
       )}
       <ChoiceTiles
         label={settings.filaments.length > 1 ? `Filament ${slot + 1}` : "Filament"}
         {...(wrapped ? { layout: "grid" as const, columns: 4 as const, dense: true } : { layout: "scroll" as const })}
-        options={[...(own ? [own] : []), ...offered.map(spoolTile), anyTile]}
-        value={anyColour ? "any" : picked ? picked.id : "own"}
+        options={[...(own && !custom ? [own] : []), ...offered.map(spoolTile), anyTile]}
+        value={anyColour || custom ? "any" : picked ? picked.id : "own"}
         onChange={choose}
         caption={
           standIn ? (
@@ -642,9 +662,11 @@ function FilamentChoice({
       {anyColour && filament && (
         <StandInPalette
           value={picked ? undefined : filament.colorHex}
-          onPick={(hex, name) =>
-            replace({ material: filament.material, colorHex: hex, ...(name ? { colorName: name } : {}) })
-          }
+          onPick={(hex, name) => {
+            const named = name ?? nearestColorName(hex);
+            setPaletteHex(hex);
+            replace({ material: filament.material, colorHex: hex, ...(named ? { colorName: named } : {}) });
+          }}
         />
       )}
     </div>

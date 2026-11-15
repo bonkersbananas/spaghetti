@@ -2,7 +2,7 @@ import { type ColourChoice, slotKey } from "@shared/slicing/colours.ts";
 import { filamentOfSpool, slicingSpools } from "@shared/slicing/pantry.ts";
 import { filamentWords } from "@shared/slicing/settings.ts";
 import type { SliceColour } from "@shared/slicing/types.ts";
-import { type SpoolLike, slotPlace } from "@shared/spools";
+import { nearestColorName, type SpoolLike, slotPlace } from "@shared/spools";
 import { AnimatePresence, m } from "motion/react";
 import { Fragment, useEffect, useRef, useState } from "react";
 import { type ChoiceTile, ChoiceTiles } from "@/components/ui/ChoiceTiles";
@@ -90,10 +90,11 @@ export function ColourMatches({
   // Any colour at all, in the row's material: a stand-in to try, kept like a spool pick.
   const chooseColour = (colour: SliceColour, hex: string, name?: string) => {
     const others = choices.filter((choice) => choice.from !== choiceKey(colour));
+    const named = name ?? nearestColorName(hex);
     const filament = {
       material: colour.material ?? colour.filament.material,
       colorHex: hex,
-      ...(name ? { colorName: name } : {}),
+      ...(named ? { colorName: named } : {}),
     };
     onChange([...others, { from: choiceKey(colour), filament }]);
   };
@@ -328,14 +329,14 @@ function Picker({
             value: STAND_IN,
             label: nameOf(colour),
             detail: "Not in the Pantry yet",
-            glyph: <Swatch color={colour.hex} size="md" />,
+            glyph: <SpoolDisc color={colour.hex} size="md" empty />,
           },
           {
             value: ANY,
-            label: "Any colour…",
+            label: custom ? (filament.colorName ?? "Your colour") : "Any colour…",
             detail: "Not in the Pantry",
             glyph: custom ? (
-              <SpoolDisc color={filament.colorHex} size="sm" empty />
+              <SpoolDisc color={filament.colorHex} size="md" empty />
             ) : (
               <PaletteIcon size={24} aria-hidden />
             ),

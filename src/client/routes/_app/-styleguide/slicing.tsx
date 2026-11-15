@@ -26,6 +26,7 @@ import { CopiesRow } from "@/components/ui/CopiesRow";
 import { MetaList } from "@/components/ui/MetaList";
 import { type PlateOption, PlatePicker, plateParts } from "@/components/ui/PlatePicker";
 import { LayersGlyph, NozzleGlyph, StrengthGlyph, SupportsGlyph } from "@/components/ui/SlicingGlyphs";
+import { SpoolDisc } from "@/components/ui/SpoolDisc";
 import { StandInPalette } from "@/components/ui/StandInPalette";
 import type { AttemptFileView } from "@/lib/items";
 import type { LyingState } from "@/lib/slicing/orientations";
@@ -353,7 +354,17 @@ function ColourMatchesDemo() {
 
 function StandInPaletteDemo() {
   const [hex, setHex] = useState<string | undefined>("#e4f01c"); // design-lint-ignore: a filament colour is data
-  return <StandInPalette value={hex} onPick={setHex} />;
+  return (
+    <div className="flex flex-col gap-4">
+      <div className="flex items-center gap-3">
+        <SpoolDisc color={hex} size="md" empty />
+        <span className="text-small text-ink-soft">
+          The disc is the colour it prints in; the dashed ring says it is not a spool from the Pantry.
+        </span>
+      </div>
+      <StandInPalette value={hex} onPick={setHex} />
+    </div>
+  );
 }
 
 export function SlicingSection() {
@@ -668,7 +679,7 @@ export function SlicingSection() {
           </Panel>
           <Label>
             Any colour…, under a row or a one-filament model's spools: common filament colours and one of your own, for
-            a stand-in that isn't in the Pantry
+            a stand-in that isn't in the Pantry; once picked, its tile reads as that colour
           </Label>
           <Panel className="max-w-md">
             <StandInPaletteDemo />
