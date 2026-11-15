@@ -1,5 +1,6 @@
 import type { JournalEntry as Entry, Item, Person, Photo as PhotoData } from "@shared/api";
 import { OUTCOME_LABELS, tagLabel } from "@shared/attempts";
+import { dateFormat } from "@shared/date-format";
 import { attemptPartsLabel } from "@shared/parts";
 import { isOffTheBed, offTheBedLabel } from "@shared/print-progress";
 import { fullTime } from "@shared/time";
@@ -56,9 +57,8 @@ function entryPhoto(entry: Entry, item: Item): PhotoData | undefined {
   return cover ?? own ?? newest(item.photos);
 }
 
-const clock = (time: number) => new Date(time).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
-const weekday = (time: number) =>
-  new Date(time).toLocaleDateString(undefined, { weekday: "short", day: "numeric", month: "short" });
+const clock = (time: number) => dateFormat({ hour: "numeric", minute: "2-digit" }).format(time);
+const weekday = (time: number) => dateFormat({ weekday: "short", day: "numeric", month: "short" }).format(time);
 
 interface JournalEntryProps {
   entry: Entry;

@@ -1,3 +1,5 @@
+import { dateFormat } from "./date-format.ts";
+
 const MINUTE = 60_000;
 const HOUR = 60 * MINUTE;
 const DAY = 24 * HOUR;
@@ -17,11 +19,11 @@ export function relativeTime(time: number, now = Date.now()): string {
   const days = Math.ceil((startOfToday - time) / DAY);
   if (days <= 1) return "Yesterday";
   if (days < 7) return `${days} days ago`;
-  return date.toLocaleDateString(undefined, {
+  return dateFormat({
     day: "numeric",
     month: "short",
     ...(date.getFullYear() !== today.getFullYear() ? { year: "numeric" } : {}),
-  });
+  }).format(date);
 }
 
 /** relativeTime for the middle of a sentence: "started yesterday", "done 12 Oct". */
@@ -32,14 +34,14 @@ export function inlineTime(time: number, now = Date.now()): string {
 
 /** "Saturday 31 October 2026, 18:04", for the detail screen. */
 export function fullTime(time: number): string {
-  return new Date(time).toLocaleString(undefined, {
+  return dateFormat({
     weekday: "long",
     day: "numeric",
     month: "long",
     year: "numeric",
     hour: "2-digit",
     minute: "2-digit",
-  });
+  }).format(time);
 }
 
 /** 130 → "2 h 10 min". */

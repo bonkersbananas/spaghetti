@@ -4,6 +4,7 @@
  * build card, Today, the sidebar) say the same thing. Never draws progress
  * the app can't know: without an estimate there is no fraction.
  */
+import { dateFormat } from "./date-format.ts";
 import { formatDuration } from "./time.ts";
 
 const MINUTE = 60_000;
@@ -22,7 +23,7 @@ export interface PrintProgressResult {
 
 /** The clock time a print is due, written like every other time in the app (the journal's "9:00 AM"): no leading zero. */
 function clockTime(time: number): string {
-  return new Date(time).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+  return dateFormat({ hour: "numeric", minute: "2-digit" }).format(time);
 }
 
 /** "About 45 min left" when it's close, else "Done around 10:38". Undefined once it is due. */

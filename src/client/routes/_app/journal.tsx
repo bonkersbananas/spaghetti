@@ -12,8 +12,8 @@ import {
 import { localDay } from "@shared/today";
 import { mondayOfDay, weekRangeLabel } from "@shared/week";
 import { keepPreviousData, useInfiniteQuery, useQuery } from "@tanstack/react-query";
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
+import { createFileRoute, Link, useNavigate, useRouterState } from "@tanstack/react-router";
+import { lazy, Suspense, startTransition, useEffect, useMemo, useRef, useState } from "react";
 import { EmptyPot } from "@/components/illustrations/EmptyPot";
 import { OpenNotebook } from "@/components/illustrations/OpenNotebook";
 import { Filters } from "@/components/journal/Filters";
@@ -41,6 +41,33 @@ import { peopleQuery } from "@/lib/queries";
 import { useIsDesktop } from "@/lib/use-media-query";
 
 // Phones only, and the print card with its motion and sheets is heavy: loaded after the journal, off the first load.
+/** The history entries whose Journal has been shown already: going back to one restores its scroll, so it renders whole. */
+const shown = new Set<string>();
+
+/**
+ * False for the first two frames of a Journal the person has just opened, true after (at once when it is a return to a
+ * page already shown, where the router restores the scroll position and needs the page's full height). The first
+ * month is all a phone shows on arrival; the older months, a hundred or so entries, are most of what a tap on the
+ * Journal tab cost, so they render after the screen has painted.
+ */
+function useRestOfTheNotebook() {
+  const key = useRouterState({ select: (state) => String(state.location.state.__TSR_key ?? state.location.href) });
+  const [rest, setRest] = useState(() => shown.has(key));
+  useEffect(() => {
+    shown.add(key);
+    if (rest) return;
+    let second = 0;
+    const first = requestAnimationFrame(() => {
+      second = requestAnimationFrame(() => startTransition(() => setRest(true)));
+    });
+    return () => {
+      cancelAnimationFrame(first);
+      cancelAnimationFrame(second);
+    };
+  }, [key, rest]);
+  return rest;
+}
+
 const Now = lazy(() => import("@/components/journal/Now"));
 
 export const Route = createFileRoute("/_app/journal")({
@@ -73,6 +100,7 @@ function Journal() {
     return map;
   }, [query.data]);
   const months = useMemo(() => groupJournal(entries), [entries]);
+  const rest = useRestOfTheNotebook();
   const filtered = hasFilters(filters);
   const isDesktop = useIsDesktop();
 
@@ -104,7 +132,7 @@ function Journal() {
   const { hasNextPage, isFetchingNextPage, fetchNextPage } = query;
   useEffect(() => {
     const element = sentinel.current;
-    if (!element || !hasNextPage) return;
+    if (!element || !hasNextPage || !rest) return;
     const observer = new IntersectionObserver(
       ([first]) => {
         if (first?.isIntersecting && !isFetchingNextPage) void fetchNextPage();
@@ -113,7 +141,7 @@ function Journal() {
     );
     observer.observe(element);
     return () => observer.disconnect();
-  }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
+  }, [hasNextPage, isFetchingNextPage, fetchNextPage, rest]);
 
   const loading = query.isPending;
   const nothingAtAll = !loading && !entries.length && !filtered;
@@ -160,7 +188,7 @@ function Journal() {
                   query.isPlaceholderData && "opacity-60",
                 )}
               >
-                {months.map((month, index) => (
+                {(rest ? months : months.slice(0, 1)).map((month, index) => (
                   <Month
                     key={month.key}
                     month={month}
@@ -171,8 +199,8 @@ function Journal() {
                     refs={refs.current}
                   />
                 ))}
-                <div ref={sentinel} aria-hidden />
-                {isFetchingNextPage ? (
+                {rest && <div ref={sentinel} aria-hidden />}
+                {!rest ? null : isFetchingNextPage ? (
                   <JournalSkeleton short />
                 ) : (
                   !hasNextPage && (
