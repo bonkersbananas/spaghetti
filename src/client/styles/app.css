@@ -123,16 +123,16 @@
      link preview; text inside a card stays selectable and its photos keep the save menu. Inline links keep theirs. */
   @media (pointer: coarse) {
     :where(
-      button,
-      summary,
-      [role="button"],
-      [role="tab"],
-      [role="radio"],
-      [role="switch"],
-      [role="checkbox"],
-      [role="option"],
-      [role="menuitem"]
-    ) {
+        button,
+        summary,
+        [role="button"],
+        [role="tab"],
+        [role="radio"],
+        [role="switch"],
+        [role="checkbox"],
+        [role="option"],
+        [role="menuitem"]
+      ) {
       -webkit-touch-callout: none;
       -webkit-user-select: none;
       user-select: none;
