@@ -194,7 +194,7 @@ function DesktopSheet({
                     ? "top-[3vh] h-[94vh] max-w-7xl overflow-hidden"
                     : wide
                       ? "top-[8vh] max-h-[84vh] max-w-4xl"
-                      : "top-[14vh] max-h-[72vh] max-w-xl",
+                      : "top-[14vh] max-h-[82vh] max-w-xl",
                 ),
           )}
         >
