@@ -26,6 +26,9 @@ const fileName = (url: string) => {
   }
 };
 
+/** An address with no title wraps after a slash, not in the middle of a word. */
+const breakAtSlashes = (text: string) => text.replaceAll("/", "/\u200b");
+
 /**
  * A link in a note as a card: the site's first letter on a tile, the page's
  * title and its site name, a small arrow for "leaves the app". It shows at
@@ -85,7 +88,7 @@ export function LinkCard({
             title && waited.current && "sg-fade-in",
           )}
         >
-          {title ?? shortUrl(url)}
+          {title ?? breakAtSlashes(shortUrl(url))}
         </span>
         <span className="text-small text-ink-faint truncate">
           {site}
