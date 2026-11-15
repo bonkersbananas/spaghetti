@@ -97,7 +97,11 @@ export function IdeaCard({ item, person, via, landing, menu, headingLevel = 2, r
     <m.li {...useReflow(landing)} ref={ref} className="group/idea relative list-none">
       <div className="h-full rounded-lg">
         <Card
-          link={{ to: "/ideas/$ideaId", params: { ideaId: item.id }, search: { ...(opensOn ? { photo: opensOn } : {}), ...toThread } as never }}
+          link={{
+            to: "/ideas/$ideaId",
+            params: { ideaId: item.id },
+            search: { ...(opensOn ? { photo: opensOn } : {}), ...toThread } as never,
+          }}
           aspect="portrait"
           headingLevel={headingLevel}
           reserveEnd={!!menu && !item.pending}
