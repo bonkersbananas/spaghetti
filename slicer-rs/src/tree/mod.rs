@@ -101,12 +101,23 @@ pub struct Config {
     pub bp_radius_increase_per_layer: f64,
     pub z_distance_bottom_layers: usize,
     pub z_distance_top_layers: usize,
+    /// The support meets the object above it without a gap (Orca's `zero_gap_interface_top`): every tip is then
+    /// a roof too, as its interface layers go (`force_tip_to_roof`).
+    pub zero_gap_top: bool,
     pub layer_start_bp_radius: i64,
     /// mm: the tops of the support's layers under the object's first one where it stands on a raft (Orca's
     /// `raft_layers`): the raft's own, its contact layer the last of them but those in the gap above it; and the top
     /// of the object's first layer. The support's layer `raft_layers.len() + i` is the object's layer `i`.
     pub raft_layers: Vec<f64>,
     pub object_first_z: f64,
+}
+
+/// The layers a roof goes in: Orca's top contacts, top interfaces and top base interfaces.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum RoofKind {
+    Contact,
+    Interface,
+    BaseInterface,
 }
 
 impl Config {
@@ -143,7 +154,14 @@ impl Config {
         } else {
             ((increase_radius_until_radius - branch_radius) as f64 / branch_radius_increase_per_layer) as usize
         };
-        let xy_min_distance = support_xy_distance.min(support_xy_distance_overhang);
+        let mut xy_min_distance = support_xy_distance.min(support_xy_distance_overhang);
+        let mut xy_distance = support_xy_distance;
+        if sp.top_z_distance < 1e-4 {
+            // Without a gap above, the gaps beside the object are 0.1 mm at least (Orca's `zero_top_z_gap`), as the
+            // safe offsets can't step by less.
+            xy_min_distance = xy_min_distance.max(100_000);
+            xy_distance = xy_distance.max(xy_min_distance);
+        }
         // Orca's defaults for what the presets don't set: a 7.5 mm base, 1 mm more by merges on the model, 1 mm
         // above the model before a branch may rest on it.
         let bp_radius = 7_500_000 / 2;
@@ -231,12 +249,13 @@ impl Config {
             increase_radius_until_radius,
             increase_radius_until_layer,
             support_rests_on_model: !sp.on_build_plate_only,
-            xy_distance: support_xy_distance,
+            xy_distance,
             xy_min_distance,
             bp_radius,
             bp_radius_increase_per_layer,
             z_distance_bottom_layers: layers(support_bottom_distance),
             z_distance_top_layers: layers(support_top_distance),
+            zero_gap_top: sp.zero_gap_top(),
             layer_start_bp_radius: ((bp_radius - branch_radius) as f64 / bp_radius_increase_per_layer) as i64,
             raft_layers,
             object_first_z,
@@ -264,6 +283,20 @@ impl Config {
     pub fn recommended_min_radius(&self, layer: i64) -> i64 {
         let widened = (self.layer_start_bp_radius - layer) as f64;
         if widened > 0.0 { (self.branch_radius as f64 + widened * self.bp_radius_increase_per_layer) as i64 } else { 0 }
+    }
+
+    /// Which of a roof's layers takes a roof `depth` layers under its contact (`add_roof_unguarded`): the contact
+    /// layer, then interface down to the deepest that is (one less where base interface layers are asked for), and
+    /// base interface under it.
+    pub fn roof_kind(&self, depth: usize) -> RoofKind {
+        let base = self.support_roof_base_layers;
+        let only = self.support_roof_layers.saturating_sub(base);
+        let threshold = if only > 0 && base > 0 { only - 1 } else { only };
+        match depth {
+            0 => RoofKind::Contact,
+            d if d <= threshold => RoofKind::Interface,
+            _ => RoofKind::BaseInterface,
+        }
     }
 
     /// mm: the top of the support's layer `layer` (`layer_z`: a raft's, then the object's layers, by formula).
@@ -412,7 +445,8 @@ pub fn supports(
     painted: &overhangs::Painted,
 ) -> Option<crate::support::TreeLayers> {
     let (c, v, mut b) = grown(slices, heights, s, origin, bed, painted)?;
-    let drawn = draw::draw(&c, &v, &mut b.layers, &b.contacts, origin);
+    let roofs = draw::Roofs { contacts: &mut b.contacts, interfaces: &mut b.interfaces, base: &mut b.base_interfaces };
+    let drawn = draw::draw(&c, &v, &mut b.layers, roofs, origin);
     let z = (0..b.layers.len()).map(|l| (if l > 0 { c.layer_z(l - 1) } else { 0.0 }, c.layer_z(l))).collect();
     Some(crate::support::TreeLayers {
         base: drawn.base,

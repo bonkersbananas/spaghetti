@@ -509,6 +509,7 @@ fn check_moves(gcode: &str, s: &Settings) -> Vec<Vec<u32>> {
             if moves_xy {
                 assert!((0.0..=s.bed[0]).contains(&nx) && (0.0..=s.bed[1]).contains(&ny), "on the plate: {}", at());
                 assert!(nz > layer_z || at_height(nz, layer_z), "never below the layer while moving: {}", at());
+                assert!(e > 0.0 || nz >= z - 1e-9, "a lifted travel comes down at its end, not on the way: {}", at());
             }
             if e > 0.0 && moves_xy {
                 assert!(at_height(nz, layer_z), "prints at the layer's height: {}", at());
@@ -542,6 +543,37 @@ fn check_moves(gcode: &str, s: &Settings) -> Vec<Vec<u32>> {
     }
     assert_eq!(label, None, "every label closed");
     layers
+}
+
+/// The first travel between the printer's start and end G-code that comes down on the way (a move across to a lower
+/// height that extrudes nothing), and how many travels come down at their end (across, then down): a lifted nozzle
+/// travels at its height and comes down where it's going, as Orca 2.5.1 has it (`descend_after_xy`, its #16933).
+fn travels_down(gcode: &str) -> (Option<&str>, usize) {
+    let body = gcode.split("M981 S1 P20000 ;open spaghetti detector\n").nth(1).expect("the start G-code's end");
+    let body = body.split("M981 S0 P20000 ; close spaghetti detector\n").next().expect("the end G-code's start");
+    let (mut z, mut across, mut at_end) = (f64::NAN, false, 0);
+    for line in body.lines() {
+        let code = line.split(';').next().unwrap_or("").trim();
+        if !["G0 ", "G1 ", "G2 ", "G3 "].iter().any(|g| code.starts_with(g)) {
+            continue;
+        }
+        let xy = word(code, 'X').is_some() || word(code, 'Y').is_some();
+        let travel =
+            xy && !word(code, 'E').is_some_and(|e| e > 0.0) && !code.starts_with("G2") && !code.starts_with("G3");
+        if let Some(nz) = word(code, 'Z') {
+            if nz < z - 1e-9 {
+                if travel {
+                    return (Some(line), at_end);
+                }
+                if !xy && across {
+                    at_end += 1;
+                }
+            }
+            z = nz;
+        }
+        across = travel;
+    }
+    (None, at_end)
 }
 
 #[test]
@@ -1466,6 +1498,10 @@ fn two_filaments_change_once_a_layer_over_a_prime_tower() {
         assert!(layer.contains("; FEATURE: Prime tower\n"), "layer {i} has no tower");
     }
     assert_eq!(s.tool_changes, 20);
+    // To the tower and back, a lifted nozzle goes over at its height and comes down at the end.
+    let (on_the_way, at_end) = travels_down(&gcode);
+    assert_eq!(on_the_way, None);
+    assert!(at_end >= 40, "{at_end} travels come down at their end");
     // Each object prints in its own filament (T0 the frame, T1 the square), and every move between the printer's start
     // and end G-code stays on the plate, tool changes and all.
     let mut printed = [0usize; 2];
@@ -2053,8 +2089,7 @@ fn supports_without_a_gap_hold_the_object_as_orcas_do() {
         .collect();
     assert_eq!(layers, ["19.8", "20"]);
 
-    // Classic trees too, here hybrid ones (Orca: 1286.15 mm³ of support, 175.27 of interface); organic trees, which
-    // Orca makes otherwise without a gap, are still refused.
+    // Classic trees too, here hybrid ones (Orca: 1286.15 mm³ of support, 175.27 of interface).
     let trees = setup.replace("normal(auto)", "tree(auto)");
     let hybrid = setup::read(
         &trees.replace(r#""support_top_z_distance""#, r#""support_style": "tree_hybrid", "support_top_z_distance""#),
@@ -2067,7 +2102,112 @@ fn supports_without_a_gap_hold_the_object_as_orcas_do() {
         assert!((volume(role) / orca - 1.0).abs() < 1.5e-3, "hybrid {role:?}: {} mm³", volume(role));
     }
     assert_eq!(feature_directions(&String::from_utf8(out.gcode).unwrap(), "Support interface"), [45, 135]);
-    assert_eq!(setup::read(&trees).err(), Some(Error::Unsupported("supports without a gap")));
+
+    // And organic trees (Orca: 759.13 mm³ of support, 112.60 of interface): the same interface, under trees 1.2 %
+    // heavier than Orca's (1.9 % with a gap).
+    let organic = setup::read(&trees).unwrap().settings;
+    let out = slice(&[Input { name: "tee.stl", bytes: &tee }], &organic, &options).unwrap();
+    let volume = |role: Role| out.stats.features[Role::ALL.iter().position(|&r| r == role).unwrap()].volume;
+    assert!(
+        (volume(Role::SupportInterface) - 112.60).abs() < 0.05,
+        "organic interface: {}",
+        volume(Role::SupportInterface)
+    );
+    assert!((volume(Role::Support) / 759.13 - 1.0).abs() < 0.015, "organic support: {}", volume(Role::Support));
+    assert_eq!(feature_directions(&String::from_utf8(out.gcode).unwrap(), "Support interface"), [45, 135]);
+}
+
+/// A closed solid of these triangles, as an ASCII STL.
+fn solid_stl(vertices: &[[f32; 3]], faces: &[[usize; 3]]) -> Vec<u8> {
+    let mut out = String::from("solid mesh\n");
+    for face in faces {
+        out.push_str(" facet normal 0 0 0\n  outer loop\n");
+        for &v in face {
+            let [x, y, z] = vertices[v];
+            out.push_str(&format!("   vertex {x} {y} {z}\n"));
+        }
+        out.push_str("  endloop\n endfacet\n");
+    }
+    out.push_str("endsolid mesh\n");
+    out.into_bytes()
+}
+
+#[test]
+fn organic_trees_without_a_gap_end_in_roofs() {
+    // A block whose side leans out 70° from upright for 6 mm over a 4 mm foot: each layer overhangs the one below by
+    // a band 0.2 mm wide, too thin for a roof of its own. Without a gap, Orca forces every tip into a roof
+    // (`force_tip_to_roof`): a circle of the tip's radius on the layer under the overhang and the next one down, the
+    // tip a layer lower still. With a gap, the tips print as base, with no interface at all.
+    let lean = 2.0 * (70f32).to_radians().tan() * 3.0;
+    let vertices = [
+        [110., 110., 0.],
+        [120., 110., 0.],
+        [120., 130., 0.],
+        [110., 130., 0.],
+        [110., 110., 4.],
+        [120., 110., 4.],
+        [120., 130., 4.],
+        [110., 130., 4.],
+        [110., 110., 10.],
+        [120. + lean, 110., 10.],
+        [120. + lean, 130., 10.],
+        [110., 130., 10.],
+    ];
+    let faces = [
+        [0, 2, 1],
+        [0, 3, 2],
+        [0, 1, 5],
+        [0, 5, 4],
+        [1, 2, 6],
+        [1, 6, 5],
+        [2, 3, 7],
+        [2, 7, 6],
+        [3, 0, 4],
+        [3, 4, 7],
+        [4, 5, 9],
+        [4, 9, 8],
+        [5, 6, 10],
+        [5, 10, 9],
+        [6, 7, 11],
+        [6, 11, 10],
+        [7, 4, 8],
+        [7, 8, 11],
+        [8, 9, 10],
+        [8, 10, 11],
+    ];
+    let stl = solid_stl(&vertices, &faces);
+    let options = Options { arrange: false, thumbnail: false, ..Options::default() };
+    let organic = r#"{"process": {"enable_support": "1", "support_type": "tree(auto)", "support_style": "tree_organic",
+        "support_interface_spacing": "0", "support_interface_pattern": "rectilinear_interlaced"GAP}}"#;
+    let run = |gap: &str| {
+        let settings = setup::read(&organic.replace("GAP", gap)).unwrap().settings;
+        slice(&[Input { name: "lean.stl", bytes: &stl }], &settings, &options).unwrap()
+    };
+    let out = run(r#", "support_top_z_distance": "0""#);
+    let volume = |role: Role| out.stats.features[Role::ALL.iter().position(|&r| r == role).unwrap()].volume;
+    // Native OrcaSlicer 2.5.0 (Nov 15): 677.46 mm³ of support and 93.31 of interface, on the 30 layers from 4 mm to
+    // 9.8 mm, each turned as ours. Ours prints as much plastic, a little less of it as interface.
+    assert!((volume(Role::Support) / 677.46 - 1.0).abs() < 0.005, "support: {}", volume(Role::Support));
+    assert!(
+        (volume(Role::SupportInterface) / 93.31 - 1.0).abs() < 0.09,
+        "interface: {}",
+        volume(Role::SupportInterface)
+    );
+    let gcode = String::from_utf8(out.gcode).unwrap();
+    let layers: Vec<&str> = gcode
+        .split("; Z_HEIGHT: ")
+        .skip(1)
+        .filter(|layer| layer.contains("; FEATURE: Support interface"))
+        .map(|layer| layer.lines().next().unwrap())
+        .collect();
+    assert_eq!(layers.len(), 30, "{layers:?}");
+    assert_eq!((layers[0], layers[29]), ("4", "9.8"));
+
+    let out = run("");
+    let volume = |role: Role| out.stats.features[Role::ALL.iter().position(|&r| r == role).unwrap()].volume;
+    // Orca: 730.93 mm³ of support, no interface.
+    assert_eq!(volume(Role::SupportInterface), 0.0);
+    assert!((volume(Role::Support) / 730.93 - 1.0).abs() < 0.015, "with a gap: {}", volume(Role::Support));
 }
 
 #[test]
@@ -2414,6 +2554,14 @@ fn a_vase_climbs_in_one_spiral_above_its_bottom_and_is_alone_on_its_plate() {
             assert!(zs[0] > top - 0.2 && (zs[zs.len() - 1] - top).abs() < 1e-9, "layer {i} at {top}: {zs:?}");
         }
     }
+    // An object that stands on two feet travels between them on its bottom layers, lifted: over at its height and
+    // down at the end, as Orca 2.5.1 does it (2.5.0 came down on the way there).
+    let feet = boxes_stl(&[([116., 116., 0.], [124., 140., 10.]), ([132., 116., 0.], [140., 140., 10.])]);
+    let out = slice(&[Input { name: "feet.stl", bytes: &feet }], &settings, &options).unwrap();
+    let gcode = String::from_utf8(out.gcode).unwrap();
+    let (on_the_way, at_end) = travels_down(&gcode);
+    assert_eq!(on_the_way, None);
+    assert!(at_end >= 1, "{at_end} travels come down at their end");
     // Orca prints one object in spiral vase mode, and stops the slice when there are more: so do we.
     let beside = boxes_stl(&[([150., 116., 0.], [160., 126., 10.])]);
     let two = [Input { name: "vase.stl", bytes: &block }, Input { name: "cup.stl", bytes: &beside }];

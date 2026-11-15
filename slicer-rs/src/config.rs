@@ -555,10 +555,10 @@ impl SupportSettings {
         {
             Some("this support pattern")
         } else if self.top_z_distance < 0.0
-            // Without a gap, Orca prints contacts in the auto pattern as concentric loops, and its organic trees and
-            // rafts meet the object otherwise, which ours doesn't yet.
+            // Without a gap, Orca prints contacts in the auto pattern as concentric loops, and its rafts meet the
+            // object otherwise, which ours doesn't yet.
             || (self.top_z_distance == 0.0
-                && (self.organic() || self.raft_layers > 0 || matches!(self.interface_pattern.as_str(), "auto" | "")))
+                && (self.raft_layers > 0 || matches!(self.interface_pattern.as_str(), "auto" | "")))
         {
             Some("supports without a gap")
         } else if self.enforce_layers > 0
