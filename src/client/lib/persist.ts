@@ -102,22 +102,51 @@ const enqueue = <T>(job: () => Promise<T>): Promise<T> => {
   return run;
 };
 
+/**
+ * Resolves when the browser has nothing to do (or after 2 s). Trimming the cache measures it with JSON.stringify and
+ * the write clones it: tens of milliseconds on a phone, and the throttled save lands wherever the clock says, so a
+ * tap that changed the screen would wait for it. The snapshot is already taken; only the work waits.
+ */
+const idle = () =>
+  new Promise<void>((resolve) => {
+    if ("requestIdleCallback" in window) requestIdleCallback(() => resolve(), { timeout: 2000 });
+    else setTimeout(resolve, 500);
+  });
+
+/** The newest snapshot waiting for an idle moment, and the save that will write it (older ones are dropped). */
+let waiting: { client: PersistedClient; done: Promise<void> } | null = null;
+
+async function save(client: PersistedClient) {
+  const user = rememberedUser();
+  if (!user) return store.clear();
+  const trimmed = trimCache(client, fetchedAt, { limits: LIMITS, maxBytes: MAX_BYTES });
+  if (!trimmed) return;
+  const hashes = new Set(trimmed.clientState.queries.map((q) => q.queryHash));
+  await store.put({
+    key: "client",
+    userId: user.id,
+    client: trimmed,
+    fetchedAt: Object.fromEntries([...fetchedAt].filter(([hash]) => hashes.has(hash))),
+  });
+}
+
 export const persister: Persister = {
-  persistClient: (client) =>
-    enqueue(async () => {
-      const user = rememberedUser();
-      // Signed out (or the session ended): nothing of theirs stays behind.
-      if (!user) return store.clear();
-      const trimmed = trimCache(client, fetchedAt, { limits: LIMITS, maxBytes: MAX_BYTES });
-      if (!trimmed) return;
-      const hashes = new Set(trimmed.clientState.queries.map((q) => q.queryHash));
-      await store.put({
-        key: "client",
-        userId: user.id,
-        client: trimmed,
-        fetchedAt: Object.fromEntries([...fetchedAt].filter(([hash]) => hashes.has(hash))),
-      });
-    }).catch(() => undefined),
+  persistClient: (client) => {
+    // A save already waiting for idle takes the newer snapshot instead of queueing another behind it, so a burst
+    // of cache events is one write and a sign-out's clear never waits behind a backlog.
+    if (waiting) {
+      waiting.client = client;
+      return waiting.done;
+    }
+    const entry = { client, done: Promise.resolve() };
+    waiting = entry;
+    entry.done = enqueue(async () => {
+      await idle();
+      waiting = null;
+      await save(entry.client);
+    }).catch(() => undefined);
+    return entry.done;
+  },
   restoreClient: () =>
     enqueue(async () => {
       const stored = await store.get("client");
