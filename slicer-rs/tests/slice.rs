@@ -2593,6 +2593,48 @@ fn a_vase_climbs_in_one_spiral_above_its_bottom_and_is_alone_on_its_plate() {
     let (on_the_way, at_end) = travels_down(&gcode);
     assert_eq!(on_the_way, None);
     assert!(at_end >= 1, "{at_end} travels come down at their end");
+    // A vase that widens as it rises (a cone opening upwards, 30° out from upright): above its bottom Orca finds no
+    // shells (its `discover_vertical_shells` stops at the bottom's layers), so every layer there is its loop alone,
+    // with no solid infill under the part that overhangs the layer below.
+    let n = 64;
+    let ring = |r: f32, z: f32| -> Vec<[f32; 3]> {
+        (0..n)
+            .map(|k| {
+                let a = k as f32 * std::f32::consts::TAU / n as f32;
+                [128. + r * a.cos(), 128. + r * a.sin(), z]
+            })
+            .collect()
+    };
+    let (r0, height) = (10., 20.);
+    let mut vertices = ring(r0, 0.);
+    vertices.extend(ring(r0 + height * 30f32.to_radians().tan(), height));
+    vertices.extend([[128., 128., 0.], [128., 128., height]]);
+    let mut faces = Vec::new();
+    for k in 0..n {
+        let next = (k + 1) % n;
+        faces.extend([[2 * n, next, k], [2 * n + 1, n + k, n + next], [k, next, n + next], [k, n + next, n + k]]);
+    }
+    let cone = solid_stl(&vertices, &faces);
+    let out = slice(&[Input { name: "cone.stl", bytes: &cone }], &settings, &options).unwrap();
+    let gcode = String::from_utf8(out.gcode).unwrap();
+    // What each layer above the bottom prints other than its wall (a rising loop's moves name their height first).
+    let (mut layer, mut feature, mut other) = (0, "", Vec::new());
+    for line in gcode.lines() {
+        if let Some(f) = line.strip_prefix("; FEATURE: ") {
+            feature = f;
+        } else if line.starts_with("; CHANGE_LAYER") {
+            layer += 1;
+        } else if line.starts_with("G1 ")
+            && word(line, 'E').is_some_and(|e| e > 0.0)
+            && word(line, 'X').or(word(line, 'Y')).is_some()
+            && layer > bottom
+            && feature != "Outer wall"
+        {
+            other.push((layer - 1, feature));
+        }
+    }
+    assert_eq!(other, []);
+    assert_eq!(layer, 101);
     // Orca prints one object in spiral vase mode, and stops the slice when there are more: so do we.
     let beside = boxes_stl(&[([150., 116., 0.], [160., 126., 10.])]);
     let two = [Input { name: "vase.stl", bytes: &block }, Input { name: "cup.stl", bytes: &beside }];
