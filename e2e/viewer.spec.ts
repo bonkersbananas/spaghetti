@@ -147,6 +147,38 @@ test("the arrow keys step layers as soon as the 3D view opens, and after a drag 
   await expect(dialog).toHaveCount(0);
 });
 
+test("Space plays the replay right after the 3D view opens, by mouse or by keyboard, and Escape still closes", async ({
+  page,
+}) => {
+  test.setTimeout(120_000);
+  await signIn(page);
+  const itemId = await buildWithTugboat(page);
+  await page.goto(`/builds/${itemId}`);
+  const chip = page.getByRole("button", { name: `See ${TUGBOAT_FILE_NAME} in 3D` });
+  const dialog = page.getByRole("dialog", { name: "3D view" });
+
+  for (const how of ["mouse", "keyboard"] as const) {
+    if (how === "mouse") await chip.click();
+    else {
+      await chip.focus();
+      await page.keyboard.press("Enter");
+    }
+    // Space at once, without waiting for the file: it must not press the close button.
+    await page.keyboard.press("Space");
+    await expect(dialog).toBeVisible();
+    await expect(dialog.locator("[data-viewer=ready]")).toBeVisible({ timeout: 30_000 });
+    await expect(dialog.getByText("Layer 317 of 317")).toBeVisible();
+    await expect(dialog.getByRole("button", { name: "Close" })).not.toBeFocused();
+    await page.keyboard.press("Space");
+    await expect(dialog.locator("[data-viewer=busy]")).toBeVisible();
+    await page.keyboard.press("Space");
+    await expect(dialog.locator("[data-viewer=ready]")).toBeVisible();
+    await expect(dialog).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(dialog).toHaveCount(0);
+  }
+});
+
 test("a file with no G-code says so instead of drawing nothing", async ({ page }) => {
   await signIn(page);
   const itemId = await buildWithTugboat(page);
