@@ -326,7 +326,7 @@ export default function PrintViewer({
             }}
           />
         )}
-        {state === "ready" && originalColors && (
+        {state === "ready" && originalColors && mode === "filament" && (
           <div className="pointer-events-none absolute inset-x-0 bottom-3 flex justify-center">
             <SegmentedControl
               label="Colours shown"
@@ -343,7 +343,12 @@ export default function PrintViewer({
           </div>
         )}
         {state === "ready" && summary?.stats.decimated && (
-          <p className="bg-cream/90 text-caption text-ink-faint absolute bottom-3 left-3 rounded-full px-2.5 py-1">
+          <p
+            className={cn(
+              "bg-cream/90 text-caption text-ink-faint absolute left-3 rounded-full px-2.5 py-1",
+              originalColors && mode === "filament" ? "bottom-16" : "bottom-3",
+            )}
+          >
             Simplified to fit this device
           </p>
         )}
