@@ -102,6 +102,7 @@ test("scrapping a build that began as an idea sends it back to Ideas, and Undo b
   await page.goto(`/builds/${id}`);
   await expect(page.getByRole("textbox", { name: "Title" })).toHaveValue("Flexi hummingbird");
   await page.getByRole("button", { name: "Scrap build" }).click();
+  await page.getByRole("button", { name: "Scrap", exact: true }).click();
   tapped.resolve();
   await expect(page.getByText("Build scrapped")).toBeVisible();
   await expect(page.getByText("Flexi hummingbird is back in Ideas")).toBeVisible();
@@ -126,6 +127,7 @@ test("a build made from scratch is deleted as before", async ({ page }) => {
   await page.goto(`/builds/${id}`);
   await expect(page.getByRole("textbox", { name: "Title" })).toHaveValue("From scratch");
   await page.getByRole("button", { name: "Delete build" }).click();
+  await page.getByRole("button", { name: "Delete", exact: true }).click();
   await expect(page.getByText("Build deleted")).toBeVisible();
   await expect.poll(async () => (await page.request.get(`/api/items/${id}`)).status()).toBe(404);
 });
@@ -198,4 +200,27 @@ test("a title typed just before leaving a new build is not lost", async ({ page 
   await page.getByRole("link", { name: "Builds" }).first().click();
   await expect(page).toHaveURL(/\/builds$/);
   await expect.poll(async () => (await getItem(page, id)).title).toBe("Quick title");
+});
+
+test("a build asks before it goes: one press asks, Escape keeps it, Ctrl+Backspace again deletes", async ({ page }) => {
+  const id = crypto.randomUUID();
+  await page.request.post("/api/items", {
+    headers: headers(page),
+    data: { id, title: "Asks first", stage: "building" },
+  });
+  await page.goto(`/builds/${id}`);
+  await expect(page.getByRole("textbox", { name: "Title" })).toHaveValue("Asks first");
+  await page.getByRole("button", { name: "Delete build" }).focus();
+  await page.keyboard.press("Backspace");
+  await expect(page.getByText("Delete this build?")).toHaveCount(0);
+  await page.keyboard.press("Control+Backspace");
+  await expect(page.getByText("Delete this build?")).toBeVisible();
+  expect((await page.request.get(`/api/items/${id}`)).status()).toBe(200);
+  await page.keyboard.press("Escape");
+  await expect(page.getByText("Delete this build?")).toHaveCount(0);
+  await expect(page).toHaveURL(new RegExp(`/builds/${id}$`));
+  await page.keyboard.press("Control+Backspace");
+  await page.keyboard.press("Control+Backspace");
+  await expect(page.getByText("Build deleted")).toBeVisible();
+  await expect.poll(async () => (await page.request.get(`/api/items/${id}`)).status()).toBe(404);
 });

@@ -137,6 +137,7 @@ test.describe("on a laptop", () => {
     await page.goto(`/ideas/${id}`);
     await expect(page.getByRole("textbox", { name: "Title" })).toHaveValue("Doomed hook");
     await page.getByRole("button", { name: "Delete idea" }).click();
+    await page.getByRole("button", { name: "Delete", exact: true }).click();
     await expect(page).toHaveURL(/\/ideas$/);
     await expect(page.getByText("Idea deleted")).toBeVisible();
     await page.keyboard.press(open);

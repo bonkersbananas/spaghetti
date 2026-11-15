@@ -73,7 +73,8 @@ test("deleting an idea with Delete, then Undo, never leaves focus on the page's 
   await page.waitForTimeout(500);
   // Out of the note field, onto the page itself.
   await focusPage(page);
-  await page.keyboard.press("Delete");
+  await page.keyboard.press("Control+Backspace");
+  await page.keyboard.press("Control+Backspace");
   await expect(page).toHaveURL(/\/ideas$/);
   await expect(page.locator("main")).toBeFocused();
 

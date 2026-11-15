@@ -12,7 +12,7 @@ The tokens live in [`src/client/styles/tokens.css`](../src/client/styles/tokens.
 4. **The phone is not a shrunken desktop.** Phones get a tab bar, bottom sheets and big thumb targets. Desktop gets a sidebar, keyboard shortcuts and columns.
 5. **Calm, warm, tactile.** Paper and cream surfaces, soft shadows instead of borders, generous space, a gentle press on everything you tap.
 6. **Playful in small doses.** Pasta lives in empty states, names and one or two moments of delight. Never in the way of reading or logging.
-7. **Never lose work.** Autosave everything. Deletes happen immediately and offer Undo in a toast; there are no "are you sure?" dialogs. One exception, in place and not a dialog: removing a saved photo takes two taps (decision 0054, `ConfirmRemove`: the X turns into a "Remove" pill where it sits, back to the X after 3 s, on a tap elsewhere or Escape), because the X sits on the photo, under a thumb; the Undo toast still follows. A draft's photos (capture sheet, Log attempt, not yet saved) still go at once.
+7. **Never lose work.** Autosave everything. Deletes happen immediately and offer Undo in a toast; there are no "are you sure?" dialogs. Two exceptions, in place and not dialogs: deleting an idea or a build asks first (decision 0062, `ConfirmDelete`: the trash can turns into "Delete this idea?" with a tomato Delete and a Keep; ⌘⌫ asks and confirms, Enter confirms, Escape backs out; the Undo toast still follows), and removing a saved photo takes two taps (decision 0054, `ConfirmRemove`: the X turns into a "Remove" pill where it sits, back to the X after 3 s, on a tap elsewhere or Escape), because the X sits on the photo, under a thumb; the Undo toast still follows. A draft's photos (capture sheet, Log attempt, not yet saved) still go at once.
 
 ## Color
 
@@ -262,7 +262,7 @@ All in `src/client/components/ui`, all shown in `/styleguide`.
 - **Workshop:** the Pantry, the Printer and the Shopping list sit under a quiet "Workshop" caption in the sidebar (`G P`, `G R`, `G S`); on phones the fourth tab, Workshop (`/workshop`), is a page of three `HubTile`s, each drawn with what is in it and a line on how things stand ("12 spools · 4 running low", "2 chores due", "5 to buy"). The account sheet no longer lists them.
 - **Keyboard (desktop):** `⌘K` (Ctrl+K elsewhere) the command palette, `?` the list of shortcuts, `C` capture, `G T` Today, `G I` Ideas, `G B` Builds, `G J` Journal, `/` Search, `G P` Pantry, `G R` Printer, `G S` Shopping list. Shortcuts are ignored while typing or while a sheet is open; only `⌘K` also works inside a field. Every shortcut is defined once in `src/shared/shortcuts.ts` (see Keyboard and the command palette below).
 - **Capture from anywhere (desktop):** paste an image (or a link) when not typing, or drop photos anywhere on the window (a "Drop to capture" overlay shows while dragging). In the capture note, `Enter` saves and `Shift+Enter` is a new line; `Escape` closes and keeps the draft.
-- **Detail screens:** phones get a full page with a sticky back bar; desktop puts the photos beside the text. `Escape` goes back, arrow keys move between photos, `Backspace`/`Delete` deletes with undo.
+- **Detail screens:** phones get a full page with a sticky back bar; desktop puts the photos beside the text. `Escape` goes back, arrow keys move between photos, `⌘⌫` (`Ctrl+Backspace`) asks to delete an idea or build, and again confirms, with undo; plain `Backspace`/`Delete` do nothing.
 
 ## Signing in
 

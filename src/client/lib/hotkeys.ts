@@ -18,6 +18,18 @@ export function shortcutCaps(id: ShortcutId): string[] {
   return first ? keycaps(first, isMac) : [];
 }
 
+/** A shortcut's keys for aria-keyshortcuts: "mod+backspace" → "Meta+Backspace" on a Mac, "Control+Backspace" elsewhere. */
+export function ariaShortcuts(id: ShortcutId): string {
+  return shortcutKeys(id)
+    .map((combo) =>
+      combo
+        .split("+")
+        .map((part) => (part === "mod" ? (isMac ? "Meta" : "Control") : part[0]?.toUpperCase() + part.slice(1)))
+        .join("+"),
+    )
+    .join(" ");
+}
+
 /**
  * A key press as the registry writes it: "c", "?", "arrowdown", "mod+k".
  * Null when Alt is held (those belong to the browser and the system).
@@ -59,6 +71,8 @@ export function useHotkeys(handlers: HotkeyHandlers) {
       if (event.defaultPrevented || key === null || document.querySelector("[role=dialog]")) return;
       const modified = key.startsWith("mod+");
       if (!modified && isTyping(event.target)) return;
+      // ⌘/Ctrl+Backspace in a field deletes a word, and must not delete an idea.
+      if (modified && isTyping(event.target) && (key === "mod+backspace" || key === "mod+delete")) return;
       const map = bound();
       const handler = map.get(pending && !modified ? `${pending} ${key}` : key);
       if (handler) {

@@ -1762,6 +1762,18 @@ export const shots: Shot[] = [
     },
   },
   { name: "build", path: `/builds/${SEED_BUILD_IDS.tugboat}`, fullPage: true },
+  {
+    // The first press of Delete on a build: the trash can has turned into the question, in the bar.
+    name: "build-delete-confirm",
+    path: `/builds/${SEED_BUILD_IDS.tugboat}`,
+    prepare: async (page) => {
+      await page.getByRole("button", { name: /^(Delete|Scrap) build$/ }).click();
+      await page.getByRole("button", { name: /^(Delete|Scrap)$/ }).waitFor();
+      await page.evaluate(() => {
+        for (const animation of document.getAnimations()) animation.finish();
+      });
+    },
+  },
   // An idea with a sliced file kept with it: the file's card under the chips, and the sticker on its card.
   { name: "idea-file", path: `/ideas/${SEED_IDS.bigTugboat}`, fullPage: true },
   {
@@ -3496,6 +3508,17 @@ export const shots: Shot[] = [
     },
   },
   { name: "idea", path: `/ideas/${SEED_IDS.deskTidy}` },
+  {
+    // The first press of Delete on an idea: the trash can has turned into the question, in the bar.
+    name: "idea-delete-confirm",
+    path: "/ideas",
+    prepare: async (page) => {
+      await page.getByRole("list", { name: "Ideas" }).getByRole("link").first().click();
+      await page.getByRole("textbox", { name: "Title" }).waitFor();
+      await page.getByRole("button", { name: "Delete idea" }).click();
+      await page.getByRole("button", { name: "Delete", exact: true }).waitFor();
+    },
+  },
   // Ideas with a model show it on the card; one tap on "Has a model" keeps only those.
   {
     name: "ideas-has-a-model",

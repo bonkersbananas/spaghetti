@@ -56,8 +56,13 @@ describe("shortcut registry", () => {
     expect(has("buildOpen", "enter")).toBe(true);
     expect(has("ideaBack", "escape")).toBe(true);
     expect(has("ideaPhotoNext", "arrowright")).toBe(true);
-    expect(has("ideaDelete", "backspace")).toBe(true);
-    expect(has("buildDelete", "delete")).toBe(true);
+    // Deleting takes ⌘⌫ / Ctrl+Backspace: plain Backspace and Delete are too easy to hit.
+    expect(has("ideaDelete", "mod+backspace")).toBe(true);
+    expect(has("buildDelete", "mod+delete")).toBe(true);
+    for (const id of ["ideaDelete", "buildDelete", "spoolDelete"] as const) {
+      expect(has(id, "backspace")).toBe(false);
+      expect(has(id, "delete")).toBe(false);
+    }
   });
 });
 
