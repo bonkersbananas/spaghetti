@@ -63,7 +63,7 @@ def audit(path):
         nx, ny = a.get("X", x), a.get("Y", y)
         if "Z" in a and layer_z is not None and a["Z"] < layer_z - 1e-6:
             below += 1
-        if a.get("E", 0) > 0 and ("X" in a or "Y" in a) and x is not None and f:
+        if a.get("E", 0) > 0 and ("X" in a or "Y" in a) and x is not None and y is not None and f:
             if m.group(1) == "1":
                 length = math.hypot(nx - x, ny - y)
             else:
@@ -71,6 +71,8 @@ def audit(path):
                 cx, cy = x + i, y + j
                 d = math.atan2(ny - cy, nx - cx) - math.atan2(y - cy, x - cx)
                 d = d % (2 * math.pi) if m.group(1) == "3" else -((-d) % (2 * math.pi))
+                if abs(d) < 1e-9:
+                    d = 2 * math.pi  # the end is the start: a full circle
                 length = abs(d) * math.hypot(i, j)
             if length > 0.05:
                 flow = max(flow, a["E"] * 2.405 / (length / (f / 60)))
