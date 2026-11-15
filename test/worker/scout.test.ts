@@ -278,7 +278,20 @@ describe("the weekly scout", () => {
     stubWeb({ status: 529 });
     await env.DB.prepare("DELETE FROM scout_rounds").run();
     expect(await scoutTick(env, wed)).toBe("failed");
+    // A busy Claude is asked once more ten minutes on (the week isn't lost), never sooner, and never a third time.
+    expect((await rounds()).results[0]).toMatchObject({ status: "thinking", outcome: "api_error" });
+    expect(await scoutTick(env, wed + 5 * 60_000)).toBe("skipped");
+    expect(await scoutTick(env, wed + 11 * 60_000)).toBe("failed");
     expect((await rounds()).results[0]).toMatchObject({ status: "failed", outcome: "api_error" });
+    expect(await scoutTick(env, wed + 30 * 60_000)).toBe("skipped");
+  });
+
+  it("asks again after a busy Claude, and keeps the week", async () => {
+    let calls = 0;
+    stubWeb(() => (++calls === 1 ? { status: 529 } : good));
+    expect(await scoutTick(env, wed)).toBe("failed");
+    expect(await scoutTick(env, wed + 11 * 60_000)).toBe("done");
+    expect((await env.DB.prepare("SELECT id FROM scout_picks").all()).results).toHaveLength(SCOUT_COUNT);
   });
 
   it("takes over a claim that went quiet once, and not a fresh one", async () => {
