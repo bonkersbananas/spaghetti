@@ -51,6 +51,9 @@ pub struct Params {
     pub first_layer_gap: f64,
     pub top_interface_layers: usize,
     pub bottom_interface_layers: usize,
+    /// How many of those print as base interface (`Settings::base_interface_layers`).
+    pub top_base_interface_layers: usize,
+    pub bottom_base_interface_layers: usize,
     pub layer_height: f64,
     /// mm: the support line (`support_line_width`) and its extrusion width as `SupportParameters` has it.
     pub line_width: f64,
@@ -149,7 +152,8 @@ pub fn draw_circles(
         .collect();
     let line_width_scaled = scale(p.line_width);
     let max_move_sq = scale(p.line_width / 2.0).powi(2);
-    let top_base_interface_layers = 0usize;
+    // The roof layers that print as base interface, one at least of them interface.
+    let top_base_interface_layers = p.top_base_interface_layers.min(p.top_interface_layers.saturating_sub(1));
 
     // Each object layer's surfaces a branch can come down on (its tops, and the first layer itself) and their box,
     // looked through for every piece of every support layer's base.
@@ -339,6 +343,9 @@ pub fn draw_circles(
         // Floors: where the base comes down onto the object's top surfaces (or its first layer), a gap and then
         // bottom interface layers.
         let mut floor_areas: Shapes = Vec::new();
+        // Whether this layer's floors print as base interface: those farthest from the object of each floor's
+        // interface layers (as the last piece of the base to reach its first floor layer has it).
+        let mut floor_interface_as_base = false;
         let bottom_gap = p.bottom_z_distance;
         if !base_areas.is_empty() && !p.plate_only && (bottom_gap > EPSILON || p.bottom_interface_layers > 0) {
             let interface_height =
@@ -366,6 +373,7 @@ pub fn draw_circles(
                 }
                 bands.sort_by(|a, b| a.0.total_cmp(&b.0));
                 let mut any_gap_cleared = false;
+                let mut interface_id_set = false;
                 for (z, surfaces) in &bands {
                     let gap_top = z + bottom_gap;
                     if top_z < z - EPSILON {
@@ -379,6 +387,22 @@ pub fn draw_circles(
                         && bottom_z >= gap_top - EPSILON
                         && bottom_z < gap_top + interface_height - EPSILON
                     {
+                        if !interface_id_set {
+                            // The support layer the interface starts on, counted by the support's own layers.
+                            let mut first_interface_layer = layer_nr;
+                            while first_interface_layer > 0
+                                && layer_heights[first_interface_layer - 1].print_z > gap_top + EPSILON
+                            {
+                                first_interface_layer -= 1;
+                            }
+                            if p.bottom_base_interface_layers > 0 {
+                                let index = layer_nr - first_interface_layer;
+                                let base_start =
+                                    p.bottom_interface_layers.saturating_sub(p.bottom_base_interface_layers);
+                                floor_interface_as_base = index >= base_start;
+                            }
+                            interface_id_set = true;
+                        }
                         let mut band = union(surfaces.clone());
                         if !band.is_empty() {
                             band = intersection(&band, &offset_ex(&comp_poly, scale(p.support_extrusion_width)));
@@ -459,7 +483,7 @@ pub fn draw_circles(
                 dist_to_top: 10000.0,
                 need_infill: false,
                 need_extra_wall: false,
-                interface_as_base: false,
+                interface_as_base: floor_interface_as_base,
             });
         }
         for e in roof_1st_layer {
