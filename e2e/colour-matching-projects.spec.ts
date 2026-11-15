@@ -5,8 +5,13 @@ import { clearIdeas, signIn } from "./helpers";
 
 // A Bambu Studio or Orca project in several filaments (MakerWorld's files): each of its filaments is matched to a
 // spool from the Pantry, listed in "Slice with…" beside the model's colours of any other file, and the choice is kept.
+// The spools a test puts in the Pantry go again after it: other specs on the same worker expect a Pantry without them
+// (with this red PLA left in, a model nobody set up slices with it, whatever spool a later test adds).
+const spools: string[] = [];
 test.afterEach(async ({ page }) => {
   await clearIdeas(page);
+  const headers = { Origin: new URL(page.url()).origin };
+  for (const id of spools.splice(0)) await page.request.delete(`/api/spools/${id}`, { headers });
 });
 
 const SLICED = 60_000;
@@ -22,6 +27,7 @@ test("a project's filaments are each matched to a spool, can be changed, and the
   ]) {
     const made = await page.request.post("/api/spools", { headers: { Origin: origin }, data: spool });
     expect(made.ok()).toBe(true);
+    spools.push(spool.id);
   }
   const id = crypto.randomUUID();
   await page.request.post("/api/items", { headers: { Origin: origin }, data: { id, title: "Plaque", note: "" } });
