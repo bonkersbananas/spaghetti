@@ -360,7 +360,8 @@ fn grown(
     let flow_spacing =
         (s.support.line_width as f32 - s.layer_height as f32 * (1.0 - 0.25 * std::f64::consts::PI) as f32) as f64;
     let roof_density = (flow_spacing / (s.support.interface_spacing + flow_spacing)).min(1.0);
-    let mut seeder = seed::Seeder::new(&c, &v, origin, flow_spacing, roof_density, n.max(raft));
+    let angles = crate::support::pattern_angles(s.support.angle);
+    let mut seeder = seed::Seeder::new(&c, &v, origin, flow_spacing, roof_density, angles, n.max(raft));
     // The raft's contact layer, a roof under the object's first layer grown by `raft_expansion`, on the last of the
     // raft's layers no higher than it (Orca's `generate_raft_contact`).
     let raft_contact = crate::raft::Raft::of(s).filter(|_| raft > 0).map(|r| {

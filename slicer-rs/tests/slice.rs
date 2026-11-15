@@ -2131,6 +2131,23 @@ fn grid_interfaces_print_as_orcas_do() {
 }
 
 #[test]
+fn organic_trees_turn_with_the_support_angle_as_orcas_do() {
+    // Organic trees with their pattern turned (`support_angle` 45): the interfaces' lines and the flange's run a
+    // quarter turn from the pattern (Orca's `interface_angle`), at 135°, and the tips are taken from the turned lines.
+    let tee = boxes_stl(&[([115., 123., 0.], [125., 133., 20.]), ([100., 123., 20.], [140., 133., 25.])]);
+    let options = Options { arrange: false, thumbnail: false, ..Options::default() };
+    let setup = r#"{"process": {"enable_support": "1", "support_type": "tree(auto)", "support_angle": "45"}}"#;
+    let settings = setup::read(setup).unwrap().settings;
+    let out = slice(&[Input { name: "tee.stl", bytes: &tee }], &settings, &options).unwrap();
+    let interface = out.stats.features[Role::ALL.iter().position(|&r| r == Role::SupportInterface).unwrap()].volume;
+    // Native OrcaSlicer 2.5.1 (Nov 15): 52.592 mm³ of interface, its lines at 135°.
+    assert!((interface / 52.592 - 1.0).abs() < 1e-3, "{interface} mm³ of interface");
+    let gcode = String::from_utf8(out.gcode).unwrap();
+    assert_eq!(feature_directions(&gcode, "Support interface"), [135, 135]);
+    assert_eq!(feature_directions(&gcode, "Support")[0], 135);
+}
+
+#[test]
 fn supports_without_a_gap_hold_the_object_as_orcas_do() {
     // A support material's interface meets the object without a gap (`support_top_z_distance` 0): the contact is the
     // object's layer right under the overhang, and the overhang prints as a bottom surface on it, not as a bridge.

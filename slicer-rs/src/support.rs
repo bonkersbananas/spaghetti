@@ -124,14 +124,17 @@ pub struct Params {
     /// rather than snapping to the grid; its interfaces are rounded off too, and none is left out under gentle slopes.
     snug: bool,
     /// Radians added to the interfaces' direction (Orca's `support_interface_angle`): a quarter of a half turn back for
-    /// snug supports whose interface pattern is set to rectilinear, a quarter turn back for the grid, which runs at
-    /// the base's angle, else none.
+    /// snug supports whose interface pattern is set to rectilinear, else none.
     interface_turn: f64,
     /// Interfaces in straight lines turned an eighth of a turn either way by their layer's interface id
     /// (`rectilinear_interlaced`).
     interlaced: bool,
     /// Interfaces in Orca's grid (`support_interface_pattern` grid), also where a contact prints as base.
     grid: bool,
+    /// The angles Orca's support fillers start from (`base_angle`, `interface_angle`): the support pattern's angle
+    /// (`support_angle`) and a quarter turn more, radians in float (`pattern_angles`).
+    base_angle: f32,
+    interface_angle: f32,
     /// The support meets the object above it without a gap (Orca's `zero_gap_interface_top`): each contact layer is
     /// the object's layer under its overhang.
     zero_gap_top: bool,
@@ -239,13 +242,13 @@ impl Params {
             snug: sp.snug(),
             interface_turn: if sp.snug() && sp.interface_pattern == "rectilinear" {
                 -(std::f32::consts::FRAC_PI_4 as f64)
-            } else if sp.interface_pattern == "grid" {
-                -(std::f32::consts::FRAC_PI_2 as f64)
             } else {
                 0.0
             },
             interlaced: sp.interlaced(),
             grid: sp.interface_pattern == "grid",
+            base_angle: pattern_angles(sp.angle).0,
+            interface_angle: pattern_angles(sp.angle).1,
             zero_gap_top: sp.zero_gap_top(),
             zero_gap_bottom: sp.zero_gap_bottom,
             double_wall_area: match sp.wall_count {
@@ -2335,13 +2338,25 @@ fn toolpaths(
 }
 
 /// Orca's `support_interface_angle` and the quarter turn its filler adds (radians, in single precision as Orca has
-/// them): the interfaces a quarter turn from the columns, turned back an eighth for snug supports set to rectilinear
-/// and a quarter for the grid (the columns' angle), or interlaced, an eighth of a turn either way by the layer's
-/// interface id.
+/// them): the interfaces a quarter turn from the columns, turned back an eighth for snug supports set to rectilinear,
+/// at the columns' angle in the grid, or interlaced, an eighth of a turn either way by the layer's interface id.
 fn interface_direction(p: &Params, id: usize) -> f64 {
     use std::f32::consts::{FRAC_PI_2, FRAC_PI_4};
-    let turn = if p.interlaced { if id & 1 == 1 { FRAC_PI_4 } else { -FRAC_PI_4 } } else { p.interface_turn as f32 };
-    (FRAC_PI_2 + turn + FRAC_PI_2) as f64
+    let angle = if p.grid {
+        p.base_angle
+    } else if p.interlaced {
+        p.interface_angle + if id & 1 == 1 { FRAC_PI_4 } else { -FRAC_PI_4 }
+    } else {
+        p.interface_angle + p.interface_turn as f32
+    };
+    (angle + FRAC_PI_2) as f64
+}
+
+/// Orca's `base_angle` and `interface_angle` for a support pattern at `degrees` (`support_angle`): its `deg2rad` in
+/// float of the angle and of the angle and a quarter turn.
+pub(crate) fn pattern_angles(degrees: f64) -> (f32, f32) {
+    let deg2rad = |a: f32| std::f32::consts::PI * a / 180.0;
+    (deg2rad(degrees as f32), deg2rad((degrees + 90.0) as f32))
 }
 
 /// One support layer's extrusions from the generator layers at its height (bottom contact, top contact, interface,
@@ -2494,7 +2509,7 @@ fn layer_paths(
     };
     // A contact without interface layers of its own that joined nothing prints as base support, in the interface's
     // pattern at the base's angle and density (Orca's `InterfaceAsBase`).
-    let base_angle = std::f32::consts::FRAC_PI_2 as f64;
+    let base_angle = (p.base_angle + std::f32::consts::FRAC_PI_2) as f64;
     let as_base = |item: &mut Option<Item>| fill_interface(item, p.density, base_angle, Role::Support);
     match raft_contact {
         // The raft's contact layer: its interface's density, turned as Orca turns it by its interface id.
@@ -2547,15 +2562,16 @@ fn layer_paths(
         let area = item.to_extrude.clone().unwrap_or_else(|| item.polygons.clone());
         if !area.is_empty() {
             if g.bottom_z < EPSILON {
-                // The flange: rectilinear lines along Y.
+                // The flange: rectilinear lines along Y, or turned by the support's angle (Orca's filler at
+                // `support_angle` and a quarter turn).
                 first = true;
-                let angle = (std::f32::consts::FRAC_PI_2 + std::f32::consts::FRAC_PI_2) as f64;
+                let angle = (p.interface_angle + std::f32::consts::FRAC_PI_2) as f64;
                 item.paths.extend(flange_paths(&area, angle, origin, p));
             } else if let Some(straight) = p.organic.then_some(p.organic_lines).flatten() {
                 // Orca's organic trees print with a sheath (`with_sheath`, which they turn on), so with a base pattern
                 // that fills them each island is a loop round the pattern's lines (`fill_expolygons_with_sheath_
                 // generate_paths`): the support's own pattern, or straight lines where the trees have walls.
-                let angle = std::f32::consts::FRAC_PI_2 as f64;
+                let angle = (p.base_angle + std::f32::consts::FRAC_PI_2) as f64;
                 let line = Line { width: p.width, height: g.height, spacing: p.spacing };
                 item.paths.extend(sheath_paths(&area, line, Role::Support, false, |inner: &Shape| {
                     if straight {
@@ -2567,7 +2583,7 @@ fn layer_paths(
             } else if p.organic {
                 item.paths.extend(tree_paths(&area, g.height, p));
             } else {
-                let angle = std::f32::consts::FRAC_PI_2 as f64;
+                let angle = (p.base_angle + std::f32::consts::FRAC_PI_2) as f64;
                 for shape in &geom::closing(&area, SCALED_EPSILON) {
                     for line in base_support::fill(shape, angle, origin, p.spacing, p.density) {
                         item.paths.push(crate::support::Item::Path(path(Role::Support, line, p.width, g.height)));
@@ -2613,7 +2629,7 @@ pub fn classic_layers(
     use crate::tree::classic::draw::AreaType;
     // Orca's `_infill_direction` angles (the filler's and a quarter turn, in float): the interfaces' filler is at the
     // support angle and a quarter turn, the base's at the support angle.
-    let base_angle = std::f32::consts::FRAC_PI_2 as f64;
+    let base_angle = (p.base_angle + std::f32::consts::FRAC_PI_2) as f64;
     let contact_density = if p.top_interfaces > 0 { p.top_interface_density } else { p.bottom_interface_density };
     // Orca's interface filler: straight lines where the contact layers are denser than 95 % or interlaced.
     let straight = contact_density > 0.95 || p.interlaced;
@@ -3019,6 +3035,16 @@ fn clip_end(line: &mut Vec<Pt>, mut distance: f64) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_support_pattern_turns_by_its_angle_in_floats_as_orcas() {
+        // Unturned, the angles are the quarter turn the interfaces always ran at, to the bit.
+        assert_eq!(pattern_angles(0.0), (0.0, std::f32::consts::FRAC_PI_2));
+        // Orca's `deg2rad` in float, of the angle and of the angle and a quarter turn.
+        let (base, interface) = pattern_angles(45.0);
+        assert_eq!(base, std::f32::consts::PI * 45.0 / 180.0);
+        assert_eq!(interface, std::f32::consts::PI * 135.0 / 180.0);
+    }
 
     #[test]
     fn sticks_and_repeated_points_leave_an_outline_and_a_bare_stick_goes() {
