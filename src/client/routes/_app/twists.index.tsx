@@ -54,7 +54,6 @@ function Twists() {
         </div>
       ) : empty ? (
         <EmptyState
-          className="py-10 md:py-20"
           illustration={<Fusilli />}
           title="Nothing twisted yet"
           action={

@@ -149,7 +149,6 @@ function BuildsEmpty({ onNew }: { onNew: () => void }) {
   const isDesktop = useIsDesktop();
   return (
     <EmptyState
-      className="py-10 md:py-20"
       illustration={<SpoolStrand />}
       title="Nothing on the bed"
       action={

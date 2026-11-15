@@ -153,7 +153,7 @@ function Ideas() {
             </p>
           )}
           {queue.length > 0 && (
-            <Section id="up-next-heading" title="Up next" size="title" count={queue.length} className="mb-8 md:mb-10">
+            <Section id="up-next-heading" title="Up next" count={queue.length} className="mb-8 md:mb-10">
               <UpNextStrip
                 key={filter ?? "all"}
                 queue={queue}
@@ -183,7 +183,7 @@ function Ideas() {
           )}
           {rest.length > 0 &&
             (queue.length > 0 ? (
-              <Section id="inbox-heading" title="The rest" size="title">
+              <Section id="inbox-heading" title="The rest">
                 <ul data-picks className={`${grid} relative`} aria-label="Ideas">
                   <Reflow key={filter ?? "all"}>{rest.map(card)}</Reflow>
                 </ul>
@@ -209,7 +209,6 @@ function Ideas() {
 function IdeasUnreachable({ onRetry }: { onRetry: () => void }) {
   return (
     <EmptyState
-      className="py-10 md:py-20"
       illustration={<EmptyPot />}
       title="The pot is out of reach"
       action={
@@ -229,7 +228,6 @@ function IdeasEmpty() {
   const isDesktop = useIsDesktop();
   return (
     <EmptyState
-      className="py-10 md:py-20"
       illustration={<EmptyPot />}
       title="Nothing simmering yet"
       action={

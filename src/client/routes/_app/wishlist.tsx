@@ -197,7 +197,7 @@ function MyList({
         <EditableWishList me={me} ideas={ideas} label="Your wishlist" />
       ) : (
         <EmptyState
-          className="py-6 md:py-10"
+          size="inline"
           illustration={<WishingBowl />}
           title="Nothing on your plate yet"
           action={

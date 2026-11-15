@@ -83,7 +83,6 @@ function SpoolDetail() {
         </div>
       ) : (
         <EmptyState
-          className="py-10 md:py-20"
           illustration={<EmptyPot />}
           title={error ? "This one is out of reach" : "Used up, or never here"}
           action={
@@ -589,6 +588,7 @@ function PrintedWith({ spool }: { spool: Spool }) {
         </div>
       ) : !hits?.length ? (
         <EmptyState
+          size="none"
           className="bg-ink/3 max-w-none rounded-xl px-4 py-8"
           illustration={<SpoolStrand />}
           title="Still on the reel"

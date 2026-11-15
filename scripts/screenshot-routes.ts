@@ -3635,7 +3635,8 @@ export const shots: Shot[] = [
     prepare: async (page) => {
       const sheet = page.getByRole("dialog", { name: "Into the pot" });
       await sheet.waitFor();
-      await sheet.getByText("Drawer bins, 42 mm grid").first().waitFor();
+      // The words sit in the note's field (text inside a field isn't found by getByText).
+      await sheet.getByRole("textbox", { name: "Add a word" }).waitFor();
       await page.waitForTimeout(600);
     },
   },

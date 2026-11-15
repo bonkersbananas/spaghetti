@@ -142,7 +142,7 @@ function Journal() {
         </Suspense>
       )}
       {nothingAtAll ? (
-        <EmptyState className="py-10 md:py-20" illustration={<OpenNotebook />} title="A clean notebook">
+        <EmptyState illustration={<OpenNotebook />} title="A clean notebook">
           Every print lands here, the perfect ones and the spaghetti. Failures are worth writing down too.
         </EmptyState>
       ) : (
@@ -313,7 +313,6 @@ function FilteredEmpty({ filters, onClear }: { filters: FilterValues; onClear: (
   const failures = filters.outcome === "failures" || filters.outcome === "failed";
   return (
     <EmptyState
-      className="py-10 md:py-16"
       illustration={<EmptyPot />}
       title={failures ? "Not a strand out of place" : "Nothing in this pot"}
       action={

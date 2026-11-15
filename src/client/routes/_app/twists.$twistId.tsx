@@ -74,7 +74,6 @@ function TwistPage() {
         </div>
       ) : (
         <EmptyState
-          className="py-10 md:py-20"
           illustration={<Fusilli />}
           title="This twist came undone"
           action={

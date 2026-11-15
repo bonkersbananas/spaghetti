@@ -138,7 +138,6 @@ function BuildDetail() {
         </div>
       ) : (
         <EmptyState
-          className="py-10 md:py-20"
           illustration={<EmptyPot />}
           title={error ? "This one is out of reach" : "This one boiled over"}
           action={
@@ -678,6 +677,7 @@ function Build({ item }: { item: ItemView }) {
               <div className="flex flex-col">
                 {story.length === 0 ? (
                   <EmptyState
+                    size="none"
                     className="bg-ink/3 max-w-none rounded-xl px-4 py-10"
                     illustration={<SpoolStrand />}
                     title="The water's still heating"

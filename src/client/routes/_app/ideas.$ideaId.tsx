@@ -98,7 +98,6 @@ function IdeaDetail() {
         </div>
       ) : (
         <EmptyState
-          className="py-10 md:py-20"
           illustration={<EmptyPot />}
           title={error ? "This one is out of reach" : "This one boiled over"}
           action={
