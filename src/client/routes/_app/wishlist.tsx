@@ -4,6 +4,7 @@ import type { Wishlist } from "@shared/wishlist";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { type ReactNode, useState } from "react";
+import { ClosedPot } from "@/components/illustrations/ClosedPot";
 import { WishingBowl } from "@/components/illustrations/WishingBowl";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { ActionBar } from "@/components/ui/ActionBar";
@@ -247,7 +248,10 @@ function TheirList({
       {loading && !ideas.length ? (
         <ListSkeleton />
       ) : list.private ? (
-        <Quiet>{name} keeps this list private for now.</Quiet>
+        <div className="flex flex-col items-center gap-1 pt-6 text-center md:items-start md:pt-2 md:text-left">
+          <ClosedPot className="w-28 md:-ml-2" />
+          <Quiet>{name} keeps this list private for now.</Quiet>
+        </div>
       ) : ideas.length ? (
         <WishListView ideas={ideas} label={`${possessive(name)} wishlist`} />
       ) : (
