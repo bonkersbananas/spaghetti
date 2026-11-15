@@ -676,7 +676,7 @@ async function tryNeonAndBlack(page: Page) {
     }
     await settings.getByText("Any colour…").first().click({ force: true });
     await settings.locator(`button[role="radio"][aria-label="${colour}"]`).last().click({ force: true });
-    await settings.getByText("a stand-in to try").waitFor({ timeout: 30_000 });
+    await settings.getByText("a stand-in to try").first().waitFor({ timeout: 30_000 });
     await page.waitForTimeout(300);
   };
   await tryColour("first", "Neon yellow");
@@ -2097,6 +2097,21 @@ export const shots: Shot[] = [
     cleanup: closeSliceSettings,
   },
   {
+    // A pick shows at once: the row, the tile and the status line take the colour while the slice is still running.
+    name: "colour-pick-midslice",
+    path: "/ideas",
+    prepare: async (page) => {
+      const settings = await openSliceSettings(page, { idea: HOTDOG_IDEA, file: HOTDOG });
+      await settings.getByText("Colours", { exact: true }).waitFor();
+      await openColour(page, settings, "first");
+      await settings.getByText("Any colour…").first().click({ force: true });
+      await settings.locator('button[role="radio"][aria-label="Neon yellow"]').last().click({ force: true });
+      await settings.getByText(/^Slicing with/).waitFor({ timeout: 30_000 });
+    },
+    beforeShot: settleSliceSettings,
+    cleanup: closeSliceSettings,
+  },
+  {
     // The zipper pull in neon yellow and black: the Colours rows, each a stand-in in its colour.
     name: "zipper-colours",
     path: "/ideas",
@@ -2148,7 +2163,7 @@ export const shots: Shot[] = [
       const group = settings.getByText("Any colour…");
       await group.click({ force: true });
       await settings.locator('button[role="radio"][aria-label="Neon yellow"]').click({ force: true });
-      await settings.getByText("a stand-in to try").waitFor({ timeout: 30_000 });
+      await settings.getByText("a stand-in to try").first().waitFor({ timeout: 30_000 });
       await settings
         .getByRole("radiogroup", { name: "Any colour" })
         .evaluate((element) => element.scrollIntoView({ block: "center", behavior: "instant" }));
@@ -2167,7 +2182,7 @@ export const shots: Shot[] = [
       await settings.getByText("Any colour…").first().click({ force: true });
       await settings.getByRole("radio", { name: "Neon yellow" }).click({ force: true });
       // The pick is kept: the row says so once the settings have it.
-      await settings.getByText("a stand-in to try").waitFor({ timeout: 30_000 });
+      await settings.getByText("a stand-in to try").first().waitFor({ timeout: 30_000 });
     },
     beforeShot: settleSliceSettings,
     cleanup: closeSliceSettings,
