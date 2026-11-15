@@ -95,6 +95,8 @@ No item is a defect found in slicer-rs. In the order to look at them:
 
 ## Checklist for the person at the printer
 
+**Print the single-filament cube first, on the main (left) nozzle.** The two-colour test waits until the nozzle grouping question ([above](#which-nozzle)) is decided: do not print a two-colour file from the app before then.
+
 Before: send only a file made by the app (not `spaghetti-slicer` without a setup). For the first print choose the cube, one filament, PLA Bambu PLA Basic on the Textured PEI plate (the file asks for bed 55 °C and nozzle 220 °C). In Bambu Studio's or the printer's dialog check the filament matches the loaded slot and the timelapse is **off**. Clear the plate and the chamber.
 
 The first minute (the start G-code, about 4 to 6 minutes before the first layer: homing, the nozzle wipe, bed levelling and the purge line):
