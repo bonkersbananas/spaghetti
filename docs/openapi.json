@@ -18690,6 +18690,11 @@
                     "minimum": 1,
                     "maximum": 1000
                   },
+                  "fitCopies": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 99
+                  },
                   "device": {
                     "type": "string",
                     "enum": [
@@ -18851,6 +18856,12 @@
                       "height"
                     ],
                     "additionalProperties": false
+                  },
+                  "copies": {
+                    "description": "How many copies of the plate's objects this slice printed, each its own object; absent: one.",
+                    "type": "integer",
+                    "minimum": 2,
+                    "maximum": 99
                   },
                   "ms": {
                     "description": "How long the slicer took on the device that sliced it, in ms.",
@@ -19077,6 +19088,11 @@
                         "minimum": 1,
                         "maximum": 1000
                       },
+                      "fitCopies": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 99
+                      },
                       "device": {
                         "type": "string",
                         "enum": [
@@ -19238,6 +19254,12 @@
                           "height"
                         ],
                         "additionalProperties": false
+                      },
+                      "copies": {
+                        "description": "How many copies of the plate's objects this slice printed, each its own object; absent: one.",
+                        "type": "integer",
+                        "minimum": 2,
+                        "maximum": 99
                       },
                       "ms": {
                         "description": "How long the slicer took on the device that sliced it, in ms.",
@@ -20552,6 +20574,20 @@
             "type": "integer",
             "minimum": 1,
             "maximum": 99
+          },
+          "copies": {
+            "description": "How many copies of the plate's objects print together, each its own object: 2 to 99, or \"fit\" for as many as the plate takes. Absent: one.",
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 2,
+                "maximum": 99
+              },
+              {
+                "type": "string",
+                "const": "fit"
+              }
+            ]
           },
           "scale": {
             "type": "integer",

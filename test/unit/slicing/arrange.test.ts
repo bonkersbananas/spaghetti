@@ -1,5 +1,15 @@
 import { describe, expect, it } from "vitest";
-import { arrangeOnPlate, boundsOf, fitsAsPlaced, plateArea, unionOf } from "../../../src/shared/slicing/arrange.ts";
+import {
+  arrangeOnPlate,
+  boundsOf,
+  copiesFit,
+  copyName,
+  fitsAsPlaced,
+  mostCopies,
+  plateArea,
+  unionOf,
+  withTowerRoom,
+} from "../../../src/shared/slicing/arrange.ts";
 import { box } from "./meshes.ts";
 
 const X2D = plateArea(["0x0", "256x0", "256x256", "0x256"], "261");
@@ -65,5 +75,35 @@ describe("fitsAsPlaced", () => {
     expect(fitsAsPlaced([boundsOf(box([10, 10, 0], [50, 50, 20]))], X2D)).toBe(true);
     expect(fitsAsPlaced([boundsOf(box([240, 10, 0], [270, 50, 20]))], X2D)).toBe(false);
     expect(fitsAsPlaced([boundsOf(box([10, 10, 0], [50, 50, 270]))], X2D)).toBe(false);
+  });
+});
+
+describe("copies", () => {
+  const tag = boundsOf(box([0, 0, 0], [40, 20, 3]));
+
+  it("counts how many copies of a 40 × 20 mm tag fit on the X2D's plate with 6 mm between", () => {
+    // 5 across (6 × 40 + 5 × 6 = 270 > 256), 10 deep (10 × 20 + 9 × 6 = 254).
+    expect(mostCopies([tag], X2D, 99)).toBe(5 * 10);
+    expect(copiesFit([tag], 50, X2D)).toBe(true);
+    expect(copiesFit([tag], 51, X2D)).toBe(false);
+  });
+
+  it("stops at the limit, and says 0 for an object bigger than the plate", () => {
+    expect(mostCopies([boundsOf(box([0, 0, 0], [5, 5, 5]))], X2D, 12)).toBe(12);
+    expect(mostCopies([boundsOf(box([0, 0, 0], [300, 5, 5]))], X2D, 12)).toBe(0);
+  });
+
+  it("keeps room at the right for the prime tower", () => {
+    const room = withTowerRoom(X2D, 35);
+    expect(room.maxX).toBe(256 - 35 - 16);
+    expect(mostCopies([tag], room, 99)).toBeLessThan(50);
+    const copies = Array.from({ length: 12 }, () => ({ positions: box([0, 0, 0], [40, 20, 3]) }));
+    expect(arrangeOnPlate(copies, room)).toBeNull();
+    for (const copy of copies) expect(boundsOf(copy.positions).max[0]).toBeLessThanOrEqual(room.maxX);
+  });
+
+  it("names the copies after the first", () => {
+    expect(copyName("Key tag", 1)).toBe("Key tag");
+    expect(copyName("Key tag", 3)).toBe("Key tag (3)");
   });
 });

@@ -152,3 +152,35 @@ export function arrangeOnPlate(objects: { positions: Float32Array }[], plate: Pl
   }
   return null;
 }
+
+/** A box as the two corner points of a mesh: enough for the arrangement to measure. */
+function boxPositions(box: Box): Float32Array {
+  return new Float32Array([...box.min, ...box.max]);
+}
+
+/** Whether `count` copies of objects with these boxes fit on the plate together. */
+export function copiesFit(boxes: Box[], count: number, plate: PlateArea): boolean {
+  const all = Array.from({ length: count }, () => boxes.map((box) => ({ positions: boxPositions(box) }))).flat();
+  return !arrangeOnPlate(all, plate);
+}
+
+/** The most copies of these objects that fit on the plate together, at most `limit`; 0 when even one doesn't. */
+export function mostCopies(boxes: Box[], plate: PlateArea, limit: number): number {
+  let best = 0;
+  while (best < limit && copiesFit(boxes, best + 1, plate)) best++;
+  return best;
+}
+
+/**
+ * The plate with room kept at its right for the prime tower (its width and a margin each side), so copies never
+ * stand where the tower does.
+ */
+export function withTowerRoom(plate: PlateArea, towerWidth: number): PlateArea {
+  return { ...plate, maxX: plate.maxX - towerWidth - TOWER_ROOM };
+}
+
+/** Space between the tower and the copies beside it, and the tower and the plate's edge, in mm. */
+export const TOWER_ROOM = 16;
+
+/** The name of copy number `n` (from 1, the first keeps the object's own): "Key tag (2)". */
+export const copyName = (name: string, n: number) => (n <= 1 ? name : `${name} (${n})`);

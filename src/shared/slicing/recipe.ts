@@ -106,7 +106,14 @@ function recipeOverBase(recipe: SlicingRecipe, base: SlicingSettings, spools: re
   const filaments = pantryFilaments(recipeFilaments(recipe), recipe, base.filaments, spools);
   if (recipe.slicing) {
     return normalizeSlicing(
-      { ...recipe.slicing, filaments, scale: base.scale, orientation: base.orientation, slicer: base.slicer },
+      {
+        ...recipe.slicing,
+        filaments,
+        copies: recipe.slicing.copies ?? base.copies,
+        scale: base.scale,
+        orientation: base.orientation,
+        slicer: base.slicer,
+      },
       base,
     );
   }

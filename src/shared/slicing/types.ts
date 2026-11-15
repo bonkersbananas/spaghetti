@@ -114,6 +114,8 @@ export interface FileSlice {
   dimensions?: [number, number, number];
   /** The printer's build volume in mm (x, y, z), to say what it takes. */
   volume?: [number, number, number];
+  /** For "too-many" with copies: how many copies of the plate's objects would fit. */
+  fitCopies?: number;
   /** The largest scale (percent, whole) at which it fits, for "Scale to 80 % and slice". */
   fitScale?: number;
   /** For "memory": what ran out. A laptop or desktop finishes what a phone couldn't. */
@@ -128,6 +130,8 @@ export interface FileSlice {
   originalPicture?: boolean;
   /** A 3MF project with several plates: which one this is of how many, and how tall its tallest object stands (mm). */
   plate?: { index: number; count: number; height: number };
+  /** How many copies of the plate's objects it printed together (2 or more; "as many as fit" is a number here). */
+  copies?: number;
   /** How long the slicer took, in ms, on the device that sliced it: from the placed model to the packed file. */
   ms?: number;
   /** When it was sliced or failed (epoch ms). */

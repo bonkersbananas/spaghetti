@@ -4,7 +4,14 @@ import { isStlName, slicedName } from "@shared/slicing/files.ts";
 import { changeWords, modelSlicing, slicingAhead, slicingOfSlice } from "@shared/slicing/model.ts";
 import { workshopDefaults } from "@shared/slicing/pantry.ts";
 import { recipesFor } from "@shared/slicing/recipe.ts";
-import { type SlicingSettings, sameSlicing, slicingFor, slicingSummary, withNozzle } from "@shared/slicing/settings.ts";
+import {
+  type Copies,
+  type SlicingSettings,
+  sameSlicing,
+  slicingFor,
+  slicingSummary,
+  withNozzle,
+} from "@shared/slicing/settings.ts";
 import { nameParts, slicedBy } from "@shared/slicing/slicers.ts";
 import type { FileSlice, SliceOptions } from "@shared/slicing/types.ts";
 import {
@@ -31,6 +38,7 @@ import {
 import { BeforeAfter, type Change } from "@/components/ui/BeforeAfter";
 import { Button } from "@/components/ui/Button";
 import { Caution } from "@/components/ui/Caution";
+import { CopiesRow } from "@/components/ui/CopiesRow";
 import { NextIcon, SettingsIcon, UndoIcon } from "@/components/ui/icons";
 import { Kbd } from "@/components/ui/Kbd";
 import { MetaList } from "@/components/ui/MetaList";
@@ -152,6 +160,12 @@ export function modelState(
 
 /** The one thing that helps a slice that failed, if there is one: a change of settings, or none to try again. */
 export function remedy(slice: FileSlice, phone: boolean): { label: string; change: SliceOptions } | null {
+  if (slice.fitCopies && slice.problem === "too-many") {
+    return {
+      label: slice.fitCopies > 1 ? `Only ${slice.fitCopies} fit: slice ${slice.fitCopies}` : "Only one fits: slice one",
+      change: { copies: slice.fitCopies > 1 ? slice.fitCopies : undefined },
+    };
+  }
   if (slice.fitScale && (slice.problem === "too-big" || slice.problem === "too-tall" || slice.problem === "too-many")) {
     return { label: `Scale to ${slice.fitScale}% and slice`, change: { scale: slice.fitScale } };
   }
@@ -161,11 +175,30 @@ export function remedy(slice: FileSlice, phone: boolean): { label: string; chang
 }
 
 /** "About 36 min · 10.6 g": what a sliced model's card leads with. */
-export function sliceLead(prefill: Pick<AttemptSettings, "estimatedMinutes" | "weightGrams"> | undefined): string[] {
+export function sliceLead(
+  prefill: Pick<AttemptSettings, "estimatedMinutes" | "weightGrams"> | undefined,
+  copies?: number,
+): string[] {
   return [
+    copies && copies > 1 ? `× ${copies}` : "",
     prefill?.estimatedMinutes !== undefined ? `About ${formatMinutes(prefill.estimatedMinutes)}` : "",
     prefill?.weightGrams !== undefined ? grams(prefill.weightGrams) : "",
   ].filter(Boolean);
+}
+
+/** "About 21 min · 28 g each": what one of the copies takes, a plate's figures over how many there are. */
+export function perPiece(
+  prefill: Pick<AttemptSettings, "estimatedMinutes" | "weightGrams"> | undefined,
+  copies?: number,
+): string {
+  if (!copies || copies < 2) return "";
+  return [
+    prefill?.estimatedMinutes !== undefined ? `About ${formatMinutes(prefill.estimatedMinutes / copies)}` : "",
+    prefill?.weightGrams !== undefined ? grams(Math.round((prefill.weightGrams / copies) * 10) / 10) : "",
+  ]
+    .filter(Boolean)
+    .join(" · ")
+    .concat(prefill?.estimatedMinutes !== undefined || prefill?.weightGrams !== undefined ? " each" : "");
 }
 
 const grams = (value: number) => `${value.toLocaleString("en", { maximumFractionDigits: 1 })} g`;
@@ -628,7 +661,10 @@ export function ModelCard({
         {change && !change.failed
           ? [plateNote ?? changeSentence(change, changed)]
           : details
-            ? [<NamesWhole key="by" words={slicedBy(slice)} />]
+            ? [
+                ...(perPiece(prefill, slice.copies) ? [perPiece(prefill, slice.copies)] : []),
+                <NamesWhole key="by" words={slicedBy(slice)} />,
+              ]
             : slicedPieces(slice)}
       </MetaList>
     ) : null;
@@ -637,7 +673,7 @@ export function ModelCard({
     <FileCard
       name={name}
       thumbSrc={thumbSrc}
-      lead={slice && !compact && !figures.length ? sliceLead(prefill) : undefined}
+      lead={slice && !compact && !figures.length ? sliceLead(prefill, slice.copies) : undefined}
       leadNode={slice && !compact && figures.length ? <BeforeAfter changes={figures} size="md" /> : undefined}
       leadStale={again}
       // A story card says only who sliced it (its attempt's line says the rest): a button that opens the settings, on
@@ -680,9 +716,12 @@ export function SliceResult({
   prefill,
   phone,
   plateNote,
+  copies,
   ...actions
 }: Omit<ModelActions, "settings"> & {
   state: ModelState;
+  /** The copies asked for, and how to change them: a stepper above the figures (a model's, not the styleguide's plain ones). */
+  copies?: { value: Copies | undefined; onChange: (next: Copies | undefined) => void };
   /** The last change was to another plate: its own figures, not a before and after (see ModelCard). */
   plateNote?: string;
   thumbSrc?: string;
@@ -691,22 +730,35 @@ export function SliceResult({
 }) {
   const change = state.kind === "sliced" ? state.change : undefined;
   const figures = change && !plateNote ? changeFigures(change) : [];
-  const lead = state.kind === "sliced" ? sliceLead(prefill) : [];
+  const made = state.kind === "sliced" ? state.slice.copies : undefined;
+  const lead = state.kind === "sliced" ? sliceLead(prefill, made) : [];
+  const each = state.kind === "sliced" ? perPiece(prefill, made) : "";
   // Sliced again, the figures are the slice being replaced: quieter, so they don't read as the new settings'.
   const stale = state.kind === "sliced" && !!state.again;
   return (
     // A tray of its own, apart from the choices: what they give.
-    <div className="bg-ink/4 flex items-start gap-3 rounded-lg p-2.5">
-      <PlateThumb src={thumbSrc} alt="The plate, as sliced" className="size-12" />
-      <div className="flex min-w-0 flex-1 flex-col items-start gap-1 self-center">
-        {figures.length > 0 ? (
-          <BeforeAfter changes={figures} size="md" />
-        ) : lead.length > 0 ? (
-          <MetaList className={cn("text-body tabular font-semibold", stale ? "text-ink-faint" : "text-ink")}>
-            {lead}
-          </MetaList>
-        ) : null}
-        <ModelStatus state={state} phone={phone} quiet {...actions} />
+    <div className="bg-ink/4 flex flex-col gap-2.5 rounded-lg p-2.5">
+      {copies && (
+        <CopiesRow
+          value={copies.value}
+          {...(made ? { made } : {})}
+          onChange={copies.onChange}
+          disabled={state.kind === "saving"}
+        />
+      )}
+      <div className="flex items-start gap-3">
+        <PlateThumb src={thumbSrc} alt="The plate, as sliced" className="size-12" />
+        <div className="flex min-w-0 flex-1 flex-col items-start gap-1 self-center">
+          {figures.length > 0 ? (
+            <BeforeAfter changes={figures} size="md" />
+          ) : lead.length > 0 ? (
+            <MetaList className={cn("text-body tabular font-semibold", stale ? "text-ink-faint" : "text-ink")}>
+              {lead}
+            </MetaList>
+          ) : null}
+          {each && !stale && <p className="text-small text-ink-soft tabular">{each}</p>}
+          <ModelStatus state={state} phone={phone} quiet {...actions} />
+        </div>
       </div>
     </div>
   );
@@ -927,6 +979,10 @@ export default function ModelFileCard({
                 prefill={prefill}
                 phone
                 plateNote={plateNote}
+                copies={{
+                  value: settings.copies,
+                  onChange: (next) => change_(slicingFor({ copies: next }, settings)),
+                }}
                 {...actions}
               />
             }
