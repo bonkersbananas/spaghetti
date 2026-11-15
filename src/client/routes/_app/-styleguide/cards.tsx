@@ -118,6 +118,33 @@ export function CardSection() {
           <MiniCard link={{ to: "/styleguide" }} note="Hook for the bike helmet" />
           <MiniCard link={{ to: "/styleguide" }} photo={{ src: planterPhoto, alt: "A green planter" }} />
         </ul>
+        <Label>
+          Mini cards with news, three across on a phone (`fill`): the title and one quiet line for what happened, as in
+          "Since Thursday"
+        </Label>
+        <ul className="grid max-w-sm grid-cols-3 gap-3 md:flex md:max-w-none">
+          <MiniCard
+            fill
+            link={{ to: "/styleguide" }}
+            photo={{ src: dragonPhoto, alt: "A red articulated dragon on the print bed" }}
+            title="Articulated dragon"
+            sub="worked"
+          />
+          <MiniCard
+            fill
+            link={{ to: "/styleguide" }}
+            photo={{ src: vasePhoto, alt: "A gold silk-PLA vase" }}
+            title="Spiral vase"
+            sub="spaghetti, printing again"
+          />
+          <MiniCard
+            fill
+            link={{ to: "/styleguide" }}
+            note="Hook for the bike helmet"
+            title="Helmet hook"
+            sub="captured"
+          />
+        </ul>
       </div>
       <div className="mt-10">
         <Label>

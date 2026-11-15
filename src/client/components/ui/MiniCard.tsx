@@ -27,6 +27,10 @@ interface MiniCardProps {
   title?: string;
   /** Under the cover when there is no title to show (as on Card): the time. */
   meta?: string;
+  /** One quiet line under the title: what happened to it ("worked"). */
+  sub?: string;
+  /** Fill its cell on a phone (three across a grid) instead of the strip's fixed width. */
+  fill?: boolean;
   /** Laid over the photo's top-right corner (the card's menu button). A link can't hold a button, so it is a sibling. */
   corner?: ReactNode;
   landing?: boolean;
@@ -41,13 +45,31 @@ interface MiniCardProps {
  * A small card for a strip: the cover photo, square (from xl a 7:5 box, wider but no taller), with its title (two lines at most) under it, about 7 rem wide.
  * It is the compact sibling of Card, for rows that scroll sideways (Up next on phones) and give way to what is below.
  */
-export function MiniCard({ link, photo, note, title, corner, landing, id, drag, meta, ref, className }: MiniCardProps) {
+export function MiniCard({
+  link,
+  photo,
+  note,
+  title,
+  sub,
+  fill,
+  corner,
+  landing,
+  id,
+  drag,
+  meta,
+  ref,
+  className,
+}: MiniCardProps) {
   const heading = title || (photo ? note : undefined);
   return (
     <m.li
       {...useReflow(landing)}
       ref={ref}
-      className={cn("group/mini relative w-[6.125rem] shrink-0 snap-start list-none md:w-32 xl:w-44", className)}
+      className={cn(
+        "group/mini relative shrink-0 snap-start list-none md:w-32 xl:w-44",
+        fill ? "w-full" : "w-[6.125rem]",
+        className,
+      )}
     >
       {/* biome-ignore lint/a11y/noStaticElementInteractions: dragging is a mouse extra; the card's menu has Move up and Move down for keyboards and phones. */}
       <div
@@ -122,6 +144,7 @@ export function MiniCard({ link, photo, note, title, corner, landing, id, drag, 
               ) : (
                 <p className="text-small text-ink-faint min-h-[2lh] leading-snug">{meta}</p>
               )}
+              {sub && heading && <p className="text-small text-ink-faint line-clamp-2 leading-snug">{sub}</p>}
             </div>
           )}
         </Link>

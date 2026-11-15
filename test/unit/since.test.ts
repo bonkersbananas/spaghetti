@@ -38,7 +38,7 @@ describe("catchUp", () => {
 
   it("counts only the other person's entries since then, in a sentence", () => {
     const result = catchUp(entries, items, { me: "me", from: at(10), name: "Sam" });
-    expect(result?.sentence).toBe("Sam had 1 spaghetti and added 2 ideas.");
+    expect(result?.sentence).toBe("Sam printed 1 (1 spaghetti) and captured 2 ideas.");
     expect(result?.total).toBe(3);
     // A build finished is credited to its creator by the journal, so it is not counted for anyone.
     expect(result?.lines).toHaveLength(3);
@@ -55,6 +55,25 @@ describe("catchUp", () => {
     const result = catchUp(logged, prints, { me: "me", from: at(10), name: "Sam" });
     // Sam logged the hook but you finished it: yours. You logged the clip and Sam finished it: his.
     expect(result?.lines.map((line) => line.itemId)).toEqual(["q"]);
+  });
+
+  it("shows each thing once, with its latest news", () => {
+    const hook = {
+      ...item("h", "Hook", "building"),
+      attempts: [
+        { id: "h1", outcome: "failed", createdBy: "sam", finishedBy: "sam" },
+        { id: "h2", outcome: null, createdBy: "sam", finishedBy: null },
+      ],
+    } as unknown as Item;
+    const map = new Map([["h", hook]]);
+    const result = catchUp(
+      [entry("attempt", "h", at(14), "sam", "h2"), entry("attempt", "h", at(13), "sam", "h1")],
+      map,
+      { me: "me", from: at(10), name: "Sam" },
+    );
+    expect(result?.lines).toHaveLength(1);
+    expect(result?.lines[0]?.what).toBe("spaghetti, printing again");
+    expect(result?.sentence).toBe("Sam printed 1 (1 spaghetti).");
   });
 
   it("is nothing when they did nothing", () => {

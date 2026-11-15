@@ -25,11 +25,11 @@ export function sinceLabel(from: number, now: number): string {
 }
 
 export interface SinceLine {
-  key: string;
   itemId: string;
+  item: Item;
   stage: Item["stage"];
   title: string;
-  /** "worked", "spaghetti", "captured"… */
+  /** The thing's latest news: "worked", "spaghetti", "spaghetti, printing again", "captured". */
   what: string;
 }
 
@@ -45,22 +45,17 @@ function firstWords(note: string, max = 40): string {
 
 const count = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 
-function listOf(parts: string[]): string {
-  if (parts.length <= 1) return parts[0] ?? "";
-  return `${parts.slice(0, -1).join(", ")} and ${parts.at(-1)}`;
-}
-
 /**
- * What the other person did since `from`, in a sentence ("had 1 spaghetti and added 2 ideas") and as
- * the newest few lines to open. Their entries only: yours you know.
+ * What the other person did since `from`: a short sentence ("Sam printed 6 (2 worked, 2 partly, 2 spaghetti)
+ * and captured 3 ideas.") and the things themselves, each once with its latest news, newest first. Their entries
+ * only: yours you know. The journal credits a build's start, finish and shelving to whoever captured it, not whoever
+ * did it, so only ideas and attempts say who (an attempt: whoever gave it its outcome, else who logged it).
  */
 export function catchUp(
   entries: readonly JournalEntry[],
   items: ReadonlyMap<string, Item>,
   { me, from, name, lines = 3 }: { me: string; from: number; name: string; lines?: number },
 ): { sentence: string; lines: SinceLine[]; total: number } | null {
-  // The journal credits a build's start, finish and shelving to whoever captured it, not whoever did it, so only
-  // ideas and attempts say who: an attempt by whoever gave it its outcome (else who logged it).
   const doneBy = (entry: JournalEntry) =>
     entry.kind === "attempt"
       ? (items.get(entry.itemId)?.attempts.find((a) => a.id === entry.attemptId)?.finishedBy ?? entry.by)
@@ -73,8 +68,10 @@ export function catchUp(
       items.has(entry.itemId),
   );
   if (theirs.length === 0) return null;
-  const tally = { worked: 0, failed: 0, partly: 0, printing: 0, ideas: 0 };
-  const rows: SinceLine[] = [];
+  const tally = { worked: 0, partly: 0, failed: 0, printing: 0, ideas: 0 };
+  const newsOf = new Map<string, string[]>();
+  const order: string[] = [];
+  // Newest first, as the journal gives them.
   for (const entry of theirs) {
     const item = items.get(entry.itemId);
     if (!item) continue;
@@ -85,22 +82,32 @@ export function catchUp(
     else if (outcome === "failed") tally.failed++, (what = "spaghetti");
     else if (outcome === "partial") tally.partly++, (what = "partly");
     else tally.printing++, (what = "printing");
-    rows.push({
-      key: entry.key,
-      itemId: item.id,
-      stage: item.stage,
-      title: item.title || firstWords(item.note),
-      what,
-    });
+    if (!newsOf.has(item.id)) {
+      newsOf.set(item.id, []);
+      order.push(item.id);
+    }
+    newsOf.get(item.id)?.push(what);
   }
-  const parts = [
-    tally.worked && `got ${count(tally.worked, "print")} that worked`,
-    tally.failed && `had ${count(tally.failed, "spaghetti", "spaghettis")}`,
-    tally.partly && `had ${count(tally.partly, "print")} come out partly`,
-    tally.printing && `started ${count(tally.printing, "print")}`,
-    tally.ideas && `added ${count(tally.ideas, "idea")}`,
-  ].filter((part): part is string => !!part);
-  // Three things read in a breath; the rest is in the list and the journal.
-  const said = parts.length > 3 ? [...parts.slice(0, 3), "more besides"] : parts;
-  return { sentence: `${name} ${listOf(said)}.`, lines: rows.slice(0, lines), total: rows.length };
+  // Prints still on the bed are in Now: the sentence counts what has an answer.
+  const prints = tally.worked + tally.partly + tally.failed;
+  const breakdown = [
+    tally.worked && `${tally.worked} worked`,
+    tally.partly && `${tally.partly} partly`,
+    tally.failed && `${tally.failed} spaghetti`,
+  ].filter(Boolean);
+  const printed = prints ? `printed ${prints} (${breakdown.join(", ")})` : "";
+  const captured = tally.ideas ? `captured ${count(tally.ideas, "idea")}` : "";
+  const sentence = `${name} ${[printed, captured].filter(Boolean).join(" and ")}.`;
+  const rows: SinceLine[] = [];
+  for (const id of order) {
+    const item = items.get(id);
+    const news = newsOf.get(id);
+    if (!item || !news) continue;
+    // The newest news; a print started again after an earlier answer says so ("spaghetti, printing again").
+    const [latest = "captured", ...earlier] = news;
+    const before = earlier.find((what) => what !== "printing" && what !== "captured");
+    const what = latest === "printing" && before ? `${before}, printing again` : latest;
+    rows.push({ itemId: id, item, stage: item.stage, title: item.title || firstWords(item.note), what });
+  }
+  return { sentence, lines: rows.slice(0, lines), total: rows.length };
 }

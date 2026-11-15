@@ -1,12 +1,14 @@
 import { displayName } from "@shared/people";
 import { catchUp, sinceLabel } from "@shared/since";
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
-import { Link } from "@tanstack/react-router";
 import { useEffect, useMemo } from "react";
-import { BuildsIcon, IdeasIcon } from "@/components/ui/icons";
-import { QuietRowContent, quietRowClass } from "@/components/ui/QuietRow";
+import { photoAlt, plateAlt, plateCover } from "@/components/ideas/IdeaCard";
+import { MiniCard } from "@/components/ui/MiniCard";
+import { Reflow } from "@/components/ui/Reflow";
 import { Section } from "@/components/ui/Section";
+import { heroPhoto, newestPhoto } from "@/lib/builds";
 import { journalQuery } from "@/lib/journal";
+import { fileThumbSrc, photoSrc } from "@/lib/previews";
 import { peopleQuery, sessionQuery } from "@/lib/queries";
 import { useSinceFrom } from "@/lib/since";
 
@@ -16,8 +18,9 @@ const MAX_PAGES = 5;
 
 /**
  * "Since Thursday": after a few days away, what the other person did, at the top of Today (desktop) and of the
- * phone's Journal: one sentence, then the newest few things to open. It comes after a visit that followed a long
- * away and goes quiet half a day later; nothing when they did nothing. Their comments are Today's comment line.
+ * phone's Journal: a short sentence, then the things themselves as photo cards, each once with its latest news.
+ * It comes after a visit that followed a long away and goes quiet half a day later; nothing when they did nothing.
+ * Their comments are Today's comment line.
  */
 export default function SinceBlock() {
   const from = useSinceFrom();
@@ -31,15 +34,12 @@ export default function SinceBlock() {
   const reaches = oldest !== undefined && from !== null && oldest <= from;
   const enough = reaches || (pages?.length ?? 0) >= MAX_PAGES;
   useEffect(() => {
-    if (from !== null && pages && !enough && hasNextPage && !isFetchingNextPage && !isFetchNextPageError)
+    if (from !== null && pages && !enough && hasNextPage && !isFetchingNextPage && !isFetchNextPageError) {
       void fetchNextPage();
+    }
   }, [from, pages, enough, hasNextPage, isFetchingNextPage, isFetchNextPageError, fetchNextPage]);
   const page = useMemo(
-    () =>
-      pages && {
-        entries: pages.flatMap((p) => p.entries),
-        items: pages.flatMap((p) => p.items),
-      },
+    () => pages && { entries: pages.flatMap((p) => p.entries), items: pages.flatMap((p) => p.items) },
     [pages],
   );
   const other = people?.find((person) => person.id !== me?.id);
@@ -53,28 +53,43 @@ export default function SinceBlock() {
   const cut = !enough && hasNextPage;
   return (
     <Section id="since" title={sinceLabel(from, Date.now())} size="overline" className="mb-8">
-      <p className="font-display text-title text-ink mb-2">{summary.sentence}</p>
-      <div className="-my-1 flex flex-col">
-        {summary.lines.map((line) => {
-          const row = (
-            <QuietRowContent key={line.key} icon={line.stage === "idea" ? IdeasIcon : BuildsIcon}>
-              <span className="text-ink font-semibold">{line.title || "Untitled"}</span>
-              <span> · {line.what}</span>
-            </QuietRowContent>
-          );
-          return line.stage === "idea" ? (
-            <Link key={line.key} to="/ideas/$ideaId" params={{ ideaId: line.itemId }} className={quietRowClass}>
-              {row}
-            </Link>
-          ) : (
-            <Link key={line.key} to="/builds/$buildId" params={{ buildId: line.itemId }} className={quietRowClass}>
-              {row}
-            </Link>
-          );
-        })}
-      </div>
+      <p className="font-display text-lead text-ink md:text-title mb-3">{summary.sentence}</p>
+      <ul className="relative grid grid-cols-3 gap-3 md:flex">
+        <Reflow>
+          {summary.lines.map((line) => {
+            const item = line.item;
+            const cover =
+              line.stage === "idea" ? item.photos[0] : (heroPhoto(item as never) ?? newestPhoto(item as never));
+            // A build with no photo yet shows its newest plate picture, as the cards do.
+            const plate = cover
+              ? undefined
+              : (plateCover(item as never) ?? item.attempts.findLast((attempt) => attempt.file)?.file);
+            return (
+              <MiniCard
+                key={line.itemId}
+                fill
+                link={
+                  line.stage === "idea"
+                    ? { to: "/ideas/$ideaId", params: { ideaId: line.itemId } }
+                    : { to: "/builds/$buildId", params: { buildId: line.itemId } }
+                }
+                photo={
+                  cover
+                    ? { src: photoSrc(cover.id, "thumb"), alt: photoAlt(item as never), color: cover.color }
+                    : plate
+                      ? { src: fileThumbSrc(plate), alt: plateAlt(item as never), fit: "contain" }
+                      : undefined
+                }
+                note={line.stage === "idea" ? item.note : undefined}
+                title={line.title}
+                sub={line.what}
+              />
+            );
+          })}
+        </Reflow>
+      </ul>
       {(more > 0 || cut) && (
-        <p className="text-small text-ink-faint mt-1">
+        <p className="text-small text-ink-faint mt-2">
           {cut ? "and more in the journal" : `and ${more} more in the journal`}
         </p>
       )}
