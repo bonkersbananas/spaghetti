@@ -36,9 +36,22 @@ export const reportReachable = () => {
   if (navigator.onLine) set(true);
 };
 /** A request failed before it reached the server. */
-export const reportUnreachable = () => set(false);
+export const reportUnreachable = () => {
+  // Requests the browser cancels as the page goes away (a reload, a swipe off a phone) fail too, but that isn't the
+  // connection: counting them blocked the taps flushed on pagehide ("Waiting for the connection") and lost them.
+  if (!leaving) set(false);
+};
+
+let leaving = false;
 
 if (typeof window !== "undefined") {
+  window.addEventListener("pagehide", () => {
+    leaving = true;
+  });
+  // A page restored from the back/forward cache is live again.
+  window.addEventListener("pageshow", () => {
+    leaving = false;
+  });
   window.addEventListener("online", () => set(true));
   window.addEventListener("offline", () => set(false));
   if (!online) scheduleProbe();

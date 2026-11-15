@@ -18,20 +18,36 @@ function endOfQueue(queryClient: QueryClient): number {
   return ideas.reduce((last, idea) => Math.max(last, idea.upNext ?? 0), 0) + 1;
 }
 
-/** Sends a place in the queue (true: the end, null: off it, a number: that place) and keeps the server's answer. */
-async function sendUpNext(
+/** Queue changes still on their way: a reorder waits for them, or the server would order places it doesn't have yet. */
+const sending = new Set<Promise<unknown>>();
+
+/**
+ * Sends a place in the queue (true: the end, null: off it, a number: that place) and keeps the server's answer,
+ * unless the place was moved again meanwhile (`shown` is what this change put in the cache): a late answer must not
+ * undo a reorder.
+ */
+function sendUpNext(
   queryClient: QueryClient,
   id: string,
   upNext: boolean | number | null,
   before: number | null,
+  shown: number | null,
 ) {
-  try {
-    const { item } = await api<ItemResponse>(`/items/${id}`, { method: "PATCH", json: { upNext } });
-    patchCachedItem(queryClient, id, (cached) => ({ ...cached, upNext: item.upNext, updatedAt: item.updatedAt }));
-  } catch {
-    patchCachedItem(queryClient, id, (cached) => ({ ...cached, upNext: before }));
-    toast.error("Couldn't save that change", "It's back the way it was. Try again in a moment.");
-  }
+  const job = (async () => {
+    try {
+      const { item } = await api<ItemResponse>(`/items/${id}`, { method: "PATCH", json: { upNext } });
+      patchCachedItem(queryClient, id, (cached) => ({
+        ...cached,
+        upNext: cached.upNext === shown ? item.upNext : cached.upNext,
+        updatedAt: item.updatedAt,
+      }));
+    } catch {
+      patchCachedItem(queryClient, id, (cached) => ({ ...cached, upNext: before }));
+      toast.error("Couldn't save that change", "It's back the way it was. Try again in a moment.");
+    }
+  })();
+  sending.add(job);
+  void job.finally(() => sending.delete(job));
 }
 
 /** Puts an idea in the Up next queue (at the end) or takes it off, at once, with an undo. */
@@ -41,12 +57,12 @@ export function setUpNext(queryClient: QueryClient, item: Pick<ItemView, "id" | 
   if (on === (before !== null)) return;
   const place = on ? endOfQueue(queryClient) : null;
   patchCachedItem(queryClient, item.id, (cached) => ({ ...cached, upNext: place }));
-  void sendUpNext(queryClient, item.id, on ? true : null, before);
+  sendUpNext(queryClient, item.id, on ? true : null, before, place);
   toast.undo(on ? "Up next" : "Off the Up next list", {
     description: on ? "At the end of the queue. Move it up whenever." : undefined,
     onUndo: () => {
       patchCachedItem(queryClient, item.id, (cached) => ({ ...cached, upNext: before }));
-      void sendUpNext(queryClient, item.id, before ?? null, place);
+      sendUpNext(queryClient, item.id, before ?? null, place, before);
     },
   });
 }
@@ -58,6 +74,7 @@ export async function reorderUpNext(queryClient: QueryClient, ids: string[]) {
   for (const [index, id] of ids.entries())
     patchCachedItem(queryClient, id, (cached) => ({ ...cached, upNext: index + 1 }));
   try {
+    await Promise.all(sending);
     await api<ItemsResponse>("/items/up-next/order", { method: "PUT", json: { ids } });
   } catch {
     if (before) queryClient.setQueryData(itemKeys.list("ideas"), before);

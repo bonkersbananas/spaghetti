@@ -282,10 +282,16 @@ test("running-low spools go on the shopping list in one tap, and only once", { t
   await low.getByRole("button", { name: "Add to shopping list" }).click();
   await expect(low.getByRole("button", { name: "On the shopping list" })).toBeVisible();
 
-  const { shoppingItems } = await (await page.request.get("/api/shopping-items")).json();
+  // The button rests as soon as every spool shows on the list; the second one may still be on its way to the server.
   const mine = ["Sunflower yellow, PLA", "Teal, PETG"];
-  const names = shoppingItems.map((item: { name: string }) => item.name);
-  expect(names.filter((name: string) => mine.includes(name)).sort()).toEqual(mine);
+  const onServer = async () => {
+    const { shoppingItems } = await (await page.request.get("/api/shopping-items")).json();
+    return shoppingItems
+      .map((item: { name: string }) => item.name)
+      .filter((name: string) => mine.includes(name))
+      .sort();
+  };
+  await expect.poll(onServer).toEqual(mine);
 
   // Everything is on the list now: the button says so and stays quiet, so a second tap can't double it.
   await expect(low.getByRole("button", { name: "On the shopping list" })).toBeDisabled();
