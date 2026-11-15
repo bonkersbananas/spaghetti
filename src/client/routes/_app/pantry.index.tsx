@@ -228,7 +228,14 @@ function Pantry() {
       )}
       {!isDesktop && (spools?.length ?? 0) > 0 && (
         <ActionBar>
-          <Button variant="primary" size="lg" icon={PlusIcon} fullWidth disabled={readOnly} onClick={() => openAdd()}>
+          <Button
+            variant="floating"
+            size="lg"
+            icon={PlusIcon}
+            disabled={readOnly}
+            onClick={() => openAdd()}
+            className="mx-auto"
+          >
             Add spool
           </Button>
         </ActionBar>
