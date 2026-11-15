@@ -48,6 +48,7 @@ async function buildWithTugboat(page: Page, printing = false): Promise<string> {
 }
 
 test("opens the 3D view of a sliced file, scrubs its layers and closes with Escape", async ({ page }) => {
+  test.setTimeout(90_000); // the first open reads 317 layers in a worker, slow on a shared runner
   await signIn(page);
   const itemId = await buildWithTugboat(page);
   await page.goto(`/builds/${itemId}`);
