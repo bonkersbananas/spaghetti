@@ -293,16 +293,28 @@ mod tests {
         // In one filament, normal supports in step with the object's layers slice too, as a project may ask.
         assert!(read(&normal(r#", "independent_support_layer_height": "0""#)).is_ok());
         // Without a prime tower Orca changes filament where the nozzle is (`toolchange.rs`), and the supports keep
-        // their own layers; with a smooth timelapse or wrapping detection it prints a tower for one filament too.
+        // their own layers; with a smooth timelapse it prints a tower for one filament too, and with wrapping
+        // detection where the printer has an area for it.
         let untowered = read(r#"{"process": {"enable_prime_tower": "0"}, "filaments": [{}, {}]}"#).unwrap().settings;
         assert_eq!(untowered.for_filaments(2).unsupported(), None);
         assert!(!untowered.for_filaments(2).prime_tower && untowered.for_filaments(2).support.independent_layer_height);
         assert_eq!(untowered.for_filaments(1).unsupported(), None);
         assert_eq!(refused(r#"{"process": {"timelapse_type": "1"}}"#), Some(Error::Unsupported("a smooth timelapse")));
-        assert_eq!(
-            refused(r#"{"process": {"enable_wrapping_detection": "1"}}"#),
-            Some(Error::Unsupported("wrapping detection"))
-        );
+        // Wrapping detection in one filament lifts the nozzle before each layer, where the printer has no G-code or
+        // area for it, as the X2D (gcode.rs); its own G-code, several filaments, whose prime tower it reshapes, and
+        // spiral vase mode don't slice yet.
+        let wrapping = read(r#"{"process": {"enable_wrapping_detection": "1"}, "filaments": [{}, {}]}"#).unwrap();
+        assert!(wrapping.settings.wrapping_detection);
+        assert_eq!(wrapping.settings.for_filaments(1).unsupported(), None);
+        assert_eq!(wrapping.settings.for_filaments(2).unsupported(), Some("wrapping detection"));
+        for json in [
+            r#"{"process": {"enable_wrapping_detection": "1", "spiral_mode": "1"}}"#,
+            r#"{"machine": {"wrapping_detection_gcode": "M1002"}, "process": {"enable_wrapping_detection": "1"}}"#,
+            r#"{"machine": {"wrapping_exclude_area": ["145x310", "256x310", "256x326", "145x326"]},
+                "process": {"enable_wrapping_detection": "1"}}"#,
+        ] {
+            assert_eq!(refused(json), Some(Error::Unsupported("wrapping detection")), "{json}");
+        }
         // Several filaments slice (filaments.rs, toolchange.rs).
         assert!(
             read(r#"{"filaments": [{}, {}]}"#).is_ok_and(|s| s.settings.palette.is_some_and(|p| p.profiles.len() == 2))

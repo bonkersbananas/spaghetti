@@ -206,9 +206,15 @@ pub struct Settings {
     pub skirt_height: usize,
     pub print_sequence: String,
     /// Whether a plate in several filaments prints a prime tower (`enable_prime_tower`), and what makes Orca print
-    /// one for a single filament too (a smooth timelapse, the nozzle's wrapping detection), which this can't.
+    /// one for a single filament too (a smooth timelapse, the nozzle's wrapping detection where the printer has an
+    /// area for it), which this can't.
     pub enable_prime_tower: bool,
     pub tower_for_one: Option<&'static str>,
+    /// The nozzle's wrapping detection (`enable_wrapping_detection`): where the printer has no G-code for it (the
+    /// X2D), Orca only retracts and lifts at once before each layer's first filament (`gcode.rs`); and whether the
+    /// printer has G-code for it (`wrapping_detection_gcode`), which Orca writes there.
+    pub wrapping_detection: bool,
+    pub wrapping_gcode: bool,
     /// How many filaments the plate prints in (0 until `for_filaments` says), and whether a prime tower prints then.
     pub used_filaments: usize,
     pub prime_tower: bool,
@@ -764,11 +770,14 @@ impl Settings {
             enable_prime_tower: p.bool("enable_prime_tower"),
             tower_for_one: if p.text("timelapse_type") == "1" {
                 Some("a smooth timelapse")
-            } else if p.bool("enable_wrapping_detection") {
+            } else if p.bool("enable_wrapping_detection") && p.list("wrapping_exclude_area").len() > 2 {
+                // Where the printer has an area for it.
                 Some("wrapping detection")
             } else {
                 None
             },
+            wrapping_detection: p.bool("enable_wrapping_detection"),
+            wrapping_gcode: !p.text("wrapping_detection_gcode").is_empty(),
             used_filaments: 0,
             prime_tower: false,
             ironing_type: text("ironing_type"),
@@ -975,6 +984,11 @@ impl Settings {
             Some("a raft with several filaments")
         } else if let Some(why) = self.tower_for_one.filter(|_| self.enable_prime_tower) {
             Some(why)
+        } else if self.wrapping_detection && (self.wrapping_gcode || self.used_filaments > 1 || self.spiral_mode) {
+            // The printer's own G-code for it isn't written yet; with several filaments it reshapes the prime tower
+            // (each of its first 20 layers prints one) and lifts before tool changes; and it lifts in spiral vase
+            // mode too.
+            Some("wrapping detection")
         } else if self.print_sequence == "by object" {
             Some("printing one object after another")
         } else if !matches!(
