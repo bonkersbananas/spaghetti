@@ -226,3 +226,26 @@ export function planProject(
   }
   return { filaments: out, rows };
 }
+
+/**
+ * The colour each of a plate's filaments has in the model itself, filament 1 first: for a project its own filament's,
+ * for a model with colours of its own the heaviest colour printed in it (rows come heaviest first, the filaments in the
+ * order their rows first use them). For the 3D view's before and after.
+ */
+export function originalFilamentColours(
+  rows: readonly { hex: string; slot?: number; filament: { spoolId?: string; material: string; colorHex?: string } }[],
+): (string | undefined)[] {
+  const out: (string | undefined)[] = [];
+  if (rows.every((row) => row.slot)) {
+    for (const row of rows) out[(row.slot as number) - 1] = row.hex;
+    return out;
+  }
+  const keys: string[] = [];
+  for (const row of rows) {
+    const key = row.filament.spoolId ?? `${row.filament.material}${row.filament.colorHex}`;
+    let index = keys.indexOf(key);
+    if (index < 0) index = keys.push(key) - 1;
+    out[index] ??= row.hex;
+  }
+  return out;
+}

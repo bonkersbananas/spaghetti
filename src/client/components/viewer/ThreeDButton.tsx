@@ -1,4 +1,5 @@
 import { fileUrl } from "@shared/api";
+import { originalFilamentColours } from "@shared/slicing/colours.ts";
 import { type ComponentType, type ReactNode, useEffect, useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { CubeIcon } from "@/components/ui/icons";
@@ -152,6 +153,9 @@ export function ViewerSheet({
       fill
     >
       <LoadedViewer
+        originalColors={
+          file.kind === "model" && file.slice?.colours ? originalFilamentColours(file.slice.colours) : undefined
+        }
         url={fileUrl(file.id, file.kind === "model" ? "sliced" : "file")}
         fileId={file.id}
         plate={file.plate}

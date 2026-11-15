@@ -54,6 +54,16 @@ test("a model with colours of its own prints each in a filament matched to it, a
   await page.getByRole("radio", { name: "In our filaments" }).click();
   await expect(cover).toHaveAttribute("src", matchedSrc ?? "");
 
+  // The 3D view has the same switch, and its legend follows it.
+  await files.getByRole("button", { name: /^See .* in 3D$/ }).click();
+  const viewer = page.getByRole("dialog", { name: "3D view" });
+  await expect(viewer.locator("[data-viewer=ready]")).toBeVisible({ timeout: 30_000 });
+  await viewer.getByRole("radio", { name: "Model's colours" }).click();
+  await expect(viewer.getByRole("radio", { name: "Model's colours" })).toBeChecked();
+  await viewer.getByRole("radio", { name: "In our filaments" }).click();
+  await page.keyboard.press("Escape");
+  await expect(viewer).toBeHidden();
+
   await files.getByRole("button", { name: "Slice with…" }).click();
   const settings = page.getByRole("dialog", { name: "How to slice it" });
   await expect(settings.getByText("Colours", { exact: true })).toBeVisible();

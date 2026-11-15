@@ -3,6 +3,7 @@ import { HOTDOG_COLOURS } from "../../../e2e/fixtures/model-3mf.ts";
 import {
   colourDistance,
   matchColour,
+  originalFilamentColours,
   planColours,
   planProject,
   simplifyColours,
@@ -145,5 +146,28 @@ describe("a project's filaments", () => {
   it("never matches a multi-colour spool by itself", () => {
     const rainbow = spool("rainbow", "#c0392b", { colors: ["#c0392b", "#2255cc"] });
     expect(matchColour({ hex: "#c0392b" }, [rainbow]).inPantry).toBe(false);
+  });
+});
+
+describe("originalFilamentColours", () => {
+  const row = (hex: string, spoolId: string, slot?: number) => ({
+    hex,
+    ...(slot ? { slot } : {}),
+    filament: { material: "PLA", spoolId },
+  });
+
+  it("gives a project's filaments their own colours, by number", () => {
+    expect(originalFilamentColours([row("#111111", "a", 3), row("#eeeeee", "b", 1)])).toEqual([
+      "#eeeeee",
+      undefined,
+      "#111111",
+    ]);
+  });
+
+  it("gives a model's filaments the heaviest colour printed in each, in the order the slice numbers them", () => {
+    expect(originalFilamentColours([row("#d2281e", "red"), row("#f3e9d2", "white"), row("#8f3b2a", "red")])).toEqual([
+      "#d2281e",
+      "#f3e9d2",
+    ]);
   });
 });
