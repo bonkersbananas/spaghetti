@@ -38,7 +38,7 @@ interface MiniCardProps {
 }
 
 /**
- * A small card for a strip: the cover photo, square, with its title (two lines at most) under it, about 7 rem wide.
+ * A small card for a strip: the cover photo, square (from xl a 7:5 box, wider but no taller), with its title (two lines at most) under it, about 7 rem wide.
  * It is the compact sibling of Card, for rows that scroll sideways (Up next on phones) and give way to what is below.
  */
 export function MiniCard({ link, photo, note, title, corner, landing, id, drag, meta, ref, className }: MiniCardProps) {
@@ -87,7 +87,7 @@ export function MiniCard({ link, photo, note, title, corner, landing, id, drag, 
           <div
             className={cn(
               "relative w-full overflow-hidden rounded-md",
-              photo || !note ? "aspect-square" : "min-h-[5.625rem] flex-1",
+              photo || !note ? "aspect-square xl:aspect-[7/5]" : "min-h-[5.625rem] flex-1",
             )}
           >
             {photo ? (
