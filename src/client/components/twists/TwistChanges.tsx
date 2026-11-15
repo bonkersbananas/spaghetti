@@ -10,6 +10,7 @@ import {
 } from "@shared/twists";
 import { useState } from "react";
 import { IconButton } from "@/components/ui/Button";
+import { ToggleChip } from "@/components/ui/Chip";
 import { PlusIcon, TrashIcon } from "@/components/ui/icons";
 import { cn } from "@/lib/cn";
 
@@ -190,15 +191,9 @@ export function TwistChanges({
           <p className="text-small text-ink-faint">{changes.length ? "Add another change" : "What did we change?"}</p>
           <div className="flex flex-wrap gap-2">
             {CHANGE_KINDS.map((kind) => (
-              <button
-                key={kind}
-                type="button"
-                onClick={() => add(kind)}
-                className="pressable focus-ring touch-target text-small text-ink-soft hover:text-ink bg-cream shadow-soft relative inline-flex h-9 items-center gap-1.5 rounded-full px-3.5 font-semibold md:h-8"
-              >
-                <PlusIcon size={14} weight="bold" aria-hidden />
+              <ToggleChip key={kind} icon={PlusIcon} onClick={() => add(kind)}>
                 {CHANGE_LABELS[kind]}
-              </button>
+              </ToggleChip>
             ))}
           </div>
         </div>

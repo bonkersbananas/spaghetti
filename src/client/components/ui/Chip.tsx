@@ -58,6 +58,8 @@ interface ToggleChipProps extends Omit<ComponentPropsWithRef<"button">, "childre
   icon?: Icon;
   /** How it looks when picked: ink (filters), or a tone for tags (a failure in tomato, a success in basil). */
   tone?: ChipTone;
+  /** Starts with a picture (a spool disc, a swatch) that sits closer to the edge than a word would. */
+  lead?: boolean;
   children: ReactNode;
 }
 
@@ -68,11 +70,12 @@ const selectedTones: Record<ChipTone, string> = {
   semolina: "bg-semolina-soft text-semolina-ink ring-1 ring-inset ring-semolina/50",
 };
 
-/** A chip people tap to filter or pick. */
+/** A chip people tap to filter or pick. Without `selected` it is a button that adds something (a spool for a filament, a kind of change). */
 export function ToggleChip({
   selected,
   icon: IconComponent,
   tone = "neutral",
+  lead,
   children,
   className,
   ...props
@@ -83,7 +86,8 @@ export function ToggleChip({
       aria-pressed={selected}
       className={cn(
         base,
-        "pressable focus-ring touch-target relative h-9 px-3.5 md:h-8",
+        "pressable focus-ring touch-target relative h-9 md:h-8",
+        lead ? "gap-2 pr-3.5 pl-2" : "px-3.5",
         selected ? selectedTones[tone] : "bg-cream text-ink-soft shadow-soft hover:text-ink",
         className,
       )}
