@@ -63,3 +63,17 @@ export function ForChip({ onClick, disabled }: { onClick: () => void; disabled?:
     </ToggleChip>
   );
 }
+
+/** "For Sam": names the other person in one tap (the page offers it beside `ForChip` while nobody is named). */
+export function ForPersonChip({ name, onClick, disabled }: { name: string; onClick: () => void; disabled?: boolean }) {
+  return (
+    <ToggleChip disabled={disabled} onClick={onClick}>
+      For {name}
+    </ToggleChip>
+  );
+}
+
+/** A "for …" line read-only, on a card or row: "for you" stands out a little (someone asked you), a name stays quiet. */
+export function ForLine({ text }: { text: string }) {
+  return text === "for you" ? <span className="text-ink font-semibold">{text}</span> : text;
+}

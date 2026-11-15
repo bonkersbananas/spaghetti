@@ -5,15 +5,17 @@ import { relativeTime } from "@shared/time";
 import { m } from "motion/react";
 import { lazy, type Ref, Suspense, useState } from "react";
 import { Card } from "@/components/ui/Card";
+import { ForLine } from "@/components/ui/ForField";
 import { ModelMark } from "@/components/ui/ModelMark";
 import { ReactionGlance } from "@/components/ui/ReactionGlance";
 import { useReflow } from "@/components/ui/Reflow";
 import { UploadBadge } from "@/components/ui/UploadBadge";
 import { cn } from "@/lib/cn";
+import { useForLine } from "@/lib/for-whom";
 import type { ItemView } from "@/lib/items";
 import { useOutbox } from "@/lib/outbox";
 import { fileThumbSrc, hasPreview, photoSrc } from "@/lib/previews";
-import { useUnreadCount } from "@/lib/unread-comments";
+import { useUnreadCount, useUnreadThreadSearch } from "@/lib/unread-comments";
 
 // The menu's code (popover, sheet) arrives after the first screen: it is only needed once a card is touched.
 const CardMenu = lazy(() => import("./CardMenu").then((m) => ({ default: m.CardMenu })));
@@ -87,6 +89,8 @@ export function IdeaCard({ item, person, via, landing, menu, headingLevel = 2, r
   const plate = cover ? undefined : plateCover(item);
   const upload = useUploadState(item);
   const unread = useUnreadCount(item.id);
+  const forLine = useForLine();
+  const toThread = useUnreadThreadSearch(item.id);
   const model = modelOf(item);
   // The photo swiped to: the idea's page opens on it.
   const [showing, setShowing] = useState<string>();
@@ -96,7 +100,11 @@ export function IdeaCard({ item, person, via, landing, menu, headingLevel = 2, r
     <m.li {...useReflow(landing)} ref={ref} className="group/idea relative list-none">
       <div className="h-full rounded-lg">
         <Card
-          link={{ to: "/ideas/$ideaId", params: { ideaId: item.id }, search: opensOn ? { photo: opensOn } : {} }}
+          link={{
+            to: "/ideas/$ideaId",
+            params: { ideaId: item.id },
+            search: { ...(opensOn ? { photo: opensOn } : {}), ...toThread } as never,
+          }}
           aspect="portrait"
           headingLevel={headingLevel}
           reserveEnd={!!menu && !item.pending}
@@ -124,7 +132,7 @@ export function IdeaCard({ item, person, via, landing, menu, headingLevel = 2, r
           onPhotoChange={(index) => setShowing(item.photos[index]?.id)}
           chips={upload ? <UploadBadge state={upload.state} progress={upload.progress} /> : undefined}
           mark={model ? <ModelMark mark={model} /> : undefined}
-          sub={item.forWhom ? `for ${item.forWhom}` : undefined}
+          sub={forLine(item.forWhom) ? <ForLine text={forLine(item.forWhom) as string} /> : undefined}
           reactions={<ReactionGlance reactions={item.reactions} />}
           meta={relativeTime(item.createdAt)}
           person={person}

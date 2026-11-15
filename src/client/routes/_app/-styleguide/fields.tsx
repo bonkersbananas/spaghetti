@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { TextArea, TextField } from "@/components/ui/Field";
-import { ForChip, ForField } from "@/components/ui/ForField";
+import { ForChip, ForField, ForLine, ForPersonChip } from "@/components/ui/ForField";
 import * as Icons from "@/components/ui/icons";
 import { NoteField } from "@/components/ui/NoteField";
 import { type SaveState, SaveStatus } from "@/components/ui/SaveStatus";
@@ -51,7 +51,15 @@ export function FieldSection() {
             For field: who it is for, quiet under a title; nobody named, the page offers a quiet chip instead
           </Label>
           <ForField defaultValue="Mila" aria-label="For" />
-          <ForChip onClick={() => undefined} />
+          <div className="flex flex-wrap gap-2">
+            <ForPersonChip name="Sam" onClick={() => undefined} />
+            <ForChip onClick={() => undefined} />
+          </div>
+          <Label>For line on a card: a name stays quiet, "for you" stands out</Label>
+          <p className="text-small text-ink-soft flex gap-4">
+            <ForLine text="for Mila" />
+            <ForLine text="for you" />
+          </p>
           <Label>Note field: links stay clickable, tap the text to edit</Label>
           <NoteField value={linkedNote} onChange={setLinkedNote} />
           <Label>Save states</Label>

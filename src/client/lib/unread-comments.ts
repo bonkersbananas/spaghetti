@@ -20,3 +20,15 @@ export function useUnreadCount(itemId: string): number {
   });
   return data ?? 0;
 }
+
+/**
+ * Where a card with unread comments leads: the page's search that brings the thread into view with the newest
+ * unread comment lit (the same way Today's comment line opens it). Nothing for a card with none.
+ */
+export function useUnreadThreadSearch(itemId: string): { thread?: 1; comment?: string } {
+  const { data } = useQuery({
+    ...unreadQuery,
+    select: (response) => response.threads.find((thread) => thread.itemId === itemId)?.latestId ?? null,
+  });
+  return data ? { thread: 1, comment: data } : {};
+}

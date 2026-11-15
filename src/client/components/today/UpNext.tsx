@@ -1,9 +1,11 @@
 import { Link } from "@tanstack/react-router";
 import { Button } from "@/components/ui/Button";
+import { ForLine } from "@/components/ui/ForField";
 import { IdeasIcon } from "@/components/ui/icons";
 import { Photo } from "@/components/ui/Photo";
 import { Section } from "@/components/ui/Section";
 import { cn } from "@/lib/cn";
+import { useForLine } from "@/lib/for-whom";
 import { itemName } from "@/lib/item-name";
 import type { ItemView } from "@/lib/items";
 import { photoSrc } from "@/lib/previews";
@@ -20,6 +22,7 @@ export function upNextIdeas(ideas: ItemView[]): ItemView[] {
 function Row({ item }: { item: ItemView }) {
   const photo = item.photos[0];
   const name = itemName(item);
+  const forLine = useForLine();
   return (
     <Link
       to="/ideas/$ideaId"
@@ -41,7 +44,11 @@ function Row({ item }: { item: ItemView }) {
         >
           {name.text}
         </span>
-        {item.forWhom && <span className="text-small text-ink-faint truncate">for {item.forWhom}</span>}
+        {forLine(item.forWhom) && (
+          <span className="text-small text-ink-faint truncate">
+            <ForLine text={forLine(item.forWhom) as string} />
+          </span>
+        )}
       </span>
     </Link>
   );

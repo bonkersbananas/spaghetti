@@ -21,7 +21,7 @@ import { ToggleChip } from "@/components/ui/Chip";
 import { ConfirmDelete } from "@/components/ui/ConfirmDelete";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { TextArea } from "@/components/ui/Field";
-import { ForChip, ForField } from "@/components/ui/ForField";
+import { ForChip, ForField, ForPersonChip } from "@/components/ui/ForField";
 import {
   BuildsIcon,
   CommentIcon,
@@ -44,6 +44,7 @@ import { useVia } from "@/lib/agents";
 import { startBuild } from "@/lib/builds";
 import { useCaptureHere } from "@/lib/capture";
 import { announceDraft } from "@/lib/drafts";
+import { useOtherPerson } from "@/lib/for-whom";
 import { ariaShortcuts, shortcutCaps, useHotkeys } from "@/lib/hotkeys";
 import { addItemFile } from "@/lib/item-files";
 import { deleteItem, type ItemView, removePhoto, useIdeas, useItem, useItemFields } from "@/lib/items";
@@ -59,6 +60,7 @@ import { makeTwist, suggestedTwistName, useTwists } from "@/lib/twists";
 import { setUpNext, splitQueue } from "@/lib/up-next";
 import { useAfterPaint, useIsDesktop } from "@/lib/use-media-query";
 import { useSettled } from "@/lib/use-settled";
+import { useWho } from "@/lib/who";
 import { toggleWishlist, useWishlistIds } from "@/lib/wishlist";
 
 const ItemFiles = lazy(() => import("@/components/ideas/ItemFiles"));
@@ -130,12 +132,14 @@ function Idea({ item }: { item: ItemView }) {
   const offline = useReadOnly();
   const { data: people } = useQuery(peopleQuery);
   const { data: user } = useQuery(sessionQuery);
+  const who = useWho();
   const wished = useWishlistIds(user?.id).includes(item.id);
   useCaptureHere(item);
   const person = people?.find((p) => p.id === item.createdBy);
   const via = useVia()(item.createdVia);
 
   const { title, setTitle, note, setNote, forWhom, setForWhom, saveState } = useItemFields(item);
+  const other = useOtherPerson();
   const [askFor, setAskFor] = useState(false);
 
   // A draft that lands while this idea is open says so once, with a way to take it back (here or from the other phone).
@@ -425,7 +429,12 @@ function Idea({ item }: { item: ItemView }) {
                   event.target.value = "";
                 }}
               />
-              {!forWhom.trim() && !askFor && !(readOnly || item.pending) && <ForChip onClick={() => setAskFor(true)} />}
+              {!forWhom.trim() && !askFor && !(readOnly || item.pending) && (
+                <>
+                  {other && <ForPersonChip name={displayName(other)} onClick={() => setForWhom(displayName(other))} />}
+                  <ForChip onClick={() => setAskFor(true)} />
+                </>
+              )}
             </div>
             <NoteField
               value={note}
@@ -470,7 +479,7 @@ function Idea({ item }: { item: ItemView }) {
             <div className="text-small text-ink-faint mt-4 flex items-center gap-2.5">
               {person && <Avatar person={person} size="sm" via={via} />}
               <p>
-                {person ? `${displayName(person)} captured this` : "Captured"}{" "}
+                {person ? `${who(person)} captured this` : "Captured"}{" "}
                 <time dateTime={new Date(item.createdAt).toISOString()} title={fullTime(item.createdAt)}>
                   {inlineTime(item.createdAt)}
                 </time>

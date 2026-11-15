@@ -3,6 +3,7 @@ import { type Outcome, tagLabel } from "@shared/attempts";
 import { beganAsIdea } from "@shared/deleted";
 import { modelOf } from "@shared/model-mark";
 import { attemptPartsLabel } from "@shared/parts";
+import { displayName } from "@shared/people";
 import { isOffTheBed } from "@shared/print-progress";
 import { recipesFor, settingsMaterial } from "@shared/recipes";
 import { fullTime, inlineTime } from "@shared/time";
@@ -38,7 +39,7 @@ import { Chip } from "@/components/ui/Chip";
 import { ConfirmDelete } from "@/components/ui/ConfirmDelete";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { TextArea } from "@/components/ui/Field";
-import { ForChip, ForField } from "@/components/ui/ForField";
+import { ForChip, ForField, ForPersonChip } from "@/components/ui/ForField";
 import {
   ArrowRightIcon,
   BuildsIcon,
@@ -68,6 +69,7 @@ import { Skeleton } from "@/components/ui/Skeleton";
 import { useVia } from "@/lib/agents";
 import { deleteAttempt, finishBuild, heroPhoto, reopenBuild, shelveBuild, useTagOptions } from "@/lib/builds";
 import { useCaptureHere } from "@/lib/capture";
+import { useOtherPerson } from "@/lib/for-whom";
 import { ariaShortcuts, shortcutCaps, useHotkeys } from "@/lib/hotkeys";
 import {
   type AttemptView,
@@ -90,6 +92,7 @@ import { useSlicerDropTarget } from "@/lib/slicer-drop";
 import { useStickyColumn } from "@/lib/sticky-column";
 import { twistFromBuild, useTwists } from "@/lib/twists";
 import { useIsDesktop } from "@/lib/use-media-query";
+import { useWho } from "@/lib/who";
 
 /** A build with more attempts than this shows only its newest few, with a line that unfolds the rest. */
 const FOLD_AFTER = 5;
@@ -169,6 +172,7 @@ function Build({ item }: { item: ItemView }) {
   const byId = new Map(people?.map((person) => [person.id, person]));
   useCaptureHere(item);
   const { data: user } = useQuery(sessionQuery);
+  const who = useWho();
   // A build from someone else's model can be kept as a twist, once (it then says it prints it).
   const model = modelOf({ note: item.note, draft: item.draft });
   // A twist made from this item while it was an idea has `fromItemId` but not the build's `twistId`: it counts too.
@@ -192,6 +196,7 @@ function Build({ item }: { item: ItemView }) {
   }
 
   const { title, setTitle, note, setNote, forWhom, setForWhom, saveState } = useItemFields(item);
+  const other = useOtherPerson();
   const [askFor, setAskFor] = useState(false);
 
   // Photos: the best one leads, then the build's own (from the idea, or added here).
@@ -590,7 +595,12 @@ function Build({ item }: { item: ItemView }) {
                   )}
                 </div>
                 {!forWhom.trim() && !askFor && !(readOnly || item.pending) && (
-                  <ForChip onClick={() => setAskFor(true)} />
+                  <>
+                    {other && (
+                      <ForPersonChip name={displayName(other)} onClick={() => setForWhom(displayName(other))} />
+                    )}
+                    <ForChip onClick={() => setAskFor(true)} />
+                  </>
                 )}
                 {!active && !isDesktop && (
                   <Button
@@ -742,7 +752,16 @@ function Build({ item }: { item: ItemView }) {
                   {creator && <Avatar person={creator} size="xs" via={via(item.createdVia)} />}
                   {fromIdea && <IdeasIcon size={16} className="-mr-1.5 shrink-0" aria-hidden />}
                   <p>
-                    {fromIdea ? <>Captured as an idea {inlineTime(item.createdAt)}, building since </> : "Started "}
+                    {fromIdea ? (
+                      <>
+                        {creator ? `${who(creator)} captured` : "Captured"} as an idea {inlineTime(item.createdAt)},
+                        building since{" "}
+                      </>
+                    ) : creator ? (
+                      `${who(creator)} started `
+                    ) : (
+                      "Started "
+                    )}
                     <time dateTime={new Date(started).toISOString()} title={fullTime(started)}>
                       {inlineTime(started)}
                     </time>

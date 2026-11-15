@@ -8,6 +8,7 @@ import { Button, IconButton } from "@/components/ui/Button";
 import { BuildsIcon } from "@/components/ui/icons";
 import { DragHandle, RankRow } from "@/components/ui/RankRow";
 import { startBuild } from "@/lib/builds";
+import { useForLine } from "@/lib/for-whom";
 import { tap } from "@/lib/haptics";
 import { itemName } from "@/lib/item-name";
 import type { ItemView } from "@/lib/items";
@@ -16,7 +17,11 @@ import { canEdit, useReadOnly } from "@/lib/read-only";
 import { useIsDesktop } from "@/lib/use-media-query";
 import { removeFromWishlist, reorderWishlist } from "@/lib/wishlist";
 
-const rowProps = (item: ItemView, rank: number) => {
+const rowProps = (
+  item: ItemView,
+  rank: number,
+  forLine: (forWhom: string | null | undefined) => string | undefined,
+) => {
   const cover = item.photos[0];
   const name = itemName(item);
   return {
@@ -24,7 +29,7 @@ const rowProps = (item: ItemView, rank: number) => {
     title: name.text,
     photo: cover ? { src: photoSrc(cover.id, "thumb"), color: cover.color || undefined } : undefined,
     note: item.note.trim() || undefined,
-    meta: [...(item.forWhom ? [`for ${item.forWhom}`] : []), relativeTime(item.createdAt)],
+    meta: [...(forLine(item.forWhom) ? [forLine(item.forWhom) as string] : []), relativeTime(item.createdAt)],
     link: { to: "/ideas/$ideaId", params: { ideaId: item.id } } as const,
   };
 };
@@ -66,10 +71,11 @@ function StartButton({ item, name }: { item: ItemView; name: string }) {
 
 /** Someone else's list: the same rows, to read and start from, not to rearrange. */
 export function WishListView({ ideas, label }: { ideas: ItemView[]; label: string }) {
+  const forLine = useForLine();
   return (
     <ol data-picks className="flex flex-col gap-2" aria-label={label}>
       {ideas.map((item, index) => {
-        const props = rowProps(item, index + 1);
+        const props = rowProps(item, index + 1, forLine);
         return (
           <li key={item.id}>
             <RankRow {...props} actions={<StartButton item={item} name={props.title} />} />
@@ -202,7 +208,8 @@ function EditableRow({
   onRemove,
 }: EditableRowProps) {
   const controls = useDragControls();
-  const props = rowProps(item, rank);
+  const forLine = useForLine();
+  const props = rowProps(item, rank, forLine);
   return (
     <Reorder.Item
       value={item.id}
