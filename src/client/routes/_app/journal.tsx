@@ -19,6 +19,7 @@ import { OpenNotebook } from "@/components/illustrations/OpenNotebook";
 import { Filters } from "@/components/journal/Filters";
 import { entryLink, JournalEntry } from "@/components/journal/JournalEntry";
 import { PageHeader } from "@/components/shell/PageHeader";
+import { Since } from "@/components/today/Since";
 import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { ArrowRightIcon } from "@/components/ui/icons";
@@ -42,7 +43,6 @@ import { useAfterPaint, useIsDesktop } from "@/lib/use-media-query";
 
 // Phones only, and the print card with its motion and sheets is heavy: loaded after the journal, off the first load.
 const Now = lazy(() => import("@/components/journal/Now"));
-const SinceBlock = lazy(() => import("@/components/today/SinceBlock"));
 
 export const Route = createFileRoute("/_app/journal")({
   validateSearch: (search: Record<string, unknown>): Omit<FilterValues, "tag"> => {
@@ -139,9 +139,7 @@ function Journal() {
       {/* Phones: what is happening now, above the notebook (desktop has Today for it). */}
       {!filtered && !isDesktop && (
         <>
-          <Suspense fallback={null}>
-            <SinceBlock />
-          </Suspense>
+          <Since />
           <Suspense fallback={null}>
             <Now />
           </Suspense>

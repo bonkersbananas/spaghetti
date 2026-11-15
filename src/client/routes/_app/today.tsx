@@ -13,6 +13,7 @@ import { BackBurner } from "@/components/today/BackBurner";
 import { InThePrinter } from "@/components/today/InThePrinter";
 import { Lately } from "@/components/today/Lately";
 import { PickUpAgain, pickUpAgain } from "@/components/today/PickUpAgain";
+import { Since } from "@/components/today/Since";
 import { UpNext, upNextIdeas } from "@/components/today/UpNext";
 import { AutoHeight } from "@/components/ui/AutoHeight";
 import { Button } from "@/components/ui/Button";
@@ -38,7 +39,6 @@ import { useIsDesktop } from "@/lib/use-media-query";
 import { useNow } from "@/lib/use-now";
 
 const UpkeepLine = lazy(() => import("@/components/today/UpkeepLine"));
-const SinceBlock = lazy(() => import("@/components/today/SinceBlock"));
 const CommentsLine = lazy(() => import("@/components/today/CommentsLine"));
 const ScoutSection = lazy(() => import("@/components/scout/ScoutSection"));
 
@@ -180,9 +180,7 @@ function Today() {
   return (
     <>
       <PageHeader title="Today" subtitle={subtitle} />
-      <Suspense fallback={null}>
-        <SinceBlock />
-      </Suspense>
+      <Since />
       <div className="-mt-4 mb-6 empty:hidden">
         {hasDueUpkeep && (
           <Suspense fallback={null}>
