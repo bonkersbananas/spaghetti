@@ -25,6 +25,8 @@ export interface PrintViewerProps {
   plate: number;
   /** The matched spools' colours, for filaments the file doesn't colour. */
   fallbackColors?: (string | null | undefined)[];
+  /** Each filament's colour in the model itself, for a model whose colours were matched to spools: the switch to them. */
+  originalColors?: (string | undefined)[];
   /** Set while the attempt prints: the viewer follows the printer's own layer while the bridge reports it. */
   printing?: { id: string } | null;
   className?: string;
@@ -55,7 +57,15 @@ function prefersReducedMotion(): boolean {
  * builds itself up, layer by layer (never with reduced motion). One finger turns it, two pinch and pan; on desktop
  * drag, scroll, and the arrow keys step layers.
  */
-export default function PrintViewer({ url, fileId, plate, fallbackColors, printing, className }: PrintViewerProps) {
+export default function PrintViewer({
+  url,
+  fileId,
+  plate,
+  fallbackColors,
+  originalColors,
+  printing,
+  className,
+}: PrintViewerProps) {
   // The printer's own layer while the bridge reports it for this attempt and the report is fresh; nothing otherwise.
   const now = useNow();
   const report = useQuery({ ...printerQuery, enabled: !!printing }).data?.bridge?.progress;
@@ -72,6 +82,8 @@ export default function PrintViewer({ url, fileId, plate, fallbackColors, printi
   const [count, setCount] = useState(0);
   const [layer, setLayerState] = useState(0);
   const [mode, setMode] = useState<ColorBy>("filament");
+  // The spools the print uses, or the model's own colours (a model whose colours were matched to spools).
+  const [palette, setPalette] = useState<"matched" | "original">("matched");
   const [summary, setSummary] = useState<ToolpathSummary | null>(null);
   const [features, setFeatures] = useState<number[]>([]);
   const [replays, setReplays] = useState(0);
@@ -238,7 +250,15 @@ export default function PrintViewer({ url, fileId, plate, fallbackColors, printi
   }, []);
 
   const text = layerReadout(layer, count || 1, heights.current[layer], times.current[layer]);
-  const filaments = summary?.filaments ?? [];
+  const printed = summary?.filaments ?? [];
+  const filaments =
+    palette === "original" && originalColors
+      ? printed.map((f, i) => ({ ...f, color: originalColors[i] ?? f.color }))
+      : printed;
+  // The scene follows the switch (and the file's colours once it is read).
+  useEffect(() => {
+    if (summary) scene.current?.setFilaments(filaments.map((f) => f.color));
+  }, [summary, palette]);
   const showFilaments = mode === "filament" && filaments.filter((f) => f.segments > 0).length > 1;
 
   return (
@@ -303,6 +323,22 @@ export default function PrintViewer({ url, fileId, plate, fallbackColors, printi
               setReplays((n) => n + 1);
             }}
           />
+        )}
+        {state === "ready" && originalColors && (
+          <div className="pointer-events-none absolute inset-x-0 bottom-3 flex justify-center">
+            <SegmentedControl
+              label="Colours shown"
+              labelHidden
+              overlay
+              className="pointer-events-auto"
+              options={[
+                { value: "matched", label: "In our filaments" },
+                { value: "original", label: "Model's colours" },
+              ]}
+              value={palette}
+              onChange={setPalette}
+            />
+          </div>
         )}
         {state === "ready" && summary?.stats.decimated && (
           <p className="bg-cream/90 text-caption text-ink-faint absolute bottom-3 left-3 rounded-full px-2.5 py-1">

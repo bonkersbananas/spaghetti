@@ -2471,6 +2471,44 @@ export const shots: Shot[] = [
     },
   },
   {
+    // A model with colours of its own in 3D: the toolpaths in the spools it prints with, the switch to its own colours.
+    name: "idea-model-colours-3d",
+    path: "/ideas",
+    prepare: async (page) => {
+      const files = await ideaWithModel(page, HOTDOG_IDEA, HOTDOG, /Sliced by/);
+      await sliceSaved(page);
+      await files.getByRole("button", { name: `See ${HOTDOG.name} in 3D` }).click();
+      await page.getByRole("dialog", { name: "3D view" }).locator("[data-viewer=ready]").waitFor({ timeout: 60_000 });
+    },
+    beforeShot: async (page) => {
+      await page.waitForTimeout(600);
+    },
+    cleanup: async (page) => {
+      await closeDialog(page);
+      await removeModelItems(page);
+    },
+  },
+  {
+    // The same, on "Model's colours": the toolpaths and the legend in the colours the file has.
+    name: "idea-model-colours-3d-original",
+    path: "/ideas",
+    prepare: async (page) => {
+      const files = await ideaWithModel(page, HOTDOG_IDEA, HOTDOG, /Sliced by/);
+      await sliceSaved(page);
+      await files.getByRole("button", { name: `See ${HOTDOG.name} in 3D` }).click();
+      const viewer = page.getByRole("dialog", { name: "3D view" });
+      await viewer.locator("[data-viewer=ready]").waitFor({ timeout: 60_000 });
+      await viewer.getByRole("radio", { name: "Model's colours" }).click();
+    },
+    beforeShot: async (page) => {
+      await page.waitForTimeout(600);
+    },
+    cleanup: async (page) => {
+      await closeDialog(page);
+      await removeModelItems(page);
+    },
+  },
+  {
     // The same sliced model seen from below the plate: the plate fades to a grid and the first layer shows.
     name: "idea-model-viewer-below",
     path: "/ideas",
