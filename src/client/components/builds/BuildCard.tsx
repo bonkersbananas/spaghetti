@@ -13,6 +13,7 @@ import { ReactionGlance } from "@/components/ui/ReactionGlance";
 import { useReflow } from "@/components/ui/Reflow";
 import { heroPhoto, newestPhoto } from "@/lib/builds";
 import { cn } from "@/lib/cn";
+import { useForLine } from "@/lib/for-whom";
 import type { ItemView } from "@/lib/items";
 import { photoSrc } from "@/lib/previews";
 import { usePrintProgress } from "@/lib/print-progress";
@@ -93,6 +94,7 @@ export function BuildCard({
   const photo = newestPhoto(item);
   const last = item.attempts.at(-1);
   const unread = useUnreadCount(item.id);
+  const forLine = useForLine();
   const toThread = useUnreadThreadSearch(item.id);
   return (
     <m.li {...useReflow(landing)} ref={ref} className="list-none">
@@ -116,7 +118,7 @@ export function BuildCard({
         }
         meta={
           <>
-            {item.forWhom && <span className="hidden md:block">for {item.forWhom}</span>}
+            {forLine(item.forWhom) && <span className="hidden md:block">{forLine(item.forWhom)}</span>}
             <ActivityLine item={item} />
           </>
         }

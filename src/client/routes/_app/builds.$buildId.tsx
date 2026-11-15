@@ -3,6 +3,7 @@ import { type Outcome, tagLabel } from "@shared/attempts";
 import { beganAsIdea } from "@shared/deleted";
 import { modelOf } from "@shared/model-mark";
 import { attemptPartsLabel } from "@shared/parts";
+import { displayName } from "@shared/people";
 import { isOffTheBed } from "@shared/print-progress";
 import { recipesFor, settingsMaterial } from "@shared/recipes";
 import { fullTime, inlineTime } from "@shared/time";
@@ -38,7 +39,7 @@ import { Chip } from "@/components/ui/Chip";
 import { ConfirmDelete } from "@/components/ui/ConfirmDelete";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { TextArea } from "@/components/ui/Field";
-import { ForChip, ForField } from "@/components/ui/ForField";
+import { ForChip, ForField, ForPersonChip } from "@/components/ui/ForField";
 import {
   ArrowRightIcon,
   BuildsIcon,
@@ -68,6 +69,7 @@ import { Skeleton } from "@/components/ui/Skeleton";
 import { useVia } from "@/lib/agents";
 import { deleteAttempt, finishBuild, heroPhoto, reopenBuild, shelveBuild, useTagOptions } from "@/lib/builds";
 import { useCaptureHere } from "@/lib/capture";
+import { useOtherPerson } from "@/lib/for-whom";
 import { ariaShortcuts, shortcutCaps, useHotkeys } from "@/lib/hotkeys";
 import {
   type AttemptView,
@@ -192,6 +194,7 @@ function Build({ item }: { item: ItemView }) {
   }
 
   const { title, setTitle, note, setNote, forWhom, setForWhom, saveState } = useItemFields(item);
+  const other = useOtherPerson();
   const [askFor, setAskFor] = useState(false);
 
   // Photos: the best one leads, then the build's own (from the idea, or added here).
@@ -590,7 +593,12 @@ function Build({ item }: { item: ItemView }) {
                   )}
                 </div>
                 {!forWhom.trim() && !askFor && !(readOnly || item.pending) && (
-                  <ForChip onClick={() => setAskFor(true)} />
+                  <>
+                    {other && (
+                      <ForPersonChip name={displayName(other)} onClick={() => setForWhom(displayName(other))} />
+                    )}
+                    <ForChip onClick={() => setAskFor(true)} />
+                  </>
                 )}
                 {!active && !isDesktop && (
                   <Button

@@ -21,7 +21,7 @@ import { ToggleChip } from "@/components/ui/Chip";
 import { ConfirmDelete } from "@/components/ui/ConfirmDelete";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { TextArea } from "@/components/ui/Field";
-import { ForChip, ForField } from "@/components/ui/ForField";
+import { ForChip, ForField, ForPersonChip } from "@/components/ui/ForField";
 import {
   BuildsIcon,
   CommentIcon,
@@ -44,6 +44,7 @@ import { useVia } from "@/lib/agents";
 import { startBuild } from "@/lib/builds";
 import { useCaptureHere } from "@/lib/capture";
 import { announceDraft } from "@/lib/drafts";
+import { useOtherPerson } from "@/lib/for-whom";
 import { ariaShortcuts, shortcutCaps, useHotkeys } from "@/lib/hotkeys";
 import { addItemFile } from "@/lib/item-files";
 import { deleteItem, type ItemView, removePhoto, useIdeas, useItem, useItemFields } from "@/lib/items";
@@ -136,6 +137,7 @@ function Idea({ item }: { item: ItemView }) {
   const via = useVia()(item.createdVia);
 
   const { title, setTitle, note, setNote, forWhom, setForWhom, saveState } = useItemFields(item);
+  const other = useOtherPerson();
   const [askFor, setAskFor] = useState(false);
 
   // A draft that lands while this idea is open says so once, with a way to take it back (here or from the other phone).
@@ -425,7 +427,12 @@ function Idea({ item }: { item: ItemView }) {
                   event.target.value = "";
                 }}
               />
-              {!forWhom.trim() && !askFor && !(readOnly || item.pending) && <ForChip onClick={() => setAskFor(true)} />}
+              {!forWhom.trim() && !askFor && !(readOnly || item.pending) && (
+                <>
+                  {other && <ForPersonChip name={displayName(other)} onClick={() => setForWhom(displayName(other))} />}
+                  <ForChip onClick={() => setAskFor(true)} />
+                </>
+              )}
             </div>
             <NoteField
               value={note}

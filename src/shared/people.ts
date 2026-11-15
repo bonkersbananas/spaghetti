@@ -21,3 +21,14 @@ export function displayName(person: { name: string } | null | undefined, fallbac
   const name = person?.name.trim();
   return name || fallback;
 }
+
+/**
+ * Whether the free-text "for …" on an idea or build names this person: their name as stored ("Carl Oscar") or its
+ * first word ("Sam" for "Sam Okafor"), in any case. "for Mila" names nobody of the two.
+ */
+export function namesPerson(forWhom: string | null | undefined, person: { name: string } | null | undefined): boolean {
+  const asked = forWhom?.trim().toLowerCase();
+  const name = person?.name.trim().toLowerCase();
+  if (!asked || !name) return false;
+  return asked === name || asked === name.split(/\s+/)[0];
+}
