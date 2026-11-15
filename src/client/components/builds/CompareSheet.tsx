@@ -110,8 +110,8 @@ function AttemptPhotos({
   );
   return (
     <div className="flex flex-col gap-2.5">
-      {/* 4:3, but never taller than 28% of the window on desktop: the photos stay whole, and "What changed" is in the first screen. */}
-      <div className="bg-paper-deep relative aspect-4/3 overflow-hidden rounded-md md:max-h-[28vh]">
+      {/* 3:2 on phones, 4:3 on desktop, but never taller than 28% of the window on desktop: the photos stay whole, and "What changed" is in the first screen. */}
+      <div className="bg-paper-deep relative aspect-3/2 overflow-hidden rounded-md md:aspect-4/3 md:max-h-[28vh]">
         {fade ? (
           <AnimatePresence initial={false}>
             <m.div
@@ -310,7 +310,7 @@ function PhoneCompare({ item, older, newer }: { item: ItemView; older: AttemptVi
     setSide(dx < 0 ? "newer" : "older");
   };
   return (
-    <div className="flex flex-col gap-5">
+    <div className="flex flex-col gap-4 md:gap-5">
       <SegmentedControl<"older" | "newer">
         label="Attempt shown"
         labelHidden
