@@ -18,6 +18,8 @@
   /* Floating surfaces (sheets, dialogs): the same cream by day, a step lighter at night, where lifting replaces shadow. */
   --sg-lifted: #fffcf7;
   --sg-well: #ebe3d5;
+  /* The channel behind a segmented control: the well by day; by night a softer step, so it doesn't outline on a lifted sheet. */
+  --sg-channel: #ebe3d5;
   /* The soft round behind a held tab bar icon. */
   --sg-pressed: #ece3d3;
   /* A note card's face: paper by day, a step lifted at night (an index card under the lamp, not a hole in the card). */
@@ -220,7 +222,8 @@
   --sg-paper-deep: #151210;
   --sg-cream: #25201c;
   --sg-lifted: #2e2823;
-  --sg-well: #171310;
+  --sg-well: #120f0d;
+  --sg-channel: #1d1915;
   --sg-pressed: #3a332c;
   --sg-note: #2e2823;
   --sg-tile: #38312b;
@@ -288,6 +291,7 @@
   --color-cream: var(--sg-cream);
   --color-lifted: var(--sg-lifted);
   --color-well: var(--sg-well);
+  --color-channel: var(--sg-channel);
   --color-note: var(--sg-note);
   --color-tile: var(--sg-tile);
   --color-qr-bg: var(--sg-qr-bg);

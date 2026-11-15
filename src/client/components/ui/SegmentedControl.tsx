@@ -53,7 +53,9 @@ export function SegmentedControl<T extends string>({
       <div
         className={cn(
           "flex gap-1 p-1",
-          overlay ? "bg-lifted/90 shadow-raised rounded-pill w-fit backdrop-blur-sm" : "bg-well shadow-well rounded-md",
+          overlay
+            ? "bg-lifted/90 shadow-raised rounded-pill w-fit backdrop-blur-sm"
+            : "bg-channel shadow-well rounded-md",
         )}
       >
         {options.map(({ value: optionValue, label: optionLabel, icon: IconComponent, mark, markWords }) => {
