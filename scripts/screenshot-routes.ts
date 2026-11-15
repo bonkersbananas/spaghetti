@@ -624,7 +624,7 @@ async function openSliceSettings(page: Page, model = { idea: FUSILLI_IDEA, file:
 }
 
 /** The Colours block opened (it starts folded to one line), and which of its rows: the first, or one with a stand-in. */
-async function openColour(page: Page, settings: Locator, which: "first" | "stand-in" | "none" = "first") {
+async function openColour(page: Page, settings: Locator, which: "first" | "second" | "stand-in" | "none" = "first") {
   const summary = settings.getByRole("button", { name: /^Colours/ });
   await summary.evaluate((button) => button.scrollIntoView({ block: "center", behavior: "instant" }));
   await summary.click({ force: true });
@@ -636,7 +636,9 @@ async function openColour(page: Page, settings: Locator, which: "first" | "stand
       ? rows.filter({ hasText: "Not in the Pantry yet" }).first()
       : which === "stand-in"
         ? rows.last()
-        : rows.first();
+        : which === "second"
+          ? rows.nth(1)
+          : rows.first();
   await row.evaluate((button) => button.scrollIntoView({ block: "center", behavior: "instant" }));
   await row.click({ force: true });
   // Its spools are below it: the row up to the top of the view, so they show.
@@ -2017,6 +2019,18 @@ export const shots: Shot[] = [
       const settings = await openSliceSettings(page, { idea: HOTDOG_IDEA, file: HOTDOG });
       await settings.getByText("Colours", { exact: true }).waitFor();
       await openColour(page, settings, "first");
+    },
+    beforeShot: settleSliceSettings,
+    cleanup: closeSliceSettings,
+  },
+  {
+    // The second colour opened: its header stays in the right half, the picker spans under the pair.
+    name: "slice-settings-colours-open-second",
+    path: "/ideas",
+    prepare: async (page) => {
+      const settings = await openSliceSettings(page, { idea: HOTDOG_IDEA, file: HOTDOG });
+      await settings.getByText("Colours", { exact: true }).waitFor();
+      await openColour(page, settings, "second");
     },
     beforeShot: settleSliceSettings,
     cleanup: closeSliceSettings,
