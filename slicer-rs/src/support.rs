@@ -450,6 +450,23 @@ fn size(shapes: &Shapes) -> (f64, f64) {
     geom::bbox(shapes).map_or((0.0, 0.0), |b| (geom::unsc(b[2] - b[0]), geom::unsc(b[3] - b[1])))
 }
 
+/// Orca's difference with a safety offset (`ApplySafetyOffset::Yes`, what is taken away grown by 10 nm first),
+/// which leaves nothing of the hairlines a difference leaves along an edge the two share. Our points lie 0.1 µm
+/// apart, ten times as far, so this drops the shapes that an opening by that much takes away instead, and keeps the
+/// others whole. Such a hairline prints nothing, but a layer it alone stands on counts as one with support (or with
+/// an interface, which interlaced interfaces turn by).
+fn difference_safe(a: &Shapes, b: &Shapes) -> Shapes {
+    let unit = 1.0 / geom::SCALE;
+    let mut out = geom::difference(a, b);
+    out.retain(|shape| {
+        // Only a shape thinner on average than two units can be one (area over perimeter), and only those are opened.
+        let area: i128 = shape.iter().map(|c| geom::area2(c)).sum::<i128>().abs() / 2;
+        let perimeter: f64 = shape.iter().map(|c| geom::length_mm(c, true)).sum::<f64>() * geom::SCALE;
+        area as f64 >= perimeter || !geom::opening(&vec![shape.clone()], unit).is_empty()
+    });
+    out
+}
+
 /// Orca's interfaces with smooth supports (snug ones and trees, `regularize` in `generate_interface_layers`): the
 /// areas grown by the islands' smallest radius for the interface's density, closed, and rounded off outward. Snug
 /// supports take Orca 2.5's own offsets (`offset_c2`); the trees, matched on box models, keep Clipper1's.
@@ -1506,7 +1523,9 @@ fn trim_by_object(o: &Object, arena: &mut [Gen], layers: &[usize], tails: &[&Vec
                     trimming.extend(square(&shape, d));
                 }
             }
-            if trimming.is_empty() { s.polygons.clone() } else { geom::difference(&s.polygons, &trimming) }
+            // Not the hairlines the difference can leave where an edge of the support runs along one of the cut
+            // (at Orca's finer resolution, most often none).
+            if trimming.is_empty() { s.polygons.clone() } else { difference_safe(&s.polygons, &trimming) }
         })
     };
     for (k, polygons) in todo.into_iter().zip(trimmed) {
@@ -1560,7 +1579,7 @@ fn base_layers(o: &Object, arena: &mut [Gen], tops: &[usize], bottoms: &[usize],
             if trimming.is_empty() {
                 geom::union_all(&[&new])
             } else {
-                geom::difference(&geom::union_all(&[&new]), &trimming)
+                difference_safe(&geom::union_all(&[&new]), &trimming)
             }
         })
     };
@@ -2776,5 +2795,21 @@ mod tests {
         let mut stick: Shapes = vec![vec![vec![p(0, 0), p(5, 0), p(10, 0), p(5, 0)]]];
         remove_sticks(&mut stick);
         assert!(stick.is_empty());
+    }
+
+    #[test]
+    fn a_safe_difference_leaves_no_hairline_along_an_edge_it_shares() {
+        let p = geom::pt;
+        let square: Shapes = vec![vec![vec![p(0, 0), p(100_000, 0), p(100_000, 100_000), p(0, 100_000)]]];
+        // A cut over all of the square but a strip a unit wide along its top edge.
+        let cut: Shapes =
+            vec![vec![vec![p(-1_000, -1_000), p(101_000, -1_000), p(101_000, 99_999), p(-1_000, 99_999)]]];
+        assert!(!geom::difference(&square, &cut).is_empty());
+        assert!(difference_safe(&square, &cut).is_empty());
+        // What a cut leaves that is wider than that stays as it is.
+        let half: Shapes =
+            vec![vec![vec![p(-1_000, -1_000), p(50_000, -1_000), p(50_000, 101_000), p(-1_000, 101_000)]]];
+        assert_eq!(difference_safe(&square, &half), geom::difference(&square, &half));
+        assert!((geom::area_mm2(&difference_safe(&square, &half)) - 50.0).abs() < 1e-9);
     }
 }
