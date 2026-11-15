@@ -37,7 +37,10 @@ export interface SinceLine {
 function firstWords(note: string, max = 40): string {
   const line = note.split("\n")[0]?.trim() ?? "";
   if (line.length <= max) return line;
-  return `${line.slice(0, max).replace(/\s+\S*$/, "")}…`;
+  return `${line
+    .slice(0, max)
+    .replace(/\s+\S*$/, "")
+    .replace(/[\s.,;:!?]+$/, "")}…`;
 }
 
 const count = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
