@@ -385,6 +385,7 @@ A short thread on every idea and build ("Talk it over", `components/comments/`, 
 
 ## Journal
 
+- **`F` toggles "Only failures"** (desktop): the journal's most-asked filter without leaving the keyboard; the chips remain for the rest.
 - **Everything that happened, newest first:** print attempts as photo-led cards, and quieter rows for ideas captured and builds started, finished (a bigger photo, in basil) or shelved. A spaghetti attempt is the same card as a success: its outcome chip over the photo and its failure tags in plain view.
 - **One icon per row:** an event row without a photo shows its icon once, in the tile (the finished row keeps its basil tile); the label beside it carries no icon. When a photo fills the tile, the icon stays beside the label, because it is then the only mark of what kind of event this is.
 - **An attempt without a photo** shows the slicer's picture of its plate in the photo's place, contained on a well in a 4:3 frame on desktop, labeled "From the model" on its corner (a render must never pass for a photo of the result), with the outcome chip bottom left. On phones a render is not the card's lead: it is a 96 px picture beside the title, under a top row that holds the outcome chip, "From the model" in words and the time, with the progress and settings full width below the picture row; photo cards keep their 4:3 picture on top. A print in progress also shows `PrintProgress` between the title and the settings. With neither a photo nor a file the card is text only, led by its outcome.

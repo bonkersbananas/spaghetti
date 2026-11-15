@@ -98,6 +98,7 @@ function Journal() {
     journalPrevious: () => move(-1),
     journalOpen: selected ? open : undefined,
     journalClear: selected ? () => setSelected(null) : undefined,
+    journalFailures: () => setFilters({ ...filters, outcome: filters.outcome === "failures" ? undefined : "failures" }),
   });
 
   // The next page loads before the end comes into view.

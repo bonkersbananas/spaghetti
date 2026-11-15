@@ -129,6 +129,7 @@ export const SHORTCUTS = define([
   { id: "journalNext", group: "journal", label: "Next entry", keys: ["j"] },
   { id: "journalPrevious", group: "journal", label: "Previous entry", keys: ["k"] },
   { id: "journalOpen", group: "journal", label: "Open the picked entry", keys: ["enter"] },
+  { id: "journalFailures", group: "journal", label: "Only failures, on or off", keys: ["f"] },
   { id: "journalClear", group: "journal", label: "Let go of the picked entry", keys: ["escape"] },
 
   { id: "weekPrevious", group: "week", label: "Previous week", keys: ["arrowleft"] },

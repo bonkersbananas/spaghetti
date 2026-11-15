@@ -116,6 +116,13 @@ test("filters the journal to failures", async ({ page, isMobile }) => {
   await expect(page.getByRole("link", { name: /^Worked.*attempt 3/ })).toBeVisible();
   await expect(page.getByText("Started a build")).toBeVisible();
 
+  // F is the keyboard's way to the chip, on and off (desktop).
+  if (!isMobile) {
+    await page.keyboard.press("f");
+    await expect(page).toHaveURL(/outcome=failures/);
+    await page.keyboard.press("f");
+    await expect(page).not.toHaveURL(/outcome=failures/);
+  }
   await page.getByRole("button", { name: "Only failures" }).click();
   await expect(page).toHaveURL(/outcome=failures/);
   await expect(page.getByRole("link", { name: /^Spaghetti.*attempt 1/ })).toBeVisible();
