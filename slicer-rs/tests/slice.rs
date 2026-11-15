@@ -1777,6 +1777,86 @@ fn normal_supports_in_several_filaments_print_on_the_objects_layers() {
 }
 
 #[test]
+fn supports_in_filaments_of_their_own_print_as_orcas_do() {
+    // A T in filament 1 of two, the tower where the app puts it, its support's interface (and base) in filament 2.
+    // Where the interface has a filament of its own, Orca prints the interface layer under each contact as base
+    // interface: in the base's filament, at the interface's spacing (`num_top_base_interface_layers`).
+    let tee = boxes_stl(&[([115., 123., 0.], [125., 133., 20.]), ([100., 123., 20.], [140., 133., 25.])]);
+    let options = Options { arrange: false, thumbnail: false, ..Options::default() };
+    let slice_with = |process: &str, filaments: usize| {
+        let setup = format!(
+            r#"{{"process": {{"enable_support": "1", "wipe_tower_x": ["211"], "wipe_tower_y": ["196"], {process}}},
+            "filaments": [{}], "colours": [{}]}}"#,
+            vec!["{}"; filaments].join(", "),
+            ["\"#F2754E\"", "\"#4F7FC7\""][..filaments].join(", ")
+        );
+        let settings = setup::read(&setup).unwrap().settings;
+        let mut plate = spaghetti_slicer::Plate::default();
+        plate.add_with_filament(&Input { name: "tee.stl", bytes: &tee }, Some(0)).unwrap();
+        plate.slice(&settings, &options).unwrap()
+    };
+    let volume = |out: &spaghetti_slicer::Output, role: Role| {
+        out.stats.features[Role::ALL.iter().position(|&r| r == role).unwrap()].volume
+    };
+    let near = |got: f64, want: f64, share: f64| (got - want).abs() <= want * share;
+    // Native OrcaSlicer 2.5.0 (Nov 15): support, interface and tower (mm³), and its 125 layers.
+    let cases = [
+        (r#""support_type": "normal(auto)", "support_interface_filament": "2""#, 1463.33, 33.95, 2141.72, 1e-3),
+        (
+            r#""support_type": "normal(auto)", "support_filament": "2", "support_interface_filament": "2""#,
+            1429.38,
+            67.90,
+            5490.57,
+            1e-3,
+        ),
+        (r#""support_type": "normal(auto)", "support_filament": "2""#, 1429.38, 67.90, 5348.23, 1e-3),
+        (
+            r#""support_type": "normal(auto)", "support_style": "snug", "support_interface_filament": "2""#,
+            1313.29,
+            27.82,
+            2141.72,
+            1e-3,
+        ),
+        // Organic trees come as close as they do in one filament.
+        (r#""support_type": "tree(auto)", "support_interface_filament": "2""#, 793.46, 27.74, 2141.72, 0.025),
+        (
+            r#""support_type": "tree(auto)", "support_style": "tree_hybrid", "support_interface_filament": "2""#,
+            1369.04,
+            29.79,
+            2141.72,
+            1e-3,
+        ),
+    ];
+    for (process, support, interface, tower, share) in cases {
+        let out = slice_with(process, 2);
+        assert_eq!(out.stats.layers, 125, "{process}");
+        let (s, i, t) =
+            (volume(&out, Role::Support), volume(&out, Role::SupportInterface), volume(&out, Role::PrimeTower));
+        assert!(near(s, support, share) && near(i, interface, 1e-3), "{process}: {s} and {i} mm³");
+        assert!(near(t, tower, 1e-4), "{process}: {t} mm³ of tower");
+    }
+    // The interface in filament 2 and the base in "don't care" filament: the base in the T's (the first, which the
+    // file starts with), the interface in filament 2.
+    let out = slice_with(r#""support_type": "normal(auto)", "support_interface_filament": "2""#, 2);
+    let gcode = String::from_utf8(out.gcode).unwrap();
+    let (mut feature, mut tools) = ("", std::collections::BTreeSet::new());
+    for (tool, _, line) in tools_and_labels(&gcode) {
+        if let Some(f) = line.strip_prefix("; FEATURE: ") {
+            feature = f;
+        }
+        if line.starts_with("G1 ") && line.contains(" E") && !line.contains(" E-") && feature.starts_with("Support") {
+            tools.insert((feature.to_string(), tool.unwrap_or(0)));
+        }
+    }
+    let want = [("Support".to_string(), 0), ("Support interface".to_string(), 1)];
+    assert_eq!(tools.into_iter().collect::<Vec<_>>(), want);
+    // In one filament, an interface in filament 1 still makes base interface layers (Orca: 1403.94 and 45.37).
+    let out = slice_with(r#""support_type": "normal(auto)", "support_interface_filament": "1""#, 1);
+    let (s, i) = (volume(&out, Role::Support), volume(&out, Role::SupportInterface));
+    assert!(near(s, 1403.94, 1e-3) && near(i, 45.37, 1e-3), "{s} and {i} mm³");
+}
+
+#[test]
 fn a_filament_change_flushes_into_the_supports_first() {
     // Three Ts in three filaments: two share a nozzle, and each layer's change between them flushes into the layer's
     // supports (`flush_into_support`), which then print right after the change in the filament flushed into, as

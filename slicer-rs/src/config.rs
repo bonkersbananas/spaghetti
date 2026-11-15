@@ -342,6 +342,9 @@ pub struct SupportSettings {
     /// mm between support and the object above it, below it, beside it, and beside it on the first layer.
     pub top_z_distance: f64,
     pub bottom_z_distance: f64,
+    /// Whether the support stands on the object under it without a gap (Orca's `zero_gap_interface_bottom`: bottom
+    /// interface layers asked for, and a bottom or top distance of 0 as set).
+    pub zero_gap_bottom: bool,
     pub xy_distance: f64,
     pub first_layer_xy_distance: f64,
     /// Layers of dense interface on top of the support and under it (the contact layer among them).
@@ -404,6 +407,9 @@ pub struct SupportSettings {
     /// `support_interface_filament`; 0: whichever the layer has, "don't care").
     pub filament: i64,
     pub interface_filament: i64,
+    /// Whether the interface's filament keeps out of the base (`support_interface_not_for_body`): a flush into
+    /// the base doesn't come from or go to it, and a layer of support alone prints its base in another.
+    pub interface_not_for_body: bool,
     /// Whether a filament change flushes into the support printed in "don't care" filament (`flush_into_support`),
     /// and into the objects' infill or the objects themselves (`flush_into_infill`, `flush_into_objects`).
     pub flush_into: bool,
@@ -468,6 +474,13 @@ impl SupportSettings {
             "tree_hybrid" => Some(Style::Hybrid),
             _ => None,
         }
+    }
+
+    /// The filaments (0-based) the support's base and interface print in when they have one of their own, of the
+    /// plate's `n`, as Orca takes them (`clamp_exturder_to_default`): one past the plate's prints in the first.
+    pub fn filaments(&self, n: usize) -> (Option<usize>, Option<usize>) {
+        let of = |f: i64| (f > 0).then(|| if (f as usize) > n { 0 } else { f as usize - 1 });
+        (of(self.filament), of(self.interface_filament))
     }
 
     /// Whether these are Orca's normal supports in their snug style, which follow the overhangs instead of the grid.
@@ -535,14 +548,6 @@ impl SupportSettings {
             || (on && s.thick_bridges)
         {
             Some("these support settings")
-        } else if self.filament > 1
-            || self.interface_filament > 1
-            || (s.palette.as_ref().is_some_and(|p| p.profiles.len() > 1)
-                && (self.filament != 0 || self.interface_filament != 0))
-        {
-            // With several filaments, support in the first prints in it whatever the object's: Orca's own choice
-            // of filament (`toolchange.rs`) is for support in "don't care" filament alone.
-            Some("supports in another filament")
         } else {
             None
         }
@@ -767,6 +772,12 @@ impl Settings {
                     d if d > 0.0 => d,
                     _ => p.float("support_top_z_distance"),
                 },
+                zero_gap_bottom: (if p.int("support_interface_bottom_layers") < 0 {
+                    p.int("support_interface_top_layers")
+                } else {
+                    p.int("support_interface_bottom_layers")
+                }) > 0
+                    && (p.float("support_bottom_z_distance") == 0.0 || p.float("support_top_z_distance") == 0.0),
                 xy_distance: p.float("support_object_xy_distance"),
                 first_layer_xy_distance: p.float("support_object_first_layer_gap"),
                 top_interface_layers: p.int("support_interface_top_layers").max(0) as usize,
@@ -813,6 +824,7 @@ impl Settings {
                 max_bridge_length: p.float("max_bridge_length"),
                 filament: p.int("support_filament"),
                 interface_filament: p.int("support_interface_filament"),
+                interface_not_for_body: p.bool("support_interface_not_for_body"),
                 flush_into: p.bool("flush_into_support"),
                 flush_into_objects: p.bool("flush_into_infill") || p.bool("flush_into_objects"),
             },
@@ -879,6 +891,36 @@ impl Settings {
             aux_fan_speed: at("additional_cooling_fan_speed") / 100.0,
             profile,
         }
+    }
+
+    /// How many of the support's top and bottom interface layers print as base interface (Orca's
+    /// `num_top_base_interface_layers` and `num_bottom_base_interface_layers`): the support pattern at the
+    /// interface's spacing, in the base's filament. Where the interface has a filament of its own other than the
+    /// base's, the one next to the base of each, if more than one is asked for; under a soluble interface on a base
+    /// that isn't, meeting the object without a gap, half of them, two at most.
+    pub fn base_interface_layers(&self) -> (usize, usize) {
+        let sp = &self.support;
+        let n = self.palette.as_ref().map_or(1, |p| p.profiles.len());
+        let (base, interface) = sp.filaments(n);
+        let soluble = |f: usize| {
+            self.palette
+                .as_ref()
+                .and_then(|p| p.profiles.get(f))
+                .is_some_and(|p| p.list("filament_soluble").first().copied() == Some("1"))
+        };
+        let soluble_interface = interface.is_some_and(soluble) && !base.is_some_and(soluble);
+        let different = interface.is_some() && interface != base;
+        let count = |layers: usize, zero_gap: bool| {
+            if zero_gap && soluble_interface {
+                (layers / 2).min(2)
+            } else if different && layers > 1 {
+                1
+            } else {
+                0
+            }
+        };
+        let zero_gap_top = sp.top_interface_layers > 0 && sp.top_z_distance == 0.0;
+        (count(sp.top_interface_layers, zero_gap_top), count(sp.bottom_interface_layers, sp.zero_gap_bottom))
     }
 
     /// What this can't slice yet, which the caller should slice elsewhere (the app: with Orca's engine).

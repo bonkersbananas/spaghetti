@@ -63,6 +63,8 @@ pub struct Config {
     pub support_top_distance: i64,
     pub support_bottom_distance: i64,
     pub support_roof_layers: usize,
+    /// How many of the roof's layers print as base interface (`Settings::base_interface_layers`).
+    pub support_roof_base_layers: usize,
     pub support_floor_layers: usize,
     pub support_line_spacing: i64,
     pub support_wall_count: i64,
@@ -198,6 +200,7 @@ impl Config {
             support_top_distance,
             support_bottom_distance,
             support_roof_layers: sp.top_interface_layers,
+            support_roof_base_layers: s.base_interface_layers().0,
             support_floor_layers: bottom_layers,
             support_line_spacing: scaled(sp.base_spacing),
             support_wall_count: sp.wall_count.max(1),
@@ -275,9 +278,10 @@ impl Config {
 /// One object's trees before they are drawn: each support layer's branches, placed, and the roofs over them.
 pub struct Branches {
     pub layers: Vec<Vec<grow::Element>>,
-    /// Each support layer's contact roofs (right under the model) and interface roofs.
+    /// Each support layer's contact roofs (right under the model), interface roofs and base interface roofs.
     pub contacts: Vec<Shapes>,
     pub interfaces: Vec<Shapes>,
+    pub base_interfaces: Vec<Shapes>,
 }
 
 /// The trees grown for an object whose layers' slices are `slices` (`heights` thick), about `origin` (units, the
@@ -360,7 +364,8 @@ fn grown(
     let mut layers = seeds.layers;
     grow::grow(&c, &v, &mut layers);
     grow::place(&c, &v, &mut layers);
-    Some((c, v, Branches { layers, contacts: seeds.contacts, interfaces: seeds.interfaces }))
+    let (contacts, interfaces, base_interfaces) = (seeds.contacts, seeds.interfaces, seeds.base_interfaces);
+    Some((c, v, Branches { layers, contacts, interfaces, base_interfaces }))
 }
 
 /// Whether `p` lies within `reach` units of an edge of `area`.
@@ -414,6 +419,7 @@ pub fn supports(
         bottom_contacts: drawn.bottom_contacts,
         contacts: b.contacts,
         interfaces: b.interfaces,
+        base_interfaces: b.base_interfaces,
         z,
     })
 }

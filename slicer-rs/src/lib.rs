@@ -538,10 +538,15 @@ impl Plate {
         let palette_len = settings.palette.as_ref().map_or(1, |p| p.profiles.len());
         let used = if several {
             let mut used = filaments.clone();
-            // Painted filaments print too (those the setup has).
+            // Painted filaments print too (those the setup has), and the supports' own, with supports or a raft
+            // (Orca's `Print::extruders`).
             for paint in paints.iter().flatten() {
                 let states = paint.states();
                 used.extend((1..=palette_len).filter(|&s| states & (1 << s) != 0).map(|s| s - 1));
+            }
+            if settings.enable_support || settings.support.raft_layers > 0 {
+                let (base, interface) = settings.support.filaments(palette_len);
+                used.extend(base.into_iter().chain(interface));
             }
             used.sort_unstable();
             used.dedup();

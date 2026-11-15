@@ -26,9 +26,10 @@ type Line = Vec<(Pt, Status)>;
 /// What seeding hands the growth: each layer's tips, and the roofs it placed.
 pub struct Seeds {
     pub layers: Vec<Vec<Element>>,
-    /// Each layer's contact roofs and interface roofs, not combined.
+    /// Each layer's contact roofs, interface roofs and base interface roofs, not combined.
     pub contacts: Vec<Shapes>,
     pub interfaces: Vec<Shapes>,
+    pub base_interfaces: Vec<Shapes>,
 }
 
 /// The shared things seeding works with.
@@ -43,6 +44,8 @@ pub struct Seeder<'a> {
     pub roof_density: f64,
     min_xy: bool,
     roof_layers: usize,
+    /// The deepest roof layer that is interface; the ones under it, base interface (`InterfacePlacer`).
+    interface_threshold: usize,
     connect_length: f64,
     out: Seeds,
     taken: Vec<HashSet<(i64, i64)>>,
@@ -61,8 +64,18 @@ impl<'a> Seeder<'a> {
             roof_density,
             min_xy: c.xy_distance > c.xy_min_distance,
             roof_layers: c.support_roof_layers,
+            interface_threshold: {
+                let base = c.support_roof_base_layers;
+                let only = c.support_roof_layers.saturating_sub(base);
+                if only > 0 && base > 0 { only - 1 } else { only }
+            },
             connect_length,
-            out: Seeds { layers: vec![Vec::new(); n], contacts: vec![Vec::new(); n], interfaces: vec![Vec::new(); n] },
+            out: Seeds {
+                layers: vec![Vec::new(); n],
+                contacts: vec![Vec::new(); n],
+                interfaces: vec![Vec::new(); n],
+                base_interfaces: vec![Vec::new(); n],
+            },
             taken: vec![HashSet::new(); n],
             base_circle: geom::make_circle(0.01, 25e-6),
         }
@@ -194,9 +207,14 @@ impl<'a> Seeder<'a> {
         (keep, free)
     }
 
-    /// Roofs on their layers: the first a contact layer, the next ones interface (`InterfacePlacer`).
+    /// Roofs on their layers: the first a contact layer, the next ones interface, the deepest base interface where
+    /// the interface has a filament of its own (`InterfacePlacer`).
     fn add_roof(&mut self, roof: &Shapes, layer: usize, depth: usize) {
-        let target = if depth == 0 { &mut self.out.contacts } else { &mut self.out.interfaces };
+        let target = match depth {
+            0 => &mut self.out.contacts,
+            d if d <= self.interface_threshold => &mut self.out.interfaces,
+            _ => &mut self.out.base_interfaces,
+        };
         if depth == 0 || depth <= self.roof_layers {
             target[layer].extend(roof.iter().cloned());
         }

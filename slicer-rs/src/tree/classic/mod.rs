@@ -306,6 +306,8 @@ pub fn supports(
             first_layer_gap: sp.first_layer_xy_distance,
             top_interface_layers: sp.top_interface_layers,
             bottom_interface_layers: sp.bottom_interface_layers,
+            top_base_interface_layers: s.base_interface_layers().0,
+            bottom_base_interface_layers: s.base_interface_layers().1,
             layer_height: s.layer_height,
             line_width: sp.line_width,
             support_extrusion_width: sp.line_width,
