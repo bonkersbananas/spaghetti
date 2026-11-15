@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
+  filamentsNamed,
   INTENT_KEYS,
+  MAX_FILAMENTS,
   MissingPreset,
   mergedSettings,
   projectIsFor,
@@ -257,5 +259,31 @@ describe("a 3MF project's settings", () => {
       filament_settings_id: ["Bambu PLA Basic @BBL X2D 0.4 nozzle", "Generic PETG @BBL X2D 0.4 nozzle"],
       curr_bed_type: "Cool Plate",
     });
+  });
+});
+
+describe("filaments a file names but doesn't describe", () => {
+  it("are as many as its parts and paint name when its project lists none, else those it lists", () => {
+    // A 3MF another program wrote, with Bambu's model_settings.config (its parts in filaments 1, 2 and 3) and no
+    // project settings: Bambu Studio prints each part in the filament it names.
+    expect(filamentsNamed(undefined)).toBe(MAX_FILAMENTS);
+    expect(filamentsNamed({ layer_height: "0.2" })).toBe(MAX_FILAMENTS);
+    expect(filamentsNamed({ filament_type: ["PLA", "PETG"] })).toBe(2);
+    expect(filamentsNamed({ filament_type: "PLA" })).toBe(1);
+  });
+
+  it("slice as stand-ins of the first filament's material, each in a colour of its own", () => {
+    const setup = sliceSetup(presets, {
+      defaults: { ...DEFAULT_SLICING, filaments: [{ ...orange, material: "PETG", spoolId: "spool-1" }] },
+      filaments: 3,
+    });
+    // Not three of the same spool: the first is the workshop's, the others wait for a spool of their own.
+    expect(setup.slicing.filaments.map((filament) => filament.material)).toEqual(["PETG", "PETG", "PETG"]);
+    expect(setup.slicing.filaments.slice(1)).toEqual([{ material: "PETG" }, { material: "PETG" }]);
+    expect(setup.colours).toEqual(["#F2711C", STAND_IN_COLOURS[1], STAND_IN_COLOURS[2]]);
+    expect(setup.chosen).toEqual([true, false, false]);
+    // Sliced again from what the slice said: the same.
+    const again = sliceSetup(presets, { settings: setup.slicing, filaments: 3 });
+    expect(again.filaments).toEqual(setup.filaments);
   });
 });

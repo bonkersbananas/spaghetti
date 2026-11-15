@@ -116,9 +116,11 @@ export function twoColourProject(): Uint8Array {
  * A Bambu Studio or OrcaSlicer project of one object made of two parts in different filaments: a two-tone coaster,
  * its left half printing in filament 1 (white PLA) and its right half in filament 2 (red PLA), as such a project says
  * it (each part's `extruder` in model_settings.config). Our own slicer prints each half in its filament since the app
- * hands it the parts (slicer-rs-v16's add_part); OrcaSlicer's engine gets the object whole, in the object's filament.
+ * hands it the parts (slicer-rs-v16's add_part); OrcaSlicer's engine gets the object whole, its red half painted in
+ * filament 2. Without `settings`, it is such a file as other programs write: the parts' filaments named, but no
+ * project settings listing them, so no material or colour for them.
  */
-export function partsProject(): Uint8Array {
+export function partsProject({ settings: withSettings = true }: { settings?: boolean } = {}): Uint8Array {
   const model = `<?xml version="1.0" encoding="UTF-8"?>
 <model unit="millimeter" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02">
 <resources>
@@ -145,7 +147,7 @@ export function partsProject(): Uint8Array {
   return zipSync({
     "3D/3dmodel.model": strToU8(model),
     "Metadata/model_settings.config": strToU8(settings),
-    "Metadata/project_settings.config": strToU8(JSON.stringify(project)),
+    ...(withSettings ? { "Metadata/project_settings.config": strToU8(JSON.stringify(project)) } : {}),
   });
 }
 
