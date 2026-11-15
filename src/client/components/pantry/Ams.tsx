@@ -143,15 +143,14 @@ function Slot({ slot, spool, onOpen, onDropSpool, shape = "bay", readOnly, unkno
                 </span>
               </MetaList>
             )}
-            {shape === "bay" && (
-              <DryIt spool={spool} compact className="text-caption justify-center @3xl:justify-start" />
-            )}
+            {shape === "bay" && <DryIt spool={spool} compact className="justify-center @3xl:justify-start" />}
             {shape === "bay" && (
               <RemainingMeter
                 remaining={spool.remaining}
                 gramsLeft={spool.gramsLeft}
                 // A spool that is still loaded but empty says so in words at every width, and grams always show.
                 showLabel={spool.remaining === "empty" || spool.gramsLeft !== null ? true : "wide"}
+                stacked
                 // Pinned to the bottom of the tile, so the four meters sit on one line when a name wraps.
                 className="mt-auto self-center pt-1 @3xl:mt-0.5 @3xl:self-start @3xl:pt-0"
               />

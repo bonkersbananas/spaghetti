@@ -25,8 +25,14 @@ export default function DryItView({
 }) {
   if (!useNeedsDrying(spool)) return null;
   return (
-    <span className={cn("text-small text-ink-soft inline-flex items-center gap-1.5", className)}>
-      <DriedIcon size={14} aria-hidden />
+    <span
+      className={cn(
+        compact ? "text-caption" : "text-small",
+        "text-ink-soft inline-flex items-center gap-1.5",
+        className,
+      )}
+    >
+      <DriedIcon size={compact ? 12 : 14} aria-hidden />
       {compact ? (
         <>
           <span className="whitespace-nowrap lg:hidden">Dry first</span>
