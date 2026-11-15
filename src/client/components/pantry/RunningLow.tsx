@@ -37,7 +37,15 @@ async function shareList(text: string, canShare: boolean) {
  * Spools to restock, under a threshold or short for a print on the bed, with the list to take to the shop.
  * One quiet surface; each row opens the spool.
  */
-export function RunningLow({ low, demo }: { low: readonly LowSpool[]; demo?: boolean }) {
+export function RunningLow({
+  low,
+  demo,
+  copy = true,
+}: {
+  low: readonly LowSpool[];
+  demo?: boolean /** False on the Printer page: no copy button, and the block fills its column. */;
+  copy?: boolean;
+}) {
   const isDesktop = useIsDesktop();
   if (!low.length) return null;
   return (
@@ -45,20 +53,22 @@ export function RunningLow({ low, demo }: { low: readonly LowSpool[]; demo?: boo
       id="running-low"
       title="Running low"
       count={low.length}
-      className="md:max-w-2xl xl:has-[li+li]:max-w-none"
+      className={copy ? "md:max-w-2xl xl:has-[li+li]:max-w-none" : undefined}
       aside={
         <span className="flex items-center gap-2">
           <Suspense fallback={<span className="bg-ink/4 h-9 w-44 rounded-md" aria-hidden />}>
             <ToShoppingList low={low} demo={demo} />
           </Suspense>
-          <Button
-            variant="secondary"
-            size="sm"
-            icon={CopyIcon}
-            onClick={() => void shareList(shoppingList(low), !isDesktop)}
-          >
-            {isDesktop ? "Copy list" : "Share list"}
-          </Button>
+          {copy && (
+            <Button
+              variant="secondary"
+              size="sm"
+              icon={CopyIcon}
+              onClick={() => void shareList(shoppingList(low), !isDesktop)}
+            >
+              {isDesktop ? "Copy list" : "Share list"}
+            </Button>
+          )}
         </span>
       }
     >
@@ -80,8 +90,8 @@ export function RunningLow({ low, demo }: { low: readonly LowSpool[]; demo?: boo
               >
                 <SpoolDisc color={spool.colorHex} colors={spool.colors} size="md" />
                 <span className="min-w-0 flex-1">
-                  <span className="text-body text-ink block truncate font-semibold">{name.title}</span>
-                  <span className="text-small text-ink-faint block truncate">{name.detail || spool.material}</span>
+                  <span className="text-body text-ink block font-semibold break-words">{name.title}</span>
+                  <span className="text-small text-ink-faint block break-words">{name.detail || spool.material}</span>
                 </span>
                 <span className="flex shrink-0 flex-col items-end gap-1">
                   <RemainingMeter remaining={spool.remaining} gramsLeft={spool.gramsLeft} showLabel />
