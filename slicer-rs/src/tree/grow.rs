@@ -56,6 +56,11 @@ pub struct State {
     /// How far the branch has widened towards the plate, in layers' worth.
     pub elephant_foot_increases: f64,
     pub dont_move_until: usize,
+    /// The layers from this one down whose slices still owe the tip its roof, this one included, and the roof's
+    /// depth here (`missing_roof_layers`, `roof_recovery_dtt`): set on a tip forced into a roof that it couldn't
+    /// keep, which drawing then takes from the branch (`recover_pending_branch_roofs`).
+    pub missing_roof_layers: usize,
+    pub roof_recovery_dtt: usize,
     pub last_area_increase: Increase,
     pub to_buildplate: bool,
     pub to_model_gracious: bool,
@@ -82,6 +87,8 @@ impl Default for State {
             increased_to_model_radius: 0,
             elephant_foot_increases: 0.0,
             dont_move_until: 0,
+            missing_roof_layers: 0,
+            roof_recovery_dtt: 0,
             last_area_increase: Increase::default(),
             to_buildplate: false,
             to_model_gracious: false,
@@ -103,9 +110,19 @@ impl State {
         let mut s = self.clone();
         s.distance_to_top += 1;
         s.layer -= 1;
+        if s.missing_roof_layers > 0 {
+            s.missing_roof_layers -= 1;
+            s.roof_recovery_dtt += 1;
+        }
         s.result_on_layer = None;
         s.skip_ovalisation = false;
         s
+    }
+
+    /// Owes its roof on `pending` layers from here down, the first `depth` deep (`set_pending_roof_recovery`).
+    pub fn set_pending_roof_recovery(&mut self, pending: usize, depth: usize) {
+        self.missing_roof_layers = pending;
+        self.roof_recovery_dtt = if pending > 0 { depth } else { 0 };
     }
 }
 
@@ -827,6 +844,11 @@ fn merge_states(c: &Config, first: &State, second: &State, next: Pt, layer: usiz
         },
         ..State::default()
     };
+    // The deepest roof either still owes.
+    out.set_pending_roof_recovery(
+        first.missing_roof_layers.max(second.missing_roof_layers),
+        first.roof_recovery_dtt.max(second.roof_recovery_dtt),
+    );
     if c.bp_radius_increase_per_layer > 0.0 {
         // The foot widened so that the merged radius is the bigger of the two.
         let foot = (c.collision_radius(second).max(c.collision_radius(first)) - c.collision_radius(&out)).abs();

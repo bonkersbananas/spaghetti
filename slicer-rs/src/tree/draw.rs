@@ -8,7 +8,7 @@
 
 use super::grow::Element;
 use super::volumes::Volumes;
-use super::{Config, smooth, util};
+use super::{Config, RoofKind, smooth, util};
 use crate::fmath::Hyp;
 use crate::geom::{self, Contour, Pt, SCALE, Shapes};
 use crate::par;
@@ -40,9 +40,16 @@ impl Frame {
 /// nm²: a polygon smaller than a micrometre squared is dropped (`tiny_area_threshold`).
 const TINY_MM2: f64 = 1e-6;
 
-/// Draws the placed branches of `layers` (`organic_draw_branches`); `contacts` are the roofs' contact layers, which
-/// the branches stay out of.
-pub fn draw(c: &Config, v: &Volumes, layers: &mut [Vec<Element>], contacts: &[Shapes], origin: (f64, f64)) -> Drawn {
+/// The roofs' layers: contacts, interfaces and base interfaces.
+pub struct Roofs<'a> {
+    pub contacts: &'a mut [Shapes],
+    pub interfaces: &'a mut [Shapes],
+    pub base: &'a mut [Shapes],
+}
+
+/// Draws the placed branches of `layers` (`organic_draw_branches`), which stay out of the roofs' contact layers.
+/// A branch from a tip that owes its roof gives up its slices to the roofs, as far down as it owes them.
+pub fn draw(c: &Config, v: &Volumes, layers: &mut [Vec<Element>], roofs: Roofs, origin: (f64, f64)) -> Drawn {
     let frame = Frame { origin };
     let n = layers.len();
     smooth_branches(c, v, layers, frame);
@@ -56,7 +63,17 @@ pub fn draw(c: &Config, v: &Volumes, layers: &mut [Vec<Element>], contacts: &[Sh
         par::map_range(trees.len(), |t| trees[t].iter().filter_map(|b| draw_branch(c, v, layers, b, frame)).collect());
     let mut base: Vec<Shapes> = vec![Vec::new(); n];
     let mut bottoms: Vec<Shapes> = vec![Vec::new(); n];
-    for (first, slices, bottom) in drawn.into_iter().flatten() {
+    for (first, slices, bottom, recovered) in drawn.into_iter().flatten() {
+        for (layer, depth, roof) in recovered {
+            let target = match c.roof_kind(depth) {
+                RoofKind::Contact => &mut *roofs.contacts,
+                RoofKind::Interface => &mut *roofs.interfaces,
+                RoofKind::BaseInterface => &mut *roofs.base,
+            };
+            if let Some(t) = target.get_mut(layer) {
+                t.extend(roof);
+            }
+        }
         for (k, slice) in slices.into_iter().enumerate() {
             if let Some(layer) = base.get_mut(first + k) {
                 layer.extend(slice);
@@ -66,6 +83,7 @@ pub fn draw(c: &Config, v: &Volumes, layers: &mut [Vec<Element>], contacts: &[Sh
             layer.extend(bottom);
         }
     }
+    let contacts = &*roofs.contacts;
     let lw = c.support_line_width;
     let tolerance = super::mm((30_000.0f64).min(c.resolution as f64));
     let finished: Vec<(Shapes, Shapes)> = par::map_range(n, |l| {
@@ -91,8 +109,9 @@ pub fn draw(c: &Config, v: &Volumes, layers: &mut [Vec<Element>], contacts: &[Sh
     Drawn { base, bottom_contacts }
 }
 
-/// A branch cut into layers: its first layer, its slices from there up, and its bottom contact on the first.
-type Drawing = (usize, Vec<Shapes>, Option<Shapes>);
+/// A branch cut into layers: its first layer, its slices from there up, its bottom contact on the first, and the
+/// slices it gave up to the roofs (each layer's, with its depth under the contact).
+type Drawing = (usize, Vec<Shapes>, Option<Shapes>, Vec<(usize, usize, Shapes)>);
 
 /// Every contour of the shapes, as Orca's flat `Polygons`.
 fn contours(shapes: &Shapes) -> Vec<Contour> {
@@ -908,8 +927,25 @@ fn draw_branch(c: &Config, v: &Volumes, layers: &[Vec<Element>], b: &Branch, fra
             bottom = Some(front_contact);
         }
     }
+    // The roofs its tip owes, from the tip down (`recover_pending_branch_roofs`).
+    let mut recovered = Vec::new();
+    if c.support_roof_layers > 0 {
+        for &(layer, i) in b.path.iter().rev() {
+            let state = &layers[layer][i].state;
+            if state.missing_roof_layers == 0 {
+                break;
+            }
+            let Some(slice) = layer.checked_sub(begin).and_then(|k| slices.get_mut(k)) else {
+                continue;
+            };
+            if slice.is_empty() || state.roof_recovery_dtt > c.support_roof_layers {
+                continue;
+            }
+            recovered.push((layer, state.roof_recovery_dtt, std::mem::take(slice)));
+        }
+    }
     while slices.last().is_some_and(|s| s.is_empty()) {
         slices.pop();
     }
-    (!slices.is_empty()).then_some((begin, slices, bottom))
+    (!slices.is_empty() || !recovered.is_empty()).then_some((begin, slices, bottom, recovered))
 }

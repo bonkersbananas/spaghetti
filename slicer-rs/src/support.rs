@@ -2426,6 +2426,25 @@ fn layer_paths(
             cut(&mut bottom, &interface);
         }
     }
+    // Organic trees meeting the object without a gap, their interface in a filament the base can't share: the base
+    // and base interface keep a line's width off the contact and interface beside them, which the branches'
+    // widening could reach (Orca's trim in `generate_support_toolpaths`).
+    if p.organic && p.zero_gap_top && !p.can_merge && (base.is_some() || base_interface.is_some()) {
+        let roofs: Shapes = [&top, &interface]
+            .into_iter()
+            .flatten()
+            .flat_map(|item| item.to_extrude.clone().unwrap_or_else(|| item.polygons.clone()))
+            .collect();
+        if !roofs.is_empty() {
+            // The wider of the base's and the interface's lines (one width here), as Orca's float flow scales it.
+            let margin = (f64::from(p.width as f32) * 1e6) as i64 as f64 / 1e6;
+            let keepout = geom::offset_c2(&roofs, margin, geom::Join::Miter(3.0));
+            for item in [&mut base, &mut base_interface].into_iter().flatten() {
+                let mine = item.to_extrude.take().unwrap_or_else(|| item.polygons.clone());
+                item.to_extrude = Some(geom::difference(&mine, &keepout));
+            }
+        }
+    }
     let path = |role: Role, points: Vec<Pt>, width: f64, h: f64| Path {
         role,
         points: geom::simplify_line(&points, RESOLUTION),
