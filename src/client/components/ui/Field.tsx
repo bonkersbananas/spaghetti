@@ -222,6 +222,13 @@ export interface TextAreaProps extends ComponentPropsWithRef<"textarea"> {
   minRows?: number;
 }
 
+/**
+ * Chrome (and others as they ship it) grows a textarea with its text by itself (`field-sizing: content`): no measuring,
+ * which forced a layout of the whole page in each box's layout effect (29 ms of the attempt sheet's tap at 4× CPU).
+ * Where it isn't there (Safari so far) the boxes are measured as before.
+ */
+const nativeSizing = typeof CSS !== "undefined" && CSS.supports("field-sizing", "content");
+
 /** A textarea that grows with its text, so notes never scroll inside a box. */
 export const TextArea = forwardRef<HTMLTextAreaElement, TextAreaProps>(function TextArea(
   { label, hint, error, saveState, appearance = "surface", minRows = 3, className, id, onInput, ...props },
@@ -233,7 +240,7 @@ export const TextArea = forwardRef<HTMLTextAreaElement, TextAreaProps>(function 
 
   const resize = useCallback(() => {
     const el = innerRef.current;
-    if (!el) return;
+    if (!el || nativeSizing) return;
     el.style.height = "auto";
     el.style.height = `${el.scrollHeight}px`;
   }, []);
@@ -245,6 +252,7 @@ export const TextArea = forwardRef<HTMLTextAreaElement, TextAreaProps>(function 
   // Re-measure when the web fonts arrive (Safari measures with the fallback font first and kept a
   // two-line title's height for one line of text) and when the box's width changes (rotation, a sheet).
   useEffect(() => {
+    if (nativeSizing) return;
     let cancelled = false;
     document.fonts?.ready.then(() => {
       if (!cancelled) resize();
@@ -277,6 +285,10 @@ export const TextArea = forwardRef<HTMLTextAreaElement, TextAreaProps>(function 
         }}
         id={fieldId}
         rows={minRows}
+        // field-sizing ignores `rows`: the same least height, in lines (and the surface's padding).
+        style={
+          nativeSizing ? { minHeight: `calc(${minRows}lh${appearance === "surface" ? " + 1.5rem" : ""})` } : undefined
+        }
         aria-invalid={error ? true : undefined}
         aria-describedby={error || hint ? `${fieldId}-message` : undefined}
         onInput={(event) => {
@@ -285,6 +297,7 @@ export const TextArea = forwardRef<HTMLTextAreaElement, TextAreaProps>(function 
         }}
         className={cn(
           "resize-none overflow-hidden",
+          nativeSizing && "[field-sizing:content]",
           appearance === "surface" && cn(inputSurface, "text-body px-4 py-3"),
           appearance === "plain" &&
             "text-lead text-ink placeholder:text-ink-faint md:text-body w-full bg-transparent focus:shadow-none",
