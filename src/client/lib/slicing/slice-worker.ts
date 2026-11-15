@@ -3,7 +3,7 @@ import { MAX_SLICER_FILE_BYTES } from "@shared/api";
 import type { AttemptSettings } from "@shared/attempts";
 import { layMeshDown, parseStl, scaleMesh } from "@shared/mesh";
 import { arrangeOnPlate, type Box, boundsOf, fitsAsPlaced, plateArea, translate } from "@shared/slicing/arrange.ts";
-import { type ColourUse, planColours } from "@shared/slicing/colours.ts";
+import { type ColourUse, type ProjectFilament, planColours, planProject } from "@shared/slicing/colours.ts";
 import {
   filamentsNamed,
   MissingPreset,
@@ -14,8 +14,9 @@ import {
 } from "@shared/slicing/configs.ts";
 import { withoutStandIns } from "@shared/slicing/filaments.ts";
 import { finiteTriangles, fitPercent, sizeOf } from "@shared/slicing/fit.ts";
+import type { Config } from "@shared/slicing/gcode3mf.ts";
 import { packGcode3mf, summarizeGcode } from "@shared/slicing/gcode3mf.ts";
-import { type ModelColourRun, readModel3mf } from "@shared/slicing/model3mf.ts";
+import { colourHex, type ModelColourRun, readModel3mf } from "@shared/slicing/model3mf.ts";
 import { presetRecord, STAND_IN_COLOURS } from "@shared/slicing/orca.ts";
 import { type ModelPaint, paintBetween, paintLeaves, paintParts, paintWithin } from "@shared/slicing/paint.ts";
 import { renderPlate } from "@shared/slicing/render.ts";
@@ -77,6 +78,9 @@ export type SliceMessage =
       slicer: string | null;
     }
   | { type: "failed"; slice: FileSlice; png: Blob | null };
+
+/** A project's filament that says no colour: a neutral grey, for its swatch and the picture. */
+const NO_COLOUR = "#8c8c8c"; // design-lint-ignore: a filament's colour is data
 
 /** A filament's colour when nothing says one (the stand-in's first: Orca's own). */
 const FALLBACK_COLOUR = STAND_IN_COLOURS[0];
@@ -178,7 +182,10 @@ async function run(request: SliceRequest) {
     const bytes = new Uint8Array(await request.file.arrayBuffer());
     const read = readModel(bytes, request.name, chosen.modelPlate);
     // A model with colours of its own prints each in the filament matched to it.
-    const matched = read.project ? null : matchColours(read.objects, request.spools, chosen);
+    // A project in several filaments prints each in the spool matched to it, its numbers kept.
+    const matched = read.project
+      ? matchProject(read.objects, read.settings, read.painted, request.spools, chosen)
+      : matchColours(read.objects, request.spools, chosen);
     colourRows = matched?.rows;
     plateOf = read.plate;
     const asked: SliceOptions = matched ? { ...chosen, filaments: matched.filaments } : chosen;
@@ -236,7 +243,12 @@ async function run(request: SliceRequest) {
     // The picture as it will print: an object's parts each in its filament's colour.
     png = await picture(objects, setup, byParts);
     if (png) post({ type: "picture", png });
-    if (matched) originalPng = await originalPicture(objects, setup);
+    if (matched) {
+      const project = (matched as { originalColours?: string[] }).originalColours;
+      originalPng = project
+        ? await picture(objects, { ...setup, colours: project }, byParts)
+        : await originalPicture(objects, setup);
+    }
 
     const tower = objects.length && setup.filaments.length > 1 ? towerSpot(objects, plate, setup) : null;
     if (tower) {
@@ -465,6 +477,50 @@ function matchColours(objects: Placed[], spools: readonly SpoolLike[], chosen: S
     };
   });
   return { filaments: plan.filaments, rows };
+}
+
+/**
+ * A project's filaments, each matched to the Pantry spool nearest its colour (of its own material first), a choice
+ * winning; null, leaving the project as it is, when its objects use fewer than two filaments. The filaments keep their
+ * numbers, so each object, part and painted triangle prints where the project put it, in the spool chosen for it.
+ */
+function matchProject(
+  objects: Placed[],
+  settings: Config | undefined,
+  painted: number,
+  spools: readonly SpoolLike[],
+  chosen: SliceOptions,
+) {
+  if (!settings) return null;
+  const types = [settings.filament_type ?? []].flat();
+  const colours = [settings.filament_colour ?? []].flat();
+  const used = new Set<number>();
+  for (const object of objects) {
+    used.add(object.extruder);
+    for (const part of object.parts ?? []) used.add(part.extruder);
+  }
+  for (let state = 1; state <= painted; state++) used.add(state);
+  if (used.size < 2) return null;
+  const count = Math.max(types.length, ...used);
+  const listed: ProjectFilament[] = [];
+  for (let slot = 1; slot <= count; slot++) {
+    const hex = colourHex(colours[slot - 1]);
+    listed.push({ slot, material: types[slot - 1] ?? types[0] ?? "PLA", ...(hex ? { hex } : {}) });
+  }
+  const plan = planProject(listed, used, spools, chosen.colours);
+  const rows: SliceColour[] = plan.rows.map((row) => ({
+    hex: row.hex ?? NO_COLOUR,
+    name: `Filament ${row.slot}`,
+    slot: row.slot,
+    material: row.material,
+    share: 0,
+    filament: row.match.filament,
+    inPantry: row.match.inPantry,
+    ...(row.chosen ? { chosen: true } : {}),
+  }));
+  // The project's own colours, for the picture of the plate as it has them.
+  const originalColours = listed.map((filament) => filament.hex ?? NO_COLOUR);
+  return { filaments: plan.filaments, rows, originalColours };
 }
 
 /** The surface of a run of an object's triangles, in mm². */

@@ -11,7 +11,9 @@
 //!    by each layer of the object, to the plate or to the object's top surfaces, where a bottom contact layer of
 //!    interface sits the bottom gap above.
 //! 4. The support's own layers between those contacts, as thick as the printer allows (0.28 mm on the X2D) and
-//!    evened out, so most of them fall between the object's layers.
+//!    evened out, so most of them fall between the object's layers; or, in step with the object's layers (the
+//!    support's own heights off, as Orca turns them with a prime tower: `synchronize_layers`), the contacts on the
+//!    object's layers the gaps reach, rounded to whole layers, and the object's layers between them.
 //! 5. Every layer cut back from the object by the XY gap (less beside sharp tails and layers it doesn't overlap), one
 //!    more layer of interface next to each contact, and on the plate a flange 2 mm wider than the columns.
 //! 6. Toolpaths: interfaces and columns as Orca's support pattern (`base_support.rs`), the flange as a loop round
@@ -73,8 +75,13 @@ pub struct Params {
     /// mm: the thinnest and thickest support layer.
     min_height: f64,
     max_height: f64,
+    /// mm: the gaps over and under the support, as Orca's slicing parameters keep them (whole layers when the
+    /// support's layers are in step with the object's).
     gap_top: f64,
     gap_bottom: f64,
+    /// The support's layers in step with the object's (`independent_support_layer_height` off, as a prime tower
+    /// turns it): Orca's `synchronize_layers`.
+    synchronize: bool,
     gap_xy: f64,
     gap_xy_first_layer: f64,
     remove_small_overhangs: bool,
@@ -143,8 +150,9 @@ impl Params {
             first_layer_height: s.first_layer_height,
             min_height,
             max_height: sp.max_layer_height,
-            gap_top: sp.top_z_distance,
-            gap_bottom: sp.bottom_z_distance,
+            gap_top: s.support_gaps().0,
+            gap_bottom: s.support_gaps().1,
+            synchronize: !sp.independent_layer_height,
             gap_xy: sp.xy_distance,
             gap_xy_first_layer: sp.first_layer_xy_distance,
             remove_small_overhangs: sp.remove_small_overhang,
@@ -551,7 +559,7 @@ pub fn generate(o: &Object, p: &Params) -> Vec<Layer> {
     trim_by_object(o, &mut arena, &bottoms, &tails, p);
 
     // 4. The support's own layers.
-    let inter = intermediate_layers(&mut arena, &tops, &bottoms, p);
+    let inter = intermediate_layers(o, &mut arena, &tops, &bottoms, p);
 
     // 5. Trimming, base layers, interfaces, the flange.
     trim_by_object(o, &mut arena, &tops, &tails, p);
@@ -949,6 +957,33 @@ fn remove_small_overhangs(detected: &mut [Detected], p: &Params) {
     }
 }
 
+/// Orca's `sync_gap_with_object_layer`, with the support's layers in step with the object's: the object layer that
+/// a contact under layer `l` (`top`) or on it (else) takes its top and height from. Walking down (up) from `l`, the
+/// layers' heights are summed in single precision, as Orca's are, until they reach the gap; the nearer of the last
+/// two sums decides the layer that ends the gap, and the contact is the layer beyond it.
+fn synced_layer(o: &Object, l: usize, gap: f64, top: bool) -> usize {
+    let n = o.height.len();
+    let next = |k: usize| if top { k.checked_sub(1) } else { Some(k + 1).filter(|&k| k < n) };
+    let back = |k: usize| if top { Some(k + 1).filter(|&k| k < n) } else { k.checked_sub(1) };
+    let Some(first) = next(l) else { return l };
+    let (mut at, mut last) = (Some(first), first);
+    let mut synced = 0.0f32;
+    while let Some(k) = at {
+        if synced as f64 >= gap {
+            break;
+        }
+        last = k;
+        synced = (synced as f64 + o.height[k]) as f32;
+        at = next(k);
+    }
+    if ((synced as f64 - o.height[last]) - gap).abs() < (synced as f64 - gap).abs()
+        && let Some(k) = back(last)
+    {
+        last = k;
+    }
+    if top || gap > 0.0 { next(last).unwrap_or(last) } else { at.unwrap_or(last) }
+}
+
 /// Orca's `detect_contacts`, `new_contact_layer` and `fill_contact_layer`: the top contact layer under layer `l`'s
 /// overhangs, the top gap below it.
 fn contact_layer(
@@ -976,7 +1011,14 @@ fn contact_layer(
     } else {
         geom::difference(&geom::intersection(&overhangs, &o.slices[l]), margin)
     };
-    let mut print_z = o.bottom_z(l) - p.gap_top;
+    // In step with the object's layers, the contact is the layer the gap ends on, and as thick; else its height is
+    // decided with the support's own layers.
+    let (mut print_z, height) = if p.synchronize {
+        let k = synced_layer(o, l, p.gap_top, true);
+        (o.print_z[k], o.height[k])
+    } else {
+        (o.bottom_z(l) - p.gap_top, 0.0)
+    };
     if print_z < p.first_layer_height - EPSILON {
         return None;
     }
@@ -984,7 +1026,7 @@ fn contact_layer(
         print_z = p.first_layer_height;
         Gen::new(Kind::TopContact, 0.0, print_z, p.first_layer_height)
     } else {
-        Gen::new(Kind::TopContact, print_z, print_z, 0.0)
+        Gen::new(Kind::TopContact, print_z - height, print_z, height)
     };
     if p.snug {
         // Snug: the contact closed and rounded off, the same to project down and to print; every overhang gets dense
@@ -1084,9 +1126,13 @@ fn columns(
         if !top.is_empty() && !p.plate_only {
             let touching = geom::intersection(top, &raw);
             if !touching.is_empty() {
-                let height0 = p.bottom_contact_height;
-                let mut height = height0;
-                let mut print_z = z + height0 + p.gap_bottom;
+                // In step with the object's layers, the layer the gap up from this one ends on, and as thick.
+                let (mut height, mut print_z) = if p.synchronize {
+                    let k = synced_layer(o, l, p.gap_bottom, false);
+                    (o.height[k], o.print_z[k])
+                } else {
+                    (p.bottom_contact_height, z + p.bottom_contact_height + p.gap_bottom)
+                };
                 let mut t = contact_idx.max(0) as usize;
                 while t < tops.len() && arena[tops[t]].print_z < print_z + p.min_height + EPSILON {
                     let tz = arena[tops[t]].print_z;
@@ -1143,10 +1189,11 @@ fn columns(
     (bottoms, areas)
 }
 
-/// Orca's `raft_and_intermediate_support_layers`, independent support layer heights: between each pair of contacts
-/// (top contacts by their bottoms, bottom contacts by their tops), as few layers as the thickest support layer
-/// allows, evenly thick; a top contact takes its height from the layers below it.
-fn intermediate_layers(arena: &mut Vec<Gen>, tops: &[usize], bottoms: &[usize], p: &Params) -> Vec<usize> {
+/// Orca's `raft_and_intermediate_support_layers`: between each pair of contacts (top contacts by their bottoms, bottom
+/// contacts by their tops), as few layers as the thickest support layer allows, evenly thick, a top contact taking its
+/// height from the layers below it; or, in step with the object's layers, the object's layers between them (and on a
+/// raft one base layer under the object's first).
+fn intermediate_layers(o: &Object, arena: &mut Vec<Gen>, tops: &[usize], bottoms: &[usize], p: &Params) -> Vec<usize> {
     let mut extremes: Vec<usize> = tops.iter().chain(bottoms).copied().collect();
     extremes.sort_by(|&a, &b| {
         let (za, zb) = (arena[a].extreme_z(), arena[b].extreme_z());
@@ -1167,6 +1214,8 @@ fn intermediate_layers(arena: &mut Vec<Gen>, tops: &[usize], bottoms: &[usize], 
     if !extremes.is_empty() && (arena[extremes[0]].extreme_z() - raft_z).abs() < EPSILON {
         first = 1;
     }
+    // In step with the object: the next of its layers to give the support.
+    let mut object_layer = 0;
     for idx in first..extremes.len() {
         let e2 = extremes[idx];
         let mut z2 = arena[e2].extreme_z();
@@ -1184,6 +1233,26 @@ fn intermediate_layers(arena: &mut Vec<Gen>, tops: &[usize], bottoms: &[usize], 
         }
         let mut dist = z2 - z1;
         if dist == 0.0 {
+            continue;
+        }
+        if p.synchronize {
+            // The object's layers from above the lower extreme up to the upper one (Orca's `synchronize_layers`).
+            let n_object = o.print_z.len();
+            while object_layer < n_object && o.print_z[object_layer] < z1 + EPSILON {
+                object_layer += 1;
+            }
+            if object_layer == 0 && z1 == raft_z && p.raft.is_some() {
+                // One base layer under the object, on the raft.
+                let bottom = raft_z;
+                let top = o.print_z.first().map_or(bottom, |&z| z - o.height[0]);
+                push(arena, &mut inter, bottom, top, top - bottom);
+            }
+            while object_layer < n_object && o.print_z[object_layer] < z2 + EPSILON {
+                let (z, h) = (o.print_z[object_layer], o.height[object_layer]);
+                let bottom = if object_layer > 0 { o.print_z[object_layer - 1] } else { z - h };
+                push(arena, &mut inter, bottom, z, h);
+                object_layer += 1;
+            }
             continue;
         }
         let mut n = ((dist - EPSILON) / p.max_height).ceil().max(0.0) as usize;

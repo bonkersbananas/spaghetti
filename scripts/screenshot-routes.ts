@@ -2,7 +2,14 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
 import type { Locator, Page } from "@playwright/test";
-import { hotdogModel, paintedProject, partsProject, platesProject, raftProject } from "../e2e/fixtures/model-3mf.ts";
+import {
+  hotdogModel,
+  makerworldProject,
+  paintedProject,
+  partsProject,
+  platesProject,
+  raftProject,
+} from "../e2e/fixtures/model-3mf.ts";
 import { boxesStl, boxStl, fusilliStl, glassesStl } from "../e2e/fixtures/model-stl.ts";
 import { SLICER_FILE_NAME, slicerFile } from "../e2e/fixtures/slicer-file.ts";
 import { SEED_BUILD_IDS } from "./seed/builds.ts";
@@ -469,6 +476,12 @@ const HOTDOG = process.env.SPAGHETTI_HOTDOG
 const HOTDOG_IDEA = {
   title: "Hotdog hero",
   note: "A model that brings its own colours: each is matched to a spool from the Pantry.",
+};
+/** A MakerWorld-style project in four filaments, with per-object extruders and a painted top: matched to the spools. */
+const PLAQUE = { name: "name-plaque.3mf", bytes: makerworldProject() };
+const PLAQUE_IDEA = {
+  title: "Name plaque",
+  note: "A project in four filaments from MakerWorld: each is matched to a spool from the Pantry.",
 };
 /** A project with painted colours, which our own slicer prints since release 23 (OrcaSlicer's engine before). */
 const FARFALLE = { name: "farfalle-coaster.3mf", bytes: paintedProject() };
@@ -1992,6 +2005,29 @@ export const shots: Shot[] = [
     },
     beforeShot: settleSliceSettings,
     cleanup: closeSliceSettings,
+  },
+  {
+    // A Bambu project's filaments (a MakerWorld file): each matched to a spool, listed as a model's colours are.
+    name: "slice-settings-colours-project",
+    path: "/ideas",
+    prepare: async (page) => {
+      const settings = await openSliceSettings(page, { idea: PLAQUE_IDEA, file: PLAQUE });
+      await settings.getByText("Colours", { exact: true }).waitFor();
+      await openColour(page, settings, "none");
+    },
+    beforeShot: settleSliceSettings,
+    cleanup: closeSliceSettings,
+  },
+  {
+    // The same project's cover: as it prints in our filaments, with the switch to the project's own colours.
+    name: "idea-model-colours-project",
+    path: "/ideas",
+    prepare: async (page) => {
+      await ideaWithModel(page, PLAQUE_IDEA, PLAQUE, /Sliced by/);
+      await sliceSaved(page);
+      await page.getByRole("radio", { name: "In our filaments" }).waitFor();
+    },
+    cleanup: removeModelItems,
   },
   {
     // Keyboard focus on a colour's row.

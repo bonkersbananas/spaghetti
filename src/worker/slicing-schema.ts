@@ -86,7 +86,7 @@ export const slicingSettingsShape = z
         "True when someone picked the nozzle size for this model (decision 0057); without it the model follows the main nozzle's size.",
       ),
     colours: z
-      .array(z.object({ from: z.string().regex(/^#[0-9a-fA-F]{6}$/), filament: slicingFilament }).strict())
+      .array(z.object({ from: z.string().regex(/^(#[0-9a-fA-F]{6}|f\d{1,2})$/), filament: slicingFilament }).strict())
       .max(16)
       .optional()
       .describe(

@@ -218,7 +218,7 @@ export function AmsLoadout({ readOnly, onSlot, onAddSpool, className }: AmsLoado
           <section
             key={letter}
             aria-label={`AMS ${letter}`}
-            className="@container bg-cream shadow-soft rounded-xl p-3 md:p-4"
+            className="bg-cream shadow-soft @container rounded-xl p-3 md:p-4"
           >
             <div className="mb-3 flex items-baseline justify-between gap-3 px-1">
               <h3 className="text-small text-ink font-sans font-semibold">AMS {letter}</h3>

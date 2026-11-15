@@ -1,4 +1,4 @@
-import type { ColourChoice } from "@shared/slicing/colours.ts";
+import { type ColourChoice, slotKey } from "@shared/slicing/colours.ts";
 import { filamentOfSpool, slicingSpools } from "@shared/slicing/pantry.ts";
 import { filamentWords } from "@shared/slicing/settings.ts";
 import type { SliceColour } from "@shared/slicing/types.ts";
@@ -33,6 +33,8 @@ export function spoolTile(spool: SpoolLike): ChoiceTile<string> {
 }
 
 const nameOf = (colour: SliceColour) => colour.name ?? colour.hex;
+/** What a choice for a colour is kept under: a model colour's #rrggbb, or a project filament's `f1`. */
+const choiceKey = (colour: SliceColour) => (colour.slot ? slotKey(colour.slot) : colour.hex);
 /** What a filament is, to tell two colours on one spool: its spool, else its material and colour. */
 const keyOf = (colour: SliceColour) =>
   colour.filament.spoolId ?? `${colour.filament.material}${colour.filament.colorHex}`;
@@ -69,23 +71,28 @@ export function ColourMatches({
   const box = useRef<HTMLDivElement>(null);
   const offered = slicingSpools(spools).slice(0, MAX_SPOOLS);
   const choose = (colour: SliceColour, id: string) => {
-    const others = choices.filter((choice) => choice.from !== colour.hex);
+    const others = choices.filter((choice) => choice.from !== choiceKey(colour));
     if (id === STAND_IN) {
-      const filament = { material: "PLA", colorHex: colour.hex, ...(colour.name ? { colorName: colour.name } : {}) };
-      onChange([...others, { from: colour.hex, filament }]);
+      const filament = {
+        material: colour.material ?? "PLA",
+        colorHex: colour.hex,
+        ...(colour.name && !colour.slot ? { colorName: colour.name } : {}),
+      };
+      onChange([...others, { from: choiceKey(colour), filament }]);
       return;
     }
     const spool = offered.find((candidate) => candidate.id === id);
-    if (spool) onChange([...others, { from: colour.hex, filament: filamentOfSpool(spool) }]);
+    if (spool) onChange([...others, { from: choiceKey(colour), filament: filamentOfSpool(spool) }]);
   };
   const filaments = new Set(colours.map(keyOf));
   const shared = [...filaments].filter((key) => colours.filter((colour) => keyOf(colour) === key).length > 1).length;
+  const projectRows = colours.every((colour) => !!colour.slot);
   const standIns = colours.filter((colour) => !colour.inPantry).length;
   const summary = (
     <span className="flex flex-col gap-1.5">
       <span className="flex flex-wrap items-center gap-x-2.5 gap-y-1.5">
         {colours.map((colour) => (
-          <span key={colour.hex} className="flex items-center gap-1">
+          <span key={choiceKey(colour)} className="flex items-center gap-1">
             <Swatch color={colour.hex} />
             <ArrowRightIcon size={10} aria-hidden className="text-ink-ghost" />
             <SpoolDisc
@@ -98,7 +105,8 @@ export function ColourMatches({
         ))}
       </span>
       <span>
-        {colours.length} colours on {filaments.size} {filaments.size === 1 ? "spool" : "spools"}
+        {colours.length} {projectRows ? (colours.length === 1 ? "filament" : "filaments") : "colours"} on{" "}
+        {filaments.size} {filaments.size === 1 ? "spool" : "spools"}
         {shared ? ` · ${shared} shared` : ""}
         {standIns ? ` · ${standIns} not in the Pantry yet` : ""}
       </span>
@@ -119,7 +127,9 @@ export function ColourMatches({
         summary={summary}
       >
         <p className="text-small text-ink-soft mb-2 text-pretty">
-          Each colour in the model, and the spool that prints it.
+          {projectRows
+            ? "Each filament of the project, and the spool that prints it."
+            : "Each colour in the model, and the spool that prints it."}
         </p>
         <ul className={wide ? "grid grid-cols-2 gap-x-6 gap-y-0" : "flex flex-col"}>
           {colours.map((colour) => {
@@ -127,7 +137,7 @@ export function ColourMatches({
             const sharing = colours.filter((other) => other !== colour && keyOf(other) === keyOf(colour));
             return (
               <li
-                key={colour.hex}
+                key={choiceKey(colour)}
                 className={cn(
                   "before:bg-hairline relative before:absolute before:top-0 before:right-0 before:left-0 before:h-px",
                   wide ? "nth-[-n+2]:before:hidden" : "first:before:hidden",
@@ -135,8 +145,8 @@ export function ColourMatches({
               >
                 <Disclosure
                   appearance="plain"
-                  open={open === colour.hex}
-                  onOpenChange={(next) => setOpen(next ? colour.hex : null)}
+                  open={open === choiceKey(colour)}
+                  onOpenChange={(next) => setOpen(next ? choiceKey(colour) : null)}
                   title={
                     <span className="grid grid-cols-1 items-center gap-2.5 md:grid-cols-[1fr_auto_1fr] md:gap-2">
                       <span className="flex min-w-0 items-center gap-2.5">
@@ -147,7 +157,7 @@ export function ColourMatches({
                           </span>
                           <MetaList className="text-caption text-ink-faint font-normal">
                             {colour.merged?.length ? `${colour.merged.length + 1} near colours` : ""}
-                            {`${colour.share}%`}
+                            {colour.slot ? (colour.material ?? "") : `${colour.share}%`}
                           </MetaList>
                         </span>
                       </span>
@@ -187,7 +197,7 @@ export function ColourMatches({
                     offered={offered}
                     wrapped={wrapped}
                     onPick={(id) => choose(colour, id)}
-                    onBack={() => onChange(choices.filter((choice) => choice.from !== colour.hex))}
+                    onBack={() => onChange(choices.filter((choice) => choice.from !== choiceKey(colour)))}
                   />
                 </Disclosure>
               </li>

@@ -313,6 +313,8 @@ export function orientationOf(value: unknown): Orientation | null | undefined {
 
 const COLOR = /^#[0-9a-f]{6}$/i;
 const MAX_CHOICES = 16;
+/** What a colour choice is for: a model colour (#rrggbb), or a project's filament (f1, f2…). */
+const CHOICE_FROM = /^(#[0-9a-f]{6}|f\d{1,2})$/i;
 const SPOOL_ID = /^[\w-]{1,64}$/;
 
 /** A filament as given, or null when it says no material. Unknown fields are dropped. */
@@ -353,7 +355,7 @@ export function colourChoices(value: unknown): ColourChoice[] {
   if (!Array.isArray(value)) return [];
   const out: ColourChoice[] = [];
   for (const item of value.slice(0, MAX_CHOICES)) {
-    if (!isRecord(item) || typeof item.from !== "string" || !COLOR.test(item.from)) continue;
+    if (!isRecord(item) || typeof item.from !== "string" || !CHOICE_FROM.test(item.from)) continue;
     const filament = slicingFilament(item.filament);
     const from = item.from.toLowerCase();
     if (filament && !out.some((choice) => choice.from === from)) out.push({ from, filament });

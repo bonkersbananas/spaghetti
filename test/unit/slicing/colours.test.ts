@@ -1,6 +1,13 @@
 import { describe, expect, it } from "vitest";
 import { HOTDOG_COLOURS } from "../../../e2e/fixtures/model-3mf.ts";
-import { colourDistance, matchColour, planColours, simplifyColours } from "../../../src/shared/slicing/colours.ts";
+import {
+  colourDistance,
+  matchColour,
+  planColours,
+  planProject,
+  simplifyColours,
+  slotKey,
+} from "../../../src/shared/slicing/colours.ts";
 
 const uses = HOTDOG_COLOURS.map((c, index) => ({ hex: c.hex.toLowerCase(), name: c.name, area: 100 - index }));
 const spool = (id: string, colorHex: string, extra = {}) => ({
@@ -101,5 +108,42 @@ describe("colourDistance", () => {
   it("is 0 for one colour and large for black against white", () => {
     expect(colourDistance("#336699", "#336699")).toBe(0);
     expect(colourDistance("#000000", "#ffffff")).toBeGreaterThan(0.9);
+  });
+});
+
+describe("a project's filaments", () => {
+  const filaments = [
+    { slot: 1, hex: "#f2eee4", material: "PLA" },
+    { slot: 2, hex: "#c2412d", material: "PLA" },
+    { slot: 3, hex: "#1d1d1f", material: "PETG" },
+    { slot: 4, material: "PLA" },
+  ];
+  const pantry = [
+    spool("red", "#c0392b"),
+    spool("pla-black", "#111111"),
+    spool("petg-black", "#101010", { material: "PETG" }),
+  ];
+
+  it("matches each used filament to the nearest spool of its own material, keeping the project's numbers", () => {
+    const plan = planProject(filaments, new Set([1, 2, 3]), pantry);
+    expect(plan.rows.map((row) => row.slot)).toEqual([1, 2, 3]);
+    expect(plan.rows.map((row) => row.match.inPantry)).toEqual([false, true, true]);
+    // Black PETG takes the PETG spool, though the PLA black is as near.
+    expect(plan.filaments.map((f) => f.spoolId)).toEqual([undefined, "red", "petg-black", undefined]);
+    // The unused fourth keeps its own, so the numbers hold.
+    expect(plan.filaments[3]).toEqual({ material: "PLA" });
+  });
+
+  it("lets a choice win, by filament number", () => {
+    const plan = planProject(filaments, new Set([1, 2]), pantry, [
+      { from: slotKey(1), filament: { material: "PLA", spoolId: "red" } },
+    ]);
+    expect(plan.filaments[0]?.spoolId).toBe("red");
+    expect(plan.rows[0]?.chosen).toBe(true);
+  });
+
+  it("never matches a multi-colour spool by itself", () => {
+    const rainbow = spool("rainbow", "#c0392b", { colors: ["#c0392b", "#2255cc"] });
+    expect(matchColour({ hex: "#c0392b" }, [rainbow]).inPantry).toBe(false);
   });
 });
