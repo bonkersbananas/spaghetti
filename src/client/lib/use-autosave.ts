@@ -188,7 +188,8 @@ export function useLiveFields<T extends Record<string, unknown>>(
 
   // Only the fields changed here are kept, never the ones beside them (the other person may have edited those).
   const remember = () => {
-    if (!keepAs) return;
+    // Held text goes out another way (a finish waiting for its button), and would come back as an old edit.
+    if (!keepAs || hold) return;
     const changed: Partial<T> = {};
     for (const key of Object.keys(latest.current) as Array<keyof T>) {
       if (!same(latest.current[key], known.current[key])) changed[key] = latest.current[key];
