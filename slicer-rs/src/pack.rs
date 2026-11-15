@@ -140,7 +140,100 @@ fn round(v: f64, places: i32) -> f64 {
     (v * p).round() / p
 }
 
+/// The printer preset's settings Bambu Studio reads to understand a two-extruder plate.
+const PRINTER_KEYS: [&str; 10] = [
+    "gcode_flavor",
+    "printable_area",
+    "master_extruder_id",
+    "extruder_type",
+    "extruder_offset",
+    "physical_extruder_map",
+    "printer_extruder_id",
+    "printer_extruder_variant",
+    "machine_load_filament_time",
+    "machine_unload_filament_time",
+];
+
+/// The plate's meshes, as the file carries them for Bambu Studio (see `model_xml`).
+pub struct Model<'a> {
+    pub meshes: &'a [crate::mesh::Mesh],
+    /// The meshes of each of the plate's objects, in the order of the objects.
+    pub members: &'a [Vec<usize>],
+    /// The filament each mesh prints in (0 is the first).
+    pub filaments: &'a [usize],
+}
+
+/// The model of the sliced file, laid out as Bambu Studio's own: each mesh a part (a mesh object), an object of several
+/// parts a wrapper of components, a build item for each object, and what `model_settings.config` says of them (name,
+/// filament, parts) and of the plate (which objects are on it, by the labels the G-code carries). Without it Studio
+/// shows the sliced preview, but drops it when anything changes (a filament, say) and finds an empty plate.
+/// Returns the resources and build, the objects' settings and the plate's instances.
+fn model_xml(model: &Model, objects: &[Object]) -> (String, String, String) {
+    use std::fmt::Write;
+    let (mut resources, mut build, mut settings, mut instances) =
+        (String::new(), String::new(), String::new(), String::new());
+    let mut next = 1;
+    for (g, members) in model.members.iter().enumerate() {
+        let Some(object) = objects.iter().find(|o| o.group as usize == g) else { continue };
+        let extruder = |m: usize| model.filaments.get(m).copied().unwrap_or(0) + 1;
+        let mut parts = String::new();
+        let mut ids = Vec::new();
+        let mut faces = 0;
+        for &m in members {
+            let mesh = &model.meshes[m];
+            let id = next;
+            next += 1;
+            ids.push(id);
+            let _ = writeln!(resources, r#"  <object id="{id}" name="{}" type="model">"#, xml(&mesh.name));
+            resources.push_str("   <mesh>\n    <vertices>\n");
+            for v in &mesh.vertices {
+                let _ = writeln!(resources, r#"     <vertex x="{}" y="{}" z="{}"/>"#, v[0], v[1], v[2]);
+            }
+            resources.push_str("    </vertices>\n    <triangles>\n");
+            for t in &mesh.triangles {
+                let _ = writeln!(resources, r#"     <triangle v1="{}" v2="{}" v3="{}"/>"#, t[0], t[1], t[2]);
+            }
+            resources.push_str("    </triangles>\n   </mesh>\n  </object>\n");
+            faces += mesh.triangles.len();
+            let _ = write!(
+                parts,
+                "    <part id=\"{id}\" subtype=\"normal_part\">\n      <metadata key=\"name\" value=\"{}\"/>\n      <metadata key=\"matrix\" value=\"1 0 0 0 0 1 0 0 0 0 1 0 0 0 0 1\"/>\n      <metadata key=\"extruder\" value=\"{}\"/>\n      <mesh_stat face_count=\"{}\" edges_fixed=\"0\" degenerate_facets=\"0\" facets_removed=\"0\" facets_reversed=\"0\" backwards_edges=\"0\"/>\n    </part>\n",
+                xml(&mesh.name),
+                extruder(m),
+                mesh.triangles.len()
+            );
+        }
+        let Some(&first) = ids.first() else { continue };
+        let mut object_id = first;
+        if ids.len() > 1 {
+            object_id = next;
+            next += 1;
+            let _ = writeln!(resources, r#"  <object id="{object_id}" name="{}" type="model">"#, xml(&object.name));
+            resources.push_str("   <components>\n");
+            for id in &ids {
+                let _ = writeln!(resources, r#"    <component objectid="{id}"/>"#);
+            }
+            resources.push_str("   </components>\n  </object>\n");
+        }
+        let _ =
+            writeln!(build, r#"  <item objectid="{object_id}" transform="1 0 0 0 1 0 0 0 1 0 0 0" printable="1"/>"#);
+        let _ = write!(
+            settings,
+            "  <object id=\"{object_id}\">\n    <metadata key=\"name\" value=\"{}\"/>\n    <metadata key=\"extruder\" value=\"{}\"/>\n    <metadata face_count=\"{faces}\"/>\n{parts}  </object>\n",
+            xml(&object.name),
+            extruder(members[0])
+        );
+        let _ = write!(
+            instances,
+            "    <model_instance>\n      <metadata key=\"object_id\" value=\"{object_id}\"/>\n      <metadata key=\"instance_id\" value=\"0\"/>\n      <metadata key=\"identify_id\" value=\"{}\"/>\n    </model_instance>\n",
+            object.label
+        );
+    }
+    (format!(" <resources>\n{resources} </resources>\n <build>\n{build} </build>\n"), settings, instances)
+}
+
 /// The `.gcode.3mf`. `title` names the archive inside (the original file's name).
+#[allow(clippy::too_many_arguments)]
 pub fn gcode_3mf(
     gcode: &[u8],
     thumbnail: Option<&[u8]>,
@@ -149,6 +242,7 @@ pub fn gcode_3mf(
     s: &Settings,
     title: &str,
     colours: Option<&crate::toolchange::Colours>,
+    model: &Model,
 ) -> Vec<u8> {
     // Level 4: within 5% of level 6's size at a third of its time (Benchy's 2.8 MB of G-code: 762 against 725 kB).
     let (packed, md5) = crate::par::join(|| zip::deflate(gcode, 4), || hex(&Md5::digest(gcode)));
@@ -162,6 +256,21 @@ pub fn gcode_3mf(
         None => vec![bambu_filament_id(&s.filament).to_string()],
     };
     settings.push(("filament_ids", Value::List(filament_ids)));
+    // What Studio's G-code reader needs to know the X2D's two extruders (which tool is which, the bed, the flavour):
+    // Orca writes the whole printer preset, ours listed only what a slice used.
+    for &key in &PRINTER_KEYS {
+        if settings.iter().any(|(k, _)| *k == key) {
+            continue;
+        }
+        let values = s.profile.list(key);
+        match values.len() {
+            0 => {}
+            1 if !matches!(s.profile.get(key), Some(crate::json::Json::Array(_))) => {
+                settings.push((key, Value::One(values[0].to_string())))
+            }
+            _ => settings.push((key, Value::List(values.into_iter().map(String::from).collect()))),
+        }
+    }
     let setting = |key: &str| settings.iter().find(|(k, _)| *k == key).map(|(_, v)| v.first().to_string());
     let nozzle = setting("nozzle_diameter").unwrap_or_else(|| "0.4".into());
     let bed_type = setting("curr_bed_type").unwrap_or_else(|| "Textured PEI Plate".into());
@@ -216,6 +325,7 @@ pub fn gcode_3mf(
     rels.push("</Relationships>".into());
     rels.push(String::new());
     files.push(("_rels/.rels", rels.join("\n").into_bytes()));
+    let (resources_and_build, object_settings, instances) = model_xml(model, objects);
     files.push((
         "3D/3dmodel.model",
         [
@@ -224,8 +334,7 @@ pub fn gcode_3mf(
             format!(r#" <metadata name="Application">{BAMBU_STUDIO_APPLICATION}</metadata>"#),
             r#" <metadata name="BambuStudio:3mfVersion">1</metadata>"#.into(),
             format!(r#" <metadata name="Title">{}</metadata>"#, xml(title)),
-            " <resources/>".into(),
-            " <build/>".into(),
+            resources_and_build,
             "</model>".into(),
             String::new(),
         ]
@@ -248,6 +357,7 @@ pub fn gcode_3mf(
     let mut model_settings = vec![
         r#"<?xml version="1.0" encoding="UTF-8"?>"#.to_string(),
         "<config>".into(),
+        object_settings.trim_end().to_string(),
         "  <plate>".into(),
         r#"    <metadata key="plater_id" value="1"/>"#.into(),
         r#"    <metadata key="plater_name" value=""/>"#.into(),
@@ -257,6 +367,7 @@ pub fn gcode_3mf(
     if thumbnail.is_some() {
         model_settings.push(r#"    <metadata key="thumbnail_file" value="Metadata/plate_1.png"/>"#.into());
     }
+    model_settings.push(instances.trim_end().to_string());
     model_settings.extend(["  </plate>".into(), "</config>".into(), String::new()]);
     files.push(("Metadata/model_settings.config", model_settings.join("\n").into_bytes()));
     // As Orca writes it for the X2D with one filament on the left extruder (`filament_maps` 1), which is what
