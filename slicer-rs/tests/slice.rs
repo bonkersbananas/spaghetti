@@ -99,10 +99,20 @@ fn a_cube_becomes_a_file_the_app_reads() {
     // geometry data"), with a non-empty project config and the plate's G-code named in model_settings.config.
     let model = String::from_utf8(entry(&out.file, "3D/3dmodel.model")).unwrap();
     assert!(model.contains(r#"<metadata name="Application">BambuStudio-02.00.00.00</metadata>"#), "{model}");
+    // The model is in the file: with it Studio can show the plate again once a change drops the sliced preview.
+    assert!(
+        model.contains("<mesh>") && model.contains("<triangle ") && model.contains(r#"<item objectid="1""#),
+        "{model}"
+    );
     let project = String::from_utf8(entry(&out.file, "Metadata/project_settings.config")).unwrap();
     assert!(project.trim_start().starts_with('{') && project.len() > 100);
     let model_settings = String::from_utf8(entry(&out.file, "Metadata/model_settings.config")).unwrap();
     assert!(model_settings.contains(r#"<metadata key="gcode_file" value="Metadata/plate_1.gcode"/>"#));
+    assert!(
+        model_settings.contains(r#"<object id="1">"#)
+            && model_settings.contains(r#"<metadata key="object_id" value="1"/>"#)
+    );
+    assert!(model_settings.contains(r#"<metadata key="identify_id" value="1"/>"#), "{model_settings}");
     let inside = entry(&out.file, "Metadata/plate_1.gcode");
     assert_eq!(inside, out.gcode);
     let md5: String = Md5::digest(&inside).iter().map(|b| format!("{b:02X}")).collect();

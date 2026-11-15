@@ -949,8 +949,16 @@ impl Plate {
         });
         let t7 = now();
         let title = title.as_deref().unwrap_or("Model");
-        let file =
-            pack::gcode_3mf(&g.text, thumbnail.as_deref(), &g.stats, &group_objects, settings, title, colours.as_ref());
+        let file = pack::gcode_3mf(
+            &g.text,
+            thumbnail.as_deref(),
+            &g.stats,
+            &group_objects,
+            settings,
+            title,
+            colours.as_ref(),
+            &pack::Model { meshes: &meshes, members: &parts.members, filaments: &filaments },
+        );
         let t8 = now();
         Ok(Output {
             file,
