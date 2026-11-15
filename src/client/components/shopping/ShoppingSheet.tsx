@@ -103,6 +103,7 @@ function ShoppingBody({ item }: { item: ShoppingItem }) {
       if (priceLink !== undefined && !linkError(priceLink)) next.priceLink = priceLink.trim() || null;
       if (Object.keys(next).length) await updateShopping(queryClient, item.id, next);
     },
+    { keepAs: `shopping:${item.id}` },
   );
   return (
     <div className="flex flex-col gap-5">

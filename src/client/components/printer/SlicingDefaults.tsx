@@ -61,8 +61,10 @@ export function SlicingDefaults() {
   const { data } = useSuspenseQuery(printerQuery);
   const slicing = data.setup.slicing ?? null;
   const server = useMemo(() => ({ slicing }), [slicing]);
-  const { value, change, saveState } = useLiveFields<{ slicing: Defaults | null }>(server, (changes) =>
-    savePrinterSetup(queryClient, changes),
+  const { value, change, saveState } = useLiveFields<{ slicing: Defaults | null }>(
+    server,
+    (changes) => savePrinterSetup(queryClient, changes),
+    { keepAs: "slicing-defaults" },
   );
   // Here, through the form; once the page is gone (the reset's Undo, from its toast), straight to the server.
   const live = useRef(true);

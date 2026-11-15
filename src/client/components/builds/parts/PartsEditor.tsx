@@ -9,6 +9,7 @@ import { Stepper } from "@/components/ui/Stepper";
 import { cn } from "@/lib/cn";
 import { removePart, saveParts } from "@/lib/parts";
 import { photoSrc } from "@/lib/previews";
+import { unsent } from "@/lib/unsent";
 import { useAutosave } from "@/lib/use-autosave";
 
 const field =
@@ -16,14 +17,20 @@ const field =
 
 function PartRow({ itemId, part, photos }: { itemId: string; part: Part; photos: PhotoType[] }) {
   const queryClient = useQueryClient();
-  const [name, setName] = useState(part.name);
-  const [quantity, setQuantity] = useState(part.quantity);
+  // What a killed tab left unsent for this part (lib/unsent.ts) is back in its fields, and saved.
+  const [left] = useState(() => unsent<{ name: string; quantity: number }>(`part:${part.id}`));
+  const [name, setName] = useState(left?.name ?? part.name);
+  const [quantity, setQuantity] = useState(left?.quantity ?? part.quantity);
   const [picking, setPicking] = useState(false);
   // A blank name isn't saved: the part keeps its last name until one is typed.
-  useAutosave({ name: cleanPartName(name), quantity }, async (value) => {
-    if (!value.name) return;
-    await saveParts(queryClient, itemId, [{ id: part.id, ...value }]);
-  });
+  useAutosave(
+    { name: cleanPartName(name), quantity },
+    async (value) => {
+      if (!value.name) return;
+      await saveParts(queryClient, itemId, [{ id: part.id, ...value }]);
+    },
+    { keepAs: `part:${part.id}`, from: { name: part.name, quantity: part.quantity } },
+  );
   const photo = photos.find((candidate) => candidate.id === part.photoId);
   return (
     <li className="flex flex-col gap-2">
