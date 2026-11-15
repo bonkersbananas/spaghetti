@@ -2885,3 +2885,36 @@ fn painted_supports_enforce_and_block_support_as_orcas_do() {
     // Nothing painted where supports are only where painted: none.
     near(painted_tee(&[36, 37], b'8', r#""support_type": "normal(manual)""#), (0.0, 0.0), 0.0);
 }
+
+#[test]
+fn wrapping_detection_lifts_the_nozzle_before_each_layer_as_orcas_does() {
+    // The nozzle's wrapping detection on the X2D, which has no G-code for it: before each layer's first filament Orca
+    // retracts and lifts at once, so the layer's first travel goes lifted and comes down at its end. Native
+    // OrcaSlicer 2.5.1 (Nov 15) changes a cube's and a Benchy's G-code so, lift for lift, as ours does.
+    let cube = cube_stl(10.0);
+    let options = Options { arrange: false, thumbnail: false, ..Options::default() };
+    let setup = r#"{"process": {"enable_wrapping_detection": "1"}}"#;
+    let settings = setup::read(setup).unwrap().settings;
+    let gcode = slice(&[Input { name: "cube.stl", bytes: &cube }], &settings, &options).unwrap().gcode;
+    let gcode = String::from_utf8(gcode).unwrap();
+    // As Orca writes a height: no leading zero, no trailing ones.
+    let short = |v: f64| {
+        let s = format!("{v:.3}");
+        let s = s.trim_end_matches('0').trim_end_matches('.');
+        s.strip_prefix('0').unwrap_or(s).to_string()
+    };
+    let layers: Vec<&str> = gcode.split("; CHANGE_LAYER\n").skip(1).collect();
+    assert_eq!(layers.len(), 50);
+    for (k, layer) in layers.iter().enumerate() {
+        let z: f64 = layer.lines().next().and_then(|l| l.strip_prefix("; Z_HEIGHT: ")).unwrap().parse().unwrap();
+        let (change, label) = (layer.find("M991 S0 P").unwrap(), layer.find("M624").unwrap());
+        let lift = format!("\nG1 Z{} F60000\n", short(z + settings.z_hop));
+        assert!(layer[change..label].contains(&lift), "layer {k}: {}", &layer[change..label]);
+        let after: Vec<&str> = layer[label..].lines().skip(1).take(3).collect();
+        assert!(after[0].starts_with("G1 X") && !after[0].contains(['F', 'Z']), "layer {k}: {after:?}");
+        // Down at the travel's end, and on the first layer to its height once more, as Orca's move onto it waits.
+        let down = format!("G1 Z{}", short(z));
+        assert_eq!(after[1], down, "layer {k}");
+        assert_eq!(after[2] == down, k == 0, "layer {k}: {after:?}");
+    }
+}

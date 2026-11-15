@@ -1191,6 +1191,15 @@ fn build_layer<'a>(
             b.note(Note::Text(temps));
         }
     }
+    // The nozzle's wrapping detection, where the printer has no G-code for it: before the layer's first filament Orca
+    // retracts and lifts at once (its `retract` with `apply_instantly`), straight up from the layer's height as its
+    // writer doesn't know where the layer change left the nozzle, so the layer's first travel goes at that height and
+    // comes down at its end.
+    let wrapping = s.wrapping_detection && course.is_none() && s.z_hop > 0.0;
+    if wrapping {
+        b.line(x0, y0, plan.z + s.z_hop, 0.0, s.travel_speed, Kind::Lift);
+        b.lifted = true;
+    }
     let labels = job.labels();
     let internal = Internal::new(&regions.islands, &regions.surfaces, &plan.support_islands);
     // The object a path prints inside the labels of: none for a brim, which Orca prints before it starts the object.
@@ -1303,7 +1312,13 @@ fn build_layer<'a>(
                     open_label = Some(o);
                 }
                 b.travel(x, y, false);
-                if first_layer {
+                if first_layer && wrapping {
+                    // Down at the travel's end, then to the first layer's height again: Orca's move onto the first
+                    // layer, which waits for its first travel.
+                    b.line(x, y, plan.z, 0.0, s.travel_speed, Kind::Lift);
+                    b.line(x, y, plan.z, 0.0, s.travel_speed, Kind::Lift);
+                    b.lifted = false;
+                } else if first_layer {
                     // Down to the first layer's travel height first.
                     b.lift_to(plan.z + s.z_hop);
                 }
