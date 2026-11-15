@@ -47,12 +47,16 @@ function RecipeBody({ recipe, onClose }: { recipe: Recipe; onClose: () => void }
   const queryClient = useQueryClient();
   const isDesktop = useIsDesktop();
   const readOnly = useReadOnly();
-  const { value, change, saveState } = useLiveFields({ name: recipe.name, note: recipe.note }, async (changes) => {
-    // A name can't be blank: that change waits until there is one.
-    const { name, ...rest } = changes;
-    const next = { ...rest, ...(name?.trim() ? { name: name.trim() } : {}) };
-    if (Object.keys(next).length) await updateRecipe(queryClient, recipe.id, next);
-  });
+  const { value, change, saveState } = useLiveFields(
+    { name: recipe.name, note: recipe.note },
+    async (changes) => {
+      // A name can't be blank: that change waits until there is one.
+      const { name, ...rest } = changes;
+      const next = { ...rest, ...(name?.trim() ? { name: name.trim() } : {}) };
+      if (Object.keys(next).length) await updateRecipe(queryClient, recipe.id, next);
+    },
+    { keepAs: `recipe:${recipe.id}` },
+  );
   return (
     <div className="flex flex-col gap-6">
       {recipe.source?.photo && (

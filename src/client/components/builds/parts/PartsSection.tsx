@@ -7,7 +7,7 @@ import {
   showsPips,
 } from "@shared/parts";
 import { useQueryClient } from "@tanstack/react-query";
-import { lazy, Suspense, useMemo, useState } from "react";
+import { lazy, Suspense, useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { CheckCircleIcon, FinishIcon, SlicerFileIcon } from "@/components/ui/icons";
 import { Overline } from "@/components/ui/Overline";
@@ -16,6 +16,7 @@ import { cn } from "@/lib/cn";
 import type { ItemView } from "@/lib/items";
 import { saveParts } from "@/lib/parts";
 import { photoSrc } from "@/lib/previews";
+import { unsent } from "@/lib/unsent";
 
 const PartsEditor = lazy(() => import("./PartsEditor"));
 
@@ -77,6 +78,12 @@ export function PartsSection({
 }) {
   const queryClient = useQueryClient();
   const [editing, setEditing] = useState(false);
+  // A part's name or count that a killed tab left unsent is only sent by its row: open the editor so it can.
+  const leftUnsent = item.parts.some((part) => unsent(`part:${part.id}`) !== undefined);
+  const cannotEdit = readOnly || item.pending;
+  useEffect(() => {
+    if (leftUnsent && !cannotEdit) setEditing(true);
+  }, [leftUnsent, cannotEdit]);
   const progress = useMemo(() => partProgress(item.parts, item.attempts), [item.parts, item.attempts]);
   const fromFile = useMemo(
     () =>

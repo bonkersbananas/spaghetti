@@ -115,6 +115,7 @@ function TwistBody({ twist }: { twist: Twist }) {
       const next = { ...rest, ...(name?.trim() ? { name: name.trim() } : {}) };
       if (Object.keys(next).length) await updateTwist(queryClient, twist.id, next);
     },
+    { keepAs: `twist:${twist.id}` },
   );
   const photo = twist.source.photo;
   const model = twist.model;
