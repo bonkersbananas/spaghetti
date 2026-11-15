@@ -3,6 +3,8 @@ import { DEFAULT_SLICING, STAND_IN_FILAMENT } from "../../../src/shared/slicing/
 import {
   changedSlicing,
   colourChoices,
+  copiesOf,
+  copiesWords,
   filamentWords,
   INFILL_PATTERNS,
   layerRange,
@@ -456,5 +458,33 @@ describe("a model's colour choices", () => {
     };
     expect(sameSlicing(a, b)).toBe(true);
     expect(changedSlicing(DEFAULT_SLICING, a)).toEqual(["colours"]);
+  });
+});
+
+describe("copies", () => {
+  it("are 2 to 99, or fit; anything else is one copy", () => {
+    expect(copiesOf(2)).toBe(2);
+    expect(copiesOf(99)).toBe(99);
+    expect(copiesOf("fit")).toBe("fit");
+    for (const bad of [1, 0, 100, 2.5, "3", null, undefined]) expect(copiesOf(bad)).toBeUndefined();
+  });
+
+  it("are kept by normalize, checked by slicingProblems and seen as a change", () => {
+    expect(normalizeSlicing({ copies: 12 }).copies).toBe(12);
+    expect(normalizeSlicing({ copies: "fit" }).copies).toBe("fit");
+    expect("copies" in normalizeSlicing({ copies: 1 })).toBe(false);
+    expect(slicingProblems({ ...DEFAULT_SLICING, copies: 100 })).toHaveLength(1);
+    expect(slicingProblems({ ...DEFAULT_SLICING, copies: 12 })).toEqual([]);
+    const twelve = { ...DEFAULT_SLICING, copies: 12 };
+    expect(changedSlicing(DEFAULT_SLICING, twelve)).toEqual(["copies"]);
+    expect(sameSlicing(DEFAULT_SLICING, { ...DEFAULT_SLICING, copies: 1 } as never)).toBe(true);
+  });
+
+  it("are said as × 12, or as many as fit", () => {
+    expect(copiesWords({})).toBe("");
+    expect(copiesWords({ copies: 12 })).toBe("× 12");
+    expect(copiesWords({ copies: "fit" })).toBe("as many as fit");
+    expect(copiesWords({ copies: "fit" }, 20)).toBe("× 20, as many as fit");
+    expect(slicingSummary({ ...DEFAULT_SLICING, copies: 4 })).toContain("× 4");
   });
 });

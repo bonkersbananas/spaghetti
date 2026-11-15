@@ -129,8 +129,25 @@ export interface SlicingSettings {
    * someone chose; without it, the first. Only a project with plates has one; kept so a re-slice and a reprint keep it.
    */
   modelPlate?: number;
+  /**
+   * How many copies of the plate's objects are printed together, each copy its own object (so one that fails can be
+   * skipped): 2 to `COPIES_MAX`, or "fit" for as many as the plate takes. Without it, one. The slice records how many
+   * there were (`FileSlice.copies`).
+   */
+  copies?: Copies;
   /** Which slicer slices it (decision 0055): `DEFAULT_SLICER` (defaults.ts) unless someone picked one. */
   slicer: SlicerId;
+}
+
+/** How many copies of a model: a number from 2, or as many as fit on the plate. */
+export type Copies = number | "fit";
+/** The most copies on one plate. */
+export const COPIES_MAX = 99;
+
+/** Copies as given: a whole number from 2 to `COPIES_MAX`, or "fit"; undefined for one copy and for anything else. */
+export function copiesOf(value: unknown): Copies | undefined {
+  if (value === "fit") return "fit";
+  return typeof value === "number" && Number.isInteger(value) && value >= 2 && value <= COPIES_MAX ? value : undefined;
 }
 
 /** A direction in the model's own axes: [x, y, z], unit length. */
@@ -418,7 +435,10 @@ export function slicingProblems(value: unknown): string[] {
   if (value.modelPlate !== undefined && !plateNumber(value.modelPlate)) {
     problems.push("modelPlate is a plate's number in the project, from 1 to 99.");
   }
-  const known = new Set<string>([...Object.keys(DEFAULT_SLICING), "nozzlePicked", "colours", "modelPlate"]);
+  if (value.copies !== undefined && copiesOf(value.copies) === undefined) {
+    problems.push(`copies is a whole number from 2 to ${COPIES_MAX}, or "fit" for as many as the plate takes.`);
+  }
+  const known = new Set<string>([...Object.keys(DEFAULT_SLICING), "nozzlePicked", "colours", "modelPlate", "copies"]);
   for (const key of Object.keys(value)) if (!known.has(key)) problems.push(`${key} isn't a slicing setting.`);
   return problems;
 }
@@ -458,6 +478,7 @@ export function normalizeSlicing(value: unknown, base: SlicingSettings = DEFAULT
     ...(given.nozzlePicked === true ? { nozzlePicked: true } : {}),
     ...(colourChoices(given.colours).length ? { colours: colourChoices(given.colours) } : {}),
     ...(plateNumber(given.modelPlate) ? { modelPlate: given.modelPlate as number } : {}),
+    ...(copiesOf(given.copies) !== undefined ? { copies: copiesOf(given.copies) as Copies } : {}),
     scale: whole("scale"),
     orientation:
       orientationOf(given.orientation) === undefined ? base.orientation : (orientationOf(given.orientation) ?? null),
@@ -476,7 +497,7 @@ export function sameSlicing(a: SlicingSettings, b: SlicingSettings): boolean {
 
 function canonical(settings: SlicingSettings) {
   return Object.fromEntries(
-    [...Object.keys(DEFAULT_SLICING), "colours", "modelPlate"].map((key) => [
+    [...Object.keys(DEFAULT_SLICING), "colours", "modelPlate", "copies"].map((key) => [
       key,
       key === "filaments"
         ? settings.filaments.map((filament) =>
@@ -491,14 +512,16 @@ function canonical(settings: SlicingSettings) {
               }))
           : key === "modelPlate"
             ? (settings.modelPlate ?? 1)
-            : settings[key as SlicingKey],
+            : key === "copies"
+              ? (settings.copies ?? 1)
+              : settings[key as SlicingKey],
     ]),
   );
 }
 
 /** The settings that differ between two, in the order they are shown. */
 export function changedSlicing(before: SlicingSettings, after: SlicingSettings): SlicingKey[] {
-  return ([...Object.keys(DEFAULT_SLICING), "colours", "modelPlate"] as SlicingKey[]).filter(
+  return ([...Object.keys(DEFAULT_SLICING), "colours", "modelPlate", "copies"] as SlicingKey[]).filter(
     (key) => JSON.stringify(canonical(before)[key]) !== JSON.stringify(canonical(after)[key]),
   );
 }
@@ -524,6 +547,13 @@ export function orientationWords(settings: Pick<SlicingSettings, "orientation">)
   const down = settings.orientation;
   if (!down) return "";
   return down[2] > 0.9 ? "upside down" : "on its side";
+}
+
+/** "× 12", "as many as fit": the copies asked for, as a line says them; empty for one. `made` is how many there were. */
+export function copiesWords(settings: Pick<SlicingSettings, "copies">, made?: number): string {
+  if (settings.copies === undefined) return "";
+  if (settings.copies === "fit") return made && made > 1 ? `× ${made}, as many as fit` : "as many as fit";
+  return `× ${settings.copies}`;
 }
 
 /** "0.12 mm": a layer height as slicers write it, beside its name. */
@@ -580,6 +610,7 @@ export function slicingLine(settings: SlicingSettings): string[] {
       : `${settings.walls} walls, ${settings.infill}% ${patternWords(settings.pattern)}`,
     orientationWords(settings),
     settings.scale !== 100 ? `${settings.scale}%` : "",
+    copiesWords(settings),
   ].filter(Boolean);
 }
 
@@ -596,6 +627,7 @@ export function slicingSummary(settings: SlicingSettings): string[] {
   return [
     // Which plate of a project, first: it is what the rest is about.
     settings.modelPlate ? `Plate ${settings.modelPlate}` : "",
+    copiesWords(settings),
     qualityOf(settings.layerHeight, settings.nozzle)?.label ?? `${Number(settings.layerHeight.toFixed(2))} mm layers`,
     strength
       ? strengthWords(strength)

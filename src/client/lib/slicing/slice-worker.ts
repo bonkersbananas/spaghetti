@@ -2,7 +2,17 @@
 import { MAX_SLICER_FILE_BYTES } from "@shared/api";
 import type { AttemptSettings } from "@shared/attempts";
 import { layMeshDown, parseStl, scaleMesh } from "@shared/mesh";
-import { arrangeOnPlate, type Box, boundsOf, fitsAsPlaced, plateArea, translate } from "@shared/slicing/arrange.ts";
+import {
+  arrangeOnPlate,
+  type Box,
+  boundsOf,
+  copyName,
+  fitsAsPlaced,
+  mostCopies,
+  plateArea,
+  translate,
+  withTowerRoom,
+} from "@shared/slicing/arrange.ts";
 import { type ColourUse, type ProjectFilament, planColours, planProject } from "@shared/slicing/colours.ts";
 import {
   filamentsNamed,
@@ -20,7 +30,7 @@ import { colourHex, type ModelColourRun, readModel3mf } from "@shared/slicing/mo
 import { presetRecord, STAND_IN_COLOURS } from "@shared/slicing/orca.ts";
 import { type ModelPaint, paintBetween, paintLeaves, paintParts, paintWithin } from "@shared/slicing/paint.ts";
 import { renderPlate } from "@shared/slicing/render.ts";
-import { type SlicerId, type SlicingSettings, slicingFor } from "@shared/slicing/settings.ts";
+import { COPIES_MAX, type SlicerId, type SlicingSettings, slicingFor } from "@shared/slicing/settings.ts";
 import { cautionsOf, rustEstimateMs, type SlicerWarning } from "@shared/slicing/slicers.ts";
 import type {
   FileSlice,
@@ -161,11 +171,14 @@ async function run(request: SliceRequest) {
   let colourRows: SliceColour[] | undefined;
   let originalPng: Blob | null = null;
   let plateOf: FileSlice["plate"];
+  // How many copies of the plate's objects are on it, when more than one.
+  let copies: number | undefined;
   const slice = (extra: Omit<FileSlice, "settings" | "at">): FileSlice => ({
     ...extra,
     ...(fallback ? { fallback } : {}),
     ...(colourRows ? { colours: colourRows, ...(originalPng ? { originalPicture: true } : {}) } : {}),
     ...(plateOf ? { plate: plateOf } : {}),
+    ...(copies ? { copies } : {}),
     settings: {
       ...settings,
       scale,
@@ -222,8 +235,34 @@ async function run(request: SliceRequest) {
     });
     // An object made of parts in different filaments prints each part in its own: so does its picture.
     const byParts = objects.some((object) => partsOf(object));
+    // Copies of everything on the plate, each its own object, arranged together: with two filaments or more, room is
+    // kept for the prime tower, wherever the project had it.
+    const several = setup.filaments.length > 1;
+    const towerWidth = Number(first(setup.process.prime_tower_width)) || 35;
+    const room = several && chosen.copies !== undefined ? withTowerRoom(plate, towerWidth) : plate;
+    const total =
+      chosen.copies === "fit"
+        ? Math.max(
+            1,
+            mostCopies(
+              objects.map((object) => boundsOf(object.positions)),
+              room,
+              COPIES_MAX,
+            ),
+          )
+        : (chosen.copies ?? 1);
+    if (total > 1) {
+      const originals = [...objects];
+      for (let n = 2; n <= total; n++) {
+        for (const object of originals) {
+          objects.push({ ...object, name: copyName(object.name, n), positions: new Float32Array(object.positions) });
+        }
+      }
+      copies = total;
+      if (several) delete setup.tower;
+    }
     try {
-      place(objects, plate, volume, read.project && scale === 100 && !down, scale);
+      place(objects, room, volume, read.project && scale === 100 && !down && total === 1, scale, total);
     } catch (error) {
       // A model that doesn't fit still gets its picture, as it is.
       png = await picture(objects, setup, byParts);
@@ -314,7 +353,7 @@ async function run(request: SliceRequest) {
           ms: Math.round(ms),
         }),
         prefill: withoutStandIns(settingsFromFile(reading, 1), setup.chosen),
-        objects: objects.map((object) => object.name),
+        objects: objects.slice(0, objects.length / (copies ?? 1)).map((object) => object.name),
         slicer: slicerName(reading) ?? null,
       },
       [sliced.buffer],
@@ -642,6 +681,7 @@ function place(
   volume: [number, number, number],
   keepLayout: boolean,
   scale: number,
+  copies = 1,
 ) {
   const boxes = objects.map((object) => boundsOf(object.positions));
   if (keepLayout && fitsAsPlaced(boxes, plate)) {
@@ -650,6 +690,11 @@ function place(
   }
   const problem = arrangeOnPlate(objects, plate);
   if (!problem) return;
+  if (problem === "too-many" && copies > 1) {
+    // Fewer copies would fit: how many.
+    const fitCopies = mostCopies(boxes.slice(0, boxes.length / copies), plate, COPIES_MAX);
+    throw new Problem("too-many", { volume, ...(fitCopies >= 1 ? { fitCopies } : {}) });
+  }
   if (problem === "too-many") {
     const fits = (percent: number) =>
       !arrangeOnPlate(

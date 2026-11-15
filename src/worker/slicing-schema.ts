@@ -6,6 +6,7 @@
 import { z } from "zod";
 import { DEFAULT_SLICING } from "../shared/slicing/defaults.ts";
 import {
+  COPIES_MAX,
   INFILL_PATTERNS,
   LIMITS,
   normalizeSlicing,
@@ -100,6 +101,12 @@ export const slicingSettingsShape = z
       .optional()
       .describe(
         "Which plate of a 3MF project with several it slices (the project's own number for it); absent: the first.",
+      ),
+    copies: z
+      .union([z.number().int().min(2).max(COPIES_MAX), z.literal("fit")])
+      .optional()
+      .describe(
+        'How many copies of the plate\'s objects print together, each its own object: 2 to 99, or "fit" for as many as the plate takes. Absent: one.',
       ),
     scale: z.number().int().min(LIMITS.scale.min).max(LIMITS.scale.max).describe("Percent of the model's own size."),
     orientation: z

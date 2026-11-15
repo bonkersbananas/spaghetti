@@ -93,6 +93,12 @@ export function changeWords(before: SlicingSettings, after: SlicingSettings): st
       return orientationWords(after) || "the model as designed";
     case "modelPlate":
       return `plate ${after.modelPlate ?? 1}`;
+    case "copies":
+      return after.copies === undefined
+        ? "one copy"
+        : after.copies === "fit"
+          ? "as many as fit"
+          : `${after.copies} copies`;
     case "slicer":
       return slicerWords(after.slicer);
     default:
