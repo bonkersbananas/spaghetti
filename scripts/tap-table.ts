@@ -388,13 +388,16 @@ const scenarios: Scenario[] = [
       for (const [path, label] of [["/builds", "builds"]] as const) {
         await goto(env, path, "main [data-picks] a[href]");
         await env.page.locator("body").click({ position: { x: 5, y: 5 } });
-        const focused = (n: number) =>
-          `document.querySelectorAll('main [data-picks] a[href]').length > 0 && !!document.activeElement?.closest('main [data-picks]') && ${n} > 0`;
-        out[`${label}: J (first)`] = await tapLatency(env.page, () => env.page.keyboard.press("j"), focused(1));
+        // Done when focus sits on a list link other than the one it was on before the key.
+        const moved = async () => {
+          const before = await env.page.evaluate(() => document.activeElement?.getAttribute("href") ?? "");
+          return `(() => { const el = document.activeElement; return !!el?.closest('main [data-picks]') && (el.getAttribute('href') ?? '') !== ${JSON.stringify(before)}; })()`;
+        };
+        out[`${label}: J (first)`] = await tapLatency(env.page, () => env.page.keyboard.press("j"), await moved());
         await env.settle();
-        out[`${label}: J (next)`] = await tapLatency(env.page, () => env.page.keyboard.press("j"), focused(1));
+        out[`${label}: J (next)`] = await tapLatency(env.page, () => env.page.keyboard.press("j"), await moved());
         await env.settle();
-        out[`${label}: K`] = await tapLatency(env.page, () => env.page.keyboard.press("k"), focused(1));
+        out[`${label}: K`] = await tapLatency(env.page, () => env.page.keyboard.press("k"), await moved());
       }
       return out;
     },
