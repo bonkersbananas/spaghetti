@@ -233,6 +233,7 @@ fn model_xml(model: &Model, objects: &[Object]) -> (String, String, String) {
 }
 
 /// The `.gcode.3mf`. `title` names the archive inside (the original file's name).
+#[allow(clippy::too_many_arguments)]
 pub fn gcode_3mf(
     gcode: &[u8],
     thumbnail: Option<&[u8]>,
