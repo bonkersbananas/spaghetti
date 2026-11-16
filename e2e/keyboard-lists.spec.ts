@@ -100,6 +100,24 @@ test("U queues the idea you're on, [ and ] reorder the queue, J and K walk ideas
   await expect(page.getByRole("button", { name: "Up next" })).toHaveAttribute("aria-pressed", "false");
 });
 
+test("U off Up next keeps the focus on the card, back in the inbox", async ({ page }) => {
+  const headers = { Origin: new URL(page.url()).origin };
+  await page.request.post("/api/items", { headers, data: { id: crypto.randomUUID(), title: "Back and forth" } });
+  await page.goto("/ideas");
+  const strip = page.getByRole("list", { name: "Up next" }).getByRole("link");
+  const inbox = page.getByRole("list", { name: "Ideas" }).getByRole("link", { name: /Back and forth/ });
+  await expect(inbox).toHaveCount(1);
+  await page.keyboard.press("j");
+  await expect(inbox).toBeFocused();
+  await page.keyboard.press("u");
+  await expect(strip).toHaveCount(1);
+  await expect(strip).toBeFocused();
+  // Off again: the strip's copy fades out while the inbox's arrives, and the focus goes with the card, not the copy.
+  await page.keyboard.press("u");
+  await expect(strip).toHaveCount(0);
+  await expect(inbox).toBeFocused();
+});
+
 test("J and K also walk Today's cards", async ({ page }) => {
   const headers = { Origin: new URL(page.url()).origin };
   const id = crypto.randomUUID();

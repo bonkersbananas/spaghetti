@@ -20,6 +20,7 @@ import { useListPicker } from "@/lib/list-picker";
 import { useArrived } from "@/lib/live";
 import { printerQuery } from "@/lib/pantry-queries";
 import { peopleQuery, sessionQuery } from "@/lib/queries";
+import { unreadQuery } from "@/lib/unread-comments";
 import { useIsDesktop } from "@/lib/use-media-query";
 import { useNow } from "@/lib/use-now";
 
@@ -57,6 +58,9 @@ function Builds() {
   const isDesktop = useIsDesktop();
   const now = useNow(60_000);
   const live = useQuery(printerQuery).data?.bridge?.progress;
+  // The grid's cards show unread comments on their corner, and so do the prints on the bed (BuildCard has the module).
+  const threads = useQuery(unreadQuery).data?.threads;
+  const unread = (itemId: string) => threads?.find((thread) => thread.itemId === itemId)?.count ?? 0;
 
   const onBed = useMemo(() => printingAttempts(items, now, live), [items, now, live]);
   const onBedIds = new Set(onBed.map(({ item }) => item.id));
@@ -95,7 +99,7 @@ function Builds() {
               <Suspense fallback={<Skeleton className="h-44 rounded-lg" />}>
                 {/* J and K walk these too, before the In progress grid. */}
                 <div data-picks>
-                  <BedCards prints={onBed} people={byId} via={via} spread />
+                  <BedCards prints={onBed} people={byId} via={via} unread={unread} spread />
                 </div>
               </Suspense>
             </Section>
