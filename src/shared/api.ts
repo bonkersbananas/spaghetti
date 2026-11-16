@@ -273,6 +273,11 @@ export interface Item {
   attempts: Attempt[];
   /** Claude's draft from a model page, while it is being read or after; null when there is none. */
   draft: ItemDraft | null;
+  /**
+   * The title Claude gave an idea saved without one (decision 0070), while the title still says it: a person's edit
+   * makes it theirs. Null otherwise; absent on items this device made.
+   */
+  claudeTitle?: string | null;
   /** Who reacted to it, and how (shared/reactions.ts). Absent in a copy saved by an older version. */
   reactions?: Reaction[];
 }
@@ -291,6 +296,8 @@ export interface FeaturesResponse {
   coach: boolean;
   /** Claude scouts three models a week for the two of them (decision 0040); the same key. */
   scout: boolean;
+  /** Claude names an idea saved without a title, from its photos and note (decision 0070); the same key. */
+  titles: boolean;
   /** The Worker has a WEBHOOK_SECRET_KEY, so webhooks can be added (decision 0025). */
   webhooks: boolean;
 }

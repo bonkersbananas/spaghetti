@@ -472,6 +472,11 @@
 .sg-fade-in {
   animation: sg-fade-in var(--sg-duration-fast) var(--sg-ease-out);
 }
+/* A title that comes to an idea already on screen (Claude naming it a moment after it was saved) settles in slowly,
+   so it reads as arriving, not as a flicker. */
+.sg-arrive {
+  animation: sg-fade-in var(--sg-duration-slow) var(--sg-ease-out);
+}
 /* A logged attempt settles into the story: a ring in its outcome's colour that fades (worked: basil, partly:
    semolina). Spaghetti gets a soft ink hush instead, never tomato: a failure is a note, not an error. */
 @keyframes sg-logged {
