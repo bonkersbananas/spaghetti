@@ -269,6 +269,7 @@ test("a print on the bed shows its progress only when there is an estimate", asy
 
 test("a long build folds its earlier attempts, and picking one unfolds them and brings it into view", async ({
   page,
+  isMobile,
 }) => {
   const id = crypto.randomUUID();
   const headers = { Origin: origin(page) };
@@ -285,8 +286,11 @@ test("a long build folds its earlier attempts, and picking one unfolds them and 
   await expect(story.getByRole("listitem")).toHaveCount(3);
   await expect(page.getByRole("button", { name: "4 earlier attempts" })).toBeVisible();
 
-  // The summary's dot for the first attempt unfolds the story and scrolls to it.
-  await page.getByRole("button", { name: "Attempt 1: spaghetti" }).click();
+  // The summary's step for the first attempt unfolds the story and scrolls to it. A phone's trail keeps one row (six
+  // steps), so there it is folded too, a tap away.
+  const trail = page.getByRole("group", { name: /^7 attempts/ });
+  if (isMobile) await trail.getByRole("button", { name: "Show 2 earlier attempts" }).click();
+  await trail.getByRole("button", { name: "Attempt 1: spaghetti" }).click();
   await expect(story.getByRole("listitem")).toHaveCount(7);
   await expect(story.getByRole("listitem").last()).toBeInViewport();
 });
@@ -322,11 +326,35 @@ test("a story column taller than the window scrolls until its end is in view, th
   expect(await column.evaluate((el) => el.scrollHeight <= el.clientHeight)).toBe(true);
 });
 
-test("the summary's attempt tiles are touch targets and mark the open attempt", { tag: "@phone" }, async ({
+test("a build of many attempts folds its earliest steps in the trail, and the folded step unfolds them", async ({
   page,
   isMobile,
 }) => {
-  test.skip(!isMobile, "Desktop tiles are compact");
+  const id = crypto.randomUUID();
+  const headers = { Origin: origin(page) };
+  await page.request.post("/api/items", { headers, data: { id, title: "Very long story", note: "" } });
+  for (let index = 0; index < 14; index++)
+    await page.request.post(`/api/items/${id}/attempts`, {
+      headers,
+      data: { id: crypto.randomUUID(), outcome: "partial", printedAt: Date.now() - (15 - index) * 3_600_000 },
+    });
+  await page.goto(`/builds/${id}`);
+  const trail = page.getByRole("group", { name: /^14 attempts/ });
+  // One row: the newest five and a step for the nine before them on a phone, the newest nine and the five before on a laptop.
+  const [shown, folded] = isMobile ? [5, 9] : [9, 5];
+  await expect(trail.getByRole("button", { name: /^Attempt \d+: partly$/ })).toHaveCount(shown);
+  await expect(trail.getByRole("button", { name: "Attempt 1: partly" })).toHaveCount(0);
+  await trail.getByRole("button", { name: `Show ${folded} earlier attempts` }).click();
+  await expect(trail.getByRole("button", { name: /^Attempt \d+: partly$/ })).toHaveCount(14);
+  await trail.getByRole("button", { name: "Attempt 1: partly" }).click();
+  await expect(trail.getByRole("button", { name: "Attempt 1: partly" })).toHaveAttribute("aria-current", "true");
+});
+
+test("the summary's attempt steps are touch targets and mark the open attempt", { tag: "@phone" }, async ({
+  page,
+  isMobile,
+}) => {
+  test.skip(!isMobile, "Desktop steps are compact");
   const id = crypto.randomUUID();
   const headers = { Origin: origin(page) };
   await page.request.post("/api/items", { headers, data: { id, title: "Tiles", note: "" } });

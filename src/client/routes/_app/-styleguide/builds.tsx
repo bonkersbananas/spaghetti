@@ -5,7 +5,11 @@ import { type AttemptPart, partProgress } from "@shared/parts";
 import type { PhotoRead } from "@shared/photo-read";
 import { livePrintProgress } from "@shared/print-progress";
 import { useState } from "react";
+import dragonPhoto from "@/assets/samples/dragon.svg";
+import planterPhoto from "@/assets/samples/planter.svg";
+import vasePhoto from "@/assets/samples/vase.svg";
 import { AttemptEntry } from "@/components/builds/AttemptEntry";
+import { AttemptTrail, type TrailAttempt } from "@/components/builds/AttemptTrail";
 import { PlateParts } from "@/components/builds/attempt-sheet/PlateParts";
 import { BuildSummary } from "@/components/builds/BuildSummary";
 import { CoachNote, CoachSuggestions } from "@/components/builds/Coach";
@@ -16,6 +20,8 @@ import { OutcomeStrip } from "@/components/builds/OutcomeStrip";
 import { PhotoReadNote } from "@/components/builds/PhotoReadNote";
 import { PartLine } from "@/components/builds/parts/PartsSection";
 import { TagPicker } from "@/components/builds/TagPicker";
+import { ACTION_ROOM, ActionCard } from "@/components/ui/ActionCard";
+import { Button } from "@/components/ui/Button";
 import * as Icons from "@/components/ui/icons";
 import { PhotoRow } from "@/components/ui/PhotoRow";
 import { AddPhotoTile } from "@/components/ui/PhotoTiles";
@@ -95,12 +101,18 @@ const progressSamples = [
 ] as const;
 
 const sampleStrip = [
-  { id: "1", number: 1, outcome: "failed" },
-  { id: "2", number: 2, outcome: "partial" },
-  { id: "3", number: 3, outcome: "success" },
+  { id: "1", number: 1, outcome: "failed", photo: { src: dragonPhoto } },
+  { id: "2", number: 2, outcome: "partial", photo: { src: planterPhoto } },
+  { id: "3", number: 3, outcome: "success", photo: { src: vasePhoto } },
   { id: "4", number: 4, outcome: null, offBed: true },
   { id: "5", number: 5, outcome: null },
 ] as const;
+
+/** The trail with its own little state, so picking a step marks it as the open attempt. */
+function TrailSpecimen({ attempts }: { attempts: TrailAttempt[] }) {
+  const [selected, setSelected] = useState<string | null>(attempts[1]?.id ?? null);
+  return <AttemptTrail attempts={attempts} onPick={setSelected} selected={selected} />;
+}
 
 const longStrip = Array.from({ length: 17 }, (_, index) => ({
   id: String(index + 1),
@@ -309,8 +321,14 @@ export function BuildsSection() {
           <Label>Outcome strip: dots, oldest first</Label>
           <div className="flex flex-col items-start gap-3">
             <OutcomeStrip attempts={[...sampleStrip]} />
-            <OutcomeStrip attempts={[...sampleStrip]} onPick={(id) => toast.message(`Attempt ${id}`)} />
             <OutcomeStrip attempts={longStrip} />
+          </div>
+          <Label>
+            Attempt trail: the strip as a control on the build page (photos and captions on phones, dots on desktop)
+          </Label>
+          <div className="flex flex-col gap-5">
+            <TrailSpecimen attempts={[...sampleStrip]} />
+            <TrailSpecimen attempts={longStrip} />
           </div>
           <TagPicker
             kind="failure"
@@ -323,7 +341,7 @@ export function BuildsSection() {
         </Panel>
         <div className="flex min-w-0 flex-col gap-4">
           <Label>Build summary: from the second attempt on, under the notes</Label>
-          <BuildSummary attempts={sampleAttempts} open onPick={(id) => toast.message(`Picked ${id}`)} />
+          <BuildSummary attempts={sampleAttempts} photos={[]} open onPick={(id) => toast.message(`Picked ${id}`)} />
           <Label>Compare two attempts: what changed, what stayed, how it went</Label>
           <CompareTable older={sampleAttempt} newer={sampleAfter} />
           <Label>Attempt in a build's timeline</Label>
@@ -366,6 +384,30 @@ export function BuildsSection() {
               <span className="text-body text-ink min-w-0 flex-1 font-semibold">A result the keyboard is on</span>
             </PhotoRow>
           </div>
+          <Label>ActionCard: a row with a button of its own, inside its card (picked here)</Label>
+          <ActionCard
+            selected
+            action={
+              <Button variant="secondary" size="sm" icon={Icons.PlayIcon} onClick={() => toast.message("Starts again")}>
+                Start again
+              </Button>
+            }
+          >
+            <PhotoRow
+              link={{ to: "/styleguide" }}
+              photo={null}
+              tile={<Icons.BuildsIcon size={26} />}
+              size="lg"
+              align="start"
+              bare
+              selected
+            >
+              <span className={`flex min-w-0 flex-1 flex-col gap-1.5 py-0.5 ${ACTION_ROOM.sm}`}>
+                <span className="text-body text-ink font-semibold">Phone stand · attempt 2</span>
+                <span className="text-small text-ink-faint">Blue PETG · 0.20 mm</span>
+              </span>
+            </PhotoRow>
+          </ActionCard>
           <Label>New build tiles</Label>
           <div className="grid grid-cols-2 gap-3">
             <AddPhotoTile size="card" icon={Icons.PlusIcon} label="New build" />

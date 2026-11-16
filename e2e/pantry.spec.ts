@@ -170,7 +170,8 @@ test("reads a dropped slicer file onto an attempt and keeps it", async ({ page, 
   });
   await again.getByRole("region", { name: "Which plate?" }).getByRole("button", { name: /Hook/ }).click();
   await expect(again.getByText("desk-clips-v2.gcode.3mf")).toBeVisible();
-  await again.getByRole("button", { name: "Remove the slicer file" }).click();
+  await again.getByRole("button", { name: "More for desk-clips-v2.gcode.3mf" }).click();
+  await page.getByRole("button", { name: "Remove file" }).click();
   await expect(again.getByRole("button", { name: "Add the slicer file" })).toBeVisible();
   await page.unroute(`**/api/attempts/${attemptId}/file`);
   await expect.poll(async () => (await getItem(page, id)).attempts[0]?.file).toBeNull();

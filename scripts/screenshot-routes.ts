@@ -2082,6 +2082,16 @@ export const shots: Shot[] = [
   },
   { name: "build", path: `/builds/${SEED_BUILD_IDS.tugboat}`, fullPage: true },
   {
+    // The build's own photo showing, tapped again: its menu, as on an idea (an attempt's photos come off in its sheet).
+    name: "build-photo-menu",
+    path: `/builds/${SEED_BUILD_IDS.tugboat}`,
+    prepare: async (page) => {
+      await page.getByRole("button", { name: /^Photo 1/ }).click();
+      await page.getByRole("button", { name: "Remove photo" }).waitFor();
+      await page.waitForTimeout(400);
+    },
+  },
+  {
     // The first press of Delete on a build: the trash can has turned into the question, in the bar.
     name: "build-delete-confirm",
     path: `/builds/${SEED_BUILD_IDS.tugboat}`,
@@ -2095,6 +2105,19 @@ export const shots: Shot[] = [
   },
   // An idea with a sliced file kept with it: the file's card under the chips, and the sticker on its card.
   { name: "idea-file", path: `/ideas/${SEED_IDS.bigTugboat}`, fullPage: true },
+  {
+    // A kept file's "…" beside its Download: Remove is in there, not an X on the card.
+    name: "idea-file-menu",
+    path: `/ideas/${SEED_IDS.bigTugboat}`,
+    prepare: async (page) => {
+      await page
+        .getByRole("button", { name: /^More for / })
+        .first()
+        .click();
+      await page.getByRole("button", { name: "Remove file" }).waitFor();
+      await page.waitForTimeout(400);
+    },
+  },
   {
     // A second file added to the idea: it shows at once, with the plate's picture.
     name: "idea-file-added",
@@ -3572,8 +3595,30 @@ export const shots: Shot[] = [
     name: "search-results",
     path: "/search?q=PETG%20warping",
     prepare: async (page) => {
-      await page.getByRole("region", { name: "Attempts" }).waitFor();
+      // What fixed it leads (the swatch box's dried filament), then the times it happened.
+      await page
+        .getByRole("region", { name: /^(Times it happened|Attempts)$/ })
+        .first()
+        .waitFor();
+      // What fixed it draws from a chunk loaded when one appears.
+      await page.waitForLoadState("networkidle");
       await page.getByRole("searchbox", { name: "Search" }).blur();
+    },
+  },
+  {
+    // A problem's word: what fixed it leads, picked with the keyboard (its Start again inside the card), and the six
+    // times it happened fold to three with "Show all 6".
+    name: "search-fixed",
+    path: "/search?q=warping",
+    fullPage: true,
+    prepare: async (page) => {
+      await page
+        .getByRole("button", { name: /^Start again with these/ })
+        .first()
+        .waitFor();
+      const box = page.getByRole("searchbox", { name: "Search" });
+      await box.press("ArrowDown");
+      await box.blur();
     },
   },
   {
@@ -4061,6 +4106,20 @@ export const shots: Shot[] = [
   },
   { name: "idea", path: `/ideas/${SEED_IDS.deskTidy}` },
   {
+    // Another photo picked in the strip and tapped again: its menu (Make cover, Remove photo), a sheet on phones and a
+    // popover from the thumbnail on desktop. Nothing on the big photo removes (decision 0054).
+    name: "idea-photo-menu",
+    path: `/ideas/${SEED_IDS.deskTidy}`,
+    prepare: async (page) => {
+      const second = page.getByRole("button", { name: "Photo 2" });
+      await second.click();
+      await page.waitForTimeout(400);
+      await second.click();
+      await page.getByRole("button", { name: "Remove photo" }).waitFor();
+      await page.waitForTimeout(400);
+    },
+  },
+  {
     // The first press of Delete on an idea: the trash can has turned into the question, in the bar.
     name: "idea-delete-confirm",
     path: "/ideas",
@@ -4402,6 +4461,23 @@ export const shots: Shot[] = [
     },
   },
   {
+    // A problem's word: what fixed it leads, with the failure it came after and what changed since.
+    name: "palette-fixed",
+    path: "/ideas",
+    width: 1440,
+    prepare: async (page) => {
+      await page.keyboard.press("ControlOrMeta+k");
+      await page.getByRole("combobox", { name: "Jump to or run" }).pressSequentially("warping");
+      await page
+        .getByRole("group", { name: /^(What fixed it|Attempts)$/ })
+        .first()
+        .waitFor();
+    },
+    cleanup: async (page) => {
+      await page.keyboard.press("Escape");
+    },
+  },
+  {
     name: "palette-build",
     path: `/builds/${SEED_BUILD_IDS.cableChain}`,
     width: 1440,
@@ -4507,6 +4583,21 @@ export const shots: Shot[] = [
           .evaluate((region) => region.scrollIntoView({ block: "center", behavior: "instant" }));
         await page.waitForTimeout(400);
       }
+    },
+    cleanup: removeTwistModels,
+  },
+  {
+    // The twist's model's "…": Remove is in there, as on an idea's files.
+    name: "twist-model-menu",
+    path: "/twists",
+    prepare: async (page) => {
+      await twistWithModel(page);
+      await page
+        .getByRole("region", { name: "Model" })
+        .getByRole("button", { name: /^More for / })
+        .click();
+      await page.getByRole("button", { name: "Remove file" }).waitFor();
+      await page.waitForTimeout(400);
     },
     cleanup: removeTwistModels,
   },
@@ -4638,6 +4729,7 @@ export const shots: Shot[] = [
   { name: "styleguide-controls", path: "/styleguide", selector: "#controls" },
   { name: "styleguide-buttons", path: "/styleguide", selector: "#buttons" },
   { name: "styleguide-builds", path: "/styleguide", selector: "#builds" },
+  { name: "styleguide-search", path: "/styleguide", selector: "#search" },
   { name: "styleguide-spools", path: "/styleguide", selector: "#pantry" },
   { name: "styleguide-recipes", path: "/styleguide", selector: "#recipes" },
   {

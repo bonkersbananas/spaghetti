@@ -1104,6 +1104,11 @@ export const operations: Record<string, Operation> = {
       attempts: z.array(z.looseObject({})),
       recipes: z.array(z.looseObject({})),
       twists: z.array(z.looseObject({})),
+      fixes: z
+        .array(z.looseObject({}))
+        .describe(
+          "When the words name a problem failures had: the later attempt on each build that went better without it, with `after` (the failure), `failures` and `changes`.",
+        ),
     }),
   },
   "GET /facets": {

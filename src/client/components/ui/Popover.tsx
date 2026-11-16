@@ -7,13 +7,18 @@ interface PopoverPanelProps {
   /** Where it opens relative to its trigger, or its anchor (`PopoverAnchor`). */
   side?: "top" | "right" | "bottom" | "left";
   align?: "start" | "center" | "end";
-  /** A menu (18 rem), or a panel of settings (28 rem, with a sheet's bigger corners: a sheet's desktop twin). */
-  size?: "menu" | "panel";
+  /**
+   * A menu (18 rem), a compact one of a few short rows (14 rem: an `ActionMenu`), or a panel of settings (28 rem, with
+   * a sheet's bigger corners: a sheet's desktop twin).
+   */
+  size?: "menu" | "compact" | "panel";
   className?: string;
   /** Accessible name for the popover. */
   label: string;
   /** What it hangs from (`PopoverAnchor`): using it (a card's Undo) leaves the popover open, as part of it. */
   keepOpenIn?: RefObject<HTMLElement | null>;
+  /** Where focus goes as it closes, when it has no trigger to go back to (a menu opened by a long press). */
+  onCloseAutoFocus?: (event: Event) => void;
 }
 
 /** Closes the popover from inside it: wrap the item that was chosen (asChild). */
@@ -37,6 +42,7 @@ export function PopoverPanel({
   className,
   label,
   keepOpenIn,
+  onCloseAutoFocus,
 }: PopoverPanelProps) {
   // Radix decides a press was outside only once it is a click, when the control pressed may be gone (an Undo that
   // undoes itself away): whether it began inside what the popover hangs from is noted as it begins.
@@ -58,6 +64,7 @@ export function PopoverPanel({
         // Clear of the window's edges, so it floats: its corners and shadow show, and its height stops short of them.
         collisionPadding={16}
         aria-label={label}
+        onCloseAutoFocus={onCloseAutoFocus}
         onInteractOutside={(event) => {
           if (!keepOpenIn) return;
           const inside =
@@ -68,7 +75,7 @@ export function PopoverPanel({
         }}
         className={cn(
           "sg-popover sg-lifted-surface bg-lifted shadow-float z-50 p-4 focus:outline-none",
-          size === "panel" ? "w-md rounded-xl" : "w-72 rounded-lg",
+          size === "panel" ? "w-md rounded-xl" : cn(size === "compact" ? "w-56" : "w-72", "rounded-lg"),
           className,
         )}
       >

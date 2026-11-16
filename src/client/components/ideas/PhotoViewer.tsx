@@ -1,6 +1,5 @@
 import { type ReactNode, useEffect, useRef } from "react";
 import { IconButton } from "@/components/ui/Button";
-import { ConfirmRemove } from "@/components/ui/ConfirmRemove";
 import { NextIcon, PreviousIcon } from "@/components/ui/icons";
 import { Photo } from "@/components/ui/Photo";
 import { UploadBadge } from "@/components/ui/UploadBadge";
@@ -17,8 +16,6 @@ interface PhotoViewerProps {
   index: number;
   onIndexChange: (index: number) => void;
   alt: string;
-  /** Removes the photo being shown (a quiet button on it). Leave out where photos can't be removed. */
-  onRemove?: (photo: PhotoView) => void;
   className?: string;
 }
 
@@ -86,9 +83,10 @@ function ViewerFigure({
 /**
  * Big photos first. Swipe between them on a phone (native scroll snapping),
  * or use the arrow buttons and keys on desktop. The whole print shows:
- * nothing is cropped.
+ * nothing is cropped. Nothing on it removes or closes: removing a photo is in the strip's menu (`PhotoStrip`,
+ * decision 0054), away from where a hand reaches for "back".
  */
-export function PhotoViewer({ photos, index, onIndexChange, alt, onRemove, className }: PhotoViewerProps) {
+export function PhotoViewer({ photos, index, onIndexChange, alt, className }: PhotoViewerProps) {
   const scroller = useRef<HTMLDivElement>(null);
   const settle = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
@@ -158,16 +156,6 @@ export function PhotoViewer({ photos, index, onIndexChange, alt, onRemove, class
             </ViewerFigure>
           ))}
         </div>
-        {onRemove && photos[index] && (
-          // On the photo's top-right corner, away from where a thumb swipes and holds the phone. Two taps in place
-          // (the X turns into "Remove"); the key starts it afresh on another photo.
-          <ConfirmRemove
-            key={photos[index].id}
-            what="this photo"
-            onRemove={() => photos[index] && onRemove(photos[index])}
-            className="duration-fast absolute top-3 right-3 transition-opacity md:opacity-0 md:group-focus-within/viewer:opacity-100 md:group-hover/viewer:opacity-100 md:has-data-confirming:opacity-100"
-          />
-        )}
       </div>
 
       {many && (

@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { ChangePasswordSheet } from "@/components/shell/ChangePasswordSheet";
+import { ActionMenuItem, MoreMenu } from "@/components/ui/ActionMenu";
 import { Button } from "@/components/ui/Button";
 import { Chip } from "@/components/ui/Chip";
 import * as Icons from "@/components/ui/icons";
@@ -84,7 +85,28 @@ export function SheetSection() {
           </MenuGroup>
         </Panel>
       </div>
-      <div className="mt-6">
+      <div className="mt-6 grid gap-6 md:grid-cols-2">
+        <Panel className="flex flex-col gap-3">
+          <Label>
+            A “…” menu (MoreMenu, ActionMenu): the rare things on a thing, out of reach of a stray tap; a sheet on
+            phones, a popover on desktop, what removes last and in tomato
+          </Label>
+          <div className="bg-cream shadow-soft flex items-center gap-3 rounded-lg p-3 pr-1.5">
+            <span className="bg-ink/5 shadow-well text-ink-faint flex size-16 items-center justify-center rounded-md">
+              <Icons.SlicerFileIcon size={22} aria-hidden />
+            </span>
+            <span className="text-small text-ink min-w-0 flex-1 truncate font-semibold">desk-clips.gcode.3mf</span>
+            <MoreMenu label="More for desk-clips.gcode.3mf" title="File" description="desk-clips.gcode.3mf">
+              <ActionMenuItem
+                icon={Icons.TrashIcon}
+                tone="danger"
+                onSelect={() => toast.undo("File removed", { onUndo: () => undefined })}
+              >
+                Remove file
+              </ActionMenuItem>
+            </MoreMenu>
+          </div>
+        </Panel>
         <Panel className="max-w-md">
           <Label>
             Pick rows (a list to choose from in a sheet: a picture or a glyph tile, status in its own ink, quiet for

@@ -4,6 +4,7 @@ import { z } from "zod";
 import type {
   AttemptHit,
   FacetsResponse,
+  FixHit,
   ItemHit,
   Recipe,
   SearchResponse,
@@ -11,11 +12,29 @@ import type {
   Twist,
   WhatWorkedResponse,
 } from "../../shared/api.ts";
-import { BUILT_IN_TAGS, byPrintTime, OUTCOMES, type Outcome, type TagKind } from "../../shared/attempts.ts";
+import {
+  type AttemptSettings,
+  BUILT_IN_TAGS,
+  byPrintTime,
+  describeChanges,
+  OUTCOMES,
+  type Outcome,
+  type TagKind,
+  tagLabel,
+} from "../../shared/attempts.ts";
+import { findFixes, isFailure } from "../../shared/fixes.ts";
 import { OUTCOME_FILTERS, outcomesFor } from "../../shared/journal.ts";
 import { attemptPartsLabel } from "../../shared/parts.ts";
 import { recipesFor } from "../../shared/recipes.ts";
-import { ftsQuery, matchesTerm, type SearchTerm, SNIPPET_CLOSE, SNIPPET_OPEN, words } from "../../shared/search.ts";
+import {
+  ftsQuery,
+  matchesTerm,
+  type SearchTerm,
+  SNIPPET_CLOSE,
+  SNIPPET_OPEN,
+  searchTerms,
+  words,
+} from "../../shared/search.ts";
 import {
   correctTerms,
   type Intent,
@@ -389,6 +408,121 @@ async function withCoachIdeas(db: Db, hits: AttemptHit[], terms: readonly Search
   });
 }
 
+/** What an attempt says about how it went: its failure tags (as their labels, with the slugs) and its note. */
+interface ProblemWords {
+  failureTags: string[];
+  note: string;
+  settings: AttemptSettings;
+}
+
+/**
+ * The words of a search that name an attempt's problem: those that match one of its failure tags, else those that
+ * match its note, leaving out what describes the print itself (its filaments: "PETG" in "PETG wants the textured
+ * sheet" is not the problem). Empty when the search found it by its title or settings.
+ */
+function problemTerms(
+  attempt: ProblemWords,
+  terms: readonly SearchTerm[],
+  custom: Array<{ kind: TagKind; slug: string; label: string }>,
+): SearchTerm[] {
+  const failureTags = custom.filter((tag) => tag.kind === "failure");
+  const tagWords = words(attempt.failureTags.map((slug) => tagLabel("failure", slug, failureTags)).join(" "));
+  const matching = (found: string[]) =>
+    terms.filter((term) => found.some((word) => matchesTerm(word, markTerms([term]))));
+  const byTag = matching(tagWords);
+  if (byTag.length) return byTag;
+  const material = words(
+    (attempt.settings.filaments ?? []).map((f) => [f.type, f.brand, f.colorName].filter(Boolean).join(" ")).join(" "),
+  );
+  return matching(words(attempt.note)).filter((term) => !matching(material).includes(term));
+}
+
+/** Whether an attempt had this problem: a failure tag or a word of its note that the problem's words match. */
+function hasProblem(
+  attempt: ProblemWords,
+  problem: readonly SearchTerm[],
+  custom: Array<{ kind: TagKind; slug: string; label: string }>,
+) {
+  const failureTags = custom.filter((tag) => tag.kind === "failure");
+  const text = `${attempt.failureTags.map((slug) => tagLabel("failure", slug, failureTags)).join(" ")} ${attempt.note}`;
+  return words(text).some((word) => matchesTerm(word, markTerms(problem)));
+}
+
+/** Most fixes an answer carries. */
+const MAX_FIXES = 6;
+
+/**
+ * "What fixed it": for the failures found whose problem the words name (a failure tag, or their note), the later
+ * attempt on each build that went better without that problem (`findFixes`), with what changed since the failure.
+ */
+async function fixesFor(
+  db: Db,
+  found: AttemptHit[],
+  terms: readonly SearchTerm[],
+  custom: Array<{ kind: TagKind; slug: string; label: string }>,
+): Promise<FixHit[]> {
+  const failures = found.flatMap((hit) => {
+    if (!isFailure(hit.attempt.outcome)) return [];
+    const problem = problemTerms(hit.attempt, terms, custom);
+    return problem.length ? [{ hit, problem }] : [];
+  });
+  if (!failures.length) return [];
+  const siblings = await liveAttempts(db, unique(failures.map(({ hit }) => hit.item.id)));
+  const rows = siblings.map((row) => ({
+    ...row,
+    id: row.id,
+    outcome: row.outcome as Outcome | null,
+    printedAt: row.printedAt.getTime(),
+    createdAt: row.createdAt.getTime(),
+  }));
+  type Row = (typeof rows)[number];
+  const problemOf = new Map(failures.map(({ hit, problem }) => [hit.attempt.id, problem]));
+  // The failures found, as rows of their builds (each keeps the words that name its problem).
+  const failed = failures.flatMap(({ hit }) => rows.filter((row) => row.id === hit.attempt.id));
+  const fixes: Array<{ fix: Row; after: Row[] }> = [];
+  for (const failure of failed) {
+    const problem = problemOf.get(failure.id) ?? [];
+    const [found] = findFixes(
+      [failure],
+      (one) => rows.filter((row) => row.itemId === one.itemId),
+      (row) => hasProblem(row, problem, custom),
+    );
+    if (!found) continue;
+    const known = fixes.find((fix) => fix.fix.id === found.fix.id);
+    if (known) known.after = byPrintTime([...known.after, failure]);
+    else fixes.push(found);
+  }
+  if (!fixes.length) return [];
+  const kept = fixes.slice(0, MAX_FIXES);
+  const hits = await attemptHits(
+    db,
+    kept.map(({ fix }) => fix.id),
+  );
+  const numbers = new Map(found.map((hit) => [hit.attempt.id, hit.number]));
+  return kept.flatMap(({ fix, after }) => {
+    const hit = hits.find((one) => one.attempt.id === fix.id);
+    const last = after.at(-1);
+    if (!hit || !last || !isFailure(last.outcome)) return [];
+    const problem = problemOf.get(last.id) ?? [];
+    return [
+      {
+        ...hit,
+        after: {
+          attemptId: last.id,
+          number: numbers.get(last.id) ?? 0,
+          outcome: last.outcome,
+          printedAt: last.printedAt,
+          tags: last.failureTags.filter((slug) =>
+            hasProblem({ failureTags: [slug], note: "", settings: {} }, problem, custom),
+          ),
+        },
+        failures: after.length,
+        changes: describeChanges(last.settings, fix.settings).map((change) => change.text),
+      },
+    ];
+  });
+}
+
 /** What anyone prints about, so a typo in "warping" is mended even in an empty notebook. */
 const KNOWN_WORDS =
   "petg nozzle bed plate temperature warping stringing adhesion brim supports support layer infill filament spool " +
@@ -648,8 +782,16 @@ export const searchRoutes = new Hono<AppEnv>()
         closest = read.terms.map((term) => term.text);
       }
     }
+    // A problem's words ("warping", or the Warping chip): the later attempts that fixed it lead the answer. Not while
+    // an outcome is picked: "Only failures" asks for the failures.
+    const failureTag = f.tag
+      ? [...BUILT_IN_TAGS.failure, ...custom.filter((tag) => tag.kind === "failure")].find((tag) => tag.slug === f.tag)
+      : undefined;
+    const problem = failureTag ? [...terms, ...searchTerms(failureTag.label)] : terms;
+    const fixes = f.outcome ? [] : await fixesFor(db, result.attempts, problem, custom);
     return c.json<SearchResponse>({
       ...result,
+      fixes,
       terms: markTerms(terms),
       corrected,
       closest,

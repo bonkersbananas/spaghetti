@@ -1,5 +1,5 @@
-import type { AttemptHit, ItemHit, Photo as PhotoData } from "@shared/api";
-import { type TagKind, tagLabel } from "@shared/attempts";
+import type { AttemptHit, FixHit, ItemHit, Photo as PhotoData } from "@shared/api";
+import { OUTCOME_LABELS, type TagKind, tagLabel } from "@shared/attempts";
 import { displayName } from "@shared/people";
 import { highlight, type SearchTerm, snippetSegments } from "@shared/search";
 import { inlineTime, relativeTime } from "@shared/time";
@@ -9,6 +9,7 @@ import { forwardRef, type ReactNode, useLayoutEffect, useRef, useState } from "r
 import { OutcomeChip } from "@/components/builds/Outcome";
 import { SettingsLine } from "@/components/builds/SettingsLine";
 import { summarizeSettings } from "@/components/builds/settings";
+import { ACTION_ROOM, ActionCard } from "@/components/ui/ActionCard";
 import { Chip } from "@/components/ui/Chip";
 import { Highlight } from "@/components/ui/Highlight";
 import {
@@ -41,6 +42,14 @@ export function itemLink(hit: ItemHit): LinkProps {
     : { to: "/builds/$buildId", params: { buildId: hit.item.id }, search };
 }
 
+/** "After Partly on 12 Oct · Warping": the failure a fix came after, and the problem it had. */
+export function afterWords(after: FixHit["after"], tags: string[]): string {
+  const when = inlineTime(after.printedAt);
+  // "yesterday", "3 days ago" read on their own; a date needs its "on".
+  const on = /ago$|^yesterday$|^just now$/.test(when) ? when : `on ${when}`;
+  return [`After ${OUTCOME_LABELS[after.outcome]} ${on}`, tags.join(", ")].filter(Boolean).join(" · ");
+}
+
 interface RowProps {
   link: LinkProps;
   photo: PhotoData | null;
@@ -48,12 +57,14 @@ interface RowProps {
   selected: boolean;
   onPointerEnter?: () => void;
   onOpen?: () => void;
+  /** Inside an `ActionCard`: the card draws the selection, and the last line leaves room for its button (this wide). */
+  inCard?: keyof typeof ACTION_ROOM;
   children: ReactNode;
 }
 
 /** A result: its photo first, the words that matched beside it. */
-const ResultRow = forwardRef<HTMLAnchorElement, RowProps>(function ResultRow(
-  { link, photo, fallbackIcon: FallbackIcon, selected, onPointerEnter, onOpen, children },
+export const ResultRow = forwardRef<HTMLAnchorElement, RowProps>(function ResultRow(
+  { link, photo, fallbackIcon: FallbackIcon, selected, onPointerEnter, onOpen, inCard, children },
   ref,
 ) {
   return (
@@ -75,8 +86,11 @@ const ResultRow = forwardRef<HTMLAnchorElement, RowProps>(function ResultRow(
       size="lg"
       align="start"
       selected={selected}
+      bare={!!inCard}
     >
-      <span className="flex min-w-0 flex-1 flex-col gap-1.5 py-0.5">{children}</span>
+      <span className={cn("flex min-w-0 flex-1 flex-col gap-1.5 py-0.5", inCard && ACTION_ROOM[inCard])}>
+        {children}
+      </span>
     </PhotoRow>
   );
 });
@@ -87,11 +101,13 @@ interface AttemptResultProps {
   selected: boolean;
   onHover: () => void;
   onOpen: () => void;
+  /** A button of its own ("Start again"), inside the result's card on its last line. */
+  action?: ReactNode;
 }
 
 /** An attempt found: how it went, the note, the tags and filaments that matched. */
 export const AttemptResult = forwardRef<HTMLAnchorElement, AttemptResultProps>(function AttemptResult(
-  { hit, terms, selected, onHover, onOpen },
+  { hit, terms, selected, onHover, onOpen, action },
   ref,
 ) {
   const failureOptions = useTagOptions("failure");
@@ -103,8 +119,9 @@ export const AttemptResult = forwardRef<HTMLAnchorElement, AttemptResultProps>(f
   const matches = (part: string) => highlight(part, terms).some((piece) => piece.match);
   const settings = summarizeSettings(attempt.settings)
     .sort((x, y) => Number(matches(y)) - Number(matches(x)))
-    .slice(0, 4);
-  return (
+    // Beside a button the line is shorter: three, so it stays one line next to it.
+    .slice(0, action ? 3 : 4);
+  const row = (
     <ResultRow
       ref={ref}
       link={attemptLink(hit)}
@@ -113,6 +130,7 @@ export const AttemptResult = forwardRef<HTMLAnchorElement, AttemptResultProps>(f
       selected={selected}
       onPointerEnter={onHover}
       onOpen={onOpen}
+      inCard={action ? "sm" : undefined}
     >
       <span className="flex items-center gap-2">
         <OutcomeChip outcome={attempt.outcome} />
@@ -159,6 +177,13 @@ export const AttemptResult = forwardRef<HTMLAnchorElement, AttemptResultProps>(f
         />
       )}
     </ResultRow>
+  );
+  return action ? (
+    <ActionCard selected={selected} action={action}>
+      {row}
+    </ActionCard>
+  ) : (
+    row
   );
 });
 
