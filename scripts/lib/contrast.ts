@@ -129,6 +129,8 @@ export const pairs: Pair[] = [
   { label: "Column names and labels in the compare sheet", fg: "ink-faint", bg: "lifted", min: 4.5 },
   { label: "A link card's letter tile", fg: "ink-soft", bg: "ink/0.05", under: "cream", min: 4.5 },
   { label: "Attempt count on the outcome strip", fg: "ink-faint", bg: "cream", min: 4.5 },
+  { label: "A folded step on the attempt trail", fg: "ink-soft", bg: "ink/0.05", under: "paper", min: 4.5 },
+  { label: "An off-the-bed step on the attempt trail", fg: "ink-soft", bg: "ink/0.08", under: "paper", min: 3 },
   { label: "An open tick box on a card", fg: "ink/0.55", bg: "cream", min: 3 },
   { label: "An open tick box on a sheet", fg: "ink/0.55", bg: "lifted", min: 3 },
   { label: "A choice tile's name", fg: "ink-soft", bg: "tile", min: 4.5 },
