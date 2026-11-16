@@ -140,7 +140,7 @@ export const AttemptEntry = forwardRef<HTMLLIElement, AttemptEntryProps>(functio
                 </h3>
                 {/* Wide screens: the time sits on the line. Phones have no room for it beside the avatar and the menu: it goes under. */}
                 <span className="text-small text-ink-faint ml-auto flex min-w-0 items-center gap-2 whitespace-nowrap">
-                  <ViaText name={via} className="hidden md:inline" />
+                  <ViaText name={via} person={person?.name} className="hidden md:inline" />
                   <time
                     dateTime={new Date(attempt.printedAt).toISOString()}
                     title={fullTime(attempt.printedAt)}

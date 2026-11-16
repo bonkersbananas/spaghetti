@@ -129,7 +129,8 @@ test("work done through an agent says so, quietly, and the agent shows on the Ag
   await expect(card.getByRole("img", { name: "Alex Rivera, via Claude for Alex" })).toBeVisible();
   await card.click();
   await expect(page.getByText("captured this")).toBeVisible();
-  await expect(page.getByText("via Claude for Alex")).toBeVisible();
+  // Beside Alex, the agent's name says Alex only once: "You captured this … via Claude".
+  await expect(page.getByText("via Claude", { exact: true })).toBeVisible();
 
   await page.goto("/ideas");
   await goToAgents(page, isMobile);

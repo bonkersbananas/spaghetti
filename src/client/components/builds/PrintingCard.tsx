@@ -247,7 +247,7 @@ export function PrintingCard({
             </h3>
             {person && (
               <span className="mt-1.5 flex shrink-0 items-center gap-2">
-                <ViaText name={via} className="hidden md:inline" />
+                <ViaText name={via} person={person?.name} className="hidden md:inline" />
                 <Avatar person={person} size="xs" via={via} />
               </span>
             )}

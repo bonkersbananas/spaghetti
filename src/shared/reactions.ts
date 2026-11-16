@@ -4,11 +4,28 @@
  * Pure, so the client, the Worker and the unit tests share the rules. A reaction's `kind` is the emoji itself.
  */
 
-/** What the quick row holds until the two of you have a history: close to the six that came first. */
-export const DEFAULT_QUICK_EMOJI = ["❤️", "🤌", "🤩", "🔥", "👏", "🫠"] as const;
+/**
+ * What the quick rows hold until the two of you have a history: the six that came first, then seven more that fit
+ * printing (a pasta one among them).
+ */
+export const DEFAULT_QUICK_EMOJI = [
+  "❤️",
+  "🤌",
+  "🤩",
+  "🔥",
+  "👏",
+  "🫠",
+  "😍",
+  "😂",
+  "🎉",
+  "🚀",
+  "👀",
+  "💯",
+  "🍝",
+] as const;
 
-/** How many emoji the quick row shows. */
-export const QUICK_EMOJI_COUNT = 6;
+/** How many emoji the quick rows show: two rows of seven with the "more" tile as the fourteenth. */
+export const QUICK_EMOJI_COUNT = 13;
 
 /** The longest a reaction may be, in UTF-16 units: a family of four with skin tones is 25, a flag 14. */
 export const MAX_EMOJI_LENGTH = 40;
@@ -92,7 +109,7 @@ export interface EmojiUse {
   recent: string[];
 }
 
-/** The quick row: the most used, filled up with the defaults that aren't in it yet. */
+/** The quick rows: the most used, filled up with the defaults that aren't in it yet. */
 export function quickEmoji(popular: readonly string[] | undefined): string[] {
   const row = (popular ?? []).slice(0, QUICK_EMOJI_COUNT);
   for (const emoji of DEFAULT_QUICK_EMOJI) {

@@ -229,22 +229,22 @@ interface ReactionPickerProps {
   /** The emoji you have already given: picked again, they are taken back. */
   given: ReadonlySet<string>;
   onPick: (emoji: string) => void;
-  /** The quick row (lib/reactions.ts useEmojiUse): the two of you's most used, then the defaults. */
+  /** The quick rows (lib/reactions.ts useEmojiUse): the two of you's 13 most used, then the defaults. */
   quick: readonly string[];
   /** Your latest picks, for the full picker. */
   recent?: readonly string[];
   /** Whether the full picker shows instead of the quick row, and the change to make (the sheet grows for it). */
   more: boolean;
   onMore: (more: boolean) => void;
-  /** `menu` is the desktop popover: a tight row, and a picker with the search on top. `sheet` is the phone's. */
+  /** `menu` is the desktop popover: tight rows, and a picker with the search on top. `sheet` is the phone's. */
   layout: "menu" | "sheet";
   disabled?: boolean;
   className?: string;
 }
 
 /**
- * What the smiley opens, like Slack's: a quick row of the emoji you use most with a "more" button, which swaps in the
- * full picker (every emoji, searched by name and keyword). Tiles are large on a phone, a tight row in a desktop menu.
+ * What the smiley opens, like Slack's: two rows of seven, the 13 emoji you use most and a "more" tile, which swaps in
+ * the full picker (every emoji, searched by name and keyword). Tiles are large on a phone, tight in a desktop menu.
  */
 export function ReactionPicker({
   given,
@@ -282,7 +282,7 @@ export function ReactionPicker({
     );
   }
   return (
-    <fieldset className={cn(sheet ? "grid grid-cols-7 gap-1.5" : "flex gap-0.5", className)}>
+    <fieldset className={cn("grid grid-cols-7", sheet ? "gap-1.5" : "gap-0.5", className)}>
       <legend className="sr-only">Reactions</legend>
       {quick.map((emoji) => {
         const picked = given.has(emoji);
