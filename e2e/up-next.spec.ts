@@ -141,7 +141,9 @@ test("For names the other person in one tap, and a line that names you reads for
   await expect(field).toHaveValue(other.name);
   // Named, the offer goes: the line under the title says who it is for.
   await expect(page.getByRole("button", { name: "For someone else" })).toHaveCount(0);
-  await expect.poll(async () => (await (await page.request.get(`/api/items/${id}`)).json()).item.forWhom).toBe(other.name);
+  await expect
+    .poll(async () => (await (await page.request.get(`/api/items/${id}`)).json()).item.forWhom)
+    .toBe(other.name);
   await field.fill(me.name);
   await field.blur();
   await expect(page.getByText("you", { exact: true })).toBeVisible();
