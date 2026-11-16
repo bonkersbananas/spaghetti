@@ -14,7 +14,7 @@ import { cn } from "@/lib/cn";
 import { useForLine } from "@/lib/for-whom";
 import type { ItemView } from "@/lib/items";
 import { useOutbox } from "@/lib/outbox";
-import { fileThumbSrc, hasPreview, photoSrc } from "@/lib/previews";
+import { fileThumbSrc, newestPlate, photoSrc } from "@/lib/previews";
 import { useUnreadCount, useUnreadThreadSearch } from "@/lib/unread-comments";
 
 // The menu's code (popover, sheet) arrives after the first screen: it is only needed once a card is touched.
@@ -28,15 +28,10 @@ export function photoAlt(item: Pick<ItemView, "title" | "note">): string {
 
 /**
  * The newest of an idea's files with a plate picture (a slicer's file, or a model Spaghetti sliced): the idea's cover
- * while it has no photo of its own. A photo always wins. A model being sliced here has its picture on this device
- * before the server does.
+ * while it has no photo of its own (`coverOf` in lib/previews.ts, the rule every cover follows). A photo always wins.
  */
 export function plateCover(item: Pick<ItemView, "files">): AttemptFile | undefined {
-  let newest: AttemptFile | undefined;
-  for (const file of item.files ?? []) {
-    if ((file.hasThumb || hasPreview(file.id)) && (!newest || file.createdAt >= newest.createdAt)) newest = file;
-  }
-  return newest;
+  return newestPlate({ files: item.files, attempts: [] });
 }
 
 /** What a plate picture shows, for screen readers. */

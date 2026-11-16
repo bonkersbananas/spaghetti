@@ -140,6 +140,7 @@ const AttemptCard = forwardRef<HTMLAnchorElement, JournalEntryProps>(function At
               src={fileThumbSrc(plate)}
               alt=""
               fit="contain"
+              frame="render"
               className="size-full p-1.5 md:p-3"
               imgClassName="group-hover:scale-[1.02] transition-[opacity,transform] duration-slow"
             />
@@ -409,7 +410,13 @@ const AttemptRow = forwardRef<HTMLAnchorElement, JournalEntryProps>(function Att
           className="size-12 shrink-0 rounded-md"
         />
       ) : plate ? (
-        <Photo src={fileThumbSrc(plate)} alt="" fit="contain" className="size-12 shrink-0 rounded-md" />
+        <Photo
+          src={fileThumbSrc(plate)}
+          alt=""
+          fit="contain"
+          frame="render"
+          className="size-12 shrink-0 rounded-md p-1"
+        />
       ) : (
         <span className="bg-ink/5 text-ink-faint flex size-12 shrink-0 items-center justify-center rounded-md">
           <BuildsIcon size={22} aria-hidden />

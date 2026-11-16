@@ -17,7 +17,7 @@ export interface CardPhoto {
   alt: string;
   color?: string /** The photo's id, so it can travel to the page this opens. */;
   id?: string;
-  /** "contain" for a slicer's plate picture standing in for a photo: the whole model on the well, not cropped. */
+  /** "contain" for a slicer's plate picture standing in for a photo: the whole model on the render ground, not cropped. */
   fit?: "cover" | "contain";
 }
 
@@ -151,15 +151,13 @@ export function Card({
             alt={photo.alt}
             color={photo.color}
             fit={photo.fit}
+            frame={photo.fit === "contain" ? "render" : undefined}
             className={cn("size-full", photo.fit === "contain" && "p-3")}
             imgClassName="group-hover:scale-[1.02] transition-[opacity,transform] duration-slow"
           />
-        ) : noteCard ? (
-          <NoteFace note={note} />
         ) : (
-          <div className="bg-well text-ink-ghost flex size-full items-center justify-center">
-            <ImageIcon size={32} weight="light" aria-hidden />
-          </div>
+          // Nothing to show yet, not even a note: a blank index card, never an empty image icon.
+          <NoteFace note={note ?? ""} />
         )}
         {badge && <div className="absolute top-2 right-2">{badge}</div>}
         {slides && (

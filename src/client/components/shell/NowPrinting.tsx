@@ -3,15 +3,15 @@ import { useQuery } from "@tanstack/react-query";
 import { Link, useLocation } from "@tanstack/react-router";
 import { AnimatePresence, m } from "motion/react";
 import { useMemo } from "react";
+import { CoverPicture } from "@/components/ui/CoverPicture";
 import { BuildsIcon } from "@/components/ui/icons";
-import { Photo } from "@/components/ui/Photo";
 import { PrintProgress } from "@/components/ui/PrintProgress";
-import { heroPhoto, printingAttempts } from "@/lib/builds";
+import { printingAttempts } from "@/lib/builds";
 import { itemName } from "@/lib/item-name";
 import { type AttemptView, type ItemView, useBuilds } from "@/lib/items";
 import { duration, ease } from "@/lib/motion";
 import { printerQuery } from "@/lib/pantry-queries";
-import { fileThumbSrc, photoSrc } from "@/lib/previews";
+import { coverOf } from "@/lib/previews";
 import { usePrintProgress } from "@/lib/print-progress";
 import { useIsDesktop } from "@/lib/use-media-query";
 import { useNow } from "@/lib/use-now";
@@ -33,8 +33,6 @@ interface NowPrintingCardProps {
 export function NowPrintingCard({ item, attempt }: NowPrintingCardProps) {
   const progress = usePrintProgress(attempt.id, attempt.printedAt, attempt.settings.estimatedMinutes);
   const offBed = isOffTheBed(attempt);
-  const hero = heroPhoto(item);
-  const plate = !hero && attempt.file?.hasThumb ? attempt.file : undefined;
   return (
     <Link
       to="/builds/$buildId"
@@ -42,20 +40,13 @@ export function NowPrintingCard({ item, attempt }: NowPrintingCardProps) {
       search={{ attempt: attempt.id }}
       className="bg-cream shadow-soft hover:shadow-raised pressable focus-ring flex items-center gap-2.5 rounded-md p-2"
     >
-      {hero ? (
-        <Photo
-          src={photoSrc(hero.id, "thumb")}
-          alt=""
-          color={hero.color || undefined}
-          className="size-9 shrink-0 rounded-sm"
-        />
-      ) : plate ? (
-        <Photo src={fileThumbSrc(plate)} alt="" fit="contain" className="size-9 shrink-0 rounded-sm p-0.5" />
-      ) : (
-        <span className="bg-ink/5 text-ink-faint flex size-9 shrink-0 items-center justify-center rounded-sm">
-          <BuildsIcon size={18} aria-hidden />
-        </span>
-      )}
+      {/* Its cover, small: the photo, else the plate on the bed on the render ground, else the build glyph. */}
+      <CoverPicture
+        cover={coverOf(item, { file: attempt.file })}
+        glyph={<BuildsIcon size={18} aria-hidden />}
+        inset="p-0.5"
+        className="size-9 shrink-0 rounded-sm"
+      />
       <span className="flex min-w-0 flex-1 flex-col">
         <span className="text-small text-ink truncate font-semibold">{itemName(item).text}</span>
         <span className="text-caption text-ink-faint tabular flex items-center gap-1.5">

@@ -22,10 +22,11 @@ import { SettingsLine } from "@/components/builds/SettingsLine";
 import { filamentLabel, summarizeSettings } from "@/components/builds/settings";
 import { CommentThread, ItemReactions } from "@/components/comments/CommentThread";
 import { AddFirstPhotos } from "@/components/ideas/AddFirstPhotos";
-import { photoAlt } from "@/components/ideas/IdeaCard";
+import { photoAlt, plateAlt } from "@/components/ideas/IdeaCard";
 import ItemFiles from "@/components/ideas/ItemFiles";
 import { PhotoStrip } from "@/components/ideas/PhotoStrip";
 import { PhotoViewer } from "@/components/ideas/PhotoViewer";
+import { PlateCover } from "@/components/ideas/PlateCover";
 import { EmptyPot } from "@/components/illustrations/EmptyPot";
 import { SpoolStrand } from "@/components/illustrations/SpoolStrand";
 import { recipeKind } from "@/components/recipes/RecipeCard";
@@ -84,6 +85,7 @@ import {
 } from "@/lib/items";
 import { scrollBehavior, spring } from "@/lib/motion";
 import { useScreenActions } from "@/lib/palette";
+import { newestPlate } from "@/lib/previews";
 import { peopleQuery, sessionQuery } from "@/lib/queries";
 import { canEdit, useReadOnly } from "@/lib/read-only";
 import { itemName, useRememberItem } from "@/lib/recent";
@@ -203,6 +205,8 @@ function Build({ item }: { item: ItemView }) {
   const hero = heroPhoto(item);
   const own = item.photos.filter((photo) => !photo.attemptId);
   const gallery = hero && !own.some((photo) => photo.id === hero.id) ? [hero, ...own] : own;
+  // Without a photo, the cover rule's next step: the newest plate picture (coverOf in lib/previews.ts).
+  const plate = gallery.length === 0 ? newestPlate(item) : undefined;
   const [photoId, setPhotoId] = useState(gallery[0]?.id);
   const photoIndex = Math.max(
     0,
@@ -543,7 +547,17 @@ function Build({ item }: { item: ItemView }) {
             {gallery.length > 0 && (
               <PhotoStrip itemId={item.id} photos={own} selectedId={gallery[photoIndex]?.id} onSelect={setPhotoId} />
             )}
-            {gallery.length === 0 && <AddFirstPhotos itemId={item.id} />}
+            {gallery.length === 0 &&
+              (plate ? (
+                // No photo yet, but a plate picture: it is the cover, where the idea had it and at its size, with
+                // the add-photo wells row-sized under it, as on the idea page. The first photo takes its place.
+                <>
+                  <PlateCover file={plate} alt={plateAlt({ title, note })} className="-mx-5 md:mx-0" />
+                  <AddFirstPhotos itemId={item.id} small />
+                </>
+              ) : (
+                <AddFirstPhotos itemId={item.id} />
+              ))}
 
             <div className="flex flex-col gap-3 md:pt-2">
               <TextArea

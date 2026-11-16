@@ -24,6 +24,13 @@
   --sg-pressed: #ece3d3;
   /* A note card's face: paper by day, a step lifted at night (an index card under the lamp, not a hole in the card). */
   --sg-note: #f6f1e8;
+  /*
+   * The ground under a slicer's plate render (PlateCover, a card's or a row's picture without a photo): the deep
+   * paper by day; by night a lifted warm step, not a black hole. The model casts a faint shadow on it, so a white
+   * model on a light ground keeps its edge.
+   */
+  --sg-render: #eee6d9;
+  --sg-render-shadow: drop-shadow(0 1px 1px rgb(43 36 32 / 0.22)) drop-shadow(0 3px 6px rgb(43 36 32 / 0.1));
   /* A choice tile on a card or sheet (ChoiceTiles, the outcome picker): paper by day, a step above a sheet at night, so it rises instead of sinking. */
   --sg-tile: #f6f1e8;
   /* The 3D viewer's stage: the build plate (a textured PEI sheet, champagne gold), its edge, and the room's light. */
@@ -227,6 +234,8 @@
   --sg-pressed: #3a332c;
   --sg-note: #2e2823;
   --sg-tile: #38312b;
+  --sg-render: #2e2823;
+  --sg-render-shadow: drop-shadow(0 1px 2px rgb(0 0 0 / 0.45));
   --sg-plate: #4f4536;
   --sg-plate-edge: #382f25;
   --sg-plate-grid: #8a7860;
@@ -294,6 +303,7 @@
   --color-channel: var(--sg-channel);
   --color-note: var(--sg-note);
   --color-tile: var(--sg-tile);
+  --color-render: var(--sg-render);
   --color-qr-bg: var(--sg-qr-bg);
   --color-qr-ink: var(--sg-qr-ink);
   --color-ink: var(--sg-ink);
@@ -570,6 +580,11 @@
     position: sticky;
     top: var(--sticky-top, 1.5rem);
   }
+}
+
+/* A slicer's render on its ground (`bg-render`): the model casts a faint shadow, so white plastic keeps its edge. */
+@utility render-shadow {
+  filter: var(--sg-render-shadow);
 }
 
 /* Text that may run past its box (a long note on a card) fades out at the bottom instead of being cut mid-line. */

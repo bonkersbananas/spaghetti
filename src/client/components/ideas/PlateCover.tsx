@@ -7,9 +7,9 @@ import { cn } from "@/lib/cn";
 import { fileThumbSrc } from "@/lib/previews";
 
 /**
- * An idea with no photo yet but a model or slicer file: the newest plate picture is its cover, where the photos go
- * and at their 4:3, the whole model contained on the viewer's deep paper and labeled "Slicer preview", so nobody
- * takes the render for a print. The first real photo takes its place.
+ * An idea or build with no photo yet but a model or slicer file (`coverOf`'s plate): the newest plate picture is its
+ * cover, where the photos go and at their 4:3, the whole model contained on the render ground and labeled "From the
+ * model", so nobody takes the render for a print. The first real photo takes its place.
  */
 export function PlateCover({
   file,
@@ -29,7 +29,7 @@ export function PlateCover({
         src={original && shown === "original" ? original : fileThumbSrc(file)}
         alt={alt}
         fit="contain"
-        frame="deep"
+        frame="render"
         eager
         className={cn("aspect-4/3 max-h-[72dvh] w-full p-6 md:rounded-xl md:p-10", original && "pb-16 md:pb-16")}
       />

@@ -3,19 +3,19 @@ import { isOffTheBed, offTheBedLabel } from "@shared/print-progress";
 import { inlineTime, relativeTime } from "@shared/time";
 import { m } from "motion/react";
 import type { Ref } from "react";
-import { photoAlt } from "@/components/ideas/IdeaCard";
+import { photoAlt, plateAlt } from "@/components/ideas/IdeaCard";
 import { Card } from "@/components/ui/Card";
 import { Chip } from "@/components/ui/Chip";
+import { coverPhoto } from "@/components/ui/CoverPicture";
 import { BuildsIcon } from "@/components/ui/icons";
 import { MetaList } from "@/components/ui/MetaList";
 import { PhotoRow } from "@/components/ui/PhotoRow";
 import { ReactionGlance } from "@/components/ui/ReactionGlance";
 import { useReflow } from "@/components/ui/Reflow";
-import { heroPhoto, newestPhoto } from "@/lib/builds";
 import { cn } from "@/lib/cn";
 import { useForLine } from "@/lib/for-whom";
 import type { ItemView } from "@/lib/items";
-import { photoSrc } from "@/lib/previews";
+import { coverOf } from "@/lib/previews";
 import { usePrintProgress } from "@/lib/print-progress";
 import { useUnreadCount, useUnreadThreadSearch } from "@/lib/unread-comments";
 import { OutcomeChip } from "./Outcome";
@@ -75,8 +75,8 @@ const lowerFirst = (text: string) => text.charAt(0).toLowerCase() + text.slice(1
 const upperFirst = (text: string) => text.charAt(0).toUpperCase() + text.slice(1);
 
 /**
- * A build in progress: its newest photo first (what came off the bed last),
- * how the last attempt went over it, and when.
+ * A build in progress: its cover first (the one its page leads with), how the
+ * last attempt went over it, and when.
  */
 export function BuildCard({
   item,
@@ -91,7 +91,8 @@ export function BuildCard({
   landing?: boolean;
   ref?: Ref<HTMLLIElement>;
 }) {
-  const photo = newestPhoto(item);
+  // The build's cover, as on its page: the best photo, else its newest plate render, else its note card.
+  const cover = coverOf(item);
   const last = item.attempts.at(-1);
   const unread = useUnreadCount(item.id);
   const forLine = useForLine();
@@ -101,13 +102,10 @@ export function BuildCard({
       <Card
         link={{ to: "/builds/$buildId", params: { buildId: item.id }, search: toThread as never }}
         aspect="portrait"
-        photo={
-          photo
-            ? { id: photo.id, src: photoSrc(photo.id, "thumb"), alt: photoAlt(item), color: photo.color }
-            : undefined
-        }
-        title={item.title}
-        note={item.note || undefined}
+        photo={coverPhoto(cover, cover.kind === "plate" ? plateAlt(item) : photoAlt(item))}
+        // A build with neither a photo nor a note shows its name on the index card, once.
+        title={cover.kind === "note" && cover.fromTitle ? undefined : item.title}
+        note={cover.kind === "note" ? cover.text : item.note || undefined}
         unread={unread}
         chips={
           last ? (
@@ -133,10 +131,10 @@ export function BuildCard({
 
 /**
  * A done or shelved build, quieter than the work in progress: a small
- * photo, the title and how it ended.
+ * picture (its cover; the build glyph where only a note would be), the title and how it ended.
  */
 export function BuildRow({ item }: { item: ItemView }) {
-  const photo = heroPhoto(item);
+  const cover = coverOf(item);
   const ended = item.finishedAt ?? item.updatedAt;
   const attempts = item.attempts.length;
   const title = item.title || item.note.split("\n")[0] || "Untitled build";
@@ -144,7 +142,7 @@ export function BuildRow({ item }: { item: ItemView }) {
     <li className="list-none">
       <PhotoRow
         link={{ to: "/builds/$buildId", params: { buildId: item.id } }}
-        photo={photo ? { src: photoSrc(photo.id, "thumb"), color: photo.color || undefined } : null}
+        photo={coverPhoto(cover, "") ?? null}
         tile={<BuildsIcon size={24} aria-hidden />}
         faded={item.stage === "shelved"}
       >

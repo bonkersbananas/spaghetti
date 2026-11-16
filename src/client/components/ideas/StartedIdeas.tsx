@@ -1,14 +1,13 @@
 import { beganAsIdea } from "@shared/deleted";
 import { Link } from "@tanstack/react-router";
+import { CoverPicture } from "@/components/ui/CoverPicture";
 import { ArrowRightIcon, BuildsIcon } from "@/components/ui/icons";
 import { MetaList } from "@/components/ui/MetaList";
-import { Photo } from "@/components/ui/Photo";
 import { Section } from "@/components/ui/Section";
-import { heroPhoto } from "@/lib/builds";
 import { cn } from "@/lib/cn";
 import { itemName } from "@/lib/item-name";
 import type { ItemView } from "@/lib/items";
-import { photoSrc } from "@/lib/previews";
+import { coverOf } from "@/lib/previews";
 
 /** How many started ideas Ideas shows before it points at Builds. */
 const MOST = 6;
@@ -62,7 +61,6 @@ export function StartedIdeas({ builds }: { builds: ItemView[] }) {
 }
 
 function Row({ item }: { item: ItemView }) {
-  const hero = heroPhoto(item);
   const name = itemName(item);
   const status = startedStatus(item);
   return (
@@ -71,18 +69,12 @@ function Row({ item }: { item: ItemView }) {
       params={{ buildId: item.id }}
       className="pressable focus-ring hover:bg-ink/4 -mx-1.5 flex items-center gap-3.5 rounded-lg p-1.5"
     >
-      {hero ? (
-        <Photo
-          src={photoSrc(hero.id, "thumb")}
-          alt=""
-          color={hero.color || undefined}
-          className="size-12 shrink-0 rounded-md"
-        />
-      ) : (
-        <span className="bg-ink/5 text-ink-faint flex size-12 shrink-0 items-center justify-center rounded-md">
-          <BuildsIcon size={22} aria-hidden />
-        </span>
-      )}
+      <CoverPicture
+        cover={coverOf(item)}
+        glyph={<BuildsIcon size={22} aria-hidden />}
+        inset="p-1"
+        className="size-12 shrink-0 rounded-md"
+      />
       <span className="flex min-w-0 flex-1 flex-col">
         <span
           className={cn("text-body truncate", name.titled ? "text-ink font-semibold" : "text-ink-soft font-medium")}

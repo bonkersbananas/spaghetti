@@ -19,6 +19,7 @@ import {
   type TagKind,
 } from "@shared/attempts";
 import type { BridgeProgress } from "@shared/bridge";
+import { bestPhoto, finalPhoto } from "@shared/cover";
 import type { AttemptPart } from "@shared/parts";
 import { isOffTheBed, livePrintProgress, printProgress } from "@shared/print-progress";
 import { type QueryClient, queryOptions, useQuery } from "@tanstack/react-query";
@@ -131,28 +132,22 @@ export function createBuild(createdBy: string, from?: { title: string; twistId: 
   return itemId;
 }
 
-const newest = <T extends Photo>(photos: T[]) =>
-  photos.reduce<T | undefined>((best, photo) => (!best || photo.createdAt > best.createdAt ? photo : best), undefined);
-
-/**
- * The photo a build leads with: its final photo once done, else its own
- * cover (from the idea), else the newest photo of its best attempt.
- */
+/** The photo a build leads with (`bestPhoto` in shared/cover.ts, the one rule the cards and the link previews share). */
 export function heroPhoto(item: Pick<ItemView, "photos" | "attempts" | "coverPhotoId">): PhotoView | undefined {
-  const cover = item.coverPhotoId ? item.photos.find((photo) => photo.id === item.coverPhotoId) : undefined;
-  return cover ?? item.photos.find((photo) => !photo.attemptId) ?? finalPhotoGuess(item);
+  return bestPhoto(item.photos, item.attempts, item.coverPhotoId);
 }
 
 /** The newest photo of the latest attempt that worked, else the newest of any attempt. */
 export function finalPhotoGuess(item: Pick<ItemView, "photos" | "attempts">): PhotoView | undefined {
-  const worked = [...item.attempts].reverse().find((attempt) => attempt.outcome === "success");
-  const workedPhotos = worked ? item.photos.filter((photo) => photo.attemptId === worked.id) : [];
-  return newest(workedPhotos) ?? newest(item.photos.filter((photo) => photo.attemptId)) ?? item.photos[0];
+  return finalPhoto(item.photos, item.attempts);
 }
 
-/** The newest photo of anything in the build: what the builds list shows for work in progress. */
+/** The newest photo of anything in the build (a twist's printed rows). */
 export function newestPhoto(item: Pick<ItemView, "photos">): PhotoView | undefined {
-  return newest(item.photos);
+  return item.photos.reduce<PhotoView | undefined>(
+    (best, photo) => (!best || photo.createdAt > best.createdAt ? photo : best),
+    undefined,
+  );
 }
 
 /**
