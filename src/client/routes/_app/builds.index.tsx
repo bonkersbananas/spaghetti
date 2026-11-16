@@ -93,7 +93,10 @@ function Builds() {
           {onBed.length > 0 && (
             <Section title="On the bed" count={onBed.length > 1 ? onBed.length : undefined}>
               <Suspense fallback={<Skeleton className="h-44 rounded-lg" />}>
-                <BedCards prints={onBed} people={byId} via={via} spread />
+                {/* J and K walk these too, before the In progress grid. */}
+                <div data-picks>
+                  <BedCards prints={onBed} people={byId} via={via} spread />
+                </div>
               </Suspense>
             </Section>
           )}

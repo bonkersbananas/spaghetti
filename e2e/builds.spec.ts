@@ -147,6 +147,7 @@ test("grows an idea into a build, logs a failure and a success, and finishes it"
 
 test("On the bed holds only what is on the plate; builds between prints are In progress", { tag: "@phone" }, async ({
   page,
+  isMobile,
 }) => {
   const headers = { Origin: origin(page) };
   const printing = crypto.randomUUID();
@@ -172,6 +173,14 @@ test("On the bed holds only what is on the plate; builds between prints are In p
   await expect(card).toContainText("Spaghetti");
   await expect(card).toContainText("Bed adhesion");
   await expect(inProgress.getByRole("link", { name: /Hook/ })).toHaveCount(0);
+
+  // On desktop J walks the prints on the bed first, by their names' links, then the In progress cards.
+  if (!isMobile) {
+    await page.keyboard.press("j");
+    await expect(bed.getByRole("link", { name: /^Hook, attempt 1/ })).toBeFocused();
+    await page.keyboard.press("j");
+    await expect(card).toBeFocused();
+  }
 
   // A build between prints says so on its page: it isn't on the bed.
   await card.click();
