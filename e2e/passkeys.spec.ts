@@ -245,6 +245,40 @@ test("an invite can be accepted with a passkey and no password", async ({ page, 
   await guest.close();
 });
 
+test("a link opened signed out lands on its page after signing in with a passkey", async ({ page, browser }) => {
+  await signIn(page);
+  const made = await (await page.request.post("/api/account/invites", { headers: headers() })).json();
+  const id = crypto.randomUUID();
+  const idea = await page.request.post("/api/items", {
+    headers: headers(),
+    data: { id, title: "Passkey-shaped cookie cutter", stage: "idea" },
+  });
+  expect(idea.ok()).toBe(true);
+  // Someone with a passkey on this browser (joined with one), signed out.
+  const guest = await browser.newContext({ baseURL: origin() });
+  const tab = await guest.newPage();
+  await addAuthenticator(guest, tab);
+  await tab.goto(made.url.replace(/^https?:\/\/[^/]+/, origin()));
+  await tab.getByLabel("Your name").fill("Lou Berg");
+  await tab.getByLabel("Username").fill(`lou${Date.now() % 1_000_000}`);
+  await tab.getByRole("button", { name: /^Join with / }).click();
+  await expect(tab.getByRole("heading", { level: 1, name: /^(Today|Journal)$/ })).toBeVisible();
+  await guest.clearCookies();
+  await tab.evaluate(() => localStorage.clear());
+
+  await tab.goto(`/ideas/${id}`);
+  await expect(tab).toHaveURL(new RegExp(`/sign-in\\?redirect=%2Fideas%2F${id}$`));
+  // The name field's own passkey offer may sign in by itself; otherwise the button does.
+  await tab
+    .getByRole("button", { name: /^Sign in with / })
+    .click({ timeout: 3000 })
+    .catch(() => undefined);
+  await expect(tab).toHaveURL(new RegExp(`/ideas/${id}$`));
+  await expect(tab.getByRole("textbox", { name: "Title" })).toHaveValue("Passkey-shaped cookie cutter");
+  await page.request.delete(`/api/items/${id}`, { headers: headers() });
+  await guest.close();
+});
+
 test("after a password sign-in, a quiet offer for a passkey comes once and never again", async ({
   page,
   context,

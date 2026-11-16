@@ -1,6 +1,6 @@
 import type { SessionResponse } from "@shared/api";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { createFileRoute, Link, redirect, useNavigate } from "@tanstack/react-router";
+import { useMutation } from "@tanstack/react-query";
+import { createFileRoute, Link, redirect } from "@tanstack/react-router";
 import { m } from "motion/react";
 import { type FormEvent, useEffect, useRef, useState } from "react";
 import { Mark } from "@/components/illustrations";
@@ -8,33 +8,33 @@ import { Button, IconButton } from "@/components/ui/Button";
 import { TextField } from "@/components/ui/Field";
 import { EyeIcon, EyeSlashIcon, PasskeyIcon } from "@/components/ui/icons";
 import { ApiError, api } from "@/lib/api";
+import { useArrive } from "@/lib/arrive";
 import { cn } from "@/lib/cn";
 import { ease, spring } from "@/lib/motion";
 import { askForPasskeyAfterSignIn } from "@/lib/passkey-offer";
 import { autofillSupported, biometric, isCancelled, passkeysSupported, signInWithPasskey } from "@/lib/passkeys";
-import { rememberUser, sessionQuery } from "@/lib/queries";
+import { sessionQuery } from "@/lib/queries";
 import { signOutSettled } from "@/lib/use-sign-out";
 
 export const Route = createFileRoute("/sign-in")({
   // By hand, not zod: route search checks load with the app (see share.tsx).
   validateSearch: (search: Record<string, unknown>): { redirect?: string } =>
     typeof search.redirect === "string" ? { redirect: search.redirect } : {},
-  beforeLoad: async ({ context }) => {
+  // Someone already signed in here goes straight on: a link to a page, opened signed out in an app's own browser
+  // (Snapchat, Instagram), reaches the real browser as this page's address with the page in `redirect`.
+  beforeLoad: async ({ context, search }) => {
     const user = await context.queryClient.ensureQueryData(sessionQuery);
-    if (user) throw redirect({ to: "/today" });
+    if (!user) return;
+    // Loaded only now: beforeLoad is in every screen's first load, and this is rare.
+    const { afterSignIn } = await import("@/lib/after-sign-in");
+    throw redirect({ href: afterSignIn(search.redirect, context.knows), replace: true });
   },
   component: SignIn,
 });
 
-/** Only same-origin paths, so a crafted link can't send people elsewhere. */
-function safeRedirect(target: string | undefined): string {
-  return target?.startsWith("/") && !target.startsWith("//") ? target : "/today";
-}
-
 function SignIn() {
   const { redirect: redirectTo } = Route.useSearch();
-  const navigate = useNavigate();
-  const queryClient = useQueryClient();
+  const arriving = useArrive(redirectTo);
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -45,11 +45,8 @@ function SignIn() {
   const [passkeyError, setPasskeyError] = useState<string>();
 
   async function arrive(user: SessionResponse["user"]) {
-    // Whatever an earlier session left in memory is not this person's to see.
-    queryClient.removeQueries({ predicate: (q) => q.queryKey[0] !== "session" });
-    queryClient.setQueryData(sessionQuery.queryKey, user);
-    rememberUser(user);
-    await navigate({ href: safeRedirect(redirectTo), replace: true });
+    arriving.stay(user);
+    await arriving.go();
   }
 
   const withPasskey = useMutation({
@@ -218,6 +215,7 @@ function SignIn() {
           <span className="block">No account? Ask the other cook.</span>
           <Link
             to="/link"
+            search={redirectTo ? { redirect: redirectTo } : {}}
             className="focus-ring touch-target decoration-ink-ghost relative inline-block py-2 underline underline-offset-4"
           >
             Signing in from another device? Use a code

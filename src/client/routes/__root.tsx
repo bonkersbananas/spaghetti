@@ -22,6 +22,8 @@ function MotionMax() {
 
 export interface RouterContext {
   queryClient: QueryClient;
+  /** Whether a route answers this path (where signing in may go on to: lib/arrive.ts afterSignIn). */
+  knows: (pathname: string) => boolean;
 }
 
 export const Route = createRootRouteWithContext<RouterContext>()({
