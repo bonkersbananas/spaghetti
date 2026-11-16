@@ -10,6 +10,7 @@ import {
   type PhotoResponse,
 } from "../../shared/api.ts";
 import { beganAsIdea } from "../../shared/deleted.ts";
+import { tidyModelLinks } from "../../shared/model-mark.ts";
 import { movedText, withMoved, withoutMoved } from "../../shared/move.ts";
 import { cleanPartName, MAX_PART_QUANTITY, MAX_PARTS } from "../../shared/parts.ts";
 import type { PhotoRead } from "../../shared/photo-read.ts";
@@ -386,7 +387,8 @@ export const itemRoutes = new Hono<AppEnv>()
         .values({
           id: itemId,
           title: itemTitle ?? null,
-          note: itemNote ?? "",
+          // A model page's link is kept without ?from=search and the like (the client tidies the same way).
+          note: tidyModelLinks(itemNote ?? ""),
           stage,
           twistId: twistId ?? null,
           // A build started from scratch starts when it was made.
@@ -505,6 +507,9 @@ export const itemRoutes = new Hono<AppEnv>()
         .update(items)
         .set({
           ...changes,
+          // An agent's note is tidied as it lands; a person's is tidied by their own field when they stop typing, so the
+          // words never change under their cursor.
+          ...(changes.note !== undefined && c.var.via ? { note: tidyModelLinks(changes.note) } : {}),
           ...(stage ? stageDates(current, stage, now) : {}),
           // Starting a build takes the idea off the queue (unless this same change puts it back: the undo).
           ...(stage && stage !== "idea" ? { upNext: null } : {}),

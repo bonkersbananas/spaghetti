@@ -5,6 +5,7 @@ import { z } from "zod";
 import type { CaptureResponse } from "../../shared/api.ts";
 import { captureNote, captureTitle, MAX_CAPTURE_PHOTOS } from "../../shared/capture.ts";
 import { lonelyModelLink } from "../../shared/model-links.ts";
+import { tidyModelLinks } from "../../shared/model-mark.ts";
 import { afterChange, recordChange } from "../changes.ts";
 import { items, photos } from "../db/schema.ts";
 import { draftsEnabled, runDraft, startDraft } from "../draft/run.ts";
@@ -209,7 +210,7 @@ export const captureRoutes = new Hono<AppEnv>().post("/", async (c) => {
     input = { ...input, url: input.text.trim(), text: undefined };
   }
 
-  const note = captureNote(input.text, input.url);
+  const note = tidyModelLinks(captureNote(input.text, input.url));
   const title = captureTitle(input.title, input.text, input.url);
   if (!note && !title && !files.length) return refuse(400, "invalid", "there was no link, text, title or photo in it.");
   if (files.length > MAX_CAPTURE_PHOTOS) {

@@ -238,3 +238,66 @@ test("while the attempt prints, the viewer says where the printer is and shows t
   await expect(dialog.getByText("Printing now · layer 126 of 317")).toBeVisible({ timeout: 25_000 });
   await page.request.put("/api/printer/bridge", { headers: { Origin: origin }, data: { progress: null } });
 });
+
+test("tilting just under the plate turns it see-through at once, by mouse or touch, and back solid above @phone", async ({
+  page,
+}, testInfo) => {
+  test.setTimeout(150_000); // the first open reads 317 layers in a worker, and each tilt draws them, slow on a runner
+  await signIn(page);
+  const itemId = await buildWithTugboat(page);
+  await page.goto(`/builds/${itemId}`);
+  await page.getByRole("button", { name: `See ${TUGBOAT_FILE_NAME} in 3D` }).click();
+  const dialog = page.getByRole("dialog", { name: "3D view" });
+  await expect(dialog.locator("[data-viewer=ready]")).toBeVisible({ timeout: 30_000 });
+  const canvas = dialog.locator("canvas");
+  await expect(canvas).toHaveAttribute("data-plate", "solid");
+  // Only the first layer: the plate doesn't depend on it, and each frame is far cheaper to draw in software GL.
+  await page.keyboard.press("Home");
+  await expect(dialog.getByText(/^Layer 1 of 317/)).toBeVisible();
+
+  const box = await canvas.boundingBox();
+  if (!box) throw new Error("no canvas");
+  const x = box.x + box.width / 2;
+  let y = box.y + box.height * 0.7;
+  const touch = testInfo.project.use.hasTouch ? await page.context().newCDPSession(page) : null;
+  const point = () => [{ x, y }];
+  if (touch) await touch.send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: point() });
+  else {
+    await page.mouse.move(x, y);
+    await page.mouse.down();
+  }
+  /** The camera's height above the plate's top (mm) and how the plate looks, read from the same frame. */
+  const look = () =>
+    canvas.evaluate((c: HTMLCanvasElement) => ({ height: Number(c.dataset.cameraHeight), plate: c.dataset.plate }));
+  const seen: { height: number; plate?: string }[] = [];
+  /** Drags a pixel or two (up tilts the camera down, under the plate) and notes where the view is. */
+  const tilt = async (dy: number) => {
+    y += dy;
+    if (touch) await touch.send("Input.dispatchTouchEvent", { type: "touchMove", touchPoints: point() });
+    else await page.mouse.move(x, y);
+    const now = await look();
+    seen.push(now);
+    return now.height;
+  };
+
+  // Tilt down in small steps until the camera is under the plate, and on, then back up: whenever the camera is level
+  // with the plate's top or under it, the plate is see-through, never solid or half faded.
+  let height = (await look()).height;
+  expect(height).toBeGreaterThan(0);
+  // (Every step draws the whole print in software GL, seconds on a runner: coarse steps away from the plate.)
+  for (let i = 0; i < 40 && height > 12; i++) height = await tilt(-10);
+  for (let i = 0; i < 40 && height > -6; i++) height = await tilt(-2);
+  await expect.poll(async () => (await look()).plate).toBe("see-through");
+  for (let i = 0; i < 40 && seen.at(-1)?.plate !== "solid"; i++) height = await tilt(16);
+  const under = seen.filter((s) => s.height <= 0);
+  // It passed just under the plate on the way (a grazing look, where the old view showed the solid underside).
+  expect(under.some((s) => s.height > -10)).toBe(true);
+  expect(under.filter((s) => s.plate !== "see-through")).toEqual([]);
+  // Back above, well clear of the plate, it is solid again.
+  await expect.poll(async () => (await look()).plate).toBe("solid");
+
+  if (touch) await touch.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+  else await page.mouse.up();
+  await page.keyboard.press("Escape");
+  await expect(dialog).toHaveCount(0);
+});

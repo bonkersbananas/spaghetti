@@ -341,6 +341,37 @@ async function orbitBelow(page: Page) {
   await page.waitForTimeout(1200);
 }
 
+/**
+ * Tilts the 3D view a few degrees under the plate (the camera 5-10 mm under its top), where the plate used to show
+ * its solid underside in front of the print: a fixed share of the canvas's height for each width, as the base of a
+ * comparison has no camera readout to aim with. Logs where it ended where the view says so.
+ */
+async function tiltJustUnder(page: Page) {
+  const canvas = page.getByRole("dialog", { name: "3D view" }).locator("canvas");
+  const box = await canvas.boundingBox();
+  if (!box) return;
+  const phone = (page.viewportSize()?.width ?? 1440) < 800;
+  const share = phone ? PHONE_GRAZE : DESKTOP_GRAZE;
+  // On a desktop, closer in, as on the phone: the camera over the plate rather than out beyond its front edge.
+  if (!phone)
+    await canvas.evaluate((c) => {
+      for (let i = 0; i < 4; i++)
+        c.dispatchEvent(new WheelEvent("wheel", { deltaY: -100, bubbles: true, cancelable: true }));
+    });
+  const x = box.x + box.width / 2;
+  await page.mouse.move(x, box.y + box.height * 0.7);
+  await page.mouse.down();
+  await page.mouse.move(x, box.y + box.height * (0.7 - share), { steps: 16 });
+  await page.mouse.up();
+  await page.mouse.move(box.x + 4, box.y + 4);
+  await page.waitForTimeout(1500);
+  const height = await canvas.getAttribute("data-camera-height");
+  if (height !== null)
+    console.log(`  camera ${height} mm above the plate, plate ${await canvas.getAttribute("data-plate")}`);
+}
+const PHONE_GRAZE = 0.09;
+const DESKTOP_GRAZE = 0.11;
+
 async function closeDialog(page: Page) {
   await page.keyboard.press("Escape");
   await page.getByRole("dialog").waitFor({ state: "detached" });
@@ -381,6 +412,34 @@ async function newModelIdea(page: Page, note: string) {
     });
     return id;
   }, note);
+}
+
+const FLEXI_LINK = "https://makerworld.com/en/models/3531476-flexi-mini-hummingbird?from=search#profileId-4037895";
+
+/**
+ * A new idea whose note has a MakerWorld link, saved as a person types it (with its tracking bits), and its page open;
+ * the page's title comes from a stand-in for the link preview (the shots have no internet).
+ */
+async function ideaWithLink(page: Page, title: string, note: string) {
+  await page.route(/\/api\/links\/preview\?url=.*3531476/, (route) =>
+    route.fulfill({ json: { url: FLEXI_LINK, title: "Flexi Mini Hummingbird", site: "MakerWorld" } }),
+  );
+  const id = crypto.randomUUID();
+  modelItems.push(id);
+  const headers = { Origin: new URL(page.url()).origin };
+  await page.request.post("/api/items", { headers, data: { id, title, note: "" } });
+  await page.request.patch(`/api/items/${id}`, { headers, data: { note } });
+  await openIdea(page, id);
+  await page
+    .getByRole("link", { name: /Flexi Mini Hummingbird/ })
+    .first()
+    .waitFor();
+  await page.waitForTimeout(600);
+}
+
+async function removeLinkIdeas(page: Page) {
+  await page.unrouteAll({ behavior: "ignoreErrors" });
+  await removeModelItems(page);
 }
 
 /** Opens that idea's page and waits for it. */
@@ -2584,6 +2643,25 @@ export const shots: Shot[] = [
     cleanup: removeModelItems,
   },
   {
+    // A MakerWorld link pasted as the whole note (the Flexi Mini Hummingbird, with its ?from=search#profileId-…): the
+    // model's card says it, once; the note reads as empty.
+    name: "idea-makerworld-link",
+    path: "/ideas",
+    prepare: async (page) => {
+      await ideaWithLink(page, "Flexi Mini Hummingbird", FLEXI_LINK);
+    },
+    cleanup: removeLinkIdeas,
+  },
+  {
+    // The same link inside a sentence: it reads as the model's title there, and the card is still the only one.
+    name: "idea-makerworld-words",
+    path: "/ideas",
+    prepare: async (page) => {
+      await ideaWithLink(page, "Hummingbirds for the window", `Green and gold, for the kitchen window: ${FLEXI_LINK}`);
+    },
+    cleanup: removeLinkIdeas,
+  },
+  {
     // On a computer, "Open in Bambu Studio" on the model's card and beside the idea's other quiet actions (the one
     // model's page-level way in); a phone has neither (idea-model-card).
     name: "idea-model-open",
@@ -3863,6 +3941,25 @@ export const shots: Shot[] = [
       await orbitBelow(page);
     },
     cleanup: closeDialog,
+  },
+  {
+    // The tugboat's 3D view tilted just under the plate's top: already the see-through grid, not the plate's solid
+    // underside in front of the hull.
+    name: "viewer-grazing",
+    path: `/builds/${SEED_BUILD_IDS.tugboat}`,
+    prepare: async (page) => {
+      // Without reduced motion, as on most phones: the plate eases between solid and see-through as the view tilts.
+      await page.emulateMedia({ reducedMotion: "no-preference" });
+      await openViewer(page);
+    },
+    beforeShot: async (page) => {
+      await page.waitForTimeout(400);
+      await tiltJustUnder(page);
+    },
+    cleanup: async (page) => {
+      await closeDialog(page);
+      await page.emulateMedia({ reducedMotion: "reduce" });
+    },
   },
   {
     // The tugboat's attempt that is printing: the printer is at layer 140, so the rest of the file is a faint ghost.

@@ -1,3 +1,4 @@
+import { modelMarkIn } from "@shared/model-mark";
 import { useNavigate } from "@tanstack/react-router";
 import { m } from "motion/react";
 import { Button } from "@/components/ui/Button";
@@ -87,7 +88,7 @@ function SharedIdea({ item, onClose }: { item: ItemView; onClose: () => void }) 
           onChange={(event) => fields.setNote(event.target.value)}
           autoFocus={isDesktop}
         />
-        <NoteLinks note={fields.note} />
+        <NoteLinks note={fields.note} model={modelMarkIn(fields.note)} />
       </div>
     </Sheet>
   );
