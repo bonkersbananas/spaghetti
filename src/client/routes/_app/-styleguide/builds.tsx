@@ -388,7 +388,7 @@ export function BuildsSection() {
             >
               <span className={`flex min-w-0 flex-1 flex-col gap-1.5 py-0.5 ${ACTION_ROOM.sm}`}>
                 <span className="text-body text-ink font-semibold">Phone stand · attempt 2</span>
-                <span className="text-small text-ink-faint">Blue PETG · 0.20 mm · 20% infill</span>
+                <span className="text-small text-ink-faint">Blue PETG · 0.20 mm</span>
               </span>
             </PhotoRow>
           </ActionCard>

@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { cn } from "@/lib/cn";
-import { type PhotoRowSize, rowHover, rowSelected } from "./PhotoRow";
+import { type PhotoRowSize, rowHover, rowSelected, wordsIndent } from "./PhotoRow";
 
 /**
  * A row with a button of its own ("Start again"): one card around both, so the button sits inside it and the card
@@ -22,13 +22,10 @@ export function ActionCard({
   return (
     <div className={cn("relative rounded-lg", selected ? rowSelected : rowHover)}>
       {children}
-      <div className={cn("flex pr-2 pb-3 md:absolute md:right-2 md:bottom-2 md:p-0", actionIndent[size])}>{action}</div>
+      <div className={cn("flex pr-2 pb-3 md:absolute md:right-2 md:bottom-2 md:p-0", wordsIndent[size])}>{action}</div>
     </div>
   );
 }
-
-/** Where a row's words start (padding, picture, gap), so a button under them lines up on a phone. */
-const actionIndent: Record<PhotoRowSize, string> = { sm: "pl-[4.375rem]", md: "pl-[5.375rem]", lg: "pl-[6.375rem]" };
 
 /**
  * The room the last line of a row in an `ActionCard` leaves at its right from md, for the button: `sm` for a short one

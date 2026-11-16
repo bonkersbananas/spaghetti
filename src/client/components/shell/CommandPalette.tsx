@@ -1,5 +1,4 @@
 import type { AttemptHit, FixHit, ItemHit, Spool } from "@shared/api";
-import { tagLabel } from "@shared/attempts";
 import { highlight, searchTerms, words } from "@shared/search";
 import { isShortcut, keycaps, type ShortcutId, shortcutKeys } from "@shared/shortcuts";
 import { inlineTime, relativeTime } from "@shared/time";
@@ -282,7 +281,10 @@ function PaletteBody({ close, choose }: { close: () => void; choose: (run: () =>
           ...found.attempts
             .filter((hit) => hit.attempt.outcome !== "success")
             .slice(0, PER_KIND)
-            .map((hit) => attemptEntry(hit, foundTerms, navigate, "Attempts")),
+            .map((hit) =>
+              // Under what fixed it, the failures are the times it happened (as on the search page).
+              attemptEntry(hit, foundTerms, navigate, fixed.size ? "Times it happened" : "Attempts"),
+            ),
           ...(found.spools ?? []).slice(0, PER_KIND).map((spool) => spoolEntry(spool, foundTerms, navigate)),
         ]
       : [];
@@ -498,10 +500,8 @@ function attemptEntry(
 function fixEntry(fix: FixHit, terms: ReturnType<typeof searchTerms>, navigate: Navigate): Entry {
   const id = `fix-${fix.attempt.id}`;
   const name = itemName(fix.item, "build");
-  const after = afterWords(
-    fix.after,
-    fix.after.tags.map((slug) => tagLabel("failure", slug)),
-  );
+  // The problem is what was typed: the line says when, and what changed.
+  const after = afterWords(fix.after, []);
   return {
     id,
     group: "What fixed it",
@@ -510,17 +510,7 @@ function fixEntry(fix: FixHit, terms: ReturnType<typeof searchTerms>, navigate: 
       id,
       label: `${name}, attempt ${fix.number}`,
       title: <Highlight text={name} terms={terms} />,
-      subtitle: (
-        <>
-          Attempt {fix.number} · {after.charAt(0).toLowerCase() + after.slice(1)}
-          {fix.changes.length > 0 && (
-            <>
-              {" · "}
-              <span className="text-ink-soft">{fix.changes.slice(0, 3).join(", ")}</span>
-            </>
-          )}
-        </>
-      ),
+      subtitle: [`Attempt ${fix.number}`, after.charAt(0).toLowerCase() + after.slice(1), ...fix.changes].join(" · "),
       photo: fix.photo ? { src: photoSrc(fix.photo.id, "thumb"), color: fix.photo.color || undefined } : null,
       icon: BuildsIcon,
       trailing: <OutcomeChip outcome={fix.attempt.outcome} />,

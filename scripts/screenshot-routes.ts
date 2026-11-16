@@ -3392,6 +3392,22 @@ export const shots: Shot[] = [
     },
   },
   {
+    // A problem's word: what fixed it leads, picked with the keyboard (its Start again inside the card), and the six
+    // times it happened fold to three with "Show all 6".
+    name: "search-fixed",
+    path: "/search?q=warping",
+    fullPage: true,
+    prepare: async (page) => {
+      await page
+        .getByRole("button", { name: /^Start again with these/ })
+        .first()
+        .waitFor();
+      const box = page.getByRole("searchbox", { name: "Search" });
+      await box.press("ArrowDown");
+      await box.blur();
+    },
+  },
+  {
     // Two words and nothing has both: the closest results at once, each word on its own a tap away.
     name: "search-nothing",
     path: "/search?q=PETG%20supports",

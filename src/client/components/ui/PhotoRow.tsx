@@ -12,6 +12,16 @@ const sizes = { sm: "size-12", md: "size-16", lg: "size-20 md:size-24" } as cons
 
 export type PhotoRowSize = keyof typeof sizes;
 
+/**
+ * Where a row's words start: its padding (p-2), the picture and the gap (gap-3.5) below md. Kept beside `sizes` so a
+ * button under the words (`ActionCard` on a phone) lines up with them; change them together.
+ */
+export const wordsIndent: Record<PhotoRowSize, string> = {
+  sm: "pl-[4.375rem]",
+  md: "pl-[5.375rem]",
+  lg: "pl-[6.375rem]",
+};
+
 interface PhotoRowProps {
   /** Where the row leads: a router `Link`'s own props (`to`, `params`, `search`) plus its handlers. */
   link: LinkComponentProps<"a">;

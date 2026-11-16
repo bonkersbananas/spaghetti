@@ -119,7 +119,8 @@ export const AttemptResult = forwardRef<HTMLAnchorElement, AttemptResultProps>(f
   const matches = (part: string) => highlight(part, terms).some((piece) => piece.match);
   const settings = summarizeSettings(attempt.settings)
     .sort((x, y) => Number(matches(y)) - Number(matches(x)))
-    .slice(0, 4);
+    // Beside a button the line is shorter: three, so it stays one line next to it.
+    .slice(0, action ? 3 : 4);
   const row = (
     <ResultRow
       ref={ref}

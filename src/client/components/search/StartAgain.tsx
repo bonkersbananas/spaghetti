@@ -35,7 +35,8 @@ export function StartAgain({
       size="sm"
       icon={PlayIcon}
       disabled={!me}
-      aria-label={`Start again with the settings of ${title}, attempt ${hit.number}`}
+      // Named by its words first, so voice control finds it by what it shows.
+      aria-label={`${children}, from the settings of ${title}, attempt ${hit.number}`}
       onClick={() => {
         if (!me) return;
         onStart?.();
