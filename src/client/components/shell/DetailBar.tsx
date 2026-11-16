@@ -7,6 +7,8 @@ import { useBackTo } from "@/lib/origin";
 interface DetailBarProps {
   /** The section the detail belongs to: where "back" goes when the page wasn't opened from somewhere in the app. */
   back: { to: "/ideas" | "/builds" | "/pantry" | "/twists"; label: string };
+  /** The page's own title: the way back never just echoes it. */
+  title?: string;
   /** The screen's actions, on the right. */
   children?: ReactNode;
 }
@@ -18,8 +20,8 @@ const backClass =
  * The top of a detail screen: a clear way back (Escape on desktop), named for where it goes (the page an idea or build
  * was opened from, else its list), and the screen's actions. Sticky and translucent on phones.
  */
-export function DetailBar({ back, children }: DetailBarProps) {
-  const to = useBackTo(back);
+export function DetailBar({ back, title, children }: DetailBarProps) {
+  const to = useBackTo(back, title);
   // A plain click goes back (a step back in history: the page before is as it was); a new tab gets the address.
   const onClick = (event: MouseEvent<HTMLAnchorElement>) => {
     if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey) return;
@@ -36,7 +38,8 @@ export function DetailBar({ back, children }: DetailBarProps) {
   return (
     <div className="bg-paper/90 sticky top-[var(--sg-safe-top)] z-20 -mx-5 mb-0 flex h-14 items-center justify-between gap-2 px-2 backdrop-blur-xl md:static md:mx-0 md:mb-6 md:h-auto md:bg-transparent md:px-0 md:pt-8 md:backdrop-blur-none">
       {to.fromOrigin ? (
-        <a href={to.href} onClick={onClick} className={backClass}>
+        // An item's name may be cut short: hovering shows all of it.
+        <a href={to.href} onClick={onClick} title={to.label} className={backClass}>
           {content}
         </a>
       ) : (

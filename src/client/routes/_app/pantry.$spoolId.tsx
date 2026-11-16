@@ -331,10 +331,10 @@ function SpoolPage({ spool }: { spool: Spool }) {
   );
 
   return (
-    <PullToGo back={back}>
+    <PullToGo back={back} title={[name.title, name.detail].filter(Boolean).join(", ")}>
       <article className="pb-6">
         <h1 className="sr-only">{[name.title, name.detail].filter(Boolean).join(", ")}</h1>
-        <DetailBar back={back}>
+        <DetailBar back={back} title={[name.title, name.detail].filter(Boolean).join(", ")}>
           <SaveStatus state={saveState} className="mr-2" />
           <IconButton
             icon={TrashIcon}

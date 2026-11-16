@@ -83,6 +83,19 @@ moves.after = (type) => {
   if (type !== "PUSH" && type !== "REPLACE" && top) settleScroll(top);
 };
 
+/** A detail page by the kind of thing it shows, for a name that would only echo the page's own title. */
+const KINDS: Record<string, string> = { ideas: "Idea", builds: "Build", twists: "Twist", pantry: "Spool" };
+
+/**
+ * What the way back says: the origin's name, unless the page's own title starts with it (a twist named after the idea
+ * it was made from would read as its own title, cut short): then the kind of page it goes to ("Idea").
+ */
+function nameOf(origin: Origin, title?: string): string {
+  const own = title?.trim().toLowerCase();
+  if (!own || !own.startsWith(origin.label.toLowerCase())) return origin.label;
+  return KINDS[origin.href.split("/")[1] ?? ""] ?? origin.label;
+}
+
 /** Where "back" goes from a detail page: by its control, Escape and pull-to-go. */
 export interface BackTo {
   /** What the control says: the origin's name, else the list's. */
@@ -96,13 +109,13 @@ export interface BackTo {
 
 /**
  * The way back from a detail page: to the page it was opened from, as it was left (a step back in history keeps its
- * scroll, filters and search), else to `list`.
+ * scroll, filters and search), else to `list`. `title` is the page's own title, so the name never only echoes it.
  */
-export function useBackTo(list: { to: string; label: string }): BackTo {
+export function useBackTo(list: { to: string; label: string }, title?: string): BackTo {
   const router = useRouter();
   const origin = useSyncExternalStore(subscribe, originHere);
   return {
-    label: origin?.label ?? list.label,
+    label: origin ? nameOf(origin, title) : list.label,
     href: origin?.href ?? list.to,
     fromOrigin: !!origin,
     go: () => {

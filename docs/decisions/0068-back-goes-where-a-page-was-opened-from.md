@@ -2,7 +2,7 @@
 
 Status: Accepted
 
-**Decision:** The back control at the top of an idea, build, twist or spool page, its Escape key and the phone's pull down from the top go back to the page it was opened from in the app (the Journal, Today, Search, Wishlists, the Pantry, another idea…), as it was left (a step back in history, so its scroll, filters and search come back), and the control names that page. A page opened directly (a shared link, a new tab, a reload, a tapped notification) goes to its list as before. Steps within the same thing keep where it came from: picking an attempt, a photo or the 3D view, J and K, and an idea that becomes a build. Twists and spools have the same pull down as ideas and builds.
+**Decision:** The back control at the top of an idea, build, twist or spool page, its Escape key and the phone's pull down from the top go back to the page it was opened from in the app (the Journal, Today, Search, Wishlists, the Pantry, another idea…), as it was left (a step back in history, so its scroll, filters and search come back), and the control names that page (its heading; when the pages own title starts with that name, as a twist made from an idea does, the kind of page instead: "Idea"). A page opened directly (a shared link, a new tab, a reload, a tapped notification) goes to its list as before. Steps within the same thing keep where it came from: picking an attempt, a photo or the 3D view, J and K, and an idea that becomes a build. Twists and spools have the same pull down as ideas and builds.
 
 **Why:** Carl Oscar, Nov 16: "When going into an idea or build from the journal, the back (top left) should take me back to Journal not to Ideas or Builds", and the same day the twist page's missing pull down.
 

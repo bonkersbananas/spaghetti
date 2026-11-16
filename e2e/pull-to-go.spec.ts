@@ -149,7 +149,8 @@ test("a twist pulls back the same way: to the idea it was made from, and from th
   await page.getByRole("button", { name: "Make a twist" }).click();
   await expect(page).toHaveURL(/\/twists\/[0-9a-f-]+$/);
   const twist = new URL(page.url()).pathname;
-  await expect(page.getByRole("main").getByRole("link", { name: "Twisted hook", exact: true })).toBeVisible();
+  // The twist takes the idea's title, so the way back names the kind of page rather than echo the title under it.
+  await expect(page.getByRole("main").getByRole("link", { name: "Idea", exact: true })).toBeVisible();
   // The twist is made on the device first; let the server's copy arrive (and the page settle) before touching it.
   await expect.poll(async () => (await page.request.get(`/api${twist}`)).status()).toBe(200);
   await page.waitForTimeout(500);
@@ -164,7 +165,7 @@ test("a twist pulls back the same way: to the idea it was made from, and from th
 
   // Past the threshold it names the idea and goes back to it.
   session = await drag(page, { x: 195, y: 250 }, { dy: 200 }, false);
-  await expect(page.locator("[data-pull-hint=ready]")).toContainText("Release for Twisted hook");
+  await expect(page.locator("[data-pull-hint=ready]")).toContainText("Release for Idea");
   await session.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
   await expect(page).toHaveURL(new RegExp(`/ideas/${idea}$`));
 

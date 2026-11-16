@@ -59,10 +59,10 @@ interface PullState {
  * (page translate), `leave` (page opacity) and the affordance. Motion values only: React renders when a pull
  * starts, ends or crosses the threshold, never per frame.
  */
-export function usePullToGo(list: { to: string; label: string }, reduced: boolean): PullState {
+export function usePullToGo(list: { to: string; label: string }, reduced: boolean, title?: string): PullState {
   const router = useRouter();
   // An idea or build opened from somewhere in the app goes back there, as its back control does.
-  const backTo = useBackTo(list);
+  const backTo = useBackTo(list, title);
   const origin = useRef(backTo);
   origin.current = backTo;
   const offset = useMotionValue(0);

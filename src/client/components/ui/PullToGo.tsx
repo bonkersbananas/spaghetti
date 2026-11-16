@@ -7,6 +7,8 @@ import { ExpandIcon } from "./icons";
 interface PullToGoProps {
   /** Where the pull goes with no page before it in the app: the list this kind of page belongs to. */
   back: { to: string; label: string };
+  /** The page's own title (see DetailBar). */
+  title?: string;
   children: ReactNode;
   className?: string;
 }
@@ -35,9 +37,9 @@ export function PullHint({ label, ready }: { label: string; ready: boolean }) {
  * content counts: sideways drags, fields, sheets and inner scrollers keep their own touches. With reduced
  * motion the page stays put, the words still change, and it fades away.
  */
-export function PullToGo({ back, children, className }: PullToGoProps) {
+export function PullToGo({ back, title, children, className }: PullToGoProps) {
   const reduced = !!useReducedMotion();
-  const { offset, ready, pulling, leave, label } = usePullToGo(back, reduced);
+  const { offset, ready, pulling, leave, label } = usePullToGo(back, reduced, title);
   const shown = useTransform(offset, [14, PULL_THRESHOLD * 0.7], [0, 1]);
   const lift = useTransform(offset, (value) => value / 2 - 18);
   return (

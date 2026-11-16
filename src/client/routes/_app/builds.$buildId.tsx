@@ -482,10 +482,10 @@ function Build({ item }: { item: ItemView }) {
   );
 
   return (
-    <PullToGo back={back}>
+    <PullToGo back={back} title={title.trim() || "Untitled build"}>
       <article className="pb-6">
         <h1 className="sr-only">{title.trim() || "Untitled build"}</h1>
-        <DetailBar back={back}>
+        <DetailBar back={back} title={title.trim() || "Untitled build"}>
           {!deleting && <SaveStatus state={saveState} className="mr-2" />}
           {deleting ? null : isDesktop ? (
             <span className="mr-2 flex items-center gap-2">{stageActions}</span>

@@ -284,10 +284,10 @@ function Idea({ item }: { item: ItemView }) {
   const alt = photoAlt({ title, note });
 
   return (
-    <PullToGo back={back}>
+    <PullToGo back={back} title={title.trim() || "Untitled idea"}>
       <article className="pb-6">
         <h1 className="sr-only">{title.trim() || "Untitled idea"}</h1>
-        <DetailBar back={back}>
+        <DetailBar back={back} title={title.trim() || "Untitled idea"}>
           {!deleting && <SaveStatus state={saveState} className="mr-2" />}
           {!deleting && <ShareLinkButton title={title.trim()} />}
           <ConfirmDelete

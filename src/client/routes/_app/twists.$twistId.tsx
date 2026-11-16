@@ -169,10 +169,10 @@ function TwistBody({ twist }: { twist: Twist }) {
   }
 
   return (
-    <PullToGo back={back}>
+    <PullToGo back={back} title={value.name || "Twist"}>
       <article className="pb-6">
         <h1 className="sr-only">{value.name || "Twist"}</h1>
-        <DetailBar back={back}>
+        <DetailBar back={back} title={value.name || "Twist"}>
           <SaveStatus state={saveState} className="mr-2" />
           <ShareLinkButton title={value.name} />
           <IconButton icon={TrashIcon} label="Delete twist" onClick={remove} disabled={readOnly} />
