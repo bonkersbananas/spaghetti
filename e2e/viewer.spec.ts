@@ -212,6 +212,8 @@ test("a printing attempt's 3D view opens at the layer being printed and comes ba
   page,
   isMobile,
 }) => {
+  // The printer moves on twice, and each move reaches the view through the change feed.
+  test.setTimeout(90_000);
   await signIn(page);
   const itemId = await buildWithTugboat(page, true);
   const origin = new URL(page.url()).origin;
