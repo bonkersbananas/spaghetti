@@ -327,8 +327,9 @@ pub fn gcode_3mf(
     rels.push("</Relationships>".into());
     rels.push(String::new());
     files.push(("_rels/.rels", rels.join("\n").into_bytes()));
-    // The model, packed as it is written (`model_xml`): the same bytes as the whole text packed at once.
-    let mut model_entry = zip::Deflater::new(6);
+    // The model, packed as it is written (`model_xml`), at level 4 as the G-code is: a big mesh's XML packs 3.2 times
+    // faster than at level 6 and 2 % larger (the 89 MB frame's 144 MB of it to 19.2 MB, against 18.7 MB).
+    let mut model_entry = zip::Deflater::new(4);
     model_entry.write(
         [
             r#"<?xml version="1.0" encoding="UTF-8"?>"#.to_string(),
