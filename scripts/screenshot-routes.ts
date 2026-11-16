@@ -835,6 +835,8 @@ async function queueFirstInbox(page: Page) {
 /** Lets a toast and the cards it talks about settle for the shot (the shots' clock is fixed, so fades are finished by hand). */
 async function settleToast(page: Page) {
   await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+  // Show Up next with the ideas that just joined it (picking them scrolled the page).
+  await page.evaluate(() => window.scrollTo({ top: 0, behavior: "instant" }));
   await page.waitForTimeout(600);
   await page.evaluate(() => {
     for (const animation of document.getAnimations()) animation.finish();
@@ -860,6 +862,7 @@ async function mockWishlists(page: Page, mode: "none" | "private") {
   });
   await page.reload();
   await page.getByRole("link", { name: /^Wishlists/ }).waitFor();
+  await page.evaluate(() => window.scrollTo({ top: 0, behavior: "instant" }));
   await page.waitForTimeout(600);
 }
 
@@ -1837,6 +1840,7 @@ export const shots: Shot[] = [
       await page.reload();
       await page.getByRole("button", { name: /^Needs designing/ }).click();
       await page.getByText(/Tap “Needs designing” again/).waitFor();
+      await page.evaluate(() => window.scrollTo({ top: 0, behavior: "instant" }));
       await page.waitForTimeout(400);
     },
     cleanup: unmockToday,
