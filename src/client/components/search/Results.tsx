@@ -269,7 +269,7 @@ function TagChip({ kind, label, terms }: { kind: TagKind; label: string; terms: 
 
 const stageLook = {
   idea: { icon: IdeasIcon, label: "Idea", tone: "neutral" },
-  building: { icon: BuildsIcon, label: "On the bed", tone: "semolina" },
+  building: { icon: BuildsIcon, label: "In progress", tone: "neutral" },
   done: { icon: FinishIcon, label: "Done", tone: "basil" },
   shelved: { icon: ShelveIcon, label: "Shelved", tone: "neutral" },
 } as const;

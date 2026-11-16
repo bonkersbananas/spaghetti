@@ -1406,6 +1406,22 @@ async function mockScout(page: Page, mode: "none" | "answered" | "one") {
   await page.getByRole("heading", { level: 1 }).waitFor();
 }
 
+/** The builds list with only the builds `keep` takes (for the Builds list's empty sections). */
+async function keepBuilds(
+  page: Page,
+  keep: (item: { id: string; stage: string; attempts?: Array<{ outcome: string | null }> }) => boolean,
+) {
+  await page.route(/\/api\/items\?stage=/, async (route) => {
+    const response = await route.fetch();
+    const json = (await response.json()) as {
+      items: Array<{ id: string; stage: string; attempts?: Array<{ outcome: string | null }> }>;
+    };
+    json.items = json.items.filter((item) => item.stage === "idea" || keep(item));
+    await route.fulfill({ response, json });
+  });
+  await page.reload({ waitUntil: "networkidle" });
+}
+
 async function unmockToday(page: Page) {
   await page.unrouteAll({ behavior: "ignoreErrors" });
 }
@@ -2161,6 +2177,128 @@ export const shots: Shot[] = [
   },
   { name: "builds", path: "/builds", fullPage: true },
   {
+    // Nothing on the plate: no On the bed section, In progress leads.
+    name: "builds-nothing-printing",
+    path: "/builds",
+    prepare: async (page) => {
+      await keepBuilds(page, (item) => !item.attempts?.some((attempt) => attempt.outcome === null));
+      // Main's list has these under On the bed: wait for a heading both draw.
+      await page
+        .getByRole("heading", { name: /^(In progress|On the bed)/ })
+        .first()
+        .waitFor();
+    },
+    cleanup: unmockToday,
+  },
+  {
+    // Every build in progress is printing: In progress says so in a line.
+    name: "builds-all-on-the-bed",
+    path: "/builds",
+    fullPage: true,
+    prepare: async (page) => {
+      await keepBuilds(
+        page,
+        (item) => item.stage !== "building" || !!item.attempts?.some((attempt) => attempt.outcome === null),
+      );
+      await page
+        .getByRole("heading", { name: /^On the bed/ })
+        .first()
+        .waitFor();
+    },
+    cleanup: unmockToday,
+  },
+  {
+    // The common case on a phone: one print on the bed, the big card.
+    name: "builds-one-print",
+    path: "/builds",
+    width: 390,
+    prepare: async (page) => {
+      await keepBuilds(
+        page,
+        (item) => !item.attempts?.some((attempt) => attempt.outcome === null) || item.id === SEED_BUILD_IDS.towelHook,
+      );
+      await page
+        .getByRole("heading", { name: /^On the bed/ })
+        .first()
+        .waitFor();
+    },
+    cleanup: unmockToday,
+  },
+  {
+    // The print that waits for "how did it go?", where a phone shows it on the first screen (a full-page shot draws
+    // the tab bar over it).
+    name: "builds-off-bed",
+    path: "/builds",
+    width: 390,
+    prepare: async (page) => {
+      const card = page.getByRole("heading", { name: "Drawer divider", level: 3 }).first();
+      await card.waitFor();
+      await page.waitForTimeout(400);
+    },
+  },
+  {
+    // No builds at all: the empty state, and no floating New build beside its button.
+    name: "builds-empty",
+    path: "/builds",
+    prepare: async (page) => {
+      await keepBuilds(page, () => false);
+      await page.getByRole("heading", { name: /^Nothing (cooking yet|on the bed)$/ }).waitFor();
+      await page.evaluate(() => {
+        for (const animation of document.getAnimations()) animation.finish();
+      });
+      await page.waitForTimeout(600);
+    },
+    cleanup: unmockToday,
+  },
+  {
+    // "Pick up again" on a shelved build, and its toast.
+    name: "build-picked-up-again",
+    path: `/builds/${SEED_IDS.planter}`,
+    prepare: async (page) => {
+      await page
+        .getByRole("button", { name: /^(Pick up again|Back on the bed)$/ })
+        .filter({ visible: true })
+        .first()
+        .click();
+      await page
+        .getByText(/^(Back in progress|Back on the bed)$/)
+        .first()
+        .waitFor();
+    },
+    cleanup: async (page) => {
+      await page.request.patch(`/api/items/${SEED_IDS.planter}`, {
+        data: { stage: "shelved" },
+        headers: { Origin: new URL(page.url()).origin },
+      });
+    },
+  },
+  {
+    // The stage's word in search: a build between prints.
+    name: "search-in-progress",
+    path: "/search?q=chain",
+    prepare: async (page) => {
+      await page.getByRole("region", { name: "Builds" }).waitFor();
+      await page.getByRole("searchbox", { name: "Search" }).blur();
+    },
+  },
+  {
+    // The stage's word in the palette.
+    name: "palette-in-progress",
+    path: "/ideas",
+    width: 1440,
+    prepare: async (page) => {
+      await page.keyboard.press("ControlOrMeta+k");
+      await page.getByRole("combobox", { name: "Jump to or run" }).pressSequentially("chain");
+      await page
+        .getByRole("option", { name: /^Cable chain\b/ })
+        .first()
+        .waitFor();
+    },
+    cleanup: async (page) => {
+      await page.keyboard.press("Escape");
+    },
+  },
+  {
     // The end of a build page on a phone: "Finish attempt" must sit above the tab bar (try it with --iphone).
     name: "build-bottom",
     path: `/builds/${SEED_BUILD_IDS.tugboat}`,
@@ -2180,6 +2318,18 @@ export const shots: Shot[] = [
     },
   },
   { name: "build", path: `/builds/${SEED_BUILD_IDS.tugboat}`, fullPage: true },
+  // A build between prints: its stage chip says In progress (it isn't on the bed).
+  { name: "build-between-prints", path: `/builds/${SEED_BUILD_IDS.cableChain}` },
+  {
+    // The build's own photo showing, tapped again: its menu, as on an idea (an attempt's photos come off in its sheet).
+    name: "build-photo-menu",
+    path: `/builds/${SEED_BUILD_IDS.tugboat}`,
+    prepare: async (page) => {
+      await page.getByRole("button", { name: /^Photo 1/ }).click();
+      await page.getByRole("button", { name: "Remove photo" }).waitFor();
+      await page.waitForTimeout(400);
+    },
+  },
   {
     // The first press of Delete on a build: the trash can has turned into the question, in the bar.
     name: "build-delete-confirm",
@@ -2194,6 +2344,19 @@ export const shots: Shot[] = [
   },
   // An idea with a sliced file kept with it: the file's card under the chips, and the sticker on its card.
   { name: "idea-file", path: `/ideas/${SEED_IDS.bigTugboat}`, fullPage: true },
+  {
+    // A kept file's "…" beside its Download: Remove is in there, not an X on the card.
+    name: "idea-file-menu",
+    path: `/ideas/${SEED_IDS.bigTugboat}`,
+    prepare: async (page) => {
+      await page
+        .getByRole("button", { name: /^More for / })
+        .first()
+        .click();
+      await page.getByRole("button", { name: "Remove file" }).waitFor();
+      await page.waitForTimeout(400);
+    },
+  },
   {
     // A second file added to the idea: it shows at once, with the plate's picture.
     name: "idea-file-added",
@@ -3734,6 +3897,8 @@ export const shots: Shot[] = [
     },
   },
   { name: "build-done", path: `/builds/${SEED_BUILD_IDS.headphoneStand}`, fullPage: true },
+  // A shelved build: its chip, then when and after how many attempts; no For offer.
+  { name: "build-shelved", path: `/builds/${SEED_IDS.planter}` },
   { name: "journal", path: "/journal" },
   // The same catch-up at the top of the phone's Journal (above Now).
   {
@@ -4343,6 +4508,20 @@ export const shots: Shot[] = [
   },
   { name: "idea", path: `/ideas/${SEED_IDS.deskTidy}` },
   {
+    // Another photo picked in the strip and tapped again: its menu (Make cover, Remove photo), a sheet on phones and a
+    // popover from the thumbnail on desktop. Nothing on the big photo removes (decision 0054).
+    name: "idea-photo-menu",
+    path: `/ideas/${SEED_IDS.deskTidy}`,
+    prepare: async (page) => {
+      const second = page.getByRole("button", { name: "Photo 2" });
+      await second.click();
+      await page.waitForTimeout(400);
+      await second.click();
+      await page.getByRole("button", { name: "Remove photo" }).waitFor();
+      await page.waitForTimeout(400);
+    },
+  },
+  {
     // The first press of Delete on an idea: the trash can has turned into the question, in the bar.
     name: "idea-delete-confirm",
     path: "/ideas",
@@ -4364,13 +4543,16 @@ export const shots: Shot[] = [
   },
   // An idea with someone named: the quiet "for the kitchen" line, no chip.
   { name: "idea-for", path: "/ideas/5eed0000-0000-4000-8000-000000000003" },
-  // Nobody named yet, "For someone" just tapped: the line opens under the title with the caret in it, no box.
+  // An idea for the person looking at it: the line reads "for you".
+  { name: "idea-for-you", path: "/ideas/5eed0000-0000-4000-8000-000000000013" },
+  // Nobody named yet, the offer's pencil just tapped: the line opens under the title with the caret in it, no box.
   {
     name: "idea-for-asking",
     path: `/ideas/${SEED_IDS.deskTidy}`,
     prepare: async (page) => {
-      await page.getByRole("button", { name: "For someone" }).click();
+      await page.getByRole("button", { name: /^For someone( else)?$/ }).click();
       await page.getByRole("textbox", { name: "For", exact: true }).waitFor();
+      await page.waitForTimeout(300);
     },
   },
   // The same idea in full: its note's link as a card under it.
@@ -4803,6 +4985,21 @@ export const shots: Shot[] = [
           .evaluate((region) => region.scrollIntoView({ block: "center", behavior: "instant" }));
         await page.waitForTimeout(400);
       }
+    },
+    cleanup: removeTwistModels,
+  },
+  {
+    // The twist's model's "…": Remove is in there, as on an idea's files.
+    name: "twist-model-menu",
+    path: "/twists",
+    prepare: async (page) => {
+      await twistWithModel(page);
+      await page
+        .getByRole("region", { name: "Model" })
+        .getByRole("button", { name: /^More for / })
+        .click();
+      await page.getByRole("button", { name: "Remove file" }).waitFor();
+      await page.waitForTimeout(400);
     },
     cleanup: removeTwistModels,
   },

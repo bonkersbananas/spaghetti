@@ -439,7 +439,7 @@ function recentEntry(item: RecentItem, navigate: Navigate, cached?: ItemView): E
   };
 }
 
-const stageWords = { idea: "Idea", building: "On the bed", done: "Done", shelved: "Shelved" } as const;
+const stageWords = { idea: "Idea", building: "In progress", done: "Done", shelved: "Shelved" } as const;
 
 function itemEntry(
   hit: ItemHit,

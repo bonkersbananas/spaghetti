@@ -66,7 +66,7 @@ test("an idea that was started stays in Ideas under Started, and opens its build
     0,
   );
   const started = page.getByRole("list", { name: "Started", exact: true });
-  await expect(started.getByRole("link", { name: /Flexi hummingbird/ })).toContainText("Building");
+  await expect(started.getByRole("link", { name: /Flexi hummingbird/ })).toContainText("In progress");
   await started.getByRole("link", { name: /Flexi hummingbird/ }).click();
   await expect(page).toHaveURL(new RegExp(`/builds/${id}$`));
 });

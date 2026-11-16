@@ -2,10 +2,11 @@ import { fileUrl, MAX_SLICER_FILE_BYTES } from "@shared/api";
 import type { AttemptFilament } from "@shared/attempts";
 import type { Plate } from "@shared/threemf/types.ts";
 import { lazy, type ReactNode, Suspense, useMemo } from "react";
+import { ActionMenuItem, MoreMenu } from "@/components/ui/ActionMenu";
 import { Button, IconButton } from "@/components/ui/Button";
 import { Caution } from "@/components/ui/Caution";
 import { ToggleChip } from "@/components/ui/Chip";
-import { CloseIcon, DownloadIcon, PlusIcon, SlicerFileIcon } from "@/components/ui/icons";
+import { CloseIcon, DownloadIcon, PlusIcon, SlicerFileIcon, TrashIcon } from "@/components/ui/icons";
 import { MetaList } from "@/components/ui/MetaList";
 import { ProgressRing } from "@/components/ui/ProgressRing";
 import { Swatch } from "@/components/ui/Swatch";
@@ -69,12 +70,18 @@ interface FileCardProps {
   downloadName?: string;
   /** Where the file can be shown in 3D: the whole plate picture opens the view, a "3D" pill on its corner. */
   view3d?: View3d;
+  /**
+   * Takes the file off. A saved file's Remove sits in a "…" menu beside Download (two deliberate taps, then Undo),
+   * never a bare X; a `draft`'s (picked for a new attempt, not saved yet) is the X, which removes at once.
+   */
   onRemove?: () => void;
+  draft?: boolean;
+  /** In a sheet: its menu is a popover on phones too, not a sheet over the sheet. */
+  inSheet?: boolean;
   /** On a story card: no box of its own and a smaller plate, its download in line with the attempt's menu above it. */
   compact?: boolean;
   /**
-   * A raised card (like a model's link card, the column's width) with a 96 px plate and its actions in the top corner;
-   * on desktop Remove shows on hover.
+   * A raised card (like a model's link card, the column's width) with a 96 px plate and its actions in the top corner.
    */
   raised?: boolean;
   className?: string;
@@ -96,6 +103,8 @@ export function FileCard({
   downloadName,
   view3d,
   onRemove,
+  draft,
+  inSheet,
   compact,
   raised,
   className,
@@ -179,15 +188,22 @@ export function FileCard({
           <DownloadIcon size={20} aria-hidden />
         </a>
       )}
-      {onRemove && (
-        <IconButton
-          icon={CloseIcon}
-          label="Remove the slicer file"
-          size="sm"
-          onClick={onRemove}
-          className={raised ? "md:opacity-0 md:group-focus-within:opacity-100 md:group-hover:opacity-100" : undefined}
-        />
-      )}
+      {onRemove &&
+        (draft ? (
+          <IconButton icon={CloseIcon} label="Remove the slicer file" size="sm" onClick={onRemove} />
+        ) : (
+          <MoreMenu
+            label={`More for ${name}`}
+            title="File"
+            // A file's name has no spaces to wrap at: one line, cut short (the card above says it whole).
+            description={<span className="block truncate">{name}</span>}
+            inSheet={inSheet}
+          >
+            <ActionMenuItem icon={TrashIcon} tone="danger" onSelect={onRemove}>
+              Remove file
+            </ActionMenuItem>
+          </MoreMenu>
+        ))}
     </>
   );
   if (!status) {
@@ -320,7 +336,16 @@ function UploadLine({ upload }: { upload: NonNullable<ReturnType<typeof useUploa
   );
 }
 
-function SlicerFileCard({ file, filaments, printing, onRemove, compact, raised, className }: SavedFileCardProps) {
+function SlicerFileCard({
+  file,
+  filaments,
+  printing,
+  onRemove,
+  compact,
+  raised,
+  inSheet,
+  className,
+}: SavedFileCardProps) {
   const { meta, note } = savedFileMeta(file, compact);
   const upload = useUpload(file.id);
   const going = file.pending && upload ? upload : undefined;
@@ -335,6 +360,7 @@ function SlicerFileCard({ file, filaments, printing, onRemove, compact, raised, 
       openFile={file}
       view3d={canView3d(file) ? { file, fallbackColors: filaments?.map((f) => f.colorHex), printing } : undefined}
       onRemove={onRemove}
+      inSheet={inSheet}
       compact={compact}
       raised={raised}
       className={className}

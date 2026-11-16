@@ -30,7 +30,7 @@ test("signs in, browses the four sections, opens capture and signs out", async (
   const nav = page.getByRole("navigation", { name: "Sections" }).filter({ visible: true });
   for (const [label, emptyTitle] of [
     ["Ideas", "Nothing simmering yet"],
-    ["Builds", "Nothing on the bed"],
+    ["Builds", "Nothing cooking yet"],
     ["Journal", "A clean notebook"],
     ["Search", "Nothing to untangle yet"],
     isMobile ? ["Workshop", ""] : ["Today", "Nothing on the stove yet"],
