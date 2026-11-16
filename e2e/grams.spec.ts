@@ -51,7 +51,7 @@ test("counts a spool down from a slicer file, weighs it, warns when it is short 
   await expect(entry).toBeVisible();
   const file = { name: SLICER_FILE_NAME, bytes: Array.from(slicerFile()) };
   if (isMobile) {
-    await entry.getByRole("button", { name: "Finish" }).click();
+    await page.getByRole("button", { name: "How did it go?" }).click();
     await page.getByRole("dialog").getByRole("button", { name: "Add the slicer file" }).waitFor();
     await page.getByTestId("slicer-file-input").setInputFiles({
       name: file.name,
@@ -111,7 +111,7 @@ test("counts a spool down from a slicer file, weighs it, warns when it is short 
   });
   await page.goto(`/builds/${buildId}`);
   await expect(page.getByTestId("not-enough")).toContainText("Bambu green has about 30 g left; this print needs 66 g.");
-  await expect(page.locator(`[data-attempt-id="${nextId}"]`).getByRole("button", { name: "Finish" })).toBeEnabled();
+  await expect(page.getByRole("button", { name: "How did it go?" })).toBeEnabled();
 
   // Running low on the pantry, with the copy action.
   await page.goto("/pantry");

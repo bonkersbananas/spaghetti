@@ -4,6 +4,7 @@ import { offTheBedLabel } from "@shared/print-progress";
 import { useRef } from "react";
 import { Button } from "@/components/ui/Button";
 import { CameraIcon, FinishIcon } from "@/components/ui/icons";
+import { Kbd } from "@/components/ui/Kbd";
 import { cn } from "@/lib/cn";
 import { OutcomePicker } from "./Outcome";
 import { PhotoReadNote } from "./PhotoReadNote";
@@ -22,6 +23,8 @@ interface OffTheBedProps {
    * on these same buttons. Shown while the attempt has no photo yet.
    */
   onPhotos?: (files: File[]) => void;
+  /** The keys that open the attempt's sheet from the page ("A" on a build), shown after the question on desktop. */
+  shortcut?: string[];
   className?: string;
 }
 
@@ -30,7 +33,15 @@ interface OffTheBedProps {
  * "Off the bed at 10:42 · how did it go?" with the three outcomes right there. The printer can't know whether
  * it worked, so the bridge never answers for us.
  */
-export function OffTheBed({ endedAt, onPick, photoRead, withTags = true, onPhotos, className }: OffTheBedProps) {
+export function OffTheBed({
+  endedAt,
+  onPick,
+  photoRead,
+  withTags = true,
+  onPhotos,
+  shortcut,
+  className,
+}: OffTheBedProps) {
   // Its own small input rather than PhotoTiles' picker: the question shows on screens (search, journal) that
   // otherwise carry none of the photo tiles' code.
   const cameraRef = useRef<HTMLInputElement>(null);
@@ -43,6 +54,7 @@ export function OffTheBed({ endedAt, onPick, photoRead, withTags = true, onPhoto
           <span>
             <span className="text-ink font-semibold">{offTheBedLabel(endedAt)}</span> · how did it go?
           </span>
+          {shortcut && <Kbd keys={shortcut} />}
         </p>
         {onPhotos && !photoRead && (
           <>
