@@ -5379,6 +5379,8 @@ export const shots: Shot[] = [
   { name: "styleguide-controls", path: "/styleguide", selector: "#controls" },
   { name: "styleguide-buttons", path: "/styleguide", selector: "#buttons" },
   { name: "styleguide-builds", path: "/styleguide", selector: "#builds" },
+  // The "…" menu rows, a build's menu while its print is on the bed among them.
+  { name: "styleguide-sheets", path: "/styleguide", selector: "#sheets" },
   {
     name: "styleguide-covers",
     path: "/styleguide",
