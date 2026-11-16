@@ -95,7 +95,8 @@ export interface TextFieldProps extends Omit<ComponentPropsWithRef<"input">, "si
 /** Room at a clearable field's end for its × (`ClearButton`), while focused as the × shows: as wide as the field is tall. */
 const clearPad = { sm: "focus:pr-11", md: "focus:pr-12 md:focus:pr-11", lg: "focus:pr-16" } as const;
 
-// The × arrives with the first search field on the screen, not with every screen's first load.
+// The × arrives the first time a search field has text, not with a screen's first load (Search's field mounts at once,
+// and an empty one has nothing to clear); the service worker has the chunk precached, so it shows with that text.
 const ClearButton = lazy(() => import("./ClearButton"));
 
 export const TextField = forwardRef<HTMLInputElement, TextFieldProps>(function TextField(
@@ -121,9 +122,6 @@ export const TextField = forwardRef<HTMLInputElement, TextFieldProps>(function T
   const fieldId = id ?? autoId;
   // A controlled field's: its value says whether there is anything to clear.
   const canClear = (clearable ?? props.type === "search") && !suffix && !props.readOnly && !props.disabled;
-  useEffect(() => {
-    if (canClear) void import("./ClearButton");
-  }, [canClear]);
   return (
     <FieldFrame
       id={fieldId}
