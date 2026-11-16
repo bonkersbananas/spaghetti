@@ -85,13 +85,34 @@ export function firstModelLink(note: string): { site: ModelSite; url: string } |
   return null;
 }
 
+/** The boxes Printables' image host makes thumbnails in (`thumbs/inside/<box>` fits a picture inside one). */
+const PRINTABLES_BOXES = ["320x240", "1280x960", "1600x1200", "1920x1440"] as const;
+
 /**
- * The address to download a picture from. MakerWorld keeps its pictures as large PNGs, which can't be stored (and
- * weigh megabytes); its image host converts and resizes on request, so ask for a WebP of `width` px (1600 by default).
+ * A Printables picture as a WebP that fits inside the smallest box at least `width` wide. Printables keeps the
+ * originals as uploaded (9 MB JPEGs, PNG renders), and its image host serves any of them, or one of its own
+ * thumbnails, resized at `<folder>/thumbs/inside/<box>/<original extension>/<name>.webp`.
+ */
+function printablesPicture(url: URL, width: number): string | null {
+  const match =
+    /^(\/media\/prints\/[^/]+\/images\/[^/]+)\/(?:thumbs\/[a-z]+\/\d+x\d+\/([a-z0-9]+)\/)?([^/]+?)\.([a-z0-9]+)$/i.exec(
+      url.pathname,
+    );
+  if (!match) return null;
+  const [, folder, thumbOf, name, extension] = match;
+  const box = PRINTABLES_BOXES.find((size) => Number(size.split("x")[0]) >= width) ?? PRINTABLES_BOXES.at(-1);
+  return `${url.origin}${folder}/thumbs/inside/${box}/${(thumbOf ?? extension)?.toLowerCase()}/${name}.webp`;
+}
+
+/**
+ * The address to download a picture from. MakerWorld and Printables keep their pictures as large PNGs or JPEGs of
+ * megabytes, which can't be stored (PNGs at all); their image hosts convert and resize on request, so ask for a
+ * WebP about `width` px wide (1600 by default).
  */
 export function pictureRequestUrl(raw: string, width = 1600): string {
   const url = new URL(raw);
   if (url.hostname === "makerworld.bblmw.com" && !url.search)
     url.search = `?x-oss-process=image/resize,w_${width}/format,webp`;
+  if (url.hostname === "media.printables.com" && !url.search) return printablesPicture(url, width) ?? url.href;
   return url.href;
 }

@@ -224,6 +224,109 @@ function readDesign(design: MakerWorldDesign): PageFacts | null {
 }
 
 /**
+ * The GraphQL query for a Printables model, as Printables' own web app asks its public API
+ * (`https://api.printables.com/graphql/`, no sign-in): everything a draft reads, nothing about the viewer.
+ */
+export const PRINTABLES_QUERY =
+  "query Print($id: ID!) { print(id: $id) { id name summary description tags { name } category { path { name } } " +
+  "user { publicUsername } license { name abbreviation } images { filePath } printer { name } materials { name } " +
+  "nozzleDiameters layerHeights weight printDuration } }";
+
+/** The API's address. It answers POST with a JSON body, and GET with the query and variables in the address. */
+export const PRINTABLES_API = "https://api.printables.com/graphql/";
+
+/** The model as one GET address: what Claude's web fetch can be handed when the Worker is throttled (it only GETs). */
+export const printablesApiUrl = (id: string) =>
+  `${PRINTABLES_API}?${new URLSearchParams({ query: PRINTABLES_QUERY, variables: JSON.stringify({ id }) })}`;
+
+/** A Printables model's number, from any address of its page (`/model/1577248-carrying-handle`, `/de/model/…`). */
+export function printablesId(link: string): string | null {
+  if (!URL.canParse(link)) return null;
+  const url = new URL(link);
+  if (!/(^|\.)printables\.com$/i.test(url.hostname)) return null;
+  return /^\/(?:[a-z]{2}\/)?model\/(\d{1,12})(?:[-/]|$)/i.exec(url.pathname)?.[1] ?? null;
+}
+
+interface PrintablesPrint {
+  id?: unknown;
+  name?: string | null;
+  summary?: string | null;
+  description?: string | null;
+  tags?: Array<{ name?: string | null } | null> | null;
+  category?: { path?: Array<{ name?: string | null } | null> | null } | null;
+  user?: { publicUsername?: string | null } | null;
+  license?: { name?: string | null; abbreviation?: string | null } | null;
+  images?: Array<{ filePath?: string | null } | null> | null;
+  printer?: { name?: string | null } | null;
+  materials?: Array<{ name?: string | null } | null> | null;
+  nozzleDiameters?: string[] | null;
+  layerHeights?: string[] | null;
+  /** Grams, as a string ("29.00"). */
+  weight?: string | number | null;
+  /** Hours, as a string ("2.46"). */
+  printDuration?: string | number | null;
+}
+
+/**
+ * What Printables' API answered for one model: its facts, `"missing"` when the API says there is no such model
+ * (`{"data":{"print":null}}`, also what a removed or private one gives), or null when the answer isn't one of
+ * those (an error, another model, not the API's shape).
+ */
+export function extractPrintablesPrint(json: unknown, id: string): PageFacts | "missing" | null {
+  if (!json || typeof json !== "object") return null;
+  const answer = json as { data?: { print?: PrintablesPrint | null } | null; errors?: unknown[] };
+  if (answer.errors?.length || !answer.data || !("print" in answer.data)) return null;
+  const print = answer.data.print;
+  if (print === null) return "missing";
+  if (!print || typeof print !== "object" || String(print.id) !== id) return null;
+  const title = clean(print.name);
+  if (!title || isSiteTitle(title)) return null;
+  const names = (list: Array<{ name?: string | null } | null> | null | undefined) =>
+    unique((list ?? []).map((entry) => entry?.name?.trim() ?? "").filter(Boolean));
+  const abbreviation = print.license?.abbreviation?.trim();
+  // "CC-BY-NC-SA" reads as the licence is usually written; the full name has long dashes and double spaces.
+  const license = abbreviation ? abbreviation.replace(/^CC-/i, "CC ") : clean(print.license?.name, 120);
+  const number = (value: unknown) => (value === null || value === undefined ? Number.NaN : Number(value));
+  const grams = number(print.weight);
+  const hoursTaken = number(print.printDuration);
+  const materials = names(print.materials);
+  const profile = [
+    materials.length ? `material ${materials.join(", ")}` : null,
+    grams > 0 ? `${Math.round(grams)} g of filament` : null,
+    hoursTaken > 0 ? `about ${hours(hoursTaken * 3600)}` : null,
+    print.layerHeights?.length ? `layer heights ${print.layerHeights.map(Number).join(", ")} mm` : null,
+    print.nozzleDiameters?.length ? `${print.nozzleDiameters.map(Number).join(", ")} mm nozzle` : null,
+    print.printer?.name ? `printed on ${print.printer.name.trim()}` : null,
+  ]
+    .filter(Boolean)
+    .join("; ");
+  const category = names(print.category?.path);
+  const tags = names(print.tags);
+  const description = [
+    plainText(print.summary ?? "", 500),
+    plainText(print.description ?? "", 2500),
+    category.length ? `Category: ${category.join(" / ")}` : "",
+    tags.length ? `Tags: ${tags.slice(0, 8).join(", ")}` : "",
+  ]
+    .filter(Boolean)
+    .join("\n");
+  return {
+    title,
+    designer: clean(print.user?.publicUsername, 120),
+    license,
+    // The originals, as Printables keeps them (pictureRequestUrl asks its image host for a WebP of them).
+    imageUrls: unique(
+      (print.images ?? [])
+        .map((image) => image?.filePath?.replace(/^\/+/, ""))
+        .filter((path): path is string => !!path && path.startsWith("media/"))
+        .map((path) => `https://media.printables.com/${path}`),
+    ),
+    description,
+    profiles: profile ? [profile] : [],
+  };
+}
+
+/**
  * A title that names the site, not a model: what a site's soft "not found" page says (Thingiverse answers a thing
  * that doesn't exist with 200 and "Thingiverse - The community for Open Hardware"), or a challenge or error page.
  */
