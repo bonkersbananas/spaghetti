@@ -55,8 +55,9 @@ export function FieldSection() {
           <ForField defaultValue="Mila" aria-label="For" />
           <ForField defaultValue="Sam" aria-label="For, naming the reader" you />
           <Label>
-            Nobody named: one dashed offer among the title's chips, "For Sam" in one tap and "Someone else…" behind the
-            caret; without the other person known, "For someone…" (an OfferChip: dashed, never a fact or a toggle)
+            Nobody named: one offer among the title's chips (an OfferChip: a plus and a dashed ring, never a fact or a
+            toggle), "For Sam" in one tap and a pencil to write someone else; "For someone" until the other person is
+            known
           </Label>
           <div className="flex flex-wrap gap-2">
             <ForOffer name="Sam" onName={() => undefined} onAsk={() => undefined} />

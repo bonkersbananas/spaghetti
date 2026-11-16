@@ -113,10 +113,10 @@ test("starting a build takes the idea off the queue", async ({ page }) => {
 test("who it is for shows under the title and is found by search", async ({ page }) => {
   const id = await makeIdea(page, "Mug stand");
   await page.goto(`/ideas/${id}`);
-  // The offer names the other person in one tap; anyone else is behind its caret.
+  // The offer names the other person in one tap; its pencil writes anyone else.
   await page.getByRole("button", { name: "For someone else" }).click();
-  await page.getByRole("button", { name: "Someone else…" }).click();
   const field = page.getByRole("textbox", { name: "For", exact: true });
+  await expect(field).toBeFocused();
   await field.fill("Mila");
   // Clearing the name to type another one doesn't close the field under the cursor.
   await field.fill("");

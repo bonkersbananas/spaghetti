@@ -2,7 +2,7 @@ import { type ComponentPropsWithRef, useEffect, useId, useRef, useState } from "
 import { cn } from "@/lib/cn";
 
 interface ForFieldProps extends Omit<ComponentPropsWithRef<"input">, "type" | "id"> {
-  /** Open although nobody is named yet, because "Someone else…" was picked (`ForOffer`): the field takes the focus. */
+  /** Open although nobody is named yet, because `ForOffer`'s pencil was tapped: the field takes the focus. */
   asking?: boolean;
   /** The field took the focus: the page keeps it open and hides `ForOffer` until `onDone`. */
   onOpen?: () => void;
@@ -16,7 +16,7 @@ interface ForFieldProps extends Omit<ComponentPropsWithRef<"input">, "type" | "i
  * "for Mila": who an idea or build is for, quiet under the title. It reads as a line of text, also while edited: like
  * the title, it shows the caret and no focus ring.
  * Nobody named, it draws nothing: the page offers `ForOffer` among its chips, so a page without a name has no empty
- * field on it, and its "Someone else…" opens this line with the focus in it.
+ * field on it, and its pencil opens this line with the focus in it.
  */
 export function ForField({
   className,
