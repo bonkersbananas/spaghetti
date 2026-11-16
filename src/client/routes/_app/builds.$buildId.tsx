@@ -33,7 +33,7 @@ import { RecipeSheet } from "@/components/recipes/RecipeSheet";
 import { SaveRecipeSheet } from "@/components/recipes/SaveRecipe";
 import { DetailBar } from "@/components/shell/DetailBar";
 import { ActionBar } from "@/components/ui/ActionBar";
-import { Avatar } from "@/components/ui/Avatar";
+import { Avatar, ViaText } from "@/components/ui/Avatar";
 import { Button, IconButton } from "@/components/ui/Button";
 import { Chip } from "@/components/ui/Chip";
 import { ConfirmDelete } from "@/components/ui/ConfirmDelete";
@@ -456,6 +456,7 @@ function Build({ item }: { item: ItemView }) {
   const alt = photoAlt({ title, note });
   const creator = byId.get(item.createdBy);
   const via = useVia();
+  const madeVia = via(item.createdVia);
 
   const stageActions = (
     <>
@@ -733,13 +734,19 @@ function Build({ item }: { item: ItemView }) {
                 )}
                 <div className="text-small text-ink-faint mt-1 flex items-center gap-3 pl-0.5">
                   <span className="bg-ink/10 flex size-3 items-center justify-center rounded-full" aria-hidden />
-                  {creator && <Avatar person={creator} size="xs" via={via(item.createdVia)} />}
+                  {creator && <Avatar person={creator} size="xs" via={madeVia} />}
                   {fromIdea && <IdeasIcon size={16} className="-mr-1.5 shrink-0" aria-hidden />}
                   <p>
                     {fromIdea ? (
                       <>
-                        {creator ? `${who(creator)} captured` : "Captured"} as an idea {inlineTime(item.createdAt)},
-                        building since{" "}
+                        {creator ? `${who(creator)} captured` : "Captured"} as an idea {inlineTime(item.createdAt)}
+                        {madeVia && (
+                          <>
+                            {" "}
+                            <ViaText name={madeVia} person={creator?.name} />
+                          </>
+                        )}
+                        , building since{" "}
                       </>
                     ) : creator ? (
                       `${who(creator)} started `
@@ -749,6 +756,12 @@ function Build({ item }: { item: ItemView }) {
                     <time dateTime={new Date(started).toISOString()} title={fullTime(started)}>
                       {inlineTime(started)}
                     </time>
+                    {!fromIdea && madeVia && (
+                      <>
+                        {" "}
+                        <ViaText name={madeVia} person={creator?.name} />
+                      </>
+                    )}
                   </p>
                 </div>
               </div>

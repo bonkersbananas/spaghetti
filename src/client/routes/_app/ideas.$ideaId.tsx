@@ -437,7 +437,7 @@ function Idea({ item }: { item: ItemView }) {
                 {via && (
                   <>
                     {" "}
-                    <ViaText name={via} />
+                    <ViaText name={via} person={person?.name} />
                   </>
                 )}
               </p>
