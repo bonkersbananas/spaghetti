@@ -108,7 +108,7 @@ WCAG AA: 4.5:1 for text, and the same for the initials on avatars; 3:1 for icons
 | A link card's letter tile | 4.5:1 | 6.6 | 7.5 |
 | Attempt count on the outcome strip | 4.5:1 | 5.6 | 6.2 |
 | A folded step on the attempt trail | 4.5:1 | 6.0 | 8.4 |
-| An off-the-bed step on the attempt trail | 3:1 | 6.0 | 9.8 |
+| An off-the-bed step on the attempt trail | 3:1 | 5.7 | 7.8 |
 | An open tick box on a card | 3:1 | 3.6 | 4.8 |
 | An open tick box on a sheet | 3:1 | 3.6 | 4.6 |
 | A choice tile's name | 4.5:1 | 6.6 | 6.7 |

@@ -28,14 +28,17 @@ const stepOf = (attempt: TrailAttempt): Step => attempt.outcome ?? (attempt.offB
 
 const stepIcons: Record<Step, Icon> = { ...outcomeIcons, printing: PrintingIcon, offBed: FinishIcon };
 
-/** A step's face without a photo, and its badge over one: the outcome's soft tones (opaque, so a badge cuts out). */
+/** A step's face without a photo: the outcome's soft tones; off the bed is neutral, like its chip. */
 const stepTones: Record<Step, string> = {
   success: "bg-basil-soft text-basil-ink",
   partial: "bg-semolina-soft text-semolina-ink",
   failed: "bg-tomato-soft text-tomato-ink",
   printing: "bg-semolina-soft text-semolina-ink",
-  offBed: "bg-paper-deep text-ink-soft",
+  offBed: "bg-ink/8 text-ink-soft",
 };
+
+/** The badge over a step's photo: the same tones, opaque, so the photo doesn't show through. */
+const badgeTones: Record<Step, string> = { ...stepTones, offBed: "bg-cream text-ink-soft" };
 
 /** The ring around a step's photo on phones: the thread's own dot colors (`outcomeDots`), as a ring. */
 const stepRings: Record<Step, string> = {
@@ -155,7 +158,7 @@ export function AttemptTrail({ attempts, onPick, selected, className }: AttemptT
                     aria-hidden
                     className={cn(
                       "ring-paper absolute -right-0.5 -bottom-0.5 flex size-5 items-center justify-center rounded-full ring-2",
-                      stepTones[step],
+                      badgeTones[step],
                     )}
                   >
                     <Icon size={12} weight="bold" className={pulse || undefined} />
