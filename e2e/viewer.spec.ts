@@ -208,35 +208,69 @@ test("when the viewer's code can't be fetched, the sheet says so and the page st
   await expect(dialog.getByRole("button", { name: "Try again" })).toBeVisible();
 });
 
-test("while the attempt prints, the viewer says where the printer is and shows the whole file", async ({ page }) => {
+test("a printing attempt's 3D view opens at the layer being printed and comes back to it @phone", async ({
+  page,
+  isMobile,
+}) => {
   await signIn(page);
   const itemId = await buildWithTugboat(page, true);
   const origin = new URL(page.url()).origin;
   const { item } = await (await page.request.get(`/api/items/${itemId}`)).json();
-  await page.request.put("/api/printer/bridge", {
-    headers: { Origin: origin },
-    data: {
-      printerState: "printing",
-      progress: { attemptId: item.attempts[0].id, percent: 38, remainingMinutes: 120, layer: 120, totalLayers: 317 },
-    },
-  });
-  await page.goto(`/builds/${itemId}`);
-  await page.getByRole("button", { name: `See ${TUGBOAT_FILE_NAME} in 3D` }).click();
-  const dialog = page.getByRole("dialog", { name: "3D view" });
-  await expect(dialog.getByText("Printing now · layer 120 of 317")).toBeVisible({ timeout: 20_000 });
-  // No build-up for a print in progress: the slider is at the end at once, and the layers past 120 are the ghost.
-  await expect(dialog.locator("[data-viewer=ready]")).toBeVisible({ timeout: 30_000 });
-  await expect(dialog.getByText(/^Layer 317 of 317/)).toBeVisible();
-  // The printer moves on: the sheet's words follow (the change feed brings it).
-  await page.request.put("/api/printer/bridge", {
-    headers: { Origin: origin },
-    data: {
-      printerState: "printing",
-      progress: { attemptId: item.attempts[0].id, percent: 40, remainingMinutes: 115, layer: 126, totalLayers: 317 },
-    },
-  });
-  await expect(dialog.getByText("Printing now · layer 126 of 317")).toBeVisible({ timeout: 25_000 });
-  await page.request.put("/api/printer/bridge", { headers: { Origin: origin }, data: { progress: null } });
+  const report = (layer: number, remainingMinutes: number) =>
+    page.request.put("/api/printer/bridge", {
+      headers: { Origin: origin },
+      data: {
+        printerState: "printing",
+        progress: { attemptId: item.attempts[0].id, percent: 40, remainingMinutes, layer, totalLayers: 317 },
+      },
+    });
+  await report(120, 120);
+  try {
+    await page.goto(`/builds/${itemId}`);
+    await page.getByRole("button", { name: `See ${TUGBOAT_FILE_NAME} in 3D` }).click();
+    const dialog = page.getByRole("dialog", { name: "3D view" });
+    const readout = dialog.locator("[data-readout]");
+    const slider = dialog.getByRole("slider", { name: "Layer" });
+    const backToNow = dialog.getByRole("button", { name: "Back to now" });
+    // No build-up for a print in progress: it opens at the printer's layer, in one line, with "now" on the slider.
+    await expect(readout).toHaveText(/^Printing now\. Layer 120 of 317 · 2 h left$/, { timeout: 20_000 });
+    await expect(dialog.locator("[data-viewer=ready]")).toBeVisible({ timeout: 30_000 });
+    await expect(slider).toHaveValue("119");
+    await expect(dialog.locator("[data-live-label]")).toHaveText("now");
+    await expect(backToNow).toBeHidden();
+    // The printer moves on: the view follows it (the change feed brings it).
+    await report(126, 115);
+    await expect(readout).toHaveText(/Layer 126 of 317 · 1 h 55 min left$/, { timeout: 25_000 });
+    await expect(slider).toHaveValue("125");
+    // Moved away, it says which layer it shows and offers the way back; the printer moving on doesn't pull it along.
+    if (isMobile) await slider.fill("59");
+    else {
+      await page.keyboard.press("ArrowLeft");
+      await page.keyboard.press("Shift+ArrowLeft");
+    }
+    const away = isMobile ? "60" : "115";
+    await expect(readout).toHaveText(new RegExp(`^Layer ${away} of 317 · `));
+    await expect(backToNow).toBeVisible();
+    await report(130, 110);
+    await expect(dialog.locator("[data-live-label]")).toBeVisible();
+    await expect(slider).toHaveValue(String(Number(away) - 1));
+    await expect(readout).toHaveText(new RegExp(`^Layer ${away} of 317 · `));
+    // The chip (or N on a keyboard) goes back to the layer being printed, which is 130 by now.
+    if (isMobile) await backToNow.click();
+    else await page.keyboard.press("n");
+    await expect(slider).toHaveValue("129", { timeout: 25_000 });
+    await expect(readout).toHaveText(/Layer 130 of 317 · 1 h 50 min left$/);
+    await expect(backToNow).toBeHidden();
+    // The build-up is moving away too: Space plays it, and the chip takes it back.
+    if (!isMobile) {
+      await page.keyboard.press("Space");
+      await expect(backToNow).toBeVisible();
+      await backToNow.click();
+      await expect(slider).toHaveValue("129");
+    }
+  } finally {
+    await page.request.put("/api/printer/bridge", { headers: { Origin: origin }, data: { progress: null } });
+  }
 });
 
 test("tilting just under the plate turns it see-through at once, by mouse or touch, and back solid above @phone", async ({

@@ -1,14 +1,15 @@
 import type { Layer } from "@shared/gcode";
 import { LIVE_FRESH_MS } from "@shared/print-progress";
 import { mmWords, type Size, sizeSpoken } from "@shared/slicing/size";
-import { formatDuration } from "@shared/time";
 import { useQuery } from "@tanstack/react-query";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { IconButton } from "@/components/ui/Button";
+import { ToggleChip } from "@/components/ui/Chip";
 import { PlayIcon } from "@/components/ui/icons";
 import { Kbd } from "@/components/ui/Kbd";
 import { LayerSlider } from "@/components/ui/LayerSlider";
 import { ProgressRing } from "@/components/ui/ProgressRing";
+import { PulseDot } from "@/components/ui/PulseDot";
 import { SegmentedControl, type SegmentedOption } from "@/components/ui/SegmentedControl";
 import { Swatch } from "@/components/ui/Swatch";
 import { cn } from "@/lib/cn";
@@ -16,6 +17,7 @@ import { printerQuery } from "@/lib/pantry-queries";
 import { loadToolpaths, type ToolpathSummary } from "@/lib/toolpaths";
 import { useNow } from "@/lib/use-now";
 import { introSeen, markIntroSeen } from "./intro";
+import { layerReadout, liveReadout } from "./readout";
 import { type ColorBy, cssColor, legendFeatures, PrintScene } from "./scene";
 
 export interface PrintViewerProps {
@@ -45,14 +47,6 @@ const MODES: readonly SegmentedOption<ColorBy>[] = [
 
 const INTRO_MS = 2600;
 
-/** The slider's readout for a layer: "Layer 112 of 240 · 13.4 mm · 1 h 12 min in". */
-export function layerReadout(index: number, count: number, z: number | undefined, seconds: number | null | undefined) {
-  const parts = [`Layer ${index + 1} of ${count}`];
-  if (z !== undefined) parts.push(`${(Math.round(z * 100) / 100).toString()} mm`);
-  if (seconds != null) parts.push(seconds < 60 ? "at the start" : `${formatDuration(seconds / 60)} in`);
-  return parts.join(" · ");
-}
-
 function prefersReducedMotion(): boolean {
   return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 }
@@ -80,7 +74,7 @@ export default function PrintViewer({
   const report = useQuery({ ...printerQuery, enabled: !!printing }).data?.bridge?.progress;
   const live =
     printing && report?.attemptId === printing.id && now - report.at <= LIVE_FRESH_MS && report.layer
-      ? { layer: report.layer, totalLayers: report.totalLayers }
+      ? { layer: report.layer, totalLayers: report.totalLayers, remainingMinutes: report.remainingMinutes }
       : null;
   const canvas = useRef<HTMLCanvasElement>(null);
   const stage = useRef<HTMLDivElement>(null);
@@ -105,8 +99,11 @@ export default function PrintViewer({
   const animation = useRef(0);
   const live0 = live ? live.layer - 1 : null;
   // A print in progress shows where it is at once; the build-up is for finished prints.
-  const liveNow = useRef(false);
-  liveNow.current = live0 !== null;
+  const liveNow = useRef<number | null>(null);
+  liveNow.current = live0;
+  // Where the view rests when nobody moved it: the layer being printed, else the last. `follow` stays true while it is
+  // there, so the view keeps up as layers arrive and as the print goes on.
+  const restOf = useCallback((total: number) => Math.max(0, Math.min(liveNow.current ?? total - 1, total - 1)), []);
 
   const setLayer = useCallback((index: number) => {
     scene.current?.setLayer(index);
@@ -136,6 +133,7 @@ export default function PrintViewer({
         light: cssColor("--sg-studio-light"),
         sky: cssColor("--sg-studio-sky"),
         ground: cssColor("--sg-studio-ground"),
+        ink: cssColor("--sg-ink"),
       });
     colors();
     const theme = new MutationObserver(colors);
@@ -155,8 +153,8 @@ export default function PrintViewer({
       const total = ps.layerCount;
       setCount(total);
       if (follow.current) {
-        ps.setLayer(total - 1);
-        setLayerState(total - 1);
+        ps.setLayer(restOf(total));
+        setLayerState(restOf(total));
       }
     };
     const stop = loadToolpaths(
@@ -175,7 +173,7 @@ export default function PrintViewer({
           setState("ready");
           setProgress(1);
           ps.fit();
-          if (!prefersReducedMotion() && !introSeen(fileId) && !liveNow.current) {
+          if (!prefersReducedMotion() && !introSeen(fileId) && liveNow.current === null) {
             markIntroSeen(fileId);
             setBuilding(true);
             setReplays((n) => n + 1);
@@ -198,9 +196,17 @@ export default function PrintViewer({
     scene.current?.setMode(mode);
   }, [mode]);
 
+  const isLive = live0 !== null && live0 >= 0;
   useEffect(() => {
-    scene.current?.setLive(live0 !== null && live0 >= 0 ? live0 : null);
-  }, [live0]);
+    scene.current?.setLive(isLive);
+  }, [isLive]);
+
+  // The print goes on (or ends) while the view is open: the view goes with it unless someone moved it.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: live0 is read through restOf's ref; a change is what moves it
+  useEffect(() => {
+    if (!follow.current || building || count < 1) return;
+    setLayer(restOf(count));
+  }, [live0, count, building, setLayer, restOf]);
 
   // The build-up: the slider runs from the first layer to the last, easing in and out; a touch on the slider stops it.
   useEffect(() => {
@@ -218,14 +224,14 @@ export default function PrintViewer({
       setLayer(Math.round(from + eased * (last - from)));
       if (t < 1) animation.current = requestAnimationFrame(tick);
       else {
-        follow.current = true;
+        follow.current = last === restOf(count);
         setBuilding(false);
       }
     };
     setLayer(from);
     animation.current = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(animation.current);
-  }, [replays, state, count, setLayer]);
+  }, [replays, state, count, setLayer, restOf]);
 
   const resumeFrom = useRef(0);
   const replay = (from = 0) => {
@@ -239,14 +245,20 @@ export default function PrintViewer({
   const pause = () => {
     cancelAnimationFrame(animation.current);
     setBuilding(false);
-    follow.current = layer >= count - 1;
+    follow.current = layer === restOf(count);
   };
 
   const scrub = (index: number) => {
     cancelAnimationFrame(animation.current);
     setBuilding(false);
-    follow.current = index >= count - 1;
+    follow.current = index === restOf(count);
     setLayer(index);
+  };
+
+  // Back to the layer being printed, and following it again. Focus goes to the stage, as the chip leaves.
+  const backToNow = () => {
+    scrub(restOf(count));
+    stage.current?.focus({ preventScroll: true });
   };
 
   // The keys belong to the viewer for as long as it is open, wherever focus is: the sheet's close button, the canvas after a drag, the slider.
@@ -277,6 +289,11 @@ export default function PrintViewer({
     else if (key === "ArrowLeft" || key === "ArrowDown") next = layer - step;
     else if (key === "Home") next = 0;
     else if (key === "End") next = count - 1;
+    else if ((key === "n" || key === "N") && !event.shiftKey && liveNow.current !== null) {
+      event.preventDefault();
+      if (!event.repeat) backToNow();
+      return;
+    }
     if (next === null) return;
     event.preventDefault();
     scrub(Math.min(count - 1, Math.max(0, next)));
@@ -303,6 +320,20 @@ export default function PrintViewer({
   // What one copy prints: kept with the slice, else read from the file's own model (older slices, dropped files).
   const shownSize = size ?? summary?.size ?? undefined;
   const text = layerReadout(layer, count || 1, heights.current[layer], times.current[layer]);
+  // At the layer being printed, the view says where the print is; moved away, which layer it shows and the way back.
+  const atNow = live !== null && follow.current && !building;
+  const away = live !== null && !atNow && state === "ready";
+  const lastTime = times.current[count - 1];
+  const nowTime = live0 !== null ? times.current[live0] : null;
+  const nowText = live
+    ? liveReadout(
+        live.layer,
+        live.totalLayers || count,
+        live.remainingMinutes,
+        lastTime != null && nowTime != null ? Math.max(0, lastTime - nowTime) : null,
+      )
+    : "";
+  const shown = atNow ? nowText : text;
   const printed = summary?.filaments ?? [];
   const filaments =
     palette === "original" && originalColors
@@ -333,7 +364,7 @@ export default function PrintViewer({
           ref={canvas}
           className="absolute inset-0 block size-full"
           role="img"
-          aria-label={state === "ready" ? `3D view of the print. ${text}` : "3D view of the print"}
+          aria-label={state === "ready" ? `3D view of the print. ${shown}` : "3D view of the print"}
         />
         {/* The stage's keyboard focus ring, drawn over the canvas (an inset shadow on the stage would sit under it). */}
         <div
@@ -416,22 +447,40 @@ export default function PrintViewer({
       </div>
       <div className="bg-lifted shrink-0 px-5 pt-3 pb-[max(1rem,var(--sg-safe-bottom))] md:px-6 md:pb-4">
         <div className="mx-auto flex w-full max-w-2xl flex-wrap items-center gap-x-3">
-          {live && (
-            <p className="text-small text-semolina-ink order-0 w-full font-semibold">
-              Printing now · layer {live.layer}
-              {live.totalLayers ? ` of ${live.totalLayers}` : ""}
-            </p>
-          )}
-          <p className="text-small text-ink-faint tabular order-1 w-full min-w-0 truncate md:w-auto md:flex-1">
-            {state === "ready" || count > 0 ? (
-              <>
-                <span className="text-ink font-semibold">{text.split(" · ")[0]}</span>
-                {text.slice(text.split(" · ")[0]?.length ?? 0)}
-              </>
-            ) : (
-              "\u00a0"
+          <div
+            className={cn(
+              "order-1 flex w-full min-w-0 items-center gap-2 md:w-auto md:flex-1",
+              live && "min-h-9 md:min-h-8",
             )}
-          </p>
+          >
+            {atNow && <PulseDot className="size-2" />}
+            <p className="text-small text-ink-faint tabular min-w-0 flex-1 truncate" data-readout>
+              {state === "ready" || count > 0 ? (
+                <>
+                  {atNow && <span className="sr-only">Printing now. </span>}
+                  {shown.split(" · ").map((part, i) => (
+                    <span
+                      // biome-ignore lint/suspicious/noArrayIndexKey: the parts of one line, always in this order
+                      key={i}
+                      // Beside "Back to now" on a phone the height gives way, so the layer and its time fit.
+                      className={cn(i === 0 && "text-ink font-semibold", i === 1 && away && "max-md:hidden")}
+                    >
+                      {i > 0 ? " · " : ""}
+                      {part}
+                    </span>
+                  ))}
+                </>
+              ) : (
+                "\u00a0"
+              )}
+            </p>
+            {away && (
+              <ToggleChip lead onClick={backToNow} className="shrink-0">
+                <span aria-hidden className="bg-semolina ml-1 size-2 rounded-full" />
+                Back to now
+              </ToggleChip>
+            )}
+          </div>
           {shownSize && (
             <p
               className="text-small text-ink-faint tabular order-1 w-full min-w-0 truncate md:w-auto md:shrink-0"
@@ -460,8 +509,9 @@ export default function PrintViewer({
             value={Math.min(layer, Math.max(0, count - 1))}
             max={Math.max(0, count - 1)}
             onChange={scrub}
-            valueText={text}
+            valueText={shown}
             live={live0}
+            liveLabel="now"
             className="order-2 w-full md:order-3"
           />
           <p className="text-caption text-ink-faint order-4 mt-1 hidden w-full items-center justify-center gap-1.5 md:flex">
@@ -472,6 +522,12 @@ export default function PrintViewer({
             ten at a time
             <Kbd keys={["Space"]} className="ml-2" />
             play or pause
+            {live && (
+              <>
+                <Kbd keys={["N"]} className="ml-2" />
+                back to now
+              </>
+            )}
           </p>
         </div>
       </div>

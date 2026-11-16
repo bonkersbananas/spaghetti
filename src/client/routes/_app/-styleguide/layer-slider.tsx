@@ -10,7 +10,7 @@ export function LayerSliderSection() {
     <Section
       id="layer-slider"
       title="Layer slider"
-      note="Scrubs the 3D view's layers under the thumb. A real range input, so arrow keys, Home and End work. The semolina tick marks how far a running print has got."
+      note="Scrubs the 3D view's layers under the thumb. A real range input, so arrow keys, Home and End work. The semolina tick marks how far a running print has got, labelled “now” under it (it hides under the handle when the handle rests there; the label stays)."
     >
       <Panel className="flex max-w-md flex-col gap-4">
         <div className="flex flex-col gap-1">
@@ -31,6 +31,7 @@ export function LayerSliderSection() {
             max={316}
             onChange={setLive}
             live={168}
+            liveLabel="now"
             valueText={`Layer ${live + 1} of 317, the print has reached layer 169`}
           />
         </div>
