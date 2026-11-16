@@ -131,3 +131,11 @@ To see how near the outer walls start to Orca's, loop by loop (the same spot, th
 ```sh
 python3 -I bench/seams.py bench/out/orca-native-benchy/plate_1.gcode bench/out/rust-native-4t-benchy/out.gcode
 ```
+
+## Arcs
+
+Paths are fitted with arcs as Orca fits them (`enable_arc_fitting`, the X2D's presets). `arcs.py` counts each feature's lines and arcs and their plastic in G-code files side by side, ours against native Orca's for the same plate:
+
+```sh
+python3 -I bench/arcs.py out/orca-native-benchy/plate_1.gcode benchy.gcode
+```

@@ -831,7 +831,19 @@ impl<'a> Clock<'a> {
             Kind::Travel
         };
         let (x, y, z) = (to[0], to[1], to[2]);
-        self.batch.push(Move { x, y, z, e, f: self.feed, accel: self.accel, kind, width: 0.0, height: 0.0, form: 0 });
+        self.batch.push(Move {
+            x,
+            y,
+            z,
+            e,
+            f: self.feed,
+            accel: self.accel,
+            kind,
+            width: 0.0,
+            height: 0.0,
+            form: 0,
+            arc: None,
+        });
         let v = vertex.then(|| {
             self.moves.push((id, 0.0));
             self.turns.push(false);
