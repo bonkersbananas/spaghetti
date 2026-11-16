@@ -3,20 +3,19 @@ import { type Outcome, tagLabel } from "@shared/attempts";
 import { beganAsIdea } from "@shared/deleted";
 import { modelOf } from "@shared/model-mark";
 import { attemptPartsLabel } from "@shared/parts";
-import { displayName } from "@shared/people";
 import { isOffTheBed } from "@shared/print-progress";
 import { recipesFor, settingsMaterial } from "@shared/recipes";
 import { fullTime, inlineTime } from "@shared/time";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { AnimatePresence, m } from "motion/react";
+import { AnimatePresence } from "motion/react";
 import { useEffect, useRef, useState } from "react";
 import { AttemptEntry } from "@/components/builds/AttemptEntry";
 import { AttemptSheet } from "@/components/builds/AttemptSheet";
 import { BuildSummary } from "@/components/builds/BuildSummary";
+import { BuildTitleLine } from "@/components/builds/BuildTitleLine";
 import { type ComparePair, CompareSheet } from "@/components/builds/CompareSheet";
 import { OpenOnlyFile, onlyOpenable } from "@/components/builds/OpenInStudio";
-import { OutcomeChip } from "@/components/builds/Outcome";
 import { PartsSection } from "@/components/builds/parts/PartsSection";
 import { SettingsLine } from "@/components/builds/SettingsLine";
 import { filamentLabel, summarizeSettings } from "@/components/builds/settings";
@@ -39,10 +38,8 @@ import { Chip } from "@/components/ui/Chip";
 import { ConfirmDelete } from "@/components/ui/ConfirmDelete";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { TextArea } from "@/components/ui/Field";
-import { ForChip, ForField, ForPersonChip } from "@/components/ui/ForField";
 import {
   ArrowRightIcon,
-  BuildsIcon,
   CheckIcon,
   CommentIcon,
   CompareIcon,
@@ -53,11 +50,9 @@ import {
   RecipeIcon,
   ReopenIcon,
   ShelveIcon,
-  SparkleIcon,
   TrashIcon,
   TwistIcon,
 } from "@/components/ui/icons";
-import { MetaList } from "@/components/ui/MetaList";
 import { NoteField } from "@/components/ui/NoteField";
 import { NoteLinks } from "@/components/ui/NoteLinks";
 import { Overline } from "@/components/ui/Overline";
@@ -69,7 +64,6 @@ import { Skeleton } from "@/components/ui/Skeleton";
 import { useVia } from "@/lib/agents";
 import { deleteAttempt, finishBuild, heroPhoto, reopenBuild, shelveBuild, useTagOptions } from "@/lib/builds";
 import { useCaptureHere } from "@/lib/capture";
-import { useOtherPerson } from "@/lib/for-whom";
 import { ariaShortcuts, shortcutCaps, useHotkeys } from "@/lib/hotkeys";
 import {
   type AttemptView,
@@ -81,7 +75,7 @@ import {
   useItem,
   useItemFields,
 } from "@/lib/items";
-import { scrollBehavior, spring } from "@/lib/motion";
+import { scrollBehavior } from "@/lib/motion";
 import { useScreenActions } from "@/lib/palette";
 import { peopleQuery, sessionQuery } from "@/lib/queries";
 import { canEdit, useReadOnly } from "@/lib/read-only";
@@ -194,8 +188,6 @@ function Build({ item }: { item: ItemView }) {
   }
 
   const { title, setTitle, note, setNote, forWhom, setForWhom, saveState } = useItemFields(item);
-  const other = useOtherPerson();
-  const [askFor, setAskFor] = useState(false);
 
   // Photos: the best one leads, then the build's own (from the idea, or added here).
   const hero = heroPhoto(item);
@@ -436,7 +428,6 @@ function Build({ item }: { item: ItemView }) {
     stage.current = item.stage;
   }, [item.stage]);
 
-  const attemptsWord = `${item.attempts.length} ${item.attempts.length === 1 ? "attempt" : "attempts"}`;
   const started = item.startedAt ?? item.createdAt;
   const fromIdea = item.startedAt !== null && item.startedAt - item.createdAt > 60_000;
   const worked = [...item.attempts].reverse().find((attempt) => attempt.outcome === "success");
@@ -563,44 +554,14 @@ function Build({ item }: { item: ItemView }) {
                   }
                 }}
               />
-              <ForField
-                aria-label="For"
-                value={forWhom}
-                onChange={(event) => setForWhom(event.target.value)}
-                readOnly={readOnly || item.pending}
-                asking={askFor}
-                onOpen={() => setAskFor(true)}
-                onDone={() => setAskFor(false)}
-              />
-              <div className="flex flex-wrap items-center gap-x-2.5 gap-y-2">
-                <StageChip
-                  item={item}
-                  printing={!!printing}
-                  offBed={!!printing && isOffTheBed(printing)}
-                  celebrate={justFinished}
-                />
-                <div className="text-small text-ink-faint">
-                  {item.stage === "done" && item.finishedAt ? (
-                    `Done ${inlineTime(item.finishedAt)}${item.attempts.length ? ` after ${attemptsWord}` : ""}`
-                  ) : item.stage === "shelved" && item.finishedAt ? (
-                    `Shelved ${inlineTime(item.finishedAt)}`
-                  ) : item.attempts.length ? (
-                    <MetaList>
-                      <span className="whitespace-nowrap">{attemptsWord}</span>
-                      <span className="whitespace-nowrap">started {inlineTime(started)}</span>
-                    </MetaList>
-                  ) : (
-                    `Started ${inlineTime(started)}`
-                  )}
-                </div>
-                {!forWhom.trim() && !askFor && !(readOnly || item.pending) && (
-                  <>
-                    {other && (
-                      <ForPersonChip name={displayName(other)} onClick={() => setForWhom(displayName(other))} />
-                    )}
-                    <ForChip onClick={() => setAskFor(true)} />
-                  </>
-                )}
+              <BuildTitleLine
+                item={item}
+                printing={printing}
+                celebrate={justFinished}
+                forWhom={forWhom}
+                setForWhom={setForWhom}
+                readOnly={readOnly}
+              >
                 {!active && !isDesktop && (
                   <Button
                     variant="quiet"
@@ -612,7 +573,7 @@ function Build({ item }: { item: ItemView }) {
                     {item.stage === "done" ? "Reopen" : "Back on the bed"}
                   </Button>
                 )}
-              </div>
+              </BuildTitleLine>
               <NoteField
                 value={note}
                 onChange={setNote}
@@ -823,56 +784,6 @@ function Build({ item }: { item: ItemView }) {
         <RecipeSheet recipeId={openRecipe} onOpenChange={(open) => !open && setOpenRecipe(null)} />
       </article>
     </PullToGo>
-  );
-}
-
-/** Where a build stands, as a chip. Marking it done pops it, with a sparkle. */
-function StageChip({
-  item,
-  printing,
-  offBed,
-  celebrate,
-}: {
-  item: ItemView;
-  printing: boolean;
-  offBed: boolean;
-  celebrate: boolean;
-}) {
-  if (item.stage === "building") {
-    return printing ? (
-      <OutcomeChip outcome={null} offTheBed={offBed} />
-    ) : (
-      <Chip tone="semolina" icon={BuildsIcon}>
-        On the bed
-      </Chip>
-    );
-  }
-  if (item.stage === "shelved") {
-    return <Chip icon={ShelveIcon}>Shelved</Chip>;
-  }
-  return (
-    <m.span
-      key={celebrate ? "celebrate" : "done"}
-      initial={celebrate ? { scale: 0.5, rotate: -10, opacity: 0 } : false}
-      animate={{ scale: 1, rotate: 0, opacity: 1 }}
-      transition={spring.snappy}
-      className="relative inline-flex"
-    >
-      <Chip tone="basil" icon={FinishIcon}>
-        Done
-      </Chip>
-      {celebrate && (
-        <m.span
-          initial={{ opacity: 0, scale: 0.4, x: -4, y: 4 }}
-          animate={{ opacity: [0, 1, 0], scale: [0.4, 1.2, 0.9], x: 6, y: -8 }}
-          transition={{ duration: 0.9, ease: "easeOut" }}
-          className="text-semolina absolute -top-1.5 -right-2.5"
-          aria-hidden
-        >
-          <SparkleIcon size={16} weight="fill" />
-        </m.span>
-      )}
-    </m.span>
   );
 }
 

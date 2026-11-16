@@ -3495,6 +3495,8 @@ export const shots: Shot[] = [
     },
   },
   { name: "build-done", path: `/builds/${SEED_BUILD_IDS.headphoneStand}`, fullPage: true },
+  // A shelved build: its chip, then when and after how many attempts; no For offer.
+  { name: "build-shelved", path: `/builds/${SEED_IDS.planter}` },
   { name: "journal", path: "/journal" },
   // The same catch-up at the top of the phone's Journal (above Now).
   {
@@ -4139,13 +4141,16 @@ export const shots: Shot[] = [
   },
   // An idea with someone named: the quiet "for the kitchen" line, no chip.
   { name: "idea-for", path: "/ideas/5eed0000-0000-4000-8000-000000000003" },
-  // Nobody named yet, "For someone" just tapped: the line opens under the title with the caret in it, no box.
+  // An idea for the person looking at it: the line reads "for you".
+  { name: "idea-for-you", path: "/ideas/5eed0000-0000-4000-8000-000000000013" },
+  // Nobody named yet, the offer's pencil just tapped: the line opens under the title with the caret in it, no box.
   {
     name: "idea-for-asking",
     path: `/ideas/${SEED_IDS.deskTidy}`,
     prepare: async (page) => {
-      await page.getByRole("button", { name: "For someone" }).click();
+      await page.getByRole("button", { name: /^For someone( else)?$/ }).click();
       await page.getByRole("textbox", { name: "For", exact: true }).waitFor();
+      await page.waitForTimeout(300);
     },
   },
   // The same idea in full: its note's link as a card under it.

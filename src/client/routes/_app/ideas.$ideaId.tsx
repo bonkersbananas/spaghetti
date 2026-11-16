@@ -1,5 +1,4 @@
 import { modelOf } from "@shared/model-mark";
-import { displayName } from "@shared/people";
 import { fullTime, inlineTime } from "@shared/time";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
@@ -9,6 +8,7 @@ import { CommentThread, ItemReactions } from "@/components/comments/CommentThrea
 import { AddFirstPhotos } from "@/components/ideas/AddFirstPhotos";
 import { DraftNote } from "@/components/ideas/DraftNote";
 import { photoAlt, plateAlt, plateCover } from "@/components/ideas/IdeaCard";
+import { IdeaTitleChips } from "@/components/ideas/IdeaTitleChips";
 import { PhotoStrip } from "@/components/ideas/PhotoStrip";
 import { PhotoViewer } from "@/components/ideas/PhotoViewer";
 import { PlateCover } from "@/components/ideas/PlateCover";
@@ -17,21 +17,10 @@ import { DetailBar } from "@/components/shell/DetailBar";
 import { ActionBar } from "@/components/ui/ActionBar";
 import { Avatar, ViaText } from "@/components/ui/Avatar";
 import { Button, IconButton } from "@/components/ui/Button";
-import { ToggleChip } from "@/components/ui/Chip";
 import { ConfirmDelete } from "@/components/ui/ConfirmDelete";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { TextArea } from "@/components/ui/Field";
-import { ForChip, ForField, ForPersonChip } from "@/components/ui/ForField";
-import {
-  BuildsIcon,
-  CommentIcon,
-  MoveIntoIcon,
-  SlicerFileIcon,
-  TrashIcon,
-  TwistIcon,
-  UpNextIcon,
-  WishIcon,
-} from "@/components/ui/icons";
+import { BuildsIcon, CommentIcon, MoveIntoIcon, SlicerFileIcon, TrashIcon, TwistIcon } from "@/components/ui/icons";
 import { LinkCard } from "@/components/ui/LinkCard";
 import { NoteField } from "@/components/ui/NoteField";
 import { NoteLinks } from "@/components/ui/NoteLinks";
@@ -44,7 +33,6 @@ import { useVia } from "@/lib/agents";
 import { startBuild } from "@/lib/builds";
 import { useCaptureHere } from "@/lib/capture";
 import { announceDraft } from "@/lib/drafts";
-import { useOtherPerson } from "@/lib/for-whom";
 import { ariaShortcuts, shortcutCaps, useHotkeys } from "@/lib/hotkeys";
 import { addItemFile } from "@/lib/item-files";
 import { deleteItem, type ItemView, useIdeas, useItem, useItemFields } from "@/lib/items";
@@ -61,7 +49,6 @@ import { setUpNext, splitQueue } from "@/lib/up-next";
 import { useAfterPaint, useIsDesktop } from "@/lib/use-media-query";
 import { useSettled } from "@/lib/use-settled";
 import { useWho } from "@/lib/who";
-import { toggleWishlist, useWishlistIds } from "@/lib/wishlist";
 
 const ItemFiles = lazy(() => import("@/components/ideas/ItemFiles"));
 const MoveToBuildSheet = lazy(() =>
@@ -131,14 +118,11 @@ function Idea({ item }: { item: ItemView }) {
   const { data: people } = useQuery(peopleQuery);
   const { data: user } = useQuery(sessionQuery);
   const who = useWho();
-  const wished = useWishlistIds(user?.id).includes(item.id);
   useCaptureHere(item);
   const person = people?.find((p) => p.id === item.createdBy);
   const via = useVia()(item.createdVia);
 
   const { title, setTitle, note, setNote, forWhom, setForWhom, saveState } = useItemFields(item);
-  const other = useOtherPerson();
-  const [askFor, setAskFor] = useState(false);
 
   // A draft that lands while this idea is open says so once, with a way to take it back (here or from the other phone).
   const draftStatus = useRef(item.draft?.status);
@@ -386,51 +370,19 @@ function Idea({ item }: { item: ItemView }) {
                 }}
               />
             )}
-            <ForField
-              aria-label="For"
-              value={forWhom}
-              onChange={(event) => setForWhom(event.target.value)}
-              readOnly={readOnly || item.pending}
-              asking={askFor}
-              onOpen={() => setAskFor(true)}
-              onDone={() => setAskFor(false)}
+            <IdeaTitleChips item={item} forWhom={forWhom} setForWhom={setForWhom} readOnly={readOnly} />
+            <input
+              ref={filePicker}
+              type="file"
+              accept={SLICER_ACCEPT}
+              multiple
+              hidden
+              data-testid="idea-file-input"
+              onChange={(event) => {
+                for (const file of event.target.files ?? []) keepFile(file);
+                event.target.value = "";
+              }}
             />
-            <div className="flex flex-wrap gap-2">
-              <ToggleChip
-                selected={item.upNext !== null}
-                icon={UpNextIcon}
-                disabled={readOnly || item.pending}
-                onClick={() => setUpNext(queryClient, item, item.upNext === null)}
-              >
-                Up next
-              </ToggleChip>
-              <ToggleChip
-                selected={wished}
-                icon={WishIcon}
-                disabled={readOnly || item.pending || !user}
-                onClick={() => user && toggleWishlist(queryClient, user.id, item)}
-              >
-                My wishlist
-              </ToggleChip>
-              <input
-                ref={filePicker}
-                type="file"
-                accept={SLICER_ACCEPT}
-                multiple
-                hidden
-                data-testid="idea-file-input"
-                onChange={(event) => {
-                  for (const file of event.target.files ?? []) keepFile(file);
-                  event.target.value = "";
-                }}
-              />
-              {!forWhom.trim() && !askFor && !(readOnly || item.pending) && (
-                <>
-                  {other && <ForPersonChip name={displayName(other)} onClick={() => setForWhom(displayName(other))} />}
-                  <ForChip onClick={() => setAskFor(true)} />
-                </>
-              )}
-            </div>
             <NoteField
               value={note}
               onChange={setNote}
