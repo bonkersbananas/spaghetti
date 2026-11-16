@@ -149,16 +149,15 @@ def run_wasm(d, runs):
 ORCA_REFUSES = {"raft_first_layer_expansion": ("-1", "2")}
 
 
-def run_orca(d, runs, filaments, substituted=None):
-    substituted = [] if substituted is None else substituted
-    if not substituted:
-        f = os.path.join(d, "orca/process.json")
-        config = json.load(open(f))
-        for key, (bad, good) in ORCA_REFUSES.items():
-            if str(config.get(key)).strip("[]'\"") == bad:
-                config[key] = good
-                substituted.append({"key": key, "old_value": bad, "new_value": good})
-        json.dump(config, open(f, "w"))
+def run_orca(d, runs, filaments):
+    substituted = []
+    f = os.path.join(d, "orca/process.json")
+    config = json.load(open(f))
+    for key, (bad, good) in ORCA_REFUSES.items():
+        if str(config.get(key)).strip("[]'\"") == bad:
+            config[key] = good
+            substituted.append({"key": key, "old_value": bad, "new_value": good})
+    json.dump(config, open(f, "w"))
     root = os.path.join(ORCA, "squashfs-root")
     env = {"XDG_RUNTIME_DIR": "/tmp", "LD_LIBRARY_PATH": f"{root}/lib:{root}/usr/lib"}
     out = []
@@ -188,17 +187,6 @@ def run_orca(d, runs, filaments, substituted=None):
         )
         result = os.path.join(o, "result.json")
         m["result"] = json.load(open(result)) if os.path.exists(result) else None
-        # A value Orca's command line substitutes (Bambu Studio's `enabled` for ensure_vertical_shell_thickness) and
-        # then refuses as invalid: given the value it substitutes, once, as the GUI would load it.
-        subs = [w for w in (m["result"] or {}).get("warnings", []) if w.get("class") == "config_value_substituted"]
-        if subs and not os.path.exists(os.path.join(o, "plate_1.gcode")) and not substituted:
-            for w in subs:
-                f = os.path.join(d, w["file"])
-                config = json.load(open(f))
-                config[w["key"]] = [w["new_value"]] if isinstance(config.get(w["key"]), list) else w["new_value"]
-                json.dump(config, open(f, "w"))
-                substituted.append({k: w[k] for k in ("key", "old_value", "new_value")})
-            return run_orca(d, runs, filaments, substituted)
         m["substituted"] = substituted
         out.append(m)
         if not os.path.exists(os.path.join(o, "plate_1.gcode")):

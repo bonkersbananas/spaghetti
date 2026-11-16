@@ -97,7 +97,7 @@ python3 -I bench/sweep.py --corpus <the models' folder> --only capybara_20mm.stl
 python3 -I bench/sweep.py --table
 ```
 
-A Bambu Studio project can carry a value Orca's command line refuses: Studio's `enabled` for `ensure_vertical_shell_thickness`, which it substitutes and then refuses, and `raft_first_layer_expansion` -1. The sweep gives Orca the value it substitutes or its default, and says so in the model's table.
+A Bambu Studio project can carry a value Orca's command line refuses outright, without saying which ("Param values in 3mf/config error", return -18): `raft_first_layer_expansion` -1. The sweep gives Orca its default instead and says so in the model's table. (Studio's `enabled` for `ensure_vertical_shell_thickness` Orca takes, as `ensure_all`.)
 
 ## Comparing files
 
