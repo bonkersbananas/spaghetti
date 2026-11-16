@@ -19,7 +19,7 @@
  *
  * A request that asks what an idea should be called is Claude naming an idea saved without a title (decision 0070).
  * It names nothing (the many untitled captures of other tests and the seed stay as they are) until a test or a shot
- * turns naming on with PUT /titles (DELETE /titles turns it off): then a word in the note picks the answer (`slow`
+ * turns naming on with PUT /titles (PUT /titles?slow makes each take ten seconds; DELETE /titles turns it off): then a word in the note picks the answer (`slow`
  * takes a few seconds, `refused` is refused, `broken` is an API error) and anything else is called NAMED_TITLE.
  *
  * A request with a photo in it is a print being read (decision 0022). A word in the build's title or the attempt's
@@ -503,10 +503,13 @@ export async function startFakeClaude(
   const received: ReceivedHook[] = [];
   // Whether it names untitled ideas (PUT /titles turns it on, DELETE /titles off).
   let naming = false;
+  let slowNaming = false;
   const server = createServer((request, response) => {
     if (request.url?.startsWith("/hooks")) return receiveHook(request, response, received);
-    if (request.url === "/titles" && (request.method === "PUT" || request.method === "DELETE")) {
+    if (request.url?.startsWith("/titles") && (request.method === "PUT" || request.method === "DELETE")) {
       naming = request.method === "PUT";
+      // PUT /titles?slow: every naming takes ten seconds, so a shot can catch "Naming…" on a photo-only idea.
+      slowNaming = naming && request.url.includes("slow");
       response.statusCode = 204;
       response.end();
       return;
@@ -540,7 +543,10 @@ export async function startFakeClaude(
     let body = "";
     request.on("data", (chunk) => (body += chunk));
     request.on("end", async () => {
-      if (body.includes("What should this idea be called?")) return answerTitle(naming, body, response);
+      if (body.includes("What should this idea be called?")) {
+        if (slowNaming) await new Promise((resolve) => setTimeout(resolve, SLOW_PHOTO_MS));
+        return answerTitle(naming, body, response);
+      }
       if (body.includes("Find the Prisjakt page for this thing")) return answerSearch(body, response);
       if (body.includes("Read the spool label")) return answerLabel(body, response);
       if (body.includes("What should they try on the next attempt?")) return answerCoach(body, response);

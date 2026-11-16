@@ -2,6 +2,7 @@ import { env } from "cloudflare:workers";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { NewTokenResponse } from "../../src/shared/agents.ts";
 import type { FeaturesResponse, ItemResponse } from "../../src/shared/api.ts";
+import { NAMING_TIMEOUT_MS } from "../../src/shared/naming.ts";
 import { cleanTitle, TITLES_PER_DAY } from "../../src/shared/title.ts";
 import { app } from "../../src/worker/app.ts";
 import { getDb } from "../../src/worker/db/index.ts";
@@ -82,7 +83,11 @@ describe("Claude names an idea saved without a title", () => {
     expect((await getItem(itemId)).title).toBeNull();
     await settled();
     const item = await getItem(itemId);
-    expect(item).toMatchObject({ title: "Spool holder for the shelf", claudeTitle: "Spool holder for the shelf" });
+    expect(item).toMatchObject({
+      title: "Spool holder for the shelf",
+      claudeTitle: "Spool holder for the shelf",
+      titleJob: null,
+    });
     // The photo went in as an image, to the small model, with no thinking and a schema for the answer.
     const body = web.bodies[0] as {
       model: string;
@@ -180,6 +185,72 @@ describe("Claude names an idea saved without a title", () => {
     });
     await asPerson(`/api/items/${named}`, { method: "PATCH", json: { title: "Tea tin lid, hinged" } });
     expect(await getItem(named)).toMatchObject({ title: "Tea tin lid, hinged", claudeTitle: null });
+  }, 20_000);
+
+  it("tells the screens it is naming an idea, and when it is done, through the item and the feed", async () => {
+    stubClaude({ stopReason: "refusal" });
+    const itemId = await capture({ note: "a ring for the curtain" });
+    // At once the idea says Claude is naming it.
+    const naming = (await getItem(itemId)).titleJob;
+    expect(naming?.status).toBe("naming");
+    expect(Math.abs((naming?.since ?? 0) - Date.now())).toBeLessThan(5000);
+    const before = await (await asPerson("/api/changes?after=0")).json<{ changes: Array<{ seq: number }> }>();
+    await settled();
+    // A refusal leaves it untitled, says it is done, and the feed tells the screens so the sign stops at once.
+    expect((await getItem(itemId)).titleJob).toMatchObject({ status: "done" });
+    const after = await (await asPerson(`/api/changes?after=${before.changes.at(-1)?.seq ?? 0}`)).json<{
+      changes: Array<{ entity: string; id: string }>;
+    }>();
+    expect(after.changes.some((c) => c.entity === "item" && c.id === itemId)).toBe(true);
+    // An idea that was never asked about, or one with a title, has none.
+    const titled = await capture({ title: "Curtain ring" });
+    expect((await getItem(titled)).titleJob).toBeNull();
+  });
+
+  it("reports a naming job as done once it is older than the screens' timeout", async () => {
+    stubClaude();
+    env.TITLES_ON_SAVE = "off";
+    const itemId = await capture({ note: "a clip for the bag" });
+    await startTitle(getDb(env.DB), itemId);
+    expect((await getItem(itemId)).titleJob?.status).toBe("naming");
+    // A job still open past the timeout (a Worker recycled mid-call): the screens' next copy drops the sign.
+    await env.DB.prepare("UPDATE item_titles SET created_at = ? WHERE item_id = ?")
+      .bind(Date.now() - NAMING_TIMEOUT_MS - 1000, itemId)
+      .run();
+    expect((await getItem(itemId)).titleJob?.status).toBe("done");
+  });
+
+  it("starts with the save when the capture says its photos are on their way, and waits for the first", async () => {
+    const web = stubClaude();
+    const itemId = uuid();
+    await asPerson("/api/items", { method: "POST", json: { id: itemId, photos: 1 } });
+    // The screens know at once.
+    expect((await getItem(itemId)).titleJob?.status).toBe("naming");
+    // The photo comes a little after the job's first wait; the job waits for it and reads it.
+    await new Promise((resolve) => setTimeout(resolve, 3000));
+    await uploadPhoto(itemId, uuid(), cookie);
+    await settled();
+    expect((await getItem(itemId)).title).toBe("Spool holder for the shelf");
+    const content = (web.bodies[0] as { messages: Array<{ content: Array<{ type: string }> }> }).messages[0]?.content;
+    expect(content?.[0]?.type).toBe("image");
+  }, 20_000);
+
+  it("steps aside when the promised photos don't come in time, and starts again with the first that does", async () => {
+    const web = stubClaude();
+    env.TITLES_ON_SAVE = "off";
+    const itemId = uuid();
+    await asPerson("/api/items", { method: "POST", json: { id: itemId } });
+    const db = getDb(env.DB);
+    expect(await startTitle(db, itemId, 1)).toBe(true);
+    // Nothing came: no job is left, so the screens stop and a photo can start one.
+    await runTitle(env, itemId, db, { settleMs: 0 });
+    expect(await rows()).toEqual([]);
+    expect((await getItem(itemId)).titleJob).toBeNull();
+    expect(web.bodies).toHaveLength(0);
+    env.TITLES_ON_SAVE = "on";
+    await uploadPhoto(itemId, uuid(), cookie);
+    await settled();
+    expect((await getItem(itemId)).title).toBe("Spool holder for the shelf");
   }, 20_000);
 
   it("leaves an idea that became a build while it waited", async () => {

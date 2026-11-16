@@ -3,10 +3,12 @@ import planterPhoto from "@/assets/samples/planter.svg";
 import vasePhoto from "@/assets/samples/vase.svg";
 import { Card, PhotoDots } from "@/components/ui/Card";
 import { Chip } from "@/components/ui/Chip";
+import { ClaudeLine } from "@/components/ui/ClaudeLine";
 import * as Icons from "@/components/ui/icons";
 import { LinkCard } from "@/components/ui/LinkCard";
 import { MiniCard } from "@/components/ui/MiniCard";
 import { Reflow } from "@/components/ui/Reflow";
+
 import { toast } from "@/components/ui/Toast";
 import { UploadBadge } from "@/components/ui/UploadBadge";
 import { Label, people, Section } from "./shared";
@@ -30,6 +32,17 @@ export function CardSection() {
             </Chip>
           }
           onClick={() => toast.message("Cards open their detail in a later phase")}
+        />
+        <Card
+          photo={{ src: planterPhoto, alt: "A planter on the print bed" }}
+          naming={
+            <ClaudeLine working className="min-h-6">
+              Naming…
+            </ClaudeLine>
+          }
+          meta="Just now"
+          person={people[0]}
+          aspect="portrait"
         />
         <Card
           note="Hook for the AMS spool holder, the stock one rattles. Check the clearance to the wall first."
