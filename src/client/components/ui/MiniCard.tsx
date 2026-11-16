@@ -124,7 +124,7 @@ export function MiniCard({
             ) : note ? (
               // Laid over its box, so a long note fills the card's face instead of making the row taller.
               <div className="absolute inset-0">
-                <NoteFace note={note} compact="fill" className="pt-7" />
+                <NoteFace note={note} compact="fill" className="pt-7 md:pt-0" />
               </div>
             ) : (
               <div className="bg-well text-ink-ghost flex size-full items-center justify-center">

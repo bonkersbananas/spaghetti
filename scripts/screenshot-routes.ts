@@ -1758,6 +1758,10 @@ export const shots: Shot[] = [
       await page.getByText("2 added to Up next").waitFor();
       await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
       await page.waitForTimeout(600);
+      // The cards that arrived in Up next fade in on the shots' fixed clock: finish them.
+      await page.evaluate(() => {
+        for (const animation of document.getAnimations()) animation.finish();
+      });
     },
     cleanup: (page) => setQueue(page, 2),
   },

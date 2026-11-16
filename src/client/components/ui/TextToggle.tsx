@@ -4,7 +4,7 @@ import { cn } from "@/lib/cn";
 /**
  * A quiet filter in words, for a section heading's side (Ideas' "Has a model", "Needs designing"): the label and its
  * count, nothing around them, so the words line up with the edge of what is under them. Picked, the label turns ink
- * on a semolina stroke, like a word underlined in the notebook. One tap filters, a second shows everything again.
+ * on a semolina pen stroke, like a search match. One tap filters, a second shows everything again.
  * Put a few in a `TextToggles`.
  */
 export function TextToggle({
@@ -25,15 +25,11 @@ export function TextToggle({
       )}
       {...props}
     >
-      <span
-        className={cn(
-          "decoration-2 underline-offset-4",
-          selected ? "decoration-semolina underline" : "decoration-transparent",
-        )}
-      >
-        {children}
-      </span>
-      {count !== undefined && <span className="tabular text-ink-faint font-medium">{count}</span>}
+      {/* Picked: a semolina pen stroke behind the word, as search marks a match; the margin keeps the words in place. */}
+      <span className={cn("-mx-1 rounded-xs px-1", selected && "bg-semolina-soft")}>{children}</span>
+      {count !== undefined && (
+        <span className={cn("tabular font-medium", selected ? "text-ink-soft" : "text-ink-faint")}>{count}</span>
+      )}
     </button>
   );
 }
