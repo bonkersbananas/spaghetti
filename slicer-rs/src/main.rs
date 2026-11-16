@@ -25,6 +25,8 @@ Options:
       --parts           Slice the models as the parts of one object (each in its --filaments filament), as Orca
                         prints an object made of parts: where two overlap, the later one's
       --keep-placement  Keep the objects where the files put them instead of arranging them on the plate
+      --job <file>      Replay what the app handed the WebAssembly module (bench/app-slice.mts writes it): its
+                        setup, then each object or part with its filament and paint, kept where they are
       --no-thumbnail    Leave out the plate picture
       --timings         Print how long each step took
   -h, --help            Show this";
@@ -45,6 +47,8 @@ struct Args {
     filaments: Vec<usize>,
     /// Each filament's nozzle (1-based), when given.
     filament_map: Option<Vec<usize>>,
+    /// A job to replay (bench/app-slice.mts), in place of models.
+    job: Option<String>,
 }
 
 fn parse(args: Vec<String>) -> Result<Args, String> {
@@ -61,6 +65,7 @@ fn parse(args: Vec<String>) -> Result<Args, String> {
         timings: false,
         filaments: vec![],
         filament_map: None,
+        job: None,
     };
     let mut it = args.into_iter();
     while let Some(arg) = it.next() {
@@ -94,6 +99,7 @@ fn parse(args: Vec<String>) -> Result<Args, String> {
                     .ok_or_else(|| format!("--filament-map takes nozzles 1 and 2, not {list}"))?;
                 out.filament_map = Some(map);
             }
+            "--job" => out.job = Some(value(&arg)?),
             "--no-thumbnail" => out.thumbnail = false,
             "--timings" => out.timings = true,
             "-h" | "--help" => return Err(String::new()),
@@ -101,7 +107,7 @@ fn parse(args: Vec<String>) -> Result<Args, String> {
             _ => out.inputs.push(arg),
         }
     }
-    if out.inputs.is_empty() {
+    if out.inputs.is_empty() && out.job.is_none() {
         return Err("no model to slice".into());
     }
     Ok(out)
@@ -119,6 +125,9 @@ fn main() -> ExitCode {
             return ExitCode::from(2);
         }
     };
+    if let Some(job) = &args.job {
+        return replay(job, &args);
+    }
     // The nozzle's presets, which a setup is laid over.
     let base = args.nozzle.and_then(profile::x2d_nozzle).unwrap_or_else(profile::x2d);
     let setup = match &args.setup {
@@ -226,4 +235,98 @@ fn main() -> ExitCode {
         );
     }
     ExitCode::SUCCESS
+}
+
+/// Slices what the app handed the WebAssembly module, as `bench/app-slice.mts` wrote it down: the setup read as the
+/// module reads it, then each call (`add`, `add_in` or `add_part`, with an STL and its paint), the objects kept where
+/// they are. The file is the module's, byte for byte.
+fn replay(path: &str, args: &Args) -> ExitCode {
+    use spaghetti_slicer::json::{self, Json};
+    use spaghetti_slicer::paint::Paint;
+    let dir = std::path::Path::new(path).parent().unwrap_or(std::path::Path::new("."));
+    let read = |name: &str| std::fs::read(dir.join(name)).map_err(|e| format!("can't read {name}: {e}"));
+    let run = || -> Result<(), String> {
+        let text = String::from_utf8(read(path)?).map_err(|_| "the job isn't UTF-8".to_string())?;
+        let Some(Json::Object(job)) = json::parse(&text) else { return Err("the job isn't JSON".into()) };
+        let text = |v: Option<&Json>| v.and_then(Json::as_str).map(str::to_string);
+        let number = |v: Option<&Json>| match v {
+            Some(Json::Number(n)) => Some(*n as usize),
+            _ => None,
+        };
+        let setup_name = text(job.get("setup")).ok_or("the job names no setup")?;
+        let setup_text = String::from_utf8(read(&setup_name)?).map_err(|_| "the setup isn't UTF-8".to_string())?;
+        let setup = setup::read(&setup_text).map_err(|e| format!("{setup_name}: {e}"))?;
+        let mut plate = Plate::default();
+        let Some(Json::Array(calls)) = job.get("calls") else { return Err("the job has no calls".into()) };
+        for call in calls {
+            let Json::Object(call) = call else { return Err("a call isn't an object".into()) };
+            let op = text(call.get("op")).unwrap_or_default();
+            let name = text(call.get("name")).unwrap_or_default();
+            let stl = text(call.get("stl")).ok_or("a call names no STL")?;
+            let bytes = read(&stl)?;
+            let input = Input { name: &name, bytes: &bytes };
+            let filament = number(call.get("filament")).unwrap_or(1).max(1) - 1;
+            match op.as_str() {
+                "add" => plate.add(&input),
+                "add_in" => plate.add_with_filament(&input, Some(filament)),
+                "add_part" => plate.add_part(&input, filament, matches!(call.get("first"), Some(Json::Bool(true)))),
+                other => return Err(format!("unknown call {other}")),
+            }
+            .map_err(|e| format!("can't slice {name}: {e}"))?;
+            for (key, supports) in [("paint", false), ("supports", true)] {
+                if let Some(file) = text(call.get(key)) {
+                    let paint = Paint::from_bytes(&read(&file)?).ok_or_else(|| format!("{file} isn't paint"))?;
+                    let taken = if supports { plate.paint_supports(&paint) } else { plate.paint(&paint) };
+                    if !taken {
+                        return Err(format!("{file} isn't paint for {stl}"));
+                    }
+                }
+            }
+        }
+        let options = Options { arrange: false, thumbnail: args.thumbnail, scale: setup.scale };
+        let out = plate.slice(&setup.settings, &options).map_err(|e| format!("can't slice: {e}"))?;
+        let output = args.output.clone().unwrap_or_else(|| "job.gcode.3mf".into());
+        let mut writes = vec![(output.clone(), out.file.as_slice())];
+        if let Some(g) = &args.gcode {
+            writes.push((g.clone(), out.gcode.as_slice()));
+        }
+        let stats = out.stats.json(&setup.settings);
+        if let Some(s) = &args.stats {
+            writes.push((s.clone(), stats.as_bytes()));
+        }
+        for (path, bytes) in writes {
+            std::fs::write(&path, bytes).map_err(|e| format!("can't write {path}: {e}"))?;
+        }
+        let s = &out.stats;
+        println!(
+            "{output}: {} layers, {} ({} printing), {:.2} g of filament ({:.2} m); {} bytes",
+            s.layers,
+            gcode::duration(s.total_time),
+            gcode::duration(s.model_time),
+            s.weight,
+            s.filament_mm / 1000.0,
+            out.file.len()
+        );
+        for fallback in &out.fallbacks {
+            eprintln!("note: {fallback}");
+        }
+        for warning in &out.warnings {
+            eprintln!("warning: {}", warning.message);
+        }
+        if args.timings {
+            let t = &out.timings;
+            eprintln!(
+                "{} triangles: read {:.1} ms, slice {:.1}, regions {:.1}, supports {:.1}, toolpaths {:.1}, gcode {:.1}, picture {:.1}, pack {:.1}; total {:.1} ms",
+                out.triangles, t.read, t.slice, t.regions, t.supports, t.toolpaths, t.gcode, t.thumbnail, t.pack, t.total
+            );
+        }
+        Ok(())
+    };
+    match run() {
+        Ok(()) => ExitCode::SUCCESS,
+        Err(e) => {
+            eprintln!("{e}");
+            ExitCode::FAILURE
+        }
+    }
 }
