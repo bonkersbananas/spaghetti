@@ -74,14 +74,25 @@ const NOW_HEIGHT = "sg-now-height";
 
 /** How tall Now was when this device last drew it (px), or undefined before it ever has. */
 function keptNowHeight(): number | undefined {
-  const kept = localStorage.getItem(NOW_HEIGHT);
-  return kept === null ? undefined : Number(kept) || 0;
+  try {
+    const kept = localStorage.getItem(NOW_HEIGHT);
+    return kept === null ? undefined : Number(kept) || 0;
+  } catch {
+    // Storage blocked (Safari without site data): every open is a first one.
+    return undefined;
+  }
 }
 
 /** Keeps Now's height as it changes, so the next open from the cache can hold its place before its code is in. */
 function keepNowHeight(element: HTMLDivElement | null) {
   if (!element) return;
-  const observer = new ResizeObserver(() => localStorage.setItem(NOW_HEIGHT, String(element.offsetHeight)));
+  const observer = new ResizeObserver(() => {
+    try {
+      localStorage.setItem(NOW_HEIGHT, String(element.offsetHeight));
+    } catch {
+      // Storage blocked: nothing is kept, and the next open waits for Now.
+    }
+  });
   observer.observe(element);
   return () => observer.disconnect();
 }
