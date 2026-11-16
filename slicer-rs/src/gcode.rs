@@ -1977,9 +1977,9 @@ pub(crate) fn arc_steps(r: f64, angle: f64) -> usize {
     const DEVIATION: f64 = 0.0125;
     let d = r - DEVIATION;
     if d < 1e-4 {
-        return if angle < PI || r * (1.0 + (PI - 0.5 * angle).cos()) < DEVIATION { 1 } else { 2 };
+        return if angle < PI || r * (1.0 + libm::cos(PI - 0.5 * angle)) < DEVIATION { 1 } else { 2 };
     }
-    ((angle / (2.0 * (d / r).acos())).ceil() as usize).max(1)
+    ((angle / (2.0 * libm::acos(d / r))).ceil() as usize).max(1)
 }
 
 /// The straight pieces Orca's estimator splits an arc into (`process_G2_G3`, Marlin's legacy flavour): from `from`
@@ -2057,8 +2057,9 @@ impl Planner<'_> {
             let v2 = (dir[0] / l2, dir[1] / l2);
             let norm_diff = (v2.0 - v1.0).hyp(v2.1 - v1.1);
             if norm_diff < 0.5 && norm_diff > 0.00001 {
-                let angle = (v1.0 * v2.1 - v1.1 * v2.0).atan2(v1.0 * v2.0 + v1.1 * v2.1);
-                let sin_half = ((1.0 - angle.cos()) * 0.5).sqrt();
+                // The `libm` crate's, as WebAssembly's: arcs make many such turns, and the file's times must agree.
+                let angle = libm::atan2(v1.0 * v2.1 - v1.1 * v2.0, v1.0 * v2.0 + v1.1 * v2.1);
+                let sin_half = ((1.0 - libm::cos(angle)) * 0.5).sqrt();
                 let r = delta[0].hyp(delta[1]) * 0.5 / sin_half;
                 cruise = cruise.min((set.min(s.max_accel_extruding) * r).sqrt());
             }
@@ -2217,13 +2218,16 @@ fn plan(moves: &[Move], start: [f64; 3], s: &Settings, resets: &[(usize, [f64; 3
         if let Kind::Spiral { i: ci, j: cj } = m.kind {
             let r = ci.hyp(cj);
             let (cx, cy, z0) = (p.at[0] + ci, p.at[1] + cj, p.at[2]);
-            let a0 = (-cj).atan2(-ci);
+            let a0 = libm::atan2(-cj, -ci);
             let n = arc_steps(r, 2.0 * PI);
             for k in 1..=n {
                 let t = k as f64 / n as f64;
                 let a = a0 + 2.0 * PI * t;
-                let to =
-                    if k == n { [m.x, m.y, m.z] } else { [cx + r * a.cos(), cy + r * a.sin(), z0 + (m.z - z0) * t] };
+                let to = if k == n {
+                    [m.x, m.y, m.z]
+                } else {
+                    [cx + r * libm::cos(a), cy + r * libm::sin(a), z0 + (m.z - z0) * t]
+                };
                 p.add(to, 0.0, m, i);
             }
         } else if let Some(arc) = m.arc {

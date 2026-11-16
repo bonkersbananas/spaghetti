@@ -759,7 +759,7 @@ impl Settings {
             elephant_foot: p.float("elefant_foot_compensation"),
             elephant_foot_layers: p.int("elefant_foot_compensation_layers").max(1) as usize,
             resolution: p.float("resolution"),
-            arc_fitting: ArcFitting::read(&p.text("enable_arc_fitting")),
+            arc_fitting: ArcFitting::read(p.text("enable_arc_fitting")),
             slice_closing_radius: p.float("slice_closing_radius"),
             skirt_distance: p.float("skirt_distance"),
             brim_width: p.float("brim_width"),
