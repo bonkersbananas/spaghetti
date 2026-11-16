@@ -70,9 +70,12 @@ function Builds() {
         title="Builds"
         subtitle="From idea to finished print, attempt by attempt."
         actions={
-          <Button variant="secondary" icon={PlusIcon} onClick={newBuild}>
-            New build
-          </Button>
+          // An empty list has its own "Start a build": one way to start, not two.
+          (isPending || items.length > 0) && (
+            <Button variant="secondary" icon={PlusIcon} onClick={newBuild}>
+              New build
+            </Button>
+          )
         }
       />
       {isPending ? (
@@ -89,36 +92,35 @@ function Builds() {
           {/* Only what is physically on the plate; with nothing there the section isn't drawn. */}
           {onBed.length > 0 && (
             <Section title="On the bed" count={onBed.length > 1 ? onBed.length : undefined}>
-              <Suspense fallback={<Skeleton className="h-44 rounded-lg lg:w-1/2" />}>
-                <BedCards prints={onBed} people={byId} via={via} pair />
+              <Suspense fallback={<Skeleton className="h-44 rounded-lg" />}>
+                <BedCards prints={onBed} people={byId} via={via} spread />
               </Suspense>
             </Section>
           )}
-          <Section
-            title="In progress"
-            count={inProgress.length || undefined}
-            description={
-              inProgress.length === 0 && (
-                <p className="text-body text-ink-soft">
-                  {onBed.length > 0 ? "Everything in progress is on the bed." : "Nothing in progress right now."}
-                </p>
-              )
-            }
-          >
-            <ul data-picks className={`${grid} relative empty:hidden`} aria-label="In progress">
-              <Reflow>
-                {inProgress.map((item) => (
-                  <BuildCard
-                    key={item.id}
-                    item={item}
-                    person={byId.get(item.createdBy)}
-                    via={via(item.createdVia)}
-                    landing={arrived.has(item.id)}
-                  />
-                ))}
-              </Reflow>
-            </ul>
-          </Section>
+          {/* Everything in progress on the bed: no section for nothing, as with an empty bed. */}
+          {(inProgress.length > 0 || onBed.length === 0) && (
+            <Section
+              title="In progress"
+              count={inProgress.length || undefined}
+              description={
+                inProgress.length === 0 && <p className="text-body text-ink-soft">Nothing in progress right now.</p>
+              }
+            >
+              <ul data-picks className={`${grid} relative empty:hidden`} aria-label="In progress">
+                <Reflow>
+                  {inProgress.map((item) => (
+                    <BuildCard
+                      key={item.id}
+                      item={item}
+                      person={byId.get(item.createdBy)}
+                      via={via(item.createdVia)}
+                      landing={arrived.has(item.id)}
+                    />
+                  ))}
+                </Reflow>
+              </ul>
+            </Section>
+          )}
           {done.length > 0 && (
             <Section title="Done" count={done.length} quiet>
               <ul data-picks className="grid gap-1 md:grid-cols-2 md:gap-x-6 xl:grid-cols-3" aria-label="Done">

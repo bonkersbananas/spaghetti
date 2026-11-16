@@ -66,9 +66,6 @@ function ActivityLine({ item }: { item: ItemView }) {
   );
 }
 
-/** A failure tag in its outcome's ink, so it reads as why the chip above says what it says, not as another date. */
-const tagInk = { success: "", partial: "text-semolina-ink", failed: "text-tomato-ink" } as const;
-
 const lowerFirst = (text: string) => text.charAt(0).toLowerCase() + text.slice(1);
 const upperFirst = (text: string) => text.charAt(0).toUpperCase() + text.slice(1);
 
@@ -110,10 +107,8 @@ export function BuildCard({
         title={item.title}
         note={item.note || undefined}
         unread={unread}
-        sub={
-          tag &&
-          last?.outcome && <span className={tagInk[last.outcome]}>{tagLabel("failure", tag, failureOptions)}</span>
-        }
+        // The chip over the photo carries the outcome's colour; the reason under the title stays quiet ink.
+        sub={tag && tagLabel("failure", tag, failureOptions)}
         chips={
           last ? (
             <OutcomeChip outcome={last.outcome} offTheBed={isOffTheBed(last)} onPhoto className="shadow-soft" />

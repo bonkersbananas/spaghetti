@@ -178,11 +178,11 @@ test("On the bed holds only what is on the plate; builds between prints are In p
   await expect(page.getByText("In progress", { exact: true })).toBeVisible();
   await expect(page.getByRole("main").getByText("On the bed", { exact: true })).toHaveCount(0);
 
-  // Only the print left: In progress says where everything is.
+  // Only the print left: no In progress section for nothing.
   await page.request.delete(`/api/items/${waiting}`, { headers });
   await page.goto("/builds");
   await expect(page.getByRole("region", { name: "On the bed" })).toBeVisible();
-  await expect(page.getByText("Everything in progress is on the bed.")).toBeVisible();
+  await expect(page.getByRole("region", { name: /^In progress/ })).toHaveCount(0);
 });
 
 test("adds a capture to the print that's running and finishes it", async ({ page, isMobile }) => {
