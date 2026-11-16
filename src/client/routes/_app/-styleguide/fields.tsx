@@ -1,8 +1,7 @@
 import { useState } from "react";
-import { OfferChip } from "@/components/ui/Chip";
 import { TextArea, TextField } from "@/components/ui/Field";
 import { ForField, ForLine } from "@/components/ui/ForField";
-import { ForOffer } from "@/components/ui/ForOffer";
+import { ForOffer, OfferChip } from "@/components/ui/ForOffer";
 import * as Icons from "@/components/ui/icons";
 import { NoteField } from "@/components/ui/NoteField";
 import { type SaveState, SaveStatus } from "@/components/ui/SaveStatus";

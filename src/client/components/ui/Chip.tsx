@@ -1,6 +1,6 @@
 import type { ComponentPropsWithRef, ReactNode } from "react";
 import { cn } from "@/lib/cn";
-import { ExpandIcon, type Icon } from "./icons";
+import type { Icon } from "./icons";
 
 export type ChipTone = "neutral" | "tomato" | "basil" | "semolina";
 
@@ -119,57 +119,5 @@ export function MoreChip({ hidden, onClick }: { hidden: number; onClick: () => v
     <ToggleChip selected={false} onClick={onClick} className="text-ink-faint">
       {hidden} more
     </ToggleChip>
-  );
-}
-
-interface OfferChipProps extends Omit<ComponentPropsWithRef<"button">, "children"> {
-  children: ReactNode;
-  /** More choices at its end, after a hairline: an `OfferMore` (wrapped in a `PopoverTrigger`). */
-  more?: ReactNode;
-}
-
-const offerSegment =
-  "pressable focus-ring touch-target relative inline-flex items-center rounded-pill hover:text-ink disabled:pointer-events-none";
-
-/**
- * An offer to set something nobody has set yet ("For Sam"): dashed and unfilled, so it never reads as a fact (a
- * `Chip`) or as a toggle that is off (a `ToggleChip`). Taking it sets the thing, and the offer goes: what was set
- * shows as itself (the "for Sam" line), not as a chip.
- */
-export function OfferChip({ children, more, className, ...props }: OfferChipProps) {
-  return (
-    <span
-      className={cn(
-        "rounded-pill text-small text-ink-soft border-ink/25 inline-flex h-9 shrink-0 items-stretch border border-dashed font-semibold md:h-8",
-        className,
-      )}
-    >
-      <button type="button" className={cn(offerSegment, more ? "pr-2 pl-3.5" : "px-3.5")} {...props}>
-        {children}
-      </button>
-      {more}
-    </span>
-  );
-}
-
-/** The caret at an `OfferChip`'s end that opens its other choices ("Someone else…"). Takes a trigger's props. */
-export function OfferMore({
-  label,
-  className,
-  ...props
-}: Omit<ComponentPropsWithRef<"button">, "children"> & { label: string }) {
-  return (
-    <button
-      type="button"
-      aria-label={label}
-      className={cn(
-        offerSegment,
-        "before:bg-ink/15 pr-2.5 pl-2 before:absolute before:inset-y-2 before:left-0 before:w-px",
-        className,
-      )}
-      {...props}
-    >
-      <ExpandIcon size={14} weight="bold" aria-hidden />
-    </button>
   );
 }

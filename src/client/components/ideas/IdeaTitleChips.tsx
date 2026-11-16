@@ -5,7 +5,7 @@ import { ToggleChip } from "@/components/ui/Chip";
 import { ForField } from "@/components/ui/ForField";
 import { ForOffer } from "@/components/ui/ForOffer";
 import { UpNextIcon, WishIcon } from "@/components/ui/icons";
-import { useNamesMe, useOtherPerson } from "@/lib/for-whom";
+import { useForLine, useOtherPerson } from "@/lib/for-whom";
 import type { ItemView } from "@/lib/items";
 import { sessionQuery } from "@/lib/queries";
 import { setUpNext } from "@/lib/up-next";
@@ -28,7 +28,7 @@ export function IdeaTitleChips({ item, forWhom, setForWhom, readOnly }: IdeaTitl
   const { data: user } = useQuery(sessionQuery);
   const wished = useWishlistIds(user?.id).includes(item.id);
   const other = useOtherPerson();
-  const namesMe = useNamesMe();
+  const forLine = useForLine();
   const [asking, setAsking] = useState(false);
   const locked = readOnly || item.pending;
 
@@ -40,7 +40,7 @@ export function IdeaTitleChips({ item, forWhom, setForWhom, readOnly }: IdeaTitl
         onChange={(event) => setForWhom(event.target.value)}
         readOnly={locked}
         asking={asking}
-        you={namesMe(forWhom)}
+        you={forLine(forWhom) === "for you"}
         onOpen={() => setAsking(true)}
         onDone={() => setAsking(false)}
       />

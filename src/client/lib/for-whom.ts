@@ -23,11 +23,3 @@ export function useOtherPerson() {
   const { data: people } = useQuery(peopleQuery);
   return people?.find((person) => person.id !== me?.id);
 }
-
-/** Whether a "for …" line names the person reading it, so the page's line reads "for you". */
-export function useNamesMe(): (forWhom: string | null | undefined) => boolean {
-  const { data: me } = useQuery(sessionQuery);
-  const { data: people } = useQuery(peopleQuery);
-  const self = people?.find((person) => person.id === me?.id);
-  return (forWhom) => namesPerson(forWhom, self);
-}

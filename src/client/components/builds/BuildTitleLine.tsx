@@ -9,7 +9,7 @@ import { ForField } from "@/components/ui/ForField";
 import { ForOffer } from "@/components/ui/ForOffer";
 import { BuildsIcon, FinishIcon, ShelveIcon, SparkleIcon } from "@/components/ui/icons";
 import { MetaList } from "@/components/ui/MetaList";
-import { useNamesMe, useOtherPerson } from "@/lib/for-whom";
+import { useForLine, useOtherPerson } from "@/lib/for-whom";
 import type { AttemptView, ItemView } from "@/lib/items";
 import { spring } from "@/lib/motion";
 
@@ -42,7 +42,7 @@ export function BuildTitleLine({
   children,
 }: BuildTitleLineProps) {
   const other = useOtherPerson();
-  const namesMe = useNamesMe();
+  const forLine = useForLine();
   const [asking, setAsking] = useState(false);
   const locked = readOnly || item.pending;
   const count = item.attempts.length;
@@ -57,7 +57,7 @@ export function BuildTitleLine({
         onChange={(event) => setForWhom(event.target.value)}
         readOnly={locked}
         asking={asking}
-        you={namesMe(forWhom)}
+        you={forLine(forWhom) === "for you"}
         onOpen={() => setAsking(true)}
         onDone={() => setAsking(false)}
       />
