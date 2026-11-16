@@ -77,7 +77,9 @@ export function PrintingCard({ item, attempt, person, via, compact = false }: Pr
   // The build's cover, with the plate on the bed first when there is no photo.
   const cover = coverOf(item, { file: attempt.file });
   // Its name is right beside the picture, in Fraunces: a build with only a name shows the glyph, not its name twice.
-  const glyphOnly = cover.kind === "note" && (compact || cover.fromTitle);
+  // So does a compact card's small square on a phone, too small for words (from md it is the full row).
+  const glyph = cover.kind === "note" ? <BuildsIcon size={compact ? 28 : 36} /> : undefined;
+  const nameOnly = cover.kind === "note" && cover.fromTitle;
   const name = itemName(item);
   const partsLabel = attemptPartsLabel(attempt, item.parts);
   const filaments = attempt.settings.filaments ?? [];
@@ -121,16 +123,23 @@ export function PrintingCard({ item, attempt, person, via, compact = false }: Pr
                   : layout.picture,
           )}
         >
-          <CoverPicture
-            cover={cover}
-            label={!compact}
-            // A compact card's small square has no room for words either.
-            glyph={glyphOnly ? <BuildsIcon size={compact ? 28 : 36} /> : undefined}
-            // A note in the phone's 5:2 strip, and the desktop row's 4:3, is set by the frame's short side.
-            shape="strip"
-            inset={compact ? "p-1 md:p-3" : "p-3"}
-            className="size-full"
-          />
+          {compact && cover.kind === "note" && !nameOnly ? (
+            <>
+              <CoverPicture cover={cover} glyph={glyph} className="size-full md:hidden" />
+              <CoverPicture cover={cover} shape="strip" className="size-full max-md:hidden" />
+            </>
+          ) : (
+            <CoverPicture
+              cover={cover}
+              // A compact card's square on a phone is too small to carry it; from md it is the full row's picture.
+              label={compact ? "md" : true}
+              glyph={nameOnly ? glyph : undefined}
+              // A note in the phone's 5:2 strip, and the desktop row's 4:3, is set by the frame's short side.
+              shape="strip"
+              inset={compact ? "p-1 md:p-3" : "p-3"}
+              className="size-full"
+            />
+          )}
           {/* The picture and the name lead to the build, each with its own area; the progress below has its own, so
               nothing presses through a button. This one is for the pointer only: the name's link is the stop for the keyboard. */}
           <Link {...to} tabIndex={-1} aria-hidden className="absolute inset-0 z-10" />

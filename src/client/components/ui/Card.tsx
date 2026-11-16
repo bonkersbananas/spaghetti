@@ -360,8 +360,8 @@ interface CoverPictureProps {
    * card on a plain well.
    */
   glyph?: ReactNode;
-  /** Says "From the model" on a render's corner, where the picture is big enough to carry it. */
-  label?: boolean;
+  /** Says "From the model" on a render's corner, where the picture is big enough to carry it ("md": from md only). */
+  label?: boolean | "md";
   /** Room around a render, so the model doesn't touch the frame (`p-3` by default). */
   inset?: string;
   /**
@@ -416,7 +416,7 @@ export function CoverPicture({
         (glyph ?? <NoteFace note={text} size={size} />)
       )}
       {plate && label && (
-        <span className="absolute top-2 left-2">
+        <span className={cn("absolute top-2 left-2", label === "md" && "max-md:hidden")}>
           <SlicerPreviewBadge />
         </span>
       )}
