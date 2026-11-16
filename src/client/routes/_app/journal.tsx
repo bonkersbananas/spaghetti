@@ -93,10 +93,10 @@ function Journal() {
 
   // Now shows the prints on the bed, so the notebook under it leaves their attempts out until they are logged, as
   // Today leaves out the print it shows on the bed. Either copy saying so counts: the builds Now draws from, or the
-  // journal's own (the two refresh apart).
+  // journal's own (the two refresh apart). Not before the builds are here: Now can't draw a print without them.
   const builds = useBuilds();
   const shown = useMemo(() => {
-    if (!showNow) return entries;
+    if (!showNow || builds.isPending) return entries;
     const onBed = new Set(printingAttempts(builds.items).map(({ attempt }) => attempt.id));
     return entries.filter((entry) => {
       if (!entry.attemptId) return true;
@@ -104,7 +104,7 @@ function Journal() {
       const item = items.get(entry.itemId);
       return !(item?.stage === "building" && item.attempts.some((a) => a.id === entry.attemptId && a.outcome === null));
     });
-  }, [showNow, entries, items, builds.items]);
+  }, [showNow, entries, items, builds.items, builds.isPending]);
   const months = useMemo(() => groupJournal(shown), [shown]);
 
   // J and K walk through the entries, Enter opens one (desktop).
@@ -148,8 +148,9 @@ function Journal() {
   }, [hasNextPage, isFetchingNextPage, fetchNextPage, rest]);
 
   const nothingAtAll = !query.isPending && !entries.length && !filtered;
-  // On a phone the notebook also waits for the builds: Now draws the prints on the bed from them.
-  const loading = query.isPending || (showNow && builds.isPending);
+  // On a phone the notebook also waits for the builds, which Now draws the prints on the bed from (not offline, where
+  // they may never come: the notebook then shows every entry).
+  const loading = query.isPending || (showNow && builds.isPending && navigator.onLine);
 
   const notebook = nothingAtAll ? (
     <EmptyState illustration={<OpenNotebook />} title="A clean notebook">
