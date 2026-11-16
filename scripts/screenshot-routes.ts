@@ -1689,6 +1689,20 @@ export const shots: Shot[] = [
       await page.waitForTimeout(1500);
     },
   },
+  // Under Now, the notebook's Today: the prints on the bed are in Now only, not again as cards here.
+  {
+    name: "journal-now-notebook",
+    path: "/journal",
+    width: 390,
+    prepare: async (page) => {
+      await page.locator("section[aria-label='On the bed']").waitFor();
+      await page.waitForTimeout(1500);
+      await page
+        .getByRole("heading", { level: 3, name: /^Today/ })
+        .evaluate((node) => window.scrollTo(0, node.getBoundingClientRect().top + window.scrollY - 96));
+      await page.waitForTimeout(600);
+    },
+  },
   {
     name: "journal-now-one",
     path: "/journal",

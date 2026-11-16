@@ -2,31 +2,26 @@ import { type QueryClient, useQuery, useQueryClient } from "@tanstack/react-quer
 import { AnimatePresence, m, useReducedMotion } from "motion/react";
 import { use, useMemo } from "react";
 import { PrintingCard } from "@/components/builds/PrintingCard";
-import ScoutRow from "@/components/scout/ScoutRow";
-import CommentsLine from "@/components/today/CommentsLine";
-import UpkeepLine from "@/components/today/UpkeepLine";
 import { Section } from "@/components/ui/Section";
 import { useVia } from "@/lib/agents";
 import { printingAttempts } from "@/lib/builds";
-import { featuresQuery } from "@/lib/features";
 import { useBuilds } from "@/lib/items";
 import { duration, ease } from "@/lib/motion";
 import { printerQuery } from "@/lib/pantry-queries";
 import { peopleQuery } from "@/lib/queries";
-import { scoutQuery, useScout, waitingPicks } from "@/lib/scout";
-import { unreadQuery } from "@/lib/unread-comments";
-import { upkeepQuery, useDueUpkeep } from "@/lib/upkeep";
+import { useScout, waitingPicks } from "@/lib/scout";
+import { useDueUpkeep } from "@/lib/upkeep";
 import { useNow } from "@/lib/use-now";
 
 /**
  * What is happening now, at the top of the phone's Journal (it replaces the Today tab): under a "Now" label, the prints on the
  * bed (all compact, with the camera and Finish, so the journal still starts on the first screen), the other person's new comments, upkeep that is
  * due and the scout's picks when they are new. Each part is drawn only when it has something to say, so a quiet
- * day has no block at all and the journal starts at the top. The block is itself loaded lazily, so its parts come with it
- * (not each lazily on its own): the Journal shows it and the notebook under it together, and nothing arrives after.
+ * day has no block at all and the journal starts at the top. The Journal shows it and the notebook under it together, and
+ * it shows with all its parts (see useLines), so nothing arrives after and pushes the page down.
  */
 export default function Now() {
-  useFirstAnswers(useQueryClient());
+  const { CommentsLine, UpkeepLine, ScoutRow } = useLines(useQueryClient());
   const reduce = useReducedMotion();
   const now = useNow(60_000);
   const builds = useBuilds();
@@ -85,29 +80,21 @@ export default function Now() {
   );
 }
 
-/** How long a first visit waits for the quiet lines' answers before the block shows without them. */
-const FIRST_ANSWERS_MS = 1000;
-let firstAnswers: Promise<unknown> | undefined;
+type Lines = typeof import("./NowLines");
+let lines: Lines | undefined;
+const loadingLines = import("./NowLines").then((module) => {
+  lines = module;
+  return module;
+});
+let waiting: Promise<unknown> | undefined;
 
 /**
- * On a first visit (nothing kept on this device yet) the block waits a moment for what its quiet lines draw from, so
- * they don't arrive after it and push the notebook down; the Journal shows a skeleton meanwhile. Answers kept from last
- * time (the usual case) wait for nothing, and neither does a phone that is offline.
+ * The quiet lines, asked for as this module runs: the block waits for their code, and on a first visit a moment for
+ * their answers, before it first shows. Once both are here (every visit after the first) it waits for nothing.
  */
-function useFirstAnswers(queryClient: QueryClient) {
-  const missing = [unreadQuery, upkeepQuery, featuresQuery].some(
-    (query) => queryClient.getQueryData(query.queryKey) === undefined,
-  );
-  if (!missing || !navigator.onLine) return;
-  firstAnswers ??= Promise.race([
-    Promise.allSettled([
-      queryClient.fetchQuery(unreadQuery),
-      queryClient.fetchQuery(upkeepQuery),
-      queryClient
-        .fetchQuery(featuresQuery)
-        .then((features) => (features.scout ? queryClient.fetchQuery(scoutQuery) : null)),
-    ]),
-    new Promise((resolve) => setTimeout(resolve, FIRST_ANSWERS_MS)),
-  ]);
-  use(firstAnswers);
+function useLines(queryClient: QueryClient): Lines {
+  if (lines && !lines.missingAnswers(queryClient)) return lines;
+  waiting ??= loadingLines.then((module) => module.firstAnswers(queryClient));
+  use(waiting);
+  return lines as Lines;
 }
