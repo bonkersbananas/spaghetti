@@ -42,14 +42,14 @@ import { scrollBehavior } from "@/lib/motion";
 import { peopleQuery } from "@/lib/queries";
 import { useAfterPaint, useIsDesktop } from "@/lib/use-media-query";
 
-// Phones only, and the print card with its motion and sheets is heavy: off the first load. A phone asks for it as soon as
-// this screen's code runs, and the notebook under it waits for it (see Journal), so Now never arrives late and pushes the
-// page down. Once it is here, a visit draws it at once instead of suspending for a moment.
 // A brand-new notebook's drawing: drawn once, so it loads only then (its size is held meanwhile).
 const OpenNotebook = lazy(() =>
   import("@/components/illustrations/OpenNotebook").then((m) => ({ default: m.OpenNotebook })),
 );
 
+// Phones only, and the print card with its motion and sheets is heavy: off the first load. A phone asks for it as soon as
+// this screen's code runs, and the notebook under it waits for it (see Journal), so Now never arrives late and pushes the
+// page down. Once it is here, a visit draws it at once instead of suspending for a moment.
 let NowLoaded: ComponentType | undefined;
 const loadNow = () =>
   import("@/components/journal/Now").then((module) => {
