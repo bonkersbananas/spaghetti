@@ -6,6 +6,7 @@ import { DRAFTS_PER_DAY } from "../../src/shared/draft.ts";
 import { app } from "../../src/worker/app.ts";
 import { resumeDrafts, STALE_MS } from "../../src/worker/draft/run.ts";
 import makerworldPage from "../fixtures/pages/makerworld.html?raw";
+import makerworldDesign from "../fixtures/pages/makerworld-design.json?raw";
 import golfPage from "../fixtures/pages/makerworld-golf.html?raw";
 import printablesChallenge from "../fixtures/pages/printables-challenge.html?raw";
 import { addUser, ORIGIN, request, resetDb, signIn } from "./helpers.ts";
@@ -41,7 +42,7 @@ const goodDraft = {
 };
 
 type Answer = { json?: unknown; stopReason?: string; status?: number };
-type Page = { status?: number; body?: string; location?: string };
+type Page = { status?: number; body?: string; location?: string; type?: string };
 
 /** Stubs the Anthropic API and the image host; Responses are made inside the stub (a Response can't cross requests). */
 function stubWeb(
@@ -62,7 +63,7 @@ function stubWeb(
     if (page) {
       return new Response(page.body ?? "", {
         status: page.status ?? 200,
-        headers: { "Content-Type": "text/html", ...(page.location ? { Location: page.location } : {}) },
+        headers: { "Content-Type": page.type ?? "text/html", ...(page.location ? { Location: page.location } : {}) },
       });
     }
     if (url.hostname === "makerworld.bblmw.com") {
@@ -395,6 +396,27 @@ describe("drafting an idea from a model page", () => {
     expect((web.bodies[0] as { tools: unknown[] }).tools).toHaveLength(1);
     const run = await env.DB.prepare("SELECT detail FROM draft_runs").first<{ detail: string }>();
     expect(JSON.parse(run?.detail ?? "{}")).toMatchObject({ source: "web_fetch", pageStatus: 403 });
+  });
+
+  it("reads MakerWorld's design API when the page is behind a bot challenge, before asking Claude's web fetch", async () => {
+    const web = stubWeb(
+      { json: { readable: true, note: "A tidy box for the mops.", material: "PLA", plate: null, settings: null } },
+      {
+        [PAGE]: { status: 403, body: printablesChallenge },
+        "https://makerworld.com/api/v1/design-service/design/12345": {
+          type: "application/json; charset=utf-8",
+          body: JSON.stringify({ ...JSON.parse(makerworldDesign), id: 12345 }),
+        },
+      },
+    );
+    const id = await addIdea({ note: PAGE });
+    const { draft } = await (await draftIt(id)).json<DraftResponse>();
+    expect(draft?.status).toBe("drafted");
+    expect((await getItem(id)).title).toBe("Sweeper Mop Storage Box Rag Storage Box");
+    // Claude got the design as data, with no web fetch tool.
+    expect((web.bodies[0] as { tools?: unknown[] }).tools ?? []).toEqual([]);
+    const run = await env.DB.prepare("SELECT detail FROM draft_runs").first<{ detail: string }>();
+    expect(JSON.parse(run?.detail ?? "{}")).toMatchObject({ source: "worker_api", pageStatus: 403 });
   });
 
   it("falls back too when the page has nothing to draft from, and never follows a redirect off the three sites", async () => {

@@ -1,7 +1,7 @@
 import { and, asc, eq, gte, inArray, isNotNull, isNull, lt, or, sql } from "drizzle-orm";
 import { PURGE_AFTER_MS } from "../../shared/deleted.ts";
 import { isModelImageUrl, pictureRequestUrl } from "../../shared/model-links.ts";
-import { extractModelPage } from "../../shared/model-page.ts";
+import { isSiteTitle, unwrapImage } from "../../shared/model-page.ts";
 import {
   SCOUT_COUNT,
   SCOUT_FROM_HOUR,
@@ -14,9 +14,9 @@ import { addWeeks, mondayOf, zonedParts } from "../../shared/week.ts";
 import { recordChange } from "../changes.ts";
 import { type Db, getDb } from "../db/index.ts";
 import { type ScoutPickRow, scoutPicks, scoutRounds } from "../db/schema.ts";
-import { fetchModelPage } from "../draft/page.ts";
+import { readModel, type UnreadReason } from "../draft/page.ts";
 import { fromUrl, type ImageInfo, readImage } from "../mcp/image.ts";
-import { askClaudeToScout, type ScoutResult } from "./claude.ts";
+import { askClaudeToScout, type ReadPage, type ScoutResult } from "./claude.ts";
 import { type ScoutNotebook, scoutNotebook } from "./context.ts";
 
 /** A claim that has gone quiet this long is taken over (once more). */
@@ -81,44 +81,65 @@ interface Checked {
   title: string;
   why: string;
   picture: ImageInfo | null;
+  /** How it was seen alive: the Worker read MakerWorld's API or the page, or Claude's web fetch read it. */
+  by: "api" | "page" | "web_fetch" | "stand_in";
 }
 
+/** Why a link was dropped (decision 0067): the Worker's reason, or the reason was the sentence on why it fits. */
+type DeadReason = UnreadReason | "no_why";
+
+/** A web fetch document's title without the site's name after it ("Octopus - Thingiverse"). */
+export const readTitle = (title: string) =>
+  title
+    .replace(/\s+/g, " ")
+    .replace(/\s*[-|–—]\s*(free 3d print model\s*[-|–—]\s*)?(makerworld|thingiverse)(\.com)?\s*$/i, "")
+    .trim();
+
 /**
- * Whether a suggested link is alive and what the page itself calls the model and shows of it. In production the
- * Worker fetches the page (only the two sites, redirects checked: decision 0019); against a stand-in Anthropic
- * (e2e, screenshots) it doesn't, and an address with the word `dead` in it is the dead one.
+ * Whether a suggested link is alive and what the model is called and looks like, never from Claude's words alone
+ * (decision 0067, which amends 0040): the Worker reads it (MakerWorld's design API, then the page; Thingiverse's
+ * page), and when it can't, a page Claude's own web fetch read in this answer counts, with the title it read. A link
+ * nobody saw alive, or a page that names no model (a soft "not found"), is dropped with its reason. Against a
+ * stand-in Anthropic (e2e, screenshots) nothing is fetched, and an address with the word `dead` in it is the dead one.
  */
-async function checkCandidate(
+export async function checkCandidate(
   env: Env,
   candidate: { url: string; title: string; why: string; imageUrl: string | null },
-): Promise<Checked | null> {
+  read: ReadPage[] = [],
+): Promise<{ ok: Checked } | { dead: DeadReason }> {
   const link = scoutLink(candidate.url);
-  if (!link) return null;
+  if (!link) return { dead: "not_found" };
   const standIn = env.ANTHROPIC_BASE_URL?.trim() ? new URL(env.ANTHROPIC_BASE_URL.trim()).origin : null;
   let title = candidate.title.replace(/\s+/g, " ").trim();
   let imageUrls: string[] = candidate.imageUrl ? [candidate.imageUrl] : [];
+  let by: Checked["by"] = "stand_in";
   if (standIn) {
-    if (/dead/i.test(link.url)) return null;
+    if (/dead/i.test(link.url)) return { dead: "not_found" };
   } else {
-    const page = await fetchModelPage(link.url);
-    if (page.status !== 200 || !page.html) return null;
-    let facts: ReturnType<typeof extractModelPage> = null;
-    try {
-      facts = extractModelPage(link.site, page.html);
-    } catch {
-      facts = null;
+    const worker = await readModel(link.site, link.url, { apiFirst: true });
+    const fetched = read.find(
+      (page) => scoutLink(page.url)?.key === link.key && !!page.title && !isSiteTitle(readTitle(page.title)),
+    );
+    if (worker.facts?.title) {
+      title = worker.facts.title;
+      imageUrls = [...worker.facts.imageUrls, ...imageUrls];
+      by = worker.via ?? "page";
+    } else if (fetched?.title) {
+      title = readTitle(fetched.title);
+      imageUrls = [...imageUrls, ...fetched.links.map(unwrapImage)];
+      by = "web_fetch";
+    } else {
+      return { dead: worker.reason ?? "unreachable" };
     }
-    // A page that says nothing a model page says (a soft 404, a challenge page) is not a live model.
-    if (!facts?.title) return null;
-    title = facts.title.replace(/\s+/g, " ").trim();
-    imageUrls = [...facts.imageUrls, ...imageUrls];
+    title = title.replace(/\s+/g, " ").trim();
   }
   const why = tidyWhy(candidate.why);
-  if (!title || !why) return null;
+  if (!title) return { dead: "no_model" };
+  if (!why) return { dead: "no_why" };
   const allowed = (url: string) =>
     isModelImageUrl(url) || (!!standIn && URL.canParse(url) && new URL(url).origin === standIn);
   let picture: ImageInfo | null = null;
-  for (const url of imageUrls.filter(allowed).slice(0, 3)) {
+  for (const url of [...new Set(imageUrls)].filter(allowed).slice(0, 3)) {
     try {
       // A redirect off the image host would be a way past the allowlist: they aren't followed.
       picture = readImage(await fromUrl(pictureRequestUrl(url, PICTURE_WIDTH), "manual", !!standIn));
@@ -127,7 +148,13 @@ async function checkCandidate(
       picture = null;
     }
   }
-  return { link, title: title.slice(0, 120), why, picture };
+  return { ok: { link, title: title.slice(0, 120), why, picture, by } };
+}
+
+function tally(values: string[]): Record<string, number> {
+  const counts: Record<string, number> = {};
+  for (const value of values) counts[value] = (counts[value] ?? 0) + 1;
+  return counts;
 }
 
 type Settled = "done" | "nothing" | "failed";
@@ -204,10 +231,18 @@ export async function runScout(
         fresh.push(suggestion);
       }
     }
-    const checked = (await Promise.all(fresh.map((suggestion) => checkCandidate(env, suggestion)))).filter(
-      (candidate): candidate is Checked => candidate !== null,
+    const results = await Promise.all(
+      fresh.map(async (suggestion) => ({
+        suggestion,
+        result: await checkCandidate(env, suggestion, answer.found.read),
+      })),
     );
-    const dead = fresh.length - checked.length;
+    const checked = results.flatMap(({ result }) => ("ok" in result ? [result.ok] : []));
+    const dropped = results.flatMap(({ suggestion, result }) =>
+      "dead" in result ? [{ suggestion, by: result.dead }] : [],
+    );
+    const dead = dropped.length;
+    const searched = new Set(answer.found.searched.map((url) => scoutLink(url)?.key).filter(Boolean));
     // Pictures first: a suggestion without one is shown only when there are not enough with.
     const chosen = [...checked.filter((c) => c.picture), ...checked.filter((c) => !c.picture)].slice(0, SCOUT_COUNT);
     const record = {
@@ -217,7 +252,20 @@ export async function runScout(
         malformed,
         repeated,
         dead,
+        // Why each was dropped, and how the others were seen alive: the next quiet week says why.
+        ...(dead ? { deadBy: tally(dropped.map((drop) => drop.by)) } : {}),
+        ...(checked.length ? { aliveBy: tally(checked.map((pick) => pick.by)) } : {}),
         kept: chosen.length,
+        // The dropped links themselves (public model addresses), and whether Claude's own search had returned them.
+        ...(dead
+          ? {
+              dropped: dropped.map(({ suggestion, by }) => ({
+                url: suggestion.url.slice(0, 200),
+                by,
+                inSearch: searched.has(scoutLink(suggestion.url)?.key),
+              })),
+            }
+          : {}),
       }),
     };
     if (!chosen.length) {
