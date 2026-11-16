@@ -28,7 +28,7 @@ const stepOf = (attempt: TrailAttempt): Step => attempt.outcome ?? (attempt.offB
 
 const stepIcons: Record<Step, Icon> = { ...outcomeIcons, printing: PrintingIcon, offBed: FinishIcon };
 
-/** A step's face without a photo: the outcome's soft tones; off the bed is neutral, like its chip. */
+/** A step's face without a photo (inside its ring on phones): the outcome's soft tones; off the bed is neutral, like its chip. */
 const stepTones: Record<Step, string> = {
   success: "bg-basil-soft text-basil-ink",
   partial: "bg-semolina-soft text-semolina-ink",
@@ -40,33 +40,37 @@ const stepTones: Record<Step, string> = {
 /** The badge over a step's photo: the same tones, opaque, so the photo doesn't show through. */
 const badgeTones: Record<Step, string> = { ...stepTones, offBed: "bg-cream text-ink-soft" };
 
-/** The ring around a step's photo on phones: the thread's own dot colors (`outcomeDots`), as a ring. */
+/** The ring around a step on phones: the thread's own dot colors (`outcomeDots`), as a ring. */
 const stepRings: Record<Step, string> = {
   success: "ring-basil",
   partial: "ring-semolina",
   failed: "ring-tomato",
   printing: "ring-semolina",
-  offBed: "ring-ink/30",
+  offBed: "ring-ink/45",
 };
 
-/** Steps shown at most, a folded "+5" included; tapping that one shows them all. Two rows of six on a phone. */
-const MAX_STEPS = 12;
+/**
+ * Steps shown at most, a folded "+5" included; tapping that one shows them all. One row: six on a phone (390 px), ten
+ * in the desktop's left column, so a long build's trail stays reference and doesn't outshout the story.
+ */
+const MAX_STEPS = { phone: 6, desktop: 10 } as const;
 
 /**
- * The outcome strip as a control (the build page's summary): the build's attempts as a trail, oldest first, each step a button that picks its attempt,
- * joined by the story's thread line. On phones a step is the attempt's photo in a ring of its outcome's color with
- * the outcome's icon as a badge (without a photo, the outcome's soft disc and icon), captioned "#2"; on desktop, where the story
- * beside it shows the photos, it is a small dot holding the icon, its name in the tooltip. No figure inside a step
- * (a number beside an icon reads as a count); the open attempt is inverted like a picked chip: its caption on a
- * phone, the dot itself on desktop. It wraps rather than scrolls, so every step is in view and under a thumb; each
- * row's line runs off its edge, so a wrapped trail still reads as one.
+ * The outcome strip as a control (the build page's summary): the build's attempts as a trail, oldest first, each step
+ * a button that picks its attempt, joined by the story's thread line. On phones a step is a ring in its outcome's
+ * color around the attempt's photo (with the outcome's icon as a badge) or around the outcome's soft disc and icon,
+ * captioned "#2"; on desktop, where the story beside it shows the photos, it is a small disc holding the icon, its
+ * name in the tooltip. No figure inside a step (a number beside an icon reads as a count). The open attempt is drawn
+ * in the picked chip's colors: on a phone a ring around the step and its caption inverted, on desktop the disc
+ * inverted. Long builds fold into one row; unfolded, the trail wraps rather than scrolls, and each row's line runs
+ * off its edge, so a wrapped trail still reads as one.
  */
 export function AttemptTrail({ attempts, onPick, selected, className }: AttemptTrailProps) {
   const desktop = useIsDesktop();
   const [unfolded, setUnfolded] = useState(false);
   if (attempts.length === 0) return null;
-  const overflow = attempts.length > MAX_STEPS;
-  const folded = overflow ? attempts.length - (MAX_STEPS - 1) : 0;
+  const max = MAX_STEPS[desktop ? "desktop" : "phone"];
+  const folded = attempts.length > max ? attempts.length - (max - 1) : 0;
   // An attempt picked elsewhere (J/K, a link) among the folded ones unfolds the trail for good, as it does the story.
   const pickedFolded = attempts.slice(0, folded).some((attempt) => attempt.id === selected);
   if (pickedFolded && !unfolded) setUnfolded(true);
@@ -133,36 +137,47 @@ export function AttemptTrail({ attempts, onPick, selected, className }: AttemptT
               onClick={() => onPick(attempt.id)}
               className={cn(
                 "pressable focus-ring touch-target relative flex shrink-0 items-center justify-center rounded-full",
-                desktop ? "size-7" : "size-12",
-                // Without a photo (and always on desktop) a step is its outcome's soft disc and icon.
-                (desktop || !attempt.photo) && (desktop && picked ? "bg-select text-on-select" : stepTones[step]),
+                desktop ? cn("size-7", picked ? "bg-select text-on-select" : stepTones[step]) : "size-12",
               )}
             >
-              {desktop || !attempt.photo ? (
-                <Icon size={desktop ? 14 : 20} weight="bold" aria-hidden className={pulse || undefined} />
+              {desktop ? (
+                <Icon size={14} weight="bold" aria-hidden className={pulse || undefined} />
               ) : (
                 <>
+                  {/* The open step: a ring of the picked chip's color around it, a paper gap away. */}
+                  {picked && <span aria-hidden className="ring-select absolute -inset-1 rounded-full ring-2" />}
                   <span
                     aria-hidden
                     className={cn("absolute inset-0 rounded-full ring-2 ring-inset", stepRings[step])}
                   />
-                  <span aria-hidden className="absolute inset-1">
-                    <Photo
-                      src={attempt.photo.src}
-                      color={attempt.photo.color}
-                      alt=""
-                      className="size-full rounded-full"
-                    />
-                  </span>
-                  <span
-                    aria-hidden
-                    className={cn(
-                      "ring-paper absolute -right-0.5 -bottom-0.5 flex size-5 items-center justify-center rounded-full ring-2",
-                      badgeTones[step],
-                    )}
-                  >
-                    <Icon size={12} weight="bold" className={pulse || undefined} />
-                  </span>
+                  {attempt.photo ? (
+                    <>
+                      <span aria-hidden className="absolute inset-1">
+                        <Photo
+                          src={attempt.photo.src}
+                          color={attempt.photo.color}
+                          alt=""
+                          className="size-full rounded-full"
+                        />
+                      </span>
+                      <span
+                        aria-hidden
+                        className={cn(
+                          "ring-paper absolute -right-0.5 -bottom-0.5 flex size-5 items-center justify-center rounded-full ring-2",
+                          badgeTones[step],
+                        )}
+                      >
+                        <Icon size={12} weight="bold" className={pulse || undefined} />
+                      </span>
+                    </>
+                  ) : (
+                    <span
+                      aria-hidden
+                      className={cn("absolute inset-1 flex items-center justify-center rounded-full", stepTones[step])}
+                    >
+                      <Icon size={20} weight="bold" className={pulse || undefined} />
+                    </span>
+                  )}
                 </>
               )}
             </button>
