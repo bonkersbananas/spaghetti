@@ -45,7 +45,6 @@ function SignIn() {
   const [passkeyError, setPasskeyError] = useState<string>();
 
   async function arrive(user: SessionResponse["user"]) {
-    // Whatever an earlier session left in memory is not this person's to see.
     arriving.stay(user);
     await arriving.go();
   }

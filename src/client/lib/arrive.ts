@@ -15,7 +15,11 @@ export function useArrive(target?: string) {
   const router = useRouter();
   const stay = useCallback(
     (user: Person) => {
-      queryClient.removeQueries({ predicate: (q) => q.queryKey[0] !== "session" });
+      // Whatever an earlier session left in memory is not this person's to see. The same person arriving twice (the
+      // name field's passkey offer and the button both answered) keeps it: the page they went on to is loading from it.
+      if (queryClient.getQueryData(sessionQuery.queryKey)?.id !== user.id) {
+        queryClient.removeQueries({ predicate: (q) => q.queryKey[0] !== "session" });
+      }
       queryClient.setQueryData(sessionQuery.queryKey, user);
       rememberUser(user);
     },
