@@ -46,6 +46,7 @@ src/
       live.ts             follows the change feed (GET /api/changes) and refreshes just what changed; useArrived for the landing motion
       persist.ts          query cache saved to IndexedDB for offline reading (PERSISTED_ROOTS), "last seen" times
       read-only.ts        useReadOnly / canEdit: saved things aren't editable offline
+      previous-path.ts, origin.ts   where a detail page was opened from (decision 0068): previous-path records the tab's moves (first load), origin reads them; useBackTo(list) for DetailBar, Escape and PullToGo
       outbox.ts           IndexedDB queue that creates items and uploads photos, with retries
       images.ts           in-browser resizing (createImageBitmap + canvas), WebP/JPEG, average color
       capture.tsx         capture state, paste and drop
