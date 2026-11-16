@@ -2,6 +2,7 @@ import { and, eq, gte, isNull, lt, or, sql } from "drizzle-orm";
 import type { BatchItem } from "drizzle-orm/batch";
 import { DRAFTS_PER_DAY, type DraftFailure, type ItemDraft } from "../../shared/draft.ts";
 import { isModelImageUrl, modelSite, pictureRequestUrl } from "../../shared/model-links.ts";
+import { cleanModelUrl } from "../../shared/model-mark.ts";
 import { afterChange, recordChange } from "../changes.ts";
 import { type Db, getDb } from "../db/index.ts";
 import { draftRuns, type ItemDraftRow, itemDrafts, items, linkPreviews, photos } from "../db/schema.ts";
@@ -51,7 +52,8 @@ export async function startDraft(
   /** The title that came with a share, which the draft may replace; a title a person typed is never passed here. */
   sharedTitle?: string | null,
 ): Promise<boolean> {
-  const found = modelSite(url);
+  // The page as it names the model, without ?from=search and the like.
+  const found = modelSite(cleanModelUrl(url));
   if (!found) return false;
   const now = new Date();
   const existing = await db.select().from(itemDrafts).where(eq(itemDrafts.itemId, itemId)).get();

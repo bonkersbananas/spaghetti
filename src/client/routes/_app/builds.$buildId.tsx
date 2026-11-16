@@ -597,9 +597,10 @@ function Build({ item }: { item: ItemView }) {
                 onChange={setNote}
                 readOnly={readOnly}
                 placeholder="Notes for the whole build: the plan, a link, what to try next…"
+                model={model}
                 className="mt-1"
               />
-              <NoteLinks note={note} />
+              <NoteLinks note={note} model={model} />
               {/* The quiet action under the model, as on an idea: keep it as a twist, or open the one it prints. */}
               {(model || existingTwistId || onlyOpenable(item.files)) && (
                 <div className="-mx-3 -mt-1 flex flex-wrap items-center gap-x-1">

@@ -279,6 +279,8 @@ function Idea({ item }: { item: ItemView }) {
   // The model card follows the note once typing pauses (half an address is not a model page yet).
   const settledNote = useSettled(note);
   const model = modelOf({ note: settledNote, draft: item.draft });
+  // A model that lives somewhere else (a page, a file's address), not a file kept here: the page shows its card.
+  const linkedModel = model && !model.url.startsWith("/api/files/") ? model : null;
   const modelPhoto = item.draft?.applied.includes("photos") ? photos.find((photo) => !photo.attemptId) : undefined;
   const modelPicture = modelPhoto ? { src: photoSrc(modelPhoto.id, "thumb"), color: modelPhoto.color } : undefined;
   const alt = photoAlt({ title, note });
@@ -387,18 +389,25 @@ function Idea({ item }: { item: ItemView }) {
                 event.target.value = "";
               }}
             />
+            {/* The model's link shows once, as its card below: the note names it short, and has no card of its own. */}
             <NoteField
               value={note}
               onChange={setNote}
               readOnly={readOnly}
+              model={linkedModel}
               placeholder="Add a note: a link, a measurement, a half-thought…"
             />
             <DraftNote item={item} title={title} note={note} readOnly={readOnly} />
-            <NoteLinks note={note} skip={model?.url} />
+            <NoteLinks note={note} model={linkedModel} modelShownElsewhere />
             {/* One model block under the note: the model's card, the files kept with the idea, and the quiet actions
               ("Make a twist", or "Twist" once one exists, sits beside "Add a file"). */}
-            {model && !model.url.startsWith("/api/files/") && (
-              <LinkCard url={model.url} model={model} picture={modelPicture} className="max-w-content my-1" />
+            {linkedModel && (
+              <LinkCard
+                url={linkedModel.url}
+                model={linkedModel}
+                picture={modelPicture}
+                className="max-w-content my-1"
+              />
             )}
             {files.length > 0 && (
               <Suspense fallback={null}>
