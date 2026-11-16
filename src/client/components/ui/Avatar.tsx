@@ -1,5 +1,5 @@
 import type { Person } from "@shared/api";
-import type { PersonColor } from "@shared/people";
+import { type PersonColor, withoutOwner } from "@shared/people";
 import { type CSSProperties, useState } from "react";
 import { cn } from "@/lib/cn";
 import { initials } from "@/lib/initials";
@@ -80,6 +80,8 @@ export function Avatar({ person, size = "md", ringed = false, decorative = false
         colors[person.color],
         sizes[size],
         ringed && "ring-paper ring-2",
+        // Small, two letters fill the circle: nudged a pixel up and left, they keep clear of the mark's cutout.
+        via && (size === "xs" || size === "sm") && "pr-0.5 pb-0.5",
         !via && className,
       )}
     >
@@ -162,9 +164,15 @@ export function AgentAvatar({
   );
 }
 
-/** "via Claude for Alex", quietly, in the place that says who did something. Renders nothing without an agent. */
-export function ViaText({ name, className }: { name?: string; className?: string }) {
-  return name ? <span className={cn("text-ink-faint whitespace-nowrap", className)}>via {name}</span> : null;
+/**
+ * "via Claude for Alex", quietly, in the place that says who did something. Renders nothing without an agent.
+ * With `person`, the one already named or shown beside it, a name that ends with them is said once:
+ * "Alex captured this via Claude", not "via Claude for Alex".
+ */
+export function ViaText({ name, person, className }: { name?: string; person?: string; className?: string }) {
+  return name ? (
+    <span className={cn("text-ink-faint whitespace-nowrap", className)}>via {withoutOwner(name, person)}</span>
+  ) : null;
 }
 
 export function AvatarStack({ people, size = "sm" }: { people: Person[]; size?: keyof typeof sizes }) {

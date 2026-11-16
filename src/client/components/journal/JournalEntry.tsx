@@ -268,7 +268,7 @@ function Meta({
         className,
       )}
     >
-      <ViaText name={via} className="hidden md:inline" />
+      <ViaText name={via} person={person?.name} className="hidden md:inline" />
       <time dateTime={new Date(at).toISOString()} title={fullTime(at)}>
         {time}
       </time>
@@ -345,7 +345,7 @@ const EventRow = forwardRef<HTMLAnchorElement, JournalEntryProps>(function Event
           {name.text}
         </span>
       </span>
-      <ViaText name={via} className="text-small hidden md:inline" />
+      <ViaText name={via} person={person?.name} className="text-small hidden md:inline" />
       {person && <Avatar person={person} size="xs" via={via} className="shrink-0" />}
     </PhotoRow>
   );
@@ -446,7 +446,7 @@ const AttemptRow = forwardRef<HTMLAnchorElement, JournalEntryProps>(function Att
           attemptId={attempt.id}
         />
       )}
-      <ViaText name={via} className="text-small hidden md:inline" />
+      <ViaText name={via} person={person?.name} className="text-small hidden md:inline" />
       {person && <Avatar person={person} size="xs" via={via} className="shrink-0" />}
     </Link>
   );

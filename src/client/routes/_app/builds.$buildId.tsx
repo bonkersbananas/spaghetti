@@ -740,7 +740,7 @@ function Build({ item }: { item: ItemView }) {
                         {madeVia && (
                           <>
                             {" "}
-                            <ViaText name={madeVia} />
+                            <ViaText name={madeVia} person={creator?.name} />
                           </>
                         )}
                         , building since{" "}
@@ -756,7 +756,7 @@ function Build({ item }: { item: ItemView }) {
                     {!fromIdea && madeVia && (
                       <>
                         {" "}
-                        <ViaText name={madeVia} />
+                        <ViaText name={madeVia} person={creator?.name} />
                       </>
                     )}
                   </p>

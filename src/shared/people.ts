@@ -32,3 +32,11 @@ export function namesPerson(forWhom: string | null | undefined, person: { name: 
   if (!asked || !name) return false;
   return asked === name || asked === name.split(/\s+/)[0];
 }
+
+/** An agent's name beside its owner: "Claude for Alex" next to Alex (or Alex Rivera) is "Claude"; any other name stays as it is. */
+export function withoutOwner(name: string, person?: string) {
+  if (!person) return name;
+  const names = [person, person.split(" ")[0]].map((owner) => ` for ${owner}`.toLowerCase());
+  const suffix = names.find((owner) => name.toLowerCase().endsWith(owner) && name.length > owner.length);
+  return suffix ? name.slice(0, -suffix.length) : name;
+}
