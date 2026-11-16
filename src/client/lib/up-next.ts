@@ -50,7 +50,25 @@ function sendUpNext(
   void job.finally(() => sending.delete(job));
 }
 
-/** Puts an idea in the Up next queue (at the end) or takes it off, at once, with an undo. */
+/** "1st", "2nd", "3rd", "11th", "22nd": a place in the queue. */
+function ordinal(place: number): string {
+  const tens = place % 100;
+  const suffix = tens >= 11 && tens <= 13 ? "th" : (["th", "st", "nd", "rd"][place % 10] ?? "th");
+  return `${place}${suffix}`;
+}
+
+/** How long after one idea goes in Up next another one joins its toast rather than raising a new one. */
+const BATCH_MS = 5000;
+const BATCH_TOAST = "up-next-added";
+
+/** The ideas put in Up next one after another (a run of U on the keyboard), so one toast says and undoes them all. */
+let batch: { at: number; added: Array<{ id: string; place: number }> } | null = null;
+
+/**
+ * Puts an idea in the Up next queue (at the end) or takes it off, at once, with an undo. The toast is one line ("In
+ * Up next · 3rd"); ideas added within a few seconds of each other share it ("3 added to Up next"), and its Undo
+ * takes them all off again.
+ */
 export function setUpNext(queryClient: QueryClient, item: Pick<ItemView, "id" | "upNext" | "pending">, on: boolean) {
   if (!canEdit(item.pending) || item.pending) return;
   const before = cachedItem(queryClient, item.id)?.upNext ?? item.upNext;
@@ -58,11 +76,33 @@ export function setUpNext(queryClient: QueryClient, item: Pick<ItemView, "id" | 
   const place = on ? endOfQueue(queryClient) : null;
   patchCachedItem(queryClient, item.id, (cached) => ({ ...cached, upNext: place }));
   sendUpNext(queryClient, item.id, on ? true : null, before, place);
-  toast.undo(on ? "Up next" : "Off the Up next list", {
-    description: on ? "At the end of the queue. Move it up whenever." : undefined,
+  if (!on || place === null) {
+    batch = null;
+    toast.undo("Off Up next", {
+      onUndo: () => {
+        patchCachedItem(queryClient, item.id, (cached) => ({ ...cached, upNext: before }));
+        sendUpNext(queryClient, item.id, before ?? null, place, before);
+      },
+    });
+    return;
+  }
+  const now = Date.now();
+  batch =
+    batch && now - batch.at < BATCH_MS
+      ? { at: now, added: [...batch.added, { id: item.id, place }] }
+      : { at: now, added: [{ id: item.id, place }] };
+  const added = batch.added;
+  const queued = (queryClient.getQueryData<Item[]>(itemKeys.list("ideas")) ?? []).filter(
+    (idea) => idea.upNext !== null,
+  );
+  toast.undo(added.length > 1 ? `${added.length} added to Up next` : `In Up next · ${ordinal(queued.length || 1)}`, {
+    id: BATCH_TOAST,
     onUndo: () => {
-      patchCachedItem(queryClient, item.id, (cached) => ({ ...cached, upNext: before }));
-      sendUpNext(queryClient, item.id, before ?? null, place, before);
+      if (batch?.added === added) batch = null;
+      for (const one of added) {
+        patchCachedItem(queryClient, one.id, (cached) => ({ ...cached, upNext: null }));
+        sendUpNext(queryClient, one.id, null, one.place, null);
+      }
     },
   });
 }

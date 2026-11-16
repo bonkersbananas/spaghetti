@@ -98,7 +98,9 @@ test("a question in words, a typo and a time are understood", async ({ page }) =
 
   await page.goto("/search?q=warping%20today");
   await expect(page.getByText("today", { exact: true })).toBeVisible();
-  await expect(page.getByRole("region", { name: "Attempts" }).getByRole("link")).toHaveCount(1);
+  // It warped, then the next one worked: that answers it, and the warped one follows.
+  await expect(page.getByRole("region", { name: "What fixed it" }).getByRole("link")).toHaveCount(1);
+  await expect(page.getByRole("region", { name: "Times it happened" }).getByRole("link")).toHaveCount(1);
 });
 
 test("a spool is found by its colour", async ({ page }) => {

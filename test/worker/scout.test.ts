@@ -34,18 +34,58 @@ const suggestion = (model: { url: string; title: string }, why = "For the kitche
   imageUrl: null as string | null,
 });
 
-type Answer = { json?: unknown; stopReason?: string; status?: number };
+type Answer = { json?: unknown; stopReason?: string; status?: number; blocks?: unknown[] };
 
 const pageFor = (title: string, image: string) =>
   `<html><head><meta property="og:title" content="${title}"><meta property="og:image" content="${image}"></head><body>${title}</body></html>`;
+/** What Thingiverse answers for a thing that isn't there: 200, and the site's own name as the title. */
+const THINGIVERSE_MISSING = pageFor(
+  "Thingiverse - The community for Open Hardware",
+  "https://cdn.thingiverse.com/og.webp",
+);
+/** What MakerWorld's page answers for a model number that isn't there: 200, and a design with no title. */
+const MAKERWORLD_MISSING = `<html><head><meta property="og:description" content="MakerWorld is the leading 3D printing model community"></head><body><script id="__NEXT_DATA__" type="application/json">{"props":{"pageProps":{"design":{"status":-1}}}}</script></body></html>`;
+const CHALLENGE = () =>
+  new Response("<html><head><title>Just a moment...</title></head></html>", {
+    status: 403,
+    headers: { "Content-Type": "text/html", "cf-mitigated": "challenge" },
+  });
+
+/** A web fetch tool result block, as the API returns one for a page Claude read. */
+const fetchedBlock = (url: string, title: string | null, text = "") => [
+  { type: "server_tool_use", id: `srvtoolu_${url.length}`, name: "web_fetch", input: { url } },
+  {
+    type: "web_fetch_tool_result",
+    tool_use_id: `srvtoolu_${url.length}`,
+    content: {
+      type: "web_fetch_result",
+      url,
+      retrieved_at: "2026-01-14T08:00:00Z",
+      content: {
+        type: "document",
+        title,
+        citations: null,
+        source: { type: "text", media_type: "text/plain", data: text },
+      },
+    },
+  },
+];
 
 /**
- * Stubs Anthropic, the two model sites and their image hosts. `dead` lists addresses whose page isn't there (404);
- * `challenge` those that answer with a bot challenge. Responses are made inside the stub.
+ * Stubs Anthropic, the two model sites (MakerWorld's pages and design API, Thingiverse's pages) and their image
+ * hosts, as they really answer. A model not in MODELS isn't there: MakerWorld's API says 404 and its page has no
+ * design; Thingiverse answers its soft "not found". `dead` lists models that are gone (404 everywhere);
+ * `challenge` those MakerWorld's bot protection challenges, page and API; `pageChallenge` only the page;
+ * `forbidden` those answered with a plain 403. Responses are made inside the stub.
  */
-function stubWeb(answer: Answer | (() => Answer), options: { dead?: string[]; challenge?: string[] } = {}) {
+function stubWeb(
+  answer: Answer | (() => Answer),
+  options: { dead?: string[]; challenge?: string[]; pageChallenge?: string[]; forbidden?: string[] } = {},
+) {
   const asked: string[] = [];
   const bodies: Array<Record<string, unknown>> = [];
+  const listed = (list: string[] | undefined, model: { url: string } | undefined) =>
+    !!model && !!list?.includes(model.url);
   vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
     const url = new URL(input instanceof Request ? input.url : String(input));
     asked.push(url.href);
@@ -66,28 +106,50 @@ function stubWeb(answer: Answer | (() => Answer), options: { dead?: string[]; ch
         type: "message",
         role: "assistant",
         model: "claude-opus-5-5",
-        content: next.stopReason === "refusal" ? [] : [{ type: "text", text: JSON.stringify(next.json) }],
+        content:
+          next.stopReason === "refusal"
+            ? []
+            : [...(next.blocks ?? []), { type: "text", text: JSON.stringify(next.json) }],
         stop_reason: next.stopReason ?? "end_turn",
         stop_sequence: null,
         usage: { input_tokens: 10, output_tokens: 10 },
       });
     }
-    if (url.hostname === "makerworld.com" || url.hostname === "www.thingiverse.com") {
-      if (options.dead?.some((dead) => url.href.startsWith(dead))) return new Response("gone", { status: 404 });
-      if (options.challenge?.some((c) => url.href.startsWith(c))) {
-        return new Response("<html>Just a moment</html>", { status: 403, headers: { "Content-Type": "text/html" } });
+    const api = /^\/api\/v1\/design-service\/design\/(\d+)$/.exec(url.pathname)?.[1];
+    if (url.hostname === "makerworld.com" && api) {
+      const model = Object.values(MODELS).find((m) => m.url.includes(`/models/${api}-`));
+      if (listed(options.challenge, model)) return CHALLENGE();
+      if (listed(options.forbidden, model)) return new Response("no", { status: 403 });
+      if (!model || listed(options.dead, model)) {
+        return Response.json({ code: 404, error: "The server cannot find the requested resource." }, { status: 404 });
       }
-      const model = Object.values(MODELS).find((m) => url.pathname.includes(m.url.split("/").pop() ?? "?"));
-      return new Response(pageFor(model?.title ?? "Some model", "https://cdn.thingiverse.com/pic.jpg"), {
-        headers: { "Content-Type": "text/html" },
+      return Response.json({
+        id: Number(api),
+        title: "抽屉分隔板",
+        titleTranslated: model.title,
+        coverUrl: "https://makerworld.bblmw.com/makerworld/model/cover.jpg",
       });
     }
-    if (url.hostname === "cdn.thingiverse.com")
+    if (url.hostname === "makerworld.com" || url.hostname === "www.thingiverse.com") {
+      const model = Object.values(MODELS).find((m) => url.pathname.includes(m.url.split("/").pop() ?? "?"));
+      if (listed(options.dead, model)) return new Response("gone", { status: 404 });
+      if (listed(options.challenge, model) || listed(options.pageChallenge, model)) return CHALLENGE();
+      if (listed(options.forbidden, model)) return new Response("no", { status: 403 });
+      const html = model
+        ? pageFor(model.title, "https://cdn.thingiverse.com/pic.jpg")
+        : url.hostname === "makerworld.com"
+          ? MAKERWORLD_MISSING
+          : THINGIVERSE_MISSING;
+      return new Response(html, { headers: { "Content-Type": "text/html" } });
+    }
+    if (url.hostname === "cdn.thingiverse.com" || url.hostname === "makerworld.bblmw.com")
       return new Response(jpeg(), { headers: { "Content-Type": "image/jpeg" } });
     return new Response("nope", { status: 404 });
   });
   return { asked, bodies };
 }
+
+const detail = async () => JSON.parse((await rounds()).results[0]?.detail ?? "{}");
 
 const good = {
   json: { suggestions: [suggestion(MODELS.drawer), suggestion(MODELS.planter), suggestion(MODELS.clips)] },
@@ -243,7 +305,17 @@ describe("the weekly scout", () => {
     expect(await scoutTick(env, wed)).toBe("done");
     const rows = await env.DB.prepare("SELECT title FROM scout_picks ORDER BY position").all<{ title: string }>();
     expect(rows.results.map((row) => row.title)).toEqual([MODELS.drawer.title, MODELS.vase.title]);
-    expect(JSON.parse((await rounds()).results[0]?.detail ?? "{}")).toMatchObject({ malformed: 2, dead: 2, kept: 2 });
+    expect(await detail()).toMatchObject({
+      malformed: 2,
+      dead: 2,
+      deadBy: { not_found: 1, challenge: 1 },
+      aliveBy: { api: 2 },
+      kept: 2,
+      dropped: [
+        { url: MODELS.planter.url, by: "not_found", inSearch: false },
+        { url: MODELS.clips.url, by: "challenge", inSearch: false },
+      ],
+    });
   });
 
   it("shows nothing when every link is dead, and says why", async () => {
@@ -251,6 +323,116 @@ describe("the weekly scout", () => {
     expect(await scoutTick(env, wed)).toBe("nothing");
     expect((await rounds()).results[0]).toMatchObject({ status: "nothing", outcome: "all_dead" });
     expect((await scout()).picks).toEqual([]);
+  });
+
+  it("reads MakerWorld's design API when the page is behind a bot challenge, as it is for a Worker in production", async () => {
+    stubWeb(good, { pageChallenge: [MODELS.drawer.url, MODELS.clips.url] });
+    expect(await scoutTick(env, wed)).toBe("done");
+    const rows = await env.DB.prepare("SELECT title, picture_type FROM scout_picks ORDER BY position").all<{
+      title: string;
+      picture_type: string | null;
+    }>();
+    // The English title, not the designer's own, and the cover from MakerWorld's image host.
+    expect(rows.results).toEqual([
+      { title: MODELS.drawer.title, picture_type: "image/jpeg" },
+      { title: MODELS.planter.title, picture_type: "image/jpeg" },
+      { title: MODELS.clips.title, picture_type: "image/jpeg" },
+    ]);
+    expect(await detail()).toMatchObject({ dead: 0, aliveBy: { api: 2, page: 1 }, kept: 3 });
+  });
+
+  it("drops a made-up link: MakerWorld's number that isn't there, and Thingiverse's soft 'not found'", async () => {
+    const web = stubWeb({
+      json: {
+        suggestions: [
+          suggestion({ url: "https://makerworld.com/en/models/9999991-plausible-hook", title: "Plausible hook" }),
+          suggestion({ url: "https://www.thingiverse.com/thing:9999992", title: "Plausible clip" }),
+          suggestion(MODELS.vase),
+        ],
+      },
+      blocks: [
+        { type: "server_tool_use", id: "srvtoolu_s", name: "web_search", input: { query: "spiral vase" } },
+        {
+          type: "web_search_tool_result",
+          tool_use_id: "srvtoolu_s",
+          content: [
+            {
+              type: "web_search_result",
+              url: "https://www.thingiverse.com/thing:9999992",
+              title: "x",
+              encrypted_content: "e",
+              page_age: null,
+            },
+          ],
+        },
+      ],
+    });
+    expect(await scoutTick(env, wed)).toBe("done");
+    const rows = await env.DB.prepare("SELECT title FROM scout_picks").all<{ title: string }>();
+    expect(rows.results.map((row) => row.title)).toEqual([MODELS.vase.title]);
+    expect(await detail()).toMatchObject({
+      searches: 1,
+      fetches: 0,
+      dead: 2,
+      deadBy: { not_found: 1, no_model: 1 },
+      dropped: [
+        { url: "https://makerworld.com/en/models/9999991-plausible-hook", by: "not_found", inSearch: false },
+        { url: "https://www.thingiverse.com/thing:9999992", by: "no_model", inSearch: true },
+      ],
+    });
+    // MakerWorld's own "no such model" is the answer: its page isn't asked after it.
+    expect(web.asked.some((url) => url.includes("/models/9999991-plausible-hook"))).toBe(false);
+  });
+
+  it("drops a link the Worker gets a plain 403 for, unless Claude's web fetch read the page in this answer", async () => {
+    stubWeb(
+      {
+        json: { suggestions: [suggestion(MODELS.planter), suggestion(MODELS.vase)] },
+        // Claude read the planter's page; the vase it never opened.
+        blocks: fetchedBlock(
+          `${MODELS.planter.url}`,
+          "Planter with a saucer, read by Claude - Thingiverse",
+          "A planter. ![photo](https://cdn.thingiverse.com/assets/planter.jpg) https://evil.example/x.jpg",
+        ),
+      },
+      { forbidden: [MODELS.planter.url, MODELS.vase.url] },
+    );
+    expect(await scoutTick(env, wed)).toBe("done");
+    const rows = await env.DB.prepare("SELECT key, title, picture_type FROM scout_picks").all<
+      Record<string, unknown>
+    >();
+    // The title the fetch read, without the site's name; the picture from the site's image host in the page's text.
+    expect(rows.results).toEqual([
+      { key: "thingiverse:6100002", title: "Planter with a saucer, read by Claude", picture_type: "image/jpeg" },
+    ]);
+    expect(await detail()).toMatchObject({
+      fetches: 1,
+      dead: 1,
+      deadBy: { http_403: 1 },
+      aliveBy: { web_fetch: 1 },
+      kept: 1,
+    });
+  });
+
+  it("doesn't take a challenge or a soft 'not found' that Claude's web fetch read for a live page", async () => {
+    stubWeb(
+      {
+        json: {
+          suggestions: [
+            suggestion(MODELS.clips),
+            suggestion({ url: "https://www.thingiverse.com/thing:9999993", title: "Clip" }),
+          ],
+        },
+        blocks: [
+          ...fetchedBlock(MODELS.clips.url, "Just a moment..."),
+          ...fetchedBlock("https://www.thingiverse.com/thing:9999993", "Thingiverse - The community for Open Hardware"),
+        ],
+      },
+      { challenge: [MODELS.clips.url] },
+    );
+    expect(await scoutTick(env, wed)).toBe("nothing");
+    expect((await rounds()).results[0]).toMatchObject({ status: "nothing", outcome: "all_dead" });
+    expect(await detail()).toMatchObject({ dead: 2, deadBy: { challenge: 1, no_model: 1 }, kept: 0 });
   });
 
   it("takes a title and picture from the page itself, not Claude's words, and asks nothing else of the web", async () => {
@@ -264,9 +446,9 @@ describe("the weekly scout", () => {
     expect(await scoutTick(env, wed)).toBe("done");
     const row = await env.DB.prepare("SELECT title FROM scout_picks").first<{ title: string }>();
     expect(row?.title).toBe(MODELS.drawer.title);
-    expect(web.asked.filter((url) => !/cloudflare-dns|anthropic|makerworld\.com|thingiverse\.com/.test(url))).toEqual(
-      [],
-    );
+    expect(
+      web.asked.filter((url) => !/cloudflare-dns|anthropic|makerworld\.com|bblmw\.com|thingiverse\.com/.test(url)),
+    ).toEqual([]);
   });
 
   it("is quiet about a refusal and a broken call, and tries a stuck week only once more", async () => {

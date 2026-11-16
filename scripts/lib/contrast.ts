@@ -89,6 +89,8 @@ export const pairs: Pair[] = [
   { label: "Hint in a hovered well on a sheet", fg: "ink-faint", bg: "ink/0.06", under: "lifted", min: 4.5 },
   { label: "Error text", fg: "tomato-ink", bg: "paper", min: 4.5 },
   { label: "Error text on cards", fg: "tomato-ink", bg: "cream", min: 4.5 },
+  { label: "A menu row that removes", fg: "tomato-ink", bg: "lifted", min: 4.5 },
+  { label: "A menu row that removes, hovered", fg: "tomato-ink", bg: "ink/0.05", under: "lifted", min: 4.5 },
   { label: "Printer check", fg: "semolina-ink", bg: "paper", min: 4.5 },
   { label: "Printer check on cards", fg: "semolina-ink", bg: "cream", min: 4.5 },
   { label: "Printer check on sheets", fg: "semolina-ink", bg: "lifted", min: 4.5 },

@@ -2,6 +2,7 @@ import { displayName } from "@shared/people";
 import { searchTerms } from "@shared/search";
 import { useState } from "react";
 import { Avatar } from "@/components/ui/Avatar";
+import { ChangeLine } from "@/components/ui/ChangeLine";
 import { ToggleChip } from "@/components/ui/Chip";
 import { ChipDivider, ChipRow, FilterGroup } from "@/components/ui/FilterChips";
 import { Highlight } from "@/components/ui/Highlight";
@@ -56,6 +57,15 @@ export function SearchSection() {
           <p className="text-body text-ink-soft">
             <Highlight text="Corners warped off the cool plate. PETG wants the textured sheet." terms={terms} />
           </p>
+          <Label>ChangeLine: what changed since the attempt before, or since a failure in “What fixed it”</Label>
+          <ChangeLine
+            label="Changed since attempt 2: "
+            changes={[
+              { key: "bed", text: "bed 60 → 65 °C" },
+              { key: "dried", text: "dried the filament" },
+              { key: "brim", text: "added a brim" },
+            ]}
+          />
           <Label>MetaList: a dot never begins or ends a line (narrow it to see)</Label>
           <div className="bg-ink/4 w-56 rounded-sm p-2">
             <MetaList className="text-small text-ink-faint">

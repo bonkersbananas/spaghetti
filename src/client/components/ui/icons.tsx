@@ -87,6 +87,7 @@ export {
   Play as PlayIcon,
   Plus as PlusIcon,
   Printer as PrinterIcon,
+  PushPin as MakeCoverIcon,
   QrCode as QrIcon,
   Robot as AgentIcon,
   Ruler as RulerIcon,
