@@ -1,6 +1,6 @@
 import type { Person } from "@shared/api";
 import { type PersonColor, withoutOwner } from "@shared/people";
-import { type CSSProperties, useState } from "react";
+import { useState } from "react";
 import { cn } from "@/lib/cn";
 import { initials } from "@/lib/initials";
 import { AgentIcon } from "./icons";
@@ -36,31 +36,16 @@ interface AvatarProps {
 }
 
 /**
- * The agent mark, per size: a small rounded square (an agent is never a circle) at the lower right, standing out
- * past the edge by `out`, with the glyph inside. `face`, `mark`, `out` and `gap` are px, for the cutout below.
+ * The agent mark, per size: a small rounded square (an agent is never a circle) at the lower right, standing a little
+ * past the circle, with the glyph inside; `cut` takes its place out of the face (the agent-cut utilities in tokens.css,
+ * whose geometry matches these sizes).
  */
 const marks = {
-  xs: { face: 24, mark: 10, out: 2, gap: 1.5, glyph: 9, className: "size-2.5 -right-0.5 -bottom-0.5" },
-  sm: { face: 28, mark: 12, out: 2, gap: 1.5, glyph: 10, className: "size-3 -right-0.5 -bottom-0.5" },
-  md: { face: 36, mark: 16, out: 3, gap: 2, glyph: 12, className: "size-4 -right-0.75 -bottom-0.75" },
-  lg: { face: 48, mark: 20, out: 4, gap: 2, glyph: 15, className: "size-5 -right-1 -bottom-1" },
+  xs: { glyph: 9, cut: "agent-cut-xs", className: "size-2.5 -right-0.5 -bottom-0.5" },
+  sm: { glyph: 10, cut: "agent-cut-sm", className: "size-3 -right-0.5 -bottom-0.5" },
+  md: { glyph: 12, cut: "agent-cut-md", className: "size-4 -right-0.75 -bottom-0.75" },
+  lg: { glyph: 15, cut: "agent-cut-lg", className: "size-5 -right-1 -bottom-1" },
 } as const;
-
-/**
- * Where the mark sits, cut out of the face with a hair of space around it, so it reads on any surface (paper, cream,
- * a sheet, a photo) without a ring in the surface's color. A mask, so the face's own picture is never covered.
- */
-const cutouts = Object.fromEntries(
-  Object.entries(marks).map(([size, { face, mark, out, gap }]) => {
-    const from = face + out - mark - gap;
-    const to = face + out + gap + 1;
-    const r = mark * 0.3 + gap;
-    const hole = `M${from + r} ${from}H${to - r}A${r} ${r} 0 0 1 ${to} ${from + r}V${to - r}A${r} ${r} 0 0 1 ${to - r} ${to}H${from + r}A${r} ${r} 0 0 1 ${from} ${to - r}V${from + r}A${r} ${r} 0 0 1 ${from + r} ${from}Z`;
-    const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${face} ${face}"><path fill-rule="evenodd" d="M0 0H${face}V${face}H0Z${hole}"/></svg>`;
-    const url = `url("data:image/svg+xml,${encodeURIComponent(svg)}")`;
-    return [size, { maskImage: url, WebkitMaskImage: url, maskSize: "100% 100%", WebkitMaskSize: "100% 100%" }];
-  }),
-) as Record<keyof typeof sizes, CSSProperties>;
 
 /**
  * A person's initials on their color (or their picture). Shown beside what they did.
@@ -74,13 +59,13 @@ export function Avatar({ person, size = "md", ringed = false, decorative = false
   const face = (
     <span
       {...(decorative ? { "aria-hidden": true } : { role: "img", "aria-label": label, title: label })}
-      style={via ? cutouts[size] : undefined}
       className={cn(
         "text-on-accent relative inline-flex shrink-0 items-center justify-center rounded-full font-bold select-none",
         colors[person.color],
         sizes[size],
         ringed && "ring-paper ring-2",
         // Small, two letters fill the circle: nudged a pixel up and left, they keep clear of the mark's cutout.
+        via && marks[size].cut,
         via && (size === "xs" || size === "sm") && "pr-0.5 pb-0.5",
         !via && className,
       )}
@@ -90,7 +75,6 @@ export function Avatar({ person, size = "md", ringed = false, decorative = false
     </span>
   );
   if (!via) return face;
-  const mark = marks[size];
   return (
     <span className={cn("relative inline-flex shrink-0", className)}>
       {face}
@@ -98,10 +82,10 @@ export function Avatar({ person, size = "md", ringed = false, decorative = false
         aria-hidden
         className={cn(
           "bg-ink-faint text-paper rounded-mark absolute inline-flex items-center justify-center",
-          mark.className,
+          marks[size].className,
         )}
       >
-        <AgentIcon size={mark.glyph} weight="fill" />
+        <AgentIcon size={marks[size].glyph} weight="fill" />
       </span>
     </span>
   );
