@@ -118,7 +118,11 @@ function readGeneric(html: string): PageFacts {
 
 interface MakerWorldDesign {
   title?: string;
+  /** The API answers in the designer's language and adds an English translation; the page is already English. */
+  titleTranslated?: string | null;
   summary?: string;
+  summaryTranslated?: string | null;
+  tagsTranslated?: string[] | null;
   license?: string;
   coverUrl?: string;
   designCreator?: { name?: string };
@@ -154,7 +158,30 @@ function readMakerWorld(html: string): PageFacts | null {
   } catch {
     return null;
   }
-  if (!design?.title) return null;
+  return design ? readDesign(design) : null;
+}
+
+/**
+ * MakerWorld's design as its public API answers it (`/api/v1/design-service/design/<id>`): the same object the page
+ * ships with, in the designer's language with English translations beside it. The API answers where the page is
+ * behind a bot challenge, so it is how a Worker reads a model the page won't show it. Null for anything else.
+ */
+export function extractMakerWorldDesign(json: unknown, id?: string): PageFacts | null {
+  if (!json || typeof json !== "object") return null;
+  const design = json as MakerWorldDesign & { id?: unknown };
+  // The answer must be the design asked for, not an error object or another model.
+  if (id !== undefined && String(design.id) !== id) return null;
+  const facts = readDesign({
+    ...design,
+    title: design.titleTranslated || design.title,
+    summary: design.summaryTranslated || design.summary,
+    tags: design.tagsTranslated?.length ? design.tagsTranslated : design.tags,
+  });
+  return facts?.title && !isSiteTitle(facts.title) ? facts : null;
+}
+
+function readDesign(design: MakerWorldDesign): PageFacts | null {
+  if (!design.title) return null;
   const pictures = design.designExtension;
   const profiles = (design.instances ?? []).slice(0, 4).map((instance) => {
     const materials = unique((instance.instanceFilaments ?? []).map((filament) => filament.type ?? "").filter(Boolean));
@@ -196,18 +223,35 @@ function readMakerWorld(html: string): PageFacts | null {
   };
 }
 
-/** The facts a page states, or null when there is nothing in it to draft from. */
+/**
+ * A title that names the site, not a model: what a site's soft "not found" page says (Thingiverse answers a thing
+ * that doesn't exist with 200 and "Thingiverse - The community for Open Hardware"), or a challenge or error page.
+ */
+export function isSiteTitle(title: string): boolean {
+  const text = title.replace(/\s+/g, " ").trim();
+  return (
+    /^(thingiverse|makerworld|printables)(\.com)?(\s*[-|:–—]\s.*)?$/i.test(text) ||
+    /^(just a moment|attention required|access denied|page not found|not found)\b/i.test(text) ||
+    /^(error|404|403)(\s+\d{3})?(\s*[-|:–—]\s.*|\s+not found.*)?$/i.test(text)
+  );
+}
+
+/**
+ * The facts a model page states, or null when it isn't one: nothing to draft from, or a page that doesn't name a
+ * model (a soft "not found", a challenge), however much else it says.
+ */
 export function extractModelPage(site: ModelSiteId, html: string): PageFacts | null {
   const specific = site === "makerworld" ? readMakerWorld(html) : null;
   const facts = specific ?? readGeneric(html);
   const generic = specific ? readGeneric(html) : facts;
+  const named = (title: string | null) => (title && !isSiteTitle(title) ? title : null);
   const merged: PageFacts = {
-    title: facts.title ?? generic.title,
+    title: named(facts.title) ?? named(generic.title),
     designer: facts.designer ?? generic.designer,
     license: facts.license ?? generic.license,
     imageUrls: unique([...facts.imageUrls, ...generic.imageUrls]),
     description: facts.description || generic.description,
     profiles: facts.profiles,
   };
-  return merged.title || merged.description ? merged : null;
+  return merged.title ? merged : null;
 }
