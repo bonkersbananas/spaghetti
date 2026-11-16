@@ -1,5 +1,6 @@
-import type { AttemptHit, ItemHit, Recipe, Spool, Twist } from "@shared/api";
+import type { AttemptHit, FixHit, ItemHit, Recipe, Spool, Twist } from "@shared/api";
 import { tagLabel } from "@shared/attempts";
+import { isFailure } from "@shared/fixes";
 import { searchTerms } from "@shared/search";
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, type LinkProps, useNavigate } from "@tanstack/react-router";
@@ -15,7 +16,7 @@ import { ToggleChip } from "@/components/ui/Chip";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { TextField } from "@/components/ui/Field";
 import { ChipRow } from "@/components/ui/FilterChips";
-import { RecentIcon, SearchIcon, TagIcon } from "@/components/ui/icons";
+import { ExpandIcon, RecentIcon, SearchIcon, TagIcon } from "@/components/ui/icons";
 import { Kbd } from "@/components/ui/Kbd";
 import { Overline } from "@/components/ui/Overline";
 import { RowSkeleton } from "@/components/ui/Skeleton";
@@ -46,11 +47,23 @@ export const Route = createFileRoute("/_app/search")({
 const DEBOUNCE_MS = 140;
 
 type Result =
+  | { kind: "fix"; hit: FixHit; link: LinkProps }
   | { kind: "item"; hit: ItemHit; link: LinkProps }
   | { kind: "attempt"; hit: AttemptHit; link: LinkProps }
   | { kind: "recipe"; hit: Recipe }
   | { kind: "twist"; hit: Twist; link: LinkProps }
   | { kind: "spool"; hit: Spool; link: LinkProps };
+
+/** A group of results under its caption. `total` is how many there are when only some are shown. */
+interface Group {
+  label: string;
+  tone?: "basil";
+  rows: Result[];
+  total?: number;
+}
+
+/** Failures shown under what fixed them before "Show all". */
+const FAILURES_FOLDED = 3;
 
 /** An attempt that worked: the answer to "what worked". */
 const didWork = (r: Result): r is Extract<Result, { kind: "attempt" }> =>
@@ -94,28 +107,60 @@ function Search() {
   // What the server made of the question (filler dropped, typos mended, synonyms added) is what gets marked.
   const shownTerms = useMemo(() => shown?.terms ?? searchTerms(shown?.q ?? ""), [shown?.terms, shown?.q]);
 
-  const list = useMemo<Result[]>(() => {
+  // A problem's failures fold to a few under what fixed it; "Show all" opens them, for this search only.
+  const searchKey = `${q}|${JSON.stringify(filters)}`;
+  const [allFailuresFor, setAllFailuresFor] = useState<string | null>(null);
+  const allFailures = allFailuresFor === searchKey;
+
+  // In the order they are drawn, so the arrow keys follow the page.
+  const groups = useMemo<Group[]>(() => {
     if (!shown) return [];
-    // In the order they are drawn, so the arrow keys follow the page: what worked leads the attempts.
-    const attempts = shown.attempts.map((hit) => ({ kind: "attempt" as const, hit, link: attemptLink(hit) }));
+    const fixes = shown.fixes ?? [];
+    const fixed = new Set(fixes.map((fix) => fix.attempt.id));
+    // What fixed a problem is said once, there; what worked leads the other attempts.
+    const attempts = shown.attempts
+      .filter((hit) => !fixed.has(hit.attempt.id))
+      .map((hit) => ({ kind: "attempt" as const, hit, link: attemptLink(hit) }));
+    // Under what fixed it, the failures the words found are the times it happened.
+    const failures = fixes.length ? attempts.filter((r) => isFailure(r.hit.attempt.outcome)) : [];
     return [
-      ...shown.recipes.map((hit) => ({ kind: "recipe" as const, hit })),
-      ...(shown.twists ?? []).map((hit) => ({
-        kind: "twist" as const,
-        hit,
-        link: { to: "/twists/$twistId", params: { twistId: hit.id } } as LinkProps,
-      })),
-      ...attempts.filter(didWork),
-      ...shown.builds.map((hit) => ({ kind: "item" as const, hit, link: itemLink(hit) })),
-      ...attempts.filter((r) => !didWork(r)),
-      ...shown.ideas.map((hit) => ({ kind: "item" as const, hit, link: itemLink(hit) })),
-      ...(shown.spools ?? []).map((hit) => ({
-        kind: "spool" as const,
-        hit,
-        link: { to: "/pantry/$spoolId", params: { spoolId: hit.id } } as LinkProps,
-      })),
+      {
+        label: "What fixed it",
+        tone: "basil",
+        rows: fixes.map((hit) => ({ kind: "fix" as const, hit, link: attemptLink(hit) })),
+      },
+      { label: "Recipes", rows: shown.recipes.map((hit) => ({ kind: "recipe" as const, hit })) },
+      {
+        label: "Twists",
+        rows: (shown.twists ?? []).map((hit) => ({
+          kind: "twist" as const,
+          hit,
+          link: { to: "/twists/$twistId", params: { twistId: hit.id } } as LinkProps,
+        })),
+      },
+      { label: "What worked", tone: "basil", rows: attempts.filter(didWork) },
+      {
+        label: "Builds",
+        rows: shown.builds.map((hit) => ({ kind: "item" as const, hit, link: itemLink(hit) })),
+      },
+      {
+        label: "Times it happened",
+        rows: allFailures ? failures : failures.slice(0, FAILURES_FOLDED),
+        total: failures.length,
+      },
+      { label: "Attempts", rows: attempts.filter((r) => !didWork(r) && !failures.includes(r)) },
+      { label: "Ideas", rows: shown.ideas.map((hit) => ({ kind: "item" as const, hit, link: itemLink(hit) })) },
+      {
+        label: "Spools",
+        rows: (shown.spools ?? []).map((hit) => ({
+          kind: "spool" as const,
+          hit,
+          link: { to: "/pantry/$spoolId", params: { spoolId: hit.id } } as LinkProps,
+        })),
+      },
     ];
-  }, [shown]);
+  }, [shown, allFailures]);
+  const list = useMemo(() => groups.flatMap((group) => group.rows), [groups]);
 
   // Arrow keys move through the results, from the box or anywhere; Enter opens one.
   const [active, setActive] = useState(-1);
@@ -156,7 +201,7 @@ function Search() {
     inputRef.current?.focus();
   };
 
-  const total = list.length;
+  const total = groups.reduce((sum, group) => sum + (group.total ?? group.rows.length), 0);
   // The words the closest search ran on (filler dropped, no synonyms: the server lists them): one tap searches for just one.
   const typedWords = shown?.closest ?? [];
   let index = -1;
@@ -179,7 +224,7 @@ function Search() {
     return (
       <li
         key={
-          result.kind === "attempt"
+          result.kind === "attempt" || result.kind === "fix"
             ? result.hit.attempt.id
             : result.kind === "recipe" || result.kind === "spool" || result.kind === "twist"
               ? result.hit.id
@@ -187,7 +232,19 @@ function Search() {
         }
         className="list-none"
       >
-        {result.kind === "attempt" ? (
+        {result.kind === "fix" ? (
+          <Suspense fallback={<RowSkeleton />}>
+            <Extra
+              part="fix"
+              innerRef={common.ref}
+              fix={result.hit}
+              terms={common.terms}
+              selected={common.selected}
+              onHover={common.onHover}
+              onOpen={common.onOpen}
+            />
+          </Suspense>
+        ) : result.kind === "attempt" ? (
           <>
             <AttemptResult hit={result.hit} {...common} />
             {didWork(result) && (
@@ -241,18 +298,6 @@ function Search() {
       </li>
     );
   };
-  const groups: Array<[string, Result[]]> = shown
-    ? [
-        ["Recipes", list.filter((r) => r.kind === "recipe")],
-        ["Twists", list.filter((r) => r.kind === "twist")],
-        ["What worked", list.filter(didWork)],
-        ["Builds", list.filter((r) => r.kind === "item" && r.hit.item.stage !== "idea")],
-        ["Attempts", list.filter((r) => r.kind === "attempt" && !didWork(r))],
-        ["Ideas", list.filter((r) => r.kind === "item" && r.hit.item.stage === "idea")],
-        ["Spools", list.filter((r) => r.kind === "spool")],
-      ]
-    : [];
-
   return (
     <>
       <PageHeader
@@ -347,18 +392,29 @@ function Search() {
                   )}
                 >
                   {groups.map(
-                    ([label, rows]) =>
+                    ({ label, tone, rows, total: all = rows.length }) =>
                       rows.length > 0 && (
                         <section key={label} aria-label={label}>
-                          <Overline
-                            as="h2"
-                            count={rows.length}
-                            tone={label === "What worked" ? "basil" : "faint"}
-                            className="mb-2 block"
-                          >
+                          <Overline as="h2" count={all} tone={tone ?? "faint"} className="mb-2 block">
                             {label}
                           </Overline>
                           <ol className="-mx-2 flex flex-col gap-1">{rows.map(row)}</ol>
+                          {all > rows.length && (
+                            <Button
+                              variant="quiet"
+                              size="sm"
+                              icon={ExpandIcon}
+                              className="mt-1 -ml-2"
+                              onClick={() => {
+                                // The button goes: the first row it brings in takes the focus, so the keyboard keeps its place.
+                                const next = list.indexOf(rows[rows.length - 1] as Result) + 1;
+                                setAllFailuresFor(searchKey);
+                                requestAnimationFrame(() => refs.current[next]?.focus());
+                              }}
+                            >
+                              Show all {all}
+                            </Button>
+                          )}
                         </section>
                       ),
                   )}

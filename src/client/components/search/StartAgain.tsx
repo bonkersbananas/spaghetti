@@ -15,7 +15,16 @@ import { sessionQuery } from "@/lib/queries";
  * "Start again": a new attempt on the same build with the settings of one that worked, in one tap. It is logged
  * as printing (the way the sheet's Start does), the build opens on it, and Undo takes it back.
  */
-export function StartAgain({ hit, onStart }: { hit: AttemptHit; onStart?: () => void }) {
+export function StartAgain({
+  hit,
+  onStart,
+  children = "Start again",
+}: {
+  hit: AttemptHit;
+  onStart?: () => void;
+  /** The button's words: "Start again with these" under what fixed a problem. */
+  children?: string;
+}) {
   const { data: me } = useQuery(sessionQuery);
   const queryClient = useQueryClient();
   const navigate = useNavigate();
@@ -56,7 +65,7 @@ export function StartAgain({ hit, onStart }: { hit: AttemptHit; onStart?: () => 
         void navigate({ to: "/builds/$buildId", params: { buildId: hit.item.id }, search: { attempt: id } });
       }}
     >
-      Start again
+      {children}
     </Button>
   );
 }

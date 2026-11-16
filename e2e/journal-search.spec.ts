@@ -221,3 +221,65 @@ test("a row without a photo shows its icon once, and a print in progress shows h
   await expect(card.getByRole("progressbar", { name: "Print progress" })).toBeVisible();
   await expect(card.getByText(/min left/)).toBeVisible();
 });
+
+test("a problem's word leads with what fixed it, and the times it happened fold to three", {
+  tag: "@phone",
+}, async ({ page, isMobile }) => {
+  // The swatch box of the seed: it peeled, still warped with a brim, then lay flat with the filament dried.
+  const box = await build(page, "Swatch box", [
+    {
+      outcome: "failed",
+      ago: 50 * HOUR,
+      note: "Corners peeled off the cool plate",
+      failureTags: ["warping", "bed-adhesion"],
+      settings: petg(70, { bedType: "Cool Plate" }),
+    },
+    { outcome: "partial", ago: 30 * HOUR, note: "Long walls still lift", failureTags: ["warping"], settings: petg(80) },
+    { outcome: "success", ago: 10 * HOUR, note: "Flat as a board", settings: petg(80, { filamentDried: true }) },
+  ]);
+  // Warped prints that never got better: still there, under what fixed it.
+  for (const title of ["Cable chain", "Drawer divider", "Vase"])
+    await build(page, title, [
+      { outcome: "failed", ago: 5 * HOUR, note: "Curled at the ends", failureTags: ["warping"], settings: pla },
+    ]);
+
+  await page.goto("/search?q=warping");
+  const fixed = page.getByRole("region", { name: "What fixed it" });
+  const fix = fixed.getByRole("link", { name: /Swatch box · attempt 3/ });
+  await expect(fix).toBeVisible();
+  // The failure it came after, what changed since then, and its note.
+  await expect(fix).toContainText(/After Partly .* · Warping/);
+  await expect(fix).toContainText("dried the filament");
+  await expect(fix).toContainText("Flat as a board");
+  // It leads: nothing comes before it, and it isn't said again under What worked.
+  await expect(page.getByRole("region").first()).toHaveAccessibleName("What fixed it");
+  await expect(page.getByRole("region", { name: "What worked" })).toHaveCount(0);
+
+  // The five failures fold to three, and "Show all 5" opens the rest.
+  const happened = page.getByRole("region", { name: "Times it happened" });
+  await expect(happened.getByRole("link")).toHaveCount(3);
+  await happened.getByRole("button", { name: "Show all 5" }).click();
+  await expect(happened.getByRole("link")).toHaveCount(5);
+  await expect(happened.getByRole("button", { name: /Show all/ })).toHaveCount(0);
+
+  // One tap starts again on those settings.
+  await fixed.getByRole("button", { name: /Start again/ }).click();
+  await expect(page).toHaveURL(new RegExp(`/builds/${box}\\?attempt=`));
+  await expect(page.getByText("Started again")).toBeVisible();
+  await expect
+    .poll(async () => {
+      const { item } = await (await page.request.get(`/api/items/${box}`)).json();
+      const latest = item.attempts.at(-1);
+      return item.attempts.length === 4 && latest.outcome === null ? latest.settings.filamentDried : null;
+    })
+    .toBe(true);
+
+  if (isMobile) return;
+  // On a laptop the palette answers the same question the same way.
+  await page.goto("/ideas");
+  await page.keyboard.press("ControlOrMeta+k");
+  const dialog = page.getByRole("dialog", { name: "Command palette" });
+  await dialog.getByRole("combobox", { name: "Jump to or run" }).pressSequentially("warping");
+  const group = dialog.getByRole("group", { name: "What fixed it" });
+  await expect(group.getByRole("option", { name: /Swatch box, attempt 3/ })).toContainText("dried the filament");
+});

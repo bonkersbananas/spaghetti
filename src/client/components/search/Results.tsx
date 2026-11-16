@@ -1,5 +1,5 @@
-import type { AttemptHit, ItemHit, Photo as PhotoData } from "@shared/api";
-import { type TagKind, tagLabel } from "@shared/attempts";
+import type { AttemptHit, FixHit, ItemHit, Photo as PhotoData } from "@shared/api";
+import { OUTCOME_LABELS, type TagKind, tagLabel } from "@shared/attempts";
 import { displayName } from "@shared/people";
 import { highlight, type SearchTerm, snippetSegments } from "@shared/search";
 import { inlineTime, relativeTime } from "@shared/time";
@@ -41,6 +41,14 @@ export function itemLink(hit: ItemHit): LinkProps {
     : { to: "/builds/$buildId", params: { buildId: hit.item.id }, search };
 }
 
+/** "After Partly on 12 Oct · Warping": the failure a fix came after, and the problem it had. */
+export function afterWords(after: FixHit["after"], tags: string[]): string {
+  const when = inlineTime(after.printedAt);
+  // "yesterday", "3 days ago" read on their own; a date needs its "on".
+  const on = /ago$|^yesterday$|^just now$/.test(when) ? when : `on ${when}`;
+  return [`After ${OUTCOME_LABELS[after.outcome]} ${on}`, tags.join(", ")].filter(Boolean).join(" · ");
+}
+
 interface RowProps {
   link: LinkProps;
   photo: PhotoData | null;
@@ -52,7 +60,7 @@ interface RowProps {
 }
 
 /** A result: its photo first, the words that matched beside it. */
-const ResultRow = forwardRef<HTMLAnchorElement, RowProps>(function ResultRow(
+export const ResultRow = forwardRef<HTMLAnchorElement, RowProps>(function ResultRow(
   { link, photo, fallbackIcon: FallbackIcon, selected, onPointerEnter, onOpen, children },
   ref,
 ) {

@@ -3381,7 +3381,8 @@ export const shots: Shot[] = [
     name: "search-results",
     path: "/search?q=PETG%20warping",
     prepare: async (page) => {
-      await page.getByRole("region", { name: "Attempts" }).waitFor();
+      // What fixed it leads (the swatch box's dried filament), then the times it happened.
+      await page.getByRole("region", { name: "Times it happened" }).waitFor();
       await page.getByRole("searchbox", { name: "Search" }).blur();
     },
   },
@@ -4202,6 +4203,20 @@ export const shots: Shot[] = [
         .first()
         .waitFor();
       await page.getByRole("group", { name: "Builds" }).waitFor();
+    },
+    cleanup: async (page) => {
+      await page.keyboard.press("Escape");
+    },
+  },
+  {
+    // A problem's word: what fixed it leads, with the failure it came after and what changed since.
+    name: "palette-fixed",
+    path: "/ideas",
+    width: 1440,
+    prepare: async (page) => {
+      await page.keyboard.press("ControlOrMeta+k");
+      await page.getByRole("combobox", { name: "Jump to or run" }).pressSequentially("warping");
+      await page.getByRole("group", { name: "What fixed it" }).waitFor();
     },
     cleanup: async (page) => {
       await page.keyboard.press("Escape");

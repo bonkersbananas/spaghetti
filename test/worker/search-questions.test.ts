@@ -262,3 +262,89 @@ describe("the closest results", () => {
     expect((await search("clean supports", { closest: "1" })).closest).toBeNull();
   });
 });
+
+describe("what fixed it", () => {
+  const fixIds = (r: SearchResponse) => (r.fixes ?? []).map((fix) => fix.attempt.id);
+
+  it("answers a problem with the later attempt that went better without it, and what changed", async () => {
+    const box = await createItem({ title: "Swatch box", stage: "building" });
+    const now = Date.now();
+    const peeled = await logAttempt(box.id, {
+      outcome: "failed",
+      failureTags: ["warping", "bed-adhesion"],
+      note: "Corners peeled. PETG wants the textured sheet.",
+      settings: petg({ bedType: "Cool Plate", bedTemperature: 70 }),
+      printedAt: now - 3 * DAY,
+    });
+    const curled = await logAttempt(box.id, {
+      outcome: "partial",
+      failureTags: ["warping"],
+      settings: petg({ bedTemperature: 80, brim: true }),
+      printedAt: now - 2 * DAY,
+    });
+    const flat = await logAttempt(box.id, {
+      outcome: "success",
+      note: "Flat as a board.",
+      settings: petg({ bedTemperature: 80, brim: true, filamentDried: true }),
+      printedAt: now - DAY,
+    });
+    const chain = await createItem({ title: "Cable chain", stage: "building" });
+    await logAttempt(chain.id, { outcome: "failed", failureTags: ["warping"], settings: petg() });
+
+    const found = await search("warping");
+    // One fix for both failures on the box (the partly one still warped); none for the chain, which never got better.
+    expect(fixIds(found)).toEqual([flat.id]);
+    const [fix] = found.fixes ?? [];
+    expect(fix?.after).toMatchObject({ attemptId: curled.id, number: 2, outcome: "partial", tags: ["warping"] });
+    expect(fix?.failures).toBe(2);
+    expect(fix?.changes).toEqual(["dried the filament"]);
+    // The fix needn't match the words itself, and the failures are still answered.
+    expect(ids(found.attempts)).not.toContain(flat.id);
+    expect(ids(found.attempts)).toEqual(expect.arrayContaining([peeled.id, curled.id]));
+
+    // Swedish and a material beside the problem: the same answer. Bed adhesion was fixed by the partly one.
+    expect(fixIds(await search("PETG warping"))).toEqual([flat.id]);
+    expect(fixIds(await search("skevhet"))).toEqual([flat.id]);
+    expect(fixIds(await search("bed adhesion"))).toEqual([curled.id]);
+  });
+
+  it("follows the Warping chip without words, and stays out while an outcome is picked", async () => {
+    const box = await createItem({ title: "Swatch box", stage: "building" });
+    await logAttempt(box.id, {
+      outcome: "failed",
+      failureTags: ["warping"],
+      settings: petg(),
+      printedAt: Date.now() - DAY,
+    });
+    const flat = await logAttempt(box.id, { outcome: "success", settings: petg() });
+    expect(fixIds(await search("", { tag: "warping" }))).toEqual([flat.id]);
+    expect(fixIds(await search("warping", { outcome: "failures" }))).toEqual([]);
+  });
+
+  it("stays out when the words don't name a problem", async () => {
+    const box = await createItem({ title: "Swatch box", stage: "building" });
+    await logAttempt(box.id, {
+      outcome: "failed",
+      failureTags: ["warping"],
+      settings: petg(),
+      printedAt: Date.now() - DAY,
+    });
+    await logAttempt(box.id, { outcome: "success", settings: petg() });
+    expect((await search("swatch")).fixes).toEqual([]);
+    expect((await search("petg")).fixes).toEqual([]);
+  });
+
+  it("comes with the closest results too", async () => {
+    const box = await createItem({ title: "Swatch box", stage: "building" });
+    await logAttempt(box.id, {
+      outcome: "failed",
+      failureTags: ["warping"],
+      settings: petg(),
+      printedAt: Date.now() - DAY,
+    });
+    const flat = await logAttempt(box.id, { outcome: "success", settings: petg() });
+    const near = await search("warping tugboat", { closest: "1" });
+    expect(near.closest).toEqual(["warping", "tugboat"]);
+    expect(fixIds(near)).toEqual([flat.id]);
+  });
+});
