@@ -16,6 +16,8 @@ import { OutcomeStrip } from "@/components/builds/OutcomeStrip";
 import { PhotoReadNote } from "@/components/builds/PhotoReadNote";
 import { PartLine } from "@/components/builds/parts/PartsSection";
 import { TagPicker } from "@/components/builds/TagPicker";
+import { ACTION_ROOM, ActionCard } from "@/components/ui/ActionCard";
+import { Button } from "@/components/ui/Button";
 import * as Icons from "@/components/ui/icons";
 import { PhotoRow } from "@/components/ui/PhotoRow";
 import { AddPhotoTile } from "@/components/ui/PhotoTiles";
@@ -366,6 +368,30 @@ export function BuildsSection() {
               <span className="text-body text-ink min-w-0 flex-1 font-semibold">A result the keyboard is on</span>
             </PhotoRow>
           </div>
+          <Label>ActionCard: a row with a button of its own, inside its card (picked here)</Label>
+          <ActionCard
+            selected
+            action={
+              <Button variant="secondary" size="sm" icon={Icons.PlayIcon} onClick={() => toast.message("Starts again")}>
+                Start again
+              </Button>
+            }
+          >
+            <PhotoRow
+              link={{ to: "/styleguide" }}
+              photo={null}
+              tile={<Icons.BuildsIcon size={26} />}
+              size="lg"
+              align="start"
+              bare
+              selected
+            >
+              <span className={`flex min-w-0 flex-1 flex-col gap-1.5 py-0.5 ${ACTION_ROOM.sm}`}>
+                <span className="text-body text-ink font-semibold">Phone stand · attempt 2</span>
+                <span className="text-small text-ink-faint">Blue PETG · 0.20 mm · 20% infill</span>
+              </span>
+            </PhotoRow>
+          </ActionCard>
           <Label>New build tiles</Label>
           <div className="grid grid-cols-2 gap-3">
             <AddPhotoTile size="card" icon={Icons.PlusIcon} label="New build" />

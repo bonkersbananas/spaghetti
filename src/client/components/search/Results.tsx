@@ -9,6 +9,7 @@ import { forwardRef, type ReactNode, useLayoutEffect, useRef, useState } from "r
 import { OutcomeChip } from "@/components/builds/Outcome";
 import { SettingsLine } from "@/components/builds/SettingsLine";
 import { summarizeSettings } from "@/components/builds/settings";
+import { ACTION_ROOM, ActionCard } from "@/components/ui/ActionCard";
 import { Chip } from "@/components/ui/Chip";
 import { Highlight } from "@/components/ui/Highlight";
 import {
@@ -56,12 +57,14 @@ interface RowProps {
   selected: boolean;
   onPointerEnter?: () => void;
   onOpen?: () => void;
+  /** Inside an `ActionCard`: the card draws the selection, and the last line leaves room for its button (this wide). */
+  inCard?: keyof typeof ACTION_ROOM;
   children: ReactNode;
 }
 
 /** A result: its photo first, the words that matched beside it. */
 export const ResultRow = forwardRef<HTMLAnchorElement, RowProps>(function ResultRow(
-  { link, photo, fallbackIcon: FallbackIcon, selected, onPointerEnter, onOpen, children },
+  { link, photo, fallbackIcon: FallbackIcon, selected, onPointerEnter, onOpen, inCard, children },
   ref,
 ) {
   return (
@@ -83,8 +86,11 @@ export const ResultRow = forwardRef<HTMLAnchorElement, RowProps>(function Result
       size="lg"
       align="start"
       selected={selected}
+      bare={!!inCard}
     >
-      <span className="flex min-w-0 flex-1 flex-col gap-1.5 py-0.5">{children}</span>
+      <span className={cn("flex min-w-0 flex-1 flex-col gap-1.5 py-0.5", inCard && ACTION_ROOM[inCard])}>
+        {children}
+      </span>
     </PhotoRow>
   );
 });
@@ -95,11 +101,13 @@ interface AttemptResultProps {
   selected: boolean;
   onHover: () => void;
   onOpen: () => void;
+  /** A button of its own ("Start again"), inside the result's card on its last line. */
+  action?: ReactNode;
 }
 
 /** An attempt found: how it went, the note, the tags and filaments that matched. */
 export const AttemptResult = forwardRef<HTMLAnchorElement, AttemptResultProps>(function AttemptResult(
-  { hit, terms, selected, onHover, onOpen },
+  { hit, terms, selected, onHover, onOpen, action },
   ref,
 ) {
   const failureOptions = useTagOptions("failure");
@@ -112,7 +120,7 @@ export const AttemptResult = forwardRef<HTMLAnchorElement, AttemptResultProps>(f
   const settings = summarizeSettings(attempt.settings)
     .sort((x, y) => Number(matches(y)) - Number(matches(x)))
     .slice(0, 4);
-  return (
+  const row = (
     <ResultRow
       ref={ref}
       link={attemptLink(hit)}
@@ -121,6 +129,7 @@ export const AttemptResult = forwardRef<HTMLAnchorElement, AttemptResultProps>(f
       selected={selected}
       onPointerEnter={onHover}
       onOpen={onOpen}
+      inCard={action ? "sm" : undefined}
     >
       <span className="flex items-center gap-2">
         <OutcomeChip outcome={attempt.outcome} />
@@ -167,6 +176,13 @@ export const AttemptResult = forwardRef<HTMLAnchorElement, AttemptResultProps>(f
         />
       )}
     </ResultRow>
+  );
+  return action ? (
+    <ActionCard selected={selected} action={action}>
+      {row}
+    </ActionCard>
+  ) : (
+    row
   );
 });
 

@@ -245,15 +245,17 @@ function Search() {
             />
           </Suspense>
         ) : result.kind === "attempt" ? (
-          <>
-            <AttemptResult hit={result.hit} {...common} />
-            {didWork(result) && (
-              // Beside the link, not in it: a button can't live inside a link.
-              <Suspense fallback={null}>
-                <Extra part="start" hit={result.hit} onStart={common.onOpen} />
-              </Suspense>
-            )}
-          </>
+          <AttemptResult
+            hit={result.hit}
+            {...common}
+            action={
+              didWork(result) && (
+                <Suspense fallback={null}>
+                  <Extra part="start" hit={result.hit} onStart={common.onOpen} />
+                </Suspense>
+              )
+            }
+          />
         ) : result.kind === "spool" ? (
           <Suspense fallback={<RowSkeleton />}>
             <Extra

@@ -4,6 +4,7 @@ import type { SearchTerm } from "@shared/search";
 import { relativeTime } from "@shared/time";
 import { forwardRef } from "react";
 import { OutcomeChip } from "@/components/builds/Outcome";
+import { ActionCard } from "@/components/ui/ActionCard";
 import { ChangeLine } from "@/components/ui/ChangeLine";
 import { Highlight } from "@/components/ui/Highlight";
 import { BuildsIcon } from "@/components/ui/icons";
@@ -21,7 +22,7 @@ interface FixResultProps {
 
 /**
  * What fixed a problem the search named: the attempt that went better, the failure it came after, what changed since
- * on the semolina marks the build's story uses, its note, and "Start again with these" under it.
+ * on the semolina marks the build's story uses, its note, and "Start again with these" in the same card.
  */
 export const FixResult = forwardRef<HTMLAnchorElement, FixResultProps>(function FixResult(
   { fix, terms, selected, onHover, onOpen },
@@ -32,7 +33,14 @@ export const FixResult = forwardRef<HTMLAnchorElement, FixResultProps>(function 
   const title = item.title?.trim() || "Untitled build";
   const tags = after.tags.map((slug) => tagLabel("failure", slug, failureOptions));
   return (
-    <>
+    <ActionCard
+      selected={selected}
+      action={
+        <StartAgain hit={fix} onStart={onOpen}>
+          Start again with these
+        </StartAgain>
+      }
+    >
       <ResultRow
         ref={ref}
         link={attemptLink(fix)}
@@ -41,6 +49,7 @@ export const FixResult = forwardRef<HTMLAnchorElement, FixResultProps>(function 
         selected={selected}
         onPointerEnter={onHover}
         onOpen={onOpen}
+        inCard="lg"
       >
         <span className="flex items-center gap-2">
           <OutcomeChip outcome={attempt.outcome} />
@@ -67,12 +76,6 @@ export const FixResult = forwardRef<HTMLAnchorElement, FixResultProps>(function 
           <Highlight text={attempt.note} terms={terms} className="text-body text-ink-soft line-clamp-2" />
         )}
       </ResultRow>
-      {/* Beside the link, not in it: a button can't live inside a link. Lined up with the text column. */}
-      <div className="pb-1 pl-[6.375rem] md:pl-[7.5rem]">
-        <StartAgain hit={fix} onStart={onOpen}>
-          Start again with these
-        </StartAgain>
-      </div>
-    </>
+    </ActionCard>
   );
 });
