@@ -1402,7 +1402,11 @@ async function catchUpFrom(page: Page, days: number) {
     ([from, until]) => localStorage.setItem("sg-since", JSON.stringify({ from, until })),
     [SEED_NOW - days * 86_400_000, SEED_NOW + 3_600_000],
   );
-  await page.reload();
+  // A fresh history entry rather than a reload: a reload gets back the scroll the router kept for this entry, which an
+  // earlier shot of the same path may have left halfway down the page.
+  const url = page.url();
+  await page.goto("about:blank");
+  await page.goto(url);
 }
 
 async function forgetCatchUp(page: Page) {
@@ -4162,10 +4166,7 @@ export const shots: Shot[] = [
       await withSeedAgents(page);
       await scrollToRow(page, "Hook for the bike helmet");
     },
-    cleanup: async (page) => {
-      await withoutSeedAgents(page);
-      await scrollJournalToTop(page);
-    },
+    cleanup: withoutSeedAgents,
   },
   {
     name: "ideas-via",
