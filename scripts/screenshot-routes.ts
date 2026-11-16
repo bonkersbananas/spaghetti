@@ -1524,6 +1524,12 @@ async function scrollToRow(page: Page, title: string) {
   await page.waitForTimeout(400);
 }
 
+/** The router keeps a scrolled position for this history entry, and the next /journal shot opens the same entry again. */
+async function scrollJournalToTop(page: Page) {
+  await page.evaluate(() => window.scrollTo(0, 0));
+  await page.waitForTimeout(300);
+}
+
 async function unmockToday(page: Page) {
   await page.unrouteAll({ behavior: "ignoreErrors" });
 }
@@ -1702,11 +1708,7 @@ export const shots: Shot[] = [
         .evaluate((node) => window.scrollTo(0, node.getBoundingClientRect().top + window.scrollY - 96));
       await page.waitForTimeout(600);
     },
-    // The router keeps the position for this history entry, and the next /journal shot opens the same entry again.
-    cleanup: async (page) => {
-      await page.evaluate(() => window.scrollTo(0, 0));
-      await page.waitForTimeout(300);
-    },
+    cleanup: scrollJournalToTop,
   },
   {
     name: "journal-now-one",
@@ -4086,7 +4088,10 @@ export const shots: Shot[] = [
       await withSeedAgents(page);
       await scrollToRow(page, "Hook for the bike helmet");
     },
-    cleanup: withoutSeedAgents,
+    cleanup: async (page) => {
+      await withoutSeedAgents(page);
+      await scrollJournalToTop(page);
+    },
   },
   {
     name: "ideas-via",
