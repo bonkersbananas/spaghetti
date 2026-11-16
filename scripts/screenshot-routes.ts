@@ -321,6 +321,15 @@ async function openViewer(page: Page) {
   await dialog.locator("[data-viewer=ready]").waitFor({ timeout: 30_000 });
 }
 
+/** Closes the live view and clears the bridge's report, so the shots after it see a print that isn't live. */
+async function closeLiveViewer(page: Page) {
+  await closeDialog(page);
+  await page.request.put("/api/printer/bridge", {
+    headers: { Origin: new URL(page.url()).origin },
+    data: { progress: null },
+  });
+}
+
 /** The bridge says the tugboat's printing attempt is at layer 140 of 317; its 3D view opens there. */
 async function openLiveViewer(page: Page) {
   await page.request.put("/api/printer/bridge", {
@@ -3920,7 +3929,7 @@ export const shots: Shot[] = [
     beforeShot: async (page) => {
       await page.waitForTimeout(400);
     },
-    cleanup: closeDialog,
+    cleanup: closeLiveViewer,
   },
   {
     // The same print scrubbed back to layer 60: "Back to now" offers the way to the layer being printed.
@@ -3934,7 +3943,7 @@ export const shots: Shot[] = [
     beforeShot: async (page) => {
       await page.waitForTimeout(400);
     },
-    cleanup: closeDialog,
+    cleanup: closeLiveViewer,
   },
   {
     // The same print coloured by feature, scrubbed back to half its height.
@@ -5357,6 +5366,7 @@ export const shots: Shot[] = [
     },
   },
   { name: "styleguide-controls", path: "/styleguide", selector: "#controls" },
+  { name: "styleguide-layer-slider", path: "/styleguide", selector: "#layer-slider" },
   { name: "styleguide-buttons", path: "/styleguide", selector: "#buttons" },
   { name: "styleguide-builds", path: "/styleguide", selector: "#builds" },
   {

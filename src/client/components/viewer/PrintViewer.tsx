@@ -125,6 +125,7 @@ export default function PrintViewer({
       return;
     }
     scene.current = ps;
+    ps.setLive(liveNow.current !== null);
     const colors = () =>
       ps.setTheme({
         plate: cssColor("--sg-plate"),
