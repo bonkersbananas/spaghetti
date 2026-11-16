@@ -19983,6 +19983,17 @@
               "$ref": "#/components/schemas/AttemptFile"
             },
             "description": "Slicer files kept with the idea (and its build), oldest first."
+          },
+          "twistModel": {
+            "description": "The model of the twist this build prints, while the twist is live: its cover without a photo or file.",
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AttemptFile"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [
