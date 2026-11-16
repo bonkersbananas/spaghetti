@@ -148,21 +148,24 @@ interface ActionMenuItemProps {
   onSelect: () => void;
   /** Removes or deletes: tomato words, and the last row. */
   tone?: "danger";
+  /** Can't be done right now (offline, a saved thing is read-only): shown, faint, and does nothing. */
+  disabled?: boolean;
   children: ReactNode;
 }
 
 /** One row of an `ActionMenu`: the menu closes, then it acts. */
-export function ActionMenuItem({ icon: IconComponent, onSelect, tone, children }: ActionMenuItemProps) {
+export function ActionMenuItem({ icon: IconComponent, onSelect, tone, disabled, children }: ActionMenuItemProps) {
   const close = use(CloseContext);
   return (
     <button
       type="button"
+      disabled={disabled}
       onClick={() => {
         close();
         onSelect();
       }}
       className={cn(
-        "pressable focus-ring text-body hover:bg-ink/5 flex min-h-12 w-full items-center gap-3 rounded-md px-3 text-left md:min-h-11",
+        "pressable focus-ring text-body hover:bg-ink/5 disabled:text-ink-ghost flex min-h-12 w-full items-center gap-3 rounded-md px-3 text-left disabled:pointer-events-none md:min-h-11",
         tone === "danger" ? "text-tomato-ink" : "text-ink",
       )}
     >

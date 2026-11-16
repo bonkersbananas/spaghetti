@@ -374,7 +374,7 @@ test("finishes a print that is printing with no signal: outcome, note and photo 
   const notice = page.getByRole("status").filter({ hasText: "Offline" });
   await expect(notice).toContainText("Showing what you saw");
   // The main action is there, not greyed out.
-  const finish = page.getByRole("button", { name: "Finish attempt 2" });
+  const finish = page.getByRole("button", { name: "How did it go?" });
   await expect(finish).toBeEnabled();
   await finish.click();
   const sheet = page.getByRole("dialog", { name: "Finish attempt 2" });
@@ -424,7 +424,7 @@ test("a finish queued offline adds its note to the one on the server, even with 
 
   await context.setOffline(true);
   await page.reload();
-  await page.getByRole("button", { name: "Finish attempt 2" }).click();
+  await page.getByRole("button", { name: "How did it go?" }).click();
   const sheet = page.getByRole("dialog", { name: "Finish attempt 2" });
   await sheet.getByRole("radio", { name: "Worked" }).click();
   await sheet.getByRole("textbox", { name: "Note" }).press("End");
@@ -461,7 +461,7 @@ test("a finish queued offline keeps the other person's outcome, adds the photo a
 
   await context.setOffline(true);
   await page.reload();
-  await page.getByRole("button", { name: "Finish attempt 2" }).click();
+  await page.getByRole("button", { name: "How did it go?" }).click();
   const sheet = page.getByRole("dialog", { name: "Finish attempt 2" });
   await sheet.getByTestId("photo-input").setInputFiles("e2e/fixtures/tugboat.jpg");
   await expect(sheet.getByRole("img", { name: "Attempt photo 1" })).toBeVisible();

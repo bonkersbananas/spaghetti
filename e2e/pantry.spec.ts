@@ -94,8 +94,8 @@ test("reads a dropped slicer file onto an attempt and keeps it", async ({ page, 
 
   const file = { name: SLICER_FILE_NAME, bytes: Array.from(slicerFile()) };
   if (isMobile) {
-    // Phones pick it from the attempt.
-    await entry.getByRole("button", { name: "Finish" }).click();
+    // Phones pick it from the attempt (its question is in the action bar there).
+    await page.getByRole("button", { name: "How did it go?" }).click();
     await page.getByRole("dialog").getByRole("button", { name: "Add the slicer file" }).waitFor();
     await page.getByTestId("slicer-file-input").setInputFiles({
       name: file.name,

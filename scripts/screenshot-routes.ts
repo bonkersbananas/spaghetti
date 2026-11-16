@@ -377,6 +377,9 @@ async function closeDialog(page: Page) {
   await page.getByRole("dialog").waitFor({ state: "detached" });
 }
 
+/** The build the "no attempts yet" shot makes, and removes again. */
+const NO_ATTEMPTS_BUILD = "5eed0000-0000-4000-8000-0000000b0b01";
+
 export interface Shot {
   /** File name, without width or extension: "ideas" → ideas-390.png. */
   name: string;
@@ -2519,7 +2522,7 @@ export const shots: Shot[] = [
     },
   },
   {
-    // The end of a build page on a phone: "Finish attempt" must sit above the tab bar (try it with --iphone).
+    // The end of a build page on a phone: the print's "How did it go?" must sit above the tab bar (try it with --iphone).
     name: "build-bottom",
     path: `/builds/${SEED_BUILD_IDS.tugboat}`,
     width: 390,
@@ -4155,6 +4158,40 @@ export const shots: Shot[] = [
     },
   },
   { name: "build-done", path: `/builds/${SEED_BUILD_IDS.headphoneStand}`, fullPage: true },
+  // A build whose latest attempt Worked: Finish build is back in the bar beside Shelve (on phones, at the page's end).
+  { name: "build-worked", path: `/builds/${SEED_IDS.desiccantHook}` },
+  {
+    // While a print is on the bed, Finish build and Shelve wait in the bar's "…" (a sheet on phones).
+    name: "build-bed-menu",
+    path: `/builds/${SEED_BUILD_IDS.tugboat}`,
+    prepare: async (page) => {
+      await page.getByRole("button", { name: "More for this build" }).click();
+      await page.getByRole("button", { name: "Shelve build" }).waitFor();
+      await page.waitForTimeout(500);
+    },
+    cleanup: async (page) => {
+      await page.keyboard.press("Escape");
+    },
+  },
+  {
+    // A build with no attempt yet: Log attempt, with the closing actions where they always are.
+    name: "build-no-attempts",
+    path: "/builds",
+    prepare: async (page) => {
+      const origin = new URL(page.url()).origin;
+      await page.request.post("/api/items", {
+        headers: { Origin: origin },
+        data: { id: NO_ATTEMPTS_BUILD, title: "Spice rack label clips", stage: "building" },
+      });
+      await page.goto(`/builds/${NO_ATTEMPTS_BUILD}`);
+      await page.getByText("The water's still heating").waitFor();
+    },
+    cleanup: async (page) => {
+      await page.request.delete(`/api/items/${NO_ATTEMPTS_BUILD}`, {
+        headers: { Origin: new URL(page.url()).origin },
+      });
+    },
+  },
   // A shelved build: its chip, then when and after how many attempts; no For offer.
   { name: "build-shelved", path: `/builds/${SEED_IDS.planter}` },
   { name: "journal", path: "/journal" },
@@ -5441,6 +5478,8 @@ export const shots: Shot[] = [
   { name: "styleguide-controls", path: "/styleguide", selector: "#controls" },
   { name: "styleguide-buttons", path: "/styleguide", selector: "#buttons" },
   { name: "styleguide-builds", path: "/styleguide", selector: "#builds" },
+  // The "…" menu rows, a build's menu while its print is on the bed among them.
+  { name: "styleguide-sheets", path: "/styleguide", selector: "#sheets" },
   {
     name: "styleguide-covers",
     path: "/styleguide",
@@ -6293,7 +6332,7 @@ async function goOffline(page: Page) {
 /** On the tugboat build (attempt 3 is printing): open the finish sheet offline and fill it in. */
 async function fillFinish(page: Page) {
   await goOffline(page);
-  await page.getByRole("button", { name: "Finish attempt 3" }).first().click();
+  await page.getByRole("button", { name: "How did it go?" }).first().click();
   const sheet = page.getByRole("dialog");
   await sheet.getByRole("radio", { name: "Worked" }).click();
   const note = sheet.getByRole("textbox", { name: "Note" });
