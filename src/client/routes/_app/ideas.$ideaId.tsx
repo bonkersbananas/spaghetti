@@ -17,6 +17,7 @@ import { DetailBar } from "@/components/shell/DetailBar";
 import { ActionBar } from "@/components/ui/ActionBar";
 import { Avatar, ViaText } from "@/components/ui/Avatar";
 import { Button, IconButton } from "@/components/ui/Button";
+import { ClaudeLine } from "@/components/ui/ClaudeLine";
 import { ConfirmDelete } from "@/components/ui/ConfirmDelete";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { TextArea } from "@/components/ui/Field";
@@ -32,6 +33,7 @@ import { toast } from "@/components/ui/Toast";
 import { useVia } from "@/lib/agents";
 import { startBuild } from "@/lib/builds";
 import { useCaptureHere } from "@/lib/capture";
+import { cn } from "@/lib/cn";
 import { announceDraft } from "@/lib/drafts";
 import { ariaShortcuts, shortcutCaps, useHotkeys } from "@/lib/hotkeys";
 import { addItemFile } from "@/lib/item-files";
@@ -282,6 +284,9 @@ function Idea({ item }: { item: ItemView }) {
   const modelPhoto = item.draft?.applied.includes("photos") ? photos.find((photo) => !photo.attemptId) : undefined;
   const modelPicture = modelPhoto ? { src: photoSrc(modelPhoto.id, "thumb"), color: modelPhoto.color } : undefined;
   const alt = photoAlt({ title, note });
+  // Claude's title (decision 0070), for as long as it is still what it wrote: marked, and faded in when it arrives here.
+  const named = !!item.claudeTitle && title === item.claudeTitle;
+  const [untitled] = useState(!item.title);
 
   return (
     <PullToGo back={back} title={title.trim() || "Untitled idea"}>
@@ -365,6 +370,7 @@ function Idea({ item }: { item: ItemView }) {
                 maxLength={200}
                 readOnly={readOnly}
                 value={title}
+                className={named && untitled ? "sg-arrive" : undefined}
                 onChange={(event) => setTitle(event.target.value.replace(/\n/g, " "))}
                 onKeyDown={(event) => {
                   if (event.key === "Enter" || event.key === "Escape") {
@@ -374,6 +380,7 @@ function Idea({ item }: { item: ItemView }) {
                 }}
               />
             )}
+            {named && <ClaudeLine className={cn("-mt-2", untitled && "sg-arrive")}>Named by Claude</ClaudeLine>}
             <IdeaTitleChips item={item} forWhom={forWhom} setForWhom={setForWhom} readOnly={readOnly} />
             <input
               ref={filePicker}

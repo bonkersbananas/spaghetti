@@ -5,7 +5,7 @@ import { attemptPartsLabel } from "@shared/parts";
 import { isOffTheBed, offTheBedLabel } from "@shared/print-progress";
 import { fullTime } from "@shared/time";
 import { Link } from "@tanstack/react-router";
-import { forwardRef } from "react";
+import { forwardRef, useState } from "react";
 import { OutcomeChip, outcomeIcons } from "@/components/builds/Outcome";
 import { SettingsLine } from "@/components/builds/SettingsLine";
 import { summarizeSettings } from "@/components/builds/settings";
@@ -298,6 +298,8 @@ const EventRow = forwardRef<HTMLAnchorElement, JournalEntryProps>(function Event
   { entry, item, person, via, selected, when },
   ref,
 ) {
+  // A title that comes to a row drawn without one (Claude naming an idea just saved) fades in where it lands.
+  const [untitled] = useState(!item.title?.trim());
   if (entry.kind === "attempt") return null;
   const event = events[entry.kind];
   const EventIcon = event.icon;
@@ -336,10 +338,12 @@ const EventRow = forwardRef<HTMLAnchorElement, JournalEntryProps>(function Event
           </time>
         </MetaList>
         <span
+          key={name.titled ? "title" : "note"}
           className={cn(
             "text-body truncate",
             name.titled ? "text-ink font-semibold" : "text-ink-soft font-medium",
             finished && "font-display text-title",
+            name.titled && untitled && "sg-arrive",
           )}
         >
           {name.text}

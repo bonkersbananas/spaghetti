@@ -262,7 +262,7 @@ export async function loadItems(db: Db, where: ReturnType<typeof and>) {
     )
   ).flat();
   const twistIds = [...new Set(rows.flatMap((row) => (row.twistId ? [row.twistId] : [])))];
-  const [itemFileSlices, coaches, reactionsByItem, twistPicture] = await Promise.all([
+  const [itemFileSlices, coaches, reactionsByItem, twistPicture, named] = await Promise.all([
     Promise.all(
       slices.map((ids) =>
         db
@@ -279,11 +279,12 @@ export async function loadItems(db: Db, where: ReturnType<typeof and>) {
     ),
     // A build that prints a twist falls back to the twist's picture for its cover (shared/cover.ts).
     twistPictures(db, twistIds),
+    // The titles Claude gave (decision 0070); only titled items can have one.
+    claudeTitles(
+      db,
+      rows.flatMap((row) => (row.title ? [row.id] : [])),
+    ),
   ]);
-  const named = await claudeTitles(
-    db,
-    rows.flatMap((row) => (row.title ? [row.id] : [])),
-  );
   const reads = new Map<string, PhotoRead>();
   for (const [attemptId, rows] of await readsByAttempt(db, [...liveAttempts])) {
     const read = toApiPhotoRead(rows);

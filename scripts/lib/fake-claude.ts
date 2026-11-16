@@ -17,6 +17,11 @@
  * suggests only a dead link, anything else is three good models and one dead link (an address with `dead` in it,
  * which the Worker drops because it checks links, as it does for real, against nothing but this stand-in).
  *
+ * A request that asks what an idea should be called is Claude naming an idea saved without a title (decision 0070).
+ * It names nothing (the many untitled captures of other tests and the seed stay as they are) until a test or a shot
+ * turns naming on with PUT /titles (DELETE /titles turns it off): then a word in the note picks the answer (`slow`
+ * takes a few seconds, `refused` is refused, `broken` is an API error) and anything else is called NAMED_TITLE.
+ *
  * A request with a photo in it is a print being read (decision 0022). A word in the build's title or the attempt's
  * note decides the answer: `slow` takes ten seconds ("Looking at the photo…" stays long enough to look at), `refused`
  * is refused, `broken` is an API error, `unsure` can't tell, `spaghetti` or `tangle` is a failed print, `partly` a
@@ -319,6 +324,33 @@ async function answerCoach(body: string, response: import("node:http").ServerRes
   );
 }
 
+/** What the stand-in calls an idea, once naming is on. */
+export const NAMED_TITLE = "Planetary gears, print-in-place";
+
+async function answerTitle(naming: boolean, body: string, response: import("node:http").ServerResponse) {
+  const note = (/Their note:\\n([^"]*)/.exec(body)?.[1] ?? "").toLowerCase();
+  if (naming && note.includes("slow")) await new Promise((resolve) => setTimeout(resolve, SLOW_MS));
+  response.setHeader("Content-Type", "application/json");
+  if (naming && note.includes("broken")) {
+    response.statusCode = 500;
+    response.end(JSON.stringify({ type: "error", error: { type: "api_error", message: "broken" } }));
+    return;
+  }
+  const refused = naming && note.includes("refused");
+  response.end(
+    JSON.stringify({
+      id: "msg_fake",
+      type: "message",
+      role: "assistant",
+      model: "claude-haiku-5-5",
+      content: refused ? [] : [{ type: "text", text: JSON.stringify({ title: naming ? NAMED_TITLE : null }) }],
+      stop_reason: refused ? "refusal" : "end_turn",
+      stop_sequence: null,
+      usage: { input_tokens: 10, output_tokens: 10 },
+    }),
+  );
+}
+
 /** The week's paragraph, as the stand-in writes it. */
 export const WEEK_NOTE =
   "PETG warped twice this week, and both times the bed was 70 °C. The prints that worked all had a brim: worth keeping for the next one.";
@@ -469,8 +501,16 @@ export async function startFakeClaude(
   const productPage = readFileSync(join(root, "test/fixtures/pages/prisjakt-product.html"), "utf8");
   const pictures = [1, 2, 3].map((n) => readFileSync(join(root, `e2e/fixtures/model-${n}.jpg`)));
   const received: ReceivedHook[] = [];
+  // Whether it names untitled ideas (PUT /titles turns it on, DELETE /titles off).
+  let naming = false;
   const server = createServer((request, response) => {
     if (request.url?.startsWith("/hooks")) return receiveHook(request, response, received);
+    if (request.url === "/titles" && (request.method === "PUT" || request.method === "DELETE")) {
+      naming = request.method === "PUT";
+      response.statusCode = 204;
+      response.end();
+      return;
+    }
     // A Prisjakt product page (the Worker reads the stand-in instead of prisjakt.nu while it talks to this server).
     // Believable prices for the seeded products (the fixture is a 7 699 kr printer): glue, a PLA spool, PETG.
     const product = /^\/produkt\.php\?p=(\d+)$/.exec(request.url ?? "");
@@ -500,6 +540,7 @@ export async function startFakeClaude(
     let body = "";
     request.on("data", (chunk) => (body += chunk));
     request.on("end", async () => {
+      if (body.includes("What should this idea be called?")) return answerTitle(naming, body, response);
       if (body.includes("Find the Prisjakt page for this thing")) return answerSearch(body, response);
       if (body.includes("Read the spool label")) return answerLabel(body, response);
       if (body.includes("What should they try on the next attempt?")) return answerCoach(body, response);
