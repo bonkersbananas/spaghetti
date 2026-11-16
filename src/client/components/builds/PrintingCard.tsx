@@ -75,9 +75,9 @@ export function PrintingCard({ item, attempt, person, via, compact = false }: Pr
   const progress = usePrintProgress(attempt.id, attempt.printedAt, attempt.settings.estimatedMinutes);
   const due = progress.state === "due";
   // The build's cover, with the plate on the bed first when there is no photo.
-  const covered = coverOf(item, { file: attempt.file });
-  // Its name is right beside the picture: a build with no note shows a blank index card, not its name twice.
-  const cover = covered.kind === "note" && covered.fromTitle ? { ...covered, text: "" } : covered;
+  const cover = coverOf(item, { file: attempt.file });
+  // Its name is right beside the picture, in Fraunces: a build with only a name shows the glyph, not its name twice.
+  const glyphOnly = cover.kind === "note" && (compact || cover.fromTitle);
   const name = itemName(item);
   const partsLabel = attemptPartsLabel(attempt, item.parts);
   const filaments = attempt.settings.filaments ?? [];
@@ -124,8 +124,10 @@ export function PrintingCard({ item, attempt, person, via, compact = false }: Pr
           <CoverPicture
             cover={cover}
             label={!compact}
-            // A compact card's small square has no room for words: the build glyph stands in for a note.
-            glyph={compact ? <BuildsIcon size={28} /> : undefined}
+            // A compact card's small square has no room for words either.
+            glyph={glyphOnly ? <BuildsIcon size={compact ? 28 : 36} /> : undefined}
+            // A note in the phone's 5:2 strip, and the desktop row's 4:3, is set by the frame's short side.
+            shape="strip"
             inset={compact ? "p-1 md:p-3" : "p-3"}
             className="size-full"
           />

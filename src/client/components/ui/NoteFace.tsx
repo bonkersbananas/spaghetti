@@ -1,4 +1,5 @@
 import { type NoteSize, noteSize } from "@shared/notes";
+import { keepUnits } from "@shared/typography";
 import { cn } from "@/lib/cn";
 
 const sizes: Record<NoteSize, string> = {
@@ -40,7 +41,7 @@ export function NoteFace({ note, size, className, compact, clearBottom }: NoteFa
               : cn("fade-bottom min-h-0 flex-1 overflow-hidden", sizes[face]),
           )}
         >
-          {note}
+          {keepUnits(note)}
         </p>
       </div>
     </div>

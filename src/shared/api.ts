@@ -256,6 +256,11 @@ export interface Item {
   forWhom: string | null;
   /** The twist this build prints, if it prints one. */
   twistId: string | null;
+  /**
+   * That twist's model (its newest, while the twist is live): the build's cover falls back to its plate picture when
+   * the build has no photo and no file of its own (shared/cover.ts). Absent on items this device made.
+   */
+  twistModel?: AttemptFile | null;
   /** What the build is made of, in order; empty for a simple build (and for ideas). */
   parts: Part[];
   /** In order: the first is the cover. Includes the attempts' photos (they have an attemptId). */

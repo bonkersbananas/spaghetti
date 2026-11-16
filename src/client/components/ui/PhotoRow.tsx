@@ -58,7 +58,7 @@ export const PhotoRow = forwardRef<HTMLAnchorElement, PhotoRowProps>(function Ph
           alt=""
           color={photo.color}
           fit={photo.fit}
-          frame={photo.fit === "contain" ? "render" : undefined}
+          frame={photo.fit === "contain" ? (size === "lg" ? "render" : "render-tile") : undefined}
           className={cn(
             "shrink-0 rounded-md",
             sizes[size],

@@ -42,6 +42,7 @@ export function NowPrintingCard({ item, attempt }: NowPrintingCardProps) {
     >
       {/* Its cover, small: the photo, else the plate on the bed on the render ground, else the build glyph. */}
       <CoverPicture
+        small
         cover={coverOf(item, { file: attempt.file })}
         glyph={<BuildsIcon size={18} aria-hidden />}
         inset="p-0"

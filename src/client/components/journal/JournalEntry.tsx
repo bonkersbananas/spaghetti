@@ -10,7 +10,7 @@ import { OutcomeChip, outcomeIcons } from "@/components/builds/Outcome";
 import { SettingsLine } from "@/components/builds/SettingsLine";
 import { summarizeSettings } from "@/components/builds/settings";
 import { Avatar, ViaText } from "@/components/ui/Avatar";
-import { PhotoCountBadge, SlicerPreviewBadge } from "@/components/ui/Card";
+import { coverPhoto, PhotoCountBadge, SlicerPreviewBadge } from "@/components/ui/Card";
 import { Chip } from "@/components/ui/Chip";
 import {
   BuildsIcon,
@@ -30,7 +30,7 @@ import { useTagOptions } from "@/lib/builds";
 import { cn } from "@/lib/cn";
 import { heroClick } from "@/lib/hero";
 import { itemName } from "@/lib/item-name";
-import { fileThumbSrc, photoSrc } from "@/lib/previews";
+import { coverOf, fileThumbSrc, photoSrc } from "@/lib/previews";
 
 /** Where an entry leads: the attempt in its build, the build, or the idea. */
 export function entryLink(entry: Entry, item: Pick<Item, "id" | "stage">) {
@@ -39,22 +39,6 @@ export function entryLink(entry: Entry, item: Pick<Item, "id" | "stage">) {
   }
   if (item.stage === "idea") return { to: "/ideas/$ideaId", params: { ideaId: item.id } } as const;
   return { to: "/builds/$buildId", params: { buildId: item.id } } as const;
-}
-
-const newest = (photos: PhotoData[]) =>
-  photos.reduce<PhotoData | undefined>(
-    (best, photo) => (!best || photo.createdAt > best.createdAt ? photo : best),
-    undefined,
-  );
-
-/** The photo an entry leads with. */
-function entryPhoto(entry: Entry, item: Item): PhotoData | undefined {
-  if (entry.kind === "attempt") return item.photos.find((photo) => photo.attemptId === entry.attemptId);
-  const cover = item.photos.find((photo) => photo.id === item.coverPhotoId);
-  const own = item.photos.find((photo) => !photo.attemptId);
-  if (entry.kind === "idea") return own;
-  if (entry.kind === "finished") return cover ?? newest(item.photos.filter((photo) => photo.attemptId)) ?? own;
-  return cover ?? own ?? newest(item.photos);
 }
 
 const clock = (time: number) => dateFormat({ hour: "numeric", minute: "2-digit" }).format(time);
@@ -317,14 +301,16 @@ const EventRow = forwardRef<HTMLAnchorElement, JournalEntryProps>(function Event
   if (entry.kind === "attempt") return null;
   const event = events[entry.kind];
   const EventIcon = event.icon;
-  const photo = entryPhoto(entry, item);
+  // The thing's cover by the one rule (coverOf): its best photo, else its newest plate render; else the event's icon.
+  const cover = coverOf(item);
+  const photo = cover.kind === "photo" ? cover.photo : undefined;
   const name = itemName(item);
   const finished = entry.kind === "finished";
   return (
     <PhotoRow
       ref={ref}
       link={{ ...entryLink(entry, item), viewTransition: true, onClick: (event) => heroClick(event, photo?.id) }}
-      photo={photo ? { src: photoSrc(photo.id, "thumb"), color: photo.color || undefined } : null}
+      photo={coverPhoto(cover, "") ?? null}
       tile={<EventIcon size={finished ? 26 : 22} aria-hidden />}
       tileClassName={finished ? "bg-basil-soft text-basil-ink" : "bg-ink/5 text-ink-faint"}
       size={finished ? "md" : "sm"}
@@ -414,7 +400,7 @@ const AttemptRow = forwardRef<HTMLAnchorElement, JournalEntryProps>(function Att
           src={fileThumbSrc(plate)}
           alt=""
           fit="contain"
-          frame="render"
+          frame="render-tile"
           className="size-12 shrink-0 rounded-md p-1"
         />
       ) : (

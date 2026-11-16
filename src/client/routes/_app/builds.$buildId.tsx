@@ -85,7 +85,7 @@ import {
 } from "@/lib/items";
 import { scrollBehavior, spring } from "@/lib/motion";
 import { useScreenActions } from "@/lib/palette";
-import { newestPlate } from "@/lib/previews";
+import { coverOf } from "@/lib/previews";
 import { peopleQuery, sessionQuery } from "@/lib/queries";
 import { canEdit, useReadOnly } from "@/lib/read-only";
 import { itemName, useRememberItem } from "@/lib/recent";
@@ -206,7 +206,8 @@ function Build({ item }: { item: ItemView }) {
   const own = item.photos.filter((photo) => !photo.attemptId);
   const gallery = hero && !own.some((photo) => photo.id === hero.id) ? [hero, ...own] : own;
   // Without a photo, the cover rule's next step: the newest plate picture (coverOf in lib/previews.ts).
-  const plate = gallery.length === 0 ? newestPlate(item) : undefined;
+  const cover = coverOf(item);
+  const plate = cover.kind === "plate" ? cover.file : undefined;
   const [photoId, setPhotoId] = useState(gallery[0]?.id);
   const photoIndex = Math.max(
     0,

@@ -15,7 +15,7 @@ export interface PaletteRow {
   label: string;
   subtitle?: ReactNode;
   /** A photo thumbnail leads the row when there is one… */
-  photo?: { src: string; color?: string } | null;
+  photo?: { src: string; color?: string; fit?: "contain" } | null;
   /** …else this icon on a quiet tile. */
   icon?: Icon;
   /** Chips or other state on the right. */
@@ -218,7 +218,10 @@ function PaletteRowView({
           src={row.photo.src}
           alt=""
           color={row.photo.color}
-          className="size-10 shrink-0 rounded-sm"
+          // A slicer's plate render: whole, on the render's own tile ground.
+          fit={row.photo.fit}
+          frame={row.photo.fit === "contain" ? "render-tile" : undefined}
+          className={cn("size-10 shrink-0 rounded-sm", row.photo.fit === "contain" && "p-0.5")}
           imgClassName="select-none"
         />
       ) : (

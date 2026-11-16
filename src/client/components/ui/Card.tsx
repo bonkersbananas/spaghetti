@@ -1,4 +1,5 @@
 import type { Person } from "@shared/api";
+import { type NoteSize, noteSize } from "@shared/notes";
 import { Link, type LinkProps } from "@tanstack/react-router";
 import { lazy, type ReactNode, Suspense, useRef, useState } from "react";
 import { cn } from "@/lib/cn";
@@ -317,7 +318,8 @@ export function PhotoCountBadge({ count }: { count: number }) {
 /** "From the model" with the file glyph: a plate's picture where a photo would be, so nobody takes it for the result. */
 export function SlicerPreviewBadge() {
   return (
-    <span className="rounded-pill bg-veil text-caption text-on-veil inline-flex h-6 items-center gap-1 px-2 font-semibold backdrop-blur-md">
+    // On the render's own ground, not over a photo: a quiet cream chip, as the 3D view's chips are, not the veil.
+    <span className="rounded-pill bg-cream/90 shadow-soft text-caption text-ink-soft inline-flex h-6 items-center gap-1 px-2 font-semibold">
       <SlicerFileIcon size={13} weight="fill" aria-hidden />
       From the model
     </span>
@@ -362,18 +364,39 @@ interface CoverPictureProps {
   label?: boolean;
   /** Room around a render, so the model doesn't touch the frame (`p-3` by default). */
   inset?: string;
+  /**
+   * A frame wider than a card's (4:3 is "wide", 5:2 a "strip"): a note is set one or two sizes down, so it is sized
+   * by the frame's short side and a short note isn't cut off.
+   */
+  shape?: "wide" | "strip";
+  /** A tile of 48 px or less (a row's, the sidebar's): a render gets the deeper tile ground and a firmer edge. */
+  small?: boolean;
   /** Sizes the frame: the picture fills it. */
   className?: string;
 }
+
+const NOTE_SIZES: NoteSize[] = ["xl", "lg", "md", "sm"];
 
 /**
  * A thing's cover where its picture goes: the best photo; else its newest plate render, whole, on the render ground
  * (the model casts a faint shadow there, so white plastic keeps its edge), labeled "From the model" when `label`;
  * else its note on an index card (`NoteFace`), or `glyph` in a tile too small for words. Never an empty image icon.
  */
-export function CoverPicture({ cover, alt = "", glyph, label, inset = "p-3", className }: CoverPictureProps) {
+export function CoverPicture({
+  cover,
+  alt = "",
+  glyph,
+  label,
+  inset = "p-3",
+  shape,
+  small,
+  className,
+}: CoverPictureProps) {
   const picture = coverPhoto(cover, alt);
   const plate = picture?.fit === "contain";
+  const text = cover.kind === "note" ? cover.text : "";
+  const steps = shape === "strip" ? 2 : shape === "wide" ? 1 : 0;
+  const size = NOTE_SIZES[Math.min(3, NOTE_SIZES.indexOf(noteSize(text)) + steps)];
   return (
     <div
       aria-hidden={(!picture && !!glyph) || undefined}
@@ -384,9 +407,13 @@ export function CoverPicture({ cover, alt = "", glyph, label, inset = "p-3", cla
       )}
     >
       {picture ? (
-        <Photo {...picture} frame={plate ? "render" : undefined} className={cn("size-full", plate && inset)} />
+        <Photo
+          {...picture}
+          frame={plate ? (small ? "render-tile" : "render") : undefined}
+          className={cn("size-full", plate && inset)}
+        />
       ) : (
-        (glyph ?? <NoteFace note={cover.kind === "note" ? cover.text : ""} />)
+        (glyph ?? <NoteFace note={text} size={size} />)
       )}
       {plate && label && (
         <span className="absolute top-2 left-2">

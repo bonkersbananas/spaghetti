@@ -39,6 +39,7 @@ function Row({ item }: { item: ItemView }) {
       className="pressable focus-ring hover:bg-ink/4 -mx-1.5 flex items-center gap-3.5 rounded-lg p-1.5"
     >
       <CoverPicture
+        small
         cover={coverOf(item)}
         glyph={<BuildsIcon size={22} aria-hidden />}
         inset="p-0.5"
