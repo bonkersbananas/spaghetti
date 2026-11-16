@@ -429,7 +429,7 @@ impl Colours {
             partitions.iter().enumerate().map(|(g, &p)| towered && (p > 0 || wrapping(g))).collect();
 
         let p0 = &settings.profile;
-        let mut params = tower_params(settings, &per_filament, &extruder_of);
+        let mut params = tower_params(settings, &per_filament, &extruder_of, first);
         if palette.place_tower {
             let spot = tower_spot(plate.object_boxes, settings.bed, params.width as f64);
             params.position = [spot[0] as f32, spot[1] as f32];
@@ -1841,8 +1841,10 @@ fn wrap_first_visit(steps: &mut Vec<Step>, finish_first: bool) {
     }
 }
 
-/// The tower's settings from the print's (`WipeTower`'s constructor).
-fn tower_params(s: &Settings, per: &[Settings], extruder_of: &[usize]) -> wipe_tower::Params {
+/// The tower's settings from the print's (`WipeTower`'s constructor). Its travel and first-layer speeds are those of
+/// the nozzle the first filament printed (`initial_tool`) is on, as Orca's `get_extruder_index(config, initial_tool)`
+/// reads them: on the X2D the two nozzles' first layers print at different speeds.
+fn tower_params(s: &Settings, per: &[Settings], extruder_of: &[usize], initial_tool: usize) -> wipe_tower::Params {
     let p = &s.profile;
     let f = |key: &str| p.float(key) as f32;
     let per_extruder = |key: &str| -> Vec<u32> {
@@ -1868,7 +1870,7 @@ fn tower_params(s: &Settings, per: &[Settings], extruder_of: &[usize]) -> wipe_t
             })
             .collect()
     };
-    let first = per.first().unwrap_or(s);
+    let first = per.get(initial_tool).or(per.first()).unwrap_or(s);
     let shared_bed = {
         let mut b = [0.0f64, 0.0, s.bed[0], s.bed[1]];
         for area in p.list("extruder_printable_area") {
@@ -2003,5 +2005,40 @@ fn tower_filament(s: &Settings, original: &crate::profile::Profile) -> wipe_towe
             0.0
         },
         petg_pre_extrusion_offset_dist: at("filament_tower_interface_pre_extrusion_dist"),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::filaments::{Palette, settings_for};
+    use crate::json::Json;
+    use std::sync::Arc;
+
+    /// Orca's tower takes its first layer's and travel speeds from the nozzle of the filament printed first
+    /// (`get_extruder_index(config, initial_tool)`), not from filament 1's: with filament 1 on the right nozzle, whose
+    /// first layer is slower, and filament 2 printed first on the left, the tower's first layer goes at the left's.
+    #[test]
+    fn the_towers_first_layer_speed_is_the_first_printed_filaments_nozzles() {
+        let x2d = crate::profile::x2d();
+        let mut p = crate::profile::Profile {
+            machine: x2d.machine.clone(),
+            process: x2d.process.clone(),
+            filament: x2d.filament.clone(),
+        };
+        let speeds = ["40", "40", "20", "20"].map(|v| Json::String(v.into())).to_vec();
+        p.process.insert("initial_layer_speed".into(), Json::Array(speeds));
+        let p = Arc::new(p);
+        let palette = Palette {
+            profiles: vec![p.clone(), p.clone()],
+            colours: vec!["#F2754E".into(), "#4F7FC7".into()],
+            manual_map: None,
+            place_tower: false,
+        };
+        let extruder_of = [1, 0];
+        let per = settings_for(&palette, &extruder_of);
+        let s = Settings::from_profile(p, None);
+        assert_eq!(tower_params(&s, &per, &extruder_of, 1).first_layer_speed, 40.0);
+        assert_eq!(tower_params(&s, &per, &extruder_of, 0).first_layer_speed, 20.0);
     }
 }
