@@ -41,7 +41,7 @@ function Row({ item }: { item: ItemView }) {
       <CoverPicture
         cover={coverOf(item)}
         glyph={<BuildsIcon size={22} aria-hidden />}
-        inset="p-1"
+        inset="p-0.5"
         className="size-12 shrink-0 rounded-md"
       />
       <span className="flex min-w-0 flex-1 flex-col">

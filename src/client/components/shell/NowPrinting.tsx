@@ -44,7 +44,7 @@ export function NowPrintingCard({ item, attempt }: NowPrintingCardProps) {
       <CoverPicture
         cover={coverOf(item, { file: attempt.file })}
         glyph={<BuildsIcon size={18} aria-hidden />}
-        inset="p-0.5"
+        inset="p-0"
         className="size-9 shrink-0 rounded-sm"
       />
       <span className="flex min-w-0 flex-1 flex-col">
