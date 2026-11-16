@@ -60,6 +60,13 @@ interface ToggleChipProps extends Omit<ComponentPropsWithRef<"button">, "childre
   tone?: ChipTone;
   /** Starts with a picture (a spool disc, a swatch) that sits closer to the edge than a word would. */
   lead?: boolean;
+  /**
+   * `quiet`: words with no chip around them until picked, for a filter or two beside a section's heading (Ideas'
+   * "Has a model" beside "The rest"); picked, the same ink pill as a picked chip, tight around the label and count.
+   */
+  appearance?: "chip" | "quiet";
+  /** How many it would show, after the label: faint at rest, in the pill's own ink once picked. */
+  count?: number;
   children: ReactNode;
 }
 
@@ -76,25 +83,35 @@ export function ToggleChip({
   icon: IconComponent,
   tone = "neutral",
   lead,
+  appearance = "chip",
+  count,
   children,
   className,
   ...props
 }: ToggleChipProps) {
+  const quiet = appearance === "quiet";
   return (
     <button
       type="button"
       aria-pressed={selected}
       className={cn(
         base,
-        "pressable focus-ring touch-target relative h-9 md:h-8",
-        lead ? "gap-2 pr-3.5 pl-2" : "px-3.5",
-        selected ? selectedTones[tone] : "bg-cream text-ink-soft shadow-soft hover:text-ink",
+        "pressable focus-ring touch-target relative",
+        quiet ? "h-7 px-2.5" : cn("h-9 md:h-8", lead ? "gap-2 pr-3.5 pl-2" : "px-3.5"),
+        selected
+          ? selectedTones[tone]
+          : quiet
+            ? "text-ink-soft hover:bg-ink/5 hover:text-ink"
+            : "bg-cream text-ink-soft shadow-soft hover:text-ink",
         className,
       )}
       {...props}
     >
       {IconComponent && <IconComponent size={16} weight={selected ? "fill" : "regular"} aria-hidden />}
       {children}
+      {count !== undefined && (
+        <span className={cn("tabular font-medium", selected ? "opacity-70" : "text-ink-faint")}>{count}</span>
+      )}
     </button>
   );
 }

@@ -1,3 +1,4 @@
+import { hyphenateLongWords } from "@shared/notes";
 import { Link, type LinkComponentProps } from "@tanstack/react-router";
 import { m } from "motion/react";
 import type { ReactNode, Ref } from "react";
@@ -67,7 +68,7 @@ export function MiniCard({
       ref={ref}
       className={cn(
         "group/mini relative shrink-0 snap-start list-none md:w-32 xl:w-44",
-        fill ? "w-full" : "w-[6.125rem]",
+        fill ? "w-full" : "w-26",
         className,
       )}
     >
@@ -121,7 +122,11 @@ export function MiniCard({
                 className={cn("size-full", photo.fit === "contain" && "p-2")}
               />
             ) : note ? (
-              <NoteFace note={note} compact className="pt-7" />
+              // Laid over its box, so a long note fills the card's face instead of making the row taller.
+              <div className="absolute inset-0">
+                {/* Room for the corner menu where it always shows (touch screens); with a mouse it shows on hover only. */}
+                <NoteFace note={note} compact="fill" className="pt-7 [@media(hover:hover)_and_(pointer:fine)]:pt-0" />
+              </div>
             ) : (
               <div className="bg-well text-ink-ghost flex size-full items-center justify-center">
                 <ImageIcon size={24} weight="light" aria-hidden />
@@ -130,7 +135,7 @@ export function MiniCard({
           </div>
           {(heading || ((photo || !note) && meta)) && (
             // The padding is on the wrapper: a clamped heading shows its next line in its own padding.
-            <div className="px-1.5 pt-1.5 pb-1">
+            <div className="px-1 pt-1.5 pb-1">
               {heading ? (
                 <h3
                   className={cn(
@@ -139,7 +144,8 @@ export function MiniCard({
                     title ? "text-ink font-semibold" : "text-ink font-sans font-medium",
                   )}
                 >
-                  {heading}
+                  {/* A word too long for the card's line breaks with a hyphen, not mid-word with none. */}
+                  {hyphenateLongWords(heading, 10)}
                 </h3>
               ) : (
                 <p className="text-small text-ink-faint min-h-[2lh] leading-snug">{meta}</p>

@@ -6,7 +6,7 @@ import { Reflow } from "@/components/ui/Reflow";
 import { cn } from "@/lib/cn";
 import type { ItemView } from "@/lib/items";
 import { fileThumbSrc, photoSrc } from "@/lib/previews";
-import { photoAlt, plateAlt, plateCover, type UpNextMenu } from "./IdeaCard";
+import { photoAlt, plateAlt, plateCover, shortenLinks, type UpNextMenu } from "./IdeaCard";
 
 const CardMenu = lazy(() => import("./CardMenu").then((m) => ({ default: m.CardMenu })));
 
@@ -82,7 +82,7 @@ export function UpNextStrip({ queue, menuFor, landed, dragFor }: UpNextStripProp
                       ? { src: fileThumbSrc(plate), alt: plateAlt(item), fit: "contain" }
                       : undefined
                 }
-                note={item.note || undefined}
+                note={item.note ? shortenLinks(item.note) : undefined}
                 title={item.title || undefined}
                 meta={relativeTime(item.createdAt)}
                 corner={
