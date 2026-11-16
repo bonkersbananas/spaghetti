@@ -417,14 +417,14 @@ struct Slowdown {
 impl Slowdown {
     fn new(role: Role, width: f64, mm3_per_mm: f64, speed: f64, s: &Settings) -> Slowdown {
         // Orca's reference: the outer wall's speed for the outer wall, the inner wall's for everything else, within
-        // the filament's flow.
+        // the filament's flow (on the plastic extruded, the filament's flow ratio counted, as `speed_cap`).
         let volumetric = s.max_volumetric_speed;
         let mut reference = if role == Role::OuterWall { s.outer_wall_speed } else { s.inner_wall_speed };
         if reference == 0.0 && mm3_per_mm > 0.0 {
-            reference = volumetric / mm3_per_mm;
+            reference = s.speed_cap(mm3_per_mm);
         }
         if volumetric > 0.0 && mm3_per_mm > 0.0 {
-            reference = reference.min(volumetric / mm3_per_mm);
+            reference = reference.min(s.speed_cap(mm3_per_mm));
         }
         let share = |v: crate::config::Share| -> f64 {
             let abs = v.of(reference);
