@@ -14,6 +14,7 @@ import { useHotkeys } from "@/lib/hotkeys";
 import { connectOutbox } from "@/lib/items";
 import { useLiveUpdates } from "@/lib/live";
 import { clearOfflineData } from "@/lib/offline";
+import { openedDirectly } from "@/lib/origin";
 import { outbox } from "@/lib/outbox";
 import { PaletteProvider, usePalette } from "@/lib/palette";
 import { usePasskeyOffer } from "@/lib/passkey-offer";
@@ -113,7 +114,7 @@ function Shell() {
   usePasskeyOffer();
   // A tapped notification says where to go; an answer given offline lands in the outbox behind this page's back.
   useServiceWorkerMessages(
-    (path) => void navigate({ href: path }),
+    (path) => void navigate({ href: path, state: openedDirectly }),
     () => void outbox.pickUp(),
   );
   // Photos that came from an agent are resized quietly, in idle time, by the first browser that sees them.

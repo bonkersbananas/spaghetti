@@ -40,6 +40,7 @@ import { MetaList } from "@/components/ui/MetaList";
 import { NoteField } from "@/components/ui/NoteField";
 import { Photo } from "@/components/ui/Photo";
 import { useFilePicker } from "@/components/ui/PhotoTiles";
+import { PullToGo } from "@/components/ui/PullToGo";
 import { SaveStatus } from "@/components/ui/SaveStatus";
 import { Section } from "@/components/ui/Section";
 import { SegmentedControl } from "@/components/ui/SegmentedControl";
@@ -49,6 +50,7 @@ import { SpoolColourField } from "@/components/ui/SpoolColourField";
 import { SpoolDisc } from "@/components/ui/SpoolDisc";
 import { shortcutCaps, useHotkeys } from "@/lib/hotkeys";
 import { pollWhileReading, requestLabelRead, useLabelReadsEnabled } from "@/lib/label-read";
+import { useBackTo } from "@/lib/origin";
 import { deleteSpool, loadSlot, saveSpool, setSpoolPhoto } from "@/lib/pantry";
 import { spoolAttemptsQuery, spoolsQuery } from "@/lib/pantry-queries";
 import { photoSrc } from "@/lib/previews";
@@ -210,7 +212,9 @@ function SpoolPage({ spool }: { spool: Spool }) {
     deleteSpool(queryClient, spool);
     void navigate({ to: "/pantry" });
   };
-  useHotkeys({ spoolBack: () => void navigate({ to: "/pantry" }), spoolDelete: remove });
+  // Escape goes where the back control goes: to the page this spool was opened from, else to the Pantry.
+  const backTo = useBackTo(back);
+  useHotkeys({ spoolBack: backTo.go, spoolDelete: remove });
 
   const materials: string[] = (SPOOL_MATERIALS as readonly string[]).includes(value.material)
     ? [...SPOOL_MATERIALS]
@@ -327,229 +331,231 @@ function SpoolPage({ spool }: { spool: Spool }) {
   );
 
   return (
-    <article className="pb-6">
-      <h1 className="sr-only">{[name.title, name.detail].filter(Boolean).join(", ")}</h1>
-      <DetailBar back={back}>
-        <SaveStatus state={saveState} className="mr-2" />
-        <IconButton
-          icon={TrashIcon}
-          label="Take out of the pantry"
-          title={`Take out of the pantry (${shortcutCaps("spoolDelete").join("")})`}
-          disabled={readOnly}
-          onClick={remove}
-        />
-      </DetailBar>
-      {camera.input}
-      {library.input}
+    <PullToGo back={back}>
+      <article className="pb-6">
+        <h1 className="sr-only">{[name.title, name.detail].filter(Boolean).join(", ")}</h1>
+        <DetailBar back={back}>
+          <SaveStatus state={saveState} className="mr-2" />
+          <IconButton
+            icon={TrashIcon}
+            label="Take out of the pantry"
+            title={`Take out of the pantry (${shortcutCaps("spoolDelete").join("")})`}
+            disabled={readOnly}
+            onClick={remove}
+          />
+        </DetailBar>
+        {camera.input}
+        {library.input}
 
-      <div className="flex flex-col gap-8 md:flex-row md:items-start md:gap-10 lg:gap-14">
-        {/* The spool: its label photo, or the spool itself in its color. */}
-        <div ref={stickyColumn} className="sticky-column flex min-w-0 flex-col gap-3 md:flex-2">
-          <div className="bg-ink/3 relative -mx-5 aspect-4/3 w-[calc(100%+2.5rem)] overflow-hidden md:mx-0 md:aspect-square md:w-auto md:rounded-xl">
-            {spool.photo ? (
-              <Photo
-                src={photoSrc(spool.photo.id, "large")}
-                alt={`The label of ${name.title}`}
-                color={spool.photo.color || undefined}
-                fit="cover"
-                className="size-full"
-              />
-            ) : (
-              <div className="flex size-full items-center justify-center">
-                <SpoolDisc color={value.colorHex} colors={value.colors} size="hero" />
-              </div>
-            )}
-          </div>
-          <div className="flex flex-wrap gap-2">
-            {labelReads ? (
-              <>
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  icon={isDesktop ? SparkleIcon : CameraIcon}
-                  disabled={readOnly}
-                  onClick={isDesktop ? library.open : camera.open}
-                >
-                  Read the label
-                </Button>
-                {!isDesktop && (
-                  <Button variant="quiet" size="sm" icon={ImageIcon} disabled={readOnly} onClick={library.open}>
-                    Library
-                  </Button>
-                )}
-                {spool.photo && !spool.labelRead && spool.fromLabel.length === 0 && (
-                  <Button
-                    variant="quiet"
-                    size="sm"
-                    icon={SparkleIcon}
-                    disabled={readOnly}
-                    onClick={() => void requestLabelRead(queryClient, spool.id)}
-                  >
-                    {/* Short, so the three buttons share one line on a phone. */}
-                    Read it
-                  </Button>
-                )}
-              </>
-            ) : (
-              <>
-                {!isDesktop && (
-                  <Button variant="secondary" size="sm" icon={CameraIcon} disabled={readOnly} onClick={camera.open}>
-                    {spool.photo ? "Retake" : "Snap the label"}
-                  </Button>
-                )}
-                <Button variant="quiet" size="sm" icon={ImageIcon} disabled={readOnly} onClick={library.open}>
-                  {spool.photo ? "Another photo" : "Add a photo"}
-                </Button>
-              </>
-            )}
-          </div>
-          <LabelReadNote spool={spool} readOnly={readOnly} titled={waiting} className="px-0.5" />
-          {isDesktop && details}
-        </div>
-
-        <div className="flex min-w-0 flex-col gap-7 md:flex-3">
-          <div className="flex flex-col gap-1">
-            <TextArea
-              appearance="title"
-              aria-label="Color name"
-              placeholder={waiting ? "Reading the label…" : value.material}
-              className={waiting ? "sg-pulse" : undefined}
-              minRows={1}
-              maxLength={60}
-              readOnly={readOnly}
-              value={value.colorName ?? ""}
-              onChange={(event) => change({ colorName: event.target.value.replace(/\n/g, " ") || null })}
-              onKeyDown={(event) => {
-                if (event.key === "Enter" || event.key === "Escape") {
-                  event.preventDefault();
-                  event.currentTarget.blur();
-                }
-              }}
-            />
-            <MetaList className="text-body text-ink-soft">
-              {[
-                // While Claude reads an unnamed spool the title says so, and the material isn't said twice.
-                ...(waiting ? [] : [name.detail || value.material]),
-                ...(spool.slot ? [slotPlace(spool.slot)] : []),
-              ].map((piece) => (
-                <span key={piece}>{piece}</span>
-              ))}
-            </MetaList>
-          </div>
-
-          <fieldset disabled={readOnly} className="contents">
-            {spool.gramsLeft !== null ? (
-              <GramsHero
-                spool={spool}
-                disabled={readOnly}
-                onWeigh={() => setWeighing(true)}
-                onSetWeight={() => setSettingWeight(true)}
-              />
-            ) : (
-              <div className="flex flex-col gap-2.5">
-                <div className="flex min-h-8 items-center justify-between gap-3 md:max-w-md">
-                  <span className="text-small text-ink-soft px-0.5 font-semibold">How much is left</span>
-                  <Button variant="quiet" size="sm" onClick={() => setSettingWeight(true)}>
-                    Count in grams
-                  </Button>
-                </div>
-                <SegmentedControl<Remaining>
-                  label="How much is left"
-                  labelHidden
-                  options={REMAINING.map((level) => ({ value: level, label: REMAINING_LABELS[level] }))}
-                  value={value.remaining}
-                  onChange={(remaining) => change({ remaining })}
-                  className="w-full md:max-w-md"
+        <div className="flex flex-col gap-8 md:flex-row md:items-start md:gap-10 lg:gap-14">
+          {/* The spool: its label photo, or the spool itself in its color. */}
+          <div ref={stickyColumn} className="sticky-column flex min-w-0 flex-col gap-3 md:flex-2">
+            <div className="bg-ink/3 relative -mx-5 aspect-4/3 w-[calc(100%+2.5rem)] overflow-hidden md:mx-0 md:aspect-square md:w-auto md:rounded-xl">
+              {spool.photo ? (
+                <Photo
+                  src={photoSrc(spool.photo.id, "large")}
+                  alt={`The label of ${name.title}`}
+                  color={spool.photo.color || undefined}
+                  fit="cover"
+                  className="size-full"
                 />
-              </div>
-            )}
-
-            {spool.netGrams !== null && fromLabel("netGrams") && (
-              <p className="text-small text-ink-soft flex flex-wrap items-baseline gap-x-2 px-0.5">
-                Net weight {gramsText(spool.netGrams)} {fromLabel("netGrams")}
-              </p>
-            )}
-
-            {/* A label with its actions beside it, and what it says below at full width, so it never wraps under them. */}
-            <div className="flex flex-col gap-0.5 md:max-w-md">
-              <div className="flex min-h-8 items-center justify-between gap-3">
-                <span className="text-small text-ink-soft font-semibold">In the printer</span>
-                <div className="flex items-center gap-1.5">
-                  <Button variant="secondary" size="sm" onClick={() => setPlacing(true)}>
-                    {spool.slot ? "Move" : "Load it"}
+              ) : (
+                <div className="flex size-full items-center justify-center">
+                  <SpoolDisc color={value.colorHex} colors={value.colors} size="hero" />
+                </div>
+              )}
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {labelReads ? (
+                <>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    icon={isDesktop ? SparkleIcon : CameraIcon}
+                    disabled={readOnly}
+                    onClick={isDesktop ? library.open : camera.open}
+                  >
+                    Read the label
                   </Button>
-                  {spool.slot && (
+                  {!isDesktop && (
+                    <Button variant="quiet" size="sm" icon={ImageIcon} disabled={readOnly} onClick={library.open}>
+                      Library
+                    </Button>
+                  )}
+                  {spool.photo && !spool.labelRead && spool.fromLabel.length === 0 && (
                     <Button
                       variant="quiet"
                       size="sm"
-                      onClick={() => spool.slot && void loadSlot(queryClient, spool.slot, null)}
+                      icon={SparkleIcon}
+                      disabled={readOnly}
+                      onClick={() => void requestLabelRead(queryClient, spool.id)}
                     >
-                      Take out
+                      {/* Short, so the three buttons share one line on a phone. */}
+                      Read it
                     </Button>
                   )}
-                </div>
-              </div>
-              <span className="text-body text-ink">
-                {spool.slot ? `Loaded ${slotPlace(spool.slot)}` : "Not loaded"}
-              </span>
+                </>
+              ) : (
+                <>
+                  {!isDesktop && (
+                    <Button variant="secondary" size="sm" icon={CameraIcon} disabled={readOnly} onClick={camera.open}>
+                      {spool.photo ? "Retake" : "Snap the label"}
+                    </Button>
+                  )}
+                  <Button variant="quiet" size="sm" icon={ImageIcon} disabled={readOnly} onClick={library.open}>
+                    {spool.photo ? "Another photo" : "Add a photo"}
+                  </Button>
+                </>
+              )}
             </div>
+            <LabelReadNote spool={spool} readOnly={readOnly} titled={waiting} className="px-0.5" />
+            {isDesktop && details}
+          </div>
 
-            <div className="flex flex-col gap-0.5 md:max-w-md">
-              <div className="flex min-h-8 items-center justify-between gap-3">
-                <span className="text-small text-ink-soft font-semibold">Dried</span>
-                <ToggleChip
-                  tone="semolina"
-                  icon={DriedIcon}
-                  selected={!!value.driedAt && Date.now() - value.driedAt < 12 * 3_600_000}
-                  onClick={() =>
-                    change({
-                      driedAt: value.driedAt && Date.now() - value.driedAt < 12 * 3_600_000 ? null : Date.now(),
-                    })
+          <div className="flex min-w-0 flex-col gap-7 md:flex-3">
+            <div className="flex flex-col gap-1">
+              <TextArea
+                appearance="title"
+                aria-label="Color name"
+                placeholder={waiting ? "Reading the label…" : value.material}
+                className={waiting ? "sg-pulse" : undefined}
+                minRows={1}
+                maxLength={60}
+                readOnly={readOnly}
+                value={value.colorName ?? ""}
+                onChange={(event) => change({ colorName: event.target.value.replace(/\n/g, " ") || null })}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" || event.key === "Escape") {
+                    event.preventDefault();
+                    event.currentTarget.blur();
                   }
-                >
-                  Dried it today
-                </ToggleChip>
-              </div>
-              <span className="text-body text-ink">
-                {value.driedAt ? `Last dried ${inlineTime(value.driedAt)}` : "Not dried yet"}
-              </span>
-              <DryIt spool={{ ...spool, driedAt: value.driedAt, material: value.material }} />
+                }}
+              />
+              <MetaList className="text-body text-ink-soft">
+                {[
+                  // While Claude reads an unnamed spool the title says so, and the material isn't said twice.
+                  ...(waiting ? [] : [name.detail || value.material]),
+                  ...(spool.slot ? [slotPlace(spool.slot)] : []),
+                ].map((piece) => (
+                  <span key={piece}>{piece}</span>
+                ))}
+              </MetaList>
             </div>
-          </fieldset>
-          <NoteField
-            value={value.note}
-            readOnly={readOnly}
-            onChange={(note) => change({ note })}
-            placeholder="How it prints, what it likes: 215 °C, slow first layer, dry it first…"
-          />
-          {/* On phones, right under the note: editing stays close however long the history grows. */}
-          {!isDesktop && details}
 
-          {/* The spool's sections, a section's distance apart and from the note above. */}
-          <div className="mt-5 flex flex-col gap-12 empty:hidden md:gap-16">
-            <UsedBy spool={spool} />
-            <SpoolRecipes material={value.material} finish={value.finish} />
-            <PrintedWith spool={spool} />
+            <fieldset disabled={readOnly} className="contents">
+              {spool.gramsLeft !== null ? (
+                <GramsHero
+                  spool={spool}
+                  disabled={readOnly}
+                  onWeigh={() => setWeighing(true)}
+                  onSetWeight={() => setSettingWeight(true)}
+                />
+              ) : (
+                <div className="flex flex-col gap-2.5">
+                  <div className="flex min-h-8 items-center justify-between gap-3 md:max-w-md">
+                    <span className="text-small text-ink-soft px-0.5 font-semibold">How much is left</span>
+                    <Button variant="quiet" size="sm" onClick={() => setSettingWeight(true)}>
+                      Count in grams
+                    </Button>
+                  </div>
+                  <SegmentedControl<Remaining>
+                    label="How much is left"
+                    labelHidden
+                    options={REMAINING.map((level) => ({ value: level, label: REMAINING_LABELS[level] }))}
+                    value={value.remaining}
+                    onChange={(remaining) => change({ remaining })}
+                    className="w-full md:max-w-md"
+                  />
+                </div>
+              )}
+
+              {spool.netGrams !== null && fromLabel("netGrams") && (
+                <p className="text-small text-ink-soft flex flex-wrap items-baseline gap-x-2 px-0.5">
+                  Net weight {gramsText(spool.netGrams)} {fromLabel("netGrams")}
+                </p>
+              )}
+
+              {/* A label with its actions beside it, and what it says below at full width, so it never wraps under them. */}
+              <div className="flex flex-col gap-0.5 md:max-w-md">
+                <div className="flex min-h-8 items-center justify-between gap-3">
+                  <span className="text-small text-ink-soft font-semibold">In the printer</span>
+                  <div className="flex items-center gap-1.5">
+                    <Button variant="secondary" size="sm" onClick={() => setPlacing(true)}>
+                      {spool.slot ? "Move" : "Load it"}
+                    </Button>
+                    {spool.slot && (
+                      <Button
+                        variant="quiet"
+                        size="sm"
+                        onClick={() => spool.slot && void loadSlot(queryClient, spool.slot, null)}
+                      >
+                        Take out
+                      </Button>
+                    )}
+                  </div>
+                </div>
+                <span className="text-body text-ink">
+                  {spool.slot ? `Loaded ${slotPlace(spool.slot)}` : "Not loaded"}
+                </span>
+              </div>
+
+              <div className="flex flex-col gap-0.5 md:max-w-md">
+                <div className="flex min-h-8 items-center justify-between gap-3">
+                  <span className="text-small text-ink-soft font-semibold">Dried</span>
+                  <ToggleChip
+                    tone="semolina"
+                    icon={DriedIcon}
+                    selected={!!value.driedAt && Date.now() - value.driedAt < 12 * 3_600_000}
+                    onClick={() =>
+                      change({
+                        driedAt: value.driedAt && Date.now() - value.driedAt < 12 * 3_600_000 ? null : Date.now(),
+                      })
+                    }
+                  >
+                    Dried it today
+                  </ToggleChip>
+                </div>
+                <span className="text-body text-ink">
+                  {value.driedAt ? `Last dried ${inlineTime(value.driedAt)}` : "Not dried yet"}
+                </span>
+                <DryIt spool={{ ...spool, driedAt: value.driedAt, material: value.material }} />
+              </div>
+            </fieldset>
+            <NoteField
+              value={value.note}
+              readOnly={readOnly}
+              onChange={(note) => change({ note })}
+              placeholder="How it prints, what it likes: 215 °C, slow first layer, dry it first…"
+            />
+            {/* On phones, right under the note: editing stays close however long the history grows. */}
+            {!isDesktop && details}
+
+            {/* The spool's sections, a section's distance apart and from the note above. */}
+            <div className="mt-5 flex flex-col gap-12 empty:hidden md:gap-16">
+              <UsedBy spool={spool} />
+              <SpoolRecipes material={value.material} finish={value.finish} />
+              <PrintedWith spool={spool} />
+            </div>
           </div>
         </div>
-      </div>
 
-      <WeighSheet spool={spool} open={weighing} onOpenChange={setWeighing} />
-      <SetWeightSheet spool={spool} open={settingWeight} onOpenChange={setSettingWeight} />
-      <Sheet
-        open={placing}
-        onOpenChange={setPlacing}
-        title={spool.slot ? "Move it" : "Load it"}
-        description="Pick the slot it sits in. Whatever was there comes out."
-      >
-        <AmsLoadout
-          onSlot={(slot) => {
-            void loadSlot(queryClient, slot, spool.id);
-            setPlacing(false);
-          }}
-        />
-      </Sheet>
-    </article>
+        <WeighSheet spool={spool} open={weighing} onOpenChange={setWeighing} />
+        <SetWeightSheet spool={spool} open={settingWeight} onOpenChange={setSettingWeight} />
+        <Sheet
+          open={placing}
+          onOpenChange={setPlacing}
+          title={spool.slot ? "Move it" : "Load it"}
+          description="Pick the slot it sits in. Whatever was there comes out."
+        >
+          <AmsLoadout
+            onSlot={(slot) => {
+              void loadSlot(queryClient, slot, spool.id);
+              setPlacing(false);
+            }}
+          />
+        </Sheet>
+      </article>
+    </PullToGo>
   );
 }
 

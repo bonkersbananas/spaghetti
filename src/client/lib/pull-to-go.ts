@@ -5,6 +5,7 @@ import { sections, workshop } from "@/components/shell/sections";
 import { afterPaint } from "./after-paint";
 import { tick } from "./haptics";
 import { duration, spring } from "./motion";
+import { useBackTo } from "./origin";
 import { previousPlace } from "./previous-path";
 
 /** How far the page has moved (px) when a release goes back. */
@@ -60,6 +61,10 @@ interface PullState {
  */
 export function usePullToGo(list: { to: string; label: string }, reduced: boolean): PullState {
   const router = useRouter();
+  // An idea or build opened from somewhere in the app goes back there, as its back control does.
+  const backTo = useBackTo(list);
+  const origin = useRef(backTo);
+  origin.current = backTo;
   const offset = useMotionValue(0);
   const leave = useMotionValue(1);
   const [ready, setReady] = useState(false);
@@ -96,7 +101,8 @@ export function usePullToGo(list: { to: string; label: string }, reduced: boolea
       void Promise.resolve(leaving).then(() => {
         // Going back keeps the page before as it was (its scroll position, the card you came from); with
         // none in the app's history (a deep link, a fresh open) the page's own list is where it goes.
-        if (place.current) router.history.back();
+        if (origin.current.fromOrigin) origin.current.go();
+        else if (place.current) router.history.back();
         else void router.navigate({ to: target.current.to });
       });
     }
@@ -140,7 +146,13 @@ export function usePullToGo(list: { to: string; label: string }, reduced: boolea
         if (dy <= SLOP) return;
         mode = "pulling";
         place.current = previousPlace();
-        setLabel(place.current ? placeLabel(place.current) : target.current.label);
+        setLabel(
+          origin.current.fromOrigin
+            ? origin.current.label
+            : place.current
+              ? placeLabel(place.current)
+              : target.current.label,
+        );
         setPulling(true);
       }
       if (event.cancelable) event.preventDefault();

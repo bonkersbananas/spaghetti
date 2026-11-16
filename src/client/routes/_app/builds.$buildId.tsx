@@ -77,6 +77,7 @@ import {
   useItemFields,
 } from "@/lib/items";
 import { scrollBehavior } from "@/lib/motion";
+import { useBackTo } from "@/lib/origin";
 import { useScreenActions } from "@/lib/palette";
 import { coverOf } from "@/lib/previews";
 import { peopleQuery, sessionQuery } from "@/lib/queries";
@@ -411,8 +412,10 @@ function Build({ item }: { item: ItemView }) {
     photo: hero ? { id: hero.id, color: hero.color } : null,
   });
 
+  // Escape lets go of the picked attempt first, then goes where the back control goes (where this build was opened from).
+  const backTo = useBackTo(back);
   useHotkeys({
-    buildBack: () => (selected ? setSelected(null) : void navigate({ to: "/builds" })),
+    buildBack: () => (selected ? setSelected(null) : backTo.go()),
     buildLog: primary,
     // Only bound when they do something, so Enter on a button and arrow-key scrolling keep working.
     buildNext: story.length ? () => moveSelection(1) : undefined,
