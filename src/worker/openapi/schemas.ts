@@ -188,6 +188,11 @@ export const Item = z
     twistPhoto: Photo.nullable()
       .optional()
       .describe("The photo that twist leads with, while its idea has it: the cover's next fallback."),
+    claudeTitle: z
+      .string()
+      .nullable()
+      .optional()
+      .describe("The title Claude gave an idea saved without one; the title is still Claude's while it says this."),
   })
   .meta({ id: "Item", description: "An idea, or a build (an idea that is being printed)." });
 
