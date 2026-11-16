@@ -297,11 +297,15 @@ export const ItemResult = forwardRef<HTMLAnchorElement, ItemResultProps>(functio
   const look = stageLook[item.stage];
   const title = item.title?.trim();
   const snippet = hit.snippet ? snippetSegments(hit.snippet) : null;
+  // A count goes with the name, as an attempt's number does ("· 3 attempts"); a time sits at the chips' end. Beside
+  // two chips a count would wrap onto a line of its own on a phone.
+  const count =
+    item.stage !== "idea" && hit.attempts ? `${hit.attempts} ${hit.attempts === 1 ? "attempt" : "attempts"}` : null;
   const meta =
     item.stage === "idea"
       ? `Captured ${inlineTime(item.createdAt)}`
-      : hit.attempts
-        ? `${hit.attempts} ${hit.attempts === 1 ? "attempt" : "attempts"}`
+      : count
+        ? null
         : `Started ${inlineTime(item.startedAt ?? item.createdAt)}`;
   return (
     <ResultRow
@@ -319,9 +323,14 @@ export const ItemResult = forwardRef<HTMLAnchorElement, ItemResultProps>(functio
           {look.label}
         </Chip>
         {item.stage !== "idea" && hit.lastOutcome && <OutcomeChip outcome={hit.lastOutcome} />}
-        <span className="text-small text-ink-faint ml-auto shrink-0">{meta}</span>
+        {meta && <span className="text-small text-ink-faint ml-auto shrink-0">{meta}</span>}
       </span>
-      {title && <Highlight text={title} terms={terms} className="text-body text-ink truncate font-semibold" />}
+      {title && (
+        <span className="text-body text-ink truncate font-semibold">
+          <Highlight text={title} terms={terms} />
+          {count && <span className="text-small text-ink-faint font-medium"> · {count}</span>}
+        </span>
+      )}
       {hit.comment && snippet ? (
         // Found in the thread: who said it and when, then their words.
         <span className="flex min-w-0 flex-col gap-0.5">

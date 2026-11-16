@@ -207,6 +207,13 @@ async function capture(page: Page, shot: (typeof shots)[number], width: number, 
   await shot.beforeShot?.(page);
   // Let entrance animations and sheets settle.
   await page.waitForTimeout(600);
+  // The fixed clock stalls animations that count on it (an empty state's fade-in stays nearly see-through, which read
+  // as a 400 px gap on the phone's build page): end every finite one. Looping ones (a print's pulse) run on.
+  await page.evaluate(() => {
+    for (const animation of document.getAnimations()) {
+      if (Number.isFinite(Number(animation.effect?.getComputedTiming().endTime))) animation.finish();
+    }
+  });
   const file = join(outDir, `${shot.name}${suffix(theme)}-${width}.png`);
   if (shot.selector) await page.locator(shot.selector).screenshot({ path: file });
   else if (shot.fullPage && (await tooTall(page))) await captureInParts(page, file);

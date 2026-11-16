@@ -8,6 +8,7 @@ import { useRef } from "react";
 import { AutoHeight } from "@/components/ui/AutoHeight";
 import { Avatar, ViaText } from "@/components/ui/Avatar";
 import { Button, IconButton } from "@/components/ui/Button";
+import { UnreadBadge } from "@/components/ui/Card";
 import { CoverPicture } from "@/components/ui/CoverPicture";
 import { BuildsIcon, CameraIcon } from "@/components/ui/icons";
 import { MetaList } from "@/components/ui/MetaList";
@@ -20,6 +21,7 @@ import { duration, ease } from "@/lib/motion";
 import { coverOf } from "@/lib/previews";
 import { usePrintProgress } from "@/lib/print-progress";
 import { useReadOnly } from "@/lib/read-only";
+import { useUnreadCount } from "@/lib/unread-comments";
 import { useIsDesktop } from "@/lib/use-media-query";
 import { OffTheBed } from "./OffTheBed";
 import { OutcomeChip, OutcomePicker } from "./Outcome";
@@ -45,6 +47,11 @@ interface PrintingCardProps {
    * across, 16:9) or `stack` (three across, 4:3), so the focal cards' pictures are never smaller than the grid's below.
    */
   desktop?: "row" | "half" | "wide" | "stack";
+  /**
+   * Builds only: the other person's unread comments as the grid's cards show them, on the picture's corner. Today and
+   * the Journal's Now say them in their own comment line under the prints, so their cards don't repeat it.
+   */
+  withUnread?: boolean;
 }
 
 /** What `desktop` changes from `lg`, over the md row. */
@@ -87,7 +94,15 @@ const layouts = {
  * the build; Finish goes to the build with the attempt's sheet open. When the print should be done, the button
  * gives way to the question people came to answer: how did it go?
  */
-export function PrintingCard({ item, attempt, person, via, compact = false, desktop = "row" }: PrintingCardProps) {
+export function PrintingCard({
+  item,
+  attempt,
+  person,
+  via,
+  compact = false,
+  desktop = "row",
+  withUnread = false,
+}: PrintingCardProps) {
   const layout = layouts[compact ? "compact" : "big"];
   const wide = desktopLayouts[desktop];
   // Each time a compact card becomes the big one on a phone (or back), its content is swapped and fades in; from
@@ -105,6 +120,8 @@ export function PrintingCard({ item, attempt, person, via, compact = false, desk
   const offBed = isOffTheBed(attempt);
   const progress = usePrintProgress(attempt.id, attempt.printedAt, attempt.settings.estimatedMinutes);
   const due = progress.state === "due";
+  const unread = useUnreadCount(item.id);
+  const showUnread = withUnread && unread > 0;
   // The build's cover, with the plate on the bed first when there is no photo.
   const cover = coverOf(item, { file: attempt.file });
   // Its name is right beside the picture, in Fraunces: a build with only a name shows the glyph, not its name twice.
@@ -170,8 +187,9 @@ export function PrintingCard({ item, attempt, person, via, compact = false, desk
           ) : (
             <CoverPicture
               cover={cover}
-              // A compact card's square on a phone is too small to carry it; from md it is the full row's picture.
-              label={compact ? "md" : true}
+              // A compact card's square on a phone is too small to carry it; from md it is the full row's picture. An
+              // unread badge takes the corner, as on the grid's cards.
+              label={showUnread ? false : compact ? "md" : true}
               glyph={nameOnly ? glyph : undefined}
               inset={compact ? "p-1 md:p-3" : "p-3"}
               className="size-full"
@@ -180,6 +198,16 @@ export function PrintingCard({ item, attempt, person, via, compact = false, desk
           {/* The picture and the name lead to the build, each with its own area; the progress below has its own, so
               nothing presses through a button. This one is for the pointer only: the name's link is the stop for the keyboard. */}
           <Link {...to} tabIndex={-1} aria-hidden className="absolute inset-0 z-10" />
+          {showUnread && (
+            <span
+              className={cn(
+                "pointer-events-none absolute z-20",
+                compact ? "top-1.5 left-1.5 md:top-2 md:left-2" : "top-2 left-2",
+              )}
+            >
+              <UnreadBadge count={unread} />
+            </span>
+          )}
           {/* On a compact card the words under it say the same, and a chip would cover the small picture. Off the bed
               the line beside the picture says so ("Off the bed at 10:42 · how did it go?"), so it isn't said twice. */}
           {!offBed && (
@@ -371,6 +399,7 @@ export function BedCards({ prints, people, via, spread = false, className }: Bed
   const cardProps = (item: ItemView, attempt: AttemptView) => ({
     compact,
     desktop,
+    withUnread: spread,
     item,
     attempt,
     person: people.get(attempt.createdBy),

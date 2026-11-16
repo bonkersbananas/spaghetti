@@ -1191,8 +1191,8 @@ async function removeCoverBuilds(page: Page) {
 /** Requests a shot holds back (a picture still on its way), let go in its cleanup. */
 const heldRoutes: Route[] = [];
 
-/** Towel hook's card in the Builds grid. */
-const TOWEL_CARD = "li:has(a:has-text('Towel hook'))";
+/** Towel hook's card on Builds: it is printing, so a print card under On the bed, not one of the grid's. */
+const TOWEL_CARD = "main article:has(a:has-text('Towel hook'))";
 
 /** Opens the attempt's sheet from its card (the card's open button is under its content: click its corner). */
 async function openOffBedSheet(page: Page) {
@@ -2109,7 +2109,9 @@ export const shots: Shot[] = [
     name: "build-scrapped",
     path: `/builds/${SEED_BUILD_IDS.headphoneStand}`,
     prepare: async (page) => {
+      // The trash can asks first (decision 0062): "Scrap this build?", then Scrap.
       await page.getByRole("button", { name: "Scrap build" }).click();
+      await page.getByRole("button", { name: "Scrap", exact: true }).click();
       await page.getByText("Build scrapped").waitFor();
       await page.getByRole("heading", { level: 1, name: "Ideas" }).waitFor();
       await page.waitForTimeout(500);
