@@ -17487,6 +17487,15 @@
                         "properties": {},
                         "additionalProperties": {}
                       }
+                    },
+                    "fixes": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {},
+                        "additionalProperties": {}
+                      },
+                      "description": "When the words name a problem failures had: the later attempt on each build that went better without it, with `after` (the failure), `failures` and `changes`."
                     }
                   },
                   "required": [
@@ -17494,7 +17503,8 @@
                     "ideas",
                     "attempts",
                     "recipes",
-                    "twists"
+                    "twists",
+                    "fixes"
                   ],
                   "additionalProperties": {},
                   "description": "Results by kind."

@@ -3832,8 +3832,30 @@ export const shots: Shot[] = [
     name: "search-results",
     path: "/search?q=PETG%20warping",
     prepare: async (page) => {
-      await page.getByRole("region", { name: "Attempts" }).waitFor();
+      // What fixed it leads (the swatch box's dried filament), then the times it happened.
+      await page
+        .getByRole("region", { name: /^(Times it happened|Attempts)$/ })
+        .first()
+        .waitFor();
+      // What fixed it draws from a chunk loaded when one appears.
+      await page.waitForLoadState("networkidle");
       await page.getByRole("searchbox", { name: "Search" }).blur();
+    },
+  },
+  {
+    // A problem's word: what fixed it leads, picked with the keyboard (its Start again inside the card), and the six
+    // times it happened fold to three with "Show all 6".
+    name: "search-fixed",
+    path: "/search?q=warping",
+    fullPage: true,
+    prepare: async (page) => {
+      await page
+        .getByRole("button", { name: /^Start again with these/ })
+        .first()
+        .waitFor();
+      const box = page.getByRole("searchbox", { name: "Search" });
+      await box.press("ArrowDown");
+      await box.blur();
     },
   },
   {
@@ -4659,6 +4681,23 @@ export const shots: Shot[] = [
     },
   },
   {
+    // A problem's word: what fixed it leads, with the failure it came after and what changed since.
+    name: "palette-fixed",
+    path: "/ideas",
+    width: 1440,
+    prepare: async (page) => {
+      await page.keyboard.press("ControlOrMeta+k");
+      await page.getByRole("combobox", { name: "Jump to or run" }).pressSequentially("warping");
+      await page
+        .getByRole("group", { name: /^(What fixed it|Attempts)$/ })
+        .first()
+        .waitFor();
+    },
+    cleanup: async (page) => {
+      await page.keyboard.press("Escape");
+    },
+  },
+  {
     name: "palette-build",
     path: `/builds/${SEED_BUILD_IDS.cableChain}`,
     width: 1440,
@@ -4904,6 +4943,7 @@ export const shots: Shot[] = [
       await page.waitForTimeout(600);
     },
   },
+  { name: "styleguide-search", path: "/styleguide", selector: "#search" },
   { name: "styleguide-spools", path: "/styleguide", selector: "#pantry" },
   { name: "styleguide-recipes", path: "/styleguide", selector: "#recipes" },
   {

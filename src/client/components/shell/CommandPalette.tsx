@@ -1,4 +1,4 @@
-import type { AttemptHit, ItemHit, Spool } from "@shared/api";
+import type { AttemptHit, FixHit, ItemHit, Spool } from "@shared/api";
 import { highlight, searchTerms, words } from "@shared/search";
 import { isShortcut, keycaps, type ShortcutId, shortcutKeys } from "@shared/shortcuts";
 import { inlineTime, relativeTime } from "@shared/time";
@@ -8,7 +8,7 @@ import { useNavigate } from "@tanstack/react-router";
 import { type KeyboardEvent, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { OutcomeChip } from "@/components/builds/Outcome";
 import { summarizeSettings } from "@/components/builds/settings";
-import { attemptLink, itemLink } from "@/components/search/Results";
+import { afterWords, attemptLink, itemLink } from "@/components/search/Results";
 import { coverPhoto } from "@/components/ui/Card";
 import { Highlight } from "@/components/ui/Highlight";
 import {
@@ -273,11 +273,15 @@ function PaletteBody({ close, choose }: { close: () => void; choose: (run: () =>
       return [...here, ...unreadEntries, ...items, ...general, ...goTo];
     }
 
+    // What fixed a problem is said once, under its own caption.
+    const fixed = new Set((found?.fixes ?? []).map((fix) => fix.attempt.id));
     const hits = found
       ? [
-          // What worked first: a settings question is asked to copy the answer.
+          // A problem's words ("warping"): what fixed it comes first.
+          ...(found.fixes ?? []).slice(0, PER_KIND).map((fix) => fixEntry(fix, foundTerms, navigate)),
+          // Then what worked: a settings question is asked to copy the answer.
           ...found.attempts
-            .filter((hit) => hit.attempt.outcome === "success")
+            .filter((hit) => hit.attempt.outcome === "success" && !fixed.has(hit.attempt.id))
             .slice(0, PER_KIND)
             .map((hit) => attemptEntry(hit, foundTerms, navigate, "What worked")),
           ...found.builds
@@ -287,9 +291,12 @@ function PaletteBody({ close, choose }: { close: () => void; choose: (run: () =>
             .slice(0, PER_KIND)
             .map((hit) => itemEntry(hit, "Ideas", foundTerms, navigate, cached.get(hit.item.id))),
           ...found.attempts
-            .filter((hit) => hit.attempt.outcome !== "success")
+            .filter((hit) => hit.attempt.outcome !== "success" && !fixed.has(hit.attempt.id))
             .slice(0, PER_KIND)
-            .map((hit) => attemptEntry(hit, foundTerms, navigate, "Attempts")),
+            .map((hit) =>
+              // Under what fixed it, the failures are the times it happened (as on the search page).
+              attemptEntry(hit, foundTerms, navigate, fixed.size ? "Times it happened" : "Attempts"),
+            ),
           ...(found.spools ?? []).slice(0, PER_KIND).map((spool) => spoolEntry(spool, foundTerms, navigate)),
         ]
       : [];
@@ -509,6 +516,28 @@ function attemptEntry(
       photo: hit.photo ? { src: photoSrc(hit.photo.id, "thumb"), color: hit.photo.color || undefined } : null,
       icon: BuildsIcon,
       trailing: <OutcomeChip outcome={hit.attempt.outcome} />,
+    },
+  };
+}
+
+/** What fixed a problem: the build, the failure it came after and what changed since ("dried the filament"). */
+function fixEntry(fix: FixHit, terms: ReturnType<typeof searchTerms>, navigate: Navigate): Entry {
+  const id = `fix-${fix.attempt.id}`;
+  const name = itemName(fix.item, "build");
+  // The problem is what was typed: the line says when, and what changed.
+  const after = afterWords(fix.after, []);
+  return {
+    id,
+    group: "What fixed it",
+    run: () => void navigate(attemptLink(fix)),
+    row: {
+      id,
+      label: `${name}, attempt ${fix.number}`,
+      title: <Highlight text={name} terms={terms} />,
+      subtitle: [`Attempt ${fix.number}`, after.charAt(0).toLowerCase() + after.slice(1), ...fix.changes].join(" · "),
+      photo: fix.photo ? { src: photoSrc(fix.photo.id, "thumb"), color: fix.photo.color || undefined } : null,
+      icon: BuildsIcon,
+      trailing: <OutcomeChip outcome={fix.attempt.outcome} />,
     },
   };
 }

@@ -524,6 +524,26 @@ export interface AttemptHit {
   coachIdea?: string | null;
 }
 
+/**
+ * "What fixed it": an attempt that went better after a failure the search found ("warping"), without the problem
+ * coming back (`pickFix` in shared/fixes.ts). It needn't match the words itself.
+ */
+export interface FixHit extends AttemptHit {
+  /** The failure it came after: the latest of them on its build, when the search found several. */
+  after: {
+    attemptId: string;
+    number: number;
+    outcome: "failed" | "partial";
+    printedAt: number;
+    /** That failure's tags that the words matched ("warping"), as slugs; empty when only its note did. */
+    tags: string[];
+  };
+  /** How many of the failures found it came after (on its own build). */
+  failures: number;
+  /** What changed since that failure, as the build's story says it: "bed 60 → 65 °C", "dried the filament". */
+  changes: string[];
+}
+
 /** An idea or a build found by search. */
 export interface ItemHit {
   item: Pick<Item, "id" | "stage" | "title" | "note" | "createdBy" | "createdAt" | "startedAt" | "finishedAt">;
@@ -548,6 +568,8 @@ export interface SearchResponse {
   twists: Twist[];
   /** Spools on the shelf whose material, brand, colour or finish match (a few); none while a filter is on. */
   spools: Spool[];
+  /** When the words name a problem that failures had: the attempts that fixed it, best answer first. */
+  fixes?: FixHit[];
   /** The words the answer is for, as the server read the question (filler dropped, typos mended, synonyms added): what to mark. */
   terms?: Array<{ text: string; prefix: boolean }>;
   /** The question with its mistyped words mended ("petgg" → "petg") when nothing matched as typed. */
