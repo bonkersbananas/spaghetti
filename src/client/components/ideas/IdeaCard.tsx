@@ -9,9 +9,11 @@ import { ForLine } from "@/components/ui/ForField";
 import { ModelMark } from "@/components/ui/ModelMark";
 import { ReactionGlance } from "@/components/ui/ReactionGlance";
 import { useReflow } from "@/components/ui/Reflow";
+import { NamingSkeleton } from "@/components/ui/Skeleton";
 import { UploadBadge } from "@/components/ui/UploadBadge";
 import { cn } from "@/lib/cn";
 import { useForLine } from "@/lib/for-whom";
+import { useNaming } from "@/lib/item-name";
 import type { ItemView } from "@/lib/items";
 import { useOutbox } from "@/lib/outbox";
 import { coverOf, newestPlate, photoAlt, photoSrc, plateAlt } from "@/lib/previews";
@@ -21,7 +23,6 @@ import { coverOf, newestPlate, photoAlt, photoSrc, plateAlt } from "@/lib/previe
 // chunk of its own on every Ideas first load.
 export { ModelMark, photoAlt, plateAlt };
 
-import { useNaming } from "@/lib/naming";
 import { useUnreadCount, useUnreadThreadSearch } from "@/lib/unread-comments";
 
 // The menu's code (popover, sheet) arrives after the first screen: it is only needed once a card is touched.
@@ -103,7 +104,7 @@ export function IdeaCard({ item, person, via, landing, menu, headingLevel = 2, r
           reserveEnd={!!menu && !item.pending}
           photo={coverPhoto(cover, cover.kind === "plate" ? plateAlt(item) : photoAlt(item))}
           title={item.title || (item.draft?.status === "reading" ? "Reading the page…" : item.title)}
-          naming={naming}
+          naming={naming && <NamingSkeleton />}
           // Links read better short on a card: printables.com/model/123.
           note={item.note ? shortenLinks(item.note) : undefined}
           unread={unread}

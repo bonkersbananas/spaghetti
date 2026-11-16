@@ -4347,6 +4347,11 @@
                     "type": "string",
                     "format": "uuid",
                     "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                  },
+                  "photos": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 100
                   }
                 },
                 "required": [
@@ -20021,6 +20026,37 @@
             "type": [
               "string",
               "null"
+            ]
+          },
+          "titleJob": {
+            "description": "An untitled idea's naming by Claude: naming while it works on the title, done once it ran.",
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "status": {
+                    "type": "string",
+                    "enum": [
+                      "naming",
+                      "done"
+                    ]
+                  },
+                  "since": {
+                    "type": "integer",
+                    "minimum": -9007199254740991,
+                    "maximum": 9007199254740991,
+                    "description": "Epoch milliseconds."
+                  }
+                },
+                "required": [
+                  "status",
+                  "since"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "null"
+              }
             ]
           }
         },

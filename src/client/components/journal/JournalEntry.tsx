@@ -5,7 +5,7 @@ import { attemptPartsLabel } from "@shared/parts";
 import { isOffTheBed, offTheBedLabel } from "@shared/print-progress";
 import { fullTime } from "@shared/time";
 import { Link } from "@tanstack/react-router";
-import { forwardRef, lazy, Suspense, useState } from "react";
+import { forwardRef, useState } from "react";
 import { OutcomeChip, outcomeIcons } from "@/components/builds/Outcome";
 import { SettingsLine } from "@/components/builds/SettingsLine";
 import { summarizeSettings } from "@/components/builds/settings";
@@ -26,14 +26,12 @@ import { MetaList } from "@/components/ui/MetaList";
 import { Photo } from "@/components/ui/Photo";
 import { PhotoRow } from "@/components/ui/PhotoRow";
 import { PrintProgress } from "@/components/ui/PrintProgress";
+import { NamingSkeleton } from "@/components/ui/Skeleton";
 import { useTagOptions } from "@/lib/builds";
 import { cn } from "@/lib/cn";
 import { heroClick } from "@/lib/hero";
-import { itemName } from "@/lib/item-name";
+import { itemName, useNaming } from "@/lib/item-name";
 import { coverOf, fileThumbSrc, photoSrc } from "@/lib/previews";
-
-/** "Naming…" in a captured idea's row while Claude names it: loaded only then, out of the Journal's first load. */
-const JournalNaming = lazy(() => import("./JournalNaming").then((module) => ({ default: module.JournalNaming })));
 
 /** Where an entry leads: the attempt in its build, the build, or the idea. */
 export function entryLink(entry: Entry, item: Pick<Item, "id" | "stage">) {
@@ -303,6 +301,7 @@ const EventRow = forwardRef<HTMLAnchorElement, JournalEntryProps>(function Event
 ) {
   // A title that comes to a row drawn without one (Claude naming an idea just saved) fades in where it lands.
   const [untitled] = useState(!item.title?.trim());
+  const naming = useNaming(item);
   if (entry.kind === "attempt") return null;
   const event = events[entry.kind];
   const EventIcon = event.icon;
@@ -341,11 +340,9 @@ const EventRow = forwardRef<HTMLAnchorElement, JournalEntryProps>(function Event
           </time>
         </MetaList>
         {
-          // While Claude names it (decision 0071) the name's place says so; its code loads only then.
-          item.titleJob?.status === "naming" && !name.titled ? (
-            <Suspense fallback={null}>
-              <JournalNaming item={item} />
-            </Suspense>
+          // While Claude names it (decision 0071) the name's place says so.
+          naming ? (
+            <NamingSkeleton />
           ) : (
             <span
               key={name.titled ? "title" : "note"}

@@ -40,30 +40,3 @@ export function cleanTitle(raw: string | null | undefined): string | null {
   title = title.charAt(0).toUpperCase() + title.slice(1);
   return title;
 }
-
-/** How long the screens show "Naming…" at most: past it, the idea reads as untitled again (decision 0071). */
-export const NAMING_TIMEOUT_MS = 15_000;
-
-/**
- * Until when an idea shows that Claude is naming it (epoch ms), or null when it doesn't. The server says so
- * (`titleJob`) once it has the job; before that (a capture still on this device, its first photo on its way) a fresh
- * capture that Claude will name shows it too, when the Worker has the key. Either way it stops a while after it began.
- */
-export function namingUntil(
-  item: {
-    stage: string;
-    title: string | null;
-    note: string;
-    photos: number;
-    createdAt: number;
-    createdVia?: string | null;
-    titleJob?: { status: "naming" | "done"; since: number } | null;
-  },
-  titlesOn: boolean,
-): number | null {
-  if (item.title?.trim() || item.stage !== "idea") return null;
-  if (item.titleJob) return item.titleJob.status === "naming" ? item.titleJob.since + NAMING_TIMEOUT_MS : null;
-  // Only a person's own fresh capture is named without the server saying so yet; an agent names what it saves.
-  if (!titlesOn || item.createdVia || !wantsTitle(item)) return null;
-  return item.createdAt + NAMING_TIMEOUT_MS;
-}

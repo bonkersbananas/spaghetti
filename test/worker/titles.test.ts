@@ -206,6 +206,21 @@ describe("Claude names an idea saved without a title", () => {
     expect((await getItem(titled)).titleJob).toBeNull();
   });
 
+  it("starts with the save when the capture says its photos are on their way, and waits for the first", async () => {
+    const web = stubClaude();
+    const itemId = uuid();
+    await asPerson("/api/items", { method: "POST", json: { id: itemId, photos: 1 } });
+    // The screens know at once.
+    expect((await getItem(itemId)).titleJob?.status).toBe("naming");
+    // The photo comes a little after the job's first wait; the job waits for it and reads it.
+    await new Promise((resolve) => setTimeout(resolve, 3000));
+    await uploadPhoto(itemId, uuid(), cookie);
+    await settled();
+    expect((await getItem(itemId)).title).toBe("Spool holder for the shelf");
+    const content = (web.bodies[0] as { messages: Array<{ content: Array<{ type: string }> }> }).messages[0]?.content;
+    expect(content?.[0]?.type).toBe("image");
+  }, 20_000);
+
   it("leaves an idea that became a build while it waited", async () => {
     const web = stubClaude();
     const itemId = await capture({ note: "a bracket for the shelf" });

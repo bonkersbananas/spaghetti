@@ -1,5 +1,5 @@
-import { CardSkeleton, RowSkeleton } from "@/components/ui/Skeleton";
-import { Panel, Section } from "./shared";
+import { CardSkeleton, NamingSkeleton, RowSkeleton } from "@/components/ui/Skeleton";
+import { Label, Panel, Section } from "./shared";
 
 export function SkeletonSection() {
   return (
@@ -17,6 +17,10 @@ export function SkeletonSection() {
           <RowSkeleton />
         </Panel>
       </div>
+      <Label>A title Claude is naming: the sparkle breathes before the title's line, until the title fades in</Label>
+      <Panel className="flex max-w-sm flex-col gap-1">
+        <NamingSkeleton />
+      </Panel>
     </Section>
   );
 }

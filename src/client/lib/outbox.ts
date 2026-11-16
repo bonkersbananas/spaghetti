@@ -489,6 +489,8 @@ class Outbox {
           // A capture is an idea unless it says otherwise; a build finished offline is created as a build.
           stage: (create.stage ?? "idea") === "idea" ? "idea" : "building",
           ...(create.twistId ? { twistId: create.twistId } : {}),
+          // The photos coming after it: Claude starts naming an untitled idea (and its screens say so) at once.
+          ...(entry.photos.length ? { photos: entry.photos.filter((photo) => !photo.attemptId).length } : {}),
         },
       }));
     } catch (error) {

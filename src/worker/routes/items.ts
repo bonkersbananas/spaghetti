@@ -63,6 +63,8 @@ const createItem = z.object({
   stage: z.enum(["idea", "building"]).optional(),
   /** The twist it prints (a build made from a twist). */
   twistId: id.optional(),
+  /** How many photos the capture is sending after it: Claude's naming of an untitled idea starts at once (0071). */
+  photos: z.number().int().min(0).max(100).optional(),
 });
 const updateItem = z.object({
   title: title.optional(),
@@ -417,7 +419,7 @@ export const itemRoutes = new Hono<AppEnv>()
       }),
     ]);
     // An idea saved without a title gets one from Claude once it has something to read (decision 0070).
-    if (stage === "idea" && !itemTitle?.trim()) await titleAfterSave(c, itemId);
+    if (stage === "idea" && !itemTitle?.trim()) await titleAfterSave(c, itemId, parsed.data.photos ?? 0);
     const item = await loadItem(c.var.db, itemId);
     if (!item) return apiError(c, 409, "deleted", "That was deleted.");
     return c.json<ItemResponse>({ item }, 201);

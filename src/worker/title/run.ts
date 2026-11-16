@@ -20,8 +20,13 @@ const DAY_MS = 24 * 60 * 60 * 1000;
  * after it, so the first save gives the rest of the capture a moment to arrive.
  */
 export const SETTLE_MS = 2500;
-/** After the response, `waitUntil` has about 30 seconds: the wait and the call fit in a little less than that. */
-export const WAIT_UNTIL_TIMEOUT_MS = 20_000;
+/**
+ * A capture that said its photos were on their way may still be sending the first when the wait is over: the job
+ * looks for it every half second for this long more before it gives up (a slow connection).
+ */
+export const PHOTO_WAIT_MS = 8000;
+/** After the response, `waitUntil` has about 30 seconds: the waits and the call fit in a little less than that. */
+export const WAIT_UNTIL_TIMEOUT_MS = 15_000;
 /** The cron has all the time it needs. */
 const CRON_TIMEOUT_MS = 60_000;
 /** The photos Claude looks at: the first few say what the idea is. */
@@ -69,7 +74,7 @@ const livePhotos = (itemId: string) =>
  * title, no model link, something to read) and it was never named before. An idea is named once. Doesn't call Claude
  * (`runTitle` does) and shows nothing: the idea keeps showing as it was until the title arrives.
  */
-export async function startTitle(db: Db, itemId: string): Promise<boolean> {
+export async function startTitle(db: Db, itemId: string, photosComing = 0): Promise<boolean> {
   const item = await db
     .select({ stage: items.stage, title: items.title, note: items.note })
     .from(items)
@@ -77,7 +82,8 @@ export async function startTitle(db: Db, itemId: string): Promise<boolean> {
     .get();
   if (!item) return false;
   const photoCount = await db.$count(photos, livePhotos(itemId));
-  if (!wantsTitle({ ...item, photos: photoCount })) return false;
+  // Photos a capture said are on their way count: the job (and the screens' "Naming…") starts with the idea.
+  if (!wantsTitle({ ...item, photos: photoCount + photosComing })) return false;
   // A model page's idea is the draft's to name (decision 0019).
   if (await db.select({ id: itemDrafts.itemId }).from(itemDrafts).where(eq(itemDrafts.itemId, itemId)).get()) {
     return false;
@@ -95,11 +101,11 @@ export async function startTitle(db: Db, itemId: string): Promise<boolean> {
  * capture endpoint): starts the naming job and runs it after the response. Only a person's save, or their sharing
  * token's (the capture scope alone), starts one: an agent that can do more names what it saves itself.
  */
-export async function titleAfterSave(c: Context<AppEnv>, itemId: string): Promise<void> {
+export async function titleAfterSave(c: Context<AppEnv>, itemId: string, photosComing = 0): Promise<void> {
   const scopes = c.var.scopes;
   const sharingToken = scopes?.length === 1 && scopes[0] === "capture";
   if ((scopes && !sharingToken) || !titlesEnabled(c.env) || c.env.TITLES_ON_SAVE === "off") return;
-  const started = await startTitle(c.var.db, itemId).catch(() => false);
+  const started = await startTitle(c.var.db, itemId, photosComing).catch(() => false);
   if (!started) return;
   try {
     c.executionCtx.waitUntil(
@@ -156,7 +162,15 @@ export async function runTitle(
     )
     .returning();
   if (!row) return;
-  if (settleMs > 0) await new Promise((resolve) => setTimeout(resolve, settleMs));
+  if (settleMs > 0) {
+    await new Promise((resolve) => setTimeout(resolve, settleMs));
+    // Started by a capture whose photos are still on their way, with no words to go on yet: wait for the first.
+    for (let waited = 0; waited < PHOTO_WAIT_MS; waited += 500) {
+      const note = (await db.select({ note: items.note }).from(items).where(eq(items.id, itemId)).get())?.note ?? "";
+      if (noteWords(note) || (await db.$count(photos, livePhotos(itemId)))) break;
+      await new Promise((resolve) => setTimeout(resolve, 500));
+    }
+  }
 
   const item = await db
     .select()
