@@ -3288,6 +3288,9 @@ export const shots: Shot[] = [
       await renderBuild(page, { title: "Shelf hook", black: true, stage: "shelved" });
       await page.goto("/builds", { waitUntil: "networkidle" });
       await page.getByText("Shelf hook").waitFor();
+      // Again from the saved list: cards that arrive by a live update fade in, which the shots' fixed clock never ends.
+      await page.reload({ waitUntil: "networkidle" });
+      await page.getByText("Coat hook").first().waitFor();
       await page.waitForTimeout(1000);
     },
     cleanup: removeCoverBuilds,

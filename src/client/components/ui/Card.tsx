@@ -365,7 +365,7 @@ interface CoverPictureProps {
   /** Room around a render, so the model doesn't touch the frame (`p-3` by default). */
   inset?: string;
   /**
-   * A frame wider than a card's (4:3 is "wide", 5:2 a "strip"): a note is set one or two sizes down, so it is sized
+   * A frame wider than a card's (4:3 is "wide", 5:2 a "strip"): a note is set one or three sizes down, so it is sized
    * by the frame's short side and a short note isn't cut off.
    */
   shape?: "wide" | "strip";
@@ -395,7 +395,8 @@ export function CoverPicture({
   const picture = coverPhoto(cover, alt);
   const plate = picture?.fit === "contain";
   const text = cover.kind === "note" ? cover.text : "";
-  const steps = shape === "strip" ? 2 : shape === "wide" ? 1 : 0;
+  // A 4:3 frame is about three fifths as tall as a card's for its width, a 5:2 strip a third.
+  const steps = shape === "strip" ? 3 : shape === "wide" ? 1 : 0;
   const size = NOTE_SIZES[Math.min(3, NOTE_SIZES.indexOf(noteSize(text)) + steps)];
   return (
     <div

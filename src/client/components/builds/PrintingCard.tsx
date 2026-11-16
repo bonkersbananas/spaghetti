@@ -123,10 +123,17 @@ export function PrintingCard({ item, attempt, person, via, compact = false }: Pr
                   : layout.picture,
           )}
         >
-          {compact && cover.kind === "note" && !nameOnly ? (
+          {cover.kind === "note" && !nameOnly ? (
+            // A note: in the phone's 5:2 strip (or, compact, the glyph: its square is too small for words), and in
+            // the desktop row's 4:3, each set by the frame's short side.
             <>
-              <CoverPicture cover={cover} glyph={glyph} className="size-full md:hidden" />
-              <CoverPicture cover={cover} shape="strip" className="size-full max-md:hidden" />
+              <CoverPicture
+                cover={cover}
+                glyph={compact ? glyph : undefined}
+                shape="strip"
+                className="size-full md:hidden"
+              />
+              <CoverPicture cover={cover} shape="wide" className="size-full max-md:hidden" />
             </>
           ) : (
             <CoverPicture
@@ -134,8 +141,6 @@ export function PrintingCard({ item, attempt, person, via, compact = false }: Pr
               // A compact card's square on a phone is too small to carry it; from md it is the full row's picture.
               label={compact ? "md" : true}
               glyph={nameOnly ? glyph : undefined}
-              // A note in the phone's 5:2 strip, and the desktop row's 4:3, is set by the frame's short side.
-              shape="strip"
               inset={compact ? "p-1 md:p-3" : "p-3"}
               className="size-full"
             />

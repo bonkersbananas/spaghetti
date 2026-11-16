@@ -238,11 +238,11 @@
   --sg-pressed: #3a332c;
   --sg-note: #2e2823;
   --sg-tile: #38312b;
-  --sg-render: #38312b;
-  /* At night a faint lit edge too, so a black or dark-filament model keeps its outline on the warm ground. */
-  --sg-render-shadow: drop-shadow(0 0 0.5px rgb(255 236 214 / 0.28)) drop-shadow(0 1px 2px rgb(0 0 0 / 0.45));
-  --sg-render-tile: #38312b;
-  --sg-render-shadow-tile: drop-shadow(0 0 0.5px rgb(255 236 214 / 0.35)) drop-shadow(0 1px 1px rgb(0 0 0 / 0.5));
+  --sg-render: #3d352e;
+  /* At night a lit edge too, so a black or dark-filament model keeps its outline on the warm ground. */
+  --sg-render-shadow: drop-shadow(0 0 0.75px rgb(255 236 214 / 0.42)) drop-shadow(0 1px 2px rgb(0 0 0 / 0.4));
+  --sg-render-tile: #4a4139;
+  --sg-render-shadow-tile: drop-shadow(0 0 0.6px rgb(255 236 214 / 0.55)) drop-shadow(0 1px 1px rgb(0 0 0 / 0.45));
   --sg-plate: #4f4536;
   --sg-plate-edge: #382f25;
   --sg-plate-grid: #8a7860;
