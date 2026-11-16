@@ -94,11 +94,12 @@ jobs:
           grep -q '; FEATURE: Support interface' /tmp/supports.gcode
           node bench/wasm-node.mjs target/wasm32-unknown-unknown/release/spaghetti_slicer.wasm /tmp/supports-wasm.gcode.3mf --setup /tmp/supports.json tests/models/bridge.stl
           cmp /tmp/supports.gcode.3mf /tmp/supports-wasm.gcode.3mf
-      - name: The same, with tree supports under the bridge
+      - name: The same, with tree supports under the bridge (their loops as arcs)
         run: |
           echo '{"process": {"enable_support": "1", "support_type": "tree(auto)"}}' > /tmp/trees.json
           ./target/release/spaghetti-slicer --setup /tmp/trees.json tests/models/bridge.stl -o /tmp/trees.gcode.3mf --gcode /tmp/trees.gcode
           grep -q '; FEATURE: Support$' /tmp/trees.gcode
+          grep -qE '^G[23] X[0-9.]+ Y[0-9.]+ I-?[0-9.]+ J-?[0-9.]+ E[0-9.]+$' /tmp/trees.gcode
           node bench/wasm-node.mjs target/wasm32-unknown-unknown/release/spaghetti_slicer.wasm /tmp/trees-wasm.gcode.3mf --setup /tmp/trees.json tests/models/bridge.stl
           cmp /tmp/trees.gcode.3mf /tmp/trees-wasm.gcode.3mf
       - name: The same, for the 0.2 mm nozzle (its presets as a setup in WebAssembly)
