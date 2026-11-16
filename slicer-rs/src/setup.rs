@@ -127,6 +127,7 @@ mod tests {
             r##"{"machine": {"curr_bed_type": "Cool Plate"},
                 "process": {"layer_height": "0.12", "wall_loops": "4", "sparse_infill_density": "25%",
                             "sparse_infill_pattern": "gyroid", "ironing_type": "top",
+                            "ironing_pattern": "concentric",
                             "print_settings_id": "0.12mm High Quality @BBL X2D"},
                 "filaments": [{"filament_type": ["PETG"], "nozzle_temperature": ["255", "255", "255", "255"],
                                "nozzle_temperature_initial_layer": ["250", "250", "250", "250"],
@@ -147,7 +148,8 @@ mod tests {
         assert_eq!(s.filament_tray, "");
         // What it doesn't print as asked, it says.
         assert_eq!(s.sparse_infill_pattern, "gyroid");
-        assert!(s.fallbacks().iter().any(|f| f == "no ironing"), "{:?}", s.fallbacks());
+        assert_eq!(s.iron.surfaces, crate::config::IronWhere::Tops);
+        assert!(s.fallbacks().iter().any(|f| f == "concentric ironing printed as lines"), "{:?}", s.fallbacks());
         // Everything else is still the X2D's.
         assert_eq!(s.outer_wall_speed, 200.0);
     }

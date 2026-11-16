@@ -45,9 +45,11 @@ pub fn areas(
         // Whether the layer's regions are solid throughout (no sparse infill, unless nearly solid, and no internal
         // bridge): `solid` then irons each of their whole slices.
         let solid_throughout = |object: u32| {
-            islands[l].iter().zip(&fills[l]).filter(|(i, _)| i.object == object).all(|(_, f)| {
-                (s.sparse_density > 0.95 || f.sparse.is_empty()) && f.internal_bridge.is_empty()
-            })
+            islands[l]
+                .iter()
+                .zip(&fills[l])
+                .filter(|(i, _)| i.object == object)
+                .all(|(_, f)| (s.sparse_density > 0.95 || f.sparse.is_empty()) && f.internal_bridge.is_empty())
         };
         islands[l]
             .iter()
