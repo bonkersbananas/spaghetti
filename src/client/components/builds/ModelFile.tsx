@@ -621,6 +621,8 @@ export function ModelCard({
   openFile,
   view3d,
   onRemove,
+  draft,
+  inSheet,
   details,
   phone,
   compact,
@@ -649,6 +651,10 @@ export function ModelCard({
   /** Once sliced and saved: the plate picture opens the 3D view. */
   view3d?: View3d;
   onRemove?: () => void;
+  /** Not saved yet (a new attempt's sheet): its X removes at once, where a saved model's Remove is in its "…" menu. */
+  draft?: boolean;
+  /** In a sheet: its menu is a popover on phones too. */
+  inSheet?: boolean;
   /** How the settings open; without it they don't, and the line is only words. */
   details?: SettingsOpener;
   phone: boolean;
@@ -709,6 +715,8 @@ export function ModelCard({
       downloadName={slicedName(name)}
       view3d={view3d}
       onRemove={onRemove}
+      draft={draft}
+      inSheet={inSheet}
       compact={compact}
       raised={raised}
       className={className}
@@ -980,6 +988,7 @@ export default function ModelFileCard({
         saved && canView3d(file) ? { file, fallbackColors: filaments?.map((f) => f.colorHex), printing } : undefined
       }
       onRemove={onRemove}
+      inSheet={inSheet}
       details={details}
       changed={changed}
       plateNote={plateNote}
@@ -1061,6 +1070,7 @@ export function ModelDraftCard({
       thumbSrc={job?.picture || draft.picture ? fileThumbSrc({ id: draft.id }) : undefined}
       prefill={job?.outcome?.ok ? job.outcome.prefill : undefined}
       onRemove={onRemove}
+      draft
       {...(onSlice ? { onSlice: (change: SliceOptions) => onSlice({ ...made, ...change }) } : {})}
       phone={!isDesktop}
     />
