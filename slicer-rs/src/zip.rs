@@ -74,7 +74,6 @@ pub fn entries(bytes: &[u8]) -> Option<Vec<Entry<'_>>> {
 /// Raw DEFLATE of `data`. Big inputs are cut into chunks compressed on their own (in parallel where there are
 /// threads), each ended on a byte boundary, so they join into one stream; the cost is a little ratio.
 pub fn deflate(data: &[u8], level: u8) -> Vec<u8> {
-    const CHUNK: usize = 1 << 18;
     if data.len() <= CHUNK {
         return deflate_part(data, level, true);
     }
@@ -84,6 +83,74 @@ pub fn deflate(data: &[u8], level: u8) -> Vec<u8> {
         deflate_part(slice, level, i + 1 == parts)
     });
     pieces.concat()
+}
+
+/// The size of the pieces `deflate` packs on their own.
+const CHUNK: usize = 1 << 18;
+
+/// How many pieces `Deflater` gathers before it packs them (together, on every core where there are threads).
+const BATCH: usize = 16;
+
+/// `deflate` for text written a little at a time (`std::fmt::Write`): the same bytes as `deflate` of all of it, packed
+/// piece by piece as the pieces fill, so that the whole text is never held (a big mesh's model is over 100 MB of it).
+pub struct Deflater {
+    level: u8,
+    /// What isn't packed yet: always the last piece, which is the one that ends the stream.
+    pending: Vec<u8>,
+    packed: Vec<u8>,
+    crc: crc32fast::Hasher,
+    size: usize,
+}
+
+impl Deflater {
+    pub fn new(level: u8) -> Self {
+        Deflater {
+            level,
+            pending: Vec::with_capacity((BATCH + 1) * CHUNK),
+            packed: Vec::new(),
+            crc: crc32fast::Hasher::new(),
+            size: 0,
+        }
+    }
+
+    pub fn write(&mut self, bytes: &[u8]) {
+        self.pending.extend_from_slice(bytes);
+        if self.pending.len() > BATCH * CHUNK {
+            self.pack_whole_pieces();
+        }
+    }
+
+    /// Packs every whole piece but the last, which may still be the stream's end.
+    fn pack_whole_pieces(&mut self) {
+        let n = (self.pending.len().saturating_sub(1)) / CHUNK;
+        if n == 0 {
+            return;
+        }
+        let (level, pending) = (self.level, &self.pending);
+        let pieces = crate::par::map_range(n, |i| deflate_part(&pending[i * CHUNK..(i + 1) * CHUNK], level, false));
+        for piece in pieces {
+            self.packed.extend_from_slice(&piece);
+        }
+        self.crc.update(&self.pending[..n * CHUNK]);
+        self.size += n * CHUNK;
+        self.pending.drain(..n * CHUNK);
+    }
+
+    /// The packed bytes, the size of what was written and its CRC-32: what `Writer::add_deflated` takes.
+    pub fn finish(mut self) -> (Vec<u8>, usize, u32) {
+        self.pack_whole_pieces();
+        self.packed.extend_from_slice(&deflate_part(&self.pending, self.level, true));
+        self.crc.update(&self.pending);
+        self.size += self.pending.len();
+        (self.packed, self.size, self.crc.finalize())
+    }
+}
+
+impl std::fmt::Write for Deflater {
+    fn write_str(&mut self, s: &str) -> std::fmt::Result {
+        self.write(s.as_bytes());
+        Ok(())
+    }
 }
 
 fn deflate_part(mut input: &[u8], level: u8, last: bool) -> Vec<u8> {
@@ -204,6 +271,29 @@ mod tests {
         assert_eq!(entries[0].read().unwrap(), b"hello");
         assert_eq!(entries[1].read().unwrap(), big);
         assert_eq!(entries[2].read().unwrap(), b"\x89PNG");
+    }
+
+    #[test]
+    fn text_written_a_little_at_a_time_packs_as_it_would_all_at_once() {
+        // Around every boundary: nothing, under a piece, a piece exactly, a byte either side, a batch and more.
+        let text: Vec<u8> = (0..175_000u32)
+            .flat_map(|i| format!("<vertex x=\"{}\" y=\"{}\"/>\n", i % 977, i % 13).into_bytes())
+            .collect();
+        for len in [0, 1, CHUNK - 1, CHUNK, CHUNK + 1, 3 * CHUNK, BATCH * CHUNK, BATCH * CHUNK + 1, text.len()] {
+            let text = &text[..len];
+            for step in [1, 7, 4096, 1 << 20] {
+                if step == 1 && len > CHUNK + 1 {
+                    continue;
+                }
+                let mut d = Deflater::new(6);
+                for piece in text.chunks(step.min(len.max(1))) {
+                    d.write(piece);
+                }
+                let (packed, size, crc) = d.finish();
+                assert_eq!(packed, deflate(text, 6), "{len} bytes, {step} at a time");
+                assert_eq!((size, crc), (len, crc32fast::hash(text)));
+            }
+        }
     }
 
     #[test]
