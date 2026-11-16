@@ -4,7 +4,8 @@ import { clearPersistedQueries } from "./persist";
 /** The service worker's caches of what came from the server or a share (src/sw/sw.js, lib/share.ts). */
 const DEVICE_CACHES = ["sg-photos", "sg-share"];
 /** What the device remembers of the workspace: the palette's recent items (lib/recent.ts) and searches (lib/search.ts). */
-const REMEMBERED_KEYS = ["sg-recent-items", "sg-recent-searches"];
+// sg-now-height: how tall the phone Journal's Now block was (routes/_app/journal.tsx); the next person's differs.
+const REMEMBERED_KEYS = ["sg-recent-items", "sg-recent-searches", "sg-now-height"];
 
 /**
  * Forgets what was kept of the workspace on this device: the offline copy, the photos, a share on its way and the

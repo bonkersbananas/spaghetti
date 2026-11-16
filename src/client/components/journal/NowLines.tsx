@@ -15,9 +15,12 @@ export { default as UpkeepLine } from "@/components/today/UpkeepLine";
 /** How long a first visit waits for the lines' answers before the block shows without them. */
 const FIRST_ANSWERS_MS = 1000;
 
-/** Whether this device has yet to hear what the lines draw from: a first visit, with nothing kept from last time. */
+/**
+ * Whether this device has yet to hear what the lines draw from: a first visit, with nothing kept from last time. Only
+ * answers the device keeps (lib/persist.ts) count: the features aren't kept, and waiting on them held every resumed app.
+ */
 export const missingAnswers = (queryClient: QueryClient) =>
-  [unreadQuery, upkeepQuery, featuresQuery].some((query) => queryClient.getQueryData(query.queryKey) === undefined);
+  [unreadQuery, upkeepQuery].some((query) => queryClient.getQueryData(query.queryKey) === undefined);
 
 /**
  * On a first visit, the lines' answers, waited for a moment so they don't arrive after the block and push the notebook
