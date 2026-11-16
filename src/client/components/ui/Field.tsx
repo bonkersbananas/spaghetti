@@ -2,7 +2,9 @@ import { formatDuration } from "@shared/time";
 import {
   type ComponentPropsWithRef,
   forwardRef,
+  lazy,
   type ReactNode,
+  Suspense,
   useCallback,
   useEffect,
   useId,
@@ -83,7 +85,18 @@ export interface TextFieldProps extends Omit<ComponentPropsWithRef<"input">, "si
   appearance?: "surface" | "plain";
   /** "sm" for dense groups of fields, such as print settings. "lg" is one big figure to type, such as a weighing. */
   size?: "sm" | "md" | "lg";
+  /**
+   * A × at the field's end that empties it while it has text (`ClearButton`; the field must be controlled). On by
+   * default for `type="search"`, which gets it in place of the browser's own, a 16 px target.
+   */
+  clearable?: boolean;
 }
+
+/** Room at a clearable field's end for its × (`ClearButton`): as wide as the field is tall. */
+const clearPad = { sm: "pr-11", md: "pr-12 md:pr-11", lg: "pr-16" } as const;
+
+// The × arrives with the first search field on the screen, not with every screen's first load.
+const ClearButton = lazy(() => import("./ClearButton"));
 
 export const TextField = forwardRef<HTMLInputElement, TextFieldProps>(function TextField(
   {
@@ -97,6 +110,7 @@ export const TextField = forwardRef<HTMLInputElement, TextFieldProps>(function T
     suffix,
     appearance = "surface",
     size = "md",
+    clearable,
     className,
     id,
     ...props
@@ -105,6 +119,11 @@ export const TextField = forwardRef<HTMLInputElement, TextFieldProps>(function T
 ) {
   const autoId = useId();
   const fieldId = id ?? autoId;
+  // A controlled field's: its value says whether there is anything to clear.
+  const canClear = (clearable ?? props.type === "search") && !suffix && !props.readOnly && !props.disabled;
+  useEffect(() => {
+    if (canClear) void import("./ClearButton");
+  }, [canClear]);
   return (
     <FieldFrame
       id={fieldId}
@@ -140,10 +159,16 @@ export const TextField = forwardRef<HTMLInputElement, TextFieldProps>(function T
               : "text-ink placeholder:text-ink-faint w-full bg-transparent",
             IconComponent && "pl-11",
             suffix && (size === "lg" ? "pr-14" : size === "md" ? "pr-12" : "pr-10"),
+            canClear && clearPad[size],
             error && "shadow-ring-error focus:shadow-ring-error",
           )}
           {...props}
         />
+        {canClear && !!props.value && (
+          <Suspense fallback={null}>
+            <ClearButton size={size} />
+          </Suspense>
+        )}
         {suffix && (
           <span
             aria-hidden

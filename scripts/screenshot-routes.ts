@@ -3996,6 +3996,21 @@ export const shots: Shot[] = [
   { name: "journal-failures", path: "/journal?outcome=failures" },
   { name: "search", path: "/search" },
   {
+    // The search field's × with its target outlined: the field's full height to its right edge (before, the browser's
+    // own 16 px button). The outline is the shot's, not the app's.
+    name: "search-clear-target",
+    path: "/search",
+    width: 390,
+    prepare: async (page) => {
+      await page.getByRole("searchbox", { name: "Search" }).fill("PETG warping");
+      await page.addStyleTag({
+        content: `[data-clear], input[type="search"]::-webkit-search-cancel-button {
+          outline: 2px dashed var(--sg-tomato); outline-offset: -2px; }`,
+      });
+      await page.getByText("Filament swatch box").first().waitFor();
+    },
+  },
+  {
     name: "search-results",
     path: "/search?q=PETG%20warping",
     prepare: async (page) => {

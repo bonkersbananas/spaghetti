@@ -6,6 +6,7 @@ import {
 } from "frimousse";
 import { type ComponentProps, createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { cn } from "@/lib/cn";
+import ClearButton from "./ClearButton";
 import { SearchIcon } from "./icons";
 import { Overline } from "./Overline";
 
@@ -86,7 +87,12 @@ export default function EmojiPicker({ onPick, given, recent, layout, className }
 
   const field = (
     <div className={cn("flex items-center gap-2", sheet ? "pt-3" : "pb-2")}>
-      <div className="bg-ink/5 rounded-pill focus-within:ring-ink/30 flex h-11 min-w-0 flex-1 items-center gap-2 px-4 focus-within:ring-2">
+      <div
+        className={cn(
+          "bg-ink/5 rounded-pill focus-within:ring-ink/30 relative flex h-11 min-w-0 flex-1 items-center gap-2 pl-4 focus-within:ring-2",
+          search ? "pr-11" : "pr-4",
+        )}
+      >
         <SearchIcon size={18} className="text-ink-faint shrink-0" aria-hidden />
         <Frimousse.Search
           aria-label="Search emoji"
@@ -96,6 +102,8 @@ export default function EmojiPicker({ onPick, given, recent, layout, className }
           placeholder="Search emoji, like fire or pasta"
           className="text-body text-ink placeholder:text-ink-faint min-w-0 flex-1 appearance-none border-0 bg-transparent p-0 shadow-none outline-none"
         />
+        {/* The browser's own × is hidden (app.css): the design system's, as tall as the pill. */}
+        {search && <ClearButton size="sm" />}
       </div>
       <Frimousse.SkinToneSelector
         aria-label="Skin tone"

@@ -11,6 +11,7 @@ export function FieldSection() {
   const [title, setTitle] = useState("Cable clip for the desk");
   const [saveState, setSaveState] = useState<SaveState>("saved");
   const [note, setNote] = useState("Needs to fit a 6 mm cable. Try PETG so it flexes without snapping.");
+  const [query, setQuery] = useState("PETG warping");
   const [linkedNote, setLinkedNote] = useState(
     "Remix of https://www.printables.com/model/123-cable-clip with a wider mouth.",
   );
@@ -43,6 +44,18 @@ export function FieldSection() {
           />
           <TextField label="Nozzle temperature" defaultValue="320" error="The X2D tops out at 300 °C." />
           <TextField icon={Icons.SearchIcon} placeholder="Search…" aria-label="Search" />
+          <Label>
+            A search field with text: the × empties it, its target the field's full height to its right edge (outlined
+            here), so a thumb near the × can't land in the text
+          </Label>
+          <TextField
+            type="search"
+            icon={Icons.SearchIcon}
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            aria-label="Search, with text"
+            className="[&_[data-clear]]:outline-tomato [&_[data-clear]]:outline-2 [&_[data-clear]]:-outline-offset-2 [&_[data-clear]]:outline-dashed"
+          />
         </Panel>
         <Panel className="flex flex-col gap-3">
           <Label>Plain, for writing surfaces</Label>

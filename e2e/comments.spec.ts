@@ -351,7 +351,7 @@ test("a print on the bed shows the other person's new comment on Builds, as the 
   await sams.say(id, "Is it floating yet?");
   await page.goto("/builds");
   const bed = page.getByRole("region", { name: /^On the bed/ });
-  await expect(bed.getByText("Bath tugboat")).toBeVisible();
+  await expect(bed.getByRole("heading", { name: "Bath tugboat" })).toBeVisible();
   await expect(bed.getByText("1 new comment")).toBeVisible({ timeout: 20_000 });
   await sams.context.close();
 });
