@@ -107,20 +107,32 @@ export function SheetSection() {
             </MoreMenu>
           </div>
           <Label>
-            A build's page while its print is on the bed: ending the build waits here, not beside “How did it go?”; a
-            row that can't act right now (offline) is disabled
+            A build's page while its print is on the bed: ending the build waits in the bar's “…”, never beside “How did
+            it go?”
           </Label>
-          <div className="flex items-center justify-end gap-1">
+          <div className="flex items-center gap-1">
+            <Button variant="quiet" icon={Icons.BackIcon} className="mr-auto -ml-2">
+              Builds
+            </Button>
             <MoreMenu label="More for this build" title="Build" description="Bath tugboat for Mila">
-              <ActionMenuItem icon={Icons.FinishIcon} onSelect={() => toast.success("Al dente")}>
+              <ActionMenuItem icon={Icons.FinishIcon} onSelect={() => toast.success("Build finished")}>
                 Finish build
               </ActionMenuItem>
-              <ActionMenuItem icon={Icons.ShelveIcon} disabled onSelect={() => undefined}>
+              <ActionMenuItem icon={Icons.ShelveIcon} onSelect={() => toast.success("Build shelved")}>
                 Shelve build
               </ActionMenuItem>
             </MoreMenu>
             <IconButton icon={Icons.ShareIcon} label="Copy link" />
             <IconButton icon={Icons.TrashIcon} label="Delete build" />
+          </div>
+          <Label>Offline the same rows are disabled, together: faint, and a tap does nothing</Label>
+          <div className="sg-lifted-surface bg-lifted shadow-float flex w-56 flex-col rounded-lg p-1.5">
+            <ActionMenuItem icon={Icons.FinishIcon} disabled onSelect={() => undefined}>
+              Finish build
+            </ActionMenuItem>
+            <ActionMenuItem icon={Icons.ShelveIcon} disabled onSelect={() => undefined}>
+              Shelve build
+            </ActionMenuItem>
           </div>
         </Panel>
         <Panel className="max-w-md">

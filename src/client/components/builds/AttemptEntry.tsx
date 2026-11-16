@@ -48,7 +48,7 @@ interface AttemptEntryProps {
    * action bar instead, within thumb reach, so the card only shows how far along it is: one question, never two.
    */
   askOnCard?: boolean;
-  /** The keys that ask it too, shown on the card's button ("A"). */
+  /** The keys that ask it too, shown on the card's button ("A"), or after an off-the-bed print's question. */
   askShortcut?: string[];
   /** With an attempt before it: compare the two. */
   onCompare?: () => void;
@@ -271,6 +271,7 @@ export const AttemptEntry = forwardRef<HTMLLIElement, AttemptEntryProps>(functio
               <OffTheBed
                 endedAt={attempt.endedAt}
                 onPick={onFinish}
+                shortcut={askShortcut}
                 photoRead={attempt.photoRead}
                 onPhotos={photos.length ? undefined : onPhotos}
                 className="pointer-events-auto"
