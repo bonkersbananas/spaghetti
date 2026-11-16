@@ -1,7 +1,7 @@
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
-import type { Locator, Page } from "@playwright/test";
+import type { Locator, Page, Route } from "@playwright/test";
 import {
   hotdogModel,
   makerworldProject,
@@ -1128,6 +1128,9 @@ async function removeCoverBuilds(page: Page) {
   const headers = { Origin: new URL(page.url()).origin };
   for (const id of coverBuilds.splice(0)) await page.request.delete(`/api/items/${id}`, { headers });
 }
+
+/** Requests a shot holds back (a picture still on its way), let go in its cleanup. */
+const heldRoutes: Route[] = [];
 
 /** Towel hook's card in the Builds grid. */
 const TOWEL_CARD = "li:has(a:has-text('Towel hook'))";
@@ -3232,13 +3235,16 @@ export const shots: Shot[] = [
     path: "/builds",
     selector: TOWEL_CARD,
     prepare: async (page) => {
-      await page.route("**/api/files/*/thumb*", () => new Promise(() => {}));
+      await page.route("**/api/files/*/thumb*", (route) => void heldRoutes.push(route));
       // The held picture would hold the page's load event too.
       await page.goto("/builds", { waitUntil: "domcontentloaded" });
       await page.locator(TOWEL_CARD).waitFor();
       await page.waitForTimeout(800);
     },
-    cleanup: (page) => page.unroute("**/api/files/*/thumb*"),
+    cleanup: async (page) => {
+      for (const route of heldRoutes.splice(0)) await route.abort().catch(() => {});
+      await page.unroute("**/api/files/*/thumb*");
+    },
   },
   {
     name: "builds-render-failed",
