@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { ChangePasswordSheet } from "@/components/shell/ChangePasswordSheet";
 import { ActionMenuItem, MoreMenu } from "@/components/ui/ActionMenu";
-import { Button } from "@/components/ui/Button";
+import { Button, IconButton } from "@/components/ui/Button";
 import { Chip } from "@/components/ui/Chip";
 import * as Icons from "@/components/ui/icons";
 import { MenuGroup, MenuItem } from "@/components/ui/Menu";
@@ -105,6 +105,22 @@ export function SheetSection() {
                 Remove file
               </ActionMenuItem>
             </MoreMenu>
+          </div>
+          <Label>
+            A build's page while its print is on the bed: ending the build waits here, not beside “How did it go?”; a
+            row that can't act right now (offline) is disabled
+          </Label>
+          <div className="flex items-center justify-end gap-1">
+            <MoreMenu label="More for this build" title="Build" description="Bath tugboat for Mila">
+              <ActionMenuItem icon={Icons.FinishIcon} onSelect={() => toast.success("Al dente")}>
+                Finish build
+              </ActionMenuItem>
+              <ActionMenuItem icon={Icons.ShelveIcon} disabled onSelect={() => undefined}>
+                Shelve build
+              </ActionMenuItem>
+            </MoreMenu>
+            <IconButton icon={Icons.ShareIcon} label="Copy link" />
+            <IconButton icon={Icons.TrashIcon} label="Delete build" />
           </div>
         </Panel>
         <Panel className="max-w-md">

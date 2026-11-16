@@ -33,6 +33,7 @@ import { RecipeSheet } from "@/components/recipes/RecipeSheet";
 import { SaveRecipeSheet } from "@/components/recipes/SaveRecipe";
 import { DetailBar } from "@/components/shell/DetailBar";
 import { ActionBar } from "@/components/ui/ActionBar";
+import { ActionMenuItem, MoreMenu } from "@/components/ui/ActionMenu";
 import { Avatar, ViaText } from "@/components/ui/Avatar";
 import { Button, IconButton } from "@/components/ui/Button";
 import { Chip } from "@/components/ui/Chip";
@@ -458,6 +459,19 @@ function Build({ item }: { item: ItemView }) {
   const via = useVia();
   const madeVia = via(item.createdVia);
 
+  // While a print is on the bed (decision 0066), ending the whole build is one menu away, not a button beside the
+  // print's own question: standing at the printer, the thumb finds "How did it go?" and nothing that closes the build.
+  // Once the print has its answer they are back where they were.
+  const closeMenu = active && printing && (
+    <MoreMenu label="More for this build" title="Build" description={title.trim() || "Untitled build"}>
+      <ActionMenuItem icon={FinishIcon} disabled={readOnly} onSelect={() => finishBuild(queryClient, item)}>
+        Finish build
+      </ActionMenuItem>
+      <ActionMenuItem icon={ShelveIcon} disabled={readOnly} onSelect={() => shelveBuild(queryClient, item)}>
+        Shelve build
+      </ActionMenuItem>
+    </MoreMenu>
+  );
   const stageActions = (
     <>
       {active ? (
@@ -488,7 +502,7 @@ function Build({ item }: { item: ItemView }) {
         <h1 className="sr-only">{title.trim() || "Untitled build"}</h1>
         <DetailBar back={back} title={title.trim() || "Untitled build"}>
           {!deleting && <SaveStatus state={saveState} className="mr-2" />}
-          {deleting ? null : isDesktop ? (
+          {deleting || closeMenu ? null : isDesktop ? (
             <span className="mr-2 flex items-center gap-2">{stageActions}</span>
           ) : (
             active && (
@@ -500,6 +514,7 @@ function Build({ item }: { item: ItemView }) {
               />
             )
           )}
+          {!deleting && closeMenu}
           {!deleting && <ShareLinkButton title={title.trim()} />}
           <ConfirmDelete
             asking={deleting}
@@ -657,14 +672,11 @@ function Build({ item }: { item: ItemView }) {
               title="Attempts"
               count={item.attempts.length || undefined}
               aside={
-                isDesktop && (
-                  <Button
-                    variant={printing && isOffTheBed(printing) ? "secondary" : "primary"}
-                    icon={printing ? CheckIcon : PlusIcon}
-                    shortcut={shortcutCaps("buildLog")}
-                    onClick={primary}
-                  >
-                    {printing ? `Finish attempt ${printing.number}` : "Log attempt"}
+                // A print on the bed is asked about on its own card, so the section offers nothing beside it.
+                isDesktop &&
+                !printing && (
+                  <Button variant="primary" icon={PlusIcon} shortcut={shortcutCaps("buildLog")} onClick={primary}>
+                    Log attempt
                   </Button>
                 )
               }
@@ -705,6 +717,8 @@ function Build({ item }: { item: ItemView }) {
                             openSheet(attempt.id);
                           }}
                           onFinish={(outcome) => openSheet(attempt.id, outcome)}
+                          askOnCard={isDesktop}
+                          askShortcut={shortcutCaps("buildLog")}
                           onCompare={comparePredecessor(attempt.id) ? () => openCompare(attempt.id) : undefined}
                           onSaveRecipe={
                             recipeSource(attempt) &&
@@ -778,17 +792,18 @@ function Build({ item }: { item: ItemView }) {
             </Section>
             {!item.pending && <CommentThread itemId={item.id} writeAsk={writeAsk} readOnly={readOnly} />}
             {/* On a phone the closing actions stay the last thing on the page, quiet beside the primary action bar. */}
-            {!isDesktop && active && (
+            {!isDesktop && active && !printing && (
               <div className="-mt-6 flex items-center justify-center gap-3 md:-mt-8">{stageActions}</div>
             )}
           </div>
         </div>
 
-        {/* A print that is off the bed asks its question on the attempt itself: one answer, not two. */}
+        {/* A print still printing is asked about here, within thumb reach (its card shows only how far along it is);
+            one that is off the bed asks on the attempt itself, with its three answers: one question, never two. */}
         {!isDesktop && (active || printing) && !(printing && isOffTheBed(printing)) && (
           <ActionBar>
-            <Button variant="primary" size="lg" icon={printing ? CheckIcon : PlusIcon} fullWidth onClick={primary}>
-              {printing ? `Finish attempt ${printing.number}` : "Log attempt"}
+            <Button variant="primary" size="lg" icon={printing ? undefined : PlusIcon} fullWidth onClick={primary}>
+              {printing ? "How did it go?" : "Log attempt"}
             </Button>
           </ActionBar>
         )}

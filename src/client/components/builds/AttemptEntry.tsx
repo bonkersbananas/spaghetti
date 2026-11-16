@@ -43,6 +43,13 @@ interface AttemptEntryProps {
   onOpen: () => void;
   /** For a printing attempt, or one that is off the bed: open it to finish it (with the outcome, if one was picked). */
   onFinish?: (outcome?: Outcome) => void;
+  /**
+   * A printing attempt asks "How did it go?" on its card (desktop, with the key's hint). Phones ask it in the page's
+   * action bar instead, within thumb reach, so the card only shows how far along it is: one question, never two.
+   */
+  askOnCard?: boolean;
+  /** The keys that ask it too, shown on the card's button ("A"). */
+  askShortcut?: string[];
   /** With an attempt before it: compare the two. */
   onCompare?: () => void;
   /** An attempt that worked and isn't a recipe yet: keep its settings under a name. */
@@ -72,6 +79,8 @@ export const AttemptEntry = forwardRef<HTMLLIElement, AttemptEntryProps>(functio
     last,
     onOpen,
     onFinish,
+    askOnCard = true,
+    askShortcut,
     onCompare,
     onSaveRecipe,
     readOnly,
@@ -276,9 +285,19 @@ export const AttemptEntry = forwardRef<HTMLLIElement, AttemptEntryProps>(functio
                   attemptId={attempt.id}
                   className="flex-1"
                 />
-                <Button size="sm" variant="secondary" onClick={() => onFinish()} className="ml-auto">
-                  Finish
-                </Button>
+                {askOnCard && (
+                  // The page's one way to log this print, so it is its primary action (Today and the Journal's Now ask
+                  // the same question in the same words).
+                  <Button
+                    size="sm"
+                    variant="primary"
+                    shortcut={askShortcut}
+                    onClick={() => onFinish()}
+                    className="ml-auto"
+                  >
+                    How did it go?
+                  </Button>
+                )}
               </div>
             )}
           </div>
