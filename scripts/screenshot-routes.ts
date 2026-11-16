@@ -5403,6 +5403,7 @@ export const shots: Shot[] = [
   { name: "styleguide-color", path: "/styleguide", selector: "#color" },
   { name: "styleguide-palette", path: "/styleguide", selector: "#palette" },
   { name: "styleguide-cards", path: "/styleguide", selector: "#cards" },
+  { name: "styleguide-chips", path: "/styleguide", selector: "#chips" },
   {
     name: "styleguide-today",
     path: "/styleguide",
