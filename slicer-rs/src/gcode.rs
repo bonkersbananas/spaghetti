@@ -114,6 +114,17 @@ pub(crate) struct Move {
     pub(crate) height: f32,
     /// How Orca's spiral vase writes it, when it rewrote it (`FORM_Z`, `FORM_E`; 0 as ever).
     pub(crate) form: u8,
+    /// An extrusion along an arc rather than a line (`G2`/`G3`), as Orca's arc fitting has it.
+    pub(crate) arc: Option<ArcMove>,
+}
+
+/// An arc to a move's end round the centre `i`, `j` mm from where it starts: counter-clockwise (`G3`) or clockwise
+/// (`G2`).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) struct ArcMove {
+    pub(crate) i: f64,
+    pub(crate) j: f64,
+    pub(crate) ccw: bool,
 }
 
 /// A move whose height Orca's spiral vase set: written first, to three decimals (`G1 Z0.601 X… Y… E…`).
@@ -536,7 +547,7 @@ impl<'a> Builder<'a> {
     }
 
     fn line(&mut self, x: f64, y: f64, z: f64, e: f64, f: f64, kind: Kind) {
-        let m = Move { x, y, z, e, f, accel: self.accel, kind, width: 0.0, height: 0.0, form: 0 };
+        let m = Move { x, y, z, e, f, accel: self.accel, kind, width: 0.0, height: 0.0, form: 0, arc: None };
         self.push(m);
     }
 
@@ -742,7 +753,9 @@ impl<'a> Builder<'a> {
 
     /// Prints a path. Where its segments print otherwise (`Path::parts`), each stretch of overhang wall or wall
     /// prints as such, at its segments' speeds as Orca writes them: a new speed where it changes by more than
-    /// 1 mm/s, and the stretch's own where it comes back within 1 mm/s of that.
+    /// 1 mm/s, and the stretch's own where it comes back within 1 mm/s of that. Its arcs (`Path::arcs`) print as
+    /// one move each, from the arc's start to its end round its centre, as Orca writes them (`GCode::_extrude` with
+    /// a fitting result): none for an arc shorter than 0.1 µm.
     fn extrude(&mut self, path: &'a Path) {
         self.ready();
         self.accel = path.accel;
@@ -750,7 +763,10 @@ impl<'a> Builder<'a> {
         let mut stretch: Option<bool> = None;
         // mm/min, as Orca compares them.
         let mut written = path.speed * 60.0;
-        for (k, q) in path.points[1..].iter().enumerate() {
+        let mut arcs = path.arcs.iter().peekable();
+        let mut k = 0;
+        while k + 1 < path.points.len() {
+            let q = path.points[k + 1];
             let part = path.parts.get(k);
             let over = part.is_some_and(|p| p.overhang);
             let (role, width, mm3_per_mm, own, accel) = if over {
@@ -765,13 +781,31 @@ impl<'a> Builder<'a> {
                 stretch = Some(over);
                 written = part.map_or(own * 60.0, |p| p.speed as f64 * 60.0);
             }
-            let (x, y) = (geom::unsc(q.x), geom::unsc(q.y));
-            // A point the G-code would write as the one before (to its thousandth of a millimetre) waits for the
-            // next one, which then covers both.
-            let same = |a: f64, b: f64| (a * 1000.0).round() == (b * 1000.0).round();
-            if same(x, self.x) && same(y, self.y) {
-                continue;
-            }
+            let run = arcs.next_if(|run| run.start == k);
+            let (x, y, length, arc) = match run {
+                Some(run) => {
+                    k = run.end;
+                    let a = &run.arc;
+                    let length = a.length * 1e-6;
+                    if length < 1e-4 {
+                        continue;
+                    }
+                    let nm = |v: i64| v as f64 * 1e-6;
+                    let (i, j) = (nm(a.center[0] - a.start[0]), nm(a.center[1] - a.start[1]));
+                    (nm(a.end[0]), nm(a.end[1]), length, Some(ArcMove { i, j, ccw: a.ccw }))
+                }
+                None => {
+                    k += 1;
+                    let (x, y) = (geom::unsc(q.x), geom::unsc(q.y));
+                    // A point the G-code would write as the one before (to its thousandth of a millimetre) waits for
+                    // the next one, which then covers both.
+                    let same = |a: f64, b: f64| (a * 1000.0).round() == (b * 1000.0).round();
+                    if same(x, self.x) && same(y, self.y) {
+                        continue;
+                    }
+                    (x, y, (x - self.x).hyp(y - self.y), None)
+                }
+            };
             match part {
                 Some(p) => {
                     let new = p.speed as f64 * 60.0;
@@ -783,7 +817,6 @@ impl<'a> Builder<'a> {
                 }
                 None => written = own * 60.0,
             }
-            let length = (x - self.x).hyp(y - self.y);
             self.accel = accel;
             let m = Move {
                 x,
@@ -796,6 +829,7 @@ impl<'a> Builder<'a> {
                 width: width as f32,
                 height: height as f32,
                 form: 0,
+                arc,
             };
             self.push(m);
         }
@@ -1553,12 +1587,31 @@ fn base64_u64(value: u64) -> String {
 // `slow_down_layer_time`, none below `slow_down_min_speed`. Like Orca, this works on plain length / speed times.
 
 fn simple_time(m: &Move, from: [f64; 3]) -> f64 {
-    let d = match m.kind {
-        Kind::Spiral { i, j } => (2.0 * PI * i.hyp(j)).hyp(m.z - from[2]),
+    let d = match (m.kind, m.arc) {
+        (Kind::Spiral { i, j }, _) => (2.0 * PI * i.hyp(j)).hyp(m.z - from[2]),
+        (_, Some(arc)) => arc_length(from, [m.x, m.y], arc).hyp(m.z - from[2]),
         _ => ((m.x - from[0]).powi(2) + (m.y - from[1]).powi(2) + (m.z - from[2]).powi(2)).sqrt(),
     };
     let d = if d > 1e-9 { d } else { m.e.abs() };
     if m.f > 0.0 { d / m.f } else { 0.0 }
+}
+
+/// mm along an arc from `from` to `to` (mm), as Orca's cooling measures it (`ArcSegment::calc_arc_length`): its
+/// radius from the start, its angle from the start and the end round the centre, a full turn where they meet.
+pub(crate) fn arc_length(from: [f64; 3], to: [f64; 2], arc: ArcMove) -> f64 {
+    let (d1, d2) = ([arc.i, arc.j], [from[0] + arc.i - to[0], from[1] + arc.j - to[1]]);
+    let angle = if (d1[0] - d2[0]).hyp(d1[1] - d2[1]) < 1e-6 {
+        2.0 * PI
+    } else {
+        let a = libm::atan2(d1[0] * d2[1] - d1[1] * d2[0], d1[0] * d2[0] + d1[1] * d2[1]);
+        match (arc.ccw, a < 0.0) {
+            (true, true) => 2.0 * PI + a,
+            (true, false) => a,
+            (false, true) => -a,
+            (false, false) => 2.0 * PI - a,
+        }
+    };
+    arc.i.hyp(arc.j) * angle
 }
 
 /// How Orca's cooling slows a layer that is too quick.
@@ -2173,6 +2226,16 @@ fn plan(moves: &[Move], start: [f64; 3], s: &Settings, resets: &[(usize, [f64; 3
                     if k == n { [m.x, m.y, m.z] } else { [cx + r * a.cos(), cy + r * a.sin(), z0 + (m.z - z0) * t] };
                 p.add(to, 0.0, m, i);
             }
+        } else if let Some(arc) = m.arc {
+            // An arc in the straight pieces Orca's estimator splits it into, the filament shared out evenly.
+            let pieces = arc_pieces(p.at, [m.x, m.y, m.z], arc.i, arc.j, !arc.ccw);
+            if pieces.is_empty() {
+                p.at = [m.x, m.y, m.z];
+            }
+            let e = m.e / pieces.len().max(1) as f64;
+            for to in pieces {
+                p.add(to, e, m, i);
+            }
         } else {
             p.add([m.x, m.y, m.z], m.e, m, i);
         }
@@ -2446,12 +2509,20 @@ fn finish_layer(
                 // A spiral vase's rising line, as Orca's spiral writes it: the height first, to three decimals.
                 if m.form & FORM_Z != 0 {
                     t.extend_from_slice(format!("G1 Z{:.3} X", m.z).as_bytes());
+                } else if let Some(arc) = m.arc {
+                    t.extend_from_slice(if arc.ccw { b"G3 X" } else { b"G2 X" });
                 } else {
                     t.extend_from_slice(b"G1 X");
                 }
                 num(t, m.x, 3);
                 t.extend_from_slice(b" Y");
                 num(t, m.y, 3);
+                if let Some(arc) = m.arc {
+                    t.extend_from_slice(b" I");
+                    num(t, arc.i, 3);
+                    t.extend_from_slice(b" J");
+                    num(t, arc.j, 3);
+                }
                 if m.form & FORM_E != 0 {
                     t.extend_from_slice(format!(" E{:.5}", m.e).as_bytes());
                 } else {
@@ -2742,6 +2813,7 @@ fn time_custom(text: &str, s: &Settings) -> f64 {
                         width: 0.0,
                         height: 0.0,
                         form: 0,
+                        arc: None,
                     });
                 }
                 at = to;
@@ -2854,6 +2926,7 @@ pub fn time_text(text: &str, from: [f64; 3], s: &Settings) -> TextTime {
                         width: 0.0,
                         height: 0.0,
                         form: 0,
+                        arc: None,
                     });
                 }
                 if to != at {
@@ -2877,6 +2950,7 @@ pub fn time_text(text: &str, from: [f64; 3], s: &Settings) -> TextTime {
                     width: 0.0,
                     height: 0.0,
                     form: 0,
+                    arc: None,
                 });
                 if to != at {
                     out.end = Some(to);
@@ -2914,6 +2988,7 @@ pub fn time_text(text: &str, from: [f64; 3], s: &Settings) -> TextTime {
                             width: 0.0,
                             height: 0.0,
                             form: 0,
+                            arc: None,
                         });
                         from = p;
                     }
@@ -3170,6 +3245,7 @@ mod tests {
             island,
             object: 0,
             parts: Vec::new(),
+            arcs: Vec::new(),
         };
         let (sparse, solid, gap) = (path(Role::SparseInfill, 0), path(Role::SolidInfill, 0), path(Role::GapFill, 0));
         let (inner, outer, top) = (path(Role::InnerWall, 0), path(Role::OuterWall, 0), path(Role::TopSurface, 0));
@@ -3233,6 +3309,7 @@ mod tests {
             island: 0,
             object: 0,
             parts: speeds.iter().enumerate().map(|(k, &speed)| Part { overhang: k >= 5, speed }).collect(),
+            arcs: Vec::new(),
         };
         b.extrude(&wall);
         let f: Vec<f64> = b.moves.iter().map(|m| m.f).collect();
@@ -3274,6 +3351,7 @@ mod tests {
                     width: 0.42,
                     height: 0.2,
                     form: 0,
+                    arc: None,
                 }
             })
             .collect();
@@ -3365,6 +3443,7 @@ mod tests {
                 width: 0.4,
                 height: 0.2,
                 form: 0,
+                arc: None,
             };
             let moved = (nx - x).abs() > 1e-9 || (ny - y).abs() > 1e-9;
             if g == "G0" || g == "G1" {
@@ -3379,22 +3458,8 @@ mod tests {
             } else if !moved {
                 moves.push(mv(nx, ny, nz, 0.0, Kind::Spiral { i, j }));
             } else {
-                let (cx, cy, r) = (x + i, y + j, i.hyp(j));
-                let a0 = (y - cy).atan2(x - cx);
-                let mut d = (ny - cy).atan2(nx - cx) - a0;
-                if g == "G3" && d <= 0.0 {
-                    d += 2.0 * PI;
-                }
-                if g == "G2" && d >= 0.0 {
-                    d -= 2.0 * PI;
-                }
-                let n = arc_steps(r, d.abs());
                 let kind = if e > 0.0 { Kind::Extrude(role) } else { Kind::Travel };
-                for k in 1..=n {
-                    let a = a0 + d * k as f64 / n as f64;
-                    let (px, py) = if k == n { (nx, ny) } else { (cx + r * a.cos(), cy + r * a.sin()) };
-                    moves.push(mv(px, py, nz, e / n as f64, kind));
-                }
+                moves.push(Move { arc: Some(ArcMove { i, j, ccw: g == "G3" }), ..mv(nx, ny, nz, e, kind) });
             }
             (x, y, z) = (nx, ny, nz);
         }

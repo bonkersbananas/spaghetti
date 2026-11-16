@@ -36,6 +36,75 @@ pub struct Arc {
     pub end_theta: f64,
 }
 
+impl Arc {
+    fn circle(&self) -> Circle {
+        Circle { center: self.center, radius: self.radius }
+    }
+
+    /// `ArcSegment::reverse`: the same arc the other way.
+    pub fn reverse(&mut self) {
+        std::mem::swap(&mut self.start, &mut self.end);
+        self.ccw = !self.ccw;
+        self.angle = -self.angle;
+        std::mem::swap(&mut self.start_theta, &mut self.end_theta);
+    }
+
+    /// `ArcSegment::is_point_inside`: whether a point's polar angle lies strictly between the arc's ends.
+    fn is_point_inside(&self, p: P) -> bool {
+        let mut delta = self.circle().polar(p) - self.start_theta;
+        if delta > 0.0 && !self.ccw {
+            delta -= 2.0 * PI;
+        } else if delta < 0.0 && self.ccw {
+            delta += 2.0 * PI;
+        }
+        if self.ccw { delta > 0.0 && delta < self.angle } else { delta < 0.0 && delta > self.angle }
+    }
+
+    /// `Circle::get_closest_point`: the point of the circle on the way to `p` (truncated to whole nanometres, as
+    /// Eigen's cast).
+    fn closest_point(&self, p: P) -> P {
+        let (dx, dy) = ((p[0] - self.center[0]) as f64, (p[1] - self.center[1]) as f64);
+        let l = norm(dx, dy);
+        let (ux, uy) = if l > 0.0 { (dx / l, dy / l) } else { (dx, dy) };
+        [self.center[0] + (ux * self.radius) as i64, self.center[1] + (uy * self.radius) as i64]
+    }
+
+    /// `ArcSegment::update_angle_and_length`, after an end moved.
+    fn update_angle_and_length(&mut self) {
+        let c = self.circle();
+        self.start_theta = c.polar(self.start);
+        self.end_theta = c.polar(self.end);
+        self.angle = self.end_theta - self.start_theta;
+        if self.angle < 0.0 && self.ccw {
+            self.angle += 2.0 * PI;
+        } else if self.angle > 0.0 && !self.ccw {
+            self.angle -= 2.0 * PI;
+        }
+        self.length = self.angle.abs() * self.radius;
+    }
+
+    /// `ArcSegment::clip_end`: the arc ends where it comes nearest `p`, if `p` lies within its angle (false: it
+    /// doesn't, and the arc is as it was).
+    pub fn clip_end(&mut self, p: P) -> bool {
+        if p == self.center || !self.is_point_inside(p) {
+            return false;
+        }
+        self.end = self.closest_point(p);
+        self.update_angle_and_length();
+        true
+    }
+
+    /// `ArcSegment::clip_start`, as `clip_end` at its start.
+    pub fn clip_start(&mut self, p: P) -> bool {
+        if p == self.center || !self.is_point_inside(p) {
+            return false;
+        }
+        self.start = self.closest_point(p);
+        self.update_angle_and_length();
+        true
+    }
+}
+
 /// A run of a path's points, `start` to `end` (indexes), as a line through them or as one arc (`PathFittingData`).
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Run {

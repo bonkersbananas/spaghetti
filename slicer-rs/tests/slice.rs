@@ -455,8 +455,9 @@ fn word(line: &str, letter: char) -> Option<f64> {
 
 /// Walks every move between the printer's start and end G-code and checks what keeps a print safe: the nozzle
 /// prints only at its layer's height and never travels below it, stays on the plate, retracts and pushes back the
-/// filament in pairs, lifts by the z-hop in a spiral that stays on the plate, and every object's moves sit inside its
-/// skip labels (a brim's outside them all, as Orca prints it). Returns the labels each layer printed.
+/// filament in pairs, lifts by the z-hop in a spiral that stays on the plate, prints arcs that start and end on their
+/// circle, and every object's moves sit inside its skip labels (a brim's outside them all, as Orca prints it). Returns
+/// the labels each layer printed.
 fn check_moves(gcode: &str, s: &Settings) -> Vec<Vec<u32>> {
     let body = gcode.split("M981 S1 P20000 ;open spaghetti detector\n").nth(1).expect("the start G-code's end");
     let body = body.split("M981 S0 P20000 ; close spaghetti detector\n").next().expect("the end G-code's start");
@@ -534,6 +535,41 @@ fn check_moves(gcode: &str, s: &Settings) -> Vec<Vec<u32>> {
                 assert!(pulled > -1e-4 && pulled < s.retract_length + 1e-4, "{pulled} mm pulled back: {}", at());
             }
             (x, y, z) = (nx, ny, nz);
+        } else if (code.starts_with("G2 ") || code.starts_with("G3 ")) && word(code, 'Z').is_none() {
+            // An extrusion along an arc (Orca's arc fitting): from where the nozzle is to its end round its centre,
+            // both on the circle (to the micrometres the G-code writes), on the plate all the way, as a line prints.
+            let (nx, ny) = (word(code, 'X').unwrap_or(x), word(code, 'Y').unwrap_or(y));
+            let (i, j) = (word(code, 'I').unwrap_or(0.0), word(code, 'J').unwrap_or(0.0));
+            let e = word(code, 'E').unwrap_or(0.0);
+            assert!(e > 0.0, "an arc extrudes: {}", at());
+            let (cx, cy, r) = (x + i, y + j, i.hypot(j));
+            assert!(r > 0.0 && r <= 2000.0, "a circle of under 2 m: {}", at());
+            assert!(((nx - cx).hypot(ny - cy) - r).abs() < 0.003, "ends on its circle: {}", at());
+            let (a0, a1) = ((y - cy).atan2(x - cx), (ny - cy).atan2(nx - cx));
+            let mut sweep = a1 - a0;
+            if code.starts_with("G3") && sweep <= 0.0 {
+                sweep += 2.0 * std::f64::consts::PI;
+            }
+            if code.starts_with("G2") && sweep >= 0.0 {
+                sweep -= 2.0 * std::f64::consts::PI;
+            }
+            for k in 0..=16 {
+                let a = a0 + sweep * k as f64 / 16.0;
+                let (px, py) = (cx + r * a.cos(), cy + r * a.sin());
+                assert!(
+                    (-0.01..=s.bed[0] + 0.01).contains(&px) && (-0.01..=s.bed[1] + 0.01).contains(&py),
+                    "on the plate: {}",
+                    at()
+                );
+            }
+            assert!(at_height(z, layer_z), "prints at the layer's height: {}", at());
+            assert!(pulled.abs() < 1e-4, "prints only with the filament pushed back: {}", at());
+            if feature == "Brim" {
+                assert!(layers.len() == 1 && label.is_none(), "a brim prints first, outside the labels: {}", at());
+            } else {
+                assert!(label.is_some(), "prints only inside an object's label: {}", at());
+            }
+            (x, y) = (nx, ny);
         } else if code.starts_with("G3 ") {
             let (i, j) = (word(code, 'I').unwrap(), word(code, 'J').unwrap());
             let nz = word(code, 'Z').unwrap();
@@ -654,10 +690,21 @@ fn each_nozzle_slices_a_cube_with_bambus_presets_for_it() {
         let body = body.split("M981 S0 P20000 ; close spaghetti detector\n").next().unwrap();
         let area = std::f64::consts::PI * (settings.filament_diameter / 2.0).powi(2);
         let (mut x, mut y, mut f, mut fastest) = (f64::NAN, f64::NAN, 0.0, 0.0f64);
-        for line in body.lines().filter(|l| l.starts_with("G1 ")) {
+        for line in body.lines().filter(|l| ["G1 ", "G2 ", "G3 "].iter().any(|g| l.starts_with(g))) {
             let (nx, ny) = (word(line, 'X').unwrap_or(x), word(line, 'Y').unwrap_or(y));
             f = word(line, 'F').unwrap_or(f);
-            let length = (nx - x).hypot(ny - y);
+            let chord = (nx - x).hypot(ny - y);
+            // An arc's length: its radius by the angle it turns through (a lift's has no E).
+            let length = match (word(line, 'I'), word(line, 'J')) {
+                (Some(i), Some(j)) if !line.starts_with("G1") => {
+                    let r = i.hypot(j);
+                    let turn = (2.0 * (chord / (2.0 * r)).min(1.0).asin()).abs();
+                    let (cross, ccw) = (i * (ny - y - j) - j * (nx - x - i), line.starts_with("G3"));
+                    // The short way round where the arc turns the way its end lies, else the long way.
+                    r * if (-cross > 0.0) == ccw { turn } else { 2.0 * std::f64::consts::PI - turn }
+                }
+                _ => chord,
+            };
             if let Some(e) = word(line, 'E').filter(|&e| e > 0.0 && length > 0.05) {
                 fastest = fastest.max(e * area / length * f / 60.0);
             }
