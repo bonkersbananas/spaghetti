@@ -1,11 +1,15 @@
 import { cn } from "@/lib/cn";
 
-/** As wide as the field is tall, so the target is square and the field's whole height (`TextField`'s sizes). */
-const room = { sm: "w-11", md: "w-12 md:w-11", lg: "w-16" } as const;
+/**
+ * As wide as the field is tall, so the target is square and the field's whole height (`TextField`'s sizes), with the
+ * glyph nudged left to where the browser drew its own (about 27 px from a medium field's edge).
+ */
+const room = { sm: "w-11 pr-0.5", md: "w-12 pr-1.5 md:w-11 md:pr-2.5", lg: "w-16" } as const;
 
 /**
  * The × that empties a field (`TextField` with `type="search"` or `clearable` draws it while it has text; anything
- * else that holds an input in a `relative` box can place it too). The glyph is the 16 px one the browser drew, but the
+ * else that holds an input in a `relative` box can place it too, after the input, which must carry `peer`). It shows
+ * while the field has the focus. The glyph is the 16 px one the browser drew, but the
  * button is the field's whole height and reaches its right edge (44 px or more, a thumb's width), so a tap near the ×
  * can't miss it and land in the text. It never takes the focus (a phone's keyboard stays up), empties the field
  * through its own onChange (the `input` event typing sends) and leaves the caret in it. Not a Tab stop: Escape and
@@ -32,7 +36,8 @@ export default function ClearButton({ size = "md" }: { size?: "sm" | "md" | "lg"
         field.focus();
       }}
       className={cn(
-        "text-ink-faint hover:text-ink duration-fast absolute inset-y-0 right-0 flex items-center justify-center transition-colors",
+        // Only while the field has the focus, as the browser's own showed (the field is its `peer`).
+        "text-ink-faint hover:text-ink duration-fast absolute inset-y-0 right-0 hidden items-center justify-center transition-colors peer-focus:flex",
         // Square, not rounded: it draws nothing of its own, and a rounded corner would be a spot no tap reaches.
         room[size],
       )}

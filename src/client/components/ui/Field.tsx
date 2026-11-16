@@ -92,8 +92,8 @@ export interface TextFieldProps extends Omit<ComponentPropsWithRef<"input">, "si
   clearable?: boolean;
 }
 
-/** Room at a clearable field's end for its × (`ClearButton`): as wide as the field is tall. */
-const clearPad = { sm: "pr-11", md: "pr-12 md:pr-11", lg: "pr-16" } as const;
+/** Room at a clearable field's end for its × (`ClearButton`), while focused as the × shows: as wide as the field is tall. */
+const clearPad = { sm: "focus:pr-11", md: "focus:pr-12 md:focus:pr-11", lg: "focus:pr-16" } as const;
 
 // The × arrives with the first search field on the screen, not with every screen's first load.
 const ClearButton = lazy(() => import("./ClearButton"));
@@ -149,6 +149,7 @@ export const TextField = forwardRef<HTMLInputElement, TextFieldProps>(function T
           aria-invalid={error ? true : undefined}
           aria-describedby={error || caution || hint ? `${fieldId}-message` : undefined}
           className={cn(
+            "peer",
             appearance === "surface"
               ? cn(
                   inputSurface,

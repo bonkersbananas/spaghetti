@@ -45,8 +45,8 @@ export function FieldSection() {
           <TextField label="Nozzle temperature" defaultValue="320" error="The X2D tops out at 300 °C." />
           <TextField icon={Icons.SearchIcon} placeholder="Search…" aria-label="Search" />
           <Label>
-            A search field with text: the × empties it, its target the field's full height to its right edge (outlined
-            here), so a thumb near the × can't land in the text
+            A search field with text, focused: the × empties it, its target the field's full height to its right edge
+            (outlined here), so a thumb near the × can't land in the text
           </Label>
           <TextField
             type="search"
@@ -54,7 +54,7 @@ export function FieldSection() {
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             aria-label="Search, with text"
-            className="[&_[data-clear]]:outline-tomato [&_[data-clear]]:outline-2 [&_[data-clear]]:-outline-offset-2 [&_[data-clear]]:outline-dashed"
+            className="[&_[data-clear]]:outline-tomato [&_[data-clear]]:flex [&_[data-clear]]:outline-2 [&_[data-clear]]:-outline-offset-2 [&_[data-clear]]:outline-dashed"
           />
         </Panel>
         <Panel className="flex flex-col gap-3">

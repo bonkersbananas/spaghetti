@@ -90,7 +90,7 @@ export default function EmojiPicker({ onPick, given, recent, layout, className }
       <div
         className={cn(
           "bg-ink/5 rounded-pill focus-within:ring-ink/30 relative flex h-11 min-w-0 flex-1 items-center gap-2 pl-4 focus-within:ring-2",
-          search ? "pr-11" : "pr-4",
+          search ? "pr-4 focus-within:pr-11" : "pr-4",
         )}
       >
         <SearchIcon size={18} className="text-ink-faint shrink-0" aria-hidden />
@@ -100,7 +100,7 @@ export default function EmojiPicker({ onPick, given, recent, layout, className }
           value={search}
           onChange={(event) => setSearch(event.target.value)}
           placeholder="Search emoji, like fire or pasta"
-          className="text-body text-ink placeholder:text-ink-faint min-w-0 flex-1 appearance-none border-0 bg-transparent p-0 shadow-none outline-none"
+          className="peer text-body text-ink placeholder:text-ink-faint min-w-0 flex-1 appearance-none border-0 bg-transparent p-0 shadow-none outline-none"
         />
         {/* The browser's own × is hidden (app.css): the design system's, as tall as the pill. */}
         {search && <ClearButton size="sm" />}
