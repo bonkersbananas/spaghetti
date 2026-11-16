@@ -277,9 +277,12 @@ test("a problem's word leads with what fixed it, and the times it happened fold 
   if (isMobile) return;
   // On a laptop the palette answers the same question the same way.
   await page.goto("/ideas");
-  await page.keyboard.press("ControlOrMeta+k");
+  await expect(page.getByRole("heading", { level: 1, name: "Ideas" })).toBeVisible();
+  await page.getByRole("button", { name: /Jump to/ }).click();
   const dialog = page.getByRole("dialog", { name: "Command palette" });
   await dialog.getByRole("combobox", { name: "Jump to or run" }).pressSequentially("warping");
   const group = dialog.getByRole("group", { name: "What fixed it" });
-  await expect(group.getByRole("option", { name: /Swatch box, attempt 3/ })).toContainText("dried the filament");
+  await expect(group.getByRole("option", { name: /Swatch box Attempt 3 · after Partly/ })).toContainText(
+    "dried the filament",
+  );
 });

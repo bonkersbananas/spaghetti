@@ -512,7 +512,7 @@ function fixEntry(fix: FixHit, terms: ReturnType<typeof searchTerms>, navigate: 
       title: <Highlight text={name} terms={terms} />,
       subtitle: (
         <>
-          {after}
+          Attempt {fix.number} · {after.charAt(0).toLowerCase() + after.slice(1)}
           {fix.changes.length > 0 && (
             <>
               {" · "}
