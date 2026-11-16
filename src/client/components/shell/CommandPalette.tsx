@@ -279,7 +279,7 @@ function PaletteBody({ close, choose }: { close: () => void; choose: (run: () =>
           ...found.builds.slice(0, PER_KIND).map((hit) => itemEntry(hit, "Builds", foundTerms, navigate)),
           ...found.ideas.slice(0, PER_KIND).map((hit) => itemEntry(hit, "Ideas", foundTerms, navigate)),
           ...found.attempts
-            .filter((hit) => hit.attempt.outcome !== "success")
+            .filter((hit) => hit.attempt.outcome !== "success" && !fixed.has(hit.attempt.id))
             .slice(0, PER_KIND)
             .map((hit) =>
               // Under what fixed it, the failures are the times it happened (as on the search page).
