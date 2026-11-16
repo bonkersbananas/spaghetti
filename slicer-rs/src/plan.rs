@@ -746,6 +746,37 @@ fn island_paths(
         at = g.paths.last().and_then(|p| p.points.last().copied());
         out.extend(g.paths);
     }
+    // Ironing last (`ironing.rs`), as Orca's `extrude_infill` irons an island once everything else is printed: each
+    // area's lines in the order they were filled, the areas chained from where the nozzle is.
+    if !fills.ironing.is_empty() {
+        let solid_angle =
+            if layer.is_multiple_of(2) { s.solid_infill_direction } else { s.solid_infill_direction + 90.0 };
+        let angle = if s.iron.fixed { s.iron.angle } else { solid_angle + s.iron.angle };
+        let params = monotonic::Params {
+            direction: angle.to_radians(),
+            spacing: s.iron.spacing,
+            adjust: false,
+            connect: true,
+            link_max: 3.0 * s.iron.spacing,
+            origin,
+        };
+        let areas: Vec<Vec<Path>> = fills
+            .ironing
+            .iter()
+            .filter_map(|shape| monotonic::fill(shape, &params))
+            .map(|filled| {
+                filled.lines.into_iter().map(|points| path(Role::Ironing, points, false, island, first, h, s)).collect()
+            })
+            .filter(|paths: &Vec<Path>| !paths.is_empty())
+            .collect();
+        let at = out.last().and_then(|p| p.points.last().copied());
+        let ends: Vec<(Pt, Pt)> =
+            areas.iter().map(|a| (a[0].points[0], *a[a.len() - 1].points.last().unwrap())).collect();
+        let mut areas: Vec<Option<Vec<Path>>> = areas.into_iter().map(Some).collect();
+        for (k, _) in order::chain(&ends, &vec![false; ends.len()], at, true) {
+            out.extend(areas[k].take().unwrap_or_default());
+        }
+    }
     // The object's first layer on a raft prints at the first layer's speeds, at its own widths and accelerations
     // (Orca's `object_layer_over_raft`): walls at the first layer's speed, the rest at its infill speed.
     if layer == 0 && !first {
@@ -1126,6 +1157,14 @@ fn simplify_thick(points: &[Pt], widths: &[f64], resolution: f64) -> (Vec<Pt>, V
 
 /// Width, mm³ per mm and nominal speed of a role on this layer.
 pub fn flow(role: Role, first: bool, h: f64, s: &Settings) -> (f64, f64, f64) {
+    if role == Role::Ironing {
+        // A thread as thin as the ironing's share of the object's layer, spread over its spacing: as wide as the
+        // nozzle (Orca's `make_ironing`), at the first layer's infill speed there.
+        let height = ironing_height(s);
+        let width = s.nozzle_diameter + height * (1.0 - std::f64::consts::FRAC_PI_4);
+        let speed = if first { s.first_layer_infill_speed } else { s.iron.speed };
+        return (width, s.nozzle_diameter * height, speed);
+    }
     if first {
         let w = s.first_layer_width;
         if role == Role::Brim {
@@ -1150,6 +1189,7 @@ pub fn flow(role: Role, first: bool, h: f64, s: &Settings) -> (f64, f64, f64) {
             return (f.width, mm3, if internal { s.internal_bridge_speed } else { s.bridge_speed });
         }
         Role::GapFill => (s.inner_wall_width, s.gap_infill_speed),
+        Role::Ironing => unreachable!(),
         // Only the first layer has one.
         Role::Brim => (s.first_layer_width, s.first_layer_speed),
         Role::Support => (s.support.line_width, s.support_speed),
@@ -1171,8 +1211,15 @@ pub fn path_height(role: Role, h: f64, s: &Settings) -> f64 {
     match role {
         Role::Bridge | Role::InternalBridge => s.bridge_flow(role == Role::InternalBridge, h).height,
         Role::OverhangWall => s.overhang_wall_flow(h).height,
+        Role::Ironing => ironing_height(s),
         _ => h,
     }
+}
+
+/// mm: how high an ironing line is laid, Orca's `extrusion_height`: the ironing's share of the object's layer
+/// height, spread from the nozzle's width over the ironing's spacing.
+fn ironing_height(s: &Settings) -> f64 {
+    s.layer_height * s.iron.flow * s.iron.spacing / s.nozzle_diameter
 }
 
 /// An overhang wall's width, mm³ per mm, speed and acceleration on a layer `h` high.

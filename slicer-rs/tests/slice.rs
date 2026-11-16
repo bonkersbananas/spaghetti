@@ -2991,3 +2991,73 @@ fn wrapping_detection_with_a_prime_tower_lifts_before_each_layers_first_visit_as
     assert!(one[..head].contains("G3 Z.8 I1.217 J0 P1  F60000\n"), "{}", &one[..head]);
     assert!(one[head..].starts_with("M220 B\nM220 S100\n; WIPE_TOWER_START\nG1 Z1.2\n"), "{}", &one[head..head + 80]);
 }
+
+/// Per layer (from `; Z_HEIGHT:`), the length (mm) of one feature's extrusions, and every feed rate it prints at.
+fn feature_lengths(gcode: &str, want: &str) -> (Vec<(f64, f64)>, std::collections::BTreeSet<i64>) {
+    let (mut x, mut y, mut f) = (f64::NAN, f64::NAN, 0.0);
+    let (mut feature, mut z) = ("", 0.0);
+    let mut out: Vec<(f64, f64)> = Vec::new();
+    let mut feeds = std::collections::BTreeSet::new();
+    for line in gcode.lines() {
+        if let Some(h) = line.strip_prefix("; Z_HEIGHT: ") {
+            z = h.trim().parse().unwrap();
+        } else if let Some(name) = line.strip_prefix("; FEATURE: ") {
+            feature = name;
+        }
+        let code = line.split(';').next().unwrap().trim();
+        if !code.starts_with("G1 ") {
+            continue;
+        }
+        f = word(code, 'F').unwrap_or(f);
+        let (nx, ny) = (word(code, 'X').unwrap_or(x), word(code, 'Y').unwrap_or(y));
+        if feature == want && word(code, 'E').is_some_and(|e| e > 0.0) && (nx != x || ny != y) {
+            if out.last().is_none_or(|&(lz, _)| lz != z) {
+                out.push((z, 0.0));
+            }
+            out.last_mut().unwrap().1 += (nx - x).hypot(ny - y);
+            feeds.insert(f as i64);
+        }
+        (x, y) = (nx, ny);
+    }
+    (out, feeds)
+}
+
+#[test]
+fn ironing_smooths_the_surfaces_it_is_asked_to_as_orcas_does() {
+    // Steps: a 40 mm square 5 mm high, a 24 mm one 10 mm high, a 10 mm one 15 mm high and a 9 mm one 8 mm high in a
+    // corner. Native OrcaSlicer 2.5.1 with the X2D's presets irons (mm of line, mm³): every top 10,213.0 and 30.0,
+    // the last layer's top only 611.4 and 1.8, every solid surface 72,471.6 and 213.1 (Nov 16).
+    let steps = boxes_stl(&[
+        ([108., 108., 0.], [148., 148., 5.]),
+        ([116., 116., 0.], [140., 140., 10.]),
+        ([123., 123., 0.], [133., 133., 15.]),
+        ([137., 137., 0.], [146., 146., 8.]),
+    ]);
+    let options = Options { arrange: false, thumbnail: false, ..Options::default() };
+    let ironed = |kind: &str| {
+        let json = format!(r#"{{"process": {{"ironing_type": "{kind}"}}}}"#);
+        let out = slice(&[Input { name: "steps.stl", bytes: &steps }], &setup::read(&json).unwrap().settings, &options)
+            .unwrap();
+        assert!(out.fallbacks.is_empty(), "{:?}", out.fallbacks);
+        let volume = out.stats.features[Role::ALL.iter().position(|&r| r == Role::Ironing).unwrap()].volume;
+        let (layers, feeds) = feature_lengths(&String::from_utf8(out.gcode).unwrap(), "Ironing");
+        (layers, feeds, volume)
+    };
+    let (none, _, volume) = ironed("no ironing");
+    assert!(none.is_empty() && volume == 0.0);
+    // Each step's top layer, at the ironing's 30 mm/s, a trickle of a tenth of the layer's flow over 0.15 mm.
+    let (tops, feeds, volume) = ironed("top");
+    assert_eq!(tops.iter().map(|&(z, _)| z).collect::<Vec<_>>(), [5.0, 8.0, 10.0, 15.0]);
+    assert_eq!(feeds, [1800].into());
+    let length: f64 = tops.iter().map(|&(_, l)| l).sum();
+    assert!((length - 10213.0).abs() < 10.0, "{length} mm of ironing");
+    assert!((volume - 30.0).abs() < 0.3, "{volume} mm³ of ironing");
+    let (topmost, _, _) = ironed("topmost");
+    assert_eq!(topmost.len(), 1);
+    assert!((topmost[0].0 - 15.0).abs() < 1e-9 && (topmost[0].1 - 611.4).abs() < 1.0, "{topmost:?}");
+    // Every solid surface: the first layers whole, the shells under each top, and the tops.
+    let (solid, _, volume) = ironed("solid");
+    let length: f64 = solid.iter().map(|&(_, l)| l).sum();
+    assert!((length - 72471.6).abs() < 72471.6 * 0.01, "{length} mm of ironing");
+    assert!((volume - 213.1).abs() < 213.1 * 0.01, "{volume} mm³ of ironing");
+}
