@@ -177,7 +177,10 @@ async function attempt(
   theme: "light" | "dark",
 ): Promise<Page> {
   const label = `${shot.name}${suffix(theme)}-${width}`;
-  if (shot.width && shot.width !== (width < 768 ? 390 : 1440)) return page;
+  if (shot.width && shot.width !== (width < 768 ? 390 : 1440)) {
+    console.log(`  - ${label} skipped: this screen only exists at ${shot.width} px${shot.why ? ` (${shot.why})` : ""}`);
+    return page;
+  }
   try {
     await capture(page, shot, width, theme);
     taken++;
@@ -187,6 +190,8 @@ async function attempt(
     const reason = message.split("\n").slice(0, 3).join(" ").slice(0, 300);
     failures.push(`${label}: ${reason}`);
     console.error(`  ✗ ${label}: ${reason}`);
+    // What prepare changed in the data (the queue, a deleted idea) would break every shot after this one.
+    await shot.cleanup?.(page).catch(() => undefined);
     // A failed shot may leave a sheet open or the browser offline: start the next one clean.
     await context.setOffline(false).catch(() => undefined);
     await page.close().catch(() => undefined);
