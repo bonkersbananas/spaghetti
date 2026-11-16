@@ -40,6 +40,30 @@ async function addIdea(page: Page, title: string, photos = 0, note = "") {
   return id;
 }
 
+/**
+ * Waits until a touch at the top of the page starts a pull: the page's pull listeners are in place (the same effect
+ * puts touch-action "pan-x pan-up" on <html> a frame later, while the page is at its top) and no view transition
+ * runs. A card's crossfade holds touches until the new page is in the DOM and then delivers them at once, which can
+ * be before that page's effect has added its listeners: then the touchstart is missed and no pull starts. How long
+ * the crossfade waits varies from run to run, so a fixed wait only makes that rarer.
+ */
+async function pullReady(page: Page) {
+  await expect
+    .poll(() =>
+      page.evaluate(() => ({
+        touchAction: document.documentElement.style.touchAction,
+        transition:
+          !!(document as Document & { activeViewTransition?: unknown }).activeViewTransition ||
+          document
+            .getAnimations()
+            .some((animation) =>
+              (animation.effect as KeyframeEffect | null)?.pseudoElement?.startsWith("::view-transition"),
+            ),
+      })),
+    )
+    .toEqual({ touchAction: "pan-x pan-up", transition: false });
+}
+
 /** A touch that goes from (x, y) by (dx, dy) in small steps, stopping short of letting go if asked. */
 async function drag(page: Page, from: { x: number; y: number }, by: { dx?: number; dy?: number }, release = true) {
   const session = await page.context().newCDPSession(page);
@@ -72,6 +96,7 @@ test("a pull past the threshold goes back to Ideas, with the same card in view",
   await card.click();
   await expect(page).toHaveURL(new RegExp(`/ideas/${target}$`));
   await expect(page.getByRole("textbox", { name: "Title" })).toHaveValue("Pulled pasta rack");
+  await pullReady(page);
   await drag(page, { x: 195, y: 250 }, { dy: 200 });
   await expect(page).toHaveURL(/\/ideas$/);
   await expect(card).toBeInViewport();
@@ -81,6 +106,7 @@ test("a short pull springs back and stays", { tag: "@phone" }, async ({ page }) 
   const id = await addIdea(page, "Short pull", 1);
   await page.goto(`/ideas/${id}`);
   await expect(page.getByRole("textbox", { name: "Title" })).toBeVisible();
+  await pullReady(page);
   const session = await drag(page, { x: 195, y: 250 }, { dy: 50 }, false);
   // Mid-pull the hint is up, not yet asking for a release.
   await expect(page.locator("[data-pull-hint=pulling]")).toBeAttached();
@@ -96,8 +122,10 @@ test("the same pull when scrolled down just scrolls", { tag: "@phone" }, async (
   const id = await addIdea(page, "Scrolled", 1, LONG);
   await page.goto(`/ideas/${id}`);
   await expect(page.getByRole("textbox", { name: "Title" })).toBeVisible();
+  // Once the page could be pulled, scrolled down it no longer keeps the downward pan for itself.
+  await pullReady(page);
   await page.evaluate(() => window.scrollTo(0, 400));
-  await page.waitForTimeout(200);
+  await expect.poll(() => page.evaluate(() => document.documentElement.style.touchAction)).toBe("");
   await drag(page, { x: 195, y: 500 }, { dy: 200 });
   await page.waitForTimeout(500);
   await expect(page).toHaveURL(new RegExp(`/ideas/${id}$`));
@@ -111,6 +139,7 @@ test("a sideways swipe on the photos still changes the photo", { tag: "@phone" }
   await expect(viewer.getByRole("figure", { name: "1 of 2" })).toBeVisible();
   const box = await viewer.boundingBox();
   if (!box) throw new Error("No photos");
+  await pullReady(page);
   await drag(page, { x: 330, y: box.y + box.height / 2 }, { dx: -250, dy: 10 });
   await expect(page).toHaveURL(new RegExp(`/ideas/${id}$`));
   await expect.poll(() => viewer.locator("div.overflow-x-auto").evaluate((el) => el.scrollLeft)).toBeGreaterThan(100);
@@ -125,6 +154,7 @@ test("a pull goes back to the page it came from, and says so", { tag: "@phone" }
     .first()
     .click();
   await expect(page.getByRole("textbox", { name: "Title" })).toHaveValue("Searchable tugboat");
+  await pullReady(page);
   const session = await drag(page, { x: 195, y: 250 }, { dy: 200 }, false);
   await expect(page.locator("[data-pull-hint=ready]")).toContainText("Release for Search");
   await session.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
@@ -135,6 +165,7 @@ test("with nothing before it in the app, a pull goes to Ideas", { tag: "@phone" 
   const id = await addIdea(page, "Deep link", 1);
   await page.goto(`/ideas/${id}`);
   await expect(page.getByRole("textbox", { name: "Title" })).toHaveValue("Deep link");
+  await pullReady(page);
   const session = await drag(page, { x: 195, y: 250 }, { dy: 200 }, false);
   await expect(page.locator("[data-pull-hint=ready]")).toContainText("Release for Ideas");
   await session.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
@@ -151,9 +182,9 @@ test("a twist pulls back the same way: to the idea it was made from, and from th
   const twist = new URL(page.url()).pathname;
   // The twist takes the idea's title, so the way back names the kind of page rather than echo the title under it.
   await expect(page.getByRole("main").getByRole("link", { name: "Idea", exact: true })).toBeVisible();
-  // The twist is made on the device first; let the server's copy arrive (and the page settle) before touching it.
+  // The twist is made on the device first; let the server's copy arrive before touching it.
   await expect.poll(async () => (await page.request.get(`/api${twist}`)).status()).toBe(200);
-  await page.waitForTimeout(500);
+  await pullReady(page);
 
   // A short pull springs back and stays.
   let session = await drag(page, { x: 195, y: 250 }, { dy: 50 }, false);
@@ -173,8 +204,8 @@ test("a twist pulls back the same way: to the idea it was made from, and from th
   await page.goto("/twists");
   await page.locator(`main a[href="${twist}"]`).first().click();
   await expect(page).toHaveURL(new RegExp(`${twist}$`));
-  // The card's picture travels to the page first (a view transition holds the touches meanwhile).
-  await page.waitForTimeout(500);
+  await expect(page.getByRole("main").getByRole("link", { name: "Twists", exact: true })).toBeVisible();
+  await pullReady(page);
   session = await drag(page, { x: 195, y: 250 }, { dy: 200 }, false);
   await expect(page.locator("[data-pull-hint=ready]")).toContainText("Release for Twists");
   await session.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
