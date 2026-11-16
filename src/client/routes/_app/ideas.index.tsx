@@ -94,21 +94,27 @@ function Ideas() {
     const id = href?.split("/").pop();
     return id ? all.find((idea) => idea.id === id) : undefined;
   };
-  const onPicked = (act: (idea: (typeof all)[number]) => void) => () => {
-    const idea = picked();
-    if (!idea || idea.pending) return;
-    act(idea);
-    // The card lands elsewhere in the page: the focused node is replaced, so find it again once it has.
-    requestAnimationFrame(() =>
-      setTimeout(
-        () => document.querySelector<HTMLElement>(`main [data-picks] a[href="/ideas/${idea.id}"]`)?.focus(),
-        0,
-      ),
-    );
-  };
+  const onPicked =
+    (act: (idea: (typeof all)[number]) => void, toggles = false) =>
+    () => {
+      const idea = picked();
+      if (!idea || idea.pending) return;
+      const queued = queue.some((item) => item.id === idea.id);
+      act(idea);
+      // The card lands elsewhere in the page: the focused node is replaced, so find it again once it has, where it is
+      // now (U moves it between Up next and the inbox). The copy it left fades out a moment longer, and focus there
+      // would leave with it.
+      const list = queued !== toggles ? "[aria-label='Up next']" : ":not([aria-label='Up next'])";
+      requestAnimationFrame(() =>
+        setTimeout(
+          () => document.querySelector<HTMLElement>(`main [data-picks]${list} a[href="/ideas/${idea.id}"]`)?.focus(),
+          0,
+        ),
+      );
+    };
   useHotkeys({
     listUpNext: isDesktop
-      ? onPicked((idea) => setUpNext(queryClient, idea, !queue.some((queued) => queued.id === idea.id)))
+      ? onPicked((idea) => setUpNext(queryClient, idea, !queue.some((queued) => queued.id === idea.id)), true)
       : undefined,
     listMoveEarlier: isDesktop ? onPicked((idea) => moveUpNext(queryClient, queue, idea.id, -1)) : undefined,
     listMoveLater: isDesktop ? onPicked((idea) => moveUpNext(queryClient, queue, idea.id, 1)) : undefined,

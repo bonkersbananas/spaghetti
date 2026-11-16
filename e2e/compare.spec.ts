@@ -55,7 +55,7 @@ test("the summary adds the attempts up, and its dots pick an attempt", async ({ 
   await expect(summary.getByRole("heading", { name: "So far" })).toBeVisible();
   await expect(summary.getByText("1 spaghetti, 1 worked, printing now")).toBeVisible();
   // 120 min measured + 90 min estimated; one attempt has no weight, and the print on the bed counts for nothing yet.
-  await expect(summary.getByText("about 3 h 30 min on the bed")).toBeVisible();
+  await expect(summary.getByText("about 3 h 30 min of printing")).toBeVisible();
   await expect(summary.getByText("60 g of filament")).toBeVisible();
   await expect(summary.getByText("at least 60 g of filament")).toBeVisible();
 
