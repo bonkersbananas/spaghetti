@@ -3,8 +3,8 @@
 <title>Slicer benchmark</title>
 <script type="module">
   // Runs the WebAssembly slicer on the page's main thread, as the benchmark asks: window.runSlice(paths, keep, setup),
-  // with the slice setup at `setup` when given; or window.runReplay(calls), the calls capture.mts recorded (their bytes
-  // at /replay/<file>), which also says the file's SHA-256.
+  // with the slice setup at `setup` when given; or window.runJob(job), what app-slice.mts wrote down that the app
+  // handed the module (its files at /job/<file>), which also says the file's SHA-256.
   let instance;
   async function load() {
     if (instance) return 0;
@@ -62,16 +62,20 @@
       stats: summary.stats.summary,
     };
   };
-  window.runReplay = async (calls) => {
+  window.runJob = async (job) => {
     const instantiateMs = await load();
     const e = instance.exports;
-    // The calls' bytes, fetched ahead so that fetching isn't timed.
+    // The job's files, fetched ahead so that fetching isn't timed.
+    const fetched = async (file) => (file ? new Uint8Array(await (await fetch(`/job/${file}`)).arrayBuffer()) : null);
     const encoder = new TextEncoder();
-    const ready = await Promise.all(
-      calls.map(async (call) => ({
+    const setup = await fetched(job.setup);
+    let calls = await Promise.all(
+      job.calls.map(async (call) => ({
         ...call,
-        bytes: call.file ? new Uint8Array(await (await fetch(`/replay/${call.file}`)).arrayBuffer()) : null,
-        name: call.name === undefined ? null : encoder.encode(call.name),
+        name: encoder.encode(call.name),
+        stl: await fetched(call.stl),
+        paint: await fetched(call.paint),
+        supports: await fetched(call.supports),
       })),
     );
     const withBytes = (bytes, use) => {
@@ -84,29 +88,25 @@
       }
     };
     const t1 = performance.now();
-    let code = 0;
-    let flags = 0;
-    for (const call of ready) {
-      if (call.op === "slice") flags = call.flags;
-      else if (call.op === "setup") code = withBytes(call.bytes, (at) => e.setup(at, call.bytes.length));
-      else if (call.op === "paint" || call.op === "paint_supports") {
-        code = withBytes(call.bytes, (at) => e[call.op](at, call.bytes.length));
-      } else {
-        code = withBytes(call.name, (n) =>
-          withBytes(call.bytes, (d) =>
-            call.op === "add"
-              ? e.add(n, call.name.length, d, call.bytes.length)
-              : call.op === "add_in"
-                ? e.add_in(n, call.name.length, d, call.bytes.length, call.filament)
-                : e.add_part(n, call.name.length, d, call.bytes.length, call.filament, call.first),
-          ),
-        );
-      }
+    let code = withBytes(setup, (at) => e.setup(at, setup.length));
+    for (const call of code === 0 ? calls : []) {
+      code = withBytes(call.name, (n) =>
+        withBytes(call.stl, (d) =>
+          call.op === "add_part"
+            ? e.add_part(n, call.name.length, d, call.stl.length, call.filament, call.first ? 1 : 0)
+            : call.op === "add_in"
+              ? e.add_in(n, call.name.length, d, call.stl.length, call.filament)
+              : e.add(n, call.name.length, d, call.stl.length),
+        ),
+      );
+      if (code === 0 && call.paint) code = withBytes(call.paint, (at) => e.paint(at, call.paint.length));
+      if (code === 0 && call.supports) code = withBytes(call.supports, (at) => e.paint_supports(at, call.supports.length));
       if (code !== 0) break;
     }
-    // Dropped as the calls are: only the module holds the plate while it slices.
-    ready.length = 0;
-    if (code === 0) code = e.slice(flags);
+    // Dropped as the app drops them: only the module holds the plate while it slices.
+    calls = null;
+    // The app keeps the objects where it put them (flag 1).
+    if (code === 0) code = e.slice(1);
     const sliceMs = performance.now() - t1;
     if (code !== 0) {
       e.clear();

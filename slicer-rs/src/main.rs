@@ -1,7 +1,7 @@
 //! The command line: slices STL and 3MF files into a `.gcode.3mf` with the app's default settings, or with a slice
 //! setup the app made from people's slicing settings.
 
-use spaghetti_slicer::{Input, Options, Plate, gcode, profile, setup};
+use spaghetti_slicer::{Input, Options, Output, Plate, Settings, gcode, profile, setup};
 use std::process::ExitCode;
 
 const USAGE: &str = "Usage: spaghetti-slicer [options] <model.stl|model.3mf>...
@@ -25,11 +25,10 @@ Options:
       --parts           Slice the models as the parts of one object (each in its --filaments filament), as Orca
                         prints an object made of parts: where two overlap, the later one's
       --keep-placement  Keep the objects where the files put them instead of arranging them on the plate
+      --job <file>      Replay what the app handed the WebAssembly module (bench/app-slice.mts writes it): its
+                        setup, then each object or part with its filament and paint, kept where they are
       --no-thumbnail    Leave out the plate picture
       --timings         Print how long each step took
-      --replay <dir>    Slice what the app handed the WebAssembly module for a model, as bench/capture.mts recorded
-                        it: its setup, each object, part and paint, and the slice's flags (models and the options
-                        above that those give are ignored)
   -h, --help            Show this";
 
 struct Args {
@@ -48,8 +47,8 @@ struct Args {
     filaments: Vec<usize>,
     /// Each filament's nozzle (1-based), when given.
     filament_map: Option<Vec<usize>>,
-    /// A folder bench/capture.mts recorded the module's calls in.
-    replay: Option<String>,
+    /// A job to replay (bench/app-slice.mts), in place of models.
+    job: Option<String>,
 }
 
 fn parse(args: Vec<String>) -> Result<Args, String> {
@@ -66,7 +65,7 @@ fn parse(args: Vec<String>) -> Result<Args, String> {
         timings: false,
         filaments: vec![],
         filament_map: None,
-        replay: None,
+        job: None,
     };
     let mut it = args.into_iter();
     while let Some(arg) = it.next() {
@@ -76,7 +75,6 @@ fn parse(args: Vec<String>) -> Result<Args, String> {
             "-o" | "--output" => out.output = Some(value(&arg)?),
             "--gcode" => out.gcode = Some(value(&arg)?),
             "--stats" => out.stats = Some(value(&arg)?),
-            "--replay" => out.replay = Some(value(&arg)?),
             "--keep-placement" => out.keep_placement = true,
             "--parts" => out.parts = true,
             "--nozzle" => {
@@ -101,6 +99,7 @@ fn parse(args: Vec<String>) -> Result<Args, String> {
                     .ok_or_else(|| format!("--filament-map takes nozzles 1 and 2, not {list}"))?;
                 out.filament_map = Some(map);
             }
+            "--job" => out.job = Some(value(&arg)?),
             "--no-thumbnail" => out.thumbnail = false,
             "--timings" => out.timings = true,
             "-h" | "--help" => return Err(String::new()),
@@ -108,61 +107,10 @@ fn parse(args: Vec<String>) -> Result<Args, String> {
             _ => out.inputs.push(arg),
         }
     }
-    if out.inputs.is_empty() && out.replay.is_none() {
+    if out.inputs.is_empty() && out.job.is_none() {
         return Err("no model to slice".into());
     }
     Ok(out)
-}
-
-/// The setup, plate and options the app's calls to the WebAssembly module made (bench/capture.mts's `calls.json`),
-/// made again here in the same order: as `wasm.rs` takes each call.
-fn replay(dir: &str) -> Result<(setup::Setup, Plate, Options), String> {
-    use spaghetti_slicer::json::{self, Json};
-    let path = std::path::Path::new(dir);
-    let text = std::fs::read_to_string(path.join("calls.json")).map_err(|e| format!("{dir}/calls.json: {e}"))?;
-    let Some(Json::Array(calls)) = json::parse(&text) else { return Err(format!("{dir}/calls.json isn't a list")) };
-    let mut setup = setup::Setup::default();
-    let mut plate = Plate::default();
-    let mut flags = 1;
-    for call in &calls {
-        let Json::Object(call) = call else { return Err("a call that isn't an object".into()) };
-        let text = |key: &str| call.get(key).and_then(Json::as_str).unwrap_or_default().to_string();
-        let number = |key: &str| match call.get(key) {
-            Some(Json::Number(n)) => *n as usize,
-            _ => 0,
-        };
-        let bytes = || {
-            let file = text("file");
-            std::fs::read(path.join(&file)).map_err(|e| format!("{dir}/{file}: {e}"))
-        };
-        let name = text("name");
-        let op = text("op");
-        match op.as_str() {
-            "setup" => {
-                let bytes = bytes()?;
-                let text = std::str::from_utf8(&bytes).map_err(|e| e.to_string())?;
-                setup = setup::read(text).map_err(|e| format!("setup: {e}"))?;
-            }
-            "add" => plate.add(&Input { name: &name, bytes: &bytes()? }).map_err(|e| e.to_string())?,
-            "add_in" => plate
-                .add_with_filament(&Input { name: &name, bytes: &bytes()? }, Some(number("filament").max(1) - 1))
-                .map_err(|e| e.to_string())?,
-            "add_part" => plate
-                .add_part(&Input { name: &name, bytes: &bytes()? }, number("filament").max(1) - 1, number("first") != 0)
-                .map_err(|e| e.to_string())?,
-            "paint" | "paint_supports" => {
-                let paint = spaghetti_slicer::paint::Paint::from_bytes(&bytes()?).ok_or("paint that isn't paint")?;
-                let taken = if op == "paint" { plate.paint(&paint) } else { plate.paint_supports(&paint) };
-                if !taken {
-                    return Err(format!("{op} that isn't for its model"));
-                }
-            }
-            "slice" => flags = number("flags"),
-            _ => return Err(format!("a call {op} the module doesn't have")),
-        }
-    }
-    let options = Options { arrange: flags & 1 == 0, thumbnail: flags & 2 == 0, scale: setup.scale };
-    Ok((setup, plate, options))
 }
 
 fn main() -> ExitCode {
@@ -177,14 +125,8 @@ fn main() -> ExitCode {
             return ExitCode::from(2);
         }
     };
-    if let Some(dir) = &args.replay {
-        return match replay(dir) {
-            Ok((setup, plate, options)) => finish(&args, &setup.settings, plate, &options, "replay"),
-            Err(e) => {
-                eprintln!("can't replay {dir}: {e}");
-                ExitCode::FAILURE
-            }
-        };
+    if let Some(job) = &args.job {
+        return replay(job, &args);
     }
     // The nozzle's presets, which a setup is laid over.
     let base = args.nozzle.and_then(profile::x2d_nozzle).unwrap_or_else(profile::x2d);
@@ -243,29 +185,30 @@ fn main() -> ExitCode {
             return ExitCode::FAILURE;
         }
     }
-    let first = &args.inputs[0];
-    let stem = first.rsplit_once('.').map(|(s, _)| s).unwrap_or(first).to_string();
-    finish(&args, &settings, plate, &options, &stem)
-}
-
-/// Slices the plate and writes what was asked for: the `.gcode.3mf` (by default `<stem>.gcode.3mf`), the G-code, the
-/// statistics, and what it noted.
-fn finish(
-    args: &Args,
-    settings: &spaghetti_slicer::config::Settings,
-    plate: Plate,
-    options: &Options,
-    stem: &str,
-) -> ExitCode {
-    let out = match plate.slice(settings, options) {
+    let out = match plate.slice(&settings, &options) {
         Ok(out) => out,
         Err(e) => {
             eprintln!("can't slice: {e}");
             return ExitCode::FAILURE;
         }
     };
-    let output = args.output.clone().unwrap_or_else(|| format!("{stem}.gcode.3mf"));
-    let mut writes = vec![(output.clone(), out.file.as_slice())];
+    let output = args.output.clone().unwrap_or_else(|| {
+        let first = &args.inputs[0];
+        let stem = first.rsplit_once('.').map(|(s, _)| s).unwrap_or(first);
+        format!("{stem}.gcode.3mf")
+    });
+    match write_out(&out, &settings, &output, &args) {
+        Ok(()) => ExitCode::SUCCESS,
+        Err(e) => {
+            eprintln!("{e}");
+            ExitCode::FAILURE
+        }
+    }
+}
+
+/// Writes the slice's files (the `.gcode.3mf`, and the G-code and statistics when asked for) and says what it made.
+fn write_out(out: &Output, settings: &Settings, output: &str, args: &Args) -> Result<(), String> {
+    let mut writes = vec![(output.to_string(), out.file.as_slice())];
     if let Some(g) = &args.gcode {
         writes.push((g.clone(), out.gcode.as_slice()));
     }
@@ -274,10 +217,7 @@ fn finish(
         writes.push((s.clone(), stats.as_bytes()));
     }
     for (path, bytes) in writes {
-        if let Err(e) = std::fs::write(&path, bytes) {
-            eprintln!("can't write {path}: {e}");
-            return ExitCode::FAILURE;
-        }
+        std::fs::write(&path, bytes).map_err(|e| format!("can't write {path}: {e}"))?;
     }
     let s = &out.stats;
     println!(
@@ -302,5 +242,66 @@ fn finish(
             out.triangles, t.read, t.slice, t.regions, t.supports, t.toolpaths, t.gcode, t.thumbnail, t.pack, t.total
         );
     }
-    ExitCode::SUCCESS
+    Ok(())
+}
+
+/// Slices what the app handed the WebAssembly module, as `bench/app-slice.mts` wrote it down: the setup read as the
+/// module reads it, then each call (`add`, `add_in` or `add_part`, with an STL and its paint), the objects kept where
+/// they are. The file is the module's, byte for byte.
+fn replay(path: &str, args: &Args) -> ExitCode {
+    use spaghetti_slicer::json::{self, Json};
+    use spaghetti_slicer::paint::Paint;
+    let dir = std::path::Path::new(path).parent().unwrap_or(std::path::Path::new("."));
+    let read = |name: &str| std::fs::read(dir.join(name)).map_err(|e| format!("can't read {name}: {e}"));
+    let run = || -> Result<(), String> {
+        let text = String::from_utf8(std::fs::read(path).map_err(|e| format!("can't read {path}: {e}"))?)
+            .map_err(|_| "the job isn't UTF-8".to_string())?;
+        let Some(Json::Object(job)) = json::parse(&text) else { return Err("the job isn't JSON".into()) };
+        let text = |v: Option<&Json>| v.and_then(Json::as_str).map(str::to_string);
+        let number = |v: Option<&Json>| match v {
+            Some(Json::Number(n)) => Some(*n as usize),
+            _ => None,
+        };
+        let setup_name = text(job.get("setup")).ok_or("the job names no setup")?;
+        let setup_text = String::from_utf8(read(&setup_name)?).map_err(|_| "the setup isn't UTF-8".to_string())?;
+        let setup = setup::read(&setup_text).map_err(|e| format!("{setup_name}: {e}"))?;
+        let mut plate = Plate::default();
+        let Some(Json::Array(calls)) = job.get("calls") else { return Err("the job has no calls".into()) };
+        for call in calls {
+            let Json::Object(call) = call else { return Err("a call isn't an object".into()) };
+            let op = text(call.get("op")).unwrap_or_default();
+            let name = text(call.get("name")).unwrap_or_default();
+            let stl = text(call.get("stl")).ok_or("a call names no STL")?;
+            let bytes = read(&stl)?;
+            let input = Input { name: &name, bytes: &bytes };
+            let filament = number(call.get("filament")).unwrap_or(1).max(1) - 1;
+            match op.as_str() {
+                "add" => plate.add(&input),
+                "add_in" => plate.add_with_filament(&input, Some(filament)),
+                "add_part" => plate.add_part(&input, filament, matches!(call.get("first"), Some(Json::Bool(true)))),
+                other => return Err(format!("unknown call {other}")),
+            }
+            .map_err(|e| format!("can't slice {name}: {e}"))?;
+            for (key, supports) in [("paint", false), ("supports", true)] {
+                if let Some(file) = text(call.get(key)) {
+                    let paint = Paint::from_bytes(&read(&file)?).ok_or_else(|| format!("{file} isn't paint"))?;
+                    let taken = if supports { plate.paint_supports(&paint) } else { plate.paint(&paint) };
+                    if !taken {
+                        return Err(format!("{file} isn't paint for {stl}"));
+                    }
+                }
+            }
+        }
+        let options = Options { arrange: false, thumbnail: args.thumbnail, scale: setup.scale };
+        let out = plate.slice(&setup.settings, &options).map_err(|e| format!("can't slice: {e}"))?;
+        let output = args.output.clone().unwrap_or_else(|| "job.gcode.3mf".into());
+        write_out(&out, &setup.settings, &output, args)
+    };
+    match run() {
+        Ok(()) => ExitCode::SUCCESS,
+        Err(e) => {
+            eprintln!("{e}");
+            ExitCode::FAILURE
+        }
+    }
 }

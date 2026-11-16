@@ -1,10 +1,10 @@
 // Slices models with the WebAssembly build in a browser (Chromium or WebKit, through Playwright), on a fresh page
 // per run, sampling the browser's processes' memory every 100 ms. Prints one JSON line per run. A slice setup slices
-// with its settings, as in wasm-node.mjs; --replay makes the calls capture.mts recorded for a model again, and says the
-// file's SHA-256 (to check it against Node's and the command line's).
+// with its settings, as in wasm-node.mjs; --job replays what the app handed the module for a model (app-slice.mts
+// writes the job), and says the file's SHA-256 (to check it against Node's and the command line's).
 //   node wasm-browser.mjs <chromium|webkit> <dir with spaghetti_slicer.wasm> <runs> [--keep-placement]
 //     [--setup <setup.json>] <model…>
-//   node wasm-browser.mjs <chromium|webkit> <dir with spaghetti_slicer.wasm> <runs> --replay <folder>
+//   node wasm-browser.mjs <chromium|webkit> <dir with spaghetti_slicer.wasm> <runs> --job <job.json>
 import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import http from "node:http";
@@ -16,10 +16,10 @@ const [which, wasmDir, runsText, ...rest] = process.argv.slice(2);
 const keep = rest.includes("--keep-placement");
 const setupAt = rest.indexOf("--setup");
 const setup = setupAt >= 0 ? path.resolve(rest[setupAt + 1]) : null;
-const replayAt = rest.indexOf("--replay");
-const replay = replayAt >= 0 ? path.resolve(rest[replayAt + 1]) : null;
-const calls = replay ? JSON.parse(fs.readFileSync(path.join(replay, "calls.json"), "utf8")) : null;
-const taken = new Set([setupAt, replayAt].filter((i) => i >= 0).flatMap((i) => [i, i + 1]));
+const jobAt = rest.indexOf("--job");
+const jobDir = jobAt >= 0 ? path.dirname(path.resolve(rest[jobAt + 1])) : null;
+const job = jobAt >= 0 ? JSON.parse(fs.readFileSync(rest[jobAt + 1], "utf8")) : null;
+const taken = new Set([setupAt, jobAt].filter((i) => i >= 0).flatMap((i) => [i, i + 1]));
 const models = rest.filter((a, i) => a !== "--keep-placement" && !taken.has(i)).map((m) => path.resolve(m));
 const here = path.dirname(fileURLToPath(import.meta.url));
 
@@ -29,7 +29,12 @@ const files = new Map([
   ["/wasm/spaghetti_slicer.wasm", path.join(wasmDir, "spaghetti_slicer.wasm")],
   ...models.map((model, i) => [`/model/${i}`, model]),
   ...(setup ? [["/setup.json", setup]] : []),
-  ...(calls ?? []).filter((call) => call.file).map((call) => [`/replay/${call.file}`, path.join(replay, call.file)]),
+  // A job's setup and files, each at /job/<its name in the job>.
+  ...(job
+    ? [job.setup, ...job.calls.flatMap((call) => [call.stl, call.paint, call.supports])]
+        .filter(Boolean)
+        .map((file) => [`/job/${file}`, path.join(jobDir, file)])
+    : []),
 ]);
 const server = http.createServer((req, res) => {
   const file = files.get(new URL(req.url, "http://127.0.0.1").pathname);
@@ -73,8 +78,8 @@ for (let run = 0; run < Number(runsText); run++) {
     );
     peakOne = Math.max(peakOne, ...now);
   }, 100);
-  const result = calls
-    ? await page.evaluate((c) => window.runReplay(c), calls)
+  const result = job
+    ? await page.evaluate((j) => window.runJob(j), job)
     : await page.evaluate(
         ([paths, k, s]) => window.runSlice(paths, k, s),
         [models.map((_, i) => `/model/${i}`), keep, setup ? "/setup.json" : null],
