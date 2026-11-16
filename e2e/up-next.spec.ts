@@ -113,7 +113,9 @@ test("starting a build takes the idea off the queue", async ({ page }) => {
 test("who it is for shows under the title and is found by search", async ({ page }) => {
   const id = await makeIdea(page, "Mug stand");
   await page.goto(`/ideas/${id}`);
-  await page.getByRole("button", { name: "For someone" }).click();
+  // The offer names the other person in one tap; anyone else is behind its caret.
+  await page.getByRole("button", { name: "For someone else" }).click();
+  await page.getByRole("button", { name: "Someone else…" }).click();
   const field = page.getByRole("textbox", { name: "For", exact: true });
   await field.fill("Mila");
   // Clearing the name to type another one doesn't close the field under the cursor.
@@ -124,6 +126,25 @@ test("who it is for shows under the title and is found by search", async ({ page
   await expect(page.getByRole("list", { name: "Ideas" }).getByText(/^for Mila/)).toBeVisible();
   await page.goto("/search?q=Mila");
   await expect(page.getByRole("link", { name: /Mug stand/ }).first()).toBeVisible();
+});
+
+test("For names the other person in one tap, and a line that names you reads for you", async ({ page }) => {
+  const id = await makeIdea(page, "Plant tag");
+  await page.goto(`/ideas/${id}`);
+  const people = (await (await page.request.get("/api/people")).json()) as { people: { id: string; name: string }[] };
+  const session = (await (await page.request.get("/api/session")).json()) as { user: { id: string } };
+  const other = people.people.find((person) => person.id !== session.user.id);
+  const me = people.people.find((person) => person.id === session.user.id);
+  if (!other || !me) throw new Error("The workspace has two people.");
+  await page.getByRole("button", { name: `For ${other.name}`, exact: true }).click();
+  const field = page.getByRole("textbox", { name: "For", exact: true });
+  await expect(field).toHaveValue(other.name);
+  // Named, the offer goes: the line under the title says who it is for.
+  await expect(page.getByRole("button", { name: "For someone else" })).toHaveCount(0);
+  await expect.poll(async () => (await (await page.request.get(`/api/items/${id}`)).json()).item.forWhom).toBe(other.name);
+  await field.fill(me.name);
+  await field.blur();
+  await expect(page.getByText("you", { exact: true })).toBeVisible();
 });
 
 test("Today shows the first three of the queue, in order, and nothing when it is empty", async ({ page }) => {

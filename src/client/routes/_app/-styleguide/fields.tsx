@@ -1,6 +1,8 @@
 import { useState } from "react";
+import { OfferChip } from "@/components/ui/Chip";
 import { TextArea, TextField } from "@/components/ui/Field";
-import { ForChip, ForField, ForLine, ForPersonChip } from "@/components/ui/ForField";
+import { ForField, ForLine } from "@/components/ui/ForField";
+import { ForOffer } from "@/components/ui/ForOffer";
 import * as Icons from "@/components/ui/icons";
 import { NoteField } from "@/components/ui/NoteField";
 import { type SaveState, SaveStatus } from "@/components/ui/SaveStatus";
@@ -48,12 +50,18 @@ export function FieldSection() {
           <TextArea appearance="title" defaultValue="Articulated dragon" aria-label="Title" minRows={1} />
           <TextArea appearance="plain" aria-label="Note" placeholder="Jot it down…" minRows={3} />
           <Label>
-            For field: who it is for, quiet under a title; nobody named, the page offers a quiet chip instead
+            For field: who it is for, quiet under a title; it reads "for you" when it names the reader, the name as
+            typed while edited
           </Label>
           <ForField defaultValue="Mila" aria-label="For" />
+          <ForField defaultValue="Sam" aria-label="For, naming the reader" you />
+          <Label>
+            Nobody named: one dashed offer among the title's chips, "For Sam" in one tap and "Someone else…" behind the
+            caret; without the other person known, "For someone…" (an OfferChip: dashed, never a fact or a toggle)
+          </Label>
           <div className="flex flex-wrap gap-2">
-            <ForPersonChip name="Sam" onClick={() => undefined} />
-            <ForChip onClick={() => undefined} />
+            <ForOffer name="Sam" onName={() => undefined} onAsk={() => undefined} />
+            <OfferChip onClick={() => undefined}>For someone…</OfferChip>
           </div>
           <Label>For line on a card: a name stays quiet, "for you" stands out</Label>
           <p className="text-small text-ink-soft flex gap-4">
