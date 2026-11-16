@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { displayName } from "../../src/shared/people.ts";
+import { displayName, withoutOwner } from "../../src/shared/people.ts";
 
 describe("displayName", () => {
   it("keeps a two-word name whole", () => {
@@ -12,5 +12,21 @@ describe("displayName", () => {
     expect(displayName(undefined, "Someone")).toBe("Someone");
     expect(displayName({ name: " " }, "you")).toBe("you");
     expect(displayName(null)).toBe("");
+  });
+});
+
+describe("withoutOwner", () => {
+  it("says the owner once when they are named beside it", () => {
+    expect(withoutOwner("Claude for Alex", "Alex Rivera")).toBe("Claude");
+    expect(withoutOwner("Claude for Carl Oscar", "Carl Oscar")).toBe("Claude");
+    expect(withoutOwner("claude FOR alex", "Alex")).toBe("claude");
+  });
+
+  it("keeps any other name as it is", () => {
+    expect(withoutOwner("Share from iPhone", "Sam Okafor")).toBe("Share from iPhone");
+    expect(withoutOwner("Claude for Alex", "Sam Okafor")).toBe("Claude for Alex");
+    expect(withoutOwner("Claude for Alexandra", "Alex")).toBe("Claude for Alexandra");
+    expect(withoutOwner(" for Alex", "Alex")).toBe(" for Alex");
+    expect(withoutOwner("Claude for Alex")).toBe("Claude for Alex");
   });
 });

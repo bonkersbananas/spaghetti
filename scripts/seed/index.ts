@@ -7,6 +7,7 @@ import { readFileSync } from "node:fs";
 import { type APIRequestContext, type Browser, request } from "@playwright/test";
 import { SEED_USERS } from "../lib/local-app.ts";
 import { executeSql } from "../lib/wrangler.ts";
+import { seedAgentWork } from "./agents.ts";
 import { seedBridge, seedBuilds } from "./builds.ts";
 import { seedComments } from "./comments.ts";
 import { seedIdeas } from "./ideas.ts";
@@ -72,6 +73,7 @@ export async function seedAll({
     await seedBridge(alex, origin);
     await seedUpkeep(alex, stateDir);
     await seedShopping({ alex, sam }, origin, stateDir, now);
+    seedAgentWork(stateDir);
   } finally {
     await Promise.all([alex.dispose(), sam.dispose()]);
   }
