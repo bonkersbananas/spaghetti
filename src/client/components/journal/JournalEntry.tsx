@@ -465,9 +465,10 @@ const AttemptRow = forwardRef<HTMLAnchorElement, JournalEntryProps>(function Att
 });
 
 /**
- * A captured idea's name while Claude names it (decision 0071): the plain words "Naming…", for 15 seconds at most
- * (`NAMING_TIMEOUT_MS`, shared/naming.ts), then its name as before. Plain words and the clock the Journal already has,
- * so the Journal's first load doesn't carry the cards' sparkle.
+ * A captured idea's name while Claude names it (decision 0071): the plain words "Naming…", for 15 seconds at most, then
+ * its name as before. Plain words and the clock the Journal already has, so its first load doesn't carry the cards'
+ * sparkle. The 15 s is `NAMING_TIMEOUT_MS` (shared/naming.ts) written out: imported, it would be a chunk of its own in
+ * the Journal's first load, which is at its ceiling; test/unit/naming.test.ts keeps the two equal.
  */
 function Naming({ since, children }: { since: number; children: ReactNode }) {
   const now = useNow(5000);

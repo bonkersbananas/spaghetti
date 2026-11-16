@@ -2,6 +2,7 @@ import { env } from "cloudflare:workers";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { NewTokenResponse } from "../../src/shared/agents.ts";
 import type { FeaturesResponse, ItemResponse } from "../../src/shared/api.ts";
+import { NAMING_TIMEOUT_MS } from "../../src/shared/naming.ts";
 import { cleanTitle, TITLES_PER_DAY } from "../../src/shared/title.ts";
 import { app } from "../../src/worker/app.ts";
 import { getDb } from "../../src/worker/db/index.ts";
@@ -204,6 +205,19 @@ describe("Claude names an idea saved without a title", () => {
     // An idea that was never asked about, or one with a title, has none.
     const titled = await capture({ title: "Curtain ring" });
     expect((await getItem(titled)).titleJob).toBeNull();
+  });
+
+  it("reports a naming job as done once it is older than the screens' timeout", async () => {
+    stubClaude();
+    env.TITLES_ON_SAVE = "off";
+    const itemId = await capture({ note: "a clip for the bag" });
+    await startTitle(getDb(env.DB), itemId);
+    expect((await getItem(itemId)).titleJob?.status).toBe("naming");
+    // A job still open past the timeout (a Worker recycled mid-call): the screens' next copy drops the sign.
+    await env.DB.prepare("UPDATE item_titles SET created_at = ? WHERE item_id = ?")
+      .bind(Date.now() - NAMING_TIMEOUT_MS - 1000, itemId)
+      .run();
+    expect((await getItem(itemId)).titleJob?.status).toBe("done");
   });
 
   it("starts with the save when the capture says its photos are on their way, and waits for the first", async () => {
