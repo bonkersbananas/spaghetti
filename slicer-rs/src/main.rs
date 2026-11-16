@@ -254,7 +254,8 @@ fn replay(path: &str, args: &Args) -> ExitCode {
     let dir = std::path::Path::new(path).parent().unwrap_or(std::path::Path::new("."));
     let read = |name: &str| std::fs::read(dir.join(name)).map_err(|e| format!("can't read {name}: {e}"));
     let run = || -> Result<(), String> {
-        let text = String::from_utf8(read(path)?).map_err(|_| "the job isn't UTF-8".to_string())?;
+        let text = String::from_utf8(std::fs::read(path).map_err(|e| format!("can't read {path}: {e}"))?)
+            .map_err(|_| "the job isn't UTF-8".to_string())?;
         let Some(Json::Object(job)) = json::parse(&text) else { return Err("the job isn't JSON".into()) };
         let text = |v: Option<&Json>| v.and_then(Json::as_str).map(str::to_string);
         let number = |v: Option<&Json>| match v {
