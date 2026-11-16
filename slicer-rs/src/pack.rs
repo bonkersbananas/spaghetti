@@ -167,12 +167,13 @@ pub struct Model<'a> {
 /// parts a wrapper of components, a build item for each object, and what `model_settings.config` says of them (name,
 /// filament, parts) and of the plate (which objects are on it, by the labels the G-code carries). Without it Studio
 /// shows the sliced preview, but drops it when anything changes (a filament, say) and finds an empty plate.
-/// Returns the resources and build, the objects' settings and the plate's instances.
-fn model_xml(model: &Model, objects: &[Object]) -> (String, String, String) {
+/// Writes the resources and build to `out` (a big mesh's run to over 100 MB of text, packed as they are written) and
+/// returns the objects' settings and the plate's instances.
+fn model_xml(out: &mut impl std::fmt::Write, model: &Model, objects: &[Object]) -> (String, String) {
     use std::fmt::Write;
-    let (mut resources, mut build, mut settings, mut instances) =
-        (String::new(), String::new(), String::new(), String::new());
+    let (mut build, mut settings, mut instances) = (String::new(), String::new(), String::new());
     let mut next = 1;
+    let _ = out.write_str(" <resources>\n");
     for (g, members) in model.members.iter().enumerate() {
         let Some(object) = objects.iter().find(|o| o.group as usize == g) else { continue };
         let extruder = |m: usize| model.filaments.get(m).copied().unwrap_or(0) + 1;
@@ -184,16 +185,16 @@ fn model_xml(model: &Model, objects: &[Object]) -> (String, String, String) {
             let id = next;
             next += 1;
             ids.push(id);
-            let _ = writeln!(resources, r#"  <object id="{id}" name="{}" type="model">"#, xml(&mesh.name));
-            resources.push_str("   <mesh>\n    <vertices>\n");
+            let _ = writeln!(out, r#"  <object id="{id}" name="{}" type="model">"#, xml(&mesh.name));
+            let _ = out.write_str("   <mesh>\n    <vertices>\n");
             for v in &mesh.vertices {
-                let _ = writeln!(resources, r#"     <vertex x="{}" y="{}" z="{}"/>"#, v[0], v[1], v[2]);
+                let _ = writeln!(out, r#"     <vertex x="{}" y="{}" z="{}"/>"#, v[0], v[1], v[2]);
             }
-            resources.push_str("    </vertices>\n    <triangles>\n");
+            let _ = out.write_str("    </vertices>\n    <triangles>\n");
             for t in &mesh.triangles {
-                let _ = writeln!(resources, r#"     <triangle v1="{}" v2="{}" v3="{}"/>"#, t[0], t[1], t[2]);
+                let _ = writeln!(out, r#"     <triangle v1="{}" v2="{}" v3="{}"/>"#, t[0], t[1], t[2]);
             }
-            resources.push_str("    </triangles>\n   </mesh>\n  </object>\n");
+            let _ = out.write_str("    </triangles>\n   </mesh>\n  </object>\n");
             faces += mesh.triangles.len();
             let _ = write!(
                 parts,
@@ -208,12 +209,12 @@ fn model_xml(model: &Model, objects: &[Object]) -> (String, String, String) {
         if ids.len() > 1 {
             object_id = next;
             next += 1;
-            let _ = writeln!(resources, r#"  <object id="{object_id}" name="{}" type="model">"#, xml(&object.name));
-            resources.push_str("   <components>\n");
+            let _ = writeln!(out, r#"  <object id="{object_id}" name="{}" type="model">"#, xml(&object.name));
+            let _ = out.write_str("   <components>\n");
             for id in &ids {
-                let _ = writeln!(resources, r#"    <component objectid="{id}"/>"#);
+                let _ = writeln!(out, r#"    <component objectid="{id}"/>"#);
             }
-            resources.push_str("   </components>\n  </object>\n");
+            let _ = out.write_str("   </components>\n  </object>\n");
         }
         let _ =
             writeln!(build, r#"  <item objectid="{object_id}" transform="1 0 0 0 1 0 0 0 1 0 0 0" printable="1"/>"#);
@@ -229,7 +230,8 @@ fn model_xml(model: &Model, objects: &[Object]) -> (String, String, String) {
             object.label
         );
     }
-    (format!(" <resources>\n{resources} </resources>\n <build>\n{build} </build>\n"), settings, instances)
+    let _ = write!(out, " </resources>\n <build>\n{build} </build>\n");
+    (settings, instances)
 }
 
 /// The `.gcode.3mf`. `title` names the archive inside (the original file's name).
@@ -325,22 +327,22 @@ pub fn gcode_3mf(
     rels.push("</Relationships>".into());
     rels.push(String::new());
     files.push(("_rels/.rels", rels.join("\n").into_bytes()));
-    let (resources_and_build, object_settings, instances) = model_xml(model, objects);
-    files.push((
-        "3D/3dmodel.model",
+    // The model, packed as it is written (`model_xml`): the same bytes as the whole text packed at once.
+    let mut model_entry = zip::Deflater::new(6);
+    model_entry.write(
         [
             r#"<?xml version="1.0" encoding="UTF-8"?>"#.to_string(),
             r#"<model unit="millimeter" xml:lang="en-US" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02" xmlns:BambuStudio="http://schemas.bambulab.com/package/2021">"#.into(),
             format!(r#" <metadata name="Application">{BAMBU_STUDIO_APPLICATION}</metadata>"#),
             r#" <metadata name="BambuStudio:3mfVersion">1</metadata>"#.into(),
             format!(r#" <metadata name="Title">{}</metadata>"#, xml(title)),
-            resources_and_build,
-            "</model>".into(),
             String::new(),
         ]
         .join("\n")
-        .into_bytes(),
-    ));
+        .as_bytes(),
+    );
+    let (object_settings, instances) = model_xml(&mut model_entry, model, objects);
+    model_entry.write(b"\n</model>\n");
     files.push(("Metadata/plate_1.gcode.md5", md5.into_bytes()));
     files.push((
         "Metadata/_rels/model_settings.config.rels",
@@ -544,11 +546,14 @@ pub fn gcode_3mf(
     files.push(("Metadata/project_settings.config", project.into_bytes()));
 
     let mut w = zip::Writer::with_capacity(packed.len() + 64 * 1024);
-    for (name, data) in &files[..3] {
+    for (name, data) in &files[..2] {
         w.add(name, data, 6);
     }
+    let (packed_model, model_size, model_crc) = model_entry.finish();
+    w.add_deflated("3D/3dmodel.model", model_size, model_crc, &packed_model);
+    drop(packed_model);
     w.add_deflated("Metadata/plate_1.gcode", gcode.len(), crc32fast::hash(gcode), &packed);
-    for (name, data) in &files[3..] {
+    for (name, data) in &files[2..] {
         w.add(name, data, 6);
     }
     if let Some(png) = thumbnail {
