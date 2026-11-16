@@ -14,8 +14,11 @@ interface NoteFaceProps {
   /** Pick a size by hand (the styleguide); otherwise it follows the note's length. */
   size?: NoteSize;
   className?: string;
-  /** For a small tile (a picker's, about 110 px): 12 px type, three lines at most, so no word has to break. */
-  compact?: boolean;
+  /**
+   * For a small tile (a picker's, about 110 px): 12 px type, three lines at most, so no word has to break. `"fill"`:
+   * the same type, as many lines as the tile holds, the last fading out (a mini card's whole face).
+   */
+  compact?: boolean | "fill";
   /** Keeps the bottom corner free for a badge laid over the card (the rank on a picked tile). */
   clearBottom?: boolean;
 }
@@ -36,9 +39,11 @@ export function NoteFace({ note, size, className, compact, clearBottom }: NoteFa
         <p
           className={cn(
             "font-display text-ink font-normal break-words whitespace-pre-line",
-            compact
-              ? "text-caption line-clamp-3 leading-snug"
-              : cn("fade-bottom min-h-0 flex-1 overflow-hidden", sizes[face]),
+            compact === "fill"
+              ? "text-caption fade-bottom min-h-0 flex-1 overflow-hidden leading-snug"
+              : compact
+                ? "text-caption line-clamp-3 leading-snug"
+                : cn("fade-bottom min-h-0 flex-1 overflow-hidden", sizes[face]),
           )}
         >
           {breakAfterSlashes(note)}

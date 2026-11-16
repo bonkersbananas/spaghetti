@@ -1626,7 +1626,7 @@ export const shots: Shot[] = [
     },
   },
   {
-    // The menu opened from a card in Up next (a sheet on phones, the popover on desktop).
+    // The menu opened from a tile in the strip (a sheet on phones; the popover on desktop's full cards).
     name: "ideas-up-next-menu",
     path: "/ideas",
     prepare: async (page) => {
@@ -1647,7 +1647,7 @@ export const shots: Shot[] = [
     },
   },
   {
-    // Up next with 1 queued idea: one large card.
+    // Up next with 1 queued idea: a strip of small cards.
     name: "ideas-up-next-1",
     path: "/ideas",
     prepare: async (page) => {
@@ -1664,7 +1664,7 @@ export const shots: Shot[] = [
     cleanup: (page) => setQueue(page, 2),
   },
   {
-    // Up next with 3 queued ideas: the row of large cards (a full row on desktop).
+    // Up next with 3 queued ideas: a strip of small cards.
     name: "ideas-up-next-3",
     path: "/ideas",
     prepare: async (page) => {
@@ -1681,7 +1681,7 @@ export const shots: Shot[] = [
     cleanup: (page) => setQueue(page, 2),
   },
   {
-    // Up next with 6 queued ideas: more than the row shows (the arrows beside the heading on desktop).
+    // Up next with 6 queued ideas: a strip of small cards.
     name: "ideas-up-next-6",
     path: "/ideas",
     prepare: async (page) => {
@@ -1698,7 +1698,7 @@ export const shots: Shot[] = [
     cleanup: (page) => setQueue(page, 2),
   },
   {
-    // Up next with 8 queued ideas: a long queue.
+    // Up next with 8 queued ideas: a strip of small cards on both.
     name: "ideas-up-next-8",
     path: "/ideas",
     prepare: async (page) => {
@@ -1744,6 +1744,24 @@ export const shots: Shot[] = [
     },
   },
   {
+    // Keyboard triage: U on two ideas in a row, one toast that counts them.
+    name: "ideas-up-next-toast",
+    path: "/ideas",
+    width: 1440,
+    prepare: async (page) => {
+      const inbox = page.getByRole("list", { name: "Ideas" }).getByRole("link");
+      for (const _ of [1, 2]) {
+        await inbox.first().focus();
+        await page.keyboard.press("u");
+        await page.waitForTimeout(300);
+      }
+      await page.getByText("2 added to Up next").waitFor();
+      await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+      await page.waitForTimeout(600);
+    },
+    cleanup: (page) => setQueue(page, 2),
+  },
+  {
     // A notebook with no ideas and nothing started: the empty pot.
     name: "ideas-empty",
     path: "/ideas",
@@ -1758,7 +1776,7 @@ export const shots: Shot[] = [
     // A card with several photos swiped to its second (and hovered, where a mouse shows the arrows).
     name: "ideas-swiped",
     path: "/ideas",
-    // Desk tidy-up is the one idea with several photos, and it sits in Up next (the cover only there): take the queue off first.
+    // Desk tidy-up is the one idea with several photos, and it sits in Up next (small cards, one photo): take the queue off first.
     prepare: async (page) => {
       await setQueue(page, 0);
       await page.reload();

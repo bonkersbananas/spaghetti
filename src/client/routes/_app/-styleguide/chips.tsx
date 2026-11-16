@@ -1,8 +1,9 @@
 import { useState } from "react";
-import { Chip, TextToggle, TextToggles, ToggleChip } from "@/components/ui/Chip";
+import { Chip, ToggleChip } from "@/components/ui/Chip";
 import { ClaudeLine } from "@/components/ui/ClaudeLine";
 import * as Icons from "@/components/ui/icons";
 import { SectionHeading } from "@/components/ui/SectionHeading";
+import { TextToggle, TextToggles } from "@/components/ui/TextToggle";
 import { Label, Panel, Section } from "./shared";
 
 export function ChipSection() {

@@ -1,26 +1,27 @@
 import { modelOf } from "@shared/model-mark";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
-import { lazy, Suspense, useState } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
 import { IdeaCard, type UpNextMenu } from "@/components/ideas/IdeaCard";
 import { StartedIdeas, startedIdeas } from "@/components/ideas/StartedIdeas";
+import { UpNextStrip } from "@/components/ideas/UpNextStrip";
 import { EmptyPot } from "@/components/illustrations/EmptyPot";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { RecentlyDeletedLink } from "@/components/shell/RecentlyDeletedLink";
 import { Button } from "@/components/ui/Button";
-import { CardRow, cardRowItem } from "@/components/ui/CardRow";
-import { TextToggle, TextToggles } from "@/components/ui/Chip";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { PlusIcon } from "@/components/ui/icons";
 import { Reflow } from "@/components/ui/Reflow";
 import { Section } from "@/components/ui/Section";
 import { CardSkeleton } from "@/components/ui/Skeleton";
+import { TextToggle, TextToggles } from "@/components/ui/TextToggle";
 import { useVia } from "@/lib/agents";
 import { useCapture } from "@/lib/capture";
 import { shortcutCaps, useHotkeys } from "@/lib/hotkeys";
 import { useBuilds, useIdeas } from "@/lib/items";
 import { useListPicker } from "@/lib/list-picker";
 import { useArrived } from "@/lib/live";
+import { scrollBehavior } from "@/lib/motion";
 import { peopleQuery, sessionQuery } from "@/lib/queries";
 import { dropUpNext, moveUpNext, setUpNext, splitQueue } from "@/lib/up-next";
 import { useAfterPaint, useIsDesktop } from "@/lib/use-media-query";
@@ -59,6 +60,18 @@ function Ideas() {
   const me = user?.id;
   const { landed } = useCapture();
   const arrived = useArrived();
+  // Up next and the wishlists come first, so on a phone an idea you just captured can land under the fold: bring it
+  // into view, so you see it land.
+  useEffect(() => {
+    if (!landed) return;
+    const frame = requestAnimationFrame(() => {
+      const card = document.querySelector(`main [data-picks] a[href^="/ideas/${landed}"]`);
+      if (card && card.getBoundingClientRect().top > window.innerHeight * 0.6) {
+        card.scrollIntoView({ block: "center", behavior: scrollBehavior() });
+      }
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [landed]);
   const via = useVia();
   const byId = new Map(people?.map((person) => [person.id, person]));
   const queryClient = useQueryClient();
@@ -107,41 +120,8 @@ function Ideas() {
       person={byId.get(item.createdBy)}
       via={via(item.createdVia)}
       landing={item.id === landed || arrived.has(item.id)}
-      reveal={item.id === landed}
       headingLevel={queue.length > 0 ? 3 : 2}
       menu={menuFor(item, -1)}
-    />
-  );
-  const featureCard = (item: (typeof all)[number], index: number) => (
-    <IdeaCard
-      key={item.id}
-      item={item}
-      feature
-      className={cardRowItem}
-      person={byId.get(item.createdBy)}
-      via={via(item.createdVia)}
-      landing={item.id === landed || arrived.has(item.id)}
-      headingLevel={3}
-      menu={menuFor(item, index)}
-      drag={
-        isDesktop && queue.length > 1
-          ? {
-              dragging: dragged === item.id,
-              over: over === item.id && dragged !== item.id,
-              onDragStart: () => setDragged(item.id),
-              onDragEnd: () => {
-                setDragged(null);
-                setOver(null);
-              },
-              onDragOver: () => setOver(item.id),
-              onDrop: () => {
-                if (dragged) dropUpNext(queryClient, queue, dragged, item.id);
-                setDragged(null);
-                setOver(null);
-              },
-            }
-          : undefined
-      }
     />
   );
   const filters = modelCount > 0 && (
@@ -185,16 +165,39 @@ function Ideas() {
         </div>
       ) : all.length || started.length ? (
         <>
-          {queue.length > 0 && (
-            <CardRow id="up-next-heading" title="Up next" count={queue.length} className="mb-6 md:mb-14">
-              {queue.map(featureCard)}
-            </CardRow>
-          )}
           {!isDesktop && me && (
             // Its own boundary, holding its place, so the grid never waits for it or jumps when it lands.
-            <Suspense fallback={<div className="mb-8 h-14" aria-hidden />}>
-              <WishlistLink me={me} ideas={all} people={people ?? []} className="mb-8" />
+            <Suspense fallback={<div className="mb-6 h-14" aria-hidden />}>
+              <WishlistLink me={me} ideas={all} people={people ?? []} className="mb-6" />
             </Suspense>
+          )}
+          {queue.length > 0 && (
+            <Section id="up-next-heading" title="Up next" count={queue.length} className="mb-8 md:mb-10">
+              <UpNextStrip
+                queue={queue}
+                menuFor={menuFor}
+                landed={(item) => item.id === landed || arrived.has(item.id)}
+                dragFor={(item) =>
+                  isDesktop && queue.length > 1
+                    ? {
+                        dragging: dragged === item.id,
+                        over: over === item.id && dragged !== item.id,
+                        onDragStart: () => setDragged(item.id),
+                        onDragEnd: () => {
+                          setDragged(null);
+                          setOver(null);
+                        },
+                        onDragOver: () => setOver(item.id),
+                        onDrop: () => {
+                          if (dragged) dropUpNext(queryClient, queue, dragged, item.id);
+                          setDragged(null);
+                          setOver(null);
+                        },
+                      }
+                    : undefined
+                }
+              />
+            </Section>
           )}
           {!all.length && (
             <p className="text-body text-ink-soft mb-2">Nothing new in the pot. What you started is below.</p>
