@@ -37,8 +37,10 @@ import { ariaShortcuts, shortcutCaps, useHotkeys } from "@/lib/hotkeys";
 import { addItemFile } from "@/lib/item-files";
 import { deleteItem, type ItemView, useIdeas, useItem, useItemFields } from "@/lib/items";
 import { whyNotMove } from "@/lib/move";
+import { useBackTo } from "@/lib/origin";
 import { useScreenActions } from "@/lib/palette";
 import { photoSrc } from "@/lib/previews";
+import { keepOrigin } from "@/lib/previous-path";
 import { peopleQuery, sessionQuery } from "@/lib/queries";
 import { canEdit, useReadOnly } from "@/lib/read-only";
 import { itemName, useRememberItem } from "@/lib/recent";
@@ -234,6 +236,8 @@ function Idea({ item }: { item: ItemView }) {
     photo: photos[0] ? { id: photos[0].id, color: photos[0].color } : null,
   });
 
+  // Escape goes where the back control goes: to the page this idea was opened from, else to Ideas.
+  const backTo = useBackTo(back);
   // J and K walk the inbox in the order its page shows it (Up next first), so a Monday's triage never goes back to the grid.
   const { items: inbox } = useIdeas();
   const { queue, rest } = splitQueue(inbox);
@@ -242,7 +246,7 @@ function Idea({ item }: { item: ItemView }) {
   const neighbour = (by: number) => {
     const next = place < 0 ? undefined : order[place + by];
     return next && !next.pending
-      ? () => void navigate({ to: "/ideas/$ideaId", params: { ideaId: next.id } })
+      ? () => void navigate({ to: "/ideas/$ideaId", params: { ideaId: next.id }, state: keepOrigin })
       : undefined;
   };
   useHotkeys({
@@ -250,7 +254,7 @@ function Idea({ item }: { item: ItemView }) {
       canEdit(item.pending) && !item.pending ? () => setUpNext(queryClient, item, item.upNext === null) : undefined,
     ideaNext: neighbour(1),
     ideaPrevious: neighbour(-1),
-    ideaBack: () => void navigate({ to: "/ideas" }),
+    ideaBack: backTo.go,
     ideaPhotoPrevious: () => select(selectedIndex - 1),
     ideaPhotoNext: () => select(selectedIndex + 1),
     ideaDelete: () => (deleting ? remove() : canEdit(item.pending) && setDeleting(true)),
@@ -280,10 +284,10 @@ function Idea({ item }: { item: ItemView }) {
   const alt = photoAlt({ title, note });
 
   return (
-    <PullToGo back={back}>
+    <PullToGo back={back} title={title.trim() || "Untitled idea"}>
       <article className="pb-6">
         <h1 className="sr-only">{title.trim() || "Untitled idea"}</h1>
-        <DetailBar back={back}>
+        <DetailBar back={back} title={title.trim() || "Untitled idea"}>
           {!deleting && <SaveStatus state={saveState} className="mr-2" />}
           {!deleting && <ShareLinkButton title={title.trim()} />}
           <ConfirmDelete

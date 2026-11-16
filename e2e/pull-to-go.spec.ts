@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { expect, type Page, test } from "@playwright/test";
-import { signIn } from "./helpers";
+import { clearTwists, signIn } from "./helpers";
 
 // Pull down at the top of an idea (or build) page on a phone to go back. Real touch events through CDP.
 
@@ -14,6 +14,7 @@ test.afterEach(async ({ page, isMobile }) => {
   const origin = new URL(page.url()).origin;
   const { items } = await (await page.request.get("/api/items")).json();
   for (const item of items) await page.request.delete(`/api/items/${item.id}`, { headers: { Origin: origin } });
+  await clearTwists(page);
 });
 
 const origin = (page: Page) => new URL(page.url()).origin;
@@ -138,4 +139,44 @@ test("with nothing before it in the app, a pull goes to Ideas", { tag: "@phone" 
   await expect(page.locator("[data-pull-hint=ready]")).toContainText("Release for Ideas");
   await session.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
   await expect(page).toHaveURL(/\/ideas$/);
+});
+
+test("a twist pulls back the same way: to the idea it was made from, and from the list to Twists", {
+  tag: "@phone",
+}, async ({ page }) => {
+  const idea = await addIdea(page, "Twisted hook", 0, "https://makerworld.com/en/models/12345-hook");
+  await page.goto(`/ideas/${idea}`);
+  await page.getByRole("button", { name: "Make a twist" }).click();
+  await expect(page).toHaveURL(/\/twists\/[0-9a-f-]+$/);
+  const twist = new URL(page.url()).pathname;
+  // The twist takes the idea's title, so the way back names the kind of page rather than echo the title under it.
+  await expect(page.getByRole("main").getByRole("link", { name: "Idea", exact: true })).toBeVisible();
+  // The twist is made on the device first; let the server's copy arrive (and the page settle) before touching it.
+  await expect.poll(async () => (await page.request.get(`/api${twist}`)).status()).toBe(200);
+  await page.waitForTimeout(500);
+
+  // A short pull springs back and stays.
+  let session = await drag(page, { x: 195, y: 250 }, { dy: 50 }, false);
+  await expect(page.locator("[data-pull-hint=pulling]")).toBeAttached();
+  await session.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+  await page.waitForTimeout(700);
+  await expect(page).toHaveURL(new RegExp(`${twist}$`));
+  await expect(page.locator("[data-pull-hint]")).toHaveCount(0);
+
+  // Past the threshold it names the idea and goes back to it.
+  session = await drag(page, { x: 195, y: 250 }, { dy: 200 }, false);
+  await expect(page.locator("[data-pull-hint=ready]")).toContainText("Release for Idea");
+  await session.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+  await expect(page).toHaveURL(new RegExp(`/ideas/${idea}$`));
+
+  // From the Twists list, back to the list.
+  await page.goto("/twists");
+  await page.locator(`main a[href="${twist}"]`).first().click();
+  await expect(page).toHaveURL(new RegExp(`${twist}$`));
+  // The card's picture travels to the page first (a view transition holds the touches meanwhile).
+  await page.waitForTimeout(500);
+  session = await drag(page, { x: 195, y: 250 }, { dy: 200 }, false);
+  await expect(page.locator("[data-pull-hint=ready]")).toContainText("Release for Twists");
+  await session.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+  await expect(page).toHaveURL(/\/twists$/);
 });

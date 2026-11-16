@@ -18,6 +18,7 @@ import { outbox } from "@/lib/outbox";
 import { PaletteProvider, usePalette } from "@/lib/palette";
 import { usePasskeyOffer } from "@/lib/passkey-offer";
 import { followUnresizedPhotos } from "@/lib/photo-resize";
+import { openedDirectly } from "@/lib/previous-path";
 import { resyncPush, useServiceWorkerMessages } from "@/lib/push";
 import { rememberedUser, sessionQuery } from "@/lib/queries";
 import { focusSearch } from "@/lib/search";
@@ -113,7 +114,7 @@ function Shell() {
   usePasskeyOffer();
   // A tapped notification says where to go; an answer given offline lands in the outbox behind this page's back.
   useServiceWorkerMessages(
-    (path) => void navigate({ href: path }),
+    (path) => void navigate({ href: path, state: openedDirectly }),
     () => void outbox.pickUp(),
   );
   // Photos that came from an agent are resized quietly, in idle time, by the first browser that sees them.

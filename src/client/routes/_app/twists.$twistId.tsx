@@ -24,6 +24,7 @@ import { ArrowRightIcon, BuildsIcon, EditIcon, SlicerFileIcon, TrashIcon } from 
 import { LinkCard } from "@/components/ui/LinkCard";
 import { NoteField } from "@/components/ui/NoteField";
 import { Photo } from "@/components/ui/Photo";
+import { PullToGo } from "@/components/ui/PullToGo";
 import { SaveStatus } from "@/components/ui/SaveStatus";
 import { Section } from "@/components/ui/Section";
 import { ShareLinkButton } from "@/components/ui/ShareLinkButton";
@@ -31,6 +32,7 @@ import { Skeleton } from "@/components/ui/Skeleton";
 import { cn } from "@/lib/cn";
 import { shortcutCaps, useHotkeys } from "@/lib/hotkeys";
 import { useBuilds } from "@/lib/items";
+import { useBackTo } from "@/lib/origin";
 import { printerQuery } from "@/lib/pantry-queries";
 import { hasPreview, photoSrc } from "@/lib/previews";
 import { sessionQuery } from "@/lib/queries";
@@ -153,8 +155,10 @@ function TwistBody({ twist }: { twist: Twist }) {
     void navigate({ to: "/builds/$buildId", params: { buildId: id } });
   }
 
+  // Escape goes where the back control goes: to the page this twist was opened from, else to Twists.
+  const backTo = useBackTo(back);
   useHotkeys({
-    twistBack: () => void navigate({ to: "/twists" }),
+    twistBack: backTo.go,
     twistPrint: printIt,
   });
 
@@ -165,204 +169,210 @@ function TwistBody({ twist }: { twist: Twist }) {
   }
 
   return (
-    <article className="pb-6">
-      <h1 className="sr-only">{value.name || "Twist"}</h1>
-      <DetailBar back={back}>
-        <SaveStatus state={saveState} className="mr-2" />
-        <ShareLinkButton title={value.name} />
-        <IconButton icon={TrashIcon} label="Delete twist" onClick={remove} disabled={readOnly} />
-        {isDesktop && (
-          <div className="ml-2 flex flex-col items-end gap-1.5">
-            <Button
-              variant="primary"
-              icon={BuildsIcon}
-              shortcut={shortcutCaps("twistPrint")}
-              onClick={printIt}
-              disabled={readOnly || !user}
-            >
-              {printWords}
-            </Button>
-            {printNote && <Caution className="max-w-sm">{printNote}</Caution>}
-          </div>
-        )}
-      </DetailBar>
-      <div className="flex flex-col gap-6 md:flex-row md:gap-10 lg:gap-14">
-        {photo && (
-          <div ref={stickyColumn} className="sticky-column md:min-w-0 md:flex-2">
-            <Photo
-              src={photoSrc(photo.id, "large")}
-              alt={`The model, from ${twist.name}`}
-              color={photo.color || undefined}
-              className="-mx-5 aspect-4/3 w-[calc(100%+2.5rem)] md:mx-0 md:w-full md:rounded-xl"
-            />
-          </div>
-        )}
-        {plate && (
-          <div ref={stickyColumn} className="sticky-column md:min-w-0 md:flex-2">
-            <PlateCover file={plate} alt={`Slicer preview: ${twist.name}`} className="-mx-5 md:mx-0" />
-          </div>
-        )}
-        <div className="max-w-content flex min-w-0 flex-col gap-6 md:flex-3 md:pt-2">
-          <div className="flex flex-col gap-1">
-            <TextArea
-              appearance="title"
-              aria-label="Name"
-              placeholder="Name this twist"
-              minRows={1}
-              maxLength={TWIST_NAME_MAX}
-              readOnly={readOnly}
-              value={value.name}
-              onChange={(event) => change({ name: event.target.value.replace(/\n/g, " ") })}
-              onKeyDown={(event) => {
-                if (event.key === "Enter" || event.key === "Escape") {
-                  event.preventDefault();
-                  event.currentTarget.blur();
-                }
-              }}
-            />
-            {subtitle && <p className="text-small text-ink-faint">{subtitle}</p>}
-          </div>
-
-          {model && (
-            <section id="model" aria-label="Model">
-              <SavedFileCard
-                raised
-                file={model}
-                owner={readOnly ? undefined : { twistId: twist.id }}
-                onRemove={
-                  readOnly || (model as { pending?: boolean }).pending
-                    ? undefined
-                    : () => removeTwistModel(queryClient, twist.id, model)
-                }
-              />
-            </section>
+    <PullToGo back={back} title={value.name || "Twist"}>
+      <article className="pb-6">
+        <h1 className="sr-only">{value.name || "Twist"}</h1>
+        <DetailBar back={back} title={value.name || "Twist"}>
+          <SaveStatus state={saveState} className="mr-2" />
+          <ShareLinkButton title={value.name} />
+          <IconButton icon={TrashIcon} label="Delete twist" onClick={remove} disabled={readOnly} />
+          {isDesktop && (
+            <div className="ml-2 flex flex-col items-end gap-1.5">
+              <Button
+                variant="primary"
+                icon={BuildsIcon}
+                shortcut={shortcutCaps("twistPrint")}
+                onClick={printIt}
+                disabled={readOnly || !user}
+              >
+                {printWords}
+              </Button>
+              {printNote && <Caution className="max-w-sm">{printNote}</Caution>}
+            </div>
           )}
+        </DetailBar>
+        <div className="flex flex-col gap-6 md:flex-row md:gap-10 lg:gap-14">
+          {photo && (
+            <div ref={stickyColumn} className="sticky-column md:min-w-0 md:flex-2">
+              <Photo
+                src={photoSrc(photo.id, "large")}
+                alt={`The model, from ${twist.name}`}
+                color={photo.color || undefined}
+                className="-mx-5 aspect-4/3 w-[calc(100%+2.5rem)] md:mx-0 md:w-full md:rounded-xl"
+              />
+            </div>
+          )}
+          {plate && (
+            <div ref={stickyColumn} className="sticky-column md:min-w-0 md:flex-2">
+              <PlateCover file={plate} alt={`Slicer preview: ${twist.name}`} className="-mx-5 md:mx-0" />
+            </div>
+          )}
+          <div className="max-w-content flex min-w-0 flex-col gap-6 md:flex-3 md:pt-2">
+            <div className="flex flex-col gap-1">
+              <TextArea
+                appearance="title"
+                aria-label="Name"
+                placeholder="Name this twist"
+                minRows={1}
+                maxLength={TWIST_NAME_MAX}
+                readOnly={readOnly}
+                value={value.name}
+                onChange={(event) => change({ name: event.target.value.replace(/\n/g, " ") })}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" || event.key === "Escape") {
+                    event.preventDefault();
+                    event.currentTarget.blur();
+                  }
+                }}
+              />
+              {subtitle && <p className="text-small text-ink-faint">{subtitle}</p>}
+            </div>
 
-          <Section id="changes" title="What we changed">
-            <TwistChanges changes={value.changes} readOnly={readOnly} onChange={(next) => change({ changes: next })} />
-            {!readOnly && (
-              // Adapting is rare: its code (the STL reader, the sheet) is fetched when it is first asked for.
-              <div className="-mx-3 -mt-2 flex">
-                <Button
-                  variant="quiet"
-                  icon={SlicerFileIcon}
-                  onClick={() => {
-                    setAdaptAsked(true);
-                    setAdapting(true);
-                  }}
-                >
-                  Adapt an STL
-                </Button>
-              </div>
-            )}
-            {adaptAsked && (
-              <Suspense fallback={null}>
-                <AdaptSheet
-                  open={adapting}
-                  onOpenChange={setAdapting}
-                  twistName={value.name}
-                  room={TWIST_CHANGES_MAX - value.changes.length}
-                  keeping={model?.name ?? null}
-                  onKeep={(file) => void keepTwistModel(queryClient, twist.id, file)}
-                  onAdapted={(made) =>
-                    change((current) => ({
-                      changes: [
-                        ...current.changes,
-                        ...made.map((line) => ({
-                          id: crypto.randomUUID(),
-                          kind: line.kind,
-                          label: line.label,
-                          value: line.value,
-                          note: "adapted in the app",
-                        })),
-                      ],
-                    }))
+            {model && (
+              <section id="model" aria-label="Model">
+                <SavedFileCard
+                  raised
+                  file={model}
+                  owner={readOnly ? undefined : { twistId: twist.id }}
+                  onRemove={
+                    readOnly || (model as { pending?: boolean }).pending
+                      ? undefined
+                      : () => removeTwistModel(queryClient, twist.id, model)
                   }
                 />
-              </Suspense>
+              </section>
             )}
-          </Section>
 
-          <NoteField
-            label="Note"
-            maxLength={TWIST_NOTE_MAX}
-            value={value.note}
-            onChange={(note) => change({ note })}
-            readOnly={readOnly}
-            placeholder="Why, what to watch for, what the lid wants…"
-          />
-
-          <div className="flex flex-col gap-2">
-            {value.sourceUrl && mark && <LinkCard url={value.sourceUrl} model={mark} className="max-w-content" />}
-            {(!value.sourceUrl || !mark || editingLink) && (
-              <TextField
-                aria-label="Link"
-                value={value.sourceUrl}
-                type="url"
-                inputMode="url"
-                placeholder="Where the model is: https://makerworld.com/…"
+            <Section id="changes" title="What we changed">
+              <TwistChanges
+                changes={value.changes}
                 readOnly={readOnly}
-                autoComplete="off"
-                error={
-                  value.sourceUrl.trim() && !checkLinkUrl(value.sourceUrl)
-                    ? "That needs to be a full https:// link. It isn't saved until it is."
-                    : undefined
-                }
-                onChange={(event) => change({ sourceUrl: event.target.value })}
+                onChange={(next) => change({ changes: next })}
               />
-            )}
-            {/* One quiet style for the actions under the model. */}
-            <div className="flex flex-wrap items-center gap-x-5">
-              {value.sourceUrl && mark && !readOnly && !editingLink && (
-                <button type="button" onClick={() => setEditingLink(true)} className={quietAction}>
-                  <EditIcon size={16} aria-hidden />
-                  Change the link
-                </button>
+              {!readOnly && (
+                // Adapting is rare: its code (the STL reader, the sheet) is fetched when it is first asked for.
+                <div className="-mx-3 -mt-2 flex">
+                  <Button
+                    variant="quiet"
+                    icon={SlicerFileIcon}
+                    onClick={() => {
+                      setAdaptAsked(true);
+                      setAdapting(true);
+                    }}
+                  >
+                    Adapt an STL
+                  </Button>
+                </div>
               )}
-              {twist.fromItemId && (
-                <Link to="/ideas/$ideaId" params={{ ideaId: twist.fromItemId }} className={quietAction}>
-                  The idea it came from
-                  <ArrowRightIcon size={16} aria-hidden />
-                </Link>
+              {adaptAsked && (
+                <Suspense fallback={null}>
+                  <AdaptSheet
+                    open={adapting}
+                    onOpenChange={setAdapting}
+                    twistName={value.name}
+                    room={TWIST_CHANGES_MAX - value.changes.length}
+                    keeping={model?.name ?? null}
+                    onKeep={(file) => void keepTwistModel(queryClient, twist.id, file)}
+                    onAdapted={(made) =>
+                      change((current) => ({
+                        changes: [
+                          ...current.changes,
+                          ...made.map((line) => ({
+                            id: crypto.randomUUID(),
+                            kind: line.kind,
+                            label: line.label,
+                            value: line.value,
+                            note: "adapted in the app",
+                          })),
+                        ],
+                      }))
+                    }
+                  />
+                </Suspense>
               )}
-            </div>
-          </div>
-
-          {printed.length > 0 && (
-            <Section id="printed" title="Printed" count={printed.length}>
-              <ul className="flex flex-col gap-2.5">
-                {printed.map((build) => (
-                  <PrintedRow key={build.id} build={build} fallback={photo} />
-                ))}
-              </ul>
             </Section>
-          )}
-        </div>
-      </div>
-      {!isDesktop && printNote && <div aria-hidden className="h-14" />}
-      {!isDesktop && (
-        <ActionBar>
-          <div
-            className={cn(
-              "flex min-w-0 flex-1 flex-col gap-2",
-              // The caution is part of the bar's own surface, so the page never shows round it.
-              printNote && "bg-paper shadow-raised rounded-2xl p-2.5",
+
+            <NoteField
+              label="Note"
+              maxLength={TWIST_NOTE_MAX}
+              value={value.note}
+              onChange={(note) => change({ note })}
+              readOnly={readOnly}
+              placeholder="Why, what to watch for, what the lid wants…"
+            />
+
+            <div className="flex flex-col gap-2">
+              {value.sourceUrl && mark && <LinkCard url={value.sourceUrl} model={mark} className="max-w-content" />}
+              {(!value.sourceUrl || !mark || editingLink) && (
+                <TextField
+                  aria-label="Link"
+                  value={value.sourceUrl}
+                  type="url"
+                  inputMode="url"
+                  placeholder="Where the model is: https://makerworld.com/…"
+                  readOnly={readOnly}
+                  autoComplete="off"
+                  error={
+                    value.sourceUrl.trim() && !checkLinkUrl(value.sourceUrl)
+                      ? "That needs to be a full https:// link. It isn't saved until it is."
+                      : undefined
+                  }
+                  onChange={(event) => change({ sourceUrl: event.target.value })}
+                />
+              )}
+              {/* One quiet style for the actions under the model. */}
+              <div className="flex flex-wrap items-center gap-x-5">
+                {value.sourceUrl && mark && !readOnly && !editingLink && (
+                  <button type="button" onClick={() => setEditingLink(true)} className={quietAction}>
+                    <EditIcon size={16} aria-hidden />
+                    Change the link
+                  </button>
+                )}
+                {twist.fromItemId && (
+                  <Link to="/ideas/$ideaId" params={{ ideaId: twist.fromItemId }} className={quietAction}>
+                    The idea it came from
+                    <ArrowRightIcon size={16} aria-hidden />
+                  </Link>
+                )}
+              </div>
+            </div>
+
+            {printed.length > 0 && (
+              <Section id="printed" title="Printed" count={printed.length}>
+                <ul className="flex flex-col gap-2.5">
+                  {printed.map((build) => (
+                    <PrintedRow key={build.id} build={build} fallback={photo} />
+                  ))}
+                </ul>
+              </Section>
             )}
-          >
-            {printNote && <Caution>{printNote}</Caution>}
-            <Button
-              variant="primary"
-              size="lg"
-              icon={BuildsIcon}
-              className="min-w-0"
-              disabled={readOnly || !user}
-              onClick={printIt}
-            >
-              {printWords}
-            </Button>
           </div>
-        </ActionBar>
-      )}
-    </article>
+        </div>
+        {!isDesktop && printNote && <div aria-hidden className="h-14" />}
+        {!isDesktop && (
+          <ActionBar>
+            <div
+              className={cn(
+                "flex min-w-0 flex-1 flex-col gap-2",
+                // The caution is part of the bar's own surface, so the page never shows round it.
+                printNote && "bg-paper shadow-raised rounded-2xl p-2.5",
+              )}
+            >
+              {printNote && <Caution>{printNote}</Caution>}
+              <Button
+                variant="primary"
+                size="lg"
+                icon={BuildsIcon}
+                className="min-w-0"
+                disabled={readOnly || !user}
+                onClick={printIt}
+              >
+                {printWords}
+              </Button>
+            </div>
+          </ActionBar>
+        )}
+      </article>
+    </PullToGo>
   );
 }
