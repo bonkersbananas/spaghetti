@@ -1263,6 +1263,7 @@ async function keepBuilds(
     json.items = json.items.filter((item) => item.stage === "idea" || keep(item));
     await route.fulfill({ response, json });
   });
+  await page.reload({ waitUntil: "networkidle" });
 }
 
 async function unmockToday(page: Page) {
@@ -1893,7 +1894,11 @@ export const shots: Shot[] = [
     path: "/builds",
     prepare: async (page) => {
       await keepBuilds(page, (item) => !item.attempts?.some((attempt) => attempt.outcome === null));
-      await page.getByRole("heading", { name: /^In progress/ }).waitFor();
+      // Main's list has these under On the bed: wait for a heading both draw.
+      await page
+        .getByRole("heading", { name: /^(In progress|On the bed)/ })
+        .first()
+        .waitFor();
     },
     cleanup: unmockToday,
   },
@@ -1906,7 +1911,10 @@ export const shots: Shot[] = [
         page,
         (item) => item.stage !== "building" || !!item.attempts?.some((attempt) => attempt.outcome === null),
       );
-      await page.getByText(/^Everything in progress is on the bed\.$/).waitFor();
+      await page
+        .getByRole("heading", { name: /^On the bed/ })
+        .first()
+        .waitFor();
     },
     cleanup: unmockToday,
   },
