@@ -27,6 +27,9 @@ Options:
       --keep-placement  Keep the objects where the files put them instead of arranging them on the plate
       --no-thumbnail    Leave out the plate picture
       --timings         Print how long each step took
+      --replay <dir>    Slice what the app handed the WebAssembly module for a model, as bench/capture.mts recorded
+                        it: its setup, each object, part and paint, and the slice's flags (models and the options
+                        above that those give are ignored)
   -h, --help            Show this";
 
 struct Args {
@@ -45,6 +48,8 @@ struct Args {
     filaments: Vec<usize>,
     /// Each filament's nozzle (1-based), when given.
     filament_map: Option<Vec<usize>>,
+    /// A folder bench/capture.mts recorded the module's calls in.
+    replay: Option<String>,
 }
 
 fn parse(args: Vec<String>) -> Result<Args, String> {
@@ -61,6 +66,7 @@ fn parse(args: Vec<String>) -> Result<Args, String> {
         timings: false,
         filaments: vec![],
         filament_map: None,
+        replay: None,
     };
     let mut it = args.into_iter();
     while let Some(arg) = it.next() {
@@ -70,6 +76,7 @@ fn parse(args: Vec<String>) -> Result<Args, String> {
             "-o" | "--output" => out.output = Some(value(&arg)?),
             "--gcode" => out.gcode = Some(value(&arg)?),
             "--stats" => out.stats = Some(value(&arg)?),
+            "--replay" => out.replay = Some(value(&arg)?),
             "--keep-placement" => out.keep_placement = true,
             "--parts" => out.parts = true,
             "--nozzle" => {
@@ -101,10 +108,61 @@ fn parse(args: Vec<String>) -> Result<Args, String> {
             _ => out.inputs.push(arg),
         }
     }
-    if out.inputs.is_empty() {
+    if out.inputs.is_empty() && out.replay.is_none() {
         return Err("no model to slice".into());
     }
     Ok(out)
+}
+
+/// The setup, plate and options the app's calls to the WebAssembly module made (bench/capture.mts's `calls.json`),
+/// made again here in the same order: as `wasm.rs` takes each call.
+fn replay(dir: &str) -> Result<(setup::Setup, Plate, Options), String> {
+    use spaghetti_slicer::json::{self, Json};
+    let path = std::path::Path::new(dir);
+    let text = std::fs::read_to_string(path.join("calls.json")).map_err(|e| format!("{dir}/calls.json: {e}"))?;
+    let Some(Json::Array(calls)) = json::parse(&text) else { return Err(format!("{dir}/calls.json isn't a list")) };
+    let mut setup = setup::Setup::default();
+    let mut plate = Plate::default();
+    let mut flags = 1;
+    for call in &calls {
+        let Json::Object(call) = call else { return Err("a call that isn't an object".into()) };
+        let text = |key: &str| call.get(key).and_then(Json::as_str).unwrap_or_default().to_string();
+        let number = |key: &str| match call.get(key) {
+            Some(Json::Number(n)) => *n as usize,
+            _ => 0,
+        };
+        let bytes = || {
+            let file = text("file");
+            std::fs::read(path.join(&file)).map_err(|e| format!("{dir}/{file}: {e}"))
+        };
+        let name = text("name");
+        let op = text("op");
+        match op.as_str() {
+            "setup" => {
+                let bytes = bytes()?;
+                let text = std::str::from_utf8(&bytes).map_err(|e| e.to_string())?;
+                setup = setup::read(text).map_err(|e| format!("setup: {e}"))?;
+            }
+            "add" => plate.add(&Input { name: &name, bytes: &bytes()? }).map_err(|e| e.to_string())?,
+            "add_in" => plate
+                .add_with_filament(&Input { name: &name, bytes: &bytes()? }, Some(number("filament").max(1) - 1))
+                .map_err(|e| e.to_string())?,
+            "add_part" => plate
+                .add_part(&Input { name: &name, bytes: &bytes()? }, number("filament").max(1) - 1, number("first") != 0)
+                .map_err(|e| e.to_string())?,
+            "paint" | "paint_supports" => {
+                let paint = spaghetti_slicer::paint::Paint::from_bytes(&bytes()?).ok_or("paint that isn't paint")?;
+                let taken = if op == "paint" { plate.paint(&paint) } else { plate.paint_supports(&paint) };
+                if !taken {
+                    return Err(format!("{op} that isn't for its model"));
+                }
+            }
+            "slice" => flags = number("flags"),
+            _ => return Err(format!("a call {op} the module doesn't have")),
+        }
+    }
+    let options = Options { arrange: flags & 1 == 0, thumbnail: flags & 2 == 0, scale: setup.scale };
+    Ok((setup, plate, options))
 }
 
 fn main() -> ExitCode {
@@ -119,6 +177,15 @@ fn main() -> ExitCode {
             return ExitCode::from(2);
         }
     };
+    if let Some(dir) = &args.replay {
+        return match replay(dir) {
+            Ok((setup, plate, options)) => finish(&args, &setup.settings, plate, &options, "replay"),
+            Err(e) => {
+                eprintln!("can't replay {dir}: {e}");
+                ExitCode::FAILURE
+            }
+        };
+    }
     // The nozzle's presets, which a setup is laid over.
     let base = args.nozzle.and_then(profile::x2d_nozzle).unwrap_or_else(profile::x2d);
     let setup = match &args.setup {
@@ -176,23 +243,33 @@ fn main() -> ExitCode {
             return ExitCode::FAILURE;
         }
     }
-    let out = match plate.slice(&settings, &options) {
+    let first = &args.inputs[0];
+    let stem = first.rsplit_once('.').map(|(s, _)| s).unwrap_or(first).to_string();
+    finish(&args, &settings, plate, &options, &stem)
+}
+
+/// Slices the plate and writes what was asked for: the `.gcode.3mf` (by default `<stem>.gcode.3mf`), the G-code, the
+/// statistics, and what it noted.
+fn finish(
+    args: &Args,
+    settings: &spaghetti_slicer::config::Settings,
+    plate: Plate,
+    options: &Options,
+    stem: &str,
+) -> ExitCode {
+    let out = match plate.slice(settings, options) {
         Ok(out) => out,
         Err(e) => {
             eprintln!("can't slice: {e}");
             return ExitCode::FAILURE;
         }
     };
-    let output = args.output.clone().unwrap_or_else(|| {
-        let first = &args.inputs[0];
-        let stem = first.rsplit_once('.').map(|(s, _)| s).unwrap_or(first);
-        format!("{stem}.gcode.3mf")
-    });
+    let output = args.output.clone().unwrap_or_else(|| format!("{stem}.gcode.3mf"));
     let mut writes = vec![(output.clone(), out.file.as_slice())];
     if let Some(g) = &args.gcode {
         writes.push((g.clone(), out.gcode.as_slice()));
     }
-    let stats = out.stats.json(&settings);
+    let stats = out.stats.json(settings);
     if let Some(s) = &args.stats {
         writes.push((s.clone(), stats.as_bytes()));
     }
