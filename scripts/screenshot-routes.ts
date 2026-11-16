@@ -1991,6 +1991,13 @@ export const shots: Shot[] = [
         .first()
         .waitFor({ timeout: 4000 })
         .catch(() => undefined);
+      // On a phone the Now block comes first (and arrives a moment after the page): the new idea's row is further
+      // down, in both versions.
+      await page.waitForTimeout(2000);
+      await page
+        .getByText("Captured an idea")
+        .first()
+        .evaluate((row) => row.scrollIntoView({ block: "center" }));
       await page.waitForTimeout(300);
     },
     cleanup: removeNamedIdeas,
