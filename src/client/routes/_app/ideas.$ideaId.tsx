@@ -39,6 +39,7 @@ import { ariaShortcuts, shortcutCaps, useHotkeys } from "@/lib/hotkeys";
 import { addItemFile } from "@/lib/item-files";
 import { deleteItem, type ItemView, useIdeas, useItem, useItemFields } from "@/lib/items";
 import { whyNotMove } from "@/lib/move";
+import { useNaming } from "@/lib/naming";
 import { useBackTo } from "@/lib/origin";
 import { useScreenActions } from "@/lib/palette";
 import { photoSrc } from "@/lib/previews";
@@ -289,6 +290,8 @@ function Idea({ item }: { item: ItemView }) {
   // Claude's title (decision 0070), for as long as it is still what it wrote: marked, and faded in when it arrives here.
   const named = !!item.claudeTitle && title === item.claudeTitle;
   const [untitled] = useState(!item.title);
+  // While Claude names it (decision 0071) the title's place says so; a title typed here ends it at once.
+  const naming = useNaming(item) && !title.trim();
 
   return (
     <PullToGo back={back} title={title.trim() || "Untitled idea"}>
@@ -367,7 +370,7 @@ function Idea({ item }: { item: ItemView }) {
               <TextArea
                 appearance="title"
                 aria-label="Title"
-                placeholder="Untitled idea"
+                placeholder={naming ? "Naming…" : "Untitled idea"}
                 minRows={1}
                 maxLength={200}
                 readOnly={readOnly}
@@ -381,6 +384,11 @@ function Idea({ item }: { item: ItemView }) {
                   }
                 }}
               />
+            )}
+            {naming && (
+              <ClaudeLine working className="-mt-2 md:-mt-1.5">
+                Claude is naming it
+              </ClaudeLine>
             )}
             {named && (
               <ClaudeLine className={cn("-mt-2 md:-mt-1.5", untitled && "sg-arrive")}>Named by Claude</ClaudeLine>

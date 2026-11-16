@@ -34,13 +34,15 @@ test("a photo saved without a title gets one from Claude, in place, marked as Cl
   else await sheet.getByRole("textbox", { name: "Note" }).press("Enter");
   await expect(sheet).toBeHidden();
 
-  // The idea is there at once, as it was saved: a photo and no title.
+  // The idea is there at once, as it was saved: a photo, no title, and Claude's quiet "Naming…" where it will land.
   const card = ideas(page).getByRole("listitem").first();
   await expect(card.getByRole("link").first()).toBeVisible();
   await expect(card.getByRole("heading")).toHaveCount(0);
+  await expect(card.getByText("Naming…")).toBeVisible();
 
-  // A few seconds later Claude's title arrives in the same card, without a reload.
+  // A few seconds later Claude's title arrives in the same card, without a reload, and the sign is gone.
   await expect(card.getByRole("heading", { name: NAMED_TITLE })).toBeVisible({ timeout: 15_000 });
+  await expect(card.getByText("Naming…")).toHaveCount(0);
 
   // The idea's page shows it as the title, marked as Claude's.
   await card.getByRole("link").first().click();
@@ -60,7 +62,7 @@ test("a photo saved without a title gets one from Claude, in place, marked as Cl
   await expect(page.getByText("Named by Claude")).toBeHidden();
 });
 
-test("a title someone types while Claude works is kept", async ({ page }) => {
+test("a title someone types while Claude works is kept, and shows no sign", async ({ page }) => {
   await page.keyboard.press("c");
   const sheet = page.getByRole("dialog", { name: "New idea" });
   await expect(sheet).toBeVisible();
@@ -73,7 +75,11 @@ test("a title someone types while Claude works is kept", async ({ page }) => {
 
   await ideas(page).getByRole("link").first().click();
   const title = page.getByRole("textbox", { name: "Title" });
+  // Claude is still at it; the first letter typed ends the sign.
+  await expect(page.getByText("Claude is naming it")).toBeVisible();
+  await expect(title).toHaveAttribute("placeholder", "Naming…");
   await title.fill("Tugboat for the bath");
+  await expect(page.getByText("Claude is naming it")).toBeHidden();
   await title.press("Enter");
   await expect
     .poll(async () => (await (await page.request.get("/api/items")).json()).items[0]?.title)

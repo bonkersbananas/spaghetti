@@ -5,7 +5,7 @@ import { attemptPartsLabel } from "@shared/parts";
 import { isOffTheBed, offTheBedLabel } from "@shared/print-progress";
 import { fullTime } from "@shared/time";
 import { Link } from "@tanstack/react-router";
-import { forwardRef, useState } from "react";
+import { forwardRef, lazy, Suspense, useState } from "react";
 import { OutcomeChip, outcomeIcons } from "@/components/builds/Outcome";
 import { SettingsLine } from "@/components/builds/SettingsLine";
 import { summarizeSettings } from "@/components/builds/settings";
@@ -31,6 +31,9 @@ import { cn } from "@/lib/cn";
 import { heroClick } from "@/lib/hero";
 import { itemName } from "@/lib/item-name";
 import { coverOf, fileThumbSrc, photoSrc } from "@/lib/previews";
+
+/** "Naming…" in a captured idea's row while Claude names it: loaded only then, out of the Journal's first load. */
+const JournalNaming = lazy(() => import("./JournalNaming").then((module) => ({ default: module.JournalNaming })));
 
 /** Where an entry leads: the attempt in its build, the build, or the idea. */
 export function entryLink(entry: Entry, item: Pick<Item, "id" | "stage">) {
@@ -337,17 +340,26 @@ const EventRow = forwardRef<HTMLAnchorElement, JournalEntryProps>(function Event
             {when === "time" ? clock(entry.at) : weekday(entry.at)}
           </time>
         </MetaList>
-        <span
-          key={name.titled ? "title" : "note"}
-          className={cn(
-            "text-body truncate",
-            name.titled ? "text-ink font-semibold" : "text-ink-soft font-medium",
-            finished && "font-display text-title",
-            name.titled && untitled && "sg-arrive",
-          )}
-        >
-          {name.text}
-        </span>
+        {
+          // While Claude names it (decision 0071) the name's place says so; its code loads only then.
+          item.titleJob?.status === "naming" && !name.titled ? (
+            <Suspense fallback={null}>
+              <JournalNaming item={item} />
+            </Suspense>
+          ) : (
+            <span
+              key={name.titled ? "title" : "note"}
+              className={cn(
+                "text-body truncate",
+                name.titled ? "text-ink font-semibold" : "text-ink-soft font-medium",
+                finished && "font-display text-title",
+                name.titled && untitled && "sg-arrive",
+              )}
+            >
+              {name.text}
+            </span>
+          )
+        }
       </span>
       <ViaText name={via} person={person?.name} className="text-small hidden md:inline" />
       {person && <Avatar person={person} size="xs" via={via} className="shrink-0" />}

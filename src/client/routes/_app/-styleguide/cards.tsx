@@ -32,6 +32,13 @@ export function CardSection() {
           onClick={() => toast.message("Cards open their detail in a later phase")}
         />
         <Card
+          photo={{ src: planterPhoto, alt: "A planter on the print bed" }}
+          naming
+          meta="Just now"
+          person={people[0]}
+          aspect="portrait"
+        />
+        <Card
           note="Hook for the AMS spool holder, the stock one rattles. Check the clearance to the wall first."
           sub="for the kitchen"
           meta="Yesterday"

@@ -82,7 +82,11 @@ describe("Claude names an idea saved without a title", () => {
     expect((await getItem(itemId)).title).toBeNull();
     await settled();
     const item = await getItem(itemId);
-    expect(item).toMatchObject({ title: "Spool holder for the shelf", claudeTitle: "Spool holder for the shelf" });
+    expect(item).toMatchObject({
+      title: "Spool holder for the shelf",
+      claudeTitle: "Spool holder for the shelf",
+      titleJob: null,
+    });
     // The photo went in as an image, to the small model, with no thinking and a schema for the answer.
     const body = web.bodies[0] as {
       model: string;
@@ -181,6 +185,26 @@ describe("Claude names an idea saved without a title", () => {
     await asPerson(`/api/items/${named}`, { method: "PATCH", json: { title: "Tea tin lid, hinged" } });
     expect(await getItem(named)).toMatchObject({ title: "Tea tin lid, hinged", claudeTitle: null });
   }, 20_000);
+
+  it("tells the screens it is naming an idea, and when it is done, through the item and the feed", async () => {
+    stubClaude({ stopReason: "refusal" });
+    const itemId = await capture({ note: "a ring for the curtain" });
+    // At once the idea says Claude is naming it.
+    const naming = (await getItem(itemId)).titleJob;
+    expect(naming?.status).toBe("naming");
+    expect(Math.abs((naming?.since ?? 0) - Date.now())).toBeLessThan(5000);
+    const before = await (await asPerson("/api/changes?after=0")).json<{ changes: Array<{ seq: number }> }>();
+    await settled();
+    // A refusal leaves it untitled, says it is done, and the feed tells the screens so the sign stops at once.
+    expect((await getItem(itemId)).titleJob).toMatchObject({ status: "done" });
+    const after = await (await asPerson(`/api/changes?after=${before.changes.at(-1)?.seq ?? 0}`)).json<{
+      changes: Array<{ entity: string; id: string }>;
+    }>();
+    expect(after.changes.some((c) => c.entity === "item" && c.id === itemId)).toBe(true);
+    // An idea that was never asked about, or one with a title, has none.
+    const titled = await capture({ title: "Curtain ring" });
+    expect((await getItem(titled)).titleJob).toBeNull();
+  });
 
   it("leaves an idea that became a build while it waited", async () => {
     const web = stubClaude();

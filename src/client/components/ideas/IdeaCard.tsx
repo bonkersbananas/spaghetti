@@ -21,6 +21,7 @@ import { coverOf, newestPlate, photoAlt, photoSrc, plateAlt } from "@/lib/previe
 // chunk of its own on every Ideas first load.
 export { ModelMark, photoAlt, plateAlt };
 
+import { useNaming } from "@/lib/naming";
 import { useUnreadCount, useUnreadThreadSearch } from "@/lib/unread-comments";
 
 // The menu's code (popover, sheet) arrives after the first screen: it is only needed once a card is touched.
@@ -81,6 +82,7 @@ export function IdeaCard({ item, person, via, landing, menu, headingLevel = 2, r
   const forLine = useForLine();
   const toThread = useUnreadThreadSearch(item.id);
   const model = modelOf(item);
+  const naming = useNaming(item);
   // The photo swiped to: the idea's page opens on it.
   const [showing, setShowing] = useState<string>();
   const opensOn =
@@ -101,6 +103,7 @@ export function IdeaCard({ item, person, via, landing, menu, headingLevel = 2, r
           reserveEnd={!!menu && !item.pending}
           photo={coverPhoto(cover, cover.kind === "plate" ? plateAlt(item) : photoAlt(item))}
           title={item.title || (item.draft?.status === "reading" ? "Reading the page…" : item.title)}
+          naming={naming}
           // Links read better short on a card: printables.com/model/123.
           note={item.note ? shortenLinks(item.note) : undefined}
           unread={unread}

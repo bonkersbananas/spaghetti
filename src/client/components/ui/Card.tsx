@@ -6,6 +6,7 @@ import { heroClick } from "@/lib/hero";
 import { scrollBehavior } from "@/lib/motion";
 import { type Cover, fileThumbSrc, photoSrc } from "@/lib/previews";
 import { Avatar } from "./Avatar";
+import { ClaudeLine } from "./ClaudeLine";
 import { CommentIcon, ImageIcon, SlicerFileIcon } from "./icons";
 import { NoteFace } from "./NoteFace";
 import { Photo } from "./Photo";
@@ -34,6 +35,8 @@ export interface CardProps {
   onPhotoChange?: (index: number) => void;
   /** Optional: ideas don't need a title. Falls back to the note. */
   title?: string | null;
+  /** Claude is naming it (decision 0071): a quiet "Naming…" stands where the title will land, then the title fades in. */
+  naming?: boolean;
   note?: string;
   /** Chips over the photo's bottom edge: status, material. */
   chips?: ReactNode;
@@ -81,6 +84,7 @@ export function Card({
   photos,
   onPhotoChange,
   title,
+  naming = false,
   note,
   chips,
   badge,
@@ -191,7 +195,11 @@ export function Card({
         {chips && <div className="absolute bottom-2 left-2 flex flex-wrap gap-1.5">{chips}</div>}
       </div>
       <div className="flex flex-1 flex-col px-2 pt-2.5 pb-1.5">
-        {heading ? (
+        {naming && !title ? (
+          <ClaudeLine working className="min-h-6">
+            Naming…
+          </ClaudeLine>
+        ) : heading ? (
           <Heading
             key={title ? "title" : "note"}
             className={cn(

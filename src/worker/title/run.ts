@@ -31,17 +31,34 @@ const CONTENT_TYPES = ["image/jpeg", "image/webp", "image/png", "image/gif"] as 
 /** The feature exists only where the key is set: without it nothing about it shows. */
 export const titlesEnabled = (env: Pick<Env, "ANTHROPIC_API_KEY">) => !!env.ANTHROPIC_API_KEY?.trim();
 
-/** The title Claude gave each of these ideas, for the ones it named (the screen marks it as Claude's while it is still that). */
-export async function claudeTitles(db: Db, itemIds: string[]): Promise<Map<string, string>> {
-  const named = new Map<string, string>();
+/** What the screens know of an idea's naming job: its state, the title it gave and when it began. */
+export interface TitleJobView {
+  status: ItemTitleRow["status"];
+  title: string | null;
+  since: number;
+}
+
+/**
+ * The naming jobs of these items (decision 0070): the title Claude gave, which the screen marks as Claude's while it
+ * is still that, and whether Claude is naming one right now, which the screen shows in place of the title (0071).
+ */
+export async function titleJobs(db: Db, itemIds: string[]): Promise<Map<string, TitleJobView>> {
+  const jobs = new Map<string, TitleJobView>();
   for (let i = 0; i < itemIds.length; i += 50) {
     const rows = await db
-      .select({ itemId: itemTitles.itemId, title: itemTitles.title })
+      .select({
+        itemId: itemTitles.itemId,
+        status: itemTitles.status,
+        title: itemTitles.title,
+        createdAt: itemTitles.createdAt,
+      })
       .from(itemTitles)
-      .where(and(inArray(itemTitles.itemId, itemIds.slice(i, i + 50)), eq(itemTitles.status, "titled")));
-    for (const row of rows) if (row.title) named.set(row.itemId, row.title);
+      .where(inArray(itemTitles.itemId, itemIds.slice(i, i + 50)));
+    for (const row of rows) {
+      jobs.set(row.itemId, { status: row.status, title: row.title, since: row.createdAt.getTime() });
+    }
   }
-  return named;
+  return jobs;
 }
 
 const livePhotos = (itemId: string) =>
@@ -93,11 +110,24 @@ export async function titleAfterSave(c: Context<AppEnv>, itemId: string): Promis
   }
 }
 
+/**
+ * Ends the job without a title of Claude's, and tells the feed, so the screens that show "Naming…" stop at once rather
+ * than wait for their timeout.
+ */
 async function settle(db: Db, itemId: string, set: Partial<typeof itemTitles.$inferInsert>) {
-  await db
+  const owner = (await db.select({ id: items.createdBy }).from(items).where(eq(items.id, itemId)).get())?.id;
+  const update = db
     .update(itemTitles)
     .set({ claimedAt: null, ...set })
     .where(eq(itemTitles.itemId, itemId));
+  if (!owner) {
+    await update;
+    return;
+  }
+  await db.batch([
+    update,
+    recordChange(db, { entity: "item", id: itemId, itemId, action: "updated", actor: { kind: "person", id: owner } }),
+  ]);
 }
 
 /**

@@ -232,6 +232,13 @@ export function fileOriginalThumbUrl(file: { id: string; slice?: { at: number; o
   return file.slice?.originalPicture ? `${fileUrl(file.id, "original-thumb")}?v=${file.slice.at}` : null;
 }
 
+/** Where Claude is with naming an untitled idea (`Item.titleJob`). */
+export interface TitleJobState {
+  status: "naming" | "done";
+  /** When the job began (epoch ms): the screens stop showing "Naming…" a while after it. */
+  since: number;
+}
+
 /** An idea, and the build it grows into: one record that moves through stages. Titles are optional. */
 export interface Item {
   id: string;
@@ -278,6 +285,11 @@ export interface Item {
    * makes it theirs. Null otherwise; absent on items this device made.
    */
   claudeTitle?: string | null;
+  /**
+   * An untitled idea's naming (decision 0071): "naming" while Claude works on its title (since: when the job began),
+   * "done" once it ran, whatever came of it. Null when it was never asked, and for an idea with a title.
+   */
+  titleJob?: TitleJobState | null;
   /** Who reacted to it, and how (shared/reactions.ts). Absent in a copy saved by an older version. */
   reactions?: Reaction[];
 }

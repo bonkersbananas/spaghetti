@@ -8,6 +8,7 @@ import {
   MAX_PHOTO_BYTES,
   PHOTO_CONTENT_TYPES,
   type PhotoResponse,
+  type TitleJobState,
 } from "../../shared/api.ts";
 import { beganAsIdea } from "../../shared/deleted.ts";
 import { tidyModelLinks } from "../../shared/model-mark.ts";
@@ -42,7 +43,7 @@ import type { AppEnv } from "../env.ts";
 import { apiError, toApiFile, toApiItem, toApiPhoto } from "../http.ts";
 import { photoReadsEnabled, readsByAttempt, runRead, startRead, toApiPhotoRead } from "../photo-read/run.ts";
 import { photoKey, photoOwner } from "../photos.ts";
-import { claudeTitles, titleAfterSave } from "../title/run.ts";
+import { type TitleJobView, titleAfterSave, titleJobs } from "../title/run.ts";
 import { reactionsFor } from "./reactions.ts";
 
 const id = z.uuid();
@@ -263,7 +264,7 @@ export async function loadItems(db: Db, where: ReturnType<typeof and>) {
     )
   ).flat();
   const twistIds = [...new Set(rows.flatMap((row) => (row.twistId ? [row.twistId] : [])))];
-  const [itemFileSlices, coaches, reactionsByItem, twistPicture, named] = await Promise.all([
+  const [itemFileSlices, coaches, reactionsByItem, twistPicture, jobs] = await Promise.all([
     Promise.all(
       slices.map((ids) =>
         db
@@ -280,10 +281,10 @@ export async function loadItems(db: Db, where: ReturnType<typeof and>) {
     ),
     // A build that prints a twist falls back to the twist's picture for its cover (shared/cover.ts).
     twistPictures(db, twistIds),
-    // The titles Claude gave (decision 0070); only titled items can have one.
-    claudeTitles(
+    // Claude's naming jobs (decisions 0070, 0071): the title it gave, or that it is naming an idea right now.
+    titleJobs(
       db,
-      rows.flatMap((row) => (row.title ? [row.id] : [])),
+      rows.flatMap((row) => (row.title || row.stage === "idea" ? [row.id] : [])),
     ),
   ]);
   const reads = new Map<string, PhotoRead>();
@@ -320,9 +321,17 @@ export async function loadItems(db: Db, where: ReturnType<typeof and>) {
       twistModel: picture?.model ?? null,
       twistPhoto: picture?.photo ?? null,
       // Claude's while the title still says what it wrote: a person's edit makes it theirs.
-      claudeTitle: row.title && named.get(row.id) === row.title ? row.title : null,
+      claudeTitle: row.title && jobs.get(row.id)?.title === row.title ? row.title : null,
+      // While Claude names an untitled idea the screens show it in place of the title; "done" once it ran, whatever came of it.
+      titleJob: titleJobView(row.title, jobs.get(row.id)),
     };
   });
+}
+
+/** What an untitled idea's screens need of its naming job (shared/api.ts `Item.titleJob`). */
+function titleJobView(title: string | null, job: TitleJobView | undefined): TitleJobState | null {
+  if (!job || title?.trim()) return null;
+  return { status: job.status === "naming" ? "naming" : "done", since: job.since };
 }
 
 export async function loadItem(db: Db, itemId: string) {
