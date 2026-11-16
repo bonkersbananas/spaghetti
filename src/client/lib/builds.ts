@@ -142,14 +142,6 @@ export function finalPhotoGuess(item: Pick<ItemView, "photos" | "attempts">): Ph
   return finalPhoto(item.photos, item.attempts);
 }
 
-/** The newest photo of anything in the build (a twist's printed rows). */
-export function newestPhoto(item: Pick<ItemView, "photos">): PhotoView | undefined {
-  return item.photos.reduce<PhotoView | undefined>(
-    (best, photo) => (!best || photo.createdAt > best.createdAt ? photo : best),
-    undefined,
-  );
-}
-
 /**
  * Marks a build done, with its final photo, in one action. A build that took
  * some spaghetti to get there earns a small moment of delight.

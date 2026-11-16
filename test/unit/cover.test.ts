@@ -38,6 +38,8 @@ describe("bestPhoto", () => {
   });
 });
 
+const thumb = (candidate: { hasThumb: boolean }) => candidate.hasThumb;
+
 describe("pickCover", () => {
   const base = {
     photos: [] as ReturnType<typeof photo>[],
@@ -49,27 +51,27 @@ describe("pickCover", () => {
   };
 
   it("shows a photo before any plate picture", () => {
-    const cover = pickCover({ ...base, photos: [photo("p", null, 1)], files: [file("f", 2)] });
+    const cover = pickCover({ ...base, photos: [photo("p", null, 1)], files: [file("f", 2)] }, thumb);
     expect(cover).toMatchObject({ kind: "photo", photo: { id: "p" } });
   });
 
   it("shows the newest plate picture of the build's own files and its attempts'", () => {
     const attempts = [{ id: "a", outcome: null, file: file("attempt-file", 5) }];
-    const cover = pickCover({ ...base, attempts, files: [file("old", 1), file("no-thumb", 9, false)] });
+    const cover = pickCover({ ...base, attempts, files: [file("old", 1), file("no-thumb", 9, false)] }, thumb);
     expect(cover).toMatchObject({ kind: "plate", file: { id: "attempt-file" } });
   });
 
   it("puts the file on the bed first", () => {
-    const cover = pickCover({ ...base, files: [file("newer", 9)] }, { file: file("on-the-bed", 1) });
+    const cover = pickCover({ ...base, files: [file("newer", 9)] }, thumb, file("on-the-bed", 1));
     expect(cover).toMatchObject({ kind: "plate", file: { id: "on-the-bed" } });
   });
 
   it("is the note card without a picture, the title standing in for a missing note", () => {
-    expect(pickCover({ ...base, note: "For the bathroom door." })).toEqual({
+    expect(pickCover({ ...base, note: "For the bathroom door." }, thumb)).toEqual({
       kind: "note",
       text: "For the bathroom door.",
       fromTitle: false,
     });
-    expect(pickCover(base)).toEqual({ kind: "note", text: "Towel hook", fromTitle: true });
+    expect(pickCover(base, thumb)).toEqual({ kind: "note", text: "Towel hook", fromTitle: true });
   });
 });

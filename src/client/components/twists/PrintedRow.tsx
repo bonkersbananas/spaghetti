@@ -3,7 +3,6 @@ import { Link } from "@tanstack/react-router";
 import { OutcomeChip } from "@/components/builds/Outcome";
 import { NoteFace } from "@/components/ui/NoteFace";
 import { Photo } from "@/components/ui/Photo";
-import { newestPhoto } from "@/lib/builds";
 import type { ItemView } from "@/lib/items";
 import { photoSrc } from "@/lib/previews";
 
@@ -16,7 +15,14 @@ interface PhotoShape {
 /** A build that printed a twist, as a quiet row: its picture if it has one, its title, how it went and when. */
 export function PrintedRow({ build, fallback }: { build: ItemView; fallback?: PhotoShape | null }) {
   // Its newest picture (an attempt's, else its own), else the twist's, else its words on an index card: never a blank square.
-  const photo = newestPhoto(build) ?? fallback ?? undefined;
+  // Its newest photo: what came off the bed last.
+  const photo =
+    build.photos.reduce<(typeof build.photos)[number] | undefined>(
+      (best, candidate) => (!best || candidate.createdAt > best.createdAt ? candidate : best),
+      undefined,
+    ) ??
+    fallback ??
+    undefined;
   const last = build.attempts.at(-1);
   const when = relativeTime(last?.finishedAt ?? last?.printedAt ?? build.startedAt ?? build.createdAt);
   return (

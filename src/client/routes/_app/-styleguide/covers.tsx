@@ -1,8 +1,7 @@
 import type { AttemptFile } from "@shared/api";
 import { useEffect, useState } from "react";
 import renderHook from "@/assets/samples/render-hook.svg";
-import { Card } from "@/components/ui/Card";
-import { CoverPicture, coverPhoto } from "@/components/ui/CoverPicture";
+import { Card, CoverPicture, coverPhoto } from "@/components/ui/Card";
 import { BuildsIcon } from "@/components/ui/icons";
 import { type Cover, setPreview } from "@/lib/previews";
 import { Label, Section } from "./shared";
@@ -65,10 +64,10 @@ export function CoversSection() {
             </div>
           </div>
           <div>
-            <Label>Where the photos go (CoverPicture with label), and small tiles</Label>
+            <Label>Where the photos go, labeled; a note in their place; small tiles (a row, the sidebar)</Label>
             <div className="flex flex-wrap items-end gap-5">
               <CoverPicture cover={plate} label className="aspect-4/3 w-72 rounded-lg" />
-              <CoverPicture cover={note} className="aspect-4/3 w-48 rounded-lg" />
+              <CoverPicture cover={note} className="shadow-soft aspect-4/3 w-48 rounded-lg" />
               <CoverPicture cover={plate} inset="p-1" glyph={<BuildsIcon size={22} />} className="size-12 rounded-md" />
               <CoverPicture cover={note} glyph={<BuildsIcon size={22} />} className="size-12 rounded-md" />
               <CoverPicture

@@ -79,14 +79,15 @@ export interface Coverable<P extends CoverPhoto, F extends CoverFile> {
   note: string;
 }
 
+/** `hasPicture` says whether a file's plate picture can be shown; `file` goes first (the plate on the bed). */
 export function pickCover<P extends CoverPhoto, F extends CoverFile>(
   item: Coverable<P, F>,
-  options: { file?: F | null; hasPicture?: (file: F) => boolean } = {},
+  hasPicture: (file: F) => boolean,
+  file?: F | null,
 ): Cover<P, F> {
-  const hasPicture = options.hasPicture ?? ((file: F) => file.hasThumb);
   const photo = bestPhoto(item.photos, item.attempts, item.coverPhotoId);
   if (photo) return { kind: "photo", photo };
-  const plate = options.file && hasPicture(options.file) ? options.file : newestPictured(item, hasPicture);
+  const plate = file && hasPicture(file) ? file : newestPictured(item, hasPicture);
   if (plate) return { kind: "plate", file: plate };
   const note = item.note.trim();
   return note
@@ -97,7 +98,7 @@ export function pickCover<P extends CoverPhoto, F extends CoverFile>(
 /** The newest of a thing's files (its own and its attempts') with a plate picture. */
 export function newestPictured<F extends CoverFile>(
   item: { files?: readonly F[]; attempts: readonly { file: F | null }[] },
-  hasPicture: (file: F) => boolean = (file) => file.hasThumb,
+  hasPicture: (file: F) => boolean,
 ): F | undefined {
   let newest: F | undefined;
   const consider = (file: F | null | undefined) => {

@@ -4,7 +4,7 @@ import { modelOf } from "@shared/model-mark";
 import { relativeTime } from "@shared/time";
 import { m } from "motion/react";
 import { lazy, type Ref, Suspense, useState } from "react";
-import { Card } from "@/components/ui/Card";
+import { Card, coverPhoto } from "@/components/ui/Card";
 import { ForLine } from "@/components/ui/ForField";
 import { ModelMark } from "@/components/ui/ModelMark";
 import { ReactionGlance } from "@/components/ui/ReactionGlance";
@@ -14,7 +14,7 @@ import { cn } from "@/lib/cn";
 import { useForLine } from "@/lib/for-whom";
 import type { ItemView } from "@/lib/items";
 import { useOutbox } from "@/lib/outbox";
-import { fileThumbSrc, newestPlate, photoSrc } from "@/lib/previews";
+import { coverOf, newestPlate, photoSrc } from "@/lib/previews";
 import { useUnreadCount, useUnreadThreadSearch } from "@/lib/unread-comments";
 
 // The menu's code (popover, sheet) arrives after the first screen: it is only needed once a card is touched.
@@ -80,8 +80,8 @@ interface IdeaCardProps {
 }
 
 export function IdeaCard({ item, person, via, landing, menu, headingLevel = 2, ref }: IdeaCardProps) {
-  const cover = item.photos[0];
-  const plate = cover ? undefined : plateCover(item);
+  // Its cover by the one rule (lib/previews.ts coverOf): the first photo, else the newest plate picture, else the note.
+  const cover = coverOf(item);
   const upload = useUploadState(item);
   const unread = useUnreadCount(item.id);
   const forLine = useForLine();
@@ -90,7 +90,9 @@ export function IdeaCard({ item, person, via, landing, menu, headingLevel = 2, r
   // The photo swiped to: the idea's page opens on it.
   const [showing, setShowing] = useState<string>();
   const opensOn =
-    showing && showing !== cover?.id && item.photos.some((photo) => photo.id === showing) ? showing : undefined;
+    showing && showing !== item.photos[0]?.id && item.photos.some((photo) => photo.id === showing)
+      ? showing
+      : undefined;
   return (
     <m.li {...useReflow(landing)} ref={ref} className="group/idea relative list-none">
       <div className="h-full rounded-lg">
@@ -103,13 +105,7 @@ export function IdeaCard({ item, person, via, landing, menu, headingLevel = 2, r
           aspect="portrait"
           headingLevel={headingLevel}
           reserveEnd={!!menu && !item.pending}
-          photo={
-            cover
-              ? { id: cover.id, src: photoSrc(cover.id, "thumb"), alt: photoAlt(item), color: cover.color }
-              : plate
-                ? { src: fileThumbSrc(plate), alt: plateAlt(item), fit: "contain" }
-                : undefined
-          }
+          photo={coverPhoto(cover, cover.kind === "plate" ? plateAlt(item) : photoAlt(item))}
           title={item.title || (item.draft?.status === "reading" ? "Reading the page…" : item.title)}
           // Links read better short on a card: printables.com/model/123.
           note={item.note ? shortenLinks(item.note) : undefined}

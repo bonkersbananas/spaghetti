@@ -26,11 +26,12 @@
   --sg-note: #f6f1e8;
   /*
    * The ground under a slicer's plate render (PlateCover, a card's or a row's picture without a photo): the deep
-   * paper by day; by night a lifted warm step, not a black hole. The model casts a faint shadow on it, so a white
-   * model on a light ground keeps its edge.
+   * paper by day; by night the tile's warm step, above a card's cream, never a black hole. The model keeps a hairline
+   * edge and casts a faint shadow on it, so a white model on a light ground still reads, even in a 36 px tile.
    */
   --sg-render: #eee6d9;
-  --sg-render-shadow: drop-shadow(0 1px 1px rgb(43 36 32 / 0.22)) drop-shadow(0 3px 6px rgb(43 36 32 / 0.1));
+  --sg-render-shadow: drop-shadow(0 0 0.5px rgb(43 36 32 / 0.45)) drop-shadow(0 1px 1px rgb(43 36 32 / 0.16))
+    drop-shadow(0 3px 6px rgb(43 36 32 / 0.1));
   /* A choice tile on a card or sheet (ChoiceTiles, the outcome picker): paper by day, a step above a sheet at night, so it rises instead of sinking. */
   --sg-tile: #f6f1e8;
   /* The 3D viewer's stage: the build plate (a textured PEI sheet, champagne gold), its edge, and the room's light. */
@@ -234,7 +235,7 @@
   --sg-pressed: #3a332c;
   --sg-note: #2e2823;
   --sg-tile: #38312b;
-  --sg-render: #2e2823;
+  --sg-render: #38312b;
   --sg-render-shadow: drop-shadow(0 1px 2px rgb(0 0 0 / 0.45));
   --sg-plate: #4f4536;
   --sg-plate-edge: #382f25;

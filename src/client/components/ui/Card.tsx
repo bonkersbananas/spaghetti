@@ -4,6 +4,7 @@ import { lazy, type ReactNode, Suspense, useRef, useState } from "react";
 import { cn } from "@/lib/cn";
 import { heroClick } from "@/lib/hero";
 import { scrollBehavior } from "@/lib/motion";
+import { type Cover, fileThumbSrc, photoSrc } from "@/lib/previews";
 import { Avatar } from "./Avatar";
 import { CommentIcon, ImageIcon, SlicerFileIcon } from "./icons";
 import { NoteFace } from "./NoteFace";
@@ -171,10 +172,18 @@ export function Card({
             <PhotoDots count={slides.length} index={index} />
           </div>
         )}
-        {!!unread && (
+        {unread ? (
           <div className="absolute top-2 left-2">
             <UnreadBadge count={unread} />
           </div>
+        ) : (
+          // A render isn't the result: from md, where a card has the room, it says so on its corner.
+          !slides &&
+          photo?.fit === "contain" && (
+            <div className="absolute top-2 left-2 max-md:hidden">
+              <SlicerPreviewBadge />
+            </div>
+          )
         )}
         {mark && <div className="absolute right-0 bottom-0 max-w-[70%]">{mark}</div>}
         {chips && <div className="absolute bottom-2 left-2 flex flex-wrap gap-1.5">{chips}</div>}
@@ -322,5 +331,68 @@ export function UnreadBadge({ count }: { count: number }) {
       <CommentIcon size={13} weight="fill" aria-hidden />
       {count > 9 ? "9+" : count} <span className="sr-only">new {count === 1 ? "comment" : "comments"}</span>
     </span>
+  );
+}
+
+/**
+ * A cover as a `Card`, `MiniCard` or `PhotoRow` takes its picture: the photo, or the plate render shown whole
+ * (`fit="contain"`, which they draw on the render ground). Undefined for a note card: they draw the note themselves.
+ */
+export function coverPhoto(
+  cover: Cover,
+  alt: string,
+): { id?: string; src: string; alt: string; color?: string; fit?: "contain" } | undefined {
+  if (cover.kind === "photo")
+    return { id: cover.photo.id, src: photoSrc(cover.photo.id, "thumb"), alt, color: cover.photo.color || undefined };
+  if (cover.kind === "plate") return { src: fileThumbSrc(cover.file), alt, fit: "contain" };
+  return undefined;
+}
+
+interface CoverPictureProps {
+  /** From `coverOf` (lib/previews.ts), the one rule for what a thing shows. */
+  cover: Cover;
+  /** "" where the words beside it already name it. */
+  alt?: string;
+  /**
+   * A small tile (a row's or the sidebar's): too small for a note to be read, so this glyph stands in for the note
+   * card on a plain well.
+   */
+  glyph?: ReactNode;
+  /** Says "From the model" on a render's corner, where the picture is big enough to carry it. */
+  label?: boolean;
+  /** Room around a render, so the model doesn't touch the frame (`p-3` by default). */
+  inset?: string;
+  /** Sizes the frame: the picture fills it. */
+  className?: string;
+}
+
+/**
+ * A thing's cover where its picture goes: the best photo; else its newest plate render, whole, on the render ground
+ * (the model casts a faint shadow there, so white plastic keeps its edge), labeled "From the model" when `label`;
+ * else its note on an index card (`NoteFace`), or `glyph` in a tile too small for words. Never an empty image icon.
+ */
+export function CoverPicture({ cover, alt = "", glyph, label, inset = "p-3", className }: CoverPictureProps) {
+  const picture = coverPhoto(cover, alt);
+  const plate = picture?.fit === "contain";
+  return (
+    <div
+      aria-hidden={(!picture && !!glyph) || undefined}
+      className={cn(
+        "relative overflow-hidden",
+        !picture && !!glyph && "bg-ink/5 text-ink-faint flex items-center justify-center",
+        className,
+      )}
+    >
+      {picture ? (
+        <Photo {...picture} frame={plate ? "render" : undefined} className={cn("size-full", plate && inset)} />
+      ) : (
+        (glyph ?? <NoteFace note={cover.kind === "note" ? cover.text : ""} />)
+      )}
+      {plate && label && (
+        <span className="absolute top-2 left-2">
+          <SlicerPreviewBadge />
+        </span>
+      )}
+    </div>
   );
 }

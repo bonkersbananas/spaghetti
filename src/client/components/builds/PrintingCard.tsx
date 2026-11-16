@@ -7,7 +7,7 @@ import { m, useReducedMotion } from "motion/react";
 import { useRef } from "react";
 import { Avatar, ViaText } from "@/components/ui/Avatar";
 import { Button, IconButton } from "@/components/ui/Button";
-import { CoverPicture } from "@/components/ui/CoverPicture";
+import { CoverPicture } from "@/components/ui/Card";
 import { BuildsIcon, CameraIcon } from "@/components/ui/icons";
 import { MetaList } from "@/components/ui/MetaList";
 import { PrintProgress } from "@/components/ui/PrintProgress";
@@ -121,15 +121,14 @@ export function PrintingCard({ item, attempt, person, via, compact = false }: Pr
                   : layout.picture,
           )}
         >
-          {compact && cover.kind === "note" ? (
-            <>
-              {/* A small square on a phone has no room for words: the build glyph; from md it is the card's picture. */}
-              <CoverPicture cover={cover} glyph={<BuildsIcon size={28} />} className="size-full md:hidden" />
-              <CoverPicture cover={cover} className="size-full max-md:hidden" />
-            </>
-          ) : (
-            <CoverPicture cover={cover} label={!compact} inset={compact ? "p-1 md:p-3" : "p-3"} className="size-full" />
-          )}
+          <CoverPicture
+            cover={cover}
+            label={!compact}
+            // A compact card's small square has no room for words: the build glyph stands in for a note.
+            glyph={compact ? <BuildsIcon size={28} /> : undefined}
+            inset={compact ? "p-1 md:p-3" : "p-3"}
+            className="size-full"
+          />
           {/* The picture and the name lead to the build, each with its own area; the progress below has its own, so
               nothing presses through a button. This one is for the pointer only: the name's link is the stop for the keyboard. */}
           <Link {...to} tabIndex={-1} aria-hidden className="absolute inset-0 z-10" />

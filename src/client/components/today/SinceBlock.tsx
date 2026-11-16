@@ -3,7 +3,7 @@ import { displayName } from "@shared/people";
 import { catchUp, sinceLabel } from "@shared/since";
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { useEffect, useMemo } from "react";
-import { coverPhoto } from "@/components/ui/CoverPicture";
+import { coverPhoto } from "@/components/ui/Card";
 import { MiniCard } from "@/components/ui/MiniCard";
 import { Reflow } from "@/components/ui/Reflow";
 import { Section } from "@/components/ui/Section";

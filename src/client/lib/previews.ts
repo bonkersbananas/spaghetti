@@ -55,7 +55,7 @@ export function dropPreview(fileId: string) {
 export type Cover = SharedCover<PhotoView, AttemptFile>;
 
 export function coverOf(item: Coverable<PhotoView, AttemptFile>, options: { file?: AttemptFile | null } = {}): Cover {
-  return pickCover(item, { file: options.file, hasPicture: pictured });
+  return pickCover(item, pictured, options.file);
 }
 
 /** The newest of a thing's files with a plate picture: its own (an idea's) and its attempts'. */

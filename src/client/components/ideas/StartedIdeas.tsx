@@ -1,6 +1,6 @@
 import { beganAsIdea } from "@shared/deleted";
 import { Link } from "@tanstack/react-router";
-import { CoverPicture } from "@/components/ui/CoverPicture";
+import { CoverPicture } from "@/components/ui/Card";
 import { ArrowRightIcon, BuildsIcon } from "@/components/ui/icons";
 import { MetaList } from "@/components/ui/MetaList";
 import { Section } from "@/components/ui/Section";
