@@ -144,7 +144,21 @@ def run_wasm(d, runs):
     return out
 
 
-def run_orca(d, runs, filaments):
+# Values a Bambu Studio project may carry that Orca 2.5.1's command line refuses outright ("Param values in 3mf/config
+# error", return -18) without saying which: given Orca's default instead, and recorded.
+ORCA_REFUSES = {"raft_first_layer_expansion": ("-1", "2")}
+
+
+def run_orca(d, runs, filaments, substituted=None):
+    substituted = [] if substituted is None else substituted
+    if not substituted:
+        f = os.path.join(d, "orca/process.json")
+        config = json.load(open(f))
+        for key, (bad, good) in ORCA_REFUSES.items():
+            if str(config.get(key)).strip("[]'\"") == bad:
+                config[key] = good
+                substituted.append({"key": key, "old_value": bad, "new_value": good})
+        json.dump(config, open(f, "w"))
     root = os.path.join(ORCA, "squashfs-root")
     env = {"XDG_RUNTIME_DIR": "/tmp", "LD_LIBRARY_PATH": f"{root}/lib:{root}/usr/lib"}
     out = []
@@ -174,6 +188,18 @@ def run_orca(d, runs, filaments):
         )
         result = os.path.join(o, "result.json")
         m["result"] = json.load(open(result)) if os.path.exists(result) else None
+        # A value Orca's command line substitutes (Bambu Studio's `enabled` for ensure_vertical_shell_thickness) and
+        # then refuses as invalid: given the value it substitutes, once, as the GUI would load it.
+        subs = [w for w in (m["result"] or {}).get("warnings", []) if w.get("class") == "config_value_substituted"]
+        if subs and not os.path.exists(os.path.join(o, "plate_1.gcode")) and not substituted:
+            for w in subs:
+                f = os.path.join(d, w["file"])
+                config = json.load(open(f))
+                config[w["key"]] = [w["new_value"]] if isinstance(config.get(w["key"]), list) else w["new_value"]
+                json.dump(config, open(f, "w"))
+                substituted.append({k: w[k] for k in ("key", "old_value", "new_value")})
+            return run_orca(d, runs, filaments, substituted)
+        m["substituted"] = substituted
         out.append(m)
         if not os.path.exists(os.path.join(o, "plate_1.gcode")):
             break
@@ -235,6 +261,7 @@ def sweep_one(entry, corpus, out, runs, skip_orca, printer):
             "peak_mb": max(m["peak_mb"] for m in orca),
             "runs": len(orca),
             "result": {k: last["result"].get(k) for k in ("return_code", "error_string", "warnings")} if last["result"] else None,
+            "substituted": last.get("substituted"),
             "stderr": last["stderr"][-600:],
         }
         if os.path.exists(gcode):
@@ -313,53 +340,64 @@ FEATURE_ORDER = [
 
 
 def table(manifest, results):
+    """The proposal's tables: one line per model, then each model's own."""
+    print("| Model | Ours | Layers, ours / Orca | Filament, ours / Orca | Estimate, ours / Orca | Retractions, ours / Orca | Native, ours / Orca | WebAssembly |")
+    print("| --- | --- | --- | --- | --- | --- | --- | --- |")
     for entry in manifest["models"]:
         row = results.get(entry["name"])
         if not row:
             continue
-        print(f"\n#### {entry['label']}\n")
-        print(entry["what"] + "\n")
         n, o = row.get("native", {}), row.get("orca", {})
         ours = (row.get("app") or {}).get("ours") or {}
         if "stats" not in n:
-            fallback = ours.get("fallback")
-            print(f"Ours: {fallback or n.get('stderr') or row.get('app_error')}\n")
+            print(f"| {entry['label']} | refused: {ours.get('fallback') or n.get('stderr')} | | | | | | |")
             continue
-        s = n["stats"]
-        os_ = o.get("stats")
-        t_r = split_time(s, False)
-        t_o = split_time(os_, True) if os_ else None
-        fr = s["features"]
-        fo = os_["features"] if os_ else {}
+        s, os_ = n["stats"], o.get("stats")
+        slices = "slices" + ("" if row["identical"]["native_wasm"] and row["identical"]["native_app"] else " (WebAssembly differs)")
+        if not os_:
+            print(f"| {entry['label']} | {slices} | {s['layer_count']} / – | {s['weight']:.2f} g / – | {s['time'] / 60:.1f} min / – | | | |")
+            continue
+        w = row.get("wasm", {})
+        print(
+            f"| {entry['label']} | {slices} | {s['layer_count']} / {os_['layer_count']} "
+            f"| {s['weight']:.2f} / {os_['weight']:.2f} g ({pct(s['weight'], os_['weight'])}) "
+            f"| {s['time'] / 60:.1f} / {os_['time'] / 60:.1f} min ({pct(s['time'], os_['time'])}) "
+            f"| {n['gcode']['retractions']:,} / {o['gcode']['retractions']:,} "
+            f"| {n['wall_ms'] / 1000:.1f} / {o['wall_ms'] / 1000:.1f} s, {n['peak_mb']:.0f} / {o['peak_mb']:.0f} MB "
+            f"| {w['slice_ms'] / 1000:.1f} s, {w['memory_mb']} MB |"
+        )
+    for entry in manifest["models"]:
+        row = results.get(entry["name"])
+        if not row or "stats" not in row.get("native", {}) or "stats" not in row.get("orca", {}):
+            continue
+        n, o = row["native"], row["orca"]
+        s, os_ = n["stats"], o["stats"]
+        t_r, t_o = split_time(s, False), split_time(os_, True)
+        fr, fo = s["features"], os_["features"]
+        print(f"\n**{entry['label']}.** {entry['what']}", end="")
+        if o.get("substituted"):
+            subs = ", ".join(f"{x['key']} {x['old_value']} as {x['new_value']}" for x in o["substituted"])
+            print(f" Orca's command line refuses the project's {subs.split(' ')[0]}: it is given {subs.split(' as ')[-1]}, its default, which changes nothing here.", end="")
+        print("\n")
         print("| | Ours | Orca 2.5.1 | Difference |")
         print("| --- | --- | --- | --- |")
 
         def line(label, a, b, fmt):
-            print(f"| {label} | {fmt(a) if a is not None else '–'} | {fmt(b) if b is not None else '–'} | {pct(a, b) if b is not None and a is not None else ''} |")
+            print(f"| {label} | {fmt(a)} | {fmt(b)} | {pct(a, b)} |")
 
-        line("Layers", s["layer_count"], os_ and os_["layer_count"], lambda v: f"{v}")
-        names = [f for f in FEATURE_ORDER if f in fr or f in fo] + sorted(set(fr) | set(fo) - set(FEATURE_ORDER))
+        line("Layers", s["layer_count"], os_["layer_count"], lambda v: f"{v}")
+        names = [f for f in FEATURE_ORDER if f in fr or f in fo] + sorted((set(fr) | set(fo)) - set(FEATURE_ORDER))
         for f in names:
-            a = fr.get(f, {}).get("volume", 0.0)
-            b = fo.get(f, {}).get("volume", 0.0) if os_ else None
-            line(f"{f}, mm³", a, b, lambda v: f"{v:,.0f}")
-        line("Filament, g", s["weight"], os_ and os_["weight"], lambda v: f"{v:.2f}")
-        line("Estimate, min", t_r["time"] / 60, t_o and t_o["time"] / 60, lambda v: f"{v:.1f}")
-        line("Extruding, min", t_r["extruding"] / 60, t_o and t_o["extruding"] / 60, lambda v: f"{v:.1f}")
-        line("Travel, retractions, lifts, min", t_r["moving"] / 60, t_o and t_o["moving"] / 60, lambda v: f"{v:.1f}")
-        line("Retractions", n["gcode"]["retractions"], o.get("gcode", {}).get("retractions"), lambda v: f"{v:,}")
+            line(f"{f}, mm³", fr.get(f, {}).get("volume", 0.0), fo.get(f, {}).get("volume", 0.0), lambda v: f"{v:,.0f}")
+        line("Filament, g", s["weight"], os_["weight"], lambda v: f"{v:.2f}")
+        line("Estimate, min", t_r["time"] / 60, t_o["time"] / 60, lambda v: f"{v:.1f}")
+        line("Extruding, min", t_r["extruding"] / 60, t_o["extruding"] / 60, lambda v: f"{v:.1f}")
+        line("Travel, retractions, lifts, min", t_r["moving"] / 60, t_o["moving"] / 60, lambda v: f"{v:.1f}")
+        line("Retractions", n["gcode"]["retractions"], o["gcode"]["retractions"], lambda v: f"{v:,}")
         if row.get("filaments", 1) > 1:
-            line("Tool changes", n["gcode"]["tool_changes"], o.get("gcode", {}).get("tool_changes"), lambda v: f"{v:,}")
-        print(
-            f"| Time, native | {n['wall_ms'] / 1000:.2f} s | {o['wall_ms'] / 1000:.2f} s | |"
-            if o.get("wall_ms")
-            else f"| Time, native | {n['wall_ms'] / 1000:.2f} s | – | |"
-        )
-        print(f"| Memory, native | {n['peak_mb']:.0f} MB | {o.get('peak_mb', 0):.0f} MB | |")
-        w = row.get("wasm", {})
-        if w.get("ok"):
-            print(f"| Time and memory, WebAssembly | {w['slice_ms'] / 1000:.2f} s, {w['memory_mb']} MB | | |")
-        print()
+            line("Tool changes", n["gcode"]["tool_changes"], o["gcode"]["tool_changes"], lambda v: f"{v:,}")
+            flush = lambda stats: sum(f["flush"]["volume"] for f in stats.get("filaments", []))  # noqa: E731
+            line("Flush, mm³", flush(s), flush(os_), lambda v: f"{v:,.0f}")
 
 
 if __name__ == "__main__":

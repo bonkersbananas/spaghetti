@@ -1,7 +1,7 @@
 //! The command line: slices STL and 3MF files into a `.gcode.3mf` with the app's default settings, or with a slice
 //! setup the app made from people's slicing settings.
 
-use spaghetti_slicer::{Input, Options, Plate, gcode, profile, setup};
+use spaghetti_slicer::{Input, Options, Output, Plate, Settings, gcode, profile, setup};
 use std::process::ExitCode;
 
 const USAGE: &str = "Usage: spaghetti-slicer [options] <model.stl|model.3mf>...
@@ -197,19 +197,27 @@ fn main() -> ExitCode {
         let stem = first.rsplit_once('.').map(|(s, _)| s).unwrap_or(first);
         format!("{stem}.gcode.3mf")
     });
-    let mut writes = vec![(output.clone(), out.file.as_slice())];
+    match write_out(&out, &settings, &output, &args) {
+        Ok(()) => ExitCode::SUCCESS,
+        Err(e) => {
+            eprintln!("{e}");
+            ExitCode::FAILURE
+        }
+    }
+}
+
+/// Writes the slice's files (the `.gcode.3mf`, and the G-code and statistics when asked for) and says what it made.
+fn write_out(out: &Output, settings: &Settings, output: &str, args: &Args) -> Result<(), String> {
+    let mut writes = vec![(output.to_string(), out.file.as_slice())];
     if let Some(g) = &args.gcode {
         writes.push((g.clone(), out.gcode.as_slice()));
     }
-    let stats = out.stats.json(&settings);
+    let stats = out.stats.json(settings);
     if let Some(s) = &args.stats {
         writes.push((s.clone(), stats.as_bytes()));
     }
     for (path, bytes) in writes {
-        if let Err(e) = std::fs::write(&path, bytes) {
-            eprintln!("can't write {path}: {e}");
-            return ExitCode::FAILURE;
-        }
+        std::fs::write(&path, bytes).map_err(|e| format!("can't write {path}: {e}"))?;
     }
     let s = &out.stats;
     println!(
@@ -234,7 +242,7 @@ fn main() -> ExitCode {
             out.triangles, t.read, t.slice, t.regions, t.supports, t.toolpaths, t.gcode, t.thumbnail, t.pack, t.total
         );
     }
-    ExitCode::SUCCESS
+    Ok(())
 }
 
 /// Slices what the app handed the WebAssembly module, as `bench/app-slice.mts` wrote it down: the setup read as the
@@ -286,41 +294,7 @@ fn replay(path: &str, args: &Args) -> ExitCode {
         let options = Options { arrange: false, thumbnail: args.thumbnail, scale: setup.scale };
         let out = plate.slice(&setup.settings, &options).map_err(|e| format!("can't slice: {e}"))?;
         let output = args.output.clone().unwrap_or_else(|| "job.gcode.3mf".into());
-        let mut writes = vec![(output.clone(), out.file.as_slice())];
-        if let Some(g) = &args.gcode {
-            writes.push((g.clone(), out.gcode.as_slice()));
-        }
-        let stats = out.stats.json(&setup.settings);
-        if let Some(s) = &args.stats {
-            writes.push((s.clone(), stats.as_bytes()));
-        }
-        for (path, bytes) in writes {
-            std::fs::write(&path, bytes).map_err(|e| format!("can't write {path}: {e}"))?;
-        }
-        let s = &out.stats;
-        println!(
-            "{output}: {} layers, {} ({} printing), {:.2} g of filament ({:.2} m); {} bytes",
-            s.layers,
-            gcode::duration(s.total_time),
-            gcode::duration(s.model_time),
-            s.weight,
-            s.filament_mm / 1000.0,
-            out.file.len()
-        );
-        for fallback in &out.fallbacks {
-            eprintln!("note: {fallback}");
-        }
-        for warning in &out.warnings {
-            eprintln!("warning: {}", warning.message);
-        }
-        if args.timings {
-            let t = &out.timings;
-            eprintln!(
-                "{} triangles: read {:.1} ms, slice {:.1}, regions {:.1}, supports {:.1}, toolpaths {:.1}, gcode {:.1}, picture {:.1}, pack {:.1}; total {:.1} ms",
-                out.triangles, t.read, t.slice, t.regions, t.supports, t.toolpaths, t.gcode, t.thumbnail, t.pack, t.total
-            );
-        }
-        Ok(())
+        write_out(&out, &setup.settings, &output, args)
     };
     match run() {
         Ok(()) => ExitCode::SUCCESS,

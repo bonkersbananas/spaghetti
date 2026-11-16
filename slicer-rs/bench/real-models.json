@@ -18,7 +18,7 @@
     {
       "name": "fctl-zipper-pull.3mf",
       "label": "fctl zipper pull, four copies",
-      "what": "A project of parts in colour, three filaments, four copies, on the 0.2 mm nozzle at 0.10 mm.",
+      "what": "Four copies of a project of three parts in three filaments, on the 0.2 mm nozzle at 0.10 mm.",
       "bytes": 162129,
       "sha256": "ecb06a3c246b3ea0e60c74017529603e257420027fb3b5470b72afaece850366",
       "slicing": {
@@ -106,7 +106,7 @@
     {
       "name": "spaghetti-zipper-pull.3mf",
       "label": "Spaghetti zipper pull",
-      "what": "A project of parts in colour, on the 0.2 mm nozzle at 0.10 mm.",
+      "what": "A project of three parts in three filaments, on the 0.2 mm nozzle at 0.10 mm.",
       "bytes": 291822,
       "sha256": "97ccfe4f4fd6cf9287af9d6ae3a075e20bcd90f74f049fff1b768a8a3221732b",
       "slicing": {
@@ -152,7 +152,7 @@
     {
       "name": "hotdog_hero_4color_30mm_multicolor.3mf",
       "label": "Hot dog hero, four colours",
-      "what": "A painted project in four filaments at 0.12 mm.",
+      "what": "A project of nine parts in four filaments, at 0.12 mm.",
       "bytes": 860673,
       "sha256": "5606ac1f5eaeace75bec2ea58c5f7ccf202ca4fa4f058d04502be3510299f7b2",
       "slicing": {
@@ -291,7 +291,7 @@
     {
       "name": "spaghetti-mascot-tomato-40mm-v2.3mf",
       "label": "Tomato mascot",
-      "what": "A project with Fins, auto brim.",
+      "what": "A project of three parts in two filaments, with Fins and auto brim.",
       "bytes": 3398984,
       "sha256": "ca37bafd4f037e83e68e994db0bcbc80645765760ae7e311fd4f0e7302d8b094",
       "slicing": {
@@ -318,7 +318,7 @@
     {
       "name": "hummingbird+multi.3mf",
       "label": "Hummingbird",
-      "what": "A project in colour, its colours matched to two filaments, auto brim.",
+      "what": "A project painted in four filaments, auto brim.",
       "bytes": 7402118,
       "sha256": "6346412716766a45f2f16ce4f0e4788c9de81c28c453a4c9d7fdc54457a927bf",
       "slicing": {
