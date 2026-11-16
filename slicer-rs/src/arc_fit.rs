@@ -93,16 +93,6 @@ impl Arc {
         self.update_angle_and_length();
         true
     }
-
-    /// `ArcSegment::clip_start`, as `clip_end` at its start.
-    pub fn clip_start(&mut self, p: P) -> bool {
-        if p == self.center || !self.is_point_inside(p) {
-            return false;
-        }
-        self.start = self.closest_point(p);
-        self.update_angle_and_length();
-        true
-    }
 }
 
 /// A run of a path's points, `start` to `end` (indexes), as a line through them or as one arc (`PathFittingData`).

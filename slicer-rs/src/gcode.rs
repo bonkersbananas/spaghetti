@@ -3268,12 +3268,10 @@ mod tests {
         assert!(retracts(&hanging, &sparse, 16.0, p(2.0, 2.0), p(18.0, 2.0), &internal, &s));
     }
 
-    #[test]
-    fn a_wall_over_an_overhang_prints_stretch_by_stretch_as_orca_writes_it() {
-        let s = Settings::default();
-        let overhang = (0.4, 0.07, 50.0, 2500.0);
-        let mut b = Builder {
-            s: &s,
+    /// A builder on a 0.2 mm layer at the plate's origin, an overhang wall 0.4 mm wide at 50 mm/s.
+    fn builder(s: &Settings) -> Builder<'_> {
+        Builder {
+            s,
             moves: Vec::new(),
             notes: Vec::new(),
             x: 0.0,
@@ -3289,12 +3287,74 @@ mod tests {
             speed: 0.0,
             retracted_mm: 0.0,
             prior: 0.0,
-            overhang,
+            overhang: (0.4, 0.07, 50.0, 2500.0),
             known: true,
             lost: false,
             change_from: (0.0, 0.0),
             fresh: false,
+        }
+    }
+
+    #[test]
+    fn an_arc_prints_as_one_move_timed_in_the_pieces_orcas_estimator_makes() {
+        let s = Settings::default();
+        let mut b = builder(&s);
+        // A quarter of a 10 mm circle round (100, 100), in points a degree apart, fitted as Orca fits a wall.
+        let raw: Vec<Pt> = (0..=90)
+            .map(|k| {
+                let a = (k as f64).to_radians();
+                geom::pt(geom::sc(100.0 + 10.0 * a.cos()), geom::sc(100.0 + 10.0 * a.sin()))
+            })
+            .collect();
+        let (points, arcs) = crate::plan::fit(&raw, 0.012, true);
+        assert_eq!(arcs.len(), 1);
+        (b.x, b.y) = (110.0, 100.0);
+        let wall = Path {
+            role: Role::OuterWall,
+            points,
+            closed: false,
+            width: 0.42,
+            height: 0.2,
+            mm3_per_mm: 0.08,
+            speed: 200.0,
+            accel: 5000.0,
+            island: 0,
+            object: 0,
+            parts: Vec::new(),
+            arcs,
         };
+        b.extrude(&wall);
+        assert_eq!(b.moves.len(), 1);
+        let m = b.moves[0];
+        let arc = m.arc.expect("an arc");
+        assert!(arc.ccw && (m.x - 100.0).abs() < 1e-3 && (m.y - 110.0).abs() < 1e-3, "{m:?}");
+        assert!((arc.i + 10.0).abs() < 0.01 && arc.j.abs() < 0.01, "{arc:?}");
+        // The plastic of the arc's length, as Orca's writer gives it.
+        let quarter = 10.0 * PI / 2.0;
+        assert!((m.e / (0.08 * s.e_per_mm3()) - quarter).abs() < 0.01, "{}", m.e);
+        // Cooling measures it along the arc; the planner times it as the straight pieces Orca's estimator splits it
+        // into, each with its share of the plastic.
+        let from = [110.0, 100.0, 0.2];
+        assert!((arc_length(from, [m.x, m.y], arc) - quarter).abs() < 0.01);
+        assert!((simple_time(&m, from) - arc_length(from, [m.x, m.y], arc) / 200.0).abs() < 1e-12);
+        let pieces = arc_pieces(from, [m.x, m.y, m.z], arc.i, arc.j, false);
+        assert!(pieces.len() > 10, "{}", pieces.len());
+        let n = pieces.len() as f64;
+        let lines: Vec<Move> =
+            pieces.iter().map(|p| Move { x: p[0], y: p[1], z: p[2], e: m.e / n, arc: None, ..m }).collect();
+        let (one, many) = (timing(&b.moves, from, &s)[0], timing(&lines, from, &s).iter().sum::<f64>());
+        assert!((one - many).abs() < 1e-12, "{one} against {many}");
+        // From rest to rest: no faster than the 200 mm/s asked for.
+        assert!(one > quarter / 200.0 && one < quarter / 200.0 * 3.0, "{one}");
+        // An arc clockwise round the same centre measures the other way round.
+        let back = ArcMove { ccw: false, ..arc };
+        assert!((arc_length(from, [m.x, m.y], back) - 3.0 * quarter).abs() < 0.03);
+    }
+
+    #[test]
+    fn a_wall_over_an_overhang_prints_stretch_by_stretch_as_orca_writes_it() {
+        let s = Settings::default();
+        let mut b = builder(&s);
         let p = |x: f64| geom::pt(geom::sc(x), 0);
         let speeds = [200.0, 120.0, 120.5, 199.5, 199.6, 50.0, 50.0];
         let wall = Path {

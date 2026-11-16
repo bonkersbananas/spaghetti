@@ -1417,4 +1417,83 @@ mod tests {
         let mut points = seam_loop(&square(0.0, 0.0, 0.005, 0.005, false), true);
         assert!(!clip_end(&mut points, &mut Vec::new(), &mut Vec::new(), 0.04));
     }
+
+    /// A circle of radius `r` mm round (100, 100) in `n` points, counter-clockwise from angle 0, closed.
+    fn circle(r: f64, n: usize) -> Vec<Pt> {
+        (0..=n)
+            .map(|k| {
+                let a = 2.0 * std::f64::consts::PI * (k % n) as f64 / n as f64;
+                geom::pt(geom::sc(100.0 + r * a.cos()), geom::sc(100.0 + r * a.sin()))
+            })
+            .collect()
+    }
+
+    /// Whether every arc of a path starts and ends at its points (to Orca's nanometres on our 0.1 µm), on its circle.
+    fn arcs_fit(points: &[Pt], arcs: &[ArcRun]) {
+        for run in arcs {
+            assert!(run.start < run.end && run.end < points.len(), "{run:?}");
+            assert_eq!(from_nm(run.arc.start), points[run.start]);
+            assert_eq!(from_nm(run.arc.end), points[run.end]);
+            for p in [run.arc.start, run.arc.end] {
+                let r = ((p[0] - run.arc.center[0]) as f64).hypot((p[1] - run.arc.center[1]) as f64);
+                assert!((r - run.arc.radius).abs() < 100.0, "{r} against {}", run.arc.radius);
+            }
+        }
+        assert!(arcs.windows(2).all(|w| w[0].end <= w[1].start));
+    }
+
+    #[test]
+    fn a_round_loop_fits_arcs_that_follow_it_backwards_and_round_its_seam_gap() {
+        let s = Settings::default();
+        assert_eq!(resolution(Role::OuterWall, &s), (s.resolution, true));
+        assert_eq!(resolution(Role::SparseInfill, &s), (0.04, true));
+        let off = Settings { arc_fitting: ArcFitting::Disabled, ..s.clone() };
+        assert_eq!(resolution(Role::SparseInfill, &off), (s.resolution, false));
+        let sparse_only = Settings { arc_fitting: ArcFitting::SparseInfill, ..s.clone() };
+        assert_eq!(resolution(Role::OuterWall, &sparse_only), (s.resolution, false));
+        assert_eq!(resolution(Role::SparseInfill, &sparse_only), (0.04, true));
+        let spiral = Settings { spiral_mode: true, ..s.clone() };
+        assert_eq!(resolution(Role::OuterWall, &spiral), (s.resolution, false));
+
+        // Without arcs, the path simplified as before; with them, a 10 mm circle in a few arcs, counter-clockwise.
+        let raw = circle(10.0, 360);
+        assert_eq!(fit(&raw, 0.012, false), (geom::simplify_line(&raw, 0.012), Vec::new()));
+        let (points, arcs) = fit(&raw, 0.012, true);
+        assert!(!arcs.is_empty() && arcs.len() <= 4, "{}", arcs.len());
+        assert!(arcs.iter().all(|a| a.arc.ccw && (a.arc.radius / 1e6 - 10.0).abs() < 0.012));
+        let covered: usize = arcs.iter().map(|a| a.end - a.start).sum();
+        assert!(covered + 2 >= points.len() - 1, "{covered} of {} segments", points.len() - 1);
+        arcs_fit(&points, &arcs);
+        let mut path = path(Role::OuterWall, raw.clone(), true, 0, false, 0.2, &s);
+        assert_eq!((&path.points, &path.arcs), (&points, &arcs));
+
+        // Backwards: the same arcs the other way round, clockwise.
+        let length = |arcs: &[ArcRun]| arcs.iter().map(|a| a.arc.length).sum::<f64>();
+        let before = length(&path.arcs);
+        path.reverse();
+        assert!(path.arcs.iter().all(|a| !a.arc.ccw && a.arc.angle < 0.0));
+        arcs_fit(&path.points, &path.arcs);
+        assert_eq!(length(&path.arcs), before);
+
+        // The seam gap cuts the loop 0.5 mm short of where it started, its last arc ending on its circle where the
+        // cut falls (Orca's `Polyline::clip_end`).
+        path.reverse();
+        let start = path.points[0];
+        // mm the path prints: its arcs, and its segments outside them.
+        let printed = |p: &Path| {
+            let mut mm = length(&p.arcs) / 1e6;
+            for k in 0..p.points.len() - 1 {
+                if !p.arcs.iter().any(|a| a.start <= k && k < a.end) {
+                    mm += geom::dist(p.points[k], p.points[k + 1]) / geom::SCALE;
+                }
+            }
+            mm
+        };
+        let whole = printed(&path);
+        assert!(clip_end(&mut path.points, &mut path.parts, &mut path.arcs, 0.5));
+        arcs_fit(&path.points, &path.arcs);
+        let chord = geom::dist(start, path.points[path.points.len() - 1]) / geom::SCALE;
+        assert!((chord - 0.5).abs() < 0.01, "{chord}");
+        assert!((whole - printed(&path) - 0.5).abs() < 0.01, "{} of {whole} mm", printed(&path));
+    }
 }

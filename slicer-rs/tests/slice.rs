@@ -44,6 +44,37 @@ fn cube_stl(size: f32) -> Vec<u8> {
     text.into_bytes()
 }
 
+/// A tube standing at (128, 128): a cylinder `r` mm round a hole `hole` mm round, `h` mm high, its circles of `n`
+/// sides, as an ASCII STL.
+fn tube_stl(r: f32, hole: f32, h: f32, n: usize) -> Vec<u8> {
+    let at = |radius: f32, k: usize, z: f32| {
+        let a = 2.0 * std::f32::consts::PI * (k % n) as f32 / n as f32;
+        [128.0 + radius * a.cos(), 128.0 + radius * a.sin(), z]
+    };
+    let mut text = String::from("solid tube\n");
+    let mut facet = |c: [[f32; 3]; 3]| {
+        text.push_str(" facet normal 0 0 0\n  outer loop\n");
+        for p in c {
+            text.push_str(&format!("   vertex {} {} {}\n", p[0], p[1], p[2]));
+        }
+        text.push_str("  endloop\n endfacet\n");
+    };
+    for k in 0..n {
+        let (a0, a1, b0, b1) = (at(r, k, 0.0), at(r, k + 1, 0.0), at(hole, k, 0.0), at(hole, k + 1, 0.0));
+        let up = |p: [f32; 3]| [p[0], p[1], h];
+        facet([a0, a1, up(a1)]);
+        facet([a0, up(a1), up(a0)]);
+        facet([b1, b0, up(b0)]);
+        facet([b1, up(b0), up(b1)]);
+        facet([up(a0), up(a1), up(b1)]);
+        facet([up(a0), up(b1), up(b0)]);
+        facet([a1, a0, b0]);
+        facet([a1, b0, b1]);
+    }
+    text.push_str("endsolid tube\n");
+    text.into_bytes()
+}
+
 fn entry(file: &[u8], name: &str) -> Vec<u8> {
     let entries = zip::entries(file).expect("a zip");
     entries.iter().find(|e| e.name == name).unwrap_or_else(|| panic!("no {name}")).read().expect("readable")
@@ -3037,4 +3068,56 @@ fn wrapping_detection_with_a_prime_tower_lifts_before_each_layers_first_visit_as
     let head = one.find("M220 B\nM220 S100\n; WIPE_TOWER_START\n").unwrap();
     assert!(one[..head].contains("G3 Z.8 I1.217 J0 P1  F60000\n"), "{}", &one[..head]);
     assert!(one[head..].starts_with("M220 B\nM220 S100\n; WIPE_TOWER_START\nG1 Z1.2\n"), "{}", &one[head..head + 80]);
+}
+
+/// Each feature's extrusions as lines (`G1`) and as arcs (`G2`/`G3`).
+fn lines_and_arcs(gcode: &str) -> std::collections::BTreeMap<String, (usize, usize)> {
+    let mut out: std::collections::BTreeMap<String, (usize, usize)> = Default::default();
+    let mut feature = String::new();
+    for line in gcode.lines() {
+        if let Some(f) = line.strip_prefix("; FEATURE: ") {
+            feature = f.to_string();
+        }
+        let printing = word(line, 'E').is_some_and(|e| e > 0.0) && word(line, 'X').is_some();
+        if printing && line.starts_with("G1 ") {
+            out.entry(feature.clone()).or_default().0 += 1;
+        } else if printing && (line.starts_with("G2 ") || line.starts_with("G3 ")) {
+            out.entry(feature.clone()).or_default().1 += 1;
+        }
+    }
+    out
+}
+
+/// Curves print as arcs, as native OrcaSlicer 2.5.1 writes them with the X2D's presets (`enable_arc_fitting`): a
+/// tube's walls go round in a few arcs a loop, each starting and ending on its circle (`check_moves`), with the
+/// plastic the lines took; with arc fitting off they print as lines. On this tube (200 sides) native Orca's outer wall
+/// took 250 arcs and 50 lines over its 50 layers, its inner walls 245 arcs and 147 lines (Nov 16; ours 181 and 35,
+/// 194 and 2).
+#[test]
+fn curves_print_as_arcs_as_orcas_do() {
+    let stl = tube_stl(15.0, 6.0, 10.0, 200);
+    let options = Options { arrange: false, ..Options::default() };
+    let run = |settings: &Settings| {
+        let out = slice(&[Input { name: "tube.stl", bytes: &stl }], settings, &options).unwrap();
+        let gcode = String::from_utf8(out.gcode).unwrap();
+        assert_eq!(check_moves(&gcode, settings).len(), 50);
+        (out.stats, lines_and_arcs(&gcode))
+    };
+    let arcs_on = Settings::default();
+    let (with, moves) = run(&arcs_on);
+    let off = setup::read(r#"{"process": {"enable_arc_fitting": "0"}}"#).unwrap().settings;
+    let (without, lines) = run(&off);
+    for wall in ["Outer wall", "Inner wall"] {
+        let ((l, a), (only_lines, none)) = (moves[wall], lines[wall]);
+        assert_eq!(none, 0, "{wall}");
+        assert!(a >= 150 && l + a < 300, "{wall}: {l} lines and {a} arcs");
+        assert!((l + a) * 4 < only_lines, "{wall}: {} moves as arcs, {only_lines} as lines", l + a);
+    }
+    // Sparse infill keeps its lines straight, but its turns along the walls fit arcs too.
+    assert!(moves["Sparse infill"].1 > 0);
+    assert!((with.volume / without.volume - 1.0).abs() < 0.002, "{} against {} mm³", with.volume, without.volume);
+    // Orca's estimator splits an arc into pieces 0.0125 mm from it, which slow down round the curve: the tube takes
+    // Orca 391 s printing with arcs, 386 s without (ours 384 and 377 s).
+    let slower = with.model_time / without.model_time - 1.0;
+    assert!((0.0..0.03).contains(&slower), "{} against {} s", with.model_time, without.model_time);
 }
