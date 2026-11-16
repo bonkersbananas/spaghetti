@@ -251,6 +251,9 @@ test("tilting just under the plate turns it see-through at once, by mouse or tou
   await expect(dialog.locator("[data-viewer=ready]")).toBeVisible({ timeout: 30_000 });
   const canvas = dialog.locator("canvas");
   await expect(canvas).toHaveAttribute("data-plate", "solid");
+  // Only the first layer: the plate doesn't depend on it, and each frame is far cheaper to draw in software GL.
+  await page.keyboard.press("Home");
+  await expect(dialog.getByText(/^Layer 1 of 317/)).toBeVisible();
 
   const box = await canvas.boundingBox();
   if (!box) throw new Error("no canvas");
