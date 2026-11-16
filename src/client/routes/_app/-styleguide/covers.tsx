@@ -42,7 +42,7 @@ export function CoversSection() {
     <Section
       id="covers"
       title="Covers"
-      note="Every idea and build shows its picture by one rule (coverOf, lib/previews.ts): the best photo; else its newest plate render (or its twist's), whole, on the render ground, with a hairline edge and a faint shadow so white and black plastic both keep their outline, labeled From the model where there is room; else its note on an index card (the title stands in for a missing note, said once), a size or two down in a wider frame. Tiles of 48 px and less use a deeper ground and a firmer edge, and show the build glyph where only words would be. Never an empty image icon."
+      note="Every idea and build shows its picture by one rule (coverOf, lib/previews.ts): the best photo; else its newest plate render (or its twist's), whole, on the render ground, with a hairline edge and a faint shadow so white and black plastic both keep their outline, labeled From the model where there is room; else its note on an index card (the title stands in for a missing note, said once), a size down in a 4:3 frame and three in a 5:2 strip. Tiles of 48 px and less use a deeper ground and a firmer edge, and show the build glyph where only words would be. Never an empty image icon."
     >
       {ready && (
         <div className="flex flex-col gap-10">
