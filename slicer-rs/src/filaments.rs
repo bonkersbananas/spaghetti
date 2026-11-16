@@ -15,8 +15,7 @@
 //!   values of its nozzle's variant (Orca's `update_values_to_printer_extruders`).
 //! - **Flushing.** A change of filament within one nozzle flushes the old one out through the printer's own chute
 //!   (the change G-code's `M620.10 … L<length>`): Orca's volume for the pair of colours (`FlushVolCalc`, with the
-//!   measured table of the nozzle's `nozzle_flush_dataset`, which for the right nozzle comes to the single-nozzle
-//!   one) times the nozzle's `flush_multiplier`, at least 100 mm³. Its first nozzle volume counts to the filament it
+//!   measured table of the nozzle's `nozzle_flush_dataset`, the dual-nozzle one on both of the X2D's) times the nozzle's `flush_multiplier`, at least 100 mm³. Its first nozzle volume counts to the filament it
 //!   pushes out, the rest to the new one, as Orca's G-code processor counts them.
 
 use crate::config::Settings;
@@ -746,14 +745,14 @@ impl Flush {
             m
         };
         // Orca's command line names each extruder's variant by its type and the config's `nozzle_volume_type`,
-        // which the presets leave at its default of one value: it reads the second extruder's past the end, finds
-        // no variant for it and takes the dataset from before the start of the list, which comes to 0, the
-        // single-nozzle table (seen in native Orca 2.5's matrices).
+        // which the presets leave at its default of one value: Orca 2.5.1 gives each nozzle that one
+        // (`nozzle_volume_types_per_nozzle`), so the right nozzle is "Bowden Standard", whose dataset is the
+        // dual-nozzle table as the left's (its G-code says `nozzle_flush_dataset = 1,1`).
         let volume_types = p.list("nozzle_volume_type");
         let volume_types = if volume_types.is_empty() { vec!["Standard"] } else { volume_types };
         let datasets: Vec<i32> = (0..k)
             .map(|e| {
-                let Some(volume) = volume_types.get(e) else { return 0 };
+                let volume = volume_types.get(e).or(volume_types.first()).unwrap_or(&"Standard");
                 let kind = p.list("extruder_type").get(e).copied().unwrap_or("Direct Drive");
                 let volume = if *volume == "Hybrid" { "Standard" } else { volume };
                 let (index, _) = variant_index(&p.machine, "printer_extruder_variant", &format!("{kind} {volume}"));
@@ -1022,14 +1021,15 @@ mod tests {
     }
 
     #[test]
-    fn the_right_nozzle_flushes_by_the_single_nozzle_table() {
-        // Native Orca 2.5 on the X2D, green to grey and back: the left nozzle by the dual nozzle table (330 and 210
-        // mm³, before its 0.3), the right one by the single nozzle table, where Orca's command line ends up for it
-        // (206 and 56 mm³ measured, plus the nozzle's 92).
+    fn both_nozzles_flush_by_the_dual_nozzle_table() {
+        // Native Orca 2.5.1 on the X2D, green to grey and back: each nozzle by the dual nozzle table, 330 and 210 mm³
+        // before the left one's 0.3 (its G-code says `nozzle_flush_dataset = 1,1`). Orca 2.5.0's command line read
+        // the right nozzle's volume type past the end of the list and took the single nozzle table for it (206 and
+        // 56 mm³ plus the nozzle's 92); 2.5.1 gives every nozzle the list's first type.
         let pal = palette(&["#00AE42", "#8E9089"]);
         let flush = Flush::of(&pal);
         assert_eq!((flush.raw(0, 0, 1), flush.raw(0, 1, 0)), (330.0, 210.0));
-        assert_eq!((flush.raw(1, 0, 1), flush.raw(1, 1, 0)), (298.0, 148.0));
+        assert_eq!((flush.raw(1, 0, 1), flush.raw(1, 1, 0)), (330.0, 210.0));
     }
 
     #[test]
