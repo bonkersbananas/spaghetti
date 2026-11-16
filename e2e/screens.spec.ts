@@ -151,7 +151,9 @@ test("the main screens and their sheets open", async ({ page, isMobile }) => {
   await expect(page.getByRole("heading", { level: 2, name: "Prints by month" })).toBeVisible();
 
   await screen(page, "/search?q=warping", "Search");
-  await expect(page.getByRole("region", { name: "Attempts" })).toBeVisible();
+  // The seeded build warped, then worked: what fixed it leads, the failure follows.
+  await expect(page.getByRole("region", { name: "What fixed it" })).toBeVisible();
+  await expect(page.getByRole("region", { name: "Times it happened" })).toBeVisible();
 
   await screen(page, "/pantry", "Pantry");
   if (!isMobile) {

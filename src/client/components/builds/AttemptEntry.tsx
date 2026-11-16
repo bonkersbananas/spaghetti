@@ -7,8 +7,7 @@ import { m } from "motion/react";
 import { forwardRef, lazy, Suspense } from "react";
 import { Avatar, ViaText } from "@/components/ui/Avatar";
 import { Button } from "@/components/ui/Button";
-import { SameAgainIcon } from "@/components/ui/icons";
-import { MetaList } from "@/components/ui/MetaList";
+import { ChangeLine } from "@/components/ui/ChangeLine";
 import { Photo } from "@/components/ui/Photo";
 import { PrintProgress } from "@/components/ui/PrintProgress";
 import { UploadBadge } from "@/components/ui/UploadBadge";
@@ -173,13 +172,7 @@ export const AttemptEntry = forwardRef<HTMLLIElement, AttemptEntryProps>(functio
               )}
             </div>
 
-            {attempt.changes.length > 0 && (
-              <p className="text-small text-ink-soft flex items-start gap-1.5">
-                <SameAgainIcon size={16} className="text-semolina-ink mt-0.5 shrink-0" aria-hidden />
-                <span className="sr-only">Changed since attempt {attempt.number - 1}: </span>
-                <ChangeChips attempt={attempt} className="flex-1" />
-              </p>
-            )}
+            <ChangeLine changes={attempt.changes} label={`Changed since attempt ${attempt.number - 1}: `} />
 
             {attempt.note && <p className="text-lead md:text-body text-ink break-words">{attempt.note}</p>}
 
@@ -324,20 +317,5 @@ function EntryPhoto({
         </span>
       )}
     </div>
-  );
-}
-
-function ChangeChips({ attempt, className }: { attempt: AttemptView; className?: string }) {
-  return (
-    <MetaList className={className}>
-      {attempt.changes.map((change) => (
-        <span
-          key={change.key}
-          className="bg-semolina-soft/70 text-ink max-w-full rounded-xs px-1 font-medium whitespace-nowrap"
-        >
-          {change.text}
-        </span>
-      ))}
-    </MetaList>
   );
 }
