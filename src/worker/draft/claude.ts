@@ -101,8 +101,13 @@ export interface RunDiagnosis {
   message?: string;
   /** Which fields of the answer were wrong, by name (bad_shape only). */
   badFields?: string[];
-  /** Where the page came from: the Worker's own fetch (worker_fetch) or Anthropic's web fetch tool (web_fetch). */
-  source?: "worker_fetch" | "web_fetch";
+  /**
+   * Where the page came from: the Worker's own fetch of the page (worker_fetch) or of MakerWorld's design API
+   * (worker_api), or Anthropic's web fetch tool (web_fetch).
+   */
+  source?: "worker_fetch" | "worker_api" | "web_fetch";
+  /** Why the Worker couldn't read the model (worker/draft/page.ts UnreadReason), when it couldn't. */
+  unread?: string;
   /** The HTTP status of the Worker's own fetch of the page (null: it never answered or wasn't allowed). */
   pageStatus?: number | null;
   /** The Worker got a page but found nothing in it to draft from, so web fetch was tried. */
