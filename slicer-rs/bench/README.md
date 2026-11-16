@@ -97,6 +97,13 @@ python3 -I bench/sweep.py --corpus <the models' folder> --only capybara_20mm.stl
 python3 -I bench/sweep.py --table
 ```
 
+To time them on every runner of ours, `corpus.py` replays each model's `job.json` natively on four threads and on one, in Node and in Chromium (`wasm-browser.mjs --job`), three times each, with the peak memory (the command line's, the WebAssembly heap's, Chromium's growth), and checks that all of them write the same file (the proposal's section 2, "On the models people slice"):
+
+```sh
+python3 -I bench/corpus.py <the folder of app-slice.mts's outputs> --runs 3
+python3 -I bench/corpus.py <that folder> --runs 3 --only rust-wasm-node,rust-wasm-chromium --models frame,capybara
+```
+
 A Bambu Studio project can carry a value Orca's command line refuses outright, without saying which ("Param values in 3mf/config error", return -18): `raft_first_layer_expansion` -1. The sweep gives Orca its default instead and says so in the model's table. (Studio's `enabled` for `ensure_vertical_shell_thickness` Orca takes, as `ensure_all`.)
 
 ## Comparing files
