@@ -5,7 +5,7 @@ import { signIn } from "./helpers";
  * Claude names an idea saved without a title (decision 0070). The e2e server's stand-in for Claude, on the port 100
  * above the app, names nothing until a test turns naming on (scripts/lib/fake-claude.ts), and then calls it this.
  */
-const NAMED_TITLE = "Planetary gears, print-in-place";
+const NAMED_TITLE = "Planetary gear set";
 const standIn = (page: Page) => `http://127.0.0.1:${Number(new URL(page.url()).port) + 100}/titles`;
 const ideas = (page: Page) => page.getByRole("list", { name: "Ideas" });
 

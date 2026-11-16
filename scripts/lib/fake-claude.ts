@@ -325,7 +325,7 @@ async function answerCoach(body: string, response: import("node:http").ServerRes
 }
 
 /** What the stand-in calls an idea, once naming is on. */
-export const NAMED_TITLE = "Planetary gears, print-in-place";
+export const NAMED_TITLE = "Planetary gear set";
 
 async function answerTitle(naming: boolean, body: string, response: import("node:http").ServerResponse) {
   const note = (/Their note:\\n([^"]*)/.exec(body)?.[1] ?? "").toLowerCase();

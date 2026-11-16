@@ -380,7 +380,9 @@ function Idea({ item }: { item: ItemView }) {
                 }}
               />
             )}
-            {named && <ClaudeLine className={cn("-mt-2", untitled && "sg-arrive")}>Named by Claude</ClaudeLine>}
+            {named && (
+              <ClaudeLine className={cn("-mt-2 md:-mt-1.5", untitled && "sg-arrive")}>Named by Claude</ClaudeLine>
+            )}
             <IdeaTitleChips item={item} forWhom={forWhom} setForWhom={setForWhom} readOnly={readOnly} />
             <input
               ref={filePicker}
