@@ -182,6 +182,16 @@ describe("Claude names an idea saved without a title", () => {
     expect(await getItem(named)).toMatchObject({ title: "Tea tin lid, hinged", claudeTitle: null });
   }, 20_000);
 
+  it("leaves an idea that became a build while it waited", async () => {
+    const web = stubClaude();
+    const itemId = await capture({ note: "a bracket for the shelf" });
+    await asPerson(`/api/items/${itemId}`, { method: "PATCH", json: { stage: "building" } });
+    await settled();
+    expect(await rows()).toMatchObject([{ status: "kept", run_outcome: "not_an_idea" }]);
+    expect(web.bodies).toHaveLength(0);
+    expect((await getItem(itemId)).title).toBeNull();
+  });
+
   it("skips an idea with a model link: the page's draft names it", async () => {
     const web = stubClaude();
     const linked = await capture({ note: "https://www.thingiverse.com/thing:763622 for the bathroom" });

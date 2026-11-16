@@ -137,6 +137,7 @@ export async function runTitle(
   // A person named it meanwhile, it grew a model link (the draft names those) or it became a build: theirs wins.
   if (item.title?.trim()) return settle(db, itemId, { status: "kept", runOutcome: "named_by_person" });
   if (firstModelLink(item.note)) return settle(db, itemId, { status: "kept", runOutcome: "model_link" });
+  if (item.stage !== "idea") return settle(db, itemId, { status: "kept", runOutcome: "not_an_idea" });
 
   // The day's cap is shared by both people (UTC days: it only has to be about right).
   const now = Date.now();
@@ -178,11 +179,19 @@ export async function runTitle(
   const record = { runOutcome, detail: JSON.stringify(detail) };
   if (!answer.ok) return settle(db, itemId, { status: answer.none ? "none" : "failed", ...record });
 
-  // Written only while the idea still has no title, in the database too: a person typing at the same moment wins.
+  // Written only while it is still an idea with no title, in the database too: a person at the same moment wins.
   const [written] = await db
     .update(items)
     .set({ title: answer.title, updatedAt: new Date() })
-    .where(and(eq(items.id, itemId), isNull(items.deletedAt), or(isNull(items.title), sql`trim(${items.title}) = ''`)))
+    .where(
+      and(
+        eq(items.id, itemId),
+        isNull(items.deletedAt),
+        // Still an idea: a build started meanwhile keeps the name its person gives it.
+        eq(items.stage, "idea"),
+        or(isNull(items.title), sql`trim(${items.title}) = ''`),
+      ),
+    )
     .returning({ id: items.id });
   if (!written) return settle(db, itemId, { status: "kept", ...record, runOutcome: "named_by_person" });
   await db.batch([
