@@ -14,6 +14,8 @@ interface PopoverPanelProps {
   label: string;
   /** What it hangs from (`PopoverAnchor`): using it (a card's Undo) leaves the popover open, as part of it. */
   keepOpenIn?: RefObject<HTMLElement | null>;
+  /** Where focus goes as it closes, when it has no trigger to go back to (a menu opened by a long press). */
+  onCloseAutoFocus?: (event: Event) => void;
 }
 
 /** Closes the popover from inside it: wrap the item that was chosen (asChild). */
@@ -37,6 +39,7 @@ export function PopoverPanel({
   className,
   label,
   keepOpenIn,
+  onCloseAutoFocus,
 }: PopoverPanelProps) {
   // Radix decides a press was outside only once it is a click, when the control pressed may be gone (an Undo that
   // undoes itself away): whether it began inside what the popover hangs from is noted as it begins.
@@ -58,6 +61,7 @@ export function PopoverPanel({
         // Clear of the window's edges, so it floats: its corners and shadow show, and its height stops short of them.
         collisionPadding={16}
         aria-label={label}
+        onCloseAutoFocus={onCloseAutoFocus}
         onInteractOutside={(event) => {
           if (!keepOpenIn) return;
           const inside =

@@ -241,6 +241,7 @@ function SlicerDraftFile({ state, onRemove }: { state: SlicerState; onRemove: ()
           : undefined
       }
       onRemove={onRemove}
+      draft
     />
   );
 }

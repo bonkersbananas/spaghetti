@@ -42,7 +42,9 @@ test("a slicer file kept with an idea shows, counts as a model, can go and come 
 
   // Remove it, then change your mind.
   await page.goto(`/ideas/${id}`);
-  await page.getByRole("button", { name: "Remove the slicer file" }).click();
+  // Two steps: its "…", then Remove (decision 0054).
+  await page.getByRole("button", { name: `More for ${TUGBOAT_FILE_NAME}` }).click();
+  await page.getByRole("button", { name: "Remove file" }).click();
   await expect(page.getByRole("region", { name: /^Files/ })).toHaveCount(0);
   await page.getByRole("button", { name: "Undo" }).click();
   await expect(page.getByRole("region", { name: /^Files/ }).getByText(TUGBOAT_FILE_NAME)).toBeVisible();

@@ -11,6 +11,7 @@ export {
   ArrowCounterClockwise as UndoIcon,
   ArrowDown as MoveDownIcon,
   ArrowElbowDownRight as MoveIntoIcon,
+  ArrowLineLeft as MakeCoverIcon,
   ArrowRight as ArrowRightIcon,
   ArrowSquareOut as OpenInAppIcon,
   ArrowsClockwise as SameAgainIcon,

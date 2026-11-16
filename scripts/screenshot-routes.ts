@@ -1907,6 +1907,19 @@ export const shots: Shot[] = [
   // An idea with a sliced file kept with it: the file's card under the chips, and the sticker on its card.
   { name: "idea-file", path: `/ideas/${SEED_IDS.bigTugboat}`, fullPage: true },
   {
+    // A kept file's "…" beside its Download: Remove is in there, not an X on the card.
+    name: "idea-file-menu",
+    path: `/ideas/${SEED_IDS.bigTugboat}`,
+    prepare: async (page) => {
+      await page
+        .getByRole("button", { name: /^More for / })
+        .first()
+        .click();
+      await page.getByRole("button", { name: "Remove file" }).waitFor();
+      await page.waitForTimeout(400);
+    },
+  },
+  {
     // A second file added to the idea: it shows at once, with the plate's picture.
     name: "idea-file-added",
     path: `/ideas/${SEED_IDS.bigTugboat}`,
@@ -3869,6 +3882,20 @@ export const shots: Shot[] = [
     },
   },
   { name: "idea", path: `/ideas/${SEED_IDS.deskTidy}` },
+  {
+    // Another photo picked in the strip and tapped again: its menu (Make cover, Remove photo), a sheet on phones and a
+    // popover from the thumbnail on desktop. Nothing on the big photo removes (decision 0054).
+    name: "idea-photo-menu",
+    path: `/ideas/${SEED_IDS.deskTidy}`,
+    prepare: async (page) => {
+      const second = page.getByRole("button", { name: "Photo 2" });
+      await second.click();
+      await page.waitForTimeout(400);
+      await second.click();
+      await page.getByRole("button", { name: "Remove photo" }).waitFor();
+      await page.waitForTimeout(400);
+    },
+  },
   {
     // The first press of Delete on an idea: the trash can has turned into the question, in the bar.
     name: "idea-delete-confirm",
