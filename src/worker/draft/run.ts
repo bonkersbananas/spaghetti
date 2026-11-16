@@ -2,7 +2,6 @@ import { and, eq, gte, isNull, lt, or, sql } from "drizzle-orm";
 import type { BatchItem } from "drizzle-orm/batch";
 import { DRAFTS_PER_DAY, type DraftFailure, type ItemDraft } from "../../shared/draft.ts";
 import { isModelImageUrl, modelSite, pictureRequestUrl } from "../../shared/model-links.ts";
-import { extractModelPage } from "../../shared/model-page.ts";
 import { afterChange, recordChange } from "../changes.ts";
 import { type Db, getDb } from "../db/index.ts";
 import { draftRuns, type ItemDraftRow, itemDrafts, items, linkPreviews, photos } from "../db/schema.ts";
@@ -10,7 +9,7 @@ import { fromUrl, readImage } from "../mcp/image.ts";
 import { photoKey } from "../photos.ts";
 import { NEUTRAL, photoIdFor } from "../routes/capture.ts";
 import { type AskResult, askClaude, MAX_DRAFT_IMAGES } from "./claude.ts";
-import { fetchModelPage } from "./page.ts";
+import { readModel } from "./page.ts";
 
 /** A worker that has had a draft this long is taken to be gone (the browser closed, the Worker was recycled). */
 export const STALE_MS = 4 * 60 * 1000;
@@ -252,21 +251,18 @@ export async function runDraft(env: Env, itemId: string, db: Db = getDb(env.DB))
     // Worker can't get or find anything in.
     const base = env.ANTHROPIC_BASE_URL?.trim();
     // With a stand-in Anthropic (e2e, screenshots) the page isn't fetched: the tests must not depend on the real sites.
-    const page = base ? { status: null, html: null } : await fetchModelPage(row.url);
-    let facts: ReturnType<typeof extractModelPage> = null;
-    try {
-      facts = page.html ? extractModelPage(site.site.id, page.html) : null;
-    } catch {
-      // A page that breaks the reader is a page it can't read: web fetch is tried instead.
-    }
+    // MakerWorld's design API is asked when its page is behind a bot challenge (decision 0067).
+    const read = base ? null : await readModel(site.site.id, row.url);
+    const facts = read?.facts ?? null;
     answer = facts
       ? await askClaude(apiKey, row.url, site.site, base, facts)
       : await askClaude(apiKey, row.url, site.site, base);
     answer.diagnosis = {
       ...answer.diagnosis,
-      source: facts ? "worker_fetch" : "web_fetch",
-      pageStatus: page.status,
-      ...(page.html && !facts ? { pageUnreadable: true } : {}),
+      source: read?.via === "api" ? "worker_api" : facts ? "worker_fetch" : "web_fetch",
+      pageStatus: read?.pageStatus ?? null,
+      ...(read?.reason ? { unread: read.reason } : {}),
+      ...(read?.pageReason === "no_model" ? { pageUnreadable: true } : {}),
     };
     if (answer.ok && facts) {
       // What the page states plainly is the page's, not Claude's.
@@ -483,19 +479,15 @@ export async function getPictures(env: Env, db: Db, itemId: string, actor: { id:
   const runId = crypto.randomUUID();
   await db.insert(draftRuns).values({ id: runId, itemId, at: new Date(), outcome: "pictures" });
   let urls = row.result?.imageUrls ?? [];
-  let source: "saved" | "worker_fetch" = "saved";
+  let source: "saved" | "worker_fetch" | "worker_api" = "saved";
   let pageStatus: number | null | undefined;
   if (!urls.length) {
     const site = modelSite(row.url);
     const base = env.ANTHROPIC_BASE_URL?.trim();
-    const page = site && !base ? await fetchModelPage(row.url) : { status: null, html: null };
-    pageStatus = page.status;
-    try {
-      urls = site && page.html ? (extractModelPage(site.site.id, page.html)?.imageUrls ?? []) : [];
-    } catch {
-      urls = [];
-    }
-    source = "worker_fetch";
+    const read = site && !base ? await readModel(site.site.id, row.url) : null;
+    pageStatus = read?.pageStatus ?? null;
+    urls = read?.facts?.imageUrls ?? [];
+    source = read?.via === "api" ? "worker_api" : "worker_fetch";
   }
   const stored = await storePictures(db, env, itemId, urls, item.createdBy);
   await db

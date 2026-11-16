@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { extractModelPage } from "../../src/shared/model-page.ts";
+import { extractMakerWorldDesign, extractModelPage, isSiteTitle } from "../../src/shared/model-page.ts";
 
 const page = (name: string) => readFileSync(new URL(`../fixtures/pages/${name}`, import.meta.url), "utf8");
 
@@ -35,6 +35,46 @@ describe("reading a model page", () => {
     expect(extractModelPage("printables", page("printables-challenge.html"))).toBeNull();
     expect(extractModelPage("makerworld", "<html><body>hello</body></html>")).toBeNull();
     expect(extractModelPage("makerworld", '<script id="__NEXT_DATA__">{broken</script>')).toBeNull();
+  });
+
+  it("finds no model in a site's soft 'not found' (real pages for numbers that don't exist, 200 OK)", () => {
+    // Thingiverse answers thing:99999999 with its home page's title and picture.
+    expect(extractModelPage("thingiverse", page("thingiverse-missing.html"))).toBeNull();
+    // MakerWorld answers a model number that isn't there with a design of status -1 and the site's description.
+    expect(extractModelPage("makerworld", page("makerworld-missing.html"))).toBeNull();
+  });
+
+  it("tells a site's own title from a model's", () => {
+    for (const title of [
+      "Thingiverse - The community for Open Hardware",
+      "MakerWorld",
+      "MakerWorld: Download Free 3D Print Models",
+      "Just a moment...",
+      "Attention Required! | Cloudflare",
+      "Page not found",
+      "404 - Not found",
+      "Error 404",
+    ]) {
+      expect(isSiteTitle(title), title).toBe(true);
+    }
+    for (const title of ["Thingiverse logo keychain", "Cute Mini Octopus", "404 error sign for the office door"]) {
+      expect(isSiteTitle(title), title).toBe(false);
+    }
+  });
+
+  it("takes MakerWorld's design from its API, in English", () => {
+    const json: unknown = JSON.parse(page("makerworld-design.json"));
+    const facts = extractMakerWorldDesign(json, "2051796");
+    expect(facts?.title).toBe("Sweeper Mop Storage Box Rag Storage Box");
+    expect(facts?.designer).toBe("user_2210284563");
+    expect(facts?.description).toContain("A storage box for universal sweeper mops");
+    expect(facts?.description).toContain("Tags: Storage, Robot Vacuum, Home");
+    expect(facts?.imageUrls).toContain(
+      "https://makerworld.bblmw.com/makerworld/model/DSM00000002051796/design/2025-11-28_22b6e31c957f9.jpg",
+    );
+    // Another model's answer, or an error, is not this model.
+    expect(extractMakerWorldDesign(json, "2051797")).toBeNull();
+    expect(extractMakerWorldDesign({ code: 404, error: "The server cannot find the requested resource." })).toBeNull();
   });
 
   it("survives character references that aren't characters", () => {
