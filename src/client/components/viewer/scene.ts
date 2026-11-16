@@ -25,7 +25,15 @@ import {
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { boxGeometry, chunkGeometry } from "./chunks";
 import { plateGrid } from "./plate-grid";
-import { GRID_LINE_PX, GRID_OUTLINE_PX, GRID_STEP, gridOpacity, MAX_POLAR, plateSolidity } from "./plate-view";
+import {
+  GRID_LINE_PX,
+  GRID_OUTLINE_PX,
+  GRID_STEP,
+  gridOpacity,
+  MAX_POLAR,
+  plateLook,
+  plateSolidity,
+} from "./plate-view";
 
 /**
  * The 3D viewer's scene: a build plate that looks like the printer's, and the toolpaths as small extrusions, one
@@ -322,9 +330,11 @@ export class PrintScene {
       (this.grid.material as ShaderMaterial).dispose();
     }
     const plate = new Group();
-    const top = new MeshBasicMaterial({ map: plateTexture(colors.plate, colors.plateEdge) });
+    // Always blended: three bakes an opaque material's alpha of 1 into its shader, and switching would recompile it
+    // at every crossing (an opaque slab that only turned "transparent" kept drawing solid until it vanished).
+    const top = new MeshBasicMaterial({ map: plateTexture(colors.plate, colors.plateEdge), transparent: true });
     top.map?.repeat.set(1 / 64, 1 / 64);
-    const side = new MeshBasicMaterial({ color: colors.plateEdge });
+    const side = new MeshBasicMaterial({ color: colors.plateEdge, transparent: true });
     const geometry = new ExtrudeGeometry(roundedPlate(), {
       depth: PLATE_THICKNESS,
       bevelEnabled: true,
@@ -341,6 +351,8 @@ export class PrintScene {
     this.backdropPrint.add(this.grid);
     this.sizeGrid();
     slab.position.z = -PLATE_THICKNESS - 0.8;
+    // First of what is blended, so the print's shadow lies on it.
+    slab.renderOrder = -2;
     plate.add(slab);
     this.plate = plate;
     this.print.add(plate);
@@ -538,16 +550,21 @@ export class PrintScene {
   /** Solid plate from above, a see-through grid from below. */
   private fadePlate() {
     const distance = this.camera.position.distanceTo(this.controls.target);
-    const solidity = plateSolidity(this.camera.position.y, distance, this.reducedMotion);
+    const height = this.camera.position.y;
+    // For tests: how far above the plate's top the camera is, in mm (one attribute, written only as it moves).
+    const mm = height.toFixed(1);
+    if (this.canvas.dataset.cameraHeight !== mm) this.canvas.dataset.cameraHeight = mm;
+    const solidity = plateSolidity(height, distance, this.reducedMotion);
     if (solidity === this.solidity) return;
     this.solidity = solidity;
+    const look = plateLook(solidity);
     for (const m of this.plateMaterials) {
       m.opacity = solidity;
-      // Solid, the slab is opaque (drawn first, so the print's shadow lies on it); only a fading slab is blended.
-      m.transparent = solidity < 0.99;
-      m.depthWrite = solidity > 0.99;
-      m.visible = solidity > 0.01;
+      // Solid, the slab hides what is behind it; a fading one doesn't, so the print shows through it.
+      m.depthWrite = look === "solid";
+      m.visible = look !== "see-through";
     }
+    if (this.canvas.dataset.plate !== look) this.canvas.dataset.plate = look;
     const below = this.material.uniforms.uBelow;
     if (below) below.value = 1 - solidity;
     const opacity = (this.grid?.material as ShaderMaterial | undefined)?.uniforms.uOpacity;
