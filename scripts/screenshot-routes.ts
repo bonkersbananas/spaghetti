@@ -363,6 +363,8 @@ export interface Shot {
   beforeShot?: (page: Page) => Promise<void>;
   /** Runs after the screenshot, to undo what prepare changed for the next width. */
   cleanup?: (page: Page) => Promise<void>;
+  /** Shows a picture still on its way, or one that failed, on purpose: skip the check that every image has loaded. */
+  brokenImages?: boolean;
 }
 
 /** An idea made through the API with this note (no draft is started: only a capture starts one by itself). */
@@ -3234,6 +3236,7 @@ export const shots: Shot[] = [
     name: "builds-render-loading",
     path: "/builds",
     selector: TOWEL_CARD,
+    brokenImages: true,
     prepare: async (page) => {
       await page.route("**/api/files/*/thumb*", (route) => void heldRoutes.push(route));
       // The held picture would hold the page's load event too.
@@ -3250,6 +3253,7 @@ export const shots: Shot[] = [
     name: "builds-render-failed",
     path: "/builds",
     selector: TOWEL_CARD,
+    brokenImages: true,
     prepare: async (page) => {
       await page.route("**/api/files/*/thumb*", (route) => route.fulfill({ status: 404, body: "" }));
       await page.goto("/builds");

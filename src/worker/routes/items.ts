@@ -162,6 +162,54 @@ function groupBy<T extends { itemId: string }>(rows: T[]): Map<string, T[]> {
  * items (more past D1's parameter limit). Photos of deleted attempts are left
  * out, so they come back when the attempt is restored.
  */
+/**
+ * What each live twist leads with, for the builds that print it: its newest model (a plate render) and the photo it
+ * took from its idea while that photo is there.
+ */
+async function twistPictures(db: Db, twistIds: string[]) {
+  const pictures = new Map<
+    string,
+    { model: ReturnType<typeof toApiFile> | null; photo: ReturnType<typeof toApiPhoto> | null }
+  >();
+  if (!twistIds.length) return pictures;
+  const [rows, files] = await Promise.all([
+    Promise.all(
+      chunked(twistIds).map((ids) =>
+        db
+          .select({ id: twists.id, sourcePhotoId: twists.sourcePhotoId })
+          .from(twists)
+          .where(and(inArray(twists.id, ids), isNull(twists.deletedAt))),
+      ),
+    ).then((slices) => slices.flat()),
+    Promise.all(
+      chunked(twistIds).map((ids) =>
+        db
+          .select()
+          .from(twistFiles)
+          .where(and(inArray(twistFiles.twistId, ids), isNull(twistFiles.deletedAt))),
+      ),
+    ).then((slices) => slices.flat()),
+  ]);
+  const photoIds = rows.flatMap((row) => (row.sourcePhotoId ? [row.sourcePhotoId] : []));
+  const sourcePhotos = photoIds.length
+    ? await db
+        .select()
+        .from(photos)
+        .where(and(inArray(photos.id, photoIds), isNull(photos.deletedAt)))
+    : [];
+  for (const row of rows) {
+    const newest = files
+      .filter((file) => file.twistId === row.id)
+      .reduce<(typeof files)[number] | undefined>(
+        (best, file) => (!best || file.createdAt >= best.createdAt ? file : best),
+        undefined,
+      );
+    const photo = sourcePhotos.find((candidate) => candidate.id === row.sourcePhotoId);
+    pictures.set(row.id, { model: newest ? toApiFile(newest) : null, photo: photo ? toApiPhoto(photo) : null });
+  }
+  return pictures;
+}
+
 export async function loadItems(db: Db, where: ReturnType<typeof and>) {
   const rows = await db.select().from(items).where(where).orderBy(desc(items.createdAt), desc(items.id));
   if (!rows.length) return [];
@@ -208,7 +256,7 @@ export async function loadItems(db: Db, where: ReturnType<typeof and>) {
     )
   ).flat();
   const twistIds = [...new Set(rows.flatMap((row) => (row.twistId ? [row.twistId] : [])))];
-  const [itemFileSlices, coaches, reactionsByItem, twistModelRows] = await Promise.all([
+  const [itemFileSlices, coaches, reactionsByItem, twistPicture] = await Promise.all([
     Promise.all(
       slices.map((ids) =>
         db
@@ -223,24 +271,9 @@ export async function loadItems(db: Db, where: ReturnType<typeof and>) {
       db,
       rows.map((row) => row.id),
     ),
-    // A build that prints a twist falls back to the twist's model render for its cover (shared/cover.ts).
-    twistIds.length
-      ? Promise.all(
-          chunked(twistIds).map((ids) =>
-            db
-              .select({ file: twistFiles })
-              .from(twistFiles)
-              .innerJoin(twists, eq(twists.id, twistFiles.twistId))
-              .where(and(inArray(twistFiles.twistId, ids), isNull(twistFiles.deletedAt), isNull(twists.deletedAt))),
-          ),
-        ).then((slices) => slices.flat().map((row) => row.file))
-      : Promise.resolve([]),
+    // A build that prints a twist falls back to the twist's picture for its cover (shared/cover.ts).
+    twistPictures(db, twistIds),
   ]);
-  const twistModels = new Map<string, (typeof twistModelRows)[number]>();
-  for (const file of twistModelRows) {
-    const kept = twistModels.get(file.twistId);
-    if (!kept || file.createdAt >= kept.createdAt) twistModels.set(file.twistId, file);
-  }
   const reads = new Map<string, PhotoRead>();
   for (const [attemptId, rows] of await readsByAttempt(db, [...liveAttempts])) {
     const read = toApiPhotoRead(rows);
@@ -257,7 +290,7 @@ export async function loadItems(db: Db, where: ReturnType<typeof and>) {
     const itemPhotos = photosByItem.get(row.id) ?? [];
     // A cover that was removed (or whose attempt was) reads as none, and returns with undo.
     const coverPhotoId = itemPhotos.some((photo) => photo.id === row.coverPhotoId) ? row.coverPhotoId : null;
-    const twistModel = row.twistId ? twistModels.get(row.twistId) : undefined;
+    const picture = row.twistId ? twistPicture.get(row.twistId) : undefined;
     const item = toApiItem(
       { ...row, coverPhotoId },
       itemPhotos,
@@ -270,7 +303,7 @@ export async function loadItems(db: Db, where: ReturnType<typeof and>) {
       reactionsByItem.get(row.id) ?? [],
       filesByItem.get(row.id) ?? [],
     );
-    return { ...item, twistModel: twistModel ? toApiFile(twistModel) : null };
+    return { ...item, twistModel: picture?.model ?? null, twistPhoto: picture?.photo ?? null };
   });
 }
 

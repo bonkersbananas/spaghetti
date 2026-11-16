@@ -10,8 +10,6 @@ import { Label, Section } from "./shared";
 const sample = (id: string): Cover => ({ kind: "plate", file: { id, hasThumb: true, createdAt: 0 } as AttemptFile });
 const plate = sample("sample-render-hook");
 const black = sample("sample-render-hook-black");
-/** A file whose picture never arrives (the server has none): the render's ground alone, as while one loads. */
-const missing = sample("sample-render-missing");
 const note: Cover = { kind: "note", text: "For the bathroom door.", fromTitle: false };
 const named: Cover = { kind: "note", text: "Drawer bins, 42 mm grid", fromTitle: true };
 
@@ -86,7 +84,7 @@ export function CoversSection() {
             </div>
           </div>
           <div>
-            <Label>Small tiles (a row's 48 px, the sidebar's 36 px), and a render that hasn't arrived</Label>
+            <Label>Small tiles (a row's 48 px, the sidebar's 36 px)</Label>
             <div className="flex flex-wrap items-end gap-5">
               <CoverPicture
                 cover={plate}
@@ -110,7 +108,6 @@ export function CoversSection() {
                 glyph={<BuildsIcon size={18} />}
                 className="size-9 rounded-sm"
               />
-              <CoverPicture cover={missing} label className="aspect-4/3 w-48 rounded-lg" />
             </div>
           </div>
         </div>

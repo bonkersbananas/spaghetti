@@ -75,6 +75,11 @@ describe("pickCover", () => {
     expect(own).toMatchObject({ kind: "plate", file: { id: "own" } });
   });
 
+  it("then to the photo that twist leads with", () => {
+    const cover = pickCover({ ...base, twistPhoto: photo("twist-photo", null, 1) }, thumb);
+    expect(cover).toMatchObject({ kind: "photo", photo: { id: "twist-photo" } });
+  });
+
   it("is the note card without a picture, the title standing in for a missing note", () => {
     expect(pickCover({ ...base, note: "For the bathroom door." }, thumb)).toEqual({
       kind: "note",

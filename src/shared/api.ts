@@ -261,6 +261,8 @@ export interface Item {
    * the build has no photo and no file of its own (shared/cover.ts). Absent on items this device made.
    */
   twistModel?: AttemptFile | null;
+  /** The photo that twist leads with (from the idea it came from, while that has it): the cover's next fallback. */
+  twistPhoto?: Photo | null;
   /** What the build is made of, in order; empty for a simple build (and for ideas). */
   parts: Part[];
   /** In order: the first is the cover. Includes the attempts' photos (they have an attemptId). */

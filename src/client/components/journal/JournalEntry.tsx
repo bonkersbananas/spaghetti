@@ -370,7 +370,15 @@ const AttemptRow = forwardRef<HTMLAnchorElement, JournalEntryProps>(function Att
   const attempt = item.attempts[index];
   if (!attempt) return null;
   const [photo] = item.photos.filter((candidate) => candidate.attemptId === attempt.id);
-  const plate = !photo && attempt.file?.hasThumb ? attempt.file : undefined;
+  // No photo or file of its own: the build's render (its own files, or its twist's model), else the glyph.
+  const cover = photo || attempt.file?.hasThumb ? undefined : coverOf(item);
+  const plate = photo
+    ? undefined
+    : attempt.file?.hasThumb
+      ? attempt.file
+      : cover?.kind === "plate"
+        ? cover.file
+        : undefined;
   const name = itemName(item);
   const offBed = isOffTheBed(attempt);
   const OutcomeIcon = attempt.outcome ? outcomeIcons[attempt.outcome] : offBed ? FinishIcon : PrintingIcon;

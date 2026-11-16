@@ -54,6 +54,7 @@ export function finalPhoto<P extends CoverPhoto>(
  * 2. else `plate`: the newest plate picture of its files (its own, or an attempt's; `file` first when it has one),
  *    else the model of the twist it prints: a render shown whole on the render ground and labeled "From the model"
  *    where there is room, so nobody takes it for the result;
+ *    A build that prints a twist with no model shows the photo the twist leads with.
  * 3. else `note`: the note card, the note on an index card; the title stands in for a missing note (`fromTitle`), so
  *    whoever shows it leaves the title out and doesn't say it twice.
  */
@@ -75,8 +76,9 @@ export interface Coverable<P extends CoverPhoto, F extends CoverFile> {
   attempts: readonly { id: string; outcome: string | null; file: F | null }[];
   coverPhotoId?: string | null;
   files?: readonly F[];
-  /** The model of the twist a build prints: its last resort before the note card. */
+  /** The model of the twist a build prints, then the photo that twist leads with: its last resorts before the note. */
   twistModel?: F | null;
+  twistPhoto?: P | null;
   title: string | null;
   note: string;
 }
@@ -92,6 +94,7 @@ export function pickCover<P extends CoverPhoto, F extends CoverFile>(
   const twist = item.twistModel && hasPicture(item.twistModel) ? item.twistModel : undefined;
   const plate = file && hasPicture(file) ? file : (newestPictured(item, hasPicture) ?? twist);
   if (plate) return { kind: "plate", file: plate };
+  if (item.twistPhoto) return { kind: "photo", photo: item.twistPhoto };
   const note = item.note.trim();
   return note
     ? { kind: "note", text: note, fromTitle: false }

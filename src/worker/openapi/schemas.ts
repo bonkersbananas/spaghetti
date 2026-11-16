@@ -185,6 +185,9 @@ export const Item = z
       .describe(
         "The model of the twist this build prints, while the twist is live: its cover without a photo or file.",
       ),
+    twistPhoto: Photo.nullable()
+      .optional()
+      .describe("The photo that twist leads with, while its idea has it: the cover's next fallback."),
   })
   .meta({ id: "Item", description: "An idea, or a build (an idea that is being printed)." });
 

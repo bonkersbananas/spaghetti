@@ -19994,6 +19994,17 @@
                 "type": "null"
               }
             ]
+          },
+          "twistPhoto": {
+            "description": "The photo that twist leads with, while its idea has it: the cover's next fallback.",
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Photo"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [
