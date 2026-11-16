@@ -383,6 +383,34 @@ async function newModelIdea(page: Page, note: string) {
   }, note);
 }
 
+const FLEXI_LINK = "https://makerworld.com/en/models/3531476-flexi-mini-hummingbird?from=search#profileId-4037895";
+
+/**
+ * A new idea whose note has a MakerWorld link, saved as a person types it (with its tracking bits), and its page open;
+ * the page's title comes from a stand-in for the link preview (the shots have no internet).
+ */
+async function ideaWithLink(page: Page, title: string, note: string) {
+  await page.route(/\/api\/links\/preview\?url=.*3531476/, (route) =>
+    route.fulfill({ json: { url: FLEXI_LINK, title: "Flexi Mini Hummingbird", site: "MakerWorld" } }),
+  );
+  const id = crypto.randomUUID();
+  modelItems.push(id);
+  const headers = { Origin: new URL(page.url()).origin };
+  await page.request.post("/api/items", { headers, data: { id, title, note: "" } });
+  await page.request.patch(`/api/items/${id}`, { headers, data: { note } });
+  await openIdea(page, id);
+  await page
+    .getByRole("link", { name: /Flexi Mini Hummingbird/ })
+    .first()
+    .waitFor();
+  await page.waitForTimeout(600);
+}
+
+async function removeLinkIdeas(page: Page) {
+  await page.unrouteAll({ behavior: "ignoreErrors" });
+  await removeModelItems(page);
+}
+
 /** Opens that idea's page and waits for it. */
 async function openIdea(page: Page, id: string) {
   await page.goto(`/ideas/${id}`);
@@ -2508,6 +2536,25 @@ export const shots: Shot[] = [
     },
     beforeShot: modelInView,
     cleanup: removeModelItems,
+  },
+  {
+    // A MakerWorld link pasted as the whole note (the Flexi Mini Hummingbird, with its ?from=search#profileId-…): the
+    // model's card says it, once; the note reads as empty.
+    name: "idea-makerworld-link",
+    path: "/ideas",
+    prepare: async (page) => {
+      await ideaWithLink(page, "Flexi Mini Hummingbird", FLEXI_LINK);
+    },
+    cleanup: removeLinkIdeas,
+  },
+  {
+    // The same link inside a sentence: it reads as the model's title there, and the card is still the only one.
+    name: "idea-makerworld-words",
+    path: "/ideas",
+    prepare: async (page) => {
+      await ideaWithLink(page, "Hummingbirds for the window", `Green and gold, for the kitchen window: ${FLEXI_LINK}`);
+    },
+    cleanup: removeLinkIdeas,
   },
   {
     // On a computer, "Open in Bambu Studio" on the model's card and beside the idea's other quiet actions (the one

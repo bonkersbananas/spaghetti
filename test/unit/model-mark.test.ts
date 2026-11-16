@@ -1,5 +1,15 @@
 import { describe, expect, it } from "vitest";
-import { modelLetter, modelMarkIn, modelMarkOf, modelOf, modelPlace } from "../../src/shared/model-mark.ts";
+import {
+  cleanModelUrl,
+  linkKey,
+  modelLetter,
+  modelMarkIn,
+  modelMarkOf,
+  modelOf,
+  modelPlace,
+  sameModel,
+  tidyModelLinks,
+} from "../../src/shared/model-mark.ts";
 
 const site = (url: string) => modelMarkOf(url)?.site ?? null;
 
@@ -60,5 +70,63 @@ describe("model marks", () => {
     expect(mark && modelPlace(mark)).toBe("3MF file");
     expect(modelOf({ note: "https://www.printables.com/model/9-x", files })?.site).toBe("printables");
     expect(modelOf({ note: "just words", files: [] })).toBeNull();
+  });
+});
+
+const FLEXI = "https://makerworld.com/en/models/3531476-flexi-mini-hummingbird?from=search#profileId-4037895";
+
+describe("the same model, however its link is written", () => {
+  it("matches a MakerWorld design with or without a query, fragment, language or slug", () => {
+    const clean = "https://makerworld.com/en/models/3531476-flexi-mini-hummingbird";
+    expect(sameModel(FLEXI, clean)).toBe(true);
+    expect(sameModel(FLEXI, "https://makerworld.com/models/3531476")).toBe(true);
+    expect(sameModel(FLEXI, "https://makerworld.com/de/models/3531476-flexi-mini-kolibri")).toBe(true);
+    expect(sameModel(FLEXI, "https://makerworld.com/zh-cn/models/3531476?from=recommend")).toBe(true);
+    expect(sameModel(FLEXI, "https://www.makerworld.com/en/models/3531476-flexi-mini-hummingbird")).toBe(true);
+    expect(sameModel(FLEXI, "https://makerworld.com/en/models/3531477-flexi-mini-hummingbird")).toBe(false);
+  });
+  it("matches a Thingiverse thing on www. or not, its files tab, a query", () => {
+    expect(sameModel("https://www.thingiverse.com/thing:123", "https://thingiverse.com/thing:123/files")).toBe(true);
+    expect(sameModel("https://www.thingiverse.com/thing:123", "https://www.thingiverse.com/thing:123?ref=x")).toBe(
+      true,
+    );
+    expect(sameModel("https://www.thingiverse.com/thing:123", "https://www.thingiverse.com/thing:1234")).toBe(false);
+  });
+  it("matches Printables by its number, and never models on two sites", () => {
+    expect(sameModel("https://www.printables.com/model/45-hook", "https://printables.com/en/model/45")).toBe(true);
+    expect(sameModel("https://www.printables.com/model/45-hook", "https://makerworld.com/en/models/45")).toBe(false);
+  });
+  it("matches files by their whole address, and nothing that isn't a model", () => {
+    expect(sameModel("https://x.org/a.stl?dl=1", "https://x.org/a.stl?dl=1#top")).toBe(true);
+    expect(sameModel("https://x.org/a.stl?dl=1", "https://x.org/a.stl?dl=2")).toBe(false);
+    expect(sameModel("https://example.com/page", "https://example.com/page")).toBe(false);
+    expect(sameModel("https://makerworld.com/en", "https://makerworld.com/en")).toBe(false);
+    expect(linkKey("https://example.com/page")).toBe("https://example.com/page");
+    expect(linkKey(FLEXI)).toBe(linkKey("https://makerworld.com/models/3531476"));
+  });
+});
+
+describe("model links without their tracking bits", () => {
+  it("keeps a model page's path and drops its query and fragment", () => {
+    expect(cleanModelUrl(FLEXI)).toBe("https://makerworld.com/en/models/3531476-flexi-mini-hummingbird");
+    expect(modelMarkOf(FLEXI)?.url).toBe("https://makerworld.com/en/models/3531476-flexi-mini-hummingbird");
+    expect(cleanModelUrl("https://www.thingiverse.com/thing:123?utm_source=x")).toBe(
+      "https://www.thingiverse.com/thing:123",
+    );
+  });
+  it("leaves other links, and files' queries, as they are", () => {
+    expect(cleanModelUrl("https://www.youtube.com/watch?v=abc")).toBe("https://www.youtube.com/watch?v=abc");
+    expect(cleanModelUrl("https://makerworld.com/en/search/models?keyword=hook")).toBe(
+      "https://makerworld.com/en/search/models?keyword=hook",
+    );
+    expect(cleanModelUrl("https://x.org/a.stl?token=1")).toBe("https://x.org/a.stl?token=1");
+  });
+  it("tidies every model link in a note and nothing else", () => {
+    const note = `Green one: ${FLEXI}, and the stand https://www.thingiverse.com/thing:9?ref=x.\nVideo https://youtu.be/x?t=3`;
+    expect(tidyModelLinks(note)).toBe(
+      "Green one: https://makerworld.com/en/models/3531476-flexi-mini-hummingbird, and the stand https://www.thingiverse.com/thing:9.\nVideo https://youtu.be/x?t=3",
+    );
+    expect(tidyModelLinks("no links")).toBe("no links");
+    expect(tidyModelLinks(FLEXI)).toBe("https://makerworld.com/en/models/3531476-flexi-mini-hummingbird");
   });
 });

@@ -1,0 +1,9 @@
+# 0069. An idea's model link shows once, as its card
+
+Status: Accepted
+
+**Decision:** When a link in an idea's note is the idea's model (the one its "Model on MakerWorld" card shows), the page shows that card only: no plain link card for the same model, and the note doesn't repeat the address. A note that is only that link reads as empty (its card says it, and tapping the note still shows the link to edit); inside other words the link reads as the model's title, or "makerworld.com/…" until the title is known. Links are matched by the model they name, not their address: the same MakerWorld design with or without /en/, a slug, ?from=search or #profileId-…, the same thing:123 on www. or not. Other links (a shop, a video, a second model) keep their own cards. The build page and the Captured sheet show the model's link once too, as the model's card. A model page's link is kept without its query and fragment: when an idea is created or captured, when a draft starts, when an agent changes a note, and when a person leaves the note field (never while they type).
+
+**Why:** Carl Oscar, Nov 16: "When adding a makerworld link it's linked twice. Would be nice with just the model on makerworld component instead of listing it twice." The Flexi Mini Hummingbird idea showed the model three times: the full address with its tracking bits, a plain link card and the model card.
+
+**Consequences:** `shared/model-mark.ts` says which model a link names (`sameModel`, `linkKey`), cleans a model page's address (`cleanModelUrl`, and `modelMarkOf`'s `url`) and tidies a note (`tidyModelLinks`). `NoteField` and `NoteLinks` take the page's `model`. MakerWorld's `#profileId-…` (which print profile was open) is dropped with the rest: the model is the design, not one of its profiles. Notes saved before this keep their addresses until next edited; they read the same way.

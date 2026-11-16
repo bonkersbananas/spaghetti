@@ -1,6 +1,6 @@
 import type { AttemptFile, Person } from "@shared/api";
 import { findLinks, shortUrl } from "@shared/links";
-import { modelOf } from "@shared/model-mark";
+import { cleanModelUrl, modelOf } from "@shared/model-mark";
 import { relativeTime } from "@shared/time";
 import { m } from "motion/react";
 import { lazy, type Ref, Suspense, useState } from "react";
@@ -139,9 +139,9 @@ export function IdeaCard({ item, person, via, landing, menu, headingLevel = 2, r
   );
 }
 
-/** Links read better short on a card: printables.com/model/123. */
+/** Links read better short on a card: printables.com/model/123, a model page without ?from=search and the like. */
 export function shortenLinks(text: string): string {
   let result = text;
-  for (const { url } of findLinks(text).reverse()) result = result.replace(url, shortUrl(url));
+  for (const { url } of findLinks(text).reverse()) result = result.replace(url, shortUrl(cleanModelUrl(url)));
   return result;
 }
