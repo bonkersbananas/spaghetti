@@ -535,12 +535,16 @@ describe("drafting an idea from a model page", () => {
       expect(item.photos).toHaveLength(4);
       const sent = web.bodies[0] as { tools: unknown[]; messages: Array<{ content: string }> };
       expect(sent.tools).toHaveLength(1);
-      expect(sent.messages[0]?.content).toContain(printablesApiUrlFor("1577248"));
+      // The address Claude is handed is one its fetch takes: at most 250 characters.
+      const handed = sent.messages[0]?.content.match(/https:\/\/api\.printables\.com\/\S+/)?.[0] ?? "";
+      expect(handed).toBe(printablesApiUrlFor("1577248"));
+      expect(handed.length).toBeLessThanOrEqual(250);
       expect(await runs()).toMatchObject([
         {
           outcome: "drafted",
           detail: {
             source: "web_fetch_api",
+            apiFetch: "read",
             pageStatus: 403,
             // The stub's 403 has no cf-mitigated header (production's does: "challenge").
             unread: "http_403",
@@ -568,7 +572,29 @@ describe("drafting an idea from a model page", () => {
       expect((await (await draftIt(id)).json<DraftResponse>()).draft?.status).toBe("drafted");
       expect((await getItem(id)).title).toBe("Carrying handle for IKEA Antilop high chair legs.");
       expect((web.bodies[1] as { tools?: unknown[] }).tools ?? []).toEqual([]);
-      expect(await runs()).toMatchObject([{ outcome: "drafted", detail: { source: "web_fetch_api", asked: 2 } }]);
+      expect(await runs()).toMatchObject([
+        { outcome: "drafted", detail: { source: "web_fetch_api", apiFetch: "read", asked: 2 } },
+      ]);
+    });
+
+    it("reads the short GET answer, which has no id, and says when Claude never tried the API", async () => {
+      const { id: _, ...print } = JSON.parse(printablesPrint).data.print;
+      stubWeb(
+        {
+          json: { ...goodDraft, imageUrls: [] },
+          fetched: { [printablesApiUrlFor("1577248")]: JSON.stringify({ data: { print } }) },
+        },
+        blocked,
+      );
+      const id = await addIdea({ note: MODEL });
+      expect((await (await draftIt(id)).json<DraftResponse>()).draft?.status).toBe("drafted");
+      expect((await getItem(id)).title).toBe("Carrying handle for IKEA Antilop high chair legs.");
+
+      vi.restoreAllMocks();
+      stubWeb({ json: { ...goodDraft, readable: false }, fetched: { [MODEL]: null } }, blocked);
+      const other = await addIdea({ note: MODEL });
+      await draftIt(other);
+      expect((await runs()).map((run) => run.detail.apiFetch)).toEqual(["read", "not_tried"]);
     });
 
     it("a model the API tells Claude's fetch isn't there is no draft, whatever Claude says", async () => {
@@ -599,6 +625,7 @@ describe("drafting an idea from a model page", () => {
           outcome: "not_readable",
           detail: {
             source: "web_fetch",
+            apiFetch: "url_not_accessible",
             pageStatus: 403,
             // The stub's 403 has no cf-mitigated header (production's does: "challenge").
             unread: "http_403",
