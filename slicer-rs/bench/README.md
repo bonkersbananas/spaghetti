@@ -85,6 +85,20 @@ python3 -I bench/run.py --runs 3 --models benchy-0.2
 python3 -I bench/run.py --runs 3 --only rust-native,orca-native --models benchy-0.6,benchy-0.8
 ```
 
+## Real models
+
+The models people sliced in the app, sliced as the app slices them (the proposal's section 3, "Real models"). `real-models.json` lists them, each with its size, sha256 and the settings it was last sliced with, and the printer's setup; the models themselves are people's downloads under their designers' licences and stay out of the repository (production keeps them: an agent token with the read scope fetches each from `GET /api/files/<id>/file`).
+
+`app-slice.mts` runs the app's own slice worker (`src/client/lib/slicing/slice-worker.ts`) in Node, its import aliases resolved by `app/hooks.mjs`, so the model is read, turned, scaled, arranged and given fins by the app's code and the setup is `sliceSetup`'s. Ours slices it in WebAssembly through the app's `ours.ts`, and it writes down what the worker handed the module: `job.json` with the setup and each object or part as an STL with its filament and paint, which `spaghetti-slicer --job job.json` and `wasm-node.mjs <wasm> <out> --job job.json` replay to the same file, and `orca/`, the setup's presets and the plate as a project (each part where the app put it, painted with `paint_color`) for native Orca with `--arrange 0`. `sweep.py` runs it all for every model and prints the tables:
+
+```sh
+python3 -I bench/sweep.py --corpus <the models' folder> --runs 3     # ENGINE (the engine's release folder) and ORCA_NATIVE as above
+python3 -I bench/sweep.py --corpus <the models' folder> --only capybara_20mm.stl --skip-orca
+python3 -I bench/sweep.py --table
+```
+
+A Bambu Studio project can carry a value Orca's command line refuses outright, without saying which ("Param values in 3mf/config error", return -18): `raft_first_layer_expansion` -1. The sweep gives Orca its default instead and says so in the model's table. (Studio's `enabled` for `ensure_vertical_shell_thickness` Orca takes, as `ensure_all`.)
+
 ## Comparing files
 
 To compare what the two write around the toolpaths, diff the head (everything before the first printed line: header, settings, the printer's start G-code, the first layer change) and the tail (everything after the last printed line: the last lift and photo, the end G-code, the totals) of the same model's G-code, line by line:
