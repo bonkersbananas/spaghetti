@@ -20,8 +20,13 @@ const DAY_MS = 24 * 60 * 60 * 1000;
  * after it, so the first save gives the rest of the capture a moment to arrive.
  */
 export const SETTLE_MS = 2500;
-/** After the response, `waitUntil` has about 30 seconds: the wait and the call fit in a little less than that. */
-export const WAIT_UNTIL_TIMEOUT_MS = 20_000;
+/**
+ * A capture that said its photos were on their way may still be sending the first when the wait is over: the job
+ * looks for it every half second for this long more before it gives up (a slow connection).
+ */
+export const PHOTO_WAIT_MS = 8000;
+/** After the response, `waitUntil` has about 30 seconds: the waits and the call fit in a little less than that. */
+export const WAIT_UNTIL_TIMEOUT_MS = 15_000;
 /** The cron has all the time it needs. */
 const CRON_TIMEOUT_MS = 60_000;
 /** The photos Claude looks at: the first few say what the idea is. */
@@ -31,17 +36,34 @@ const CONTENT_TYPES = ["image/jpeg", "image/webp", "image/png", "image/gif"] as 
 /** The feature exists only where the key is set: without it nothing about it shows. */
 export const titlesEnabled = (env: Pick<Env, "ANTHROPIC_API_KEY">) => !!env.ANTHROPIC_API_KEY?.trim();
 
-/** The title Claude gave each of these ideas, for the ones it named (the screen marks it as Claude's while it is still that). */
-export async function claudeTitles(db: Db, itemIds: string[]): Promise<Map<string, string>> {
-  const named = new Map<string, string>();
+/** What the screens know of an idea's naming job: its state, the title it gave and when it began. */
+export interface TitleJobView {
+  status: ItemTitleRow["status"];
+  title: string | null;
+  since: number;
+}
+
+/**
+ * The naming jobs of these items (decision 0070): the title Claude gave, which the screen marks as Claude's while it
+ * is still that, and whether Claude is naming one right now, which the screen shows in place of the title (0072).
+ */
+export async function titleJobs(db: Db, itemIds: string[]): Promise<Map<string, TitleJobView>> {
+  const jobs = new Map<string, TitleJobView>();
   for (let i = 0; i < itemIds.length; i += 50) {
     const rows = await db
-      .select({ itemId: itemTitles.itemId, title: itemTitles.title })
+      .select({
+        itemId: itemTitles.itemId,
+        status: itemTitles.status,
+        title: itemTitles.title,
+        createdAt: itemTitles.createdAt,
+      })
       .from(itemTitles)
-      .where(and(inArray(itemTitles.itemId, itemIds.slice(i, i + 50)), eq(itemTitles.status, "titled")));
-    for (const row of rows) if (row.title) named.set(row.itemId, row.title);
+      .where(inArray(itemTitles.itemId, itemIds.slice(i, i + 50)));
+    for (const row of rows) {
+      jobs.set(row.itemId, { status: row.status, title: row.title, since: row.createdAt.getTime() });
+    }
   }
-  return named;
+  return jobs;
 }
 
 const livePhotos = (itemId: string) =>
@@ -52,7 +74,7 @@ const livePhotos = (itemId: string) =>
  * title, no model link, something to read) and it was never named before. An idea is named once. Doesn't call Claude
  * (`runTitle` does) and shows nothing: the idea keeps showing as it was until the title arrives.
  */
-export async function startTitle(db: Db, itemId: string): Promise<boolean> {
+export async function startTitle(db: Db, itemId: string, photosComing = 0): Promise<boolean> {
   const item = await db
     .select({ stage: items.stage, title: items.title, note: items.note })
     .from(items)
@@ -60,7 +82,8 @@ export async function startTitle(db: Db, itemId: string): Promise<boolean> {
     .get();
   if (!item) return false;
   const photoCount = await db.$count(photos, livePhotos(itemId));
-  if (!wantsTitle({ ...item, photos: photoCount })) return false;
+  // Photos a capture said are on their way count: the job (and the screens' "Naming…") starts with the idea.
+  if (!wantsTitle({ ...item, photos: photoCount + photosComing })) return false;
   // A model page's idea is the draft's to name (decision 0019).
   if (await db.select({ id: itemDrafts.itemId }).from(itemDrafts).where(eq(itemDrafts.itemId, itemId)).get()) {
     return false;
@@ -78,11 +101,11 @@ export async function startTitle(db: Db, itemId: string): Promise<boolean> {
  * capture endpoint): starts the naming job and runs it after the response. Only a person's save, or their sharing
  * token's (the capture scope alone), starts one: an agent that can do more names what it saves itself.
  */
-export async function titleAfterSave(c: Context<AppEnv>, itemId: string): Promise<void> {
+export async function titleAfterSave(c: Context<AppEnv>, itemId: string, photosComing = 0): Promise<void> {
   const scopes = c.var.scopes;
   const sharingToken = scopes?.length === 1 && scopes[0] === "capture";
   if ((scopes && !sharingToken) || !titlesEnabled(c.env) || c.env.TITLES_ON_SAVE === "off") return;
-  const started = await startTitle(c.var.db, itemId).catch(() => false);
+  const started = await startTitle(c.var.db, itemId, photosComing).catch(() => false);
   if (!started) return;
   try {
     c.executionCtx.waitUntil(
@@ -93,11 +116,24 @@ export async function titleAfterSave(c: Context<AppEnv>, itemId: string): Promis
   }
 }
 
+/**
+ * Ends the job without a title of Claude's, and tells the feed, so the screens that show "Naming…" stop at once rather
+ * than wait for their timeout.
+ */
 async function settle(db: Db, itemId: string, set: Partial<typeof itemTitles.$inferInsert>) {
-  await db
+  const owner = (await db.select({ id: items.createdBy }).from(items).where(eq(items.id, itemId)).get())?.id;
+  const update = db
     .update(itemTitles)
     .set({ claimedAt: null, ...set })
     .where(eq(itemTitles.itemId, itemId));
+  if (!owner) {
+    await update;
+    return;
+  }
+  await db.batch([
+    update,
+    recordChange(db, { entity: "item", id: itemId, itemId, action: "updated", actor: { kind: "person", id: owner } }),
+  ]);
 }
 
 /**
@@ -126,7 +162,15 @@ export async function runTitle(
     )
     .returning();
   if (!row) return;
-  if (settleMs > 0) await new Promise((resolve) => setTimeout(resolve, settleMs));
+  if (settleMs > 0) {
+    await new Promise((resolve) => setTimeout(resolve, settleMs));
+    // Started by a capture whose photos are still on their way, with no words to go on yet: wait for the first.
+    for (let waited = 0; waited < PHOTO_WAIT_MS; waited += 500) {
+      const note = (await db.select({ note: items.note }).from(items).where(eq(items.id, itemId)).get())?.note ?? "";
+      if (noteWords(note) || (await db.$count(photos, livePhotos(itemId)))) break;
+      await new Promise((resolve) => setTimeout(resolve, 500));
+    }
+  }
 
   const item = await db
     .select()
@@ -163,7 +207,18 @@ export async function runTitle(
     read.push({ bytes: new Uint8Array(await object.arrayBuffer()), contentType });
   }
   if (!read.length && !noteWords(item.note)) {
-    return settle(db, itemId, { status: "none", runOutcome: "nothing_to_read" });
+    // Its photos haven't come (a slow connection): the job steps aside, so the first photo to arrive starts it again.
+    await db.batch([
+      db.delete(itemTitles).where(eq(itemTitles.itemId, itemId)),
+      recordChange(db, {
+        entity: "item",
+        id: itemId,
+        itemId,
+        action: "updated",
+        actor: { kind: "person", id: item.createdBy },
+      }),
+    ]);
+    return;
   }
 
   await db

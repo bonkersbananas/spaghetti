@@ -193,6 +193,14 @@ export const Item = z
       .nullable()
       .optional()
       .describe("The title Claude gave an idea saved without one; the title is still Claude's while it says this."),
+    titleJob: z
+      .object({
+        status: z.enum(["naming", "done"]),
+        since: epoch,
+      })
+      .nullable()
+      .optional()
+      .describe("An untitled idea's naming by Claude: naming while it works on the title, done once it ran."),
   })
   .meta({ id: "Item", description: "An idea, or a build (an idea that is being printed)." });
 

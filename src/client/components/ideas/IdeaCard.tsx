@@ -25,6 +25,7 @@ import { useUnreadCount, useUnreadThreadSearch } from "@/lib/unread-comments";
 
 // The menu's code (popover, sheet) arrives after the first screen: it is only needed once a card is touched.
 const CardMenu = lazy(() => import("./CardMenu").then((m) => ({ default: m.CardMenu })));
+const NamingSign = lazy(() => import("@/components/ui/NamingSign"));
 
 /**
  * The newest of an idea's files with a plate picture (a slicer's file, or a model Spaghetti sliced): the idea's cover
@@ -101,6 +102,14 @@ export function IdeaCard({ item, person, via, landing, menu, headingLevel = 2, r
           reserveEnd={!!menu && !item.pending}
           photo={coverPhoto(cover, cover.kind === "plate" ? plateAlt(item) : photoAlt(item))}
           title={item.title || (item.draft?.status === "reading" ? "Reading the page…" : item.title)}
+          naming={
+            // The server says while Claude names it (decision 0072); the sparkle and the timeout load only then.
+            item.titleJob?.status === "naming" && (
+              <Suspense fallback={<span className="text-small text-ink-faint min-h-6">Naming…</span>}>
+                <NamingSign item={item} />
+              </Suspense>
+            )
+          }
           // Links read better short on a card: printables.com/model/123.
           note={item.note ? shortenLinks(item.note) : undefined}
           unread={unread}

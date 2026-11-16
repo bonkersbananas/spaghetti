@@ -34,6 +34,11 @@ export interface CardProps {
   onPhotoChange?: (index: number) => void;
   /** Optional: ideas don't need a title. Falls back to the note. */
   title?: string | null;
+  /**
+   * Stands where the title will land while there is none yet: Claude's "Naming…" (`NamingSign`, decision 0072). The
+   * title fades in when it comes.
+   */
+  naming?: ReactNode;
   note?: string;
   /** Chips over the photo's bottom edge: status, material. */
   chips?: ReactNode;
@@ -81,6 +86,7 @@ export function Card({
   photos,
   onPhotoChange,
   title,
+  naming,
   note,
   chips,
   badge,
@@ -191,7 +197,9 @@ export function Card({
         {chips && <div className="absolute bottom-2 left-2 flex flex-wrap gap-1.5">{chips}</div>}
       </div>
       <div className="flex flex-1 flex-col px-2 pt-2.5 pb-1.5">
-        {heading ? (
+        {naming && !title ? (
+          naming
+        ) : heading ? (
           <Heading
             key={title ? "title" : "note"}
             className={cn(

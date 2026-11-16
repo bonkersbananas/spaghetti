@@ -1002,9 +1002,10 @@ const standInClaude = (page: Page) => `http://127.0.0.1:${Number(new URL(page.ur
  * the grid shows one) and waits for Claude's title (decision 0070; the stand-in names it once a shot turns naming on).
  * On a version without naming the wait just ends and the idea stays untitled: the "before" of the comparison.
  */
-async function saveUntitledPhotoIdea(page: Page) {
+async function saveUntitledPhotoIdea(page: Page, { waitForTitle = true } = {}) {
   const headers = { Origin: new URL(page.url()).origin };
-  await page.request.put(`${standInClaude(page)}/titles`);
+  // Slowly when the shot is of the naming itself: "Naming…" stays long enough to take.
+  await page.request.put(`${standInClaude(page)}/titles${waitForTitle ? "" : "?slow"}`);
   const seed = (await (await page.request.get(`/api/items/${SEED_UNTITLED_PHOTO_IDEA}`)).json()) as {
     item: { photos: Array<{ id: string; width: number; height: number; color: string }> };
   };
@@ -1026,7 +1027,7 @@ async function saveUntitledPhotoIdea(page: Page) {
       thumb: { name: "thumb.jpg", mimeType: "image/jpeg", buffer: thumb },
     },
   });
-  for (let i = 0; i < 40; i++) {
+  for (let i = 0; i < (waitForTitle ? 40 : 0); i++) {
     const { item } = (await (await page.request.get(`/api/items/${id}`)).json()) as { item: { title: string | null } };
     if (item.title) break;
     await page.waitForTimeout(250);
@@ -2001,6 +2002,62 @@ export const shots: Shot[] = [
       await page.reload();
       await page.getByRole("list", { name: "Ideas" }).waitFor();
       await page.waitForTimeout(500);
+    },
+    cleanup: removeNamedIdeas,
+  },
+  {
+    // The same photo while Claude names it: "Naming…" where the title will land (decision 0072). On a version
+    // without the sign the card just has no title yet.
+    name: "ideas-naming",
+    path: "/ideas",
+    prepare: async (page) => {
+      await saveUntitledPhotoIdea(page, { waitForTitle: false });
+      await page.reload();
+      await page.getByRole("list", { name: "Ideas" }).waitFor();
+      await page
+        .getByText("Naming…")
+        .first()
+        .waitFor({ timeout: 4000 })
+        .catch(() => undefined);
+      await page.waitForTimeout(300);
+    },
+    cleanup: removeNamedIdeas,
+  },
+  {
+    name: "idea-naming",
+    path: "/ideas",
+    prepare: async (page) => {
+      const id = await saveUntitledPhotoIdea(page, { waitForTitle: false });
+      await page.goto(`/ideas/${id}`);
+      await page.getByRole("textbox", { name: "Title" }).waitFor();
+      await page
+        .getByText("Looking at the photo…")
+        .waitFor({ timeout: 4000 })
+        .catch(() => undefined);
+      await page.waitForTimeout(300);
+    },
+    cleanup: removeNamedIdeas,
+  },
+  {
+    name: "journal-naming",
+    path: "/journal",
+    prepare: async (page) => {
+      await saveUntitledPhotoIdea(page, { waitForTitle: false });
+      await page.reload();
+      await page.getByRole("heading", { level: 1, name: "Journal" }).waitFor();
+      await page
+        .getByText("Naming…")
+        .first()
+        .waitFor({ timeout: 4000 })
+        .catch(() => undefined);
+      // On a phone the Now block comes first (and arrives a moment after the page): the new idea's row is further
+      // down, in both versions.
+      await page.waitForTimeout(2000);
+      await page
+        .getByText("Captured an idea")
+        .first()
+        .evaluate((row) => row.scrollIntoView({ block: "center" }));
+      await page.waitForTimeout(300);
     },
     cleanup: removeNamedIdeas,
   },

@@ -5,7 +5,7 @@ import { attemptPartsLabel } from "@shared/parts";
 import { isOffTheBed, offTheBedLabel } from "@shared/print-progress";
 import { fullTime } from "@shared/time";
 import { Link } from "@tanstack/react-router";
-import { forwardRef, useState } from "react";
+import { forwardRef, type ReactNode, useState } from "react";
 import { OutcomeChip, outcomeIcons } from "@/components/builds/Outcome";
 import { SettingsLine } from "@/components/builds/SettingsLine";
 import { summarizeSettings } from "@/components/builds/settings";
@@ -31,6 +31,7 @@ import { cn } from "@/lib/cn";
 import { heroClick } from "@/lib/hero";
 import { itemName } from "@/lib/item-name";
 import { coverOf, fileThumbSrc, photoSrc } from "@/lib/previews";
+import { useNow } from "@/lib/use-now";
 
 /** Where an entry leads: the attempt in its build, the build, or the idea. */
 export function entryLink(entry: Entry, item: Pick<Item, "id" | "stage">) {
@@ -337,17 +338,24 @@ const EventRow = forwardRef<HTMLAnchorElement, JournalEntryProps>(function Event
             {when === "time" ? clock(entry.at) : weekday(entry.at)}
           </time>
         </MetaList>
-        <span
-          key={name.titled ? "title" : "note"}
-          className={cn(
-            "text-body truncate",
-            name.titled ? "text-ink font-semibold" : "text-ink-soft font-medium",
-            finished && "font-display text-title",
-            name.titled && untitled && "sg-arrive",
-          )}
-        >
-          {name.text}
-        </span>
+        {
+          // While Claude names it (decision 0072) the name's place says so.
+          item.titleJob?.status === "naming" && !name.titled ? (
+            <Naming since={item.titleJob.since}>{name.text}</Naming>
+          ) : (
+            <span
+              key={name.titled ? "title" : "note"}
+              className={cn(
+                "text-body truncate",
+                name.titled ? "text-ink font-semibold" : "text-ink-soft font-medium",
+                finished && "font-display text-title",
+                name.titled && untitled && "sg-arrive",
+              )}
+            >
+              {name.text}
+            </span>
+          )
+        }
       </span>
       <ViaText name={via} person={person?.name} className="text-small hidden md:inline" />
       {person && <Avatar person={person} size="xs" via={via} className="shrink-0" />}
@@ -455,3 +463,15 @@ const AttemptRow = forwardRef<HTMLAnchorElement, JournalEntryProps>(function Att
     </Link>
   );
 });
+
+/**
+ * A captured idea's name while Claude names it (decision 0072): the plain words "Naming…", for 15 seconds at most, then
+ * its name as before. Plain words and the clock the Journal already has, so its first load doesn't carry the cards'
+ * sparkle. The 15 s is `NAMING_TIMEOUT_MS` (shared/naming.ts) written out: imported, it would be a chunk of its own in
+ * the Journal's first load, which is at its ceiling; test/unit/naming.test.ts keeps the two equal.
+ */
+function Naming({ since, children }: { since: number; children: ReactNode }) {
+  const now = useNow(5000);
+  if (now >= since + 15_000) return <span className="text-body text-ink-soft truncate font-medium">{children}</span>;
+  return <span className="text-small text-ink-faint min-h-6">Naming…</span>;
+}
