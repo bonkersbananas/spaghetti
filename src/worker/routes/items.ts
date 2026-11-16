@@ -13,6 +13,7 @@ import {
 import { beganAsIdea } from "../../shared/deleted.ts";
 import { tidyModelLinks } from "../../shared/model-mark.ts";
 import { movedText, withMoved, withoutMoved } from "../../shared/move.ts";
+import { NAMING_TIMEOUT_MS } from "../../shared/naming.ts";
 import { cleanPartName, MAX_PART_QUANTITY, MAX_PARTS } from "../../shared/parts.ts";
 import type { PhotoRead } from "../../shared/photo-read.ts";
 import { canUse, missingScope } from "../auth/scopes.ts";
@@ -333,7 +334,9 @@ export async function loadItems(db: Db, where: ReturnType<typeof and>) {
 /** What an untitled idea's screens need of its naming job (shared/api.ts `Item.titleJob`). */
 function titleJobView(title: string | null, job: TitleJobView | undefined): TitleJobState | null {
   if (!job || title?.trim()) return null;
-  return { status: job.status === "naming" ? "naming" : "done", since: job.since };
+  // Past the screens' timeout it reads as done, so a list that refetches (or a copy saved earlier) drops the sign.
+  const naming = job.status === "naming" && Date.now() - job.since < NAMING_TIMEOUT_MS;
+  return { status: naming ? "naming" : "done", since: job.since };
 }
 
 export async function loadItem(db: Db, itemId: string) {

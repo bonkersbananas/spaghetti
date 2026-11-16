@@ -5,7 +5,7 @@ import { attemptPartsLabel } from "@shared/parts";
 import { isOffTheBed, offTheBedLabel } from "@shared/print-progress";
 import { fullTime } from "@shared/time";
 import { Link } from "@tanstack/react-router";
-import { forwardRef, useState } from "react";
+import { forwardRef, type ReactNode, useState } from "react";
 import { OutcomeChip, outcomeIcons } from "@/components/builds/Outcome";
 import { SettingsLine } from "@/components/builds/SettingsLine";
 import { summarizeSettings } from "@/components/builds/settings";
@@ -26,12 +26,12 @@ import { MetaList } from "@/components/ui/MetaList";
 import { Photo } from "@/components/ui/Photo";
 import { PhotoRow } from "@/components/ui/PhotoRow";
 import { PrintProgress } from "@/components/ui/PrintProgress";
-import { NamingSign } from "@/components/ui/Skeleton";
 import { useTagOptions } from "@/lib/builds";
 import { cn } from "@/lib/cn";
 import { heroClick } from "@/lib/hero";
-import { itemName, useNaming } from "@/lib/item-name";
+import { itemName } from "@/lib/item-name";
 import { coverOf, fileThumbSrc, photoSrc } from "@/lib/previews";
+import { useNow } from "@/lib/use-now";
 
 /** Where an entry leads: the attempt in its build, the build, or the idea. */
 export function entryLink(entry: Entry, item: Pick<Item, "id" | "stage">) {
@@ -301,7 +301,6 @@ const EventRow = forwardRef<HTMLAnchorElement, JournalEntryProps>(function Event
 ) {
   // A title that comes to a row drawn without one (Claude naming an idea just saved) fades in where it lands.
   const [untitled] = useState(!item.title?.trim());
-  const naming = useNaming(item);
   if (entry.kind === "attempt") return null;
   const event = events[entry.kind];
   const EventIcon = event.icon;
@@ -341,8 +340,8 @@ const EventRow = forwardRef<HTMLAnchorElement, JournalEntryProps>(function Event
         </MetaList>
         {
           // While Claude names it (decision 0071) the name's place says so.
-          naming ? (
-            <NamingSign />
+          item.titleJob?.status === "naming" && !name.titled ? (
+            <Naming since={item.titleJob.since}>{name.text}</Naming>
           ) : (
             <span
               key={name.titled ? "title" : "note"}
@@ -464,3 +463,14 @@ const AttemptRow = forwardRef<HTMLAnchorElement, JournalEntryProps>(function Att
     </Link>
   );
 });
+
+/**
+ * A captured idea's name while Claude names it (decision 0071): the plain words "Naming…", for 15 seconds at most
+ * (`NAMING_TIMEOUT_MS`, shared/naming.ts), then its name as before. Plain words and the clock the Journal already has,
+ * so the Journal's first load doesn't carry the cards' sparkle.
+ */
+function Naming({ since, children }: { since: number; children: ReactNode }) {
+  const now = useNow(5000);
+  if (now >= since + 15_000) return <span className="text-body text-ink-soft truncate font-medium">{children}</span>;
+  return <span className="text-small text-ink-faint min-h-6">Naming…</span>;
+}
