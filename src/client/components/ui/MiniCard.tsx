@@ -124,7 +124,8 @@ export function MiniCard({
             ) : note ? (
               // Laid over its box, so a long note fills the card's face instead of making the row taller.
               <div className="absolute inset-0">
-                <NoteFace note={note} compact="fill" className="pt-7 md:pt-0" />
+                {/* Room for the corner menu where it always shows (touch screens); with a mouse it shows on hover only. */}
+                <NoteFace note={note} compact="fill" className="pt-7 [@media(hover:hover)_and_(pointer:fine)]:pt-0" />
               </div>
             ) : (
               <div className="bg-well text-ink-ghost flex size-full items-center justify-center">
