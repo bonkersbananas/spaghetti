@@ -7,6 +7,7 @@ import {
   type PageFacts,
   PRINTABLES_API,
   PRINTABLES_QUERY,
+  printablesApiId,
   printablesId,
 } from "../../shared/model-page.ts";
 import { readCapped, resolvesPublic } from "../link-preview.ts";
@@ -269,7 +270,8 @@ export async function readModel(
  */
 export function printablesFromFetched(docs: FetchedDoc[] | undefined, id: string): PageFacts | "missing" | null {
   for (const doc of docs ?? []) {
-    if (!URL.canParse(doc.url) || new URL(doc.url).hostname !== "api.printables.com") continue;
+    // Only an answer to this model's address: the short GET answer has no id of its own.
+    if (printablesApiId(doc.url) !== id) continue;
     const text = doc.text.trim();
     // The tool gives the body as text; anything around the JSON is cut away.
     const json = text.slice(text.indexOf("{"), text.lastIndexOf("}") + 1);
