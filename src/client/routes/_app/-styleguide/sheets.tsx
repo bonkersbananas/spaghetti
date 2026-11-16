@@ -96,7 +96,7 @@ export function SheetSection() {
               <Icons.SlicerFileIcon size={22} aria-hidden />
             </span>
             <span className="text-small text-ink min-w-0 flex-1 truncate font-semibold">desk-clips.gcode.3mf</span>
-            <MoreMenu label="More for desk-clips.gcode.3mf" title="desk-clips.gcode.3mf">
+            <MoreMenu label="More for desk-clips.gcode.3mf" title="File" description="desk-clips.gcode.3mf">
               <ActionMenuItem
                 icon={Icons.TrashIcon}
                 tone="danger"

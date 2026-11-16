@@ -1893,6 +1893,16 @@ export const shots: Shot[] = [
   },
   { name: "build", path: `/builds/${SEED_BUILD_IDS.tugboat}`, fullPage: true },
   {
+    // The build's own photo showing, tapped again: its menu, as on an idea (an attempt's photos come off in its sheet).
+    name: "build-photo-menu",
+    path: `/builds/${SEED_BUILD_IDS.tugboat}`,
+    prepare: async (page) => {
+      await page.getByRole("button", { name: /^Photo 1/ }).click();
+      await page.getByRole("button", { name: "Remove photo" }).waitFor();
+      await page.waitForTimeout(400);
+    },
+  },
+  {
     // The first press of Delete on a build: the trash can has turned into the question, in the bar.
     name: "build-delete-confirm",
     path: `/builds/${SEED_BUILD_IDS.tugboat}`,
@@ -4340,6 +4350,21 @@ export const shots: Shot[] = [
           .evaluate((region) => region.scrollIntoView({ block: "center", behavior: "instant" }));
         await page.waitForTimeout(400);
       }
+    },
+    cleanup: removeTwistModels,
+  },
+  {
+    // The twist's model's "…": Remove is in there, as on an idea's files.
+    name: "twist-model-menu",
+    path: "/twists",
+    prepare: async (page) => {
+      await twistWithModel(page);
+      await page
+        .getByRole("region", { name: "Model" })
+        .getByRole("button", { name: /^More for / })
+        .click();
+      await page.getByRole("button", { name: "Remove file" }).waitFor();
+      await page.waitForTimeout(400);
     },
     cleanup: removeTwistModels,
   },

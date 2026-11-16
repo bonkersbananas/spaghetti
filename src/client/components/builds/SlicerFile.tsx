@@ -192,7 +192,13 @@ export function FileCard({
         (draft ? (
           <IconButton icon={CloseIcon} label="Remove the slicer file" size="sm" onClick={onRemove} />
         ) : (
-          <MoreMenu label={`More for ${name}`} title={name} inSheet={inSheet}>
+          <MoreMenu
+            label={`More for ${name}`}
+            title="File"
+            // A file's name has no spaces to wrap at: one line, cut short (the card above says it whole).
+            description={<span className="block truncate">{name}</span>}
+            inSheet={inSheet}
+          >
             <ActionMenuItem icon={TrashIcon} tone="danger" onSelect={onRemove}>
               Remove file
             </ActionMenuItem>

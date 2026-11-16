@@ -7,8 +7,11 @@ interface PopoverPanelProps {
   /** Where it opens relative to its trigger, or its anchor (`PopoverAnchor`). */
   side?: "top" | "right" | "bottom" | "left";
   align?: "start" | "center" | "end";
-  /** A menu (18 rem), or a panel of settings (28 rem, with a sheet's bigger corners: a sheet's desktop twin). */
-  size?: "menu" | "panel";
+  /**
+   * A menu (18 rem), a compact one of a few short rows (14 rem: an `ActionMenu`), or a panel of settings (28 rem, with
+   * a sheet's bigger corners: a sheet's desktop twin).
+   */
+  size?: "menu" | "compact" | "panel";
   className?: string;
   /** Accessible name for the popover. */
   label: string;
@@ -72,7 +75,7 @@ export function PopoverPanel({
         }}
         className={cn(
           "sg-popover sg-lifted-surface bg-lifted shadow-float z-50 p-4 focus:outline-none",
-          size === "panel" ? "w-md rounded-xl" : "w-72 rounded-lg",
+          size === "panel" ? "w-md rounded-xl" : cn(size === "compact" ? "w-56" : "w-72", "rounded-lg"),
           className,
         )}
       >

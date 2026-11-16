@@ -17,8 +17,10 @@ export interface MenuAnchor {
 interface ActionMenuProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  /** The sheet's title on phones ("Photo 2"); also names the popover on desktop. */
+  /** The sheet's title on phones ("Photo 2 of 3"); also names the popover on desktop. */
   title: string;
+  /** A quiet line under the sheet's title on phones: which one, where the title says what kind ("File", its name). */
+  description?: ReactNode;
   /** What it hangs from on desktop: the thumbnail it was opened on. */
   anchor?: RefObject<MenuAnchor | null>;
   /** Where focus goes when it closes (it was opened without a trigger: a long press, a second tap). */
@@ -33,21 +35,33 @@ interface ActionMenuProps {
  * popover on desktop. Its rows are `ActionMenuItem`s; one that removes is `tone="danger"`, last. This one is opened
  * by its owner (a long press, a second tap, a right click); `MoreMenu` is the same behind its own "…" button.
  */
-export function ActionMenu({ open, onOpenChange, title, anchor, returnFocus, inSheet, children }: ActionMenuProps) {
+export function ActionMenu({
+  open,
+  onOpenChange,
+  title,
+  description,
+  anchor,
+  returnFocus,
+  inSheet,
+  children,
+}: ActionMenuProps) {
   const isDesktop = useIsDesktop();
   const close = () => onOpenChange(false);
+  if (!isDesktop && !inSheet) {
+    // In a sheet the rows' icons line up with its title: the rows' own padding reaches into the sheet's.
+    return (
+      <Sheet open={open} onOpenChange={onOpenChange} title={title} description={description}>
+        <CloseContext value={close}>
+          <div className="-mx-3 flex flex-col">{children}</div>
+        </CloseContext>
+      </Sheet>
+    );
+  }
   const rows = (
     <CloseContext value={close}>
       <div className="flex flex-col">{children}</div>
     </CloseContext>
   );
-  if (!isDesktop && !inSheet) {
-    return (
-      <Sheet open={open} onOpenChange={onOpenChange} title={title}>
-        {rows}
-      </Sheet>
-    );
-  }
   return (
     <PopoverRoot open={open} onOpenChange={onOpenChange}>
       {anchor && <PopoverAnchor virtualRef={anchor as RefObject<MenuAnchor>} />}
@@ -55,7 +69,8 @@ export function ActionMenu({ open, onOpenChange, title, anchor, returnFocus, inS
         label={title}
         side="bottom"
         align="start"
-        className="w-56 p-1.5"
+        size="compact"
+        className="p-1.5"
         onCloseAutoFocus={(event) => {
           if (!returnFocus?.current) return;
           event.preventDefault();
@@ -71,8 +86,10 @@ export function ActionMenu({ open, onOpenChange, title, anchor, returnFocus, inS
 interface MoreMenuProps {
   /** The button's accessible name: "More for desk-clips.3mf". */
   label: string;
-  /** The sheet's title on phones. */
+  /** The sheet's title on phones, and the popover's name on desktop. */
   title: string;
+  /** A quiet line under the sheet's title (a file's name, under "File"). */
+  description?: ReactNode;
   inSheet?: boolean;
   /** Placed where its row needs it (the end of a card's actions). */
   className?: string;
@@ -80,7 +97,7 @@ interface MoreMenuProps {
 }
 
 /** An `ActionMenu` behind a quiet "…" button: a popover from it on desktop, a sheet on phones. */
-export function MoreMenu({ label, title, inSheet, className, children }: MoreMenuProps) {
+export function MoreMenu({ label, title, description, inSheet, className, children }: MoreMenuProps) {
   const isDesktop = useIsDesktop();
   const [open, setOpen] = useState(false);
   // A closed phone sheet still costs a vaul root: mounted with the first tap, kept afterwards so it closes smoothly.
@@ -106,7 +123,7 @@ export function MoreMenu({ label, title, inSheet, className, children }: MoreMen
     return (
       <PopoverRoot open={open} onOpenChange={setOpen}>
         <PopoverTrigger asChild>{button}</PopoverTrigger>
-        <PopoverPanel label={title} side="bottom" align="end" className="w-56 p-1.5">
+        <PopoverPanel label={title} side="bottom" align="end" size="compact" className="p-1.5">
           <CloseContext value={() => setOpen(false)}>
             <div className="flex flex-col">{children}</div>
           </CloseContext>
@@ -118,7 +135,7 @@ export function MoreMenu({ label, title, inSheet, className, children }: MoreMen
     <>
       {button}
       {asked && (
-        <ActionMenu open={open} onOpenChange={setOpen} title={title}>
+        <ActionMenu open={open} onOpenChange={setOpen} title={title} description={description}>
           {children}
         </ActionMenu>
       )}
