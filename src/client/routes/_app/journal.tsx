@@ -13,10 +13,11 @@ import { localDay } from "@shared/today";
 import { mondayOfDay, weekRangeLabel } from "@shared/week";
 import { keepPreviousData, useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { type ComponentType, lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
+import { lazy, Suspense, startTransition, useEffect, useMemo, useRef, useState } from "react";
 import { EmptyPot } from "@/components/illustrations/EmptyPot";
 import { Filters } from "@/components/journal/Filters";
 import { entryLink, JournalEntry } from "@/components/journal/JournalEntry";
+import { loadNow, nowCode } from "@/components/journal/now-code";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -47,17 +48,60 @@ const OpenNotebook = lazy(() =>
   import("@/components/illustrations/OpenNotebook").then((m) => ({ default: m.OpenNotebook })),
 );
 
-// Phones only, and the print card with its motion and sheets is heavy: off the first load. A phone asks for it as soon as
-// this screen's code runs, and the notebook under it waits for it (see Journal), so Now never arrives late and pushes the
-// page down. Once it is here, a visit draws it at once instead of suspending for a moment.
-let NowLoaded: ComponentType | undefined;
-const loadNow = () =>
-  import("@/components/journal/Now").then((module) => {
-    NowLoaded = module.default;
-    return module;
-  });
-if (!window.matchMedia("(min-width: 48rem)").matches) loadNow().catch(() => undefined);
-const LazyNow = lazy(loadNow);
+/**
+ * Now's code (now-code.ts) once it is here, at once if it already is; `failed` when it can't come (offline, a deploy).
+ * Waited for with state rather than Suspense: React holds a Suspense boundary's reveal for up to 300 ms after its fallback
+ * first shows.
+ */
+function useNowCode(wanted: boolean) {
+  const [code, setCode] = useState(nowCode);
+  const [failed, setFailed] = useState(false);
+  useEffect(() => {
+    if (!wanted || code) return;
+    let live = true;
+    loadNow().then(
+      () => live && setCode(nowCode),
+      () => live && setFailed(true),
+    );
+    return () => {
+      live = false;
+    };
+  }, [wanted, code]);
+  return { Now: code, failed };
+}
+
+const NOW_HEIGHT = "sg-now-height";
+
+/** How tall Now was when this device last drew it (px), or undefined before it ever has. */
+function keptNowHeight(): number | undefined {
+  const kept = localStorage.getItem(NOW_HEIGHT);
+  return kept === null ? undefined : Number(kept) || 0;
+}
+
+/** Keeps Now's height as it changes, so the next open from the cache can hold its place before its code is in. */
+function keepNowHeight(element: HTMLDivElement | null) {
+  if (!element) return;
+  const observer = new ResizeObserver(() => localStorage.setItem(NOW_HEIGHT, String(element.offsetHeight)));
+  observer.observe(element);
+  return () => observer.disconnect();
+}
+
+/** True two frames after `ready` turns true: what is below the first screen waits for the first paint of the rest. */
+function useFramesAfter(ready: boolean) {
+  const [after, setAfter] = useState(false);
+  useEffect(() => {
+    if (!ready || after) return;
+    let second = 0;
+    const first = requestAnimationFrame(() => {
+      second = requestAnimationFrame(() => startTransition(() => setAfter(true)));
+    });
+    return () => {
+      cancelAnimationFrame(first);
+      cancelAnimationFrame(second);
+    };
+  }, [ready, after]);
+  return after;
+}
 
 export const Route = createFileRoute("/_app/journal")({
   validateSearch: (search: Record<string, unknown>): Omit<FilterValues, "tag"> => {
@@ -88,12 +132,15 @@ function Journal() {
     for (const page of query.data?.pages ?? []) for (const item of page.items) map.set(item.id, item);
     return map;
   }, [query.data]);
-  const rest = useAfterPaint();
+  // A page already shown renders whole at once (the router restores its scroll); a fresh one draws its first month
+  // first, and the rest two frames after the notebook first shows (on a phone, after Now's code and the builds).
+  const painted = useAfterPaint();
+  const [returning] = useState(painted);
   const filtered = hasFilters(filters);
   const isDesktop = useIsDesktop();
   // Phones: what is happening now, above the notebook (desktop has Today for it).
   const showNow = !filtered && !isDesktop;
-  const [Now] = useState(() => NowLoaded ?? LazyNow);
+  const { Now, failed: nowFailed } = useNowCode(showNow);
 
   // Now shows the prints on the bed, so the notebook under it leaves their attempts out until they are logged, as
   // Today leaves out the print it shows on the bed. Either copy saying so counts: the builds Now draws from, or the
@@ -110,6 +157,17 @@ function Journal() {
     });
   }, [showNow, entries, items, builds.items, builds.isPending]);
   const months = useMemo(() => groupJournal(shown), [shown]);
+
+  const nothingAtAll = !query.isPending && !entries.length && !filtered;
+  // On a phone the notebook also waits for the builds, which Now draws the prints on the bed from (not offline, where
+  // they may never come: the notebook then shows every entry).
+  const online = useOnline();
+  const loading = query.isPending || (showNow && builds.isPending && online);
+  // Until Now's code is in, its place is held at the height it had last time on this device (an open from the cache
+  // draws the same block, so nothing moves when it fills in); a first visit, with no height kept, waits for it.
+  const [kept] = useState(keptNowHeight);
+  const waiting = showNow && (loading || (!Now && !nowFailed && kept === undefined));
+  const rest = useFramesAfter(!waiting) || returning;
 
   // J and K walk through the entries, Enter opens one (desktop).
   const [selected, setSelected] = useState<string | null>(null);
@@ -151,11 +209,14 @@ function Journal() {
     return () => observer.disconnect();
   }, [hasNextPage, isFetchingNextPage, fetchNextPage, rest]);
 
-  const nothingAtAll = !query.isPending && !entries.length && !filtered;
-  // On a phone the notebook also waits for the builds, which Now draws the prints on the bed from (not offline, where
-  // they may never come: the notebook then shows every entry).
-  const online = useOnline();
-  const loading = query.isPending || (showNow && builds.isPending && online);
+  const held = <div aria-hidden style={{ height: kept }} />;
+  const nowBlock = Now ? (
+    <div className="flow-root" ref={keepNowHeight}>
+      <Now />
+    </div>
+  ) : (
+    !nowFailed && held
+  );
 
   const notebook = nothingAtAll ? (
     <EmptyState
@@ -169,7 +230,8 @@ function Journal() {
       Every print lands here, the perfect ones and the spaghetti. Failures are worth writing down too.
     </EmptyState>
   ) : (
-    <div className="xl:flex xl:items-start xl:gap-14">
+    // Four screens of room until the whole notebook is drawn, so a scroll position restored meanwhile isn't cut short.
+    <div className={cn("xl:flex xl:items-start xl:gap-14", !rest && "min-h-[400dvh]")}>
       <div className="min-w-0 flex-1">
         <div className="mb-6 xl:hidden">
           <Filters layout="row" value={filters} onChange={setFilters} />
@@ -233,11 +295,12 @@ function Journal() {
       {/* Phones: Now (with the "Since Thursday" catch-up above it) and the notebook under it show together, once Now's
           code and what it draws from are here, with one skeleton until then, so nothing is pushed down after it first
           shows. The notebook keeps its place in the tree when a filter hides Now, so the filter row doesn't start over. */}
-      {showNow && loading ? (
+      {waiting ? (
         <Waiting />
       ) : (
+        // On a first visit Now also waits here for its lines' first answers (NowLines.tsx), holding back the notebook.
         <Suspense fallback={<Waiting />}>
-          {showNow && <Now />}
+          {showNow && (kept === undefined ? nowBlock : <Suspense fallback={held}>{nowBlock}</Suspense>)}
           {notebook}
         </Suspense>
       )}

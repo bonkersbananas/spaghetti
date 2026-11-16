@@ -88,7 +88,8 @@ export default function Now() {
 
 type Lines = typeof import("./NowLines");
 let lines: Lines | undefined;
-const loadingLines = import("./NowLines").then((module) => {
+/** Resolves once the lines' code is here: now-code.ts waits for it, so the block never suspends for it. */
+export const loadingLines = import("./NowLines").then((module) => {
   lines = module;
   return module;
 });
