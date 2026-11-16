@@ -67,3 +67,15 @@ export function newestPlate(
 
 /** A file with a plate picture: on the server, or drawn on this device. */
 const pictured = (file: Pick<AttemptFile, "id" | "hasThumb">) => file.hasThumb || hasPreview(file.id);
+
+/** What a photo shows, for screen readers: the title, else the start of the note. */
+export function photoAlt(item: { title: string | null; note: string }): string {
+  const text = item.title || item.note.split("\n")[0]?.slice(0, 80);
+  return text ? `Photo: ${text}` : "Photo of an idea";
+}
+
+/** What a plate picture shows, for screen readers. */
+export function plateAlt(item: { title: string | null; note: string }): string {
+  const text = item.title || item.note.split("\n")[0]?.slice(0, 80);
+  return text ? `Slicer preview: ${text}` : "Slicer preview of an idea";
+}

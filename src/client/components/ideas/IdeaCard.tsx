@@ -14,17 +14,15 @@ import { cn } from "@/lib/cn";
 import { useForLine } from "@/lib/for-whom";
 import type { ItemView } from "@/lib/items";
 import { useOutbox } from "@/lib/outbox";
-import { coverOf, newestPlate, photoSrc } from "@/lib/previews";
+import { coverOf, newestPlate, photoAlt, photoSrc, plateAlt } from "@/lib/previews";
+
+// Where they used to live: the idea page and Up next read them from here.
+export { photoAlt, plateAlt };
+
 import { useUnreadCount, useUnreadThreadSearch } from "@/lib/unread-comments";
 
 // The menu's code (popover, sheet) arrives after the first screen: it is only needed once a card is touched.
 const CardMenu = lazy(() => import("./CardMenu").then((m) => ({ default: m.CardMenu })));
-
-/** What a photo shows, for screen readers: the title, else the start of the note. */
-export function photoAlt(item: Pick<ItemView, "title" | "note">): string {
-  const text = item.title || item.note.split("\n")[0]?.slice(0, 80);
-  return text ? `Photo: ${text}` : "Photo of an idea";
-}
 
 /**
  * The newest of an idea's files with a plate picture (a slicer's file, or a model Spaghetti sliced): the idea's cover
@@ -32,12 +30,6 @@ export function photoAlt(item: Pick<ItemView, "title" | "note">): string {
  */
 export function plateCover(item: Pick<ItemView, "files">): AttemptFile | undefined {
   return newestPlate({ files: item.files, attempts: [] });
-}
-
-/** What a plate picture shows, for screen readers. */
-export function plateAlt(item: Pick<ItemView, "title" | "note">): string {
-  const text = item.title || item.note.split("\n")[0]?.slice(0, 80);
-  return text ? `Slicer preview: ${text}` : "Slicer preview of an idea";
 }
 
 /** Where an idea's uploads stand, summed up for its card. */

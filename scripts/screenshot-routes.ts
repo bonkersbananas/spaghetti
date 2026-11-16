@@ -3233,7 +3233,8 @@ export const shots: Shot[] = [
     selector: TOWEL_CARD,
     prepare: async (page) => {
       await page.route("**/api/files/*/thumb*", () => new Promise(() => {}));
-      await page.goto("/builds");
+      // The held picture would hold the page's load event too.
+      await page.goto("/builds", { waitUntil: "domcontentloaded" });
       await page.locator(TOWEL_CARD).waitFor();
       await page.waitForTimeout(800);
     },
