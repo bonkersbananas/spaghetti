@@ -15,11 +15,9 @@ import { keepPreviousData, useInfiniteQuery, useQuery } from "@tanstack/react-qu
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { type ComponentType, lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { EmptyPot } from "@/components/illustrations/EmptyPot";
-import { OpenNotebook } from "@/components/illustrations/OpenNotebook";
 import { Filters } from "@/components/journal/Filters";
 import { entryLink, JournalEntry } from "@/components/journal/JournalEntry";
 import { PageHeader } from "@/components/shell/PageHeader";
-import { Since } from "@/components/today/Since";
 import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { ArrowRightIcon } from "@/components/ui/icons";
@@ -47,6 +45,11 @@ import { useAfterPaint, useIsDesktop } from "@/lib/use-media-query";
 // Phones only, and the print card with its motion and sheets is heavy: off the first load. A phone asks for it as soon as
 // this screen's code runs, and the notebook under it waits for it (see Journal), so Now never arrives late and pushes the
 // page down. Once it is here, a visit draws it at once instead of suspending for a moment.
+// A brand-new notebook's drawing: drawn once, so it loads only then (its size is held meanwhile).
+const OpenNotebook = lazy(() =>
+  import("@/components/illustrations/OpenNotebook").then((m) => ({ default: m.OpenNotebook })),
+);
+
 let NowLoaded: ComponentType | undefined;
 const loadNow = () =>
   import("@/components/journal/Now").then((module) => {
@@ -155,7 +158,14 @@ function Journal() {
   const loading = query.isPending || (showNow && builds.isPending && online);
 
   const notebook = nothingAtAll ? (
-    <EmptyState illustration={<OpenNotebook />} title="A clean notebook">
+    <EmptyState
+      illustration={
+        <Suspense fallback={<div className="aspect-4/3 w-40" />}>
+          <OpenNotebook />
+        </Suspense>
+      }
+      title="A clean notebook"
+    >
       Every print lands here, the perfect ones and the spaghetti. Failures are worth writing down too.
     </EmptyState>
   ) : (
@@ -220,10 +230,9 @@ function Journal() {
           )
         }
       />
-      {showNow && <Since />}
-      {/* Phones: Now and the notebook under it show together, once Now's code and what it draws from are here, with one
-          skeleton until then, so nothing is pushed down after it first shows. The notebook keeps its place in the tree
-          when a filter hides Now, so the filter row doesn't start over. */}
+      {/* Phones: Now (with the "Since Thursday" catch-up above it) and the notebook under it show together, once Now's
+          code and what it draws from are here, with one skeleton until then, so nothing is pushed down after it first
+          shows. The notebook keeps its place in the tree when a filter hides Now, so the filter row doesn't start over. */}
       {showNow && loading ? (
         <Waiting />
       ) : (
