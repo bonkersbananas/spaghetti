@@ -158,11 +158,6 @@ function groupBy<T extends { itemId: string }>(rows: T[]): Map<string, T[]> {
 }
 
 /**
- * Items with their photos and print attempts: three queries however many
- * items (more past D1's parameter limit). Photos of deleted attempts are left
- * out, so they come back when the attempt is restored.
- */
-/**
  * What each live twist leads with, for the builds that print it: its newest model (a plate render) and the photo it
  * took from its idea while that photo is there.
  */
@@ -191,12 +186,17 @@ async function twistPictures(db: Db, twistIds: string[]) {
     ).then((slices) => slices.flat()),
   ]);
   const photoIds = rows.flatMap((row) => (row.sourcePhotoId ? [row.sourcePhotoId] : []));
-  const sourcePhotos = photoIds.length
-    ? await db
-        .select()
-        .from(photos)
-        .where(and(inArray(photos.id, photoIds), isNull(photos.deletedAt)))
-    : [];
+  // In slices too: D1 binds at most 100 parameters.
+  const sourcePhotos = (
+    await Promise.all(
+      chunked(photoIds).map((ids) =>
+        db
+          .select()
+          .from(photos)
+          .where(and(inArray(photos.id, ids), isNull(photos.deletedAt))),
+      ),
+    )
+  ).flat();
   for (const row of rows) {
     const newest = files
       .filter((file) => file.twistId === row.id)
@@ -210,6 +210,11 @@ async function twistPictures(db: Db, twistIds: string[]) {
   return pictures;
 }
 
+/**
+ * Items with their photos and print attempts: three queries however many
+ * items (more past D1's parameter limit). Photos of deleted attempts are left
+ * out, so they come back when the attempt is restored.
+ */
 export async function loadItems(db: Db, where: ReturnType<typeof and>) {
   const rows = await db.select().from(items).where(where).orderBy(desc(items.createdAt), desc(items.id));
   if (!rows.length) return [];
