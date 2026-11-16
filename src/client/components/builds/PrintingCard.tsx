@@ -7,7 +7,7 @@ import { m, useReducedMotion } from "motion/react";
 import { useRef } from "react";
 import { Avatar, ViaText } from "@/components/ui/Avatar";
 import { Button, IconButton } from "@/components/ui/Button";
-import { CoverPicture } from "@/components/ui/Card";
+import { CoverPicture } from "@/components/ui/CoverPicture";
 import { BuildsIcon, CameraIcon } from "@/components/ui/icons";
 import { MetaList } from "@/components/ui/MetaList";
 import { PrintProgress } from "@/components/ui/PrintProgress";

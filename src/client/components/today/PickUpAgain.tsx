@@ -5,7 +5,7 @@ import { AnimatePresence, m, useReducedMotion } from "motion/react";
 import { lastActivity } from "@/components/builds/BuildCard";
 import { OutcomeStrip } from "@/components/builds/OutcomeStrip";
 import { Button } from "@/components/ui/Button";
-import { CoverPicture } from "@/components/ui/Card";
+import { CoverPicture } from "@/components/ui/CoverPicture";
 import { BuildsIcon } from "@/components/ui/icons";
 import { MetaList } from "@/components/ui/MetaList";
 import { Section } from "@/components/ui/Section";

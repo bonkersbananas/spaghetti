@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Link, useLocation } from "@tanstack/react-router";
 import { AnimatePresence, m } from "motion/react";
 import { useMemo } from "react";
-import { CoverPicture } from "@/components/ui/Card";
+import { CoverPicture } from "@/components/ui/CoverPicture";
 import { BuildsIcon } from "@/components/ui/icons";
 import { PrintProgress } from "@/components/ui/PrintProgress";
 import { printingAttempts } from "@/lib/builds";

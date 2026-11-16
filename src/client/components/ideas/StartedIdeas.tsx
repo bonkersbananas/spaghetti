@@ -1,8 +1,9 @@
 import { beganAsIdea } from "@shared/deleted";
 import { Link } from "@tanstack/react-router";
-import { CoverPicture } from "@/components/ui/Card";
+import { coverPhoto } from "@/components/ui/Card";
 import { ArrowRightIcon, BuildsIcon } from "@/components/ui/icons";
 import { MetaList } from "@/components/ui/MetaList";
+import { Photo } from "@/components/ui/Photo";
 import { Section } from "@/components/ui/Section";
 import { cn } from "@/lib/cn";
 import { itemName } from "@/lib/item-name";
@@ -63,19 +64,25 @@ export function StartedIdeas({ builds }: { builds: ItemView[] }) {
 function Row({ item }: { item: ItemView }) {
   const name = itemName(item);
   const status = startedStatus(item);
+  const picture = coverPhoto(coverOf(item), "");
   return (
     <Link
       to="/builds/$buildId"
       params={{ buildId: item.id }}
       className="pressable focus-ring hover:bg-ink/4 -mx-1.5 flex items-center gap-3.5 rounded-lg p-1.5"
     >
-      <CoverPicture
-        small
-        cover={coverOf(item)}
-        glyph={<BuildsIcon size={22} aria-hidden />}
-        inset="p-0.5"
-        className="size-12 shrink-0 rounded-md"
-      />
+      {/* Its cover, small (a render on the tile ground), else the build glyph: no room for a note at 48 px. */}
+      {picture ? (
+        <Photo
+          {...picture}
+          frame={picture.fit ? "render-tile" : undefined}
+          className={cn("size-12 shrink-0 rounded-md", picture.fit && "p-0.5")}
+        />
+      ) : (
+        <span className="bg-ink/5 text-ink-faint flex size-12 shrink-0 items-center justify-center rounded-md">
+          <BuildsIcon size={22} aria-hidden />
+        </span>
+      )}
       <span className="flex min-w-0 flex-1 flex-col">
         <span
           className={cn("text-body truncate", name.titled ? "text-ink font-semibold" : "text-ink-soft font-medium")}

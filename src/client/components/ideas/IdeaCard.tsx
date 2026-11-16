@@ -17,7 +17,9 @@ import { useOutbox } from "@/lib/outbox";
 import { coverOf, newestPlate, photoAlt, photoSrc, plateAlt } from "@/lib/previews";
 
 // Where they used to live: the idea page and Up next read them from here.
-export { photoAlt, plateAlt };
+// The styleguide shows the mark from here, so it stays in the idea card's chunk (its only other user) rather than a
+// chunk of its own on every Ideas first load.
+export { ModelMark, photoAlt, plateAlt };
 
 import { useUnreadCount, useUnreadThreadSearch } from "@/lib/unread-comments";
 
@@ -137,7 +139,8 @@ export function IdeaCard({ item, person, via, landing, menu, headingLevel = 2, r
   );
 }
 
-function shortenLinks(text: string): string {
+/** Links read better short on a card: printables.com/model/123. */
+export function shortenLinks(text: string): string {
   let result = text;
   for (const { url } of findLinks(text).reverse()) result = result.replace(url, shortUrl(url));
   return result;

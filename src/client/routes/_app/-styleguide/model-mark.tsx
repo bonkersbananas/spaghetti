@@ -2,9 +2,9 @@ import { modelMarkOf } from "@shared/model-mark";
 import dragonPhoto from "@/assets/samples/dragon.svg";
 import platePhoto from "@/assets/samples/plate.svg";
 import vasePhoto from "@/assets/samples/vase.svg";
+import { ModelMark } from "@/components/ideas/IdeaCard";
 import { Card } from "@/components/ui/Card";
 import { LinkCard } from "@/components/ui/LinkCard";
-import { ModelMark } from "@/components/ui/ModelMark";
 import { Label, Section } from "./shared";
 
 const at = (url: string) => {

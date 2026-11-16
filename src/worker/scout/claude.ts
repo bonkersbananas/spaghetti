@@ -1,6 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { z } from "zod";
-import { SCOUT_CANDIDATES, SCOUT_DOMAINS, SCOUT_WHY_MAX } from "../../shared/scout.ts";
+import { SCOUT_CANDIDATES, SCOUT_COUNT, SCOUT_DOMAINS, SCOUT_WHY_MAX } from "../../shared/scout.ts";
 import { PRINTER_FACTS } from "../coach/claude.ts";
 
 /** The model that scouts (decision 0040), the same as the drafts, the coach and the week's paragraph. */
@@ -74,11 +74,42 @@ export interface ScoutDiagnosis {
   ms?: number;
   /** Error codes of search or fetch results that failed. */
   toolErrors?: string[];
+  /** How many searches and page reads Claude made. */
+  searches?: number;
+  fetches?: number;
+}
+
+/** A page Claude's own web fetch read in this answer: proof the page was there and what it said. */
+export interface ReadPage {
+  /** The address it read (after any redirects). */
+  url: string;
+  /** The document's title, as the fetch tool gives it. */
+  title: string | null;
+  /** Addresses in the page's text, a few, for its picture (still checked against the image hosts). */
+  links: string[];
+}
+
+export interface ScoutFound {
+  /** Pages Claude's web fetch read successfully. */
+  read: ReadPage[];
+  /** Every address its searches returned. */
+  searched: string[];
 }
 
 export type ScoutResult =
-  | { ok: true; suggestions: ClaudeScout["suggestions"]; diagnosis: ScoutDiagnosis }
+  | { ok: true; suggestions: ClaudeScout["suggestions"]; found: ScoutFound; diagnosis: ScoutDiagnosis }
   | { ok: false; diagnosis: ScoutDiagnosis };
+
+/** What a web fetch result says: its address, title and the first addresses in its text. */
+function readPage(result: Anthropic.WebFetchBlock): ReadPage {
+  const source = result.content.source;
+  const text = source.type === "text" ? source.data : "";
+  return {
+    url: result.url,
+    title: result.content.title?.trim() || null,
+    links: [...new Set(text.match(/https:\/\/[^\s"'<>()[\]]+/g) ?? [])].slice(0, 40),
+  };
+}
 
 /** Asks Claude for the week's models. Never throws: a failure is one of the honest reasons. */
 export async function askClaudeToScout(
@@ -96,6 +127,9 @@ export async function askClaudeToScout(
     fetch: (input, init) => globalThis.fetch(input, init),
   });
   const toolErrors: string[] = [];
+  const found: ScoutFound = { read: [], searched: [] };
+  let searches = 0;
+  let fetches = 0;
   const done = (result: ScoutResult): ScoutResult => ({
     ...result,
     diagnosis: {
@@ -103,10 +137,16 @@ export async function askClaudeToScout(
       model: SCOUT_MODEL,
       ms: Date.now() - started,
       ...(toolErrors.length ? { toolErrors: toolErrors.slice(0, 8) } : {}),
+      searches,
+      fetches,
     },
   });
   const messages: Anthropic.MessageParam[] = [
-    { role: "user", content: `${notebook}\n\nWhich models should they print next? Suggest three for this week.` },
+    {
+      role: "user",
+      // Up to six (decision 0040): three are shown, and a link that turns out dead or seen leaves room for the next.
+      content: `${notebook}\n\nWhich models should they print next? Suggest up to ${SCOUT_CANDIDATES}, best first: the first ${SCOUT_COUNT} that check out are shown this week.`,
+    },
   ];
   try {
     for (let round = 0; ; round++) {
@@ -116,7 +156,7 @@ export async function askClaudeToScout(
         system: SYSTEM,
         output_config: { effort: "low", format: { type: "json_schema", schema: JSON_SCHEMA } },
         tools: [
-          // The Worker never fetches a page for this: Claude's own search and fetch, limited to the two sites.
+          // Claude finds the models with its own search and fetch, limited to the two sites; the Worker checks them after.
           { type: "web_search_20260209", name: "web_search", allowed_domains: [...SCOUT_DOMAINS], max_uses: 6 },
           {
             type: "web_fetch_20260209",
@@ -129,11 +169,17 @@ export async function askClaudeToScout(
         messages,
       });
       for (const block of response.content) {
-        if (block.type === "web_fetch_tool_result" && block.content.type === "web_fetch_tool_result_error") {
-          toolErrors.push(block.content.error_code);
+        if (block.type === "server_tool_use") {
+          if (block.name === "web_search") searches++;
+          if (block.name === "web_fetch") fetches++;
         }
-        if (block.type === "web_search_tool_result" && !Array.isArray(block.content)) {
-          toolErrors.push(block.content.error_code);
+        if (block.type === "web_fetch_tool_result") {
+          if (block.content.type === "web_fetch_tool_result_error") toolErrors.push(block.content.error_code);
+          else if (block.content.type === "web_fetch_result") found.read.push(readPage(block.content));
+        }
+        if (block.type === "web_search_tool_result") {
+          if (Array.isArray(block.content)) found.searched.push(...block.content.map((result) => result.url));
+          else toolErrors.push(block.content.error_code);
         }
       }
       const stopReason = response.stop_reason ?? undefined;
@@ -158,6 +204,7 @@ export async function askClaudeToScout(
       return done({
         ok: true,
         suggestions: parsed.data.suggestions.slice(0, SCOUT_CANDIDATES),
+        found,
         diagnosis: { outcome: "done", stopReason },
       });
     }
