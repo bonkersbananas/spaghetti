@@ -5,14 +5,14 @@ const origin = (page: Page) => new URL(page.url()).origin;
 const MINUTE = 60_000;
 
 /** A build with one attempt on the bed, started `ago` ms ago, through the API. */
-async function printing(page: Page, title: string, ago: number, estimatedMinutes: number) {
+async function printing(page: Page, title: string, ago: number, estimatedMinutes: number, attemptId?: string) {
   const id = crypto.randomUUID();
   const headers = { Origin: origin(page) };
   await page.request.post("/api/items", { headers, data: { id, title, stage: "building" } });
   const response = await page.request.post(`/api/items/${id}/attempts`, {
     headers,
     data: {
-      id: crypto.randomUUID(),
+      id: attemptId ?? crypto.randomUUID(),
       outcome: null,
       printedAt: Date.now() - ago,
       settings: { filaments: [{ type: "PLA", brand: "Bambu", colorName: "Green" }], estimatedMinutes },
@@ -49,6 +49,37 @@ test("phones: the journal opens on what is on the bed, and Finish leads to that 
 
   await bed.getByRole("button", { name: "Finish" }).click();
   await expect(page).toHaveURL(new RegExp(`/builds/${id}`));
+});
+
+test("phones: a print on the bed shows once, in Now, and joins the notebook once it is logged", {
+  tag: "@phone",
+}, async ({ page, isMobile }) => {
+  test.skip(!isMobile, "The Now block is the phone's.");
+  const attemptId = crypto.randomUUID();
+  await printing(page, "Bath tugboat", 2 * MINUTE, 120, attemptId);
+  await page.goto("/journal");
+
+  const bed = page.getByRole("region", { name: "On the bed" });
+  await expect(bed.getByRole("heading", { name: "Bath tugboat" })).toBeVisible();
+  // The notebook starts under Now (with the build started), and doesn't show the print a second time.
+  const firstEntry = page.locator("ol > li").first();
+  await expect(firstEntry).toContainText("Bath tugboat");
+  const bedBox = await bed.boundingBox();
+  const entryBox = await firstEntry.boundingBox();
+  expect(bedBox && entryBox && bedBox.y + bedBox.height <= entryBox.y).toBe(true);
+  const attemptInNotebook = page.locator(`ol a[href*="attempt=${attemptId}"]`);
+  await expect(attemptInNotebook).toHaveCount(0);
+
+  // Logged from right here: it leaves Now and its entry takes its place in the notebook, with how it went.
+  await page.getByRole("button", { name: "New idea" }).click();
+  const sheet = page.getByRole("dialog");
+  await sheet.getByRole("radio", { name: "This print" }).click();
+  await sheet.getByRole("radio", { name: "Worked" }).click();
+  await sheet.getByRole("button", { name: "Finish print" }).click();
+  await expect(sheet).toBeHidden();
+  await expect(bed).toHaveCount(0);
+  await expect(attemptInNotebook).toHaveCount(1);
+  await expect(attemptInNotebook).toContainText("Worked");
 });
 
 test("phones: with nothing printing the journal has no Now block", { tag: "@phone" }, async ({ page, isMobile }) => {

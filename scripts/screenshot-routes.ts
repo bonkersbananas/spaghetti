@@ -1406,7 +1406,11 @@ async function catchUpFrom(page: Page, days: number) {
     ([from, until]) => localStorage.setItem("sg-since", JSON.stringify({ from, until })),
     [SEED_NOW - days * 86_400_000, SEED_NOW + 3_600_000],
   );
-  await page.reload();
+  // A fresh history entry rather than a reload: a reload gets back the scroll the router kept for this entry, which an
+  // earlier shot of the same path may have left halfway down the page.
+  const url = page.url();
+  await page.goto("about:blank");
+  await page.goto(url);
 }
 
 async function forgetCatchUp(page: Page) {
@@ -1578,6 +1582,12 @@ async function scrollToRow(page: Page, title: string) {
   await page.waitForTimeout(400);
 }
 
+/** The router keeps a scrolled position for this history entry, and the next /journal shot opens the same entry again. */
+async function scrollJournalToTop(page: Page) {
+  await page.evaluate(() => window.scrollTo(0, 0));
+  await page.waitForTimeout(300);
+}
+
 async function unmockToday(page: Page) {
   await page.unrouteAll({ behavior: "ignoreErrors" });
 }
@@ -1742,6 +1752,21 @@ export const shots: Shot[] = [
       await page.locator("section[aria-label='On the bed']").or(page.locator("#now-bed")).first().waitFor();
       await page.waitForTimeout(1500);
     },
+  },
+  // Under Now, the notebook's Today: the prints on the bed are in Now only, not again as cards here.
+  {
+    name: "journal-now-notebook",
+    path: "/journal",
+    width: 390,
+    prepare: async (page) => {
+      await page.locator("section[aria-label='On the bed']").waitFor();
+      await page.waitForTimeout(1500);
+      await page
+        .getByRole("heading", { level: 3, name: /^Today/ })
+        .evaluate((node) => window.scrollTo(0, node.getBoundingClientRect().top + window.scrollY - 96));
+      await page.waitForTimeout(600);
+    },
+    cleanup: scrollJournalToTop,
   },
   {
     name: "journal-now-one",
