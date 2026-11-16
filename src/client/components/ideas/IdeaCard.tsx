@@ -3,8 +3,9 @@ import { findLinks, shortUrl } from "@shared/links";
 import { modelOf } from "@shared/model-mark";
 import { relativeTime } from "@shared/time";
 import { m } from "motion/react";
-import { lazy, type Ref, Suspense, useState } from "react";
+import { lazy, type Ref, Suspense, useEffect, useRef, useState } from "react";
 import { Card } from "@/components/ui/Card";
+import { type CardDrag, DragFrame } from "@/components/ui/DragFrame";
 import { ForLine } from "@/components/ui/ForField";
 import { ModelMark } from "@/components/ui/ModelMark";
 import { ReactionGlance } from "@/components/ui/ReactionGlance";
@@ -13,6 +14,7 @@ import { UploadBadge } from "@/components/ui/UploadBadge";
 import { cn } from "@/lib/cn";
 import { useForLine } from "@/lib/for-whom";
 import type { ItemView } from "@/lib/items";
+import { scrollBehavior } from "@/lib/motion";
 import { useOutbox } from "@/lib/outbox";
 import { fileThumbSrc, hasPreview, photoSrc } from "@/lib/previews";
 import { useUnreadCount, useUnreadThreadSearch } from "@/lib/unread-comments";
@@ -82,9 +84,28 @@ interface IdeaCardProps {
   headingLevel?: 2 | 3;
   /** Lets the list measure the card when it leaves (see Reflow). */
   ref?: Ref<HTMLLIElement>;
+  /** The large card of Up next's row: the cover only (the row is what swipes), the title larger (Card `feature`). */
+  feature?: boolean;
+  /** Dragging it to another place in Up next (desktop). */
+  drag?: CardDrag;
+  /** You just captured it here: if it landed below the screen, the page brings it into view so you see it land. */
+  reveal?: boolean;
+  className?: string;
 }
 
-export function IdeaCard({ item, person, via, landing, menu, headingLevel = 2, ref }: IdeaCardProps) {
+export function IdeaCard({
+  item,
+  person,
+  via,
+  landing,
+  menu,
+  headingLevel = 2,
+  ref,
+  feature,
+  drag,
+  reveal,
+  className,
+}: IdeaCardProps) {
   const cover = item.photos[0];
   const plate = cover ? undefined : plateCover(item);
   const upload = useUploadState(item);
@@ -96,50 +117,62 @@ export function IdeaCard({ item, person, via, landing, menu, headingLevel = 2, r
   const [showing, setShowing] = useState<string>();
   const opensOn =
     showing && showing !== cover?.id && item.photos.some((photo) => photo.id === showing) ? showing : undefined;
+  const frame = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const el = frame.current;
+    if (!reveal || !el) return;
+    // Up next and the wishlists come first, so on a phone a new idea can land under the fold: show it land.
+    if (el.getBoundingClientRect().top > window.innerHeight * 0.6) {
+      el.scrollIntoView({ block: "center", behavior: scrollBehavior() });
+    }
+  }, [reveal]);
   return (
-    <m.li {...useReflow(landing)} ref={ref} className="group/idea relative list-none">
-      <div className="h-full rounded-lg">
-        <Card
-          link={{
-            to: "/ideas/$ideaId",
-            params: { ideaId: item.id },
-            search: { ...(opensOn ? { photo: opensOn } : {}), ...toThread } as never,
-          }}
-          aspect="portrait"
-          headingLevel={headingLevel}
-          reserveEnd={!!menu && !item.pending}
-          photo={
-            cover
-              ? { id: cover.id, src: photoSrc(cover.id, "thumb"), alt: photoAlt(item), color: cover.color }
-              : plate
-                ? { src: fileThumbSrc(plate), alt: plateAlt(item), fit: "contain" }
+    <m.li {...useReflow(landing)} ref={ref} className={cn("group/idea relative list-none", className)}>
+      <DragFrame drag={drag} id={item.id}>
+        <div ref={frame} className="h-full">
+          <Card
+            link={{
+              to: "/ideas/$ideaId",
+              params: { ideaId: item.id },
+              search: { ...(opensOn ? { photo: opensOn } : {}), ...toThread } as never,
+            }}
+            aspect="portrait"
+            size={feature ? "feature" : "grid"}
+            headingLevel={headingLevel}
+            reserveEnd={!!menu && !item.pending}
+            photo={
+              cover
+                ? { id: cover.id, src: photoSrc(cover.id, "thumb"), alt: photoAlt(item), color: cover.color }
+                : plate
+                  ? { src: fileThumbSrc(plate), alt: plateAlt(item), fit: "contain" }
+                  : undefined
+            }
+            title={item.title || (item.draft?.status === "reading" ? "Reading the page…" : item.title)}
+            // Links read better short on a card: printables.com/model/123.
+            note={item.note ? shortenLinks(item.note) : undefined}
+            unread={unread}
+            photos={
+              !feature && item.photos.length > 1
+                ? item.photos.map((photo) => ({
+                    id: photo.id,
+                    src: photoSrc(photo.id, "thumb"),
+                    alt: photoAlt(item),
+                    color: photo.color,
+                  }))
                 : undefined
-          }
-          title={item.title || (item.draft?.status === "reading" ? "Reading the page…" : item.title)}
-          // Links read better short on a card: printables.com/model/123.
-          note={item.note ? shortenLinks(item.note) : undefined}
-          unread={unread}
-          photos={
-            item.photos.length > 1
-              ? item.photos.map((photo) => ({
-                  id: photo.id,
-                  src: photoSrc(photo.id, "thumb"),
-                  alt: photoAlt(item),
-                  color: photo.color,
-                }))
-              : undefined
-          }
-          onPhotoChange={(index) => setShowing(item.photos[index]?.id)}
-          chips={upload ? <UploadBadge state={upload.state} progress={upload.progress} /> : undefined}
-          mark={model ? <ModelMark mark={model} /> : undefined}
-          sub={forLine(item.forWhom) ? <ForLine text={forLine(item.forWhom) as string} /> : undefined}
-          reactions={<ReactionGlance reactions={item.reactions} />}
-          meta={relativeTime(item.createdAt)}
-          person={person}
-          via={via}
-          className="h-full"
-        />
-      </div>
+            }
+            onPhotoChange={(index) => setShowing(item.photos[index]?.id)}
+            chips={upload ? <UploadBadge state={upload.state} progress={upload.progress} /> : undefined}
+            mark={model ? <ModelMark mark={model} /> : undefined}
+            sub={forLine(item.forWhom) ? <ForLine text={forLine(item.forWhom) as string} /> : undefined}
+            reactions={<ReactionGlance reactions={item.reactions} />}
+            meta={relativeTime(item.createdAt)}
+            person={person}
+            via={via}
+            className="h-full"
+          />
+        </div>
+      </DragFrame>
       {menu && !item.pending && (
         // Its own boundary: the menu's code must never hold the whole list back (the page waited for it, 300 ms, on every first visit).
         <Suspense fallback={null}>

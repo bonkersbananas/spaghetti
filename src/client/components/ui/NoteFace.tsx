@@ -1,4 +1,5 @@
 import { type NoteSize, noteSize } from "@shared/notes";
+import { Fragment, type ReactNode } from "react";
 import { cn } from "@/lib/cn";
 
 const sizes: Record<NoteSize, string> = {
@@ -40,9 +41,28 @@ export function NoteFace({ note, size, className, compact, clearBottom }: NoteFa
               : cn("fade-bottom min-h-0 flex-1 overflow-hidden", sizes[face]),
           )}
         >
-          {note}
+          {breakAfterSlashes(note)}
         </p>
       </div>
     </div>
   );
+}
+
+/**
+ * An address in a note ("ikea.com/se/en/p/skadis-pegboard") may break after each slash, so it wraps between its
+ * parts rather than mid-word: browsers don't break after a slash on their own. The text itself is unchanged.
+ */
+function breakAfterSlashes(note: string): ReactNode {
+  if (!note.includes("/")) return note;
+  return note.split("/").map((part, index, parts) => (
+    // biome-ignore lint/suspicious/noArrayIndexKey: the parts are a fixed split of this note.
+    <Fragment key={index}>
+      {part}
+      {index < parts.length - 1 && (
+        <>
+          /<wbr />
+        </>
+      )}
+    </Fragment>
+  ));
 }

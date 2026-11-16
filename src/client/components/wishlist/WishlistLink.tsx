@@ -9,8 +9,8 @@ import { photoSrc } from "@/lib/previews";
 import { useWishlists, wishedIdeas } from "@/lib/wishlist";
 
 /**
- * The way to the wishlists on a phone, where the tab bar has no room for them: one quiet row at the top of
- * Ideas with your top picks' photos fanned out and how long each list is.
+ * The way to the wishlists on a phone, where the tab bar has no room for them: one quiet line on Ideas, under Up
+ * next, with your top picks' photos as three small dots and how long each list is ("Wishlists · yours 5, Sam's 4").
  */
 export function WishlistLink({
   me,
@@ -39,37 +39,37 @@ export function WishlistLink({
     }))
     .filter((list) => list.name && list.count > 0);
   const covers = mine.flatMap((item) => (item.photos[0] ? [item.photos[0]] : [])).slice(0, 3);
-  const parts = [
-    mine.length ? `Your top ${mine.length}` : "Pick your top ideas",
-    ...theirs.map((list) => `${list.name} has ${list.count}`),
+  const counts = [
+    mine.length ? `yours ${mine.length}` : "pick your top ideas",
+    ...theirs.map((list) => `${list.name}'s ${list.count}`),
   ];
   return (
     <Link
       to="/wishlist"
       className={cn(
-        "pressable focus-ring bg-cream shadow-soft flex items-center gap-3.5 rounded-lg py-2.5 pr-3 pl-2.5",
+        "pressable focus-ring duration-fast hover:bg-ink/4 -mx-2 flex h-14 items-center gap-3 rounded-lg px-2 transition-colors",
         className,
       )}
     >
       {covers.length ? (
-        <span className="flex shrink-0 pl-2" aria-hidden>
+        <span className="flex shrink-0 pl-1.5" aria-hidden>
           {covers.map((photo) => (
-            <span key={photo.id} className="ring-cream -ml-2 size-10 overflow-hidden rounded-md ring-2">
+            <span key={photo.id} className="ring-paper -ml-1.5 size-8 overflow-hidden rounded-full ring-2">
               <Photo src={photoSrc(photo.id, "thumb")} alt="" color={photo.color || undefined} className="size-full" />
             </span>
           ))}
         </span>
       ) : (
         <span
-          className="bg-semolina-soft text-semolina-ink flex size-10 shrink-0 items-center justify-center rounded-md"
+          className="bg-semolina-soft text-semolina-ink flex size-8 shrink-0 items-center justify-center rounded-full"
           aria-hidden
         >
-          <WishIcon size={20} weight="fill" />
+          <WishIcon size={16} weight="fill" />
         </span>
       )}
-      <span className="flex min-w-0 flex-1 flex-col">
-        <span className="text-body text-ink font-semibold">Wishlists</span>
-        <span className="text-small text-ink-faint truncate">{parts.join(" · ")}</span>
+      <span className="text-body min-w-0 flex-1 truncate">
+        <span className="text-ink font-semibold">Wishlists</span>
+        <span className="text-ink-faint"> · {counts.join(", ")}</span>
       </span>
       <NextIcon size={18} className="text-ink-faint shrink-0" aria-hidden />
     </Link>

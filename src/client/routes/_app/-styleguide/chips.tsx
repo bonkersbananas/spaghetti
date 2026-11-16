@@ -1,12 +1,14 @@
 import { useState } from "react";
-import { Chip, ToggleChip } from "@/components/ui/Chip";
+import { Chip, TextToggle, TextToggles, ToggleChip } from "@/components/ui/Chip";
 import { ClaudeLine } from "@/components/ui/ClaudeLine";
 import * as Icons from "@/components/ui/icons";
+import { SectionHeading } from "@/components/ui/SectionHeading";
 import { Label, Panel, Section } from "./shared";
 
 export function ChipSection() {
   const [selected, setSelected] = useState("PLA");
   const [tags, setTags] = useState(["warping"]);
+  const [filter, setFilter] = useState<"model" | "design" | null>("model");
   return (
     <Section id="chips" title="Chips" note="Labels for status and materials; toggle chips for filters.">
       <Panel className="flex flex-col gap-5">
@@ -30,6 +32,28 @@ export function ChipSection() {
               {m}
             </ToggleChip>
           ))}
+        </div>
+        <Label>
+          Text toggles, for a filter or two beside a section's heading: words, a semolina stroke once picked
+        </Label>
+        <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+          <SectionHeading id="styleguide-text-toggles">The rest</SectionHeading>
+          <TextToggles label="Filter ideas">
+            <TextToggle
+              selected={filter === "model"}
+              count={3}
+              onClick={() => setFilter(filter === "model" ? null : "model")}
+            >
+              Has a model
+            </TextToggle>
+            <TextToggle
+              selected={filter === "design"}
+              count={7}
+              onClick={() => setFilter(filter === "design" ? null : "design")}
+            >
+              Needs designing
+            </TextToggle>
+          </TextToggles>
         </div>
         <Label>Claude's marks: one quiet line, a sparkle first</Label>
         <div className="flex flex-col gap-2">

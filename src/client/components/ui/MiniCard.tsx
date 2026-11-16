@@ -7,16 +7,6 @@ import { NoteFace } from "./NoteFace";
 import { Photo } from "./Photo";
 import { useReflow } from "./Reflow";
 
-/** Dragging a mini card to another place in its row (desktop, with a mouse). */
-export interface MiniDrag {
-  dragging: boolean;
-  over: boolean;
-  onDragStart: () => void;
-  onDragEnd: () => void;
-  onDragOver: () => void;
-  onDrop: () => void;
-}
-
 interface MiniCardProps {
   /** Where the card leads: a router `Link`'s own props. */
   link: LinkComponentProps<"a">;
@@ -34,16 +24,13 @@ interface MiniCardProps {
   /** Laid over the photo's top-right corner (the card's menu button). A link can't hold a button, so it is a sibling. */
   corner?: ReactNode;
   landing?: boolean;
-  /** The id the drag carries (a card dragged out of the page drops as text). */
-  id?: string;
-  drag?: MiniDrag;
   ref?: Ref<HTMLLIElement>;
   className?: string;
 }
 
 /**
  * A small card for a strip: the cover photo, square (from xl a 7:5 box, wider but no taller), with its title (two lines at most) under it, about 7 rem wide.
- * It is the compact sibling of Card, for rows that scroll sideways (Up next on phones) and give way to what is below.
+ * It is the compact sibling of Card, for rows that scroll sideways (Today's catch-up) and give way to what is below.
  */
 export function MiniCard({
   link,
@@ -54,8 +41,6 @@ export function MiniCard({
   fill,
   corner,
   landing,
-  id,
-  drag,
   meta,
   ref,
   className,
@@ -71,37 +56,7 @@ export function MiniCard({
         className,
       )}
     >
-      {/* biome-ignore lint/a11y/noStaticElementInteractions: dragging is a mouse extra; the card's menu has Move up and Move down for keyboards and phones. */}
-      <div
-        draggable={!!drag}
-        onDragStart={
-          drag
-            ? (event) => {
-                event.dataTransfer.effectAllowed = "move";
-                event.dataTransfer.setData("text/plain", id ?? "");
-                drag.onDragStart();
-              }
-            : undefined
-        }
-        onDragEnd={drag?.onDragEnd}
-        onDragOver={
-          drag
-            ? (event) => {
-                event.preventDefault();
-                drag.onDragOver();
-              }
-            : undefined
-        }
-        onDrop={
-          drag
-            ? (event) => {
-                event.preventDefault();
-                drag.onDrop();
-              }
-            : undefined
-        }
-        className={cn("h-full rounded-lg", drag?.dragging && "opacity-40", drag?.over && "ring-tomato ring-2")}
-      >
+      <div className="h-full rounded-lg">
         <Link
           {...link}
           className="group pressable focus-ring bg-cream shadow-soft hover:bg-lifted flex h-full w-full flex-col rounded-lg p-1"

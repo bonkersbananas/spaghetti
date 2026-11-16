@@ -18,3 +18,26 @@ export function noteSize(note: string): NoteSize {
   while (step < 3 && longestWord > (fits[step] ?? 0)) step += 1;
   return order[step] ?? "sm";
 }
+
+/** A soft hyphen: where a word may break, with a hyphen drawn only if it does. */
+const SOFT_HYPHEN = "­";
+
+/**
+ * A title made safe for a narrow card: a word too long for any line (more than `longest` characters) gets a soft
+ * hyphen between each pair of letters, at least three from either end, so the browser breaks it where the line ends,
+ * with a hyphen, instead of cutting it with none ("Supercalifr / agilistic…"). Shorter words are left alone, so they
+ * move to the next line whole.
+ */
+export function hyphenateLongWords(text: string, longest = 18): string {
+  return text.replace(/\S+/g, (word) => {
+    if (word.length <= longest) return word;
+    const chars = [...word];
+    let out = "";
+    for (let i = 0; i < chars.length; i++) {
+      out += chars[i];
+      const between = i >= 2 && i < chars.length - 3;
+      if (between && /\p{L}/u.test(chars[i] ?? "") && /\p{L}/u.test(chars[i + 1] ?? "")) out += SOFT_HYPHEN;
+    }
+    return out;
+  });
+}

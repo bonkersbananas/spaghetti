@@ -4,12 +4,12 @@ import { createFileRoute } from "@tanstack/react-router";
 import { lazy, Suspense, useState } from "react";
 import { IdeaCard, type UpNextMenu } from "@/components/ideas/IdeaCard";
 import { StartedIdeas, startedIdeas } from "@/components/ideas/StartedIdeas";
-import { UpNextStrip } from "@/components/ideas/UpNextStrip";
 import { EmptyPot } from "@/components/illustrations/EmptyPot";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { RecentlyDeletedLink } from "@/components/shell/RecentlyDeletedLink";
 import { Button } from "@/components/ui/Button";
-import { ToggleChip } from "@/components/ui/Chip";
+import { CardRow, cardRowItem } from "@/components/ui/CardRow";
+import { TextToggle, TextToggles } from "@/components/ui/Chip";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { PlusIcon } from "@/components/ui/icons";
 import { Reflow } from "@/components/ui/Reflow";
@@ -35,7 +35,7 @@ export const Route = createFileRoute("/_app/ideas/")({
 });
 
 /** The inbox's grid: two columns on phones, more on desktop. */
-const grid = "grid grid-cols-2 gap-3 md:grid-cols-3 md:gap-5 xl:grid-cols-4";
+const gridClass = "grid grid-cols-2 gap-3 md:grid-cols-3 md:gap-5 xl:grid-cols-4";
 
 /** How many cards a phone (or a laptop) shows before it scrolls: the rest draw after the first paint (useAfterPaint). */
 const FIRST_SCREEN = { phone: 8, desktop: 12 };
@@ -44,11 +44,13 @@ function Ideas() {
   useListPicker();
   const after = useAfterPaint();
   const { items: all, isPending, error, refetch } = useIdeas();
-  // "Has a model" / "Needs designing": one tap each, tap again to see everything. Only offered once an idea has a model.
+  const { queue, rest: inbox } = splitQueue(all);
+  // "Has a model" / "Needs designing", beside The rest: one tap each, tap again to see everything. They narrow the
+  // inbox, not Up next (already picked), and are only offered once an idea there has a model.
   const [modelFilter, setModelFilter] = useState<"model" | "design" | null>(null);
-  const modelCount = all.filter((item) => modelOf(item)).length;
+  const modelCount = inbox.filter((item) => modelOf(item)).length;
   const filter = modelCount > 0 ? modelFilter : null;
-  const items = filter ? all.filter((item) => !!modelOf(item) === (filter === "model")) : all;
+  const everything = filter ? inbox.filter((item) => !!modelOf(item) === (filter === "model")) : inbox;
   // Ideas that were started stay here, after the rest: they are the builds that began as an idea.
   const { items: builds } = useBuilds();
   const started = startedIdeas(builds);
@@ -61,13 +63,12 @@ function Ideas() {
   const byId = new Map(people?.map((person) => [person.id, person]));
   const queryClient = useQueryClient();
   const isDesktop = useIsDesktop();
-  const { queue, rest: everything } = splitQueue(items);
   // The cards below the fold wait for the first paint, so a tap on Ideas (or on a delete that lands here) shows the top
   // of the grid at once; a return to the page draws it whole, for the scroll position the router restores.
   const rest = after ? everything : everything.slice(0, isDesktop ? FIRST_SCREEN.desktop : FIRST_SCREEN.phone);
   const [dragged, setDragged] = useState<string | null>(null);
   const [over, setOver] = useState<string | null>(null);
-  const menuFor = (item: (typeof items)[number], index: number): UpNextMenu => ({
+  const menuFor = (item: (typeof all)[number], index: number): UpNextMenu => ({
     queued: index >= 0,
     onToggle: () => setUpNext(queryClient, item, index < 0),
     onMoveUp: index > 0 ? () => moveUpNext(queryClient, queue, item.id, -1) : undefined,
@@ -78,9 +79,9 @@ function Ideas() {
   const picked = () => {
     const href = document.activeElement?.closest("main [data-picks] a[href^='/ideas/']")?.getAttribute("href");
     const id = href?.split("/").pop();
-    return id ? items.find((idea) => idea.id === id) : undefined;
+    return id ? all.find((idea) => idea.id === id) : undefined;
   };
-  const onPicked = (act: (idea: (typeof items)[number]) => void) => () => {
+  const onPicked = (act: (idea: (typeof all)[number]) => void) => () => {
     const idea = picked();
     if (!idea || idea.pending) return;
     act(idea);
@@ -99,23 +100,84 @@ function Ideas() {
     listMoveEarlier: isDesktop ? onPicked((idea) => moveUpNext(queryClient, queue, idea.id, -1)) : undefined,
     listMoveLater: isDesktop ? onPicked((idea) => moveUpNext(queryClient, queue, idea.id, 1)) : undefined,
   });
-  const card = (item: (typeof items)[number]) => (
+  const card = (item: (typeof all)[number]) => (
     <IdeaCard
       key={item.id}
       item={item}
       person={byId.get(item.createdBy)}
       via={via(item.createdVia)}
       landing={item.id === landed || arrived.has(item.id)}
+      reveal={item.id === landed}
       headingLevel={queue.length > 0 ? 3 : 2}
       menu={menuFor(item, -1)}
     />
+  );
+  const featureCard = (item: (typeof all)[number], index: number) => (
+    <IdeaCard
+      key={item.id}
+      item={item}
+      feature
+      className={cardRowItem}
+      person={byId.get(item.createdBy)}
+      via={via(item.createdVia)}
+      landing={item.id === landed || arrived.has(item.id)}
+      headingLevel={3}
+      menu={menuFor(item, index)}
+      drag={
+        isDesktop && queue.length > 1
+          ? {
+              dragging: dragged === item.id,
+              over: over === item.id && dragged !== item.id,
+              onDragStart: () => setDragged(item.id),
+              onDragEnd: () => {
+                setDragged(null);
+                setOver(null);
+              },
+              onDragOver: () => setOver(item.id),
+              onDrop: () => {
+                if (dragged) dropUpNext(queryClient, queue, dragged, item.id);
+                setDragged(null);
+                setOver(null);
+              },
+            }
+          : undefined
+      }
+    />
+  );
+  const filters = modelCount > 0 && (
+    <TextToggles label="Filter ideas">
+      <TextToggle
+        selected={filter === "model"}
+        count={modelCount}
+        onClick={() => setModelFilter(filter === "model" ? null : "model")}
+      >
+        Has a model
+      </TextToggle>
+      <TextToggle
+        selected={filter === "design"}
+        count={inbox.length - modelCount}
+        onClick={() => setModelFilter(filter === "design" ? null : "design")}
+      >
+        Needs designing
+      </TextToggle>
+    </TextToggles>
+  );
+  const grid = (
+    <>
+      {filter && !rest.length && (
+        <p className="text-body text-ink-soft">Nothing here. Tap it again to see every idea.</p>
+      )}
+      <ul data-picks className={`${gridClass} relative`} aria-label="Ideas">
+        <Reflow key={filter ?? "all"}>{rest.map(card)}</Reflow>
+      </ul>
+    </>
   );
 
   return (
     <>
       <PageHeader title="Ideas" subtitle="The inbox. Every print starts as a half-thought." />
       {isPending ? (
-        <div className={grid} aria-hidden>
+        <div className={gridClass} aria-hidden>
           {Array.from({ length: 8 }, (_, index) => (
             // biome-ignore lint/suspicious/noArrayIndexKey: placeholders have no identity.
             <CardSkeleton key={index} aspect="portrait" />
@@ -123,75 +185,30 @@ function Ideas() {
         </div>
       ) : all.length || started.length ? (
         <>
+          {queue.length > 0 && (
+            <CardRow id="up-next-heading" title="Up next" count={queue.length} className="mb-6 md:mb-14">
+              {queue.map(featureCard)}
+            </CardRow>
+          )}
           {!isDesktop && me && (
             // Its own boundary, holding its place, so the grid never waits for it or jumps when it lands.
-            <Suspense fallback={<div className="mb-8 h-16" aria-hidden />}>
+            <Suspense fallback={<div className="mb-8 h-14" aria-hidden />}>
               <WishlistLink me={me} ideas={all} people={people ?? []} className="mb-8" />
             </Suspense>
           )}
-          {modelCount > 0 && (
-            <div className="mb-6 flex flex-wrap gap-2">
-              <ToggleChip
-                selected={filter === "model"}
-                onClick={() => setModelFilter(filter === "model" ? null : "model")}
-              >
-                Has a model <span className="text-ink-faint font-medium">{modelCount}</span>
-              </ToggleChip>
-              <ToggleChip
-                selected={filter === "design"}
-                onClick={() => setModelFilter(filter === "design" ? null : "design")}
-              >
-                Needs designing <span className="text-ink-faint font-medium">{all.length - modelCount}</span>
-              </ToggleChip>
-            </div>
+          {!all.length && (
+            <p className="text-body text-ink-soft mb-2">Nothing new in the pot. What you started is below.</p>
           )}
-          {!items.length && (
-            <p className="text-body text-ink-soft mb-2">
-              {filter
-                ? "Nothing here. Tap the chip again to see every idea."
-                : "Nothing new in the pot. What you started is below."}
-            </p>
-          )}
-          {queue.length > 0 && (
-            <Section id="up-next-heading" title="Up next" count={queue.length} className="mb-8 md:mb-10">
-              <UpNextStrip
-                key={filter ?? "all"}
-                queue={queue}
-                menuFor={menuFor}
-                landed={(item) => item.id === landed || arrived.has(item.id)}
-                dragFor={(item) =>
-                  isDesktop && queue.length > 1
-                    ? {
-                        dragging: dragged === item.id,
-                        over: over === item.id && dragged !== item.id,
-                        onDragStart: () => setDragged(item.id),
-                        onDragEnd: () => {
-                          setDragged(null);
-                          setOver(null);
-                        },
-                        onDragOver: () => setOver(item.id),
-                        onDrop: () => {
-                          if (dragged) dropUpNext(queryClient, queue, dragged, item.id);
-                          setDragged(null);
-                          setOver(null);
-                        },
-                      }
-                    : undefined
-                }
-              />
-            </Section>
-          )}
-          {rest.length > 0 &&
+          {inbox.length > 0 &&
             (queue.length > 0 ? (
-              <Section id="inbox-heading" title="The rest">
-                <ul data-picks className={`${grid} relative`} aria-label="Ideas">
-                  <Reflow key={filter ?? "all"}>{rest.map(card)}</Reflow>
-                </ul>
+              <Section id="inbox-heading" title="The rest" aside={filters || undefined}>
+                {grid}
               </Section>
             ) : (
-              <ul data-picks className={`${grid} relative`} aria-label="Ideas">
-                <Reflow key={filter ?? "all"}>{rest.map(card)}</Reflow>
-              </ul>
+              <>
+                {filters && <div className="mb-4 md:mb-5">{filters}</div>}
+                {grid}
+              </>
             ))}
           <StartedIdeas builds={builds} />
         </>

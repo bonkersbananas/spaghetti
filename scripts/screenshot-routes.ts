@@ -816,6 +816,9 @@ async function settleSection(page: Page, section: Locator) {
 /** The seed's Up next queue, in order: the desk tidy-up, then the oven knob. */
 const SEED_QUEUE = [SEED_IDS.deskTidy, "5eed0000-0000-4000-8000-000000000003"];
 
+/** The seed's note-only "Bag clips for the coffee": a bare link for a moment in the shot of every kind of idea in Up next. */
+const COFFEE_CLIPS = "5eed0000-0000-4000-8000-000000000013";
+
 /** Up next holds exactly these ideas, in this order (the first two are the seed's own). */
 async function setQueue(page: Page, count: number) {
   const headers = { Origin: new URL(page.url()).origin };
@@ -1623,7 +1626,7 @@ export const shots: Shot[] = [
     },
   },
   {
-    // The menu opened from a tile in the strip (a sheet on phones; the popover on desktop's full cards).
+    // The menu opened from a card in Up next (a sheet on phones, the popover on desktop).
     name: "ideas-up-next-menu",
     path: "/ideas",
     prepare: async (page) => {
@@ -1644,7 +1647,7 @@ export const shots: Shot[] = [
     },
   },
   {
-    // Up next with 1 queued idea: a strip of small cards.
+    // Up next with 1 queued idea: one large card.
     name: "ideas-up-next-1",
     path: "/ideas",
     prepare: async (page) => {
@@ -1661,7 +1664,7 @@ export const shots: Shot[] = [
     cleanup: (page) => setQueue(page, 2),
   },
   {
-    // Up next with 3 queued ideas: a strip of small cards.
+    // Up next with 3 queued ideas: the row of large cards (a full row on desktop).
     name: "ideas-up-next-3",
     path: "/ideas",
     prepare: async (page) => {
@@ -1678,7 +1681,7 @@ export const shots: Shot[] = [
     cleanup: (page) => setQueue(page, 2),
   },
   {
-    // Up next with 6 queued ideas: a strip of small cards.
+    // Up next with 6 queued ideas: more than the row shows (the arrows beside the heading on desktop).
     name: "ideas-up-next-6",
     path: "/ideas",
     prepare: async (page) => {
@@ -1695,7 +1698,7 @@ export const shots: Shot[] = [
     cleanup: (page) => setQueue(page, 2),
   },
   {
-    // Up next with 8 queued ideas: a strip of small cards on both.
+    // Up next with 8 queued ideas: a long queue.
     name: "ideas-up-next-8",
     path: "/ideas",
     prepare: async (page) => {
@@ -1712,10 +1715,50 @@ export const shots: Shot[] = [
     cleanup: (page) => setQueue(page, 2),
   },
   {
+    // Every kind of idea in Up next: a photo, a note with no title and a bare link.
+    name: "ideas-up-next-kinds",
+    path: "/ideas",
+    prepare: async (page) => {
+      const headers = { Origin: new URL(page.url()).origin };
+      await setQueue(page, 0);
+      await page.request.patch(`/api/items/${COFFEE_CLIPS}`, {
+        headers,
+        data: { note: "https://www.ikea.com/se/en/p/skadis-pegboard-white-20320802/" },
+      });
+      for (const id of [COFFEE_CLIPS, SEED_QUEUE[1], SEED_IDS.deskTidy]) {
+        await page.request.patch(`/api/items/${id}`, { headers, data: { upNext: true } });
+      }
+      await page.reload();
+      await page.getByRole("heading", { level: 2, name: /^Up next\s*3$/ }).waitFor();
+      await page.waitForTimeout(500);
+      await page.evaluate(() => {
+        for (const animation of document.getAnimations()) animation.finish();
+      });
+    },
+    cleanup: async (page) => {
+      await page.request.patch(`/api/items/${COFFEE_CLIPS}`, {
+        headers: { Origin: new URL(page.url()).origin },
+        data: { note: "Bag clips for the coffee, with a little spoon holder on the side." },
+      });
+      await setQueue(page, 2);
+    },
+  },
+  {
+    // A notebook with no ideas and nothing started: the empty pot.
+    name: "ideas-empty",
+    path: "/ideas",
+    prepare: async (page) => {
+      await mockToday(page, { builds: "none", journal: "none", spools: "none", ideas: "none" });
+      await page.reload();
+      await waitUntilEased(page, "Nothing simmering yet");
+    },
+    cleanup: unmockToday,
+  },
+  {
     // A card with several photos swiped to its second (and hovered, where a mouse shows the arrows).
     name: "ideas-swiped",
     path: "/ideas",
-    // Desk tidy-up is the one idea with several photos, and it sits in Up next (small cards, one photo): take the queue off first.
+    // Desk tidy-up is the one idea with several photos, and it sits in Up next (the cover only there): take the queue off first.
     prepare: async (page) => {
       await setQueue(page, 0);
       await page.reload();

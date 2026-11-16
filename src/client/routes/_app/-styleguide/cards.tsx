@@ -2,10 +2,12 @@ import dragonPhoto from "@/assets/samples/dragon.svg";
 import planterPhoto from "@/assets/samples/planter.svg";
 import vasePhoto from "@/assets/samples/vase.svg";
 import { Card, PhotoDots } from "@/components/ui/Card";
+import { CardRow, cardRowItem } from "@/components/ui/CardRow";
 import { Chip } from "@/components/ui/Chip";
 import * as Icons from "@/components/ui/icons";
 import { LinkCard } from "@/components/ui/LinkCard";
 import { MiniCard } from "@/components/ui/MiniCard";
+import { Reflow } from "@/components/ui/Reflow";
 import { toast } from "@/components/ui/Toast";
 import { UploadBadge } from "@/components/ui/UploadBadge";
 import { Label, people, Section } from "./shared";
@@ -101,49 +103,104 @@ export function CardSection() {
       </div>
       <div className="mt-10">
         <Label>
-          Mini cards, for a row that scrolls sideways with snap (Up next on phones): the cover only, so a drag never
-          fights a photo swipe, with the title under it and room for a menu button in the corner
+          A card row: the section a page leads with (Up next), large `feature` cards (4:5 on phones, square from md)
+          that scroll sideways with the next one peeking in, the title in text-title and a word too long for the line
+          hyphenated; arrows beside the heading on desktop when there are more
         </Label>
-        <ul className="no-scrollbar flex snap-x snap-proximity gap-2.5 overflow-x-auto pb-1">
-          <MiniCard
-            link={{ to: "/styleguide" }}
-            photo={{ src: dragonPhoto, alt: "A red articulated dragon on the print bed" }}
-            title="Articulated dragon"
-          />
-          <MiniCard
-            link={{ to: "/styleguide" }}
-            photo={{ src: vasePhoto, alt: "A gold silk-PLA vase" }}
-            title="Spiral vase in silk PLA, maybe 0.6 nozzle"
-          />
-          <MiniCard link={{ to: "/styleguide" }} note="Hook for the bike helmet" />
-          <MiniCard link={{ to: "/styleguide" }} photo={{ src: planterPhoto, alt: "A green planter" }} />
+        <CardRow id="styleguide-card-row" title="Up next" count={4}>
+          <li className={cardRowItem}>
+            <Card
+              size="feature"
+              photo={{ src: dragonPhoto, alt: "A red articulated dragon on the print bed" }}
+              title="Articulated dragon"
+              meta="2 days ago"
+              person={people[0]}
+              headingLevel={3}
+              className="h-full"
+            />
+          </li>
+          <li className={cardRowItem}>
+            <Card
+              size="feature"
+              note="Replacement knob for the oven, 6 mm D-shaft. Measure the old one before it breaks completely."
+              sub="for the kitchen"
+              meta="5 h ago"
+              person={people[1]}
+              className="h-full"
+            />
+          </li>
+          <li className={cardRowItem}>
+            <Card
+              size="feature"
+              photo={{ src: vasePhoto, alt: "A gold silk-PLA vase" }}
+              title="Supercalifragilisticexpialidocious spiral vase in silk PLA, maybe on the 0.6 nozzle"
+              meta="Just now"
+              person={people[0]}
+              headingLevel={3}
+              className="h-full"
+            />
+          </li>
+          <li className={cardRowItem}>
+            <Card
+              size="feature"
+              note="ikea.com/se/en/p/skadis-pegboard-white-20320802"
+              meta="Yesterday"
+              person={people[1]}
+              className="h-full"
+            />
+          </li>
+        </CardRow>
+      </div>
+      <div className="mt-10">
+        <Label>
+          Mini cards, for a row that scrolls sideways with snap and gives way to what is below: the cover only, so a
+          drag never fights a photo swipe, with the title under it and room for a menu button in the corner
+        </Label>
+        <ul className="no-scrollbar relative flex snap-x snap-proximity gap-2.5 overflow-x-auto pb-1">
+          {/* Mini cards fade in from a Reflow, as in the app: outside one they would stay at their first frame. */}
+          <Reflow>
+            <MiniCard
+              link={{ to: "/styleguide" }}
+              photo={{ src: dragonPhoto, alt: "A red articulated dragon on the print bed" }}
+              title="Articulated dragon"
+            />
+            <MiniCard
+              link={{ to: "/styleguide" }}
+              photo={{ src: vasePhoto, alt: "A gold silk-PLA vase" }}
+              title="Spiral vase in silk PLA, maybe 0.6 nozzle"
+            />
+            <MiniCard link={{ to: "/styleguide" }} note="Hook for the bike helmet" />
+            <MiniCard link={{ to: "/styleguide" }} photo={{ src: planterPhoto, alt: "A green planter" }} />
+          </Reflow>
         </ul>
         <Label>
           Mini cards with news, three across on a phone (`fill`): the title and one quiet line for what happened, as in
           "Since Thursday"
         </Label>
-        <ul className="grid max-w-sm grid-cols-3 gap-3 md:flex md:max-w-none">
-          <MiniCard
-            fill
-            link={{ to: "/styleguide" }}
-            photo={{ src: dragonPhoto, alt: "A red articulated dragon on the print bed" }}
-            title="Articulated dragon"
-            sub="worked"
-          />
-          <MiniCard
-            fill
-            link={{ to: "/styleguide" }}
-            photo={{ src: vasePhoto, alt: "A gold silk-PLA vase" }}
-            title="Spiral vase"
-            sub="spaghetti, printing again"
-          />
-          <MiniCard
-            fill
-            link={{ to: "/styleguide" }}
-            note="Hook for the bike helmet"
-            title="Helmet hook"
-            sub="captured"
-          />
+        <ul className="relative grid max-w-sm grid-cols-3 gap-3 md:flex md:max-w-none">
+          <Reflow>
+            <MiniCard
+              fill
+              link={{ to: "/styleguide" }}
+              photo={{ src: dragonPhoto, alt: "A red articulated dragon on the print bed" }}
+              title="Articulated dragon"
+              sub="worked"
+            />
+            <MiniCard
+              fill
+              link={{ to: "/styleguide" }}
+              photo={{ src: vasePhoto, alt: "A gold silk-PLA vase" }}
+              title="Spiral vase"
+              sub="spaghetti, printing again"
+            />
+            <MiniCard
+              fill
+              link={{ to: "/styleguide" }}
+              note="Hook for the bike helmet"
+              title="Helmet hook"
+              sub="captured"
+            />
+          </Reflow>
         </ul>
       </div>
       <div className="mt-10">

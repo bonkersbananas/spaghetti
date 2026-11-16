@@ -1,4 +1,5 @@
 import type { Person } from "@shared/api";
+import { hyphenateLongWords } from "@shared/notes";
 import { Link, type LinkProps } from "@tanstack/react-router";
 import { lazy, type ReactNode, Suspense, useRef, useState } from "react";
 import { cn } from "@/lib/cn";
@@ -51,8 +52,14 @@ export interface CardProps {
   person?: Pick<Person, "name" | "color">;
   /** The agent it was made through: the avatar gets its mark and says "via …". */
   via?: string;
-  /** "portrait" (4:5) suits grids of prints; "tall" is 3:4. */
+  /** "portrait" (4:5) suits grids of prints; "tall" is 3:4. A `feature` card sets its own. */
   aspect?: "landscape" | "square" | "portrait" | "tall";
+  /**
+   * `feature`: a card a screen leads with, in a row of its own above a grid (Up next): 4:5 on phones and square from
+   * `md` (it is wider than the grid's cards there, so its photo is the larger one without pushing the grid off the
+   * first screen), the title in `text-title`, and a word too long for the line hyphenated rather than cut.
+   */
+  size?: "grid" | "feature";
   /** Where the card leads (a TanStack Router link). */
   link?: LinkProps;
   onClick?: () => void;
@@ -95,8 +102,10 @@ export function Card({
   onClick,
   headingLevel = 3,
   reserveEnd,
+  size = "grid",
   className,
 }: CardProps) {
+  const feature = size === "feature";
   const Heading = headingLevel === 2 ? "h2" : "h3";
   const scroller = useRef<HTMLDivElement>(null);
   const [index, setIndex] = useState(0);
@@ -114,7 +123,12 @@ export function Card({
 
   const content = (
     <>
-      <div className={cn("relative w-full overflow-hidden rounded-md", aspects[aspect])}>
+      <div
+        className={cn(
+          "relative w-full overflow-hidden rounded-md",
+          feature ? "aspect-4/5 md:aspect-square" : aspects[aspect],
+        )}
+      >
         {slides ? (
           <div
             ref={scroller}
@@ -181,17 +195,18 @@ export function Card({
         {mark && <div className="absolute right-0 bottom-0 max-w-[70%]">{mark}</div>}
         {chips && <div className="absolute bottom-2 left-2 flex flex-wrap gap-1.5">{chips}</div>}
       </div>
-      <div className="flex flex-1 flex-col px-2 pt-2.5 pb-1.5">
+      <div className={cn("flex flex-1 flex-col", feature ? "px-2.5 pt-3 pb-1.5" : "px-2 pt-2.5 pb-1.5")}>
         {heading ? (
           <Heading
             className={cn(
-              "text-body text-ink font-semibold break-words",
+              "text-ink font-semibold break-words",
+              feature && title ? "text-title text-pretty" : "text-body",
               // Notes standing in for a title read as text, not as a heading, and get a third line
               // so they aren't cut off mid-thought. Real titles stay at two.
               title ? "line-clamp-2" : "line-clamp-3 font-sans font-medium",
             )}
           >
-            {heading}
+            {feature && title ? hyphenateLongWords(title) : heading}
           </Heading>
         ) : (
           !noteCard &&
