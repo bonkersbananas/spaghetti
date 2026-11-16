@@ -1702,6 +1702,11 @@ export const shots: Shot[] = [
         .evaluate((node) => window.scrollTo(0, node.getBoundingClientRect().top + window.scrollY - 96));
       await page.waitForTimeout(600);
     },
+    // The router keeps the position for this history entry, and the next /journal shot opens the same entry again.
+    cleanup: async (page) => {
+      await page.evaluate(() => window.scrollTo(0, 0));
+      await page.waitForTimeout(300);
+    },
   },
   {
     name: "journal-now-one",
