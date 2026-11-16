@@ -371,13 +371,18 @@ fn fit(points: &[P], tolerance: f64) -> Vec<Run> {
         Some(r) if r.arc.is_none() => r.end = end,
         _ => result.push(Run { start, end, arc: None }),
     };
+    // The run's length as Orca's `Polyline::length` sums it, kept as the run grows (the same sum, in the same order).
+    let mut length = 0.0;
     for (i, &p) in points.iter().enumerate() {
         back = i;
         current.push(p);
+        if let [.., a, b] = current[..] {
+            length += norm((b[0] - a[0]) as f64, (b[1] - a[1]) as f64);
+        }
         if back - front < 2 {
             continue;
         }
-        if let Some(arc) = try_arc(&current, path_length(&current), tolerance) {
+        if let Some(arc) = try_arc(&current, length, tolerance) {
             last_arc = arc;
             if back == points.len() - 1 {
                 result.push(Run { start: front, end: back, arc: Some(last_arc) });
@@ -393,6 +398,7 @@ fn fit(points: &[P], tolerance: f64) -> Vec<Run> {
             front = back - 1;
             current.clear();
             current.extend_from_slice(&points[front..=front + 1]);
+            length = path_length(&current);
         }
     }
     if front != back {
