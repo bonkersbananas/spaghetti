@@ -55,7 +55,7 @@ export function BuildSummary({
   if (attempts.length < 2) return null;
   const { minutes, grams, filaments } = summary;
   const figures = [
-    minutes && `${minutes.approximate ? "about " : ""}${formatMinutes(minutes.value)} on the bed`,
+    minutes && `${minutes.approximate ? "about " : ""}${formatMinutes(minutes.value)} of printing`,
     grams && `${grams.atLeast ? "at least " : ""}${Math.round(grams.value)} g of filament`,
   ].filter((figure): figure is string => !!figure);
   return (

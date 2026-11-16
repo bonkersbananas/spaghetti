@@ -88,10 +88,10 @@ export const SHORTCUTS = define([
   { id: "listMoveEarlier", group: "lists", label: "Earlier in Up next", keys: ["["] },
   { id: "listMoveLater", group: "lists", label: "Later in Up next", keys: ["]"] },
 
-  { id: "twistBack", group: "twist", label: "Back to Twists", keys: ["escape"] },
+  { id: "twistBack", group: "twist", label: "Back to where you opened it from", keys: ["escape"] },
   { id: "twistPrint", group: "twist", label: "Print it", keys: ["p"] },
 
-  { id: "ideaBack", group: "idea", label: "Back to Ideas", keys: ["escape"] },
+  { id: "ideaBack", group: "idea", label: "Back to where you opened it from", keys: ["escape"] },
   { id: "ideaBuild", group: "idea", label: "Start building", keys: ["b"] },
   { id: "sliceSettings", group: "idea", label: "How to slice the model, if it has one", keys: ["s"] },
   { id: "sliceSettingsTwist", group: "twist", label: "How to slice the model, if it has one", keys: ["s"] },
@@ -104,7 +104,12 @@ export const SHORTCUTS = define([
   { id: "ideaComment", group: "idea", label: "Say something to the other person", keys: ["m"] },
   { id: "ideaDelete", group: "idea", label: "Delete (asks first), with undo", keys: ["mod+backspace", "mod+delete"] },
 
-  { id: "buildBack", group: "build", label: "Back to Builds, or let go of the attempt", keys: ["escape"] },
+  {
+    id: "buildBack",
+    group: "build",
+    label: "Let go of the attempt, or back to where you opened it from",
+    keys: ["escape"],
+  },
   { id: "buildLog", group: "build", label: "Log or finish an attempt", keys: ["a"] },
   { id: "buildNext", group: "build", label: "Next attempt", keys: ["j", "arrowdown"] },
   { id: "buildPrevious", group: "build", label: "Previous attempt", keys: ["k", "arrowup"] },
@@ -142,7 +147,7 @@ export const SHORTCUTS = define([
   { id: "pantryAdd", group: "pantry", label: "Add a spool", keys: ["n"] },
   { id: "shoppingAdd", group: "shopping", label: "Add something to buy", keys: ["n"] },
 
-  { id: "spoolBack", group: "spool", label: "Back to the Pantry", keys: ["escape"] },
+  { id: "spoolBack", group: "spool", label: "Back to where you opened it from", keys: ["escape"] },
   {
     id: "spoolDelete",
     group: "spool",

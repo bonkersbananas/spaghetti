@@ -18,6 +18,7 @@ import { outbox } from "@/lib/outbox";
 import { PaletteProvider, usePalette } from "@/lib/palette";
 import { usePasskeyOffer } from "@/lib/passkey-offer";
 import { followUnresizedPhotos } from "@/lib/photo-resize";
+import { openedDirectly } from "@/lib/previous-path";
 import { resyncPush, useServiceWorkerMessages } from "@/lib/push";
 import { rememberedUser, sessionQuery } from "@/lib/queries";
 import { focusSearch } from "@/lib/search";
@@ -52,7 +53,7 @@ export const Route = createFileRoute("/_app")({
       }
     }
     if (!user) {
-      throw redirect({ to: "/sign-in", search: { redirect: location.href } });
+      throw redirect({ to: "/sign-in", search: { redirect: location.href }, replace: true });
     }
   },
   component: AppLayout,
@@ -69,8 +70,8 @@ function AppLayout() {
     if (user === null && !isSigningOut()) {
       forgetEndedSession();
       void clearOfflineData();
-      void navigate({ to: "/sign-in", search: { redirect: location.pathname + location.search } }).then(() =>
-        queryClient.removeQueries({ predicate: (query) => query.queryKey[0] !== "session" }),
+      void navigate({ to: "/sign-in", search: { redirect: location.pathname + location.search }, replace: true }).then(
+        () => queryClient.removeQueries({ predicate: (query) => query.queryKey[0] !== "session" }),
       );
     }
   }, [user, navigate, queryClient]);
@@ -113,7 +114,7 @@ function Shell() {
   usePasskeyOffer();
   // A tapped notification says where to go; an answer given offline lands in the outbox behind this page's back.
   useServiceWorkerMessages(
-    (path) => void navigate({ href: path }),
+    (path) => void navigate({ href: path, state: openedDirectly }),
     () => void outbox.pickUp(),
   );
   // Photos that came from an agent are resized quietly, in idle time, by the first browser that sees them.

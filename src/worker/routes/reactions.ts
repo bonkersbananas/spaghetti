@@ -1,6 +1,6 @@
 import { and, asc, desc, eq, inArray, isNull, sql } from "drizzle-orm";
 import { type Context, Hono } from "hono";
-import { type EmojiUse, isEmoji, LEGACY_REACTIONS, type Reaction } from "../../shared/reactions.ts";
+import { type EmojiUse, isEmoji, LEGACY_REACTIONS, QUICK_EMOJI_COUNT, type Reaction } from "../../shared/reactions.ts";
 import { recordChange } from "../changes.ts";
 import type { Db } from "../db/index.ts";
 import { comments, items, type ReactionRow, reactions } from "../db/schema.ts";
@@ -137,7 +137,7 @@ export const reactionUseRoutes = new Hono<AppEnv>().get("/used", async (c) => {
       .from(reactions)
       .groupBy(reactions.kind)
       .orderBy(desc(sql`count(*)`), desc(sql`max(${reactions.createdAt})`))
-      .limit(12),
+      .limit(QUICK_EMOJI_COUNT),
     db
       .select({ kind: reactions.kind })
       .from(reactions)

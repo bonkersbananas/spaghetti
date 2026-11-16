@@ -286,3 +286,48 @@ test("a problem's word leads with what fixed it, and the times it happened fold 
     "dried the filament",
   );
 });
+
+test("the search field's × takes a tap anywhere at the field's end, never one in the text", { tag: "@phone" }, async ({
+  page,
+  isMobile,
+}) => {
+  await page.goto("/search");
+  const box = page.getByRole("searchbox", { name: "Search" });
+  const tap = async (x: number, y: number) => {
+    if (isMobile) await page.touchscreen.tap(x, y);
+    else await page.mouse.click(x, y);
+  };
+  const clear = page.getByRole("button", { name: "Clear" });
+  // What a tap depends on: text in the field, which has the focus, and so the × drawn (its code arrives with the
+  // first text); then where both are now.
+  const typed = async () => {
+    await box.fill("warping");
+    await expect(box).toBeFocused();
+    await expect(clear).toBeVisible();
+    const field = await box.boundingBox();
+    const target = await clear.boundingBox();
+    if (!field || !target) throw new Error("no field or no clear button");
+    return { field, target };
+  };
+
+  let { field, target } = await typed();
+  // A thumb's width, the field's full height, up to its right edge.
+  expect(target.width).toBeGreaterThanOrEqual(44);
+  expect(target.height).toBeGreaterThanOrEqual(44);
+  expect(Math.round(target.x + target.width)).toBe(Math.round(field.x + field.width));
+  // Near its edges, far from the 16 px glyph: the field's last pixels and the button's bottom-left corner.
+  await tap(field.x + field.width - 3, field.y + 3);
+  await expect(box).toHaveValue("");
+  await expect(box).toBeFocused();
+  await expect(clear).toBeHidden();
+  ({ field, target } = await typed());
+  await tap(target.x + 3, target.y + target.height - 3);
+  await expect(box).toHaveValue("");
+  await expect(clear).toBeHidden();
+  // A tap in the text just left of the target is the field's: it keeps what was typed.
+  ({ field, target } = await typed());
+  await tap(target.x - 4, field.y + field.height / 2);
+  await expect(box).toBeFocused();
+  await expect(box).toHaveValue("warping");
+  await expect(clear).toBeVisible();
+});

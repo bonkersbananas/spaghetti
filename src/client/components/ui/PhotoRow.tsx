@@ -82,7 +82,9 @@ export const PhotoRow = forwardRef<HTMLAnchorElement, PhotoRowProps>(function Ph
             "shrink-0 rounded-md",
             sizes[size],
             photo.fit === "contain" && "p-1",
-            faded && "opacity-75 saturate-50",
+            // A render steps back by its colour only: see-through, a dark filament's faint lit edge (its outline on
+            // the dark render ground) would go with it.
+            faded && (photo.fit === "contain" ? "saturate-50" : "opacity-75 saturate-50"),
           )}
         />
       ) : (

@@ -36,7 +36,8 @@ const queryClient = new QueryClient({
 
 const router = createRouter({
   routeTree,
-  context: { queryClient },
+  // `router` is only read once the app runs, by which time it exists.
+  context: { queryClient, knows: (pathname: string): boolean => !!router.getMatchedRoutes(pathname)[2] },
   defaultPreload: "intent",
   defaultPreloadStaleTime: 0,
   scrollRestoration: true,

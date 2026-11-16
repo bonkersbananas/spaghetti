@@ -218,7 +218,7 @@ function Month({ month, first, items, people, selected, refs }: MonthProps) {
   const { data: summary } = useQuery(summaryQuery(month.start, month.end));
   const line = summary ? summaryLine(summary) : null;
   return (
-    <section aria-label={monthLabel(month.start)} className="render-lazy flex flex-col gap-7 md:gap-8">
+    <section aria-label={monthLabel(month.start)} className="render-lazy -mx-2 flex flex-col gap-7 px-2 md:gap-8">
       <header className={cn("flex flex-col gap-1", !first && "pt-4 md:pt-6")}>
         <div className="flex items-baseline justify-between gap-4">
           <Overline as="h2">

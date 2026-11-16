@@ -47,7 +47,22 @@ describe("reactions", () => {
 
   it("fills the quick row with what is used, then the defaults", () => {
     expect(quickEmoji(undefined)).toEqual([...DEFAULT_QUICK_EMOJI]);
-    expect(quickEmoji(["🍝", "🔥"])).toEqual(["🍝", "🔥", "❤️", "🤌", "🤩", "👏"]);
-    expect(quickEmoji(["1", "2", "3", "4", "5", "6", "7"])).toHaveLength(6);
+    expect(quickEmoji(["🍝", "🔥"])).toEqual([
+      "🍝",
+      "🔥",
+      "❤️",
+      "🤌",
+      "🤩",
+      "👏",
+      "🫠",
+      "😍",
+      "😂",
+      "🎉",
+      "🚀",
+      "👀",
+      "💯",
+    ]);
+    expect(quickEmoji(Array.from({ length: 20 }, (_, i) => String(i)))).toHaveLength(13);
+    expect(new Set(DEFAULT_QUICK_EMOJI).size).toBe(13);
   });
 });

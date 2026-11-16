@@ -2,7 +2,9 @@ import { formatDuration } from "@shared/time";
 import {
   type ComponentPropsWithRef,
   forwardRef,
+  lazy,
   type ReactNode,
+  Suspense,
   useCallback,
   useEffect,
   useId,
@@ -83,7 +85,19 @@ export interface TextFieldProps extends Omit<ComponentPropsWithRef<"input">, "si
   appearance?: "surface" | "plain";
   /** "sm" for dense groups of fields, such as print settings. "lg" is one big figure to type, such as a weighing. */
   size?: "sm" | "md" | "lg";
+  /**
+   * A × at the field's end that empties it while it has text (`ClearButton`; the field must be controlled). On by
+   * default for `type="search"`, which gets it in place of the browser's own, a 16 px target.
+   */
+  clearable?: boolean;
 }
+
+/** Room at a clearable field's end for its × (`ClearButton`), while focused as the × shows: as wide as the field is tall. */
+const clearPad = { sm: "focus:pr-11", md: "focus:pr-12 md:focus:pr-11", lg: "focus:pr-16" } as const;
+
+// The × arrives the first time a search field has text, not with a screen's first load (Search's field mounts at once,
+// and an empty one has nothing to clear); the service worker has the chunk precached, so it shows with that text.
+const ClearButton = lazy(() => import("./ClearButton"));
 
 export const TextField = forwardRef<HTMLInputElement, TextFieldProps>(function TextField(
   {
@@ -97,6 +111,7 @@ export const TextField = forwardRef<HTMLInputElement, TextFieldProps>(function T
     suffix,
     appearance = "surface",
     size = "md",
+    clearable,
     className,
     id,
     ...props
@@ -105,6 +120,8 @@ export const TextField = forwardRef<HTMLInputElement, TextFieldProps>(function T
 ) {
   const autoId = useId();
   const fieldId = id ?? autoId;
+  // A controlled field's: its value says whether there is anything to clear.
+  const canClear = (clearable ?? props.type === "search") && !suffix && !props.readOnly && !props.disabled;
   return (
     <FieldFrame
       id={fieldId}
@@ -130,6 +147,7 @@ export const TextField = forwardRef<HTMLInputElement, TextFieldProps>(function T
           aria-invalid={error ? true : undefined}
           aria-describedby={error || caution || hint ? `${fieldId}-message` : undefined}
           className={cn(
+            "peer",
             appearance === "surface"
               ? cn(
                   inputSurface,
@@ -140,10 +158,16 @@ export const TextField = forwardRef<HTMLInputElement, TextFieldProps>(function T
               : "text-ink placeholder:text-ink-faint w-full bg-transparent",
             IconComponent && "pl-11",
             suffix && (size === "lg" ? "pr-14" : size === "md" ? "pr-12" : "pr-10"),
+            canClear && clearPad[size],
             error && "shadow-ring-error focus:shadow-ring-error",
           )}
           {...props}
         />
+        {canClear && !!props.value && (
+          <Suspense fallback={null}>
+            <ClearButton size={size} />
+          </Suspense>
+        )}
         {suffix && (
           <span
             aria-hidden

@@ -338,3 +338,20 @@ test("search finds a build by what Sam said and opens the thread at that comment
   await expect(bubble).toBeInViewport();
   await expect(bubble).not.toHaveClass(/ring-semolina/, { timeout: 8000 });
 });
+
+test("a print on the bed shows the other person's new comment on Builds, as the grid's cards do", async ({ page }) => {
+  test.setTimeout(60_000);
+  const id = await newIdea(page, "Bath tugboat", "building");
+  const attempt = await page.request.post(`/api/items/${id}/attempts`, {
+    headers: { Origin: origin(page) },
+    data: { id: crypto.randomUUID(), outcome: null },
+  });
+  expect(attempt.ok()).toBe(true);
+  const sams = await samSession(page);
+  await sams.say(id, "Is it floating yet?");
+  await page.goto("/builds");
+  const bed = page.getByRole("region", { name: /^On the bed/ });
+  await expect(bed.getByRole("heading", { name: "Bath tugboat" })).toBeVisible();
+  await expect(bed.getByText("1 new comment")).toBeVisible({ timeout: 20_000 });
+  await sams.context.close();
+});

@@ -86,7 +86,7 @@ function JoinPage() {
     onSuccess: async ({ user }) => {
       arrive.stay(user);
       if (method === "password") askForPasskeyAfterSignIn();
-      await arrive.goToday();
+      await arrive.go();
     },
   });
 
