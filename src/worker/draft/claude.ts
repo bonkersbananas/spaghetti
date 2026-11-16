@@ -111,6 +111,11 @@ export interface RunDiagnosis {
   unread?: string;
   /** Why the site's API gave the Worker nothing, when it was asked (UnreadReason: http_429 is Printables' throttle). */
   apiUnread?: string;
+  /**
+   * What Claude's web fetch made of the site's API address it was handed (Printables'): "read", the tool's error
+   * code (url_too_long, unsupported_content_type, url_not_accessible…), or "not_tried".
+   */
+  apiFetch?: string;
   /** The HTTP status of the Worker's own fetch of the page (null: it never answered or wasn't allowed). */
   pageStatus?: number | null;
   /** Claude was asked twice: its fetch read Printables' API but it called that unreadable, so it got the facts as data. */
@@ -132,9 +137,21 @@ export interface FetchedDoc {
   text: string;
 }
 
+/** One address Claude's web fetch was asked for (as Claude asked it), and "read" or the tool's error code. */
+export interface FetchTry {
+  url: string;
+  result: string;
+}
+
+/** What Claude's web fetch did in an answer: the documents it read, and every address it tried. */
+interface Fetches {
+  fetched?: FetchedDoc[];
+  tried?: FetchTry[];
+}
+
 export type AskResult =
-  | { ok: true; draft: ClaudeDraft; diagnosis: RunDiagnosis; fetched?: FetchedDoc[] }
-  | { ok: false; failure: DraftFailure; diagnosis: RunDiagnosis; fetched?: FetchedDoc[] };
+  | ({ ok: true; draft: ClaudeDraft; diagnosis: RunDiagnosis } & Fetches)
+  | ({ ok: false; failure: DraftFailure; diagnosis: RunDiagnosis } & Fetches);
 
 /** Asks Claude to read one model page. Never throws: a failure is one of the honest reasons. */
 export async function askClaude(
@@ -183,11 +200,15 @@ export async function askClaude(
   ];
   const fetchErrors: string[] = [];
   const fetched: FetchedDoc[] = [];
+  /** Every address Claude's fetch was asked for, by tool call, and what came of it ("read" or the error code). */
+  const askedFor = new Map<string, string>();
+  const tried: FetchTry[] = [];
   const stop = (failure: DraftFailure, diagnosis: RunDiagnosis): AskResult => ({
     ok: false,
     failure,
     diagnosis: { ...diagnosis, ...(fetchErrors.length ? { fetchErrors } : {}) },
     ...(fetched.length ? { fetched } : {}),
+    ...(tried.length ? { tried } : {}),
   });
   try {
     for (let round = 0; ; round++) {
@@ -212,10 +233,20 @@ export async function askClaude(
         messages,
       });
       for (const block of response.content) {
+        if (block.type === "server_tool_use" && block.name === "web_fetch") {
+          const asked = (block.input as { url?: unknown } | null)?.url;
+          if (typeof asked === "string") askedFor.set(block.id, asked);
+        }
         if (block.type !== "web_fetch_tool_result") continue;
-        if (block.content.type === "web_fetch_tool_result_error") fetchErrors.push(block.content.error_code);
-        else if (block.content.content.source.type === "text")
-          fetched.push({ url: block.content.url, text: block.content.content.source.data });
+        const address = askedFor.get(block.tool_use_id) ?? "";
+        if (block.content.type === "web_fetch_tool_result_error") {
+          fetchErrors.push(block.content.error_code);
+          tried.push({ url: address, result: block.content.error_code });
+        } else {
+          tried.push({ url: address || block.content.url, result: "read" });
+          if (block.content.content.source.type === "text")
+            fetched.push({ url: block.content.url, text: block.content.content.source.data });
+        }
       }
       const stopReason = response.stop_reason ?? undefined;
       if (response.stop_reason === "refusal") return stop("refused", { outcome: "refusal", stopReason });
@@ -243,6 +274,7 @@ export async function askClaude(
         draft: parsed.data,
         diagnosis: { outcome: "drafted", stopReason, ...(fetchErrors.length ? { fetchErrors } : {}) },
         ...(fetched.length ? { fetched } : {}),
+        ...(tried.length ? { tried } : {}),
       };
     }
   } catch (error) {
