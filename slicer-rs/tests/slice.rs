@@ -2476,7 +2476,7 @@ fn blocks_in_filaments(x0: f32, colours: &[&str], heights: &[f32]) -> spaghetti_
     plate.slice(&settings, &Options { arrange: false, ..Options::default() }).unwrap()
 }
 
-/// A plate of blocks native Orca 2.5 sliced alike (`blocks_in_filaments`), and what it made of it: its filament map,
+/// A plate of blocks native Orca 2.5.1 sliced alike (`blocks_in_filaments`), and what it made of it: its filament map,
 /// tool changes and the grams of each filament.
 struct OrcaPlate {
     x0: f32,
@@ -2497,9 +2497,9 @@ fn several_filaments_go_on_the_nozzles_as_orcas_grouping_puts_them() {
             x0: 20.0,
             colours: &["#F7D4E0", "#8E9089", "#5B3A29", "#FFE600", "#00AE42", "#000000", "#C12E1F", "#F2754E"],
             heights: &[10.0, 6.0, 4.0, 10.0, 8.0, 6.0, 4.0, 4.0],
-            map: "1 1 2 2 1 2 2 1",
-            changes: 210,
-            grams: &[8.45, 6.01, 7.99, 12.01, 4.69, 5.55, 6.56, 3.98],
+            map: "1 1 2 2 1 1 2 2",
+            changes: 211,
+            grams: &[8.54, 7.09, 6.58, 9.68, 7.02, 4.41, 7.23, 6.23],
         },
         // Clear of that strip, the flush and loading time alone decide.
         OrcaPlate {
