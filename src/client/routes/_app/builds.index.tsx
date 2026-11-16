@@ -1,24 +1,33 @@
+import type { Person } from "@shared/api";
 import { useQuery, useSuspenseQuery } from "@tanstack/react-query";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import type { ReactNode } from "react";
-import { BuildCard, BuildRow, lastActivity } from "@/components/builds/BuildCard";
+import { lazy, type ReactNode, Suspense, useMemo } from "react";
+import { BuildCard, BuildRow } from "@/components/builds/BuildCard";
 import { SpoolStrand } from "@/components/illustrations/SpoolStrand";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { RecentlyDeletedLink } from "@/components/shell/RecentlyDeletedLink";
+import { ActionBar } from "@/components/ui/ActionBar";
 import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { PlusIcon } from "@/components/ui/icons";
-import { AddPhotoTile } from "@/components/ui/PhotoTiles";
 import { Reflow } from "@/components/ui/Reflow";
 import { Section as PageSection } from "@/components/ui/Section";
-import { CardSkeleton } from "@/components/ui/Skeleton";
+import { CardSkeleton, Skeleton } from "@/components/ui/Skeleton";
 import { useVia } from "@/lib/agents";
-import { createBuild } from "@/lib/builds";
+import { createBuild, lastActivity, printingAttempts } from "@/lib/builds";
 import { type ItemView, useBuilds } from "@/lib/items";
 import { useListPicker } from "@/lib/list-picker";
 import { useArrived } from "@/lib/live";
+import { printerQuery } from "@/lib/pantry-queries";
 import { peopleQuery, sessionQuery } from "@/lib/queries";
 import { useIsDesktop } from "@/lib/use-media-query";
+import { useNow } from "@/lib/use-now";
+
+// The printing cards come with their own code (progress, outcome buttons, the camera): only a list with something on
+// the bed loads it, so the first load stays as light as the grid.
+const BedCards = lazy(() =>
+  import("@/components/builds/PrintingCard").then((module) => ({ default: module.BedCards })),
+);
 
 export const Route = createFileRoute("/_app/builds/")({
   component: Builds,
@@ -27,32 +36,48 @@ export const Route = createFileRoute("/_app/builds/")({
 /** The same grid as the ideas inbox: two columns on phones, more on desktop. */
 const grid = "grid grid-cols-2 gap-3 md:grid-cols-3 md:gap-5 xl:grid-cols-4";
 
-const isPrinting = (item: ItemView) => item.attempts.some((attempt) => attempt.outcome === null);
-
-/** What's printing first, then what was worked on most recently. */
-function byActivity(a: ItemView, b: ItemView) {
-  return Number(isPrinting(b)) - Number(isPrinting(a)) || lastActivity(b) - lastActivity(a);
-}
+/** What was worked on most recently first. */
+const byActivity = (a: ItemView, b: ItemView) => lastActivity(b) - lastActivity(a);
 
 const byFinished = (a: ItemView, b: ItemView) => (b.finishedAt ?? b.updatedAt) - (a.finishedAt ?? a.updatedAt);
 
+/**
+ * Builds, in the order you'd look standing at the printer: what is on the bed (printing, or off the bed and waiting
+ * for "how did it go?") as the same big cards as Today, then the builds in progress between prints, then the
+ * quieter Done and On the shelf.
+ */
 function Builds() {
   useListPicker();
   const { items, isPending } = useBuilds();
   const { data: people } = useQuery(peopleQuery);
-  const byId = new Map(people?.map((person) => [person.id, person]));
+  const byId = useMemo(() => new Map<string, Person>(people?.map((person) => [person.id, person])), [people]);
   const arrived = useArrived();
   const via = useVia();
   const newBuild = useNewBuild();
   const isDesktop = useIsDesktop();
+  const now = useNow(60_000);
+  const live = useQuery(printerQuery).data?.bridge?.progress;
 
-  const active = items.filter((item) => item.stage === "building").sort(byActivity);
+  const onBed = useMemo(() => printingAttempts(items, now, live), [items, now, live]);
+  const onBedIds = new Set(onBed.map(({ item }) => item.id));
+  const inProgress = items.filter((item) => item.stage === "building" && !onBedIds.has(item.id)).sort(byActivity);
   const done = items.filter((item) => item.stage === "done").sort(byFinished);
   const shelved = items.filter((item) => item.stage === "shelved").sort(byFinished);
 
   return (
     <>
-      <PageHeader title="Builds" subtitle="From idea to finished print, attempt by attempt." />
+      <PageHeader
+        title="Builds"
+        subtitle="From idea to finished print, attempt by attempt."
+        actions={
+          // An empty list has its own "Start a build": one way to start, not two.
+          (isPending || items.length > 0) && (
+            <Button variant="secondary" icon={PlusIcon} onClick={newBuild}>
+              New build
+            </Button>
+          )
+        }
+      />
       {isPending ? (
         <div className={grid} aria-hidden>
           {Array.from({ length: 4 }, (_, index) => (
@@ -64,28 +89,41 @@ function Builds() {
         <BuildsEmpty onNew={newBuild} />
       ) : (
         <div className="flex flex-col gap-12 md:gap-16">
-          <Section title="On the bed" count={active.length}>
-            <ul data-picks className={`${grid} relative`} aria-label="On the bed">
-              <Reflow>
-                {active.map((item) => (
-                  <BuildCard
-                    key={item.id}
-                    item={item}
-                    person={byId.get(item.createdBy)}
-                    via={via(item.createdVia)}
-                    landing={arrived.has(item.id)}
-                  />
-                ))}
-              </Reflow>
-              <li className="col-span-2 list-none md:col-span-1">
-                {isDesktop ? (
-                  <AddPhotoTile size="card" icon={PlusIcon} label="New build" onClick={newBuild} />
-                ) : (
-                  <AddPhotoTile size="row" icon={PlusIcon} label="New build" onClick={newBuild} />
-                )}
-              </li>
-            </ul>
-          </Section>
+          {/* Only what is physically on the plate; with nothing there the section isn't drawn. */}
+          {onBed.length > 0 && (
+            <Section title="On the bed" count={onBed.length > 1 ? onBed.length : undefined}>
+              <Suspense fallback={<Skeleton className="h-44 rounded-lg" />}>
+                {/* J and K walk these too, before the In progress grid. */}
+                <div data-picks>
+                  <BedCards prints={onBed} people={byId} via={via} spread />
+                </div>
+              </Suspense>
+            </Section>
+          )}
+          {/* Everything in progress on the bed: no section for nothing, as with an empty bed. */}
+          {(inProgress.length > 0 || onBed.length === 0) && (
+            <Section
+              title="In progress"
+              count={inProgress.length || undefined}
+              description={
+                inProgress.length === 0 && <p className="text-body text-ink-soft">Nothing in progress right now.</p>
+              }
+            >
+              <ul data-picks className={`${grid} relative empty:hidden`} aria-label="In progress">
+                <Reflow>
+                  {inProgress.map((item) => (
+                    <BuildCard
+                      key={item.id}
+                      item={item}
+                      person={byId.get(item.createdBy)}
+                      via={via(item.createdVia)}
+                      landing={arrived.has(item.id)}
+                    />
+                  ))}
+                </Reflow>
+              </ul>
+            </Section>
+          )}
           {done.length > 0 && (
             <Section title="Done" count={done.length} quiet>
               <ul data-picks className="grid gap-1 md:grid-cols-2 md:gap-x-6 xl:grid-cols-3" aria-label="Done">
@@ -107,6 +145,14 @@ function Builds() {
         </div>
       )}
       {!isPending && <RecentlyDeletedLink />}
+      {/* The list's add-action on phones, as on every list: a floating button over the tab bar. */}
+      {!isPending && items.length > 0 && !isDesktop && (
+        <ActionBar>
+          <Button variant="floating" size="lg" icon={PlusIcon} onClick={newBuild} className="mx-auto">
+            New build
+          </Button>
+        </ActionBar>
+      )}
     </>
   );
 }
@@ -115,11 +161,13 @@ function Section({
   title,
   count,
   quiet,
+  description,
   children,
 }: {
   title: string;
-  count: number;
+  count?: number;
   quiet?: boolean;
+  description?: ReactNode;
   children: ReactNode;
 }) {
   return (
@@ -128,6 +176,7 @@ function Section({
       title={title}
       size={quiet ? "title" : "headline"}
       count={count}
+      description={description}
     >
       {children}
     </PageSection>
@@ -150,7 +199,7 @@ function BuildsEmpty({ onNew }: { onNew: () => void }) {
   return (
     <EmptyState
       illustration={<SpoolStrand />}
-      title="Nothing on the bed"
+      title="Nothing cooking yet"
       action={
         <Button variant={isDesktop ? "secondary" : "primary"} icon={PlusIcon} onClick={onNew}>
           Start a build

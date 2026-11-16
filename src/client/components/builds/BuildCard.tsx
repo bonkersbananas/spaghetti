@@ -1,4 +1,5 @@
 import type { Person } from "@shared/api";
+import { tagLabel } from "@shared/attempts";
 import { isOffTheBed, offTheBedLabel } from "@shared/print-progress";
 import { inlineTime, relativeTime } from "@shared/time";
 import { m } from "motion/react";
@@ -11,7 +12,7 @@ import { MetaList } from "@/components/ui/MetaList";
 import { PhotoRow } from "@/components/ui/PhotoRow";
 import { ReactionGlance } from "@/components/ui/ReactionGlance";
 import { useReflow } from "@/components/ui/Reflow";
-import { heroPhoto, newestPhoto } from "@/lib/builds";
+import { heroPhoto, newestPhoto, useTagOptions } from "@/lib/builds";
 import { cn } from "@/lib/cn";
 import { useForLine } from "@/lib/for-whom";
 import type { ItemView } from "@/lib/items";
@@ -19,12 +20,6 @@ import { photoSrc } from "@/lib/previews";
 import { usePrintProgress } from "@/lib/print-progress";
 import { useUnreadCount, useUnreadThreadSearch } from "@/lib/unread-comments";
 import { OutcomeChip } from "./Outcome";
-
-/** When anything last happened on a build: its newest attempt, or when it started. */
-export function lastActivity(item: ItemView): number {
-  const last = item.attempts.at(-1);
-  return Math.max(last?.printedAt ?? 0, last?.finishedAt ?? 0, item.startedAt ?? item.createdAt);
-}
 
 /**
  * "Attempt 3 · 2 h ago", "Attempt 3 · about 45 min left" while it prints,
@@ -76,7 +71,7 @@ const upperFirst = (text: string) => text.charAt(0).toUpperCase() + text.slice(1
 
 /**
  * A build in progress: its newest photo first (what came off the bed last),
- * how the last attempt went over it, and when.
+ * how the last attempt went over it, why when it didn't work (its first failure tag), and when.
  */
 export function BuildCard({
   item,
@@ -96,6 +91,9 @@ export function BuildCard({
   const unread = useUnreadCount(item.id);
   const forLine = useForLine();
   const toThread = useUnreadThreadSearch(item.id);
+  const failureOptions = useTagOptions("failure");
+  // What went wrong last time, under the title: the outcome chip over the photo says how it went, this says why.
+  const tag = last?.outcome && last.outcome !== "success" ? last.failureTags[0] : undefined;
   return (
     <m.li {...useReflow(landing)} ref={ref} className="list-none">
       <Card
@@ -109,6 +107,8 @@ export function BuildCard({
         title={item.title}
         note={item.note || undefined}
         unread={unread}
+        // The chip over the photo carries the outcome's colour; the reason under the title stays quiet ink.
+        sub={tag && tagLabel("failure", tag, failureOptions)}
         chips={
           last ? (
             <OutcomeChip outcome={last.outcome} offTheBed={isOffTheBed(last)} onPhoto className="shadow-soft" />

@@ -24,7 +24,6 @@ import { ACTION_ROOM, ActionCard } from "@/components/ui/ActionCard";
 import { Button } from "@/components/ui/Button";
 import * as Icons from "@/components/ui/icons";
 import { PhotoRow } from "@/components/ui/PhotoRow";
-import { AddPhotoTile } from "@/components/ui/PhotoTiles";
 import { PrintProgress, PrintProgressView } from "@/components/ui/PrintProgress";
 import { Stepper } from "@/components/ui/Stepper";
 import { toast } from "@/components/ui/Toast";
@@ -408,13 +407,6 @@ export function BuildsSection() {
               </span>
             </PhotoRow>
           </ActionCard>
-          <Label>New build tiles</Label>
-          <div className="grid grid-cols-2 gap-3">
-            <AddPhotoTile size="card" icon={Icons.PlusIcon} label="New build" />
-            <div className="flex flex-col justify-end">
-              <AddPhotoTile size="row" icon={Icons.PlusIcon} label="New build" />
-            </div>
-          </div>
         </div>
       </div>
     </Section>

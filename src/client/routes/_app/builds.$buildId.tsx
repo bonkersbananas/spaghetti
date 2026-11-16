@@ -384,7 +384,7 @@ function Build({ item }: { item: ItemView }) {
       : [
           {
             id: "reopen",
-            label: item.stage === "done" ? "Reopen build" : "Back on the bed",
+            label: item.stage === "done" ? "Reopen build" : "Pick up again",
             icon: ReopenIcon,
             keywords: "resume restart unshelve",
             run: () => canEdit(item.pending) && reopenBuild(queryClient, item),
@@ -467,7 +467,7 @@ function Build({ item }: { item: ItemView }) {
         </>
       ) : (
         <Button icon={ReopenIcon} disabled={readOnly} onClick={() => reopenBuild(queryClient, item)}>
-          {item.stage === "done" ? "Reopen" : "Back on the bed"}
+          {item.stage === "done" ? "Reopen" : "Pick up again"}
         </Button>
       )}
     </>
@@ -570,7 +570,7 @@ function Build({ item }: { item: ItemView }) {
                     disabled={readOnly}
                     onClick={() => reopenBuild(queryClient, item)}
                   >
-                    {item.stage === "done" ? "Reopen" : "Back on the bed"}
+                    {item.stage === "done" ? "Reopen" : "Pick up again"}
                   </Button>
                 )}
               </BuildTitleLine>

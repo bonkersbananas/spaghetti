@@ -64,7 +64,7 @@ test("grows an idea into a build, logs a failure and a success, and finishes it"
   await page.getByRole("button", { name: "Start building" }).click();
   await expect(page).toHaveURL(new RegExp(`/builds/${id}$`));
   await expect(page.getByRole("textbox", { name: "Title" })).toHaveValue("Cable chain");
-  await expect(page.getByText("On the bed", { exact: true })).toBeVisible();
+  await expect(page.getByText("In progress", { exact: true })).toBeVisible();
   await expect.poll(async () => (await getItem(page, id)).stage).toBe("building");
 
   // A failed attempt, with a failure tag, a photo and a bed temperature.
@@ -135,12 +135,63 @@ test("grows an idea into a build, logs a failure and a success, and finishes it"
     .filter({ hasText: "Al dente" })
     .getByRole("button", { name: "Undo" })
     .click();
-  await expect(page.getByText("On the bed", { exact: true })).toBeVisible();
+  await expect(page.getByText("In progress", { exact: true })).toBeVisible();
   await expect.poll(async () => (await getItem(page, id)).stage).toBe("building");
 
   // It lives under Builds now, not Ideas.
   await page.goto("/builds");
-  await expect(page.getByRole("list", { name: "On the bed" }).getByRole("link", { name: /Cable chain/ })).toBeVisible();
+  await expect(
+    page.getByRole("list", { name: "In progress" }).getByRole("link", { name: /Cable chain/ }),
+  ).toBeVisible();
+});
+
+test("On the bed holds only what is on the plate; builds between prints are In progress", { tag: "@phone" }, async ({
+  page,
+  isMobile,
+}) => {
+  const headers = { Origin: origin(page) };
+  const printing = crypto.randomUUID();
+  const waiting = crypto.randomUUID();
+  await page.request.post("/api/items", { headers, data: { id: printing, title: "Hook", stage: "building" } });
+  await page.request.post(`/api/items/${printing}/attempts`, {
+    headers,
+    data: { id: crypto.randomUUID(), outcome: null },
+  });
+  await page.request.post("/api/items", { headers, data: { id: waiting, title: "Cable chain", stage: "building" } });
+  await page.request.post(`/api/items/${waiting}/attempts`, {
+    headers,
+    data: { id: crypto.randomUUID(), outcome: "failed", failureTags: ["bed-adhesion"] },
+  });
+
+  await page.goto("/builds");
+  const bed = page.getByRole("region", { name: "On the bed" });
+  await expect(bed.getByRole("link", { name: /Hook/ }).first()).toBeVisible();
+  await expect(bed.getByRole("button", { name: "Finish" })).toBeVisible();
+  await expect(bed.getByText("Cable chain")).toHaveCount(0);
+  const inProgress = page.getByRole("list", { name: "In progress" });
+  const card = inProgress.getByRole("link", { name: /Cable chain/ });
+  await expect(card).toContainText("Spaghetti");
+  await expect(card).toContainText("Bed adhesion");
+  await expect(inProgress.getByRole("link", { name: /Hook/ })).toHaveCount(0);
+
+  // On desktop J walks the prints on the bed first, by their names' links, then the In progress cards.
+  if (!isMobile) {
+    await page.keyboard.press("j");
+    await expect(bed.getByRole("link", { name: /^Hook, attempt 1/ })).toBeFocused();
+    await page.keyboard.press("j");
+    await expect(card).toBeFocused();
+  }
+
+  // A build between prints says so on its page: it isn't on the bed.
+  await card.click();
+  await expect(page.getByText("In progress", { exact: true })).toBeVisible();
+  await expect(page.getByRole("main").getByText("On the bed", { exact: true })).toHaveCount(0);
+
+  // Only the print left: no In progress section for nothing.
+  await page.request.delete(`/api/items/${waiting}`, { headers });
+  await page.goto("/builds");
+  await expect(page.getByRole("region", { name: "On the bed" })).toBeVisible();
+  await expect(page.getByRole("region", { name: /^In progress/ })).toHaveCount(0);
 });
 
 test("adds a capture to the print that's running and finishes it", async ({ page, isMobile }) => {
@@ -257,9 +308,9 @@ test("a print on the bed shows its progress only when there is an estimate", asy
   await expect(bar).toHaveAttribute("aria-valuetext", /^About \d+ (h \d+ )?min left$|^Done around /);
   await expect(page.getByText(/^About .* left$|^Done around /)).toBeVisible();
 
-  // The builds list says how long is left instead of when it started.
+  // The builds list has it on the bed, saying how long is left instead of when it started.
   await page.goto("/builds");
-  await expect(page.getByRole("link", { name: /Timed tugboat/ })).toContainText(/about .* left|done around/);
+  await expect(page.getByRole("region", { name: "On the bed" })).toContainText(/About .* left|Done around/);
 
   // No estimate, nothing to measure: words only, no bar.
   await page.goto(`/builds/${untimed}`);

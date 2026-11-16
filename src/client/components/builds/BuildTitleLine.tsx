@@ -99,9 +99,8 @@ function StageChip({
     return printing ? (
       <OutcomeChip outcome={null} offTheBed={isOffTheBed(printing)} />
     ) : (
-      <Chip tone="semolina" icon={BuildsIcon}>
-        On the bed
-      </Chip>
+      // Between prints: neutral, since semolina is for what is printing now.
+      <Chip icon={BuildsIcon}>In progress</Chip>
     );
   }
   if (item.stage === "shelved") {

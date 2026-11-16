@@ -81,19 +81,19 @@ export function NowPrintingCard({ item, attempt }: NowPrintingCardProps) {
 /**
  * The print on the bed, at the foot of the sidebar: what it is and how far along, one click from its
  * build. With several, the one that should be done by now comes first and "and 1 more" leads to Today.
- * Hidden on Today, which shows every print in full.
+ * Hidden on Today and the Builds list, which show every print in full.
  */
 export function NowPrinting() {
   const { items } = useBuilds();
   const now = useNow();
   // The sidebar is for desktop; on a phone its words would only sit hidden in the page.
   const isDesktop = useIsDesktop();
-  const onToday = useLocation({ select: (location) => location.pathname === "/today" });
+  const showsThemAll = useLocation({ select: (location) => /^\/(today|builds)\/?$/.test(location.pathname) });
   // Ranked by what the printer says when the bridge reports, as Today and the card's own progress do.
   const live = useQuery(printerQuery).data?.bridge?.progress;
   const printing = useMemo(() => printingAttempts(items, now, live), [items, now, live]);
   const first = printing[0];
-  const show = !!first && !onToday && isDesktop;
+  const show = !!first && !showsThemAll && isDesktop;
 
   return (
     <AnimatePresence initial={false}>

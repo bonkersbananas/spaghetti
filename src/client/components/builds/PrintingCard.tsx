@@ -3,8 +3,9 @@ import type { Outcome } from "@shared/attempts";
 import { attemptPartsLabel } from "@shared/parts";
 import { isOffTheBed } from "@shared/print-progress";
 import { Link, useNavigate } from "@tanstack/react-router";
-import { m, useReducedMotion } from "motion/react";
+import { AnimatePresence, m, useReducedMotion } from "motion/react";
 import { useRef } from "react";
+import { AutoHeight } from "@/components/ui/AutoHeight";
 import { Avatar, ViaText } from "@/components/ui/Avatar";
 import { Button, IconButton } from "@/components/ui/Button";
 import { BuildsIcon, CameraIcon } from "@/components/ui/icons";
@@ -16,7 +17,7 @@ import { useCapture } from "@/lib/capture";
 import { cn } from "@/lib/cn";
 import { itemName } from "@/lib/item-name";
 import { type AttemptView, addPhotosToItem, type ItemView } from "@/lib/items";
-import { duration } from "@/lib/motion";
+import { duration, ease } from "@/lib/motion";
 import { fileThumbSrc, photoSrc } from "@/lib/previews";
 import { usePrintProgress } from "@/lib/print-progress";
 import { useReadOnly } from "@/lib/read-only";
@@ -39,7 +40,36 @@ interface PrintingCardProps {
    * Now block. Desktop is unchanged.
    */
   compact?: boolean;
+  /**
+   * From `lg`: `row` (Today's column: the picture on two fifths, the text beside it), `half` (one print across the
+   * Builds list: the picture on half the card, 16:9), or the picture on top for prints side by side, `wide` (two
+   * across, 16:9) or `stack` (three across, 4:3), so the focal cards' pictures are never smaller than the grid's below.
+   */
+  desktop?: "row" | "half" | "wide" | "stack";
 }
+
+/** What `desktop` changes from `lg`, over the md row. */
+const desktopLayouts = {
+  row: { card: "", picture: "", head: "", body: "" },
+  half: {
+    card: "lg:grid-cols-2",
+    picture: "lg:col-span-1 lg:aspect-video",
+    head: "lg:col-span-1 lg:px-5 lg:pt-4",
+    body: "lg:col-span-1 lg:px-5 lg:pb-4",
+  },
+  wide: {
+    card: "lg:grid-cols-1 lg:grid-rows-[auto_auto_1fr]",
+    picture: "lg:col-span-1 lg:row-span-1 lg:aspect-video",
+    head: "lg:col-span-1 lg:px-2 lg:pt-3",
+    body: "lg:col-span-1 lg:px-2 lg:pb-2",
+  },
+  stack: {
+    card: "lg:grid-cols-1 lg:grid-rows-[auto_auto_1fr]",
+    picture: "lg:col-span-1 lg:row-span-1",
+    head: "lg:col-span-1 lg:px-2 lg:pt-3",
+    body: "lg:col-span-1 lg:px-2 lg:pb-2",
+  },
+} as const;
 
 /** The card's grid on phones, big or compact; from md both are the same row: picture on two fifths, text beside. */
 const layouts = {
@@ -58,8 +88,9 @@ const layouts = {
  * the build; Finish goes to the build with the attempt's sheet open. When the print should be done, the button
  * gives way to the question people came to answer: how did it go?
  */
-export function PrintingCard({ item, attempt, person, via, compact = false }: PrintingCardProps) {
+export function PrintingCard({ item, attempt, person, via, compact = false, desktop = "row" }: PrintingCardProps) {
   const layout = layouts[compact ? "compact" : "big"];
+  const wide = desktopLayouts[desktop];
   // Each time a compact card becomes the big one on a phone (or back), its content is swapped and fades in; from
   // md both layouts are the same row, so nothing is swapped there, and a change of breakpoint never remounts it.
   const isDesktop = useIsDesktop();
@@ -99,12 +130,12 @@ export function PrintingCard({ item, attempt, person, via, compact = false }: Pr
   return (
     // On Today a compact card that becomes the first turns into the big one: Today's AutoHeight grows the box, and
     // the new layout fades in here (the compact one leaves at once), so nothing slides through anything.
-    <article className="bg-cream shadow-soft hover:shadow-raised hover:bg-lifted duration-fast relative rounded-lg p-1.5 transition-shadow has-[a:focus-visible]:shadow-[var(--sg-ring)]">
+    <article className="bg-cream shadow-soft hover:shadow-raised hover:bg-lifted duration-fast relative h-full rounded-lg p-1.5 transition-shadow has-[a:focus-visible]:shadow-[var(--sg-ring)]">
       <m.div
         key={swaps.current}
         initial={swaps.current > 0 && !reduce ? { opacity: 0 } : false}
         animate={{ opacity: 1, transition: { duration: duration.base } }}
-        className={cn("grid md:grid-cols-5 md:grid-rows-[auto_1fr]", layout.card)}
+        className={cn("grid md:h-full md:grid-cols-5 md:grid-rows-[auto_1fr]", layout.card, wide.card)}
       >
         <div
           className={cn(
@@ -112,6 +143,7 @@ export function PrintingCard({ item, attempt, person, via, compact = false }: Pr
             // A big card without a picture keeps a shorter strip on phones: an empty 4:3 well would only push the
             // print's state down; the slicer's plate picture (a render, not the result) gets a calmer 16:9.
             !hero && !plate && !compact ? "aspect-5/2" : plate && !compact ? "aspect-video" : layout.picture,
+            wide.picture,
           )}
         >
           {hero ? (
@@ -132,19 +164,25 @@ export function PrintingCard({ item, attempt, person, via, compact = false }: Pr
           {/* The picture and the name lead to the build, each with its own area; the progress below has its own, so
               nothing presses through a button. This one is for the pointer only: the name's link is the stop for the keyboard. */}
           <Link {...to} tabIndex={-1} aria-hidden className="absolute inset-0 z-10" />
-          {/* On a compact card the words under it say the same, and a chip would cover the small picture. */}
-          <OutcomeChip
-            outcome={null}
-            offTheBed={offBed}
-            onPhoto
-            className={cn("shadow-soft pointer-events-none absolute bottom-2 left-2 z-20", compact && "max-md:hidden")}
-          />
+          {/* On a compact card the words under it say the same, and a chip would cover the small picture. Off the bed
+              the line beside the picture says so ("Off the bed at 10:42 · how did it go?"), so it isn't said twice. */}
+          {!offBed && (
+            <OutcomeChip
+              outcome={null}
+              onPhoto
+              className={cn(
+                "shadow-soft pointer-events-none absolute bottom-2 left-2 z-20",
+                compact && "max-md:hidden",
+              )}
+            />
+          )}
         </div>
         <div
           className={cn(
             "pointer-events-none relative flex min-w-0 flex-col md:col-span-3 md:px-4 md:pt-3",
             compact ? "gap-1.5 md:gap-2.5" : "gap-2.5",
             layout.head,
+            wide.head,
           )}
         >
           <Link
@@ -173,7 +211,7 @@ export function PrintingCard({ item, attempt, person, via, compact = false }: Pr
             )}
           </div>
           <MetaList className="text-small text-ink-faint">
-            <span className="whitespace-nowrap">attempt {attempt.number}</span>
+            <span className="whitespace-nowrap">Attempt {attempt.number}</span>
             {partsLabel && <span>{partsLabel}</span>}
             {filaments.length > 0 && (
               <SettingsLine
@@ -189,6 +227,7 @@ export function PrintingCard({ item, attempt, person, via, compact = false }: Pr
           className={cn(
             "pointer-events-none relative flex min-w-0 flex-col gap-2.5 md:col-span-3 md:px-4 md:pt-2.5 md:pb-3",
             layout.body,
+            wide.body,
           )}
         >
           {offBed && attempt.endedAt !== null ? (
@@ -208,7 +247,8 @@ export function PrintingCard({ item, attempt, person, via, compact = false }: Pr
             />
           ) : (
             <>
-              <div className="flex flex-col gap-1.5">
+              {/* At the card's foot, so cards side by side have their Finish buttons on one line. */}
+              <div className="flex flex-col gap-1.5 md:mt-auto">
                 <PrintProgress
                   startedAt={attempt.printedAt}
                   estimatedMinutes={attempt.settings.estimatedMinutes}
@@ -222,7 +262,13 @@ export function PrintingCard({ item, attempt, person, via, compact = false }: Pr
                       progress.state === "due" ? "text-semolina-ink font-semibold" : "text-ink-soft",
                     )}
                   >
-                    {progress.label}
+                    {/* "Layer 70 of 205 · 30 min left" breaks between its parts, never inside "30 min left". */}
+                    {progress.label.split(" · ").map((part, index, parts) => (
+                      <span key={part} className="whitespace-nowrap">
+                        {part}
+                        {index < parts.length - 1 ? " · " : ""}
+                      </span>
+                    ))}
                   </p>
                   <div className="pointer-events-auto flex shrink-0 items-center gap-1.5">
                     {!readOnly && (
@@ -272,5 +318,87 @@ export function PrintingCard({ item, attempt, person, via, compact = false }: Pr
         </div>
       </m.div>
     </article>
+  );
+}
+
+interface BedCardsProps {
+  /** What is physically on the plate: printing, or off the bed and waiting for "how did it go?" (`printingAttempts`). */
+  prints: Array<{ item: ItemView; attempt: AttemptView }>;
+  people: ReadonlyMap<string, Person>;
+  via: (createdVia: string | null | undefined) => string | undefined;
+  /**
+   * The Builds list, which has the whole width: from `lg` one print takes the row (picture on half the card), two or
+   * four sit two across and three (or more) three across, pictures on top. Today's column keeps one row each.
+   */
+  spread?: boolean;
+  className?: string;
+}
+
+/**
+ * The prints on the bed as `PrintingCard`s, on Today and at the top of Builds. On phones one print is the big card and
+ * two or more are all compact, so the one that waits for an answer is still on the first screen. A print that gets its
+ * answer fades and collapses while the others move up, and a last one left grows into the big card; with reduced
+ * motion everything is at its end state at once.
+ */
+export function BedCards({ prints, people, via, spread = false, className }: BedCardsProps) {
+  const reduce = useReducedMotion();
+  const isDesktop = useIsDesktop();
+  const compact = prints.length > 1;
+  const count = prints.length;
+  const desktop: PrintingCardProps["desktop"] = !spread
+    ? "row"
+    : count === 1
+      ? "half"
+      : count === 2 || count === 4
+        ? "wide"
+        : "stack";
+  const cardProps = (item: ItemView, attempt: AttemptView) => ({
+    compact,
+    desktop,
+    item,
+    attempt,
+    person: people.get(attempt.createdBy),
+    via: via(attempt.createdVia),
+  });
+  return (
+    <div
+      className={cn(
+        "flex flex-col",
+        spread && "lg:grid lg:gap-5",
+        spread && (desktop === "wide" ? "lg:grid-cols-2" : desktop === "stack" ? "lg:grid-cols-3" : "lg:grid-cols-1"),
+        className,
+      )}
+    >
+      <AnimatePresence initial={false}>
+        {prints.map(({ item, attempt }) => (
+          <m.div
+            key={attempt.id}
+            // The space under a card is its own padding, so a card that leaves takes its gap with it (in the spread
+            // grid the gap is the grid's).
+            className={cn("pb-4 last:pb-0", spread && "lg:pb-0")}
+            exit={{
+              opacity: 0,
+              height: 0,
+              paddingBottom: 0,
+              overflow: "hidden",
+              // Faded before the collapse shows a clipped slice of it.
+              transition: reduce
+                ? { duration: 0 }
+                : { duration: duration.base, ease: ease.inOut, opacity: { duration: duration.fast } },
+            }}
+          >
+            {spread && isDesktop ? (
+              // Side by side, the cards of a row are as tall as each other; on desktop a card never changes between
+              // big and compact, so there is nothing for AutoHeight to animate.
+              <PrintingCard {...cardProps(item, attempt)} />
+            ) : (
+              <AutoHeight trigger={isDesktop ? "row" : compact}>
+                <PrintingCard {...cardProps(item, attempt)} />
+              </AutoHeight>
+            )}
+          </m.div>
+        ))}
+      </AnimatePresence>
+    </div>
   );
 }

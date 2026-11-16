@@ -190,12 +190,12 @@ export function shelveBuild(queryClient: QueryClient, item: ItemView) {
   });
 }
 
-/** Back on the bed: a done or shelved build becomes active again. */
+/** Back in progress: a done build is reopened, a shelved one picked up again. Nothing goes on the bed by this. */
 export function reopenBuild(queryClient: QueryClient, item: ItemView) {
   if (!canEdit(item.pending)) return;
   const before = item.stage;
   void changeStage(queryClient, item.id, "building");
-  toast.undo("Back on the bed", { onUndo: () => void changeStage(queryClient, item.id, before) });
+  toast.undo("Back in progress", { onUndo: () => void changeStage(queryClient, item.id, before) });
 }
 
 /** What the attempt sheet hands over when someone logs an attempt. */
@@ -393,6 +393,12 @@ export function findPrinting(items: ItemView[]): { item: ItemView; attempt: Atte
     }
   }
   return found;
+}
+
+/** When anything last happened on a build: its newest attempt, or when it started. */
+export function lastActivity(item: ItemView): number {
+  const last = item.attempts.at(-1);
+  return Math.max(last?.printedAt ?? 0, last?.finishedAt ?? 0, item.startedAt ?? item.createdAt);
 }
 
 /**
