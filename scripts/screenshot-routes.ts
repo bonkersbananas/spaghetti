@@ -321,6 +321,40 @@ async function openViewer(page: Page) {
   await dialog.locator("[data-viewer=ready]").waitFor({ timeout: 30_000 });
 }
 
+/** Closes the live view and clears the bridge's report, so the shots after it see a print that isn't live. */
+async function closeLiveViewer(page: Page) {
+  await closeDialog(page);
+  await page.request.put("/api/printer/bridge", {
+    headers: { Origin: new URL(page.url()).origin },
+    data: { progress: null },
+  });
+}
+
+/** The bridge says the tugboat's printing attempt is at layer 140 of 317; its 3D view opens there. */
+async function openLiveViewer(page: Page) {
+  await page.request.put("/api/printer/bridge", {
+    headers: { Origin: new URL(page.url()).origin },
+    data: {
+      printerState: "printing",
+      progress: {
+        attemptId: "5eed0000-0000-4000-8000-0000000a0003",
+        percent: 44,
+        remainingMinutes: 105,
+        layer: 140,
+        totalLayers: 317,
+      },
+    },
+  });
+  await page.reload();
+  await page
+    .locator(`[data-attempt-id="5eed0000-0000-4000-8000-0000000a0003"]`)
+    .getByRole("button", { name: "See tugboat.gcode.3mf in 3D" })
+    .click();
+  const dialog = page.getByRole("dialog", { name: "3D view" });
+  await dialog.getByText("Layer 140 of 317").waitFor({ timeout: 30_000 });
+  await dialog.locator("[data-viewer=ready]").waitFor({ timeout: 30_000 });
+}
+
 /** Orbits the 3D view to about 30 degrees under the plate's horizon and backs off until the plate's edge is in view. */
 async function orbitBelow(page: Page) {
   const box = await page.getByRole("dialog", { name: "3D view" }).locator("canvas").boundingBox();
@@ -4047,36 +4081,28 @@ export const shots: Shot[] = [
     },
   },
   {
-    // The tugboat's attempt that is printing: the printer is at layer 140, so the rest of the file is a faint ghost.
+    // The tugboat's attempt that is printing: the view opens at layer 140, where the printer is, the rest a faint ghost.
     name: "viewer-live",
     path: `/builds/${SEED_BUILD_IDS.tugboat}`,
+    prepare: openLiveViewer,
+    beforeShot: async (page) => {
+      await page.waitForTimeout(400);
+    },
+    cleanup: closeLiveViewer,
+  },
+  {
+    // The same print scrubbed back to layer 60: "Back to now" offers the way to the layer being printed.
+    name: "viewer-live-away",
+    path: `/builds/${SEED_BUILD_IDS.tugboat}`,
     prepare: async (page) => {
-      await page.request.put("/api/printer/bridge", {
-        headers: { Origin: new URL(page.url()).origin },
-        data: {
-          printerState: "printing",
-          progress: {
-            attemptId: "5eed0000-0000-4000-8000-0000000a0003",
-            percent: 44,
-            remainingMinutes: 105,
-            layer: 140,
-            totalLayers: 317,
-          },
-        },
-      });
-      await page.reload();
-      await page
-        .locator(`[data-attempt-id="5eed0000-0000-4000-8000-0000000a0003"]`)
-        .getByRole("button", { name: "See tugboat.gcode.3mf in 3D" })
-        .click();
-      const dialog = page.getByRole("dialog", { name: "3D view" });
-      await dialog.getByText("Printing now · layer 140 of 317").waitFor({ timeout: 30_000 });
-      await dialog.locator("[data-viewer=ready]").waitFor({ timeout: 30_000 });
+      await openLiveViewer(page);
+      await page.getByRole("slider", { name: "Layer" }).fill("59");
+      await page.getByRole("button", { name: "Back to now" }).waitFor();
     },
     beforeShot: async (page) => {
       await page.waitForTimeout(400);
     },
-    cleanup: closeDialog,
+    cleanup: closeLiveViewer,
   },
   {
     // The same print coloured by feature, scrubbed back to half its height.
@@ -5533,6 +5559,7 @@ export const shots: Shot[] = [
     },
   },
   { name: "styleguide-controls", path: "/styleguide", selector: "#controls" },
+  { name: "styleguide-layer-slider", path: "/styleguide", selector: "#layer-slider" },
   { name: "styleguide-buttons", path: "/styleguide", selector: "#buttons" },
   { name: "styleguide-builds", path: "/styleguide", selector: "#builds" },
   // The "…" menu rows, a build's menu while its print is on the bed among them.

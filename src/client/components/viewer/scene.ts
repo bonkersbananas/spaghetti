@@ -11,9 +11,11 @@ import {
   Mesh,
   MeshBasicMaterial,
   NoToneMapping,
+  NotEqualStencilFunc,
   PerspectiveCamera,
   PlaneGeometry,
   RepeatWrapping,
+  ReplaceStencilOp,
   Scene,
   ShaderMaterial,
   Shape,
@@ -52,30 +54,12 @@ export type ColorBy = "filament" | "feature";
 
 const MAX_FILAMENTS = 16;
 const MAX_FEATURES = 16;
+/** The ghost of what is still to print: how far its colour leans to the ink, and how much of it shows. */
+const GHOST_TINT = 0.2;
+const GHOST_ALPHA = 0.18;
 
-const vertex = /* glsl */ `
-attribute vec3 aStart;
-attribute vec3 aEnd;
-attribute vec2 aInfo; // layer, feature * 64 + filament
-uniform float uTop;
-uniform float uLive;
-uniform float uWidth;
-uniform float uHeight;
-uniform float uMode;
-uniform vec3 uFilament[${MAX_FILAMENTS}];
-uniform vec3 uFeature[${MAX_FEATURES}];
-uniform vec3 uGhost;
-varying vec3 vColor;
-varying vec3 vNormal;
-varying float vGhost;
-varying float vTop;
-
-void main() {
-  float layer = aInfo.x;
-  if (layer > uTop + 0.5) {
-    gl_Position = vec4(2.0, 2.0, 2.0, 1.0);
-    return;
-  }
+/** One segment's box, placed and coloured: shared by the print and its ghost. Leaves `p`, `vNormal` and `base`. */
+const BOX = /* glsl */ `
   float feature = floor(aInfo.y / 64.0);
   float filament = aInfo.y - feature * 64.0;
   vec3 d = aEnd - aStart;
@@ -89,8 +73,30 @@ void main() {
   vec3 n = dir * normal.x + side * normal.y + up * normal.z;
   vNormal = normalize(mat3(modelMatrix) * n);
   vec3 base = uMode < 0.5 ? uFilament[int(min(filament, ${MAX_FILAMENTS - 1}.0))] : uFeature[int(min(feature, ${MAX_FEATURES - 1}.0))];
-  vGhost = (uLive >= 0.0 && layer > uLive + 0.5) ? 1.0 : 0.0;
-  vColor = mix(base, uGhost, vGhost * 0.82);
+`;
+
+const vertex = /* glsl */ `
+attribute vec3 aStart;
+attribute vec3 aEnd;
+attribute vec2 aInfo; // layer, feature * 64 + filament
+uniform float uTop;
+uniform float uWidth;
+uniform float uHeight;
+uniform float uMode;
+uniform vec3 uFilament[${MAX_FILAMENTS}];
+uniform vec3 uFeature[${MAX_FEATURES}];
+varying vec3 vColor;
+varying vec3 vNormal;
+varying float vTop;
+
+void main() {
+  float layer = aInfo.x;
+  if (layer > uTop + 0.5) {
+    gl_Position = vec4(2.0, 2.0, 2.0, 1.0);
+    return;
+  }
+${BOX}
+  vColor = base;
   vTop = abs(layer - uTop) < 0.5 ? 1.0 : 0.0;
   gl_Position = projectionMatrix * modelViewMatrix * vec4(p, 1.0);
 }
@@ -100,7 +106,6 @@ const fragment = /* glsl */ `
 precision highp float;
 varying vec3 vColor;
 varying vec3 vNormal;
-varying float vGhost;
 varying float vTop;
 uniform vec3 uLight;
 uniform vec3 uSky;
@@ -116,8 +121,62 @@ void main() {
   vec3 lit = vColor * (ambient * 0.62 + uLight * key * 0.5 + uLight * fill * 0.12);
   // The layer being drawn is a touch brighter, so the slider's position reads on the print.
   lit += vTop * 0.07;
-  lit = mix(lit, vColor * 0.95 + 0.05, vGhost * 0.6);
   gl_FragColor = vec4(lit, 1.0);
+}
+`;
+
+/**
+ * The layers a print in progress hasn't reached yet: the same boxes, only those above the slider's layer, drawn as a
+ * faint veil of their own colour leaning to the ink. Two draws after the print and the plate: the ghost's depth
+ * alone, then its colour only where that depth is, once per pixel (the stencil). So only its nearest surface shows,
+ * shaded, and walls behind walls don't pile up into something solid: one even, glassy ghost of what is still to come.
+ */
+const ghostVertex = /* glsl */ `
+attribute vec3 aStart;
+attribute vec3 aEnd;
+attribute vec2 aInfo;
+uniform float uTop;
+uniform float uWidth;
+uniform float uHeight;
+uniform float uMode;
+uniform vec3 uFilament[${MAX_FILAMENTS}];
+uniform vec3 uFeature[${MAX_FEATURES}];
+varying vec3 vColor;
+varying vec3 vNormal;
+
+void main() {
+  float layer = aInfo.x;
+  if (layer < uTop + 0.5) {
+    gl_Position = vec4(2.0, 2.0, 2.0, 1.0);
+    return;
+  }
+${BOX}
+  vColor = base;
+  gl_Position = projectionMatrix * modelViewMatrix * vec4(p, 1.0);
+}
+`;
+
+const depthOnlyFragment = /* glsl */ `
+precision highp float;
+void main() {
+  gl_FragColor = vec4(0.0);
+}
+`;
+
+const ghostFragment = /* glsl */ `
+precision highp float;
+varying vec3 vColor;
+varying vec3 vNormal;
+uniform vec3 uInk;
+uniform float uTint;
+uniform float uAlpha;
+
+void main() {
+  vec3 n = normalize(vNormal);
+  // Shaded like the print, softer: tops, sides and the turn of a wall read, while the veil stays one even layer.
+  float key = abs(dot(n, normalize(vec3(-0.45, 0.85, 0.5))));
+  float shade = 0.62 + 0.38 * key;
+  gl_FragColor = vec4(mix(vColor, uInk, uTint) * shade, uAlpha);
 }
 `;
 
@@ -216,6 +275,8 @@ export interface SceneColors {
   light: Color;
   sky: Color;
   ground: Color;
+  /** The ghost of the layers still to print leans towards it. */
+  ink: Color;
 }
 
 export class PrintScene {
@@ -226,6 +287,11 @@ export class PrintScene {
   /** The printer's frame (x right, y back, z up) turned into three's (y up). */
   private readonly print = new Group();
   private readonly material: ShaderMaterial;
+  private readonly ghostMaterial: ShaderMaterial;
+  private readonly ghostDepthMaterial: ShaderMaterial;
+  /** Each chunk's ghost (its depth, then its colour), shown only while the print is in progress. */
+  private readonly ghosts: Mesh[] = [];
+  private live = false;
   private readonly box = boxGeometry();
   private readonly chunks: Mesh[] = [];
   private plate: Group | null = null;
@@ -253,7 +319,13 @@ export class PrintScene {
   constructor(canvas: HTMLCanvasElement, onDirty?: () => void) {
     this.canvas = canvas;
     this.onDirty = onDirty;
-    this.renderer = new WebGLRenderer({ canvas, antialias: true, alpha: true, powerPreference: "high-performance" });
+    this.renderer = new WebGLRenderer({
+      canvas,
+      antialias: true,
+      alpha: true,
+      stencil: true,
+      powerPreference: "high-performance",
+    });
     this.renderer.outputColorSpace = LinearSRGBColorSpace;
     this.renderer.toneMapping = NoToneMapping;
     this.renderer.setClearColor(0x000000, 0);
@@ -270,19 +342,52 @@ export class PrintScene {
       fragmentShader: fragment,
       uniforms: {
         uTop: { value: 0 },
-        uLive: { value: -1 },
         uWidth: { value: 0.45 },
         uHeight: { value: 0.2 },
         uMode: { value: 0 },
         uFilament: { value: Array.from({ length: MAX_FILAMENTS }, () => new Color(0.8, 0.77, 0.7)) },
         uFeature: { value: Array.from({ length: MAX_FEATURES }, () => new Color(0.6, 0.6, 0.6)) },
-        uGhost: { value: new Color(0.85, 0.8, 0.7) },
         uLight: { value: new Color(1, 0.95, 0.88) },
         uSky: { value: new Color(1, 0.98, 0.94) },
         uGround: { value: new Color(0.62, 0.55, 0.47) },
         uBelow: { value: 0 },
       },
       side: DoubleSide,
+    });
+    const shared = this.material.uniforms;
+    const ghostUniforms = {
+      uTop: shared.uTop as { value: number },
+      uWidth: shared.uWidth as { value: number },
+      uHeight: shared.uHeight as { value: number },
+      uMode: shared.uMode as { value: number },
+      uFilament: shared.uFilament as { value: Color[] },
+      uFeature: shared.uFeature as { value: Color[] },
+    };
+    this.ghostDepthMaterial = new ShaderMaterial({
+      vertexShader: ghostVertex,
+      fragmentShader: depthOnlyFragment,
+      uniforms: ghostUniforms,
+      side: DoubleSide,
+      // Transparent only to be drawn after the plate, like the colour that follows it; it writes depth alone.
+      transparent: true,
+      colorWrite: false,
+    });
+    this.ghostMaterial = new ShaderMaterial({
+      vertexShader: ghostVertex,
+      fragmentShader: ghostFragment,
+      uniforms: {
+        ...ghostUniforms,
+        uInk: { value: new Color(0.3, 0.27, 0.24) },
+        uTint: { value: GHOST_TINT },
+        uAlpha: { value: GHOST_ALPHA },
+      },
+      side: DoubleSide,
+      transparent: true,
+      depthWrite: false,
+      stencilWrite: true,
+      stencilRef: 1,
+      stencilFunc: NotEqualStencilFunc,
+      stencilZPass: ReplaceStencilOp,
     });
     this.setFeatureColors();
 
@@ -308,10 +413,10 @@ export class PrintScene {
       ["uLight", colors.light],
       ["uSky", colors.sky],
       ["uGround", colors.ground],
-      ["uGhost", colors.plate],
     ] as const) {
       (u[name]?.value as Color | undefined)?.copy(color);
     }
+    (this.ghostMaterial.uniforms.uInk?.value as Color | undefined)?.copy(colors.ink);
     if (this.plate) {
       this.print.remove(this.plate);
       this.plate.traverse((o) => {
@@ -393,9 +498,11 @@ export class PrintScene {
     this.dirty();
   }
 
-  /** The layers after `index` are a faint ghost: a print that has got that far. `null` is a finished print. */
-  setLive(index: number | null) {
-    (this.material.uniforms.uLive as { value: number }).value = index ?? -1;
+  /** While a print is in progress, the layers above the slider's are a faint ghost of what is still to print. */
+  setLive(live: boolean) {
+    if (live === this.live) return;
+    this.live = live;
+    for (const g of this.ghosts) g.visible = live;
     this.dirty();
   }
 
@@ -426,6 +533,18 @@ export class PrintScene {
     mesh.frustumCulled = false;
     this.print.add(mesh);
     this.chunks.push(mesh);
+    // After the plate and its shadow, which are blended too: the ghost lies over them, its depth first.
+    for (const [material, order] of [
+      [this.ghostDepthMaterial, 1],
+      [this.ghostMaterial, 2],
+    ] as const) {
+      const ghost = new Mesh(geometry, material);
+      ghost.frustumCulled = false;
+      ghost.renderOrder = order;
+      ghost.visible = this.live;
+      this.print.add(ghost);
+      this.ghosts.push(ghost);
+    }
     this.placeShadow();
     if (!this.fitted && this.bounds) this.fit();
     this.dirty();
@@ -594,6 +713,8 @@ export class PrintScene {
     for (const m of this.chunks) m.geometry.dispose();
     this.box.dispose();
     this.material.dispose();
+    this.ghostMaterial.dispose();
+    this.ghostDepthMaterial.dispose();
     this.renderer.dispose();
   }
 }
