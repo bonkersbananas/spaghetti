@@ -21,7 +21,6 @@ import { duration, ease } from "@/lib/motion";
 import { coverOf } from "@/lib/previews";
 import { usePrintProgress } from "@/lib/print-progress";
 import { useReadOnly } from "@/lib/read-only";
-import { useUnreadCount } from "@/lib/unread-comments";
 import { useIsDesktop } from "@/lib/use-media-query";
 import { OffTheBed } from "./OffTheBed";
 import { OutcomeChip, OutcomePicker } from "./Outcome";
@@ -48,10 +47,10 @@ interface PrintingCardProps {
    */
   desktop?: "row" | "half" | "wide" | "stack";
   /**
-   * Builds only: the other person's unread comments as the grid's cards show them, on the picture's corner. Today and
+   * The other person's unread comments, on the picture's corner as the grid's cards show them: Builds only. Today and
    * the Journal's Now say them in their own comment line under the prints, so their cards don't repeat it.
    */
-  withUnread?: boolean;
+  unread?: number;
 }
 
 /** What `desktop` changes from `lg`, over the md row. */
@@ -101,7 +100,7 @@ export function PrintingCard({
   via,
   compact = false,
   desktop = "row",
-  withUnread = false,
+  unread = 0,
 }: PrintingCardProps) {
   const layout = layouts[compact ? "compact" : "big"];
   const wide = desktopLayouts[desktop];
@@ -120,8 +119,7 @@ export function PrintingCard({
   const offBed = isOffTheBed(attempt);
   const progress = usePrintProgress(attempt.id, attempt.printedAt, attempt.settings.estimatedMinutes);
   const due = progress.state === "due";
-  const unread = useUnreadCount(item.id);
-  const showUnread = withUnread && unread > 0;
+  const showUnread = unread > 0;
   // The build's cover, with the plate on the bed first when there is no photo.
   const cover = coverOf(item, { file: attempt.file });
   // Its name is right beside the picture, in Fraunces: a build with only a name shows the glyph, not its name twice.
@@ -375,6 +373,8 @@ interface BedCardsProps {
    * four sit two across and three (or more) three across, pictures on top. Today's column keeps one row each.
    */
   spread?: boolean;
+  /** How many unread comments a build has (Builds passes it; `PrintingCard`'s `unread`). */
+  unread?: (itemId: string) => number;
   className?: string;
 }
 
@@ -384,7 +384,7 @@ interface BedCardsProps {
  * answer fades and collapses while the others move up, and a last one left grows into the big card; with reduced
  * motion everything is at its end state at once.
  */
-export function BedCards({ prints, people, via, spread = false, className }: BedCardsProps) {
+export function BedCards({ prints, people, via, spread = false, unread, className }: BedCardsProps) {
   const reduce = useReducedMotion();
   const isDesktop = useIsDesktop();
   const compact = prints.length > 1;
@@ -399,7 +399,7 @@ export function BedCards({ prints, people, via, spread = false, className }: Bed
   const cardProps = (item: ItemView, attempt: AttemptView) => ({
     compact,
     desktop,
-    withUnread: spread,
+    unread: unread?.(item.id),
     item,
     attempt,
     person: people.get(attempt.createdBy),

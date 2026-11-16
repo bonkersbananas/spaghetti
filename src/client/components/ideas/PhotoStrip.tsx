@@ -167,12 +167,13 @@ export function PhotoStrip({ itemId, photos, selectedId, onSelect, fixedCover }:
       {camera.input}
       {library.input}
       {draggable ? (
+        // Empty (a build whose photos are all its attempts'), a list would still take a gap before the add tiles.
         <Reorder.Group
           as="ul"
           axis="x"
           values={order}
           onReorder={setOrder}
-          className="flex shrink-0 gap-2.5"
+          className="flex shrink-0 gap-2.5 empty:hidden"
           aria-label="Photo order"
         >
           {order.map((id, index) => {
@@ -200,7 +201,7 @@ export function PhotoStrip({ itemId, photos, selectedId, onSelect, fixedCover }:
           })}
         </Reorder.Group>
       ) : (
-        <ul className="flex shrink-0 gap-2.5" aria-label="Photo order">
+        <ul className="flex shrink-0 gap-2.5 empty:hidden" aria-label="Photo order">
           {order.map((id, index) => {
             const photo = byId.get(id);
             if (!photo) return null;
