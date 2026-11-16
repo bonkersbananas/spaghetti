@@ -235,9 +235,38 @@ export const PRINTABLES_QUERY =
 /** The API's address. It answers POST with a JSON body, and GET with the query and variables in the address. */
 export const PRINTABLES_API = "https://api.printables.com/graphql/";
 
-/** The model as one GET address: what Claude's web fetch can be handed when the Worker is throttled (it only GETs). */
+/**
+ * The fields the GET address asks for: what a draft can't do without. Anthropic's web fetch refuses an address over
+ * 250 characters (`url_too_long`), so the address carries no settings beyond the materials and weight, no tags.
+ */
+const PRINTABLES_SHORT_FIELDS =
+  "name,summary,description,user{publicUsername},license{abbreviation},images{filePath},materials{name},weight";
+
+/** The longest address Anthropic's web fetch takes. */
+export const WEB_FETCH_MAX_URL = 250;
+
+/**
+ * The model as one GET address, for Claude's web fetch when the Worker is throttled (it only GETs, and only up to
+ * 250 characters): `https://api.printables.com/graphql/?query=%7Bprint(id:1577248)%7Bname,…%7D%7D`, about 190
+ * characters. GraphQL needs no quotes round a number and takes commas as spaces; only the braces are escaped, since
+ * Printables reads `(`, `:` and `,` as they are.
+ */
 export const printablesApiUrl = (id: string) =>
-  `${PRINTABLES_API}?${new URLSearchParams({ query: PRINTABLES_QUERY, variables: JSON.stringify({ id }) })}`;
+  `${PRINTABLES_API}?query=${`{print(id:${id}){${PRINTABLES_SHORT_FIELDS}}}`.replace(/[{}]/g, (brace) =>
+    brace === "{" ? "%7B" : "%7D",
+  )}`;
+
+/** The model number a Printables API address asks for (`print(id:1577248)`, escaped or not), or null. */
+export function printablesApiId(url: string): string | null {
+  if (!URL.canParse(url) || new URL(url).hostname !== "api.printables.com") return null;
+  let text = url;
+  try {
+    text = decodeURIComponent(url.replace(/\+/g, " "));
+  } catch {
+    // A stray % stays as it is.
+  }
+  return /print\(\s*id\s*:\s*"?(\d{1,12})"?\s*\)/.exec(text)?.[1] ?? null;
+}
 
 /** A Printables model's number, from any address of its page (`/model/1577248-carrying-handle`, `/de/model/…`). */
 export function printablesId(link: string): string | null {
@@ -278,7 +307,8 @@ export function extractPrintablesPrint(json: unknown, id: string): PageFacts | "
   if (answer.errors?.length || !answer.data || !("print" in answer.data)) return null;
   const print = answer.data.print;
   if (print === null) return "missing";
-  if (!print || typeof print !== "object" || String(print.id) !== id) return null;
+  // The short GET address doesn't ask for the id (its caller checks the address); when it's there, it must match.
+  if (!print || typeof print !== "object" || (print.id !== undefined && String(print.id) !== id)) return null;
   const title = clean(print.name);
   if (!title || isSiteTitle(title)) return null;
   const names = (list: Array<{ name?: string | null } | null> | null | undefined) =>
