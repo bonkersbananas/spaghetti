@@ -3,14 +3,19 @@ import type { BatchItem } from "drizzle-orm/batch";
 import { DRAFTS_PER_DAY, type DraftFailure, type ItemDraft } from "../../shared/draft.ts";
 import { isModelImageUrl, modelSite, pictureRequestUrl } from "../../shared/model-links.ts";
 import { cleanModelUrl } from "../../shared/model-mark.ts";
+import { printablesApiUrl, printablesId } from "../../shared/model-page.ts";
 import { afterChange, recordChange } from "../changes.ts";
 import { type Db, getDb } from "../db/index.ts";
 import { draftRuns, type ItemDraftRow, itemDrafts, items, linkPreviews, photos } from "../db/schema.ts";
 import { fromUrl, readImage } from "../mcp/image.ts";
 import { photoKey } from "../photos.ts";
 import { NEUTRAL, photoIdFor } from "../routes/capture.ts";
-import { type AskResult, askClaude, MAX_DRAFT_IMAGES } from "./claude.ts";
-import { readModel } from "./page.ts";
+import { type AskResult, askClaude, MAX_DRAFT_IMAGES, type RunDiagnosis } from "./claude.ts";
+import { printablesFromFetched, readModel } from "./page.ts";
+
+/** How Claude finds a Printables model's pictures in its API's answer. */
+const PRINTABLES_PICTURES =
+  "Its pictures' full addresses are https://media.printables.com/ followed by each image's filePath.";
 
 /** A worker that has had a draft this long is taken to be gone (the browser closed, the Worker was recycled). */
 export const STALE_MS = 4 * 60 * 1000;
@@ -253,21 +258,54 @@ export async function runDraft(env: Env, itemId: string, db: Db = getDb(env.DB))
     // Worker can't get or find anything in.
     const base = env.ANTHROPIC_BASE_URL?.trim();
     // With a stand-in Anthropic (e2e, screenshots) the page isn't fetched: the tests must not depend on the real sites.
-    // MakerWorld's design API is asked when its page is behind a bot challenge (decision 0067).
+    // MakerWorld's design API is asked when its page is behind a bot challenge (decision 0067), Printables' GraphQL
+    // API before its page, which a Worker never gets (decision 0071).
     const read = base ? null : await readModel(site.site.id, row.url);
-    const facts = read?.facts ?? null;
-    answer = facts
-      ? await askClaude(apiKey, row.url, site.site, base, facts)
-      : await askClaude(apiKey, row.url, site.site, base);
+    let facts = read?.facts ?? null;
+    let source: RunDiagnosis["source"] = read?.via === "api" ? "worker_api" : facts ? "worker_fetch" : "web_fetch";
+    // Printables throttles the addresses Workers share: Claude's fetch is handed its API's address instead, and
+    // the Worker reads what it got back itself.
+    const printables = !facts && site.site.id === "printables" ? printablesId(row.url) : null;
+    if (site.site.id === "printables" && read?.apiReason === "not_found") {
+      // Printables' API says there is no such model: nothing to draft, and nothing for Claude to make up. (Other
+      // sites' "not found" still goes to Claude's fetch, as before decision 0071.)
+      answer = { ok: false, failure: "unreadable", diagnosis: { outcome: "not_found" } };
+      source = "worker_api";
+    } else if (facts) {
+      answer = await askClaude(apiKey, row.url, site.site, base, facts);
+    } else {
+      answer = await askClaude(
+        apiKey,
+        row.url,
+        site.site,
+        base,
+        undefined,
+        printables ? { url: printablesApiUrl(printables), hint: PRINTABLES_PICTURES } : undefined,
+      );
+      const fetched = printables ? printablesFromFetched(answer.fetched, printables) : null;
+      if (fetched === "missing")
+        answer = { ok: false, failure: "unreadable", diagnosis: { ...answer.diagnosis, outcome: "not_found" } };
+      else if (fetched) {
+        facts = fetched;
+        source = "web_fetch_api";
+        // Claude may not take the API's JSON for a model page; the Worker read it, so Claude writes from that.
+        if (!answer.ok && answer.diagnosis.outcome === "not_readable") {
+          const { fetchErrors } = answer.diagnosis;
+          answer = await askClaude(apiKey, row.url, site.site, base, facts);
+          answer.diagnosis = { ...answer.diagnosis, ...(fetchErrors ? { fetchErrors } : {}), asked: 2 };
+        }
+      }
+    }
     answer.diagnosis = {
       ...answer.diagnosis,
-      source: read?.via === "api" ? "worker_api" : facts ? "worker_fetch" : "web_fetch",
+      source,
       pageStatus: read?.pageStatus ?? null,
       ...(read?.reason ? { unread: read.reason } : {}),
+      ...(read?.apiReason ? { apiUnread: read.apiReason } : {}),
       ...(read?.pageReason === "no_model" ? { pageUnreadable: true } : {}),
     };
     if (answer.ok && facts) {
-      // What the page states plainly is the page's, not Claude's.
+      // What the page (or the site's API) states plainly is the page's, not Claude's.
       answer.draft = {
         ...answer.draft,
         title: facts.title ?? answer.draft.title,

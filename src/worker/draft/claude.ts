@@ -102,14 +102,19 @@ export interface RunDiagnosis {
   /** Which fields of the answer were wrong, by name (bad_shape only). */
   badFields?: string[];
   /**
-   * Where the page came from: the Worker's own fetch of the page (worker_fetch) or of MakerWorld's design API
-   * (worker_api), or Anthropic's web fetch tool (web_fetch).
+   * Where the page came from: the Worker's own fetch of the page (worker_fetch) or of the site's API (worker_api:
+   * MakerWorld's design API, Printables' GraphQL), or Anthropic's web fetch tool, of the page (web_fetch) or of the
+   * site's API (web_fetch_api: Printables', when the Worker is throttled).
    */
-  source?: "worker_fetch" | "worker_api" | "web_fetch";
+  source?: "worker_fetch" | "worker_api" | "web_fetch" | "web_fetch_api";
   /** Why the Worker couldn't read the model (worker/draft/page.ts UnreadReason), when it couldn't. */
   unread?: string;
+  /** Why the site's API gave the Worker nothing, when it was asked (UnreadReason: http_429 is Printables' throttle). */
+  apiUnread?: string;
   /** The HTTP status of the Worker's own fetch of the page (null: it never answered or wasn't allowed). */
   pageStatus?: number | null;
+  /** Claude was asked twice: its fetch read Printables' API but it called that unreadable, so it got the facts as data. */
+  asked?: number;
   /** The Worker got a page but found nothing in it to draft from, so web fetch was tried. */
   pageUnreadable?: boolean;
 }
@@ -121,9 +126,15 @@ function parseFacts(json: unknown) {
   return draftSchema.safeParse({ title: null, designer: null, license: null, imageUrls: [], ...parsed.data });
 }
 
+/** A document Claude's web fetch read in this answer: its address (after redirects) and its text. */
+export interface FetchedDoc {
+  url: string;
+  text: string;
+}
+
 export type AskResult =
-  | { ok: true; draft: ClaudeDraft; diagnosis: RunDiagnosis }
-  | { ok: false; failure: DraftFailure; diagnosis: RunDiagnosis };
+  | { ok: true; draft: ClaudeDraft; diagnosis: RunDiagnosis; fetched?: FetchedDoc[] }
+  | { ok: false; failure: DraftFailure; diagnosis: RunDiagnosis; fetched?: FetchedDoc[] };
 
 /** Asks Claude to read one model page. Never throws: a failure is one of the honest reasons. */
 export async function askClaude(
@@ -133,6 +144,11 @@ export async function askClaude(
   baseURL?: string,
   /** What the Worker read from the page itself; without it Claude reads the page with the web fetch tool. */
   facts?: PageFacts,
+  /**
+   * Without facts: the site's API address for this model, which Claude's fetch is asked to read when the page is
+   * closed to it (Printables'), and a sentence on how to read it.
+   */
+  api?: { url: string; hint: string },
 ): Promise<AskResult> {
   // A fresh client per call, with fetch looked up late, so a test can stub globalThis.fetch.
   const client = new Anthropic({
@@ -158,14 +174,20 @@ export async function askClaude(
             null,
             1,
           )}`
-        : `Read this ${site.name} page and draft the idea from it: ${url}`,
+        : `Read this ${site.name} page and draft the idea from it: ${url}${
+            api
+              ? `\n\nThe page is usually closed to your fetch tool. Fetch this address first instead: ${site.name}'s public API, which answers with the same model as JSON. ${api.hint}\n${api.url}`
+              : ""
+          }`,
     },
   ];
   const fetchErrors: string[] = [];
+  const fetched: FetchedDoc[] = [];
   const stop = (failure: DraftFailure, diagnosis: RunDiagnosis): AskResult => ({
     ok: false,
     failure,
     diagnosis: { ...diagnosis, ...(fetchErrors.length ? { fetchErrors } : {}) },
+    ...(fetched.length ? { fetched } : {}),
   });
   try {
     for (let round = 0; ; round++) {
@@ -190,9 +212,10 @@ export async function askClaude(
         messages,
       });
       for (const block of response.content) {
-        if (block.type === "web_fetch_tool_result" && block.content.type === "web_fetch_tool_result_error") {
-          fetchErrors.push(block.content.error_code);
-        }
+        if (block.type !== "web_fetch_tool_result") continue;
+        if (block.content.type === "web_fetch_tool_result_error") fetchErrors.push(block.content.error_code);
+        else if (block.content.content.source.type === "text")
+          fetched.push({ url: block.content.url, text: block.content.content.source.data });
       }
       const stopReason = response.stop_reason ?? undefined;
       if (response.stop_reason === "refusal") return stop("refused", { outcome: "refusal", stopReason });
@@ -219,6 +242,7 @@ export async function askClaude(
         ok: true,
         draft: parsed.data,
         diagnosis: { outcome: "drafted", stopReason, ...(fetchErrors.length ? { fetchErrors } : {}) },
+        ...(fetched.length ? { fetched } : {}),
       };
     }
   } catch (error) {
