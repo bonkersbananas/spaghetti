@@ -53,7 +53,7 @@ export const Route = createFileRoute("/_app")({
       }
     }
     if (!user) {
-      throw redirect({ to: "/sign-in", search: { redirect: location.href } });
+      throw redirect({ to: "/sign-in", search: { redirect: location.href }, replace: true });
     }
   },
   component: AppLayout,
@@ -70,8 +70,8 @@ function AppLayout() {
     if (user === null && !isSigningOut()) {
       forgetEndedSession();
       void clearOfflineData();
-      void navigate({ to: "/sign-in", search: { redirect: location.pathname + location.search } }).then(() =>
-        queryClient.removeQueries({ predicate: (query) => query.queryKey[0] !== "session" }),
+      void navigate({ to: "/sign-in", search: { redirect: location.pathname + location.search }, replace: true }).then(
+        () => queryClient.removeQueries({ predicate: (query) => query.queryKey[0] !== "session" }),
       );
     }
   }, [user, navigate, queryClient]);

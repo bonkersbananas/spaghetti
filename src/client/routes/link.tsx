@@ -13,6 +13,9 @@ import { addPasskeyHere, biometric, hasPasskeyHere, isCancelled, passkeysSupport
 import { signOutSettled } from "@/lib/use-sign-out";
 
 export const Route = createFileRoute("/link")({
+  // The page sign-in was asked for on ("Use a code" carries it): signing in with a code goes on to it too.
+  validateSearch: (search: Record<string, unknown>): { redirect?: string } =>
+    typeof search.redirect === "string" ? { redirect: search.redirect } : {},
   component: LinkPage,
 });
 
@@ -21,7 +24,8 @@ export const Route = createFileRoute("/link")({
  * server's logs) or its short code. Opening it asks for one tap, then signs in and offers a passkey for this device.
  */
 function LinkPage() {
-  const arrive = useArrive();
+  const search = Route.useSearch();
+  const arrive = useArrive(search.redirect);
   const navigate = useNavigate();
   // Read in the initializer, which changes nothing: React runs it (and effects) twice in development.
   const [token] = useState<string | null>(() => window.location.hash.slice(1) || null);
@@ -30,7 +34,7 @@ function LinkPage() {
 
   // Then take the secret out of the address bar and the history entry.
   useEffect(() => {
-    if (window.location.hash) history.replaceState(null, "", window.location.pathname);
+    if (window.location.hash) history.replaceState(null, "", window.location.pathname + window.location.search);
   }, []);
 
   const redeem = useMutation({
@@ -41,7 +45,7 @@ function LinkPage() {
     onSuccess: async ({ user }) => {
       arrive.stay(user);
       if (passkeysSupported() && !hasPasskeyHere()) setPerson(user);
-      else await arrive.goToday();
+      else await arrive.go();
     },
   });
 
@@ -55,7 +59,7 @@ function LinkPage() {
     redeem.mutate();
   }
 
-  if (person) return <AddHere person={person} onDone={() => void arrive.goToday()} />;
+  if (person) return <AddHere person={person} onDone={() => void arrive.go()} />;
 
   if (gone) {
     return (
@@ -69,7 +73,7 @@ function LinkPage() {
           size="lg"
           fullWidth
           className="mt-6"
-          onClick={() => void navigate({ to: "/sign-in" })}
+          onClick={() => void navigate({ to: "/sign-in", search })}
         >
           Go to sign in
         </Button>
@@ -83,6 +87,7 @@ function LinkPage() {
       footer={
         <Link
           to="/sign-in"
+          search={search}
           className="focus-ring decoration-ink-ghost -my-3 inline-block py-3 underline underline-offset-4"
         >
           Back to sign in
