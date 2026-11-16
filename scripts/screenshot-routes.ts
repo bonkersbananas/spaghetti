@@ -864,6 +864,10 @@ async function mockWishlists(page: Page, mode: "none" | "private") {
   await page.getByRole("link", { name: /^Wishlists/ }).waitFor();
   await page.evaluate(() => window.scrollTo({ top: 0, behavior: "instant" }));
   await page.waitForTimeout(600);
+  // Cards that arrived after the first draw fade in on the shots' fixed clock: finish them.
+  await page.evaluate(() => {
+    for (const animation of document.getAnimations()) animation.finish();
+  });
 }
 
 /** The seed's note-only "Bag clips for the coffee": a bare link for a moment in the shot of every kind of idea in Up next. */

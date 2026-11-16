@@ -41,7 +41,7 @@ export function WishlistLink({
     .filter((list) => list.name && list.count > 0);
   const covers = mine.flatMap((item) => (item.photos[0] ? [item.photos[0]] : [])).slice(0, 3);
   const counts = [
-    mine.length ? `yours ${mine.length}` : "pick your top ideas",
+    mine.length ? `yours ${mine.length}` : "pick yours",
     ...theirs.map((list) => `${list.name}'s ${list.count}`),
   ];
   return (
