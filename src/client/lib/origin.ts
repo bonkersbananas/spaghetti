@@ -1,92 +1,53 @@
-import { type AnyRouter, type HistoryState, useRouter } from "@tanstack/react-router";
+import { useRouter } from "@tanstack/react-router";
 import { useSyncExternalStore } from "react";
-import { previousPlace } from "./previous-path";
+import { moves, previousPlace } from "./previous-path";
 
-/** The page an idea or build was opened from: a page in this tab's history, with its name. */
+/**
+ * Where a detail page (an idea, a build, a twist, a spool) was opened from, read from what lib/previous-path.ts wrote
+ * down about the tab's history. Loaded with the detail pages, not with every screen.
+ */
 export interface Origin {
   /** Its address, with what was in it (the Journal's filters, the search). */
   href: string;
   /** What the back control says: the page's heading as it was left ("Journal", "Search", another idea's title). */
   label: string;
-  /** Its place in this tab's history (TanStack's `__TSR_index`). */
+  /** Its place in this tab's history. */
   index: number;
 }
 
-/**
- * Router state for a step to the next or previous thing of the same list (J and K): the page keeps the origin it had.
- * A cast because the router's HistoryState declares no fields of its own.
- */
-export const keepOrigin = { keepOrigin: true } as HistoryState;
+/** The detail pages, by the thing they show: an idea and the build it becomes are one. */
+const THING = /^\/(?:ideas|builds|twists|pantry)\/([^/]+)\/?$/;
+const thingOf = (path: string) => THING.exec(path)?.[1] ?? null;
 
-/** Router state for a page opened from outside the app's pages (a tapped notification): back goes to its list. */
-export const openedDirectly = { openedDirectly: true } as HistoryState;
-
-/** The pages that remember where they were opened from, by the thing they show (an idea and the build it becomes are one). */
-const REMEMBERS = /^\/(?:ideas|builds|twists|pantry)\/([^/]+)\/?$/;
-
-/** Each history entry's origin, by its key. Kept in memory only: a reload or a new tab starts from the list again. */
 const origins = new Map<string, Origin | null>();
-const listeners = new Set<() => void>();
-let here: { key: string; href: string; path: string; index: number } | null = null;
-
-interface EntryState {
-  key?: string;
-  __TSR_key?: string;
-  __TSR_index: number;
-  keepOrigin?: boolean;
-  openedDirectly?: boolean;
-}
-interface Moved {
-  href: string;
-  pathname: string;
-  state: unknown;
-}
-const keyOf = (state: EntryState) => state.__TSR_key ?? state.key ?? "";
-const thingOf = (path: string) => REMEMBERS.exec(path)?.[1] ?? null;
-
-/** The name of the page on screen (its heading: the section, an idea's title, a week), read as it is left. */
-function nameOfPage(): string {
-  const heading = [...document.querySelectorAll("h1")].find((h1) => !h1.closest("[role=dialog]"));
-  return heading?.textContent?.trim() || "Back";
-}
 
 /**
- * Follows the tab's history: an idea or build opened from another page remembers that page (its address, name and
- * place in history), so its way back can return there. A step within the same thing (an attempt picked, a photo, the
- * idea that became a build, J and K) keeps the origin it had; a page opened directly (a link, a reload) has none.
+ * The page an entry was opened from. A step within the same thing (an attempt picked, a photo, the idea that became a
+ * build, J and K) and a replaced page keep the origin they had; a page opened directly (a link, a reload, a tapped
+ * notification) or reached by back and forward onto an entry from before a reload has none.
  */
-export function trackOrigins(router: AnyRouter) {
-  const start: Moved = router.history.location;
-  const startState = start.state as EntryState;
-  here = { key: keyOf(startState), href: start.href, path: start.pathname, index: startState.__TSR_index };
-  router.history.subscribe(({ location, action }: { location: Moved; action: { type: string } }) => {
-    const before = here;
-    const state = location.state as EntryState;
-    const key = keyOf(state);
-    here = { key, href: location.href, path: location.pathname, index: state.__TSR_index };
-    // The page being left is still on screen: where it was scrolled to is kept for a step back to it.
-    if (before && before.key !== key) scrolls.set(before.key, window.scrollY);
-    const scrolled = scrolls.get(key);
-    if (action.type !== "PUSH" && action.type !== "REPLACE" && scrolled) settleScroll(scrolled);
-    const thing = thingOf(location.pathname);
-    if (thing && !origins.has(key) && before && before.key !== key) {
-      let origin: Origin | null = null;
-      // Back or forward onto an entry from before a reload: where it came from isn't known.
-      if ((action.type === "PUSH" || action.type === "REPLACE") && !state.openedDirectly) {
-        // A replaced page is gone from history, so what replaced it inherits its origin too.
-        const same = thingOf(before.path) === thing || action.type === "REPLACE" || state.keepOrigin;
-        origin = same
-          ? (origins.get(before.key) ?? null)
-          : { href: before.href, label: nameOfPage(), index: before.index };
-      }
-      origins.set(key, origin);
-    }
-    for (const listener of listeners) listener();
-  });
+function originOf(key: string): Origin | null {
+  const known = origins.get(key);
+  if (known !== undefined) return known;
+  const move = moves.reached.get(key);
+  const thing = move && thingOf(move.path);
+  let origin: Origin | null = null;
+  if (move && thing && !move.direct && (move.type === "PUSH" || move.type === "REPLACE")) {
+    const same = thingOf(move.from.path) === thing || move.type === "REPLACE" || move.keep;
+    origin = same ? originOf(move.from.key) : { href: move.from.href, label: move.label, index: move.from.index };
+  }
+  origins.set(key, origin);
+  return origin;
 }
 
-/** Where each history entry was scrolled to when it was left, by its key. */
-const scrolls = new Map<string, number>();
+const originHere = () => (moves.here ? originOf(moves.here.key) : null);
+
+const listeners = new Set<() => void>();
+function subscribe(listener: () => void) {
+  listeners.add(listener);
+  return () => void listeners.delete(listener);
+}
+
 /** What a person does that means "leave the scroll to me". */
 const TAKING_OVER = ["wheel", "touchstart", "pointerdown", "keydown"] as const;
 let stopSettling = () => {};
@@ -116,12 +77,11 @@ function settleScroll(top: number) {
   stopSettling = stop;
 }
 
-function subscribe(listener: () => void) {
-  listeners.add(listener);
-  return () => void listeners.delete(listener);
-}
-
-const originHere = () => (here ? (origins.get(here.key) ?? null) : null);
+moves.after = (type) => {
+  for (const listener of listeners) listener();
+  const top = moves.here && moves.scrolls.get(moves.here.key);
+  if (type !== "PUSH" && type !== "REPLACE" && top) settleScroll(top);
+};
 
 /** Where "back" goes from a detail page: by its control, Escape and pull-to-go. */
 export interface BackTo {
@@ -135,8 +95,8 @@ export interface BackTo {
 }
 
 /**
- * The way back from a detail page: to the page an idea or build was opened from, as it was left (a step back in
- * history keeps its scroll, filters and search), else to `list` (the other detail pages always go there).
+ * The way back from a detail page: to the page it was opened from, as it was left (a step back in history keeps its
+ * scroll, filters and search), else to `list`.
  */
 export function useBackTo(list: { to: string; label: string }): BackTo {
   const router = useRouter();
@@ -147,7 +107,7 @@ export function useBackTo(list: { to: string; label: string }): BackTo {
     fromOrigin: !!origin,
     go: () => {
       const now = originHere();
-      const index = (router.history.location.state as EntryState).__TSR_index;
+      const index = moves.here?.index ?? 0;
       if (now && now.index < index) return router.history.go(now.index - index);
       if (now) return void router.navigate({ href: now.href });
       // From the list itself, back is a step back in history rather than a new page on top: the list is as it was,

@@ -9,7 +9,6 @@ import { createRoot } from "react-dom/client";
 import { focusContentAfterMoves } from "./lib/focus-content";
 import { followTextSize, stopPageZoom } from "./lib/no-page-zoom";
 import { registerServiceWorker } from "./lib/offline";
-import { trackOrigins } from "./lib/origin";
 import { MAX_AGE, persistOptions, recordFetch, refetchRestored } from "./lib/persist";
 import { isBackMove, trackMoves } from "./lib/previous-path";
 import { RouterError } from "./lib/router-error";
@@ -48,7 +47,6 @@ const router = createRouter({
 });
 
 trackMoves(router);
-trackOrigins(router);
 focusContentAfterMoves(router);
 
 declare module "@tanstack/react-router" {
