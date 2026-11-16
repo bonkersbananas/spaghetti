@@ -159,6 +159,43 @@ describe("small files", () => {
     expect(paths.layers[0]?.count).toBe(2);
   });
 
+  it("draws arcs round their centres, either way, as our slicer writes them", () => {
+    // slicer-rs fits arcs as Orca does: G3 counter-clockwise and G2 clockwise, I and J from the arc's start, numbers
+    // without a leading zero.
+    const paths = parseGcode(
+      [
+        "; CHANGE_LAYER",
+        "; Z_HEIGHT: 0.2",
+        "; LAYER_HEIGHT: 0.2",
+        "; FEATURE: Outer wall",
+        "G1 X110 Y100 F60000",
+        // A quarter round (100, 100), counter-clockwise up to its top…
+        "G3 X100 Y110 I-10 J0 E.6",
+        // …then a quarter round (100, 120), clockwise from its bottom to its left.
+        "G2 X90 Y120 I0 J10 E.6",
+        "G3 X89.5 Y120.5 I-.5 J0 E.01",
+      ].join("\n"),
+    );
+    const layer = paths.layers[0];
+    const count = layer?.count ?? 0;
+    expect(count).toBeGreaterThan(8);
+    const ends: [number, number][] = [];
+    for (let i = 0; i < count; i++) {
+      const [x0 = 0, y0 = 0, , x1 = 0, y1 = 0] = layer?.pos.subarray(i * 6, i * 6 + 6) ?? [];
+      ends.push([x0, y0], [x1, y1]);
+    }
+    const round = (cx: number, cy: number, r: number) => (p: [number, number]) =>
+      Math.abs(Math.hypot(p[0] - cx, p[1] - cy) - r) < 1e-3;
+    const first = round(100, 100, 10);
+    const second = round(100, 120, 10);
+    const third = round(89.5, 120, 0.5);
+    expect(ends.every((p) => first(p) || second(p) || third(p))).toBe(true);
+    // The first quarter stays in its quadrant; the second bulges down and left of its chord, as clockwise goes.
+    expect(ends.filter(first).every(([x, y]) => x >= 100 - 1e-3 && y >= 100 - 1e-3)).toBe(true);
+    expect(ends.filter(second).every(([x, y]) => x <= 100 + 1e-3 && y <= 120 + 1e-3)).toBe(true);
+    expect(ends.some(([x, y]) => x < 95 && y < 113)).toBe(true);
+  });
+
   it("keeps a stroke that doubles back", () => {
     const paths = parseGcode(
       [";LAYER_CHANGE", ";Z:0.2", ";HEIGHT:0.2", "G1 X0 Y0", "G1 X10 Y0 E1", "G1 X2 Y0 E1"].join("\n"),
