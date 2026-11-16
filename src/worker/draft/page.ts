@@ -1,7 +1,16 @@
 import { checkLinkUrl } from "../../shared/link-safety.ts";
 import { isModelHost, type ModelSiteId } from "../../shared/model-links.ts";
-import { extractMakerWorldDesign, extractModelPage, type PageFacts } from "../../shared/model-page.ts";
+import {
+  extractMakerWorldDesign,
+  extractModelPage,
+  extractPrintablesPrint,
+  type PageFacts,
+  PRINTABLES_API,
+  PRINTABLES_QUERY,
+  printablesId,
+} from "../../shared/model-page.ts";
 import { readCapped, resolvesPublic } from "../link-preview.ts";
+import type { FetchedDoc } from "./claude.ts";
 
 /** MakerWorld's pages are about 1.4 MB (the design is a 900 KB JSON blob inside); anything bigger isn't read. */
 const MAX_BYTES = 3 * 1024 * 1024;
@@ -58,13 +67,14 @@ export async function fetchModelPage(link: string): Promise<FetchedPage> {
 
 /**
  * Why the Worker couldn't read a model: nothing answered (`unreachable`: refused, timed out, DNS, a redirect off the
- * sites), the site says it isn't there (`not_found`: a 404 or 410, or MakerWorld's API saying 404), a bot challenge,
+ * sites), the site says it isn't there (`not_found`: a 404 or 410, MakerWorld's API saying 404, Printables' saying
+ * `print: null`), a bot challenge,
  * another status, an answer that isn't HTML, or a page that names no model (`no_model`: a soft "not found").
  */
 export type UnreadReason = "unreachable" | "not_found" | "challenge" | `http_${number}` | "not_html" | "no_model";
 
 export interface ModelRead {
-  /** What the model's page (or MakerWorld's API) states, or null when the Worker couldn't read the model. */
+  /** What the model's page (or its site's API) states, or null when the Worker couldn't read the model. */
   facts: PageFacts | null;
   /** Which way it was read. */
   via: "page" | "api" | null;
@@ -74,6 +84,8 @@ export interface ModelRead {
   reason: UnreadReason | null;
   /** Why the page itself gave nothing, when it was asked. */
   pageReason: UnreadReason | null;
+  /** Why the site's API gave nothing, when it was asked (MakerWorld's and Printables' have one). */
+  apiReason: UnreadReason | null;
 }
 
 function unreadReason(page: FetchedPage): UnreadReason {
@@ -95,9 +107,7 @@ const makerWorldId = (link: string) =>
  * behind a bot challenge, and a plain 404 for a model that isn't there. Only that one address on makerworld.com,
  * no redirects followed, the same cap and timeout as a page. Never throws.
  */
-export async function fetchMakerWorldDesign(
-  id: string,
-): Promise<{ status: number | null; facts: PageFacts | null; challenged?: boolean }> {
+export async function fetchMakerWorldDesign(id: string): Promise<ApiAnswer> {
   try {
     const response = await fetch(`https://makerworld.com/api/v1/design-service/design/${encodeURIComponent(id)}`, {
       redirect: "manual",
@@ -123,18 +133,79 @@ export async function fetchMakerWorldDesign(
   }
 }
 
+/** What a site's API answered: the model's facts, or its status and whether it says there is no such model. */
+interface ApiAnswer {
+  status: number | null;
+  facts: PageFacts | null;
+  challenged?: boolean;
+  /** The API answered, and says there is no such model. */
+  missing?: boolean;
+}
+
 /**
- * Reads a model the way a Worker can: its page (decision 0019's fetch), and for MakerWorld its design API as well,
- * which gets through where MakerWorld's bot protection challenges the page. `apiFirst` asks the API before the page
- * (the scout: smaller, and a made-up number is a plain 404); otherwise the API is only asked when the page gave
- * nothing (the drafts, which read the page's English design). Never throws.
+ * Printables' public GraphQL API (decision 0071): what its own web app reads a model from, JSON, no sign-in. The
+ * page is behind a bot challenge for Workers and data-centre addresses; the API answers those, but throttles the
+ * addresses Workers share (429 "Request was throttled."), so from a Worker it is a try, not a promise. Only that one
+ * address, no redirects, the same cap and timeout as a page. Never throws.
+ */
+export async function fetchPrintablesPrint(id: string): Promise<ApiAnswer> {
+  try {
+    const response = await fetch(PRINTABLES_API, {
+      method: "POST",
+      redirect: "manual",
+      signal: AbortSignal.timeout(TIMEOUT_MS),
+      headers: {
+        Accept: "application/json",
+        "Accept-Language": "en",
+        "Content-Type": "application/json",
+        "User-Agent": USER_AGENT,
+      },
+      body: JSON.stringify({ query: PRINTABLES_QUERY, variables: { id } }),
+    });
+    const type = (response.headers.get("content-type") ?? "").toLowerCase();
+    if (!response.ok || !type.startsWith("application/json")) {
+      await response.body?.cancel().catch(() => undefined);
+      const challenged = response.headers.get("cf-mitigated")?.toLowerCase() === "challenge";
+      return { status: response.status, facts: null, ...(challenged ? { challenged } : {}) };
+    }
+    let read: PageFacts | "missing" | null = null;
+    try {
+      read = extractPrintablesPrint(JSON.parse(await readCapped(response, MAX_BYTES)), id);
+    } catch {
+      read = null;
+    }
+    return read === "missing"
+      ? { status: response.status, facts: null, missing: true }
+      : { status: response.status, facts: read };
+  } catch {
+    return { status: null, facts: null };
+  }
+}
+
+/** The site's API for a model link, when the site has one the Worker reads: its model number and how to ask it. */
+function siteApi(site: ModelSiteId, link: string) {
+  const id = site === "makerworld" ? makerWorldId(link) : site === "printables" ? printablesId(link) : null;
+  if (!id) return null;
+  return {
+    ask: (): Promise<ApiAnswer> => (site === "makerworld" ? fetchMakerWorldDesign(id) : fetchPrintablesPrint(id)),
+    // Printables' page is always challenged for a Worker, and its API says plainly when a model isn't there.
+    first: site === "printables",
+  };
+}
+
+/**
+ * Reads a model the way a Worker can: its page (decision 0019's fetch), and for MakerWorld and Printables their API
+ * as well, which gets through where the sites' bot protection challenges the page. `apiFirst` asks the API before
+ * the page (the scout: smaller, and a made-up number is a plain "not found"); otherwise MakerWorld's API is only
+ * asked when the page gave nothing (the drafts, which read the page's English design). Printables' API always comes
+ * first: a Worker never gets its page. Never throws.
  */
 export async function readModel(
   site: ModelSiteId,
   link: string,
   options: { apiFirst?: boolean } = {},
 ): Promise<ModelRead> {
-  const id = site === "makerworld" ? makerWorldId(link) : null;
+  const api = siteApi(site, link);
   let pageStatus: number | null = null;
   let pageReason: UnreadReason | null = null;
   let apiReason: UnreadReason | null = null;
@@ -152,30 +223,33 @@ export async function readModel(
     return facts;
   };
   const fromApi = async (): Promise<PageFacts | null> => {
-    if (!id) return null;
-    const answer = await fetchMakerWorldDesign(id);
+    if (!api) return null;
+    const answer = await api.ask();
     if (!answer.facts)
-      apiReason = unreadReason({
-        status: answer.status,
-        html: answer.status === 200 ? "json" : null,
-        challenged: answer.challenged,
-      });
+      apiReason = answer.missing
+        ? "not_found"
+        : unreadReason({
+            status: answer.status,
+            html: answer.status === 200 ? "json" : null,
+            challenged: answer.challenged,
+          });
     return answer.facts;
   };
-  const ways: Array<["page" | "api", () => Promise<PageFacts | null>]> = options.apiFirst
-    ? [
-        ["api", fromApi],
-        ["page", fromPage],
-      ]
-    : [
-        ["page", fromPage],
-        ["api", fromApi],
-      ];
+  const ways: Array<["page" | "api", () => Promise<PageFacts | null>]> =
+    options.apiFirst || api?.first
+      ? [
+          ["api", fromApi],
+          ["page", fromPage],
+        ]
+      : [
+          ["page", fromPage],
+          ["api", fromApi],
+        ];
   for (const [via, read] of ways) {
-    if (via === "api" && !id) continue;
+    if (via === "api" && !api) continue;
     const facts = await read();
-    if (facts) return { facts, via, pageStatus, reason: null, pageReason };
-    // MakerWorld's own "there is no such model" is the answer: the page isn't asked after it.
+    if (facts) return { facts, via, pageStatus, reason: null, pageReason, apiReason };
+    // The site's own "there is no such model" is the answer: the page isn't asked after it.
     if (apiReason === "not_found") break;
   }
   return {
@@ -184,5 +258,27 @@ export async function readModel(
     pageStatus,
     reason: apiReason === "not_found" ? "not_found" : (pageReason ?? apiReason),
     pageReason,
+    apiReason,
   };
+}
+
+/**
+ * Printables' API answer for model `id` among the documents Claude's web fetch read (it is handed the API's GET
+ * address when the Worker is throttled): the model's facts, `"missing"` when the API says there is no such model,
+ * or null when the fetch didn't read it.
+ */
+export function printablesFromFetched(docs: FetchedDoc[] | undefined, id: string): PageFacts | "missing" | null {
+  for (const doc of docs ?? []) {
+    if (!URL.canParse(doc.url) || new URL(doc.url).hostname !== "api.printables.com") continue;
+    const text = doc.text.trim();
+    // The tool gives the body as text; anything around the JSON is cut away.
+    const json = text.slice(text.indexOf("{"), text.lastIndexOf("}") + 1);
+    try {
+      const read = extractPrintablesPrint(JSON.parse(json), id);
+      if (read) return read;
+    } catch {
+      // Not the API's JSON: look at the next one.
+    }
+  }
+  return null;
 }

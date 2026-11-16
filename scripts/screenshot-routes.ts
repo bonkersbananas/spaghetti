@@ -2006,7 +2006,7 @@ export const shots: Shot[] = [
     cleanup: removeNamedIdeas,
   },
   {
-    // The same photo while Claude names it: "Naming…" where the title will land (decision 0071). On a version
+    // The same photo while Claude names it: "Naming…" where the title will land (decision 0072). On a version
     // without the sign the card just has no title yet.
     name: "ideas-naming",
     path: "/ideas",

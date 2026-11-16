@@ -4,7 +4,7 @@ import { useEffect, useReducer } from "react";
 import { ClaudeLine } from "./ClaudeLine";
 
 /**
- * Whether Claude is naming this idea right now (decision 0071), from what the server says (`titleJob`), and for 15
+ * Whether Claude is naming this idea right now (decision 0072), from what the server says (`titleJob`), and for 15
  * seconds at most: then it is drawn again without it. (The server reports the job as done past the timeout too, so
  * the next copy of the idea the screens fetch drops it as well.)
  */

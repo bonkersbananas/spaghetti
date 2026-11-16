@@ -286,7 +286,7 @@ export interface Item {
    */
   claudeTitle?: string | null;
   /**
-   * An untitled idea's naming (decision 0071): "naming" while Claude works on its title (since: when the job began),
+   * An untitled idea's naming (decision 0072): "naming" while Claude works on its title (since: when the job began),
    * "done" once it ran, whatever came of it. Null when it was never asked, and for an idea with a title.
    */
   titleJob?: TitleJobState | null;

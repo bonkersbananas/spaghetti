@@ -35,7 +35,7 @@ export interface CardProps {
   /** Optional: ideas don't need a title. Falls back to the note. */
   title?: string | null;
   /**
-   * Stands where the title will land while there is none yet: Claude's "Naming…" (`NamingSign`, decision 0071). The
+   * Stands where the title will land while there is none yet: Claude's "Naming…" (`NamingSign`, decision 0072). The
    * title fades in when it comes.
    */
   naming?: ReactNode;

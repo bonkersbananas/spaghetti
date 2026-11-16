@@ -1,5 +1,5 @@
 /**
- * When the screens show that Claude is naming an idea (decision 0071): the Worker (which reports a job as done past
+ * When the screens show that Claude is naming an idea (decision 0072): the Worker (which reports a job as done past
  * the timeout) and the lazy `NamingSign` (cards, the idea page) read it here; the Journal's rows keep a written-out
  * copy of the timeout, which test/unit/naming.test.ts holds equal. Without imports, so it adds only itself.
  */

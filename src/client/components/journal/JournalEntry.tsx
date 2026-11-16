@@ -339,7 +339,7 @@ const EventRow = forwardRef<HTMLAnchorElement, JournalEntryProps>(function Event
           </time>
         </MetaList>
         {
-          // While Claude names it (decision 0071) the name's place says so.
+          // While Claude names it (decision 0072) the name's place says so.
           item.titleJob?.status === "naming" && !name.titled ? (
             <Naming since={item.titleJob.since}>{name.text}</Naming>
           ) : (
@@ -465,7 +465,7 @@ const AttemptRow = forwardRef<HTMLAnchorElement, JournalEntryProps>(function Att
 });
 
 /**
- * A captured idea's name while Claude names it (decision 0071): the plain words "Naming…", for 15 seconds at most, then
+ * A captured idea's name while Claude names it (decision 0072): the plain words "Naming…", for 15 seconds at most, then
  * its name as before. Plain words and the clock the Journal already has, so its first load doesn't carry the cards'
  * sparkle. The 15 s is `NAMING_TIMEOUT_MS` (shared/naming.ts) written out: imported, it would be a chunk of its own in
  * the Journal's first load, which is at its ceiling; test/unit/naming.test.ts keeps the two equal.

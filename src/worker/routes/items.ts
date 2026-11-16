@@ -64,7 +64,7 @@ const createItem = z.object({
   stage: z.enum(["idea", "building"]).optional(),
   /** The twist it prints (a build made from a twist). */
   twistId: id.optional(),
-  /** How many photos the capture is sending after it: Claude's naming of an untitled idea starts at once (0071). */
+  /** How many photos the capture is sending after it: Claude's naming of an untitled idea starts at once (0072). */
   photos: z.number().int().min(0).max(100).optional(),
 });
 const updateItem = z.object({
@@ -284,7 +284,7 @@ export async function loadItems(db: Db, where: ReturnType<typeof and>) {
     ),
     // A build that prints a twist falls back to the twist's picture for its cover (shared/cover.ts).
     twistPictures(db, twistIds),
-    // Claude's naming jobs (decisions 0070, 0071): the title it gave, or that it is naming an idea right now.
+    // Claude's naming jobs (decisions 0070, 0072): the title it gave, or that it is naming an idea right now.
     titleJobs(
       db,
       rows.flatMap((row) => (row.title || row.stage === "idea" ? [row.id] : [])),

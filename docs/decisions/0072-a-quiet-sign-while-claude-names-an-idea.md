@@ -1,4 +1,4 @@
-# 0071. While Claude names an idea, its title's place says so, and the server says when
+# 0072. While Claude names an idea, its title's place says so, and the server says when
 
 Status: Accepted
 

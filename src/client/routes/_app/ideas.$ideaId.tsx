@@ -290,7 +290,7 @@ function Idea({ item }: { item: ItemView }) {
   // Claude's title (decision 0070), for as long as it is still what it wrote: marked, and faded in when it arrives here.
   const named = !!item.claudeTitle && title === item.claudeTitle;
   const [untitled] = useState(!item.title);
-  // While Claude names it (decision 0071) the title's place says so; a title typed here ends it at once.
+  // While Claude names it (decision 0072) the title's place says so; a title typed here ends it at once.
   const naming = useNaming(item) && !title.trim();
 
   return (

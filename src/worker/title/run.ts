@@ -45,7 +45,7 @@ export interface TitleJobView {
 
 /**
  * The naming jobs of these items (decision 0070): the title Claude gave, which the screen marks as Claude's while it
- * is still that, and whether Claude is naming one right now, which the screen shows in place of the title (0071).
+ * is still that, and whether Claude is naming one right now, which the screen shows in place of the title (0072).
  */
 export async function titleJobs(db: Db, itemIds: string[]): Promise<Map<string, TitleJobView>> {
   const jobs = new Map<string, TitleJobView>();

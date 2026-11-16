@@ -103,7 +103,7 @@ export function IdeaCard({ item, person, via, landing, menu, headingLevel = 2, r
           photo={coverPhoto(cover, cover.kind === "plate" ? plateAlt(item) : photoAlt(item))}
           title={item.title || (item.draft?.status === "reading" ? "Reading the page…" : item.title)}
           naming={
-            // The server says while Claude names it (decision 0071); the sparkle and the timeout load only then.
+            // The server says while Claude names it (decision 0072); the sparkle and the timeout load only then.
             item.titleJob?.status === "naming" && (
               <Suspense fallback={<span className="text-small text-ink-faint min-h-6">Naming…</span>}>
                 <NamingSign item={item} />

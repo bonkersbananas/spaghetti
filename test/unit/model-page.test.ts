@@ -1,6 +1,13 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { extractMakerWorldDesign, extractModelPage, isSiteTitle } from "../../src/shared/model-page.ts";
+import {
+  extractMakerWorldDesign,
+  extractModelPage,
+  extractPrintablesPrint,
+  isSiteTitle,
+  printablesApiUrl,
+  printablesId,
+} from "../../src/shared/model-page.ts";
 
 const page = (name: string) => readFileSync(new URL(`../fixtures/pages/${name}`, import.meta.url), "utf8");
 
@@ -75,6 +82,53 @@ describe("reading a model page", () => {
     // Another model's answer, or an error, is not this model.
     expect(extractMakerWorldDesign(json, "2051797")).toBeNull();
     expect(extractMakerWorldDesign({ code: 404, error: "The server cannot find the requested resource." })).toBeNull();
+  });
+
+  it("takes a Printables model from its GraphQL API (real answers, November 2026)", () => {
+    const facts = extractPrintablesPrint(JSON.parse(page("printables-print.json")), "1577248");
+    expect(facts).not.toBe("missing");
+    if (!facts || facts === "missing") return;
+    expect(facts.title).toBe("Carrying handle for IKEA Antilop high chair legs.");
+    expect(facts.designer).toBe("DaBloch");
+    expect(facts.license).toBe("CC BY-NC-SA");
+    expect(facts.description).toContain("Can be printed upright without support.");
+    expect(facts.description).toContain("Category: Household / Kitchen");
+    expect(facts.description).toContain("Tags: leg, ikea, holder");
+    expect(facts.description).not.toContain("<p>");
+    expect(facts.imageUrls).toHaveLength(5);
+    expect(facts.imageUrls[0]).toMatch(/^https:\/\/media\.printables\.com\/media\/prints\/[^/]+\/images\/.+\.jpg$/);
+    // This one states no print settings, so there's no profile line.
+    expect(facts.profiles).toEqual([]);
+
+    const benchy = extractPrintablesPrint(JSON.parse(page("printables-benchy.json")), "3161");
+    if (!benchy || benchy === "missing") throw new Error("no Benchy");
+    expect(benchy.license).toBe("CC0");
+    expect(benchy.designer).toBe("Prusa Research");
+    expect(benchy.profiles).toEqual([
+      "material PLA; 29 g of filament; about 2 h 28 min; layer heights 0.15, 0.28, 0.25 mm; 0.4 mm nozzle; printed on Prusa MK3/S/S+",
+    ]);
+  });
+
+  it("tells a Printables model that isn't there from an answer it can't read", () => {
+    // What the API answers for a number that doesn't exist (and for a removed or private model).
+    expect(extractPrintablesPrint({ data: { print: null } }, "999999999")).toBe("missing");
+    // Another model's answer, an error, or not the API at all.
+    expect(extractPrintablesPrint(JSON.parse(page("printables-print.json")), "1577249")).toBeNull();
+    expect(extractPrintablesPrint({ errors: [{ message: "Cannot query field" }], data: null }, "1")).toBeNull();
+    expect(extractPrintablesPrint({ detail: "Request was throttled." }, "1")).toBeNull();
+    expect(extractPrintablesPrint("Request was throttled.", "1")).toBeNull();
+  });
+
+  it("finds a Printables model's number in its page's address, and makes the API's GET address", () => {
+    expect(printablesId("https://www.printables.com/model/1577248-carrying-handle-for-ikea-antilop")).toBe("1577248");
+    expect(printablesId("https://www.printables.com/de/model/1577248-griff/files")).toBe("1577248");
+    expect(printablesId("https://printables.com/model/3161")).toBe("3161");
+    expect(printablesId("https://www.printables.com/@DaBloch_258351/models")).toBeNull();
+    expect(printablesId("https://makerworld.com/model/1577248")).toBeNull();
+    const url = new URL(printablesApiUrl("1577248"));
+    expect(url.origin + url.pathname).toBe("https://api.printables.com/graphql/");
+    expect(JSON.parse(url.searchParams.get("variables") ?? "")).toEqual({ id: "1577248" });
+    expect(url.searchParams.get("query")).toContain("print(id: $id)");
   });
 
   it("survives character references that aren't characters", () => {

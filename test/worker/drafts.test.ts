@@ -3,12 +3,15 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { NewTokenResponse } from "../../src/shared/agents.ts";
 import type { DraftResponse, FeaturesResponse, ItemResponse } from "../../src/shared/api.ts";
 import { DRAFTS_PER_DAY } from "../../src/shared/draft.ts";
+import { printablesApiUrl as printablesApiUrlFor } from "../../src/shared/model-page.ts";
 import { app } from "../../src/worker/app.ts";
 import { resumeDrafts, STALE_MS } from "../../src/worker/draft/run.ts";
 import makerworldPage from "../fixtures/pages/makerworld.html?raw";
 import makerworldDesign from "../fixtures/pages/makerworld-design.json?raw";
 import golfPage from "../fixtures/pages/makerworld-golf.html?raw";
+import printablesBenchy from "../fixtures/pages/printables-benchy.json?raw";
 import printablesChallenge from "../fixtures/pages/printables-challenge.html?raw";
+import printablesPrint from "../fixtures/pages/printables-print.json?raw";
 import { addUser, ORIGIN, request, resetDb, signIn } from "./helpers.ts";
 
 const PAGE = "https://makerworld.com/en/models/12345-cable-comb";
@@ -41,7 +44,8 @@ const goodDraft = {
   imageUrls: [IMAGE, "https://evil.example/tracker.jpg"],
 };
 
-type Answer = { json?: unknown; stopReason?: string; status?: number };
+/** `fetched`: what Claude's web fetch read before it answered (a text document per address; null: the fetch failed). */
+type Answer = { json?: unknown; stopReason?: string; status?: number; fetched?: Record<string, string | null> };
 type Page = { status?: number; body?: string; location?: string; type?: string };
 
 /** Stubs the Anthropic API and the image host; Responses are made inside the stub (a Response can't cross requests). */
@@ -72,17 +76,40 @@ function stubWeb(
         ? new Response(webp(), { headers: { "Content-Type": "image/webp" } })
         : new Response(png(), { headers: { "Content-Type": "image/png" } });
     }
+    if (url.hostname === "media.printables.com") {
+      // Printables keeps its pictures as uploaded (big JPEGs, PNGs); its host sends a WebP thumbnail when asked.
+      return /\/thumbs\/inside\/\d+x\d+\/[a-z]+\/[^/]+\.webp$/.test(url.pathname) && !pngOnly
+        ? new Response(webp(), { headers: { "Content-Type": "image/webp" } })
+        : new Response(png(), { headers: { "Content-Type": "image/png" } });
+    }
     if (url.hostname === "api.anthropic.com") {
       bodies.push(JSON.parse(String(init?.body)));
       const next = typeof answer === "function" ? answer() : answer;
       if (next.status)
         return Response.json({ type: "error", error: { type: "api_error", message: "no" } }, { status: next.status });
+      // Each fetch Claude made, as the API reports it: the tool's call, then its result or its error.
+      const fetches = Object.entries(next.fetched ?? {}).flatMap(([address, text], i) => [
+        { type: "server_tool_use", id: `srvtoolu_${i}`, name: "web_fetch", input: { url: address } },
+        {
+          type: "web_fetch_tool_result",
+          tool_use_id: `srvtoolu_${i}`,
+          content:
+            text === null
+              ? { type: "web_fetch_tool_result_error", error_code: "url_not_accessible" }
+              : {
+                  type: "web_fetch_result",
+                  url: address,
+                  retrieved_at: "2026-11-16T20:00:00Z",
+                  content: { type: "document", source: { type: "text", media_type: "text/plain", data: text } },
+                },
+        },
+      ]);
       return Response.json({
         id: "msg_test",
         type: "message",
         role: "assistant",
         model: "claude-opus-5-5",
-        content: next.stopReason === "refusal" ? [] : [{ type: "text", text: JSON.stringify(next.json) }],
+        content: next.stopReason === "refusal" ? [] : [...fetches, { type: "text", text: JSON.stringify(next.json) }],
         stop_reason: next.stopReason ?? "end_turn",
         stop_sequence: null,
         usage: { input_tokens: 10, output_tokens: 10 },
@@ -417,6 +444,170 @@ describe("drafting an idea from a model page", () => {
     expect((web.bodies[0] as { tools?: unknown[] }).tools ?? []).toEqual([]);
     const run = await env.DB.prepare("SELECT detail FROM draft_runs").first<{ detail: string }>();
     expect(JSON.parse(run?.detail ?? "{}")).toMatchObject({ source: "worker_api", pageStatus: 403 });
+  });
+
+  describe("from Printables", () => {
+    const MODEL = "https://www.printables.com/model/1577248-carrying-handle-for-ikea-antilop-high-chair-legs";
+    const API = "https://api.printables.com/graphql/";
+    const json = (body: string, status = 200): Page => ({ status, type: "application/json", body });
+    /** What Printables answers a Worker: a throttle on its API, a bot challenge on its pages. */
+    const blocked: Record<string, Page> = {
+      [API]: { status: 429, type: "text/plain", body: "Request was throttled." },
+      [MODEL]: { status: 403, body: printablesChallenge },
+    };
+    const runs = async () =>
+      (
+        await env.DB.prepare("SELECT outcome, detail FROM draft_runs ORDER BY at, rowid").all<{
+          outcome: string;
+          detail: string | null;
+        }>()
+      ).results.map((run) => ({ outcome: run.outcome, detail: JSON.parse(run.detail ?? "{}") }));
+    const note = {
+      readable: true,
+      note: "Keeps the high chair's legs together.",
+      material: null,
+      plate: null,
+      settings: null,
+    };
+
+    it("reads the model from Printables' API, before its page, and stores its pictures as WebP", async () => {
+      const web = stubWeb({ json: note }, { [API]: json(printablesPrint) });
+      const id = await addIdea({ note: MODEL });
+      const { draft } = await (await draftIt(id)).json<DraftResponse>();
+      expect(draft).toMatchObject({
+        status: "drafted",
+        applied: ["title", "note", "photos"],
+        findings: { designer: "DaBloch", license: "CC BY-NC-SA" },
+      });
+      const item = await getItem(id);
+      expect(item.title).toBe("Carrying handle for IKEA Antilop high chair legs.");
+      expect(item.photos).toHaveLength(4);
+      // The page was never asked; Claude got the model as data, with no web fetch tool.
+      expect(web.asked).not.toContain(MODEL);
+      const sent = web.bodies[0] as { tools?: unknown[]; messages: Array<{ content: string }> };
+      expect(sent.tools ?? []).toEqual([]);
+      expect(sent.messages[0]?.content).toContain("Can be printed upright without support.");
+      // Every picture came as a WebP thumbnail, never a 9 MB original.
+      const pictures = web.asked.filter((url) => url.startsWith("https://media.printables.com/"));
+      expect(pictures.length).toBeGreaterThanOrEqual(4);
+      expect(pictures.every((url) => /\/thumbs\/inside\/1600x1200\/jpg\/[^/]+\.webp$/.test(url))).toBe(true);
+      expect(await runs()).toMatchObject([
+        { outcome: "drafted", detail: { source: "worker_api", pageStatus: null, pictures: { stored: 4 } } },
+      ]);
+    });
+
+    it("hands Claude the model's settings from the API", async () => {
+      const web = stubWeb({ json: { ...note, material: "PLA" } }, { [API]: json(printablesBenchy) });
+      const id = await addIdea({ note: "https://www.printables.com/model/3161-3d-benchy" });
+      const { draft } = await (await draftIt(id)).json<DraftResponse>();
+      expect(draft?.findings).toMatchObject({ designer: "Prusa Research", license: "CC0", material: "PLA" });
+      const sent = web.bodies[0] as { messages: Array<{ content: string }> };
+      expect(sent.messages[0]?.content).toContain("material PLA; 29 g of filament");
+    });
+
+    it("stops without asking Claude when Printables says the model isn't there", async () => {
+      const web = stubWeb(undefined, { [API]: json('{"data":{"print":null}}') });
+      const id = await addIdea({ note: MODEL });
+      const { draft } = await (await draftIt(id)).json<DraftResponse>();
+      expect(draft).toMatchObject({ status: "failed", failure: "unreadable" });
+      expect(web.bodies).toHaveLength(0);
+      expect(web.asked).not.toContain(MODEL);
+      expect(await runs()).toMatchObject([
+        { outcome: "not_found", detail: { source: "worker_api", unread: "not_found", apiUnread: "not_found" } },
+      ]);
+      expect((await getItem(id)).title).toBeNull();
+    });
+
+    it("when the Worker is throttled, Claude's fetch is handed the API's address, and what it read is the model", async () => {
+      const web = stubWeb(
+        {
+          // Claude's own words for the facts are not taken: the API's are.
+          json: { ...goodDraft, title: "Antilop leg handle", designer: "someone", imageUrls: [] },
+          fetched: { [MODEL]: null, [printablesApiUrlFor("1577248")]: printablesPrint },
+        },
+        blocked,
+      );
+      const id = await addIdea({ note: MODEL });
+      const { draft } = await (await draftIt(id)).json<DraftResponse>();
+      expect(draft).toMatchObject({ status: "drafted", findings: { designer: "DaBloch", license: "CC BY-NC-SA" } });
+      const item = await getItem(id);
+      expect(item.title).toBe("Carrying handle for IKEA Antilop high chair legs.");
+      expect(item.photos).toHaveLength(4);
+      const sent = web.bodies[0] as { tools: unknown[]; messages: Array<{ content: string }> };
+      expect(sent.tools).toHaveLength(1);
+      expect(sent.messages[0]?.content).toContain(printablesApiUrlFor("1577248"));
+      expect(await runs()).toMatchObject([
+        {
+          outcome: "drafted",
+          detail: {
+            source: "web_fetch_api",
+            pageStatus: 403,
+            // The stub's 403 has no cf-mitigated header (production's does: "challenge").
+            unread: "http_403",
+            apiUnread: "http_429",
+            fetchErrors: ["url_not_accessible"],
+            pictures: { found: 5, stored: 4 },
+          },
+        },
+      ]);
+    });
+
+    it("when Claude won't take the API's JSON its fetch read, it is asked again with the model as data", async () => {
+      let calls = 0;
+      const web = stubWeb(
+        () =>
+          ++calls === 1
+            ? {
+                json: { ...goodDraft, readable: false },
+                fetched: { [printablesApiUrlFor("1577248")]: printablesPrint },
+              }
+            : { json: note },
+        blocked,
+      );
+      const id = await addIdea({ note: MODEL });
+      expect((await (await draftIt(id)).json<DraftResponse>()).draft?.status).toBe("drafted");
+      expect((await getItem(id)).title).toBe("Carrying handle for IKEA Antilop high chair legs.");
+      expect((web.bodies[1] as { tools?: unknown[] }).tools ?? []).toEqual([]);
+      expect(await runs()).toMatchObject([{ outcome: "drafted", detail: { source: "web_fetch_api", asked: 2 } }]);
+    });
+
+    it("a model the API tells Claude's fetch isn't there is no draft, whatever Claude says", async () => {
+      stubWeb({ json: goodDraft, fetched: { [printablesApiUrlFor("1577248")]: '{"data":{"print":null}}' } }, blocked);
+      const id = await addIdea({ note: MODEL });
+      expect((await (await draftIt(id)).json<DraftResponse>()).draft).toMatchObject({
+        status: "failed",
+        failure: "unreadable",
+      });
+      expect((await getItem(id)).title).toBeNull();
+      expect(await runs()).toMatchObject([
+        { outcome: "not_found", detail: { source: "web_fetch", apiUnread: "http_429" } },
+      ]);
+    });
+
+    it("says why when neither the Worker nor Claude's fetch could read it", async () => {
+      stubWeb(
+        {
+          json: { ...goodDraft, readable: false },
+          fetched: { [MODEL]: null, [printablesApiUrlFor("1577248")]: null },
+        },
+        blocked,
+      );
+      const id = await addIdea({ note: MODEL });
+      expect((await (await draftIt(id)).json<DraftResponse>()).draft?.failure).toBe("unreadable");
+      expect(await runs()).toMatchObject([
+        {
+          outcome: "not_readable",
+          detail: {
+            source: "web_fetch",
+            pageStatus: 403,
+            // The stub's 403 has no cf-mitigated header (production's does: "challenge").
+            unread: "http_403",
+            apiUnread: "http_429",
+            fetchErrors: ["url_not_accessible", "url_not_accessible"],
+          },
+        },
+      ]);
+    });
   });
 
   it("falls back too when the page has nothing to draft from, and never follows a redirect off the three sites", async () => {
