@@ -215,3 +215,37 @@ test("on desktop Up next is one compact row, and the inbox starts on the first s
   await page.getByRole("button", { name: "Take off Up next" }).click();
   await expect.poll(() => serverQueue(page)).not.toContain("Nine");
 });
+
+test("the model filters narrow the inbox beside its heading, not Up next", async ({ page }) => {
+  const headers = { Origin: origin(page) };
+  const queued = crypto.randomUUID();
+  await page.request.post("/api/items", { headers, data: { id: queued, title: "Queued sketch" } });
+  await page.request.patch(`/api/items/${queued}`, { headers, data: { upNext: true } });
+  await page.request.post("/api/items", {
+    headers,
+    data: { id: crypto.randomUUID(), title: "Bins", note: "https://makerworld.com/en/models/487213-drawer-bins" },
+  });
+  await makeIdea(page, "Loose idea");
+  await page.goto("/ideas");
+  const rest = page.getByRole("region", { name: "The rest" });
+  const inbox = page.getByRole("list", { name: "Ideas" });
+  await rest.getByRole("button", { name: /^Has a model/ }).click();
+  await expect(rest.getByRole("button", { name: /^Has a model/ })).toHaveAttribute("aria-pressed", "true");
+  await expect(inbox.getByRole("heading", { name: "Bins" })).toBeVisible();
+  await expect(inbox.getByRole("heading", { name: "Loose idea" })).toHaveCount(0);
+  // Up next stays as it is.
+  await expect(upNext(page).getByRole("heading", { name: "Queued sketch" })).toBeVisible();
+  // A second tap shows every idea again.
+  await rest.getByRole("button", { name: /^Has a model/ }).click();
+  await expect(inbox.getByRole("heading", { name: "Loose idea" })).toBeVisible();
+
+  // A filter that empties the inbox keeps its own way back, and says which it is.
+  await rest.getByRole("button", { name: /^Needs designing/ }).click();
+  await page.getByRole("button", { name: "Options for Loose idea" }).click();
+  await page.getByRole("button", { name: "Up next", exact: true }).click();
+  await expect(
+    rest.getByText("Everything here has a model. Tap “Needs designing” again to see every idea."),
+  ).toBeVisible();
+  await rest.getByRole("button", { name: /^Needs designing/ }).click();
+  await expect(inbox.getByRole("heading", { name: "Bins" })).toBeVisible();
+});

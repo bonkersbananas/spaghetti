@@ -70,6 +70,7 @@ test("U queues the idea you're on, [ and ] reorder the queue, J and K walk ideas
   await page.keyboard.press("j");
   await page.keyboard.press("u");
   await expect(strip).toHaveCount(1);
+  await expect(page.getByText("In Up next · 1st")).toBeVisible();
   await expect(inbox).toHaveCount(2);
   await page.keyboard.press("j");
   await expect(inbox.first()).toBeFocused();
@@ -79,6 +80,9 @@ test("U queues the idea you're on, [ and ] reorder the queue, J and K walk ideas
   await expect(strip.nth(1)).toBeFocused();
   await page.keyboard.press("[");
   await expect(strip.nth(0)).toBeFocused();
+  // Both went in within a moment: one toast, one line, that counts them.
+  await expect(page.getByText("2 added to Up next")).toBeVisible();
+  await expect(page.locator("[data-sonner-toast]")).toHaveCount(1);
 
   // On an idea's page J goes to the next idea in the same order, K back, U takes it off the queue.
   await page.keyboard.press("Enter");

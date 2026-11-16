@@ -1,7 +1,7 @@
 import { modelOf } from "@shared/model-mark";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
-import { lazy, Suspense, useState } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
 import { IdeaCard, type UpNextMenu } from "@/components/ideas/IdeaCard";
 import { StartedIdeas, startedIdeas } from "@/components/ideas/StartedIdeas";
 import { UpNextStrip } from "@/components/ideas/UpNextStrip";
@@ -21,6 +21,7 @@ import { shortcutCaps, useHotkeys } from "@/lib/hotkeys";
 import { useBuilds, useIdeas } from "@/lib/items";
 import { useListPicker } from "@/lib/list-picker";
 import { useArrived } from "@/lib/live";
+import { scrollBehavior } from "@/lib/motion";
 import { peopleQuery, sessionQuery } from "@/lib/queries";
 import { dropUpNext, moveUpNext, setUpNext, splitQueue } from "@/lib/up-next";
 import { useAfterPaint, useIsDesktop } from "@/lib/use-media-query";
@@ -35,7 +36,7 @@ export const Route = createFileRoute("/_app/ideas/")({
 });
 
 /** The inbox's grid: two columns on phones, more on desktop. */
-const grid = "grid grid-cols-2 gap-3 md:grid-cols-3 md:gap-5 xl:grid-cols-4";
+const gridClass = "grid grid-cols-2 gap-3 md:grid-cols-3 md:gap-5 xl:grid-cols-4";
 
 /** How many cards a phone (or a laptop) shows before it scrolls: the rest draw after the first paint (useAfterPaint). */
 const FIRST_SCREEN = { phone: 8, desktop: 12 };
@@ -44,11 +45,13 @@ function Ideas() {
   useListPicker();
   const after = useAfterPaint();
   const { items: all, isPending, error, refetch } = useIdeas();
-  // "Has a model" / "Needs designing": one tap each, tap again to see everything. Only offered once an idea has a model.
+  const { queue, rest: inbox } = splitQueue(all);
+  // "Has a model" / "Needs designing", beside The rest: one tap each, tap again to see everything. They narrow the
+  // inbox, not Up next (already picked), and are only offered once an idea there has a model.
   const [modelFilter, setModelFilter] = useState<"model" | "design" | null>(null);
-  const modelCount = all.filter((item) => modelOf(item)).length;
+  const modelCount = inbox.filter((item) => modelOf(item)).length;
   const filter = modelCount > 0 ? modelFilter : null;
-  const items = filter ? all.filter((item) => !!modelOf(item) === (filter === "model")) : all;
+  const everything = filter ? inbox.filter((item) => !!modelOf(item) === (filter === "model")) : inbox;
   // Ideas that were started stay here, after the rest: they are the builds that began as an idea.
   const { items: builds } = useBuilds();
   const started = startedIdeas(builds);
@@ -57,17 +60,28 @@ function Ideas() {
   const me = user?.id;
   const { landed } = useCapture();
   const arrived = useArrived();
+  // Up next and the wishlists come first, so on a phone an idea you just captured can land under the fold: bring it
+  // into view, so you see it land.
+  useEffect(() => {
+    if (!landed) return;
+    const frame = requestAnimationFrame(() => {
+      const card = document.querySelector(`main [data-picks] a[href^="/ideas/${landed}"]`);
+      if (card && card.getBoundingClientRect().top > window.innerHeight * 0.6) {
+        card.scrollIntoView({ block: "center", behavior: scrollBehavior() });
+      }
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [landed]);
   const via = useVia();
   const byId = new Map(people?.map((person) => [person.id, person]));
   const queryClient = useQueryClient();
   const isDesktop = useIsDesktop();
-  const { queue, rest: everything } = splitQueue(items);
   // The cards below the fold wait for the first paint, so a tap on Ideas (or on a delete that lands here) shows the top
   // of the grid at once; a return to the page draws it whole, for the scroll position the router restores.
   const rest = after ? everything : everything.slice(0, isDesktop ? FIRST_SCREEN.desktop : FIRST_SCREEN.phone);
   const [dragged, setDragged] = useState<string | null>(null);
   const [over, setOver] = useState<string | null>(null);
-  const menuFor = (item: (typeof items)[number], index: number): UpNextMenu => ({
+  const menuFor = (item: (typeof all)[number], index: number): UpNextMenu => ({
     queued: index >= 0,
     onToggle: () => setUpNext(queryClient, item, index < 0),
     onMoveUp: index > 0 ? () => moveUpNext(queryClient, queue, item.id, -1) : undefined,
@@ -78,9 +92,9 @@ function Ideas() {
   const picked = () => {
     const href = document.activeElement?.closest("main [data-picks] a[href^='/ideas/']")?.getAttribute("href");
     const id = href?.split("/").pop();
-    return id ? items.find((idea) => idea.id === id) : undefined;
+    return id ? all.find((idea) => idea.id === id) : undefined;
   };
-  const onPicked = (act: (idea: (typeof items)[number]) => void) => () => {
+  const onPicked = (act: (idea: (typeof all)[number]) => void) => () => {
     const idea = picked();
     if (!idea || idea.pending) return;
     act(idea);
@@ -99,7 +113,7 @@ function Ideas() {
     listMoveEarlier: isDesktop ? onPicked((idea) => moveUpNext(queryClient, queue, idea.id, -1)) : undefined,
     listMoveLater: isDesktop ? onPicked((idea) => moveUpNext(queryClient, queue, idea.id, 1)) : undefined,
   });
-  const card = (item: (typeof items)[number]) => (
+  const card = (item: (typeof all)[number]) => (
     <IdeaCard
       key={item.id}
       item={item}
@@ -110,12 +124,48 @@ function Ideas() {
       menu={menuFor(item, -1)}
     />
   );
+  const filters = modelCount > 0 && (
+    // biome-ignore lint/a11y/useSemanticElements: a group of toggle buttons, not a form fieldset.
+    <div role="group" aria-label="Filter ideas" className="-ml-2.5 flex flex-wrap items-baseline">
+      <ToggleChip
+        appearance="quiet"
+        selected={filter === "model"}
+        count={modelCount}
+        onClick={() => setModelFilter(filter === "model" ? null : "model")}
+      >
+        Has a model
+      </ToggleChip>
+      <ToggleChip
+        appearance="quiet"
+        selected={filter === "design"}
+        count={inbox.length - modelCount}
+        onClick={() => setModelFilter(filter === "design" ? null : "design")}
+      >
+        Needs designing
+      </ToggleChip>
+    </div>
+  );
+  const grid = (
+    <>
+      {filter && !rest.length && (
+        // The filter that emptied the inbox stays right above, so this says which one takes you back.
+        <p className="text-body text-ink-soft">
+          {filter === "model"
+            ? "Nothing here has a model yet. Tap “Has a model” again to see every idea."
+            : "Everything here has a model. Tap “Needs designing” again to see every idea."}
+        </p>
+      )}
+      <ul data-picks className={`${gridClass} relative`} aria-label="Ideas">
+        <Reflow key={filter ?? "all"}>{rest.map(card)}</Reflow>
+      </ul>
+    </>
+  );
 
   return (
     <>
       <PageHeader title="Ideas" subtitle="The inbox. Every print starts as a half-thought." />
       {isPending ? (
-        <div className={grid} aria-hidden>
+        <div className={gridClass} aria-hidden>
           {Array.from({ length: 8 }, (_, index) => (
             // biome-ignore lint/suspicious/noArrayIndexKey: placeholders have no identity.
             <CardSkeleton key={index} aspect="portrait" />
@@ -125,37 +175,13 @@ function Ideas() {
         <>
           {!isDesktop && me && (
             // Its own boundary, holding its place, so the grid never waits for it or jumps when it lands.
-            <Suspense fallback={<div className="mb-8 h-16" aria-hidden />}>
-              <WishlistLink me={me} ideas={all} people={people ?? []} className="mb-8" />
+            <Suspense fallback={<div className="mb-6 h-14" aria-hidden />}>
+              <WishlistLink me={me} ideas={all} people={people ?? []} className="mb-6" />
             </Suspense>
-          )}
-          {modelCount > 0 && (
-            <div className="mb-6 flex flex-wrap gap-2">
-              <ToggleChip
-                selected={filter === "model"}
-                onClick={() => setModelFilter(filter === "model" ? null : "model")}
-              >
-                Has a model <span className="text-ink-faint font-medium">{modelCount}</span>
-              </ToggleChip>
-              <ToggleChip
-                selected={filter === "design"}
-                onClick={() => setModelFilter(filter === "design" ? null : "design")}
-              >
-                Needs designing <span className="text-ink-faint font-medium">{all.length - modelCount}</span>
-              </ToggleChip>
-            </div>
-          )}
-          {!items.length && (
-            <p className="text-body text-ink-soft mb-2">
-              {filter
-                ? "Nothing here. Tap the chip again to see every idea."
-                : "Nothing new in the pot. What you started is below."}
-            </p>
           )}
           {queue.length > 0 && (
             <Section id="up-next-heading" title="Up next" count={queue.length} className="mb-8 md:mb-10">
               <UpNextStrip
-                key={filter ?? "all"}
                 queue={queue}
                 menuFor={menuFor}
                 landed={(item) => item.id === landed || arrived.has(item.id)}
@@ -181,17 +207,19 @@ function Ideas() {
               />
             </Section>
           )}
-          {rest.length > 0 &&
+          {!all.length && (
+            <p className="text-body text-ink-soft mb-2">Nothing new in the pot. What you started is below.</p>
+          )}
+          {inbox.length > 0 &&
             (queue.length > 0 ? (
-              <Section id="inbox-heading" title="The rest">
-                <ul data-picks className={`${grid} relative`} aria-label="Ideas">
-                  <Reflow key={filter ?? "all"}>{rest.map(card)}</Reflow>
-                </ul>
+              <Section id="inbox-heading" title="The rest" aside={filters || undefined} asideAfter>
+                {grid}
               </Section>
             ) : (
-              <ul data-picks className={`${grid} relative`} aria-label="Ideas">
-                <Reflow key={filter ?? "all"}>{rest.map(card)}</Reflow>
-              </ul>
+              <>
+                {filters && <div className="mb-4 md:mb-5">{filters}</div>}
+                {grid}
+              </>
             ))}
           <StartedIdeas builds={builds} />
         </>
