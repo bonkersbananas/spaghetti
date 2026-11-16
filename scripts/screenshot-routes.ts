@@ -3064,6 +3064,24 @@ export const shots: Shot[] = [
     cleanup: removeModelItems,
   },
   {
+    // An idea led by its model's render, started: the build keeps the render where the idea had it, at its size, with
+    // the add-photo wells row-sized under it (one cover rule, lib/previews.ts coverOf).
+    name: "build-model-cover",
+    path: "/builds",
+    fullPage: true,
+    prepare: async (page) => {
+      await ideaWithModel(page, FUSILLI_IDEA, FUSILLI, /Sliced by Spaghetti/);
+      await sliceSaved(page);
+      const id = modelItems.at(-1) as string;
+      const headers = { Origin: new URL(page.url()).origin };
+      await page.request.patch(`/api/items/${id}`, { headers, data: { stage: "building" } });
+      await page.goto(`/builds/${id}`, { waitUntil: "networkidle" });
+      await page.getByRole("textbox", { name: "Title" }).waitFor();
+      await page.waitForTimeout(1200);
+    },
+    cleanup: removeModelItems,
+  },
+  {
     // On desktop, a story card's "Sliced by Spaghetti" opens the settings below the model's card in the attempt.
     name: "build-model-settings",
     path: "/builds",
@@ -4444,6 +4462,15 @@ export const shots: Shot[] = [
   { name: "styleguide-controls", path: "/styleguide", selector: "#controls" },
   { name: "styleguide-buttons", path: "/styleguide", selector: "#buttons" },
   { name: "styleguide-builds", path: "/styleguide", selector: "#builds" },
+  {
+    name: "styleguide-covers",
+    path: "/styleguide",
+    selector: "#covers",
+    prepare: async (page) => {
+      await page.locator("#covers img").first().waitFor();
+      await page.waitForTimeout(600);
+    },
+  },
   { name: "styleguide-spools", path: "/styleguide", selector: "#pantry" },
   { name: "styleguide-recipes", path: "/styleguide", selector: "#recipes" },
   {
