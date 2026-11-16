@@ -27,12 +27,14 @@ import { SEED_PASSWORD, SEED_USERS } from "../scripts/lib/local-app.ts";
  * Raise a screen's ceiling only for code that screen shows at once, and say why in the pull request.
  * 2026-11-15: /today and /journal +2: the "Since Thursday" gate on both (the block itself loads only when there is a catch-up, but its
  * lazy import adds its dependency list to the gate's chunk, about 1.5 kB gzip).
+ * 2026-11-16: /builds +2: its On the bed section (the printing cards, loaded only when something is on the bed; the lazy
+ * import's dependency list is about 1.4 kB gzip in the route). /today fell 7.4 kB the same day (it no longer loads BuildCard).
  */
 const CEILING_KB = {
   "/sign-in": 185,
   "/today": 294,
   "/ideas": 259,
-  "/builds": 267,
+  "/builds": 269,
   "/journal": 278,
   "/search": 275,
   "/pantry": 257,

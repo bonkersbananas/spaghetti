@@ -152,11 +152,14 @@ test("On the bed holds only what is on the plate; builds between prints are In p
   const printing = crypto.randomUUID();
   const waiting = crypto.randomUUID();
   await page.request.post("/api/items", { headers, data: { id: printing, title: "Hook", stage: "building" } });
-  await page.request.post(`/api/items/${printing}/attempts`, { headers, data: { outcome: null } });
+  await page.request.post(`/api/items/${printing}/attempts`, {
+    headers,
+    data: { id: crypto.randomUUID(), outcome: null },
+  });
   await page.request.post("/api/items", { headers, data: { id: waiting, title: "Cable chain", stage: "building" } });
   await page.request.post(`/api/items/${waiting}/attempts`, {
     headers,
-    data: { outcome: "failed", failureTags: ["bed-adhesion"] },
+    data: { id: crypto.randomUUID(), outcome: "failed", failureTags: ["bed-adhesion"] },
   });
 
   await page.goto("/builds");
@@ -173,7 +176,7 @@ test("On the bed holds only what is on the plate; builds between prints are In p
   // A build between prints says so on its page: it isn't on the bed.
   await card.click();
   await expect(page.getByText("In progress", { exact: true })).toBeVisible();
-  await expect(page.getByText("On the bed", { exact: true })).toHaveCount(0);
+  await expect(page.getByRole("main").getByText("On the bed", { exact: true })).toHaveCount(0);
 
   // Only the print left: In progress says where everything is.
   await page.request.delete(`/api/items/${waiting}`, { headers });
@@ -296,9 +299,9 @@ test("a print on the bed shows its progress only when there is an estimate", asy
   await expect(bar).toHaveAttribute("aria-valuetext", /^About \d+ (h \d+ )?min left$|^Done around /);
   await expect(page.getByText(/^About .* left$|^Done around /)).toBeVisible();
 
-  // The builds list says how long is left instead of when it started.
+  // The builds list has it on the bed, saying how long is left instead of when it started.
   await page.goto("/builds");
-  await expect(page.getByRole("link", { name: /Timed tugboat/ })).toContainText(/about .* left|done around/);
+  await expect(page.getByRole("region", { name: "On the bed" })).toContainText(/About .* left|Done around/);
 
   // No estimate, nothing to measure: words only, no bar.
   await page.goto(`/builds/${untimed}`);

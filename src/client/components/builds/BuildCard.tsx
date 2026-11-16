@@ -7,7 +7,7 @@ import type { Ref } from "react";
 import { photoAlt } from "@/components/ideas/IdeaCard";
 import { Card } from "@/components/ui/Card";
 import { Chip } from "@/components/ui/Chip";
-import { BuildsIcon, TagIcon } from "@/components/ui/icons";
+import { BuildsIcon } from "@/components/ui/icons";
 import { MetaList } from "@/components/ui/MetaList";
 import { PhotoRow } from "@/components/ui/PhotoRow";
 import { ReactionGlance } from "@/components/ui/ReactionGlance";
@@ -20,12 +20,6 @@ import { photoSrc } from "@/lib/previews";
 import { usePrintProgress } from "@/lib/print-progress";
 import { useUnreadCount, useUnreadThreadSearch } from "@/lib/unread-comments";
 import { OutcomeChip } from "./Outcome";
-
-/** When anything last happened on a build: its newest attempt, or when it started. */
-export function lastActivity(item: ItemView): number {
-  const last = item.attempts.at(-1);
-  return Math.max(last?.printedAt ?? 0, last?.finishedAt ?? 0, item.startedAt ?? item.createdAt);
-}
 
 /**
  * "Attempt 3 · 2 h ago", "Attempt 3 · about 45 min left" while it prints,
@@ -113,14 +107,7 @@ export function BuildCard({
         title={item.title}
         note={item.note || undefined}
         unread={unread}
-        sub={
-          tag && (
-            <span className="flex items-center gap-1">
-              <TagIcon size={14} className="text-ink-faint shrink-0" aria-hidden />
-              <span className="truncate">{tagLabel("failure", tag, failureOptions)}</span>
-            </span>
-          )
-        }
+        sub={tag && tagLabel("failure", tag, failureOptions)}
         chips={
           last ? (
             <OutcomeChip outcome={last.outcome} offTheBed={isOffTheBed(last)} onPhoto className="shadow-soft" />

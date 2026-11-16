@@ -5,7 +5,7 @@ import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link, redirect, useNavigate } from "@tanstack/react-router";
 import { AnimatePresence, m, useReducedMotion } from "motion/react";
 import { lazy, Suspense, useMemo } from "react";
-import { BedCards } from "@/components/builds/BedCards";
+import { BedCards } from "@/components/builds/PrintingCard";
 import { EmptyPot } from "@/components/illustrations/EmptyPot";
 import { SpoolStrand } from "@/components/illustrations/SpoolStrand";
 import { PageHeader } from "@/components/shell/PageHeader";

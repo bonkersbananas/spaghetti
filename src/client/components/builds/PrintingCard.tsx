@@ -3,8 +3,9 @@ import type { Outcome } from "@shared/attempts";
 import { attemptPartsLabel } from "@shared/parts";
 import { isOffTheBed } from "@shared/print-progress";
 import { Link, useNavigate } from "@tanstack/react-router";
-import { m, useReducedMotion } from "motion/react";
+import { AnimatePresence, m, useReducedMotion } from "motion/react";
 import { useRef } from "react";
+import { AutoHeight } from "@/components/ui/AutoHeight";
 import { Avatar, ViaText } from "@/components/ui/Avatar";
 import { Button, IconButton } from "@/components/ui/Button";
 import { BuildsIcon, CameraIcon } from "@/components/ui/icons";
@@ -16,7 +17,7 @@ import { useCapture } from "@/lib/capture";
 import { cn } from "@/lib/cn";
 import { itemName } from "@/lib/item-name";
 import { type AttemptView, addPhotosToItem, type ItemView } from "@/lib/items";
-import { duration } from "@/lib/motion";
+import { duration, ease } from "@/lib/motion";
 import { fileThumbSrc, photoSrc } from "@/lib/previews";
 import { usePrintProgress } from "@/lib/print-progress";
 import { useReadOnly } from "@/lib/read-only";
@@ -99,12 +100,12 @@ export function PrintingCard({ item, attempt, person, via, compact = false }: Pr
   return (
     // On Today a compact card that becomes the first turns into the big one: Today's AutoHeight grows the box, and
     // the new layout fades in here (the compact one leaves at once), so nothing slides through anything.
-    <article className="bg-cream shadow-soft hover:shadow-raised hover:bg-lifted duration-fast relative rounded-lg p-1.5 transition-shadow has-[a:focus-visible]:shadow-[var(--sg-ring)]">
+    <article className="bg-cream shadow-soft hover:shadow-raised hover:bg-lifted duration-fast relative h-full rounded-lg p-1.5 transition-shadow has-[a:focus-visible]:shadow-[var(--sg-ring)]">
       <m.div
         key={swaps.current}
         initial={swaps.current > 0 && !reduce ? { opacity: 0 } : false}
         animate={{ opacity: 1, transition: { duration: duration.base } }}
-        className={cn("grid md:grid-cols-5 md:grid-rows-[auto_1fr]", layout.card)}
+        className={cn("grid md:h-full md:grid-cols-5 md:grid-rows-[auto_1fr]", layout.card)}
       >
         <div
           className={cn(
@@ -222,7 +223,13 @@ export function PrintingCard({ item, attempt, person, via, compact = false }: Pr
                       progress.state === "due" ? "text-semolina-ink font-semibold" : "text-ink-soft",
                     )}
                   >
-                    {progress.label}
+                    {/* "Layer 70 of 205 · 30 min left" breaks between its parts, never inside "30 min left". */}
+                    {progress.label.split(" · ").map((part, index, parts) => (
+                      <span key={part} className="whitespace-nowrap">
+                        {part}
+                        {index < parts.length - 1 ? " · " : ""}
+                      </span>
+                    ))}
                   </p>
                   <div className="pointer-events-auto flex shrink-0 items-center gap-1.5">
                     {!readOnly && (
@@ -272,5 +279,67 @@ export function PrintingCard({ item, attempt, person, via, compact = false }: Pr
         </div>
       </m.div>
     </article>
+  );
+}
+
+interface BedCardsProps {
+  /** What is physically on the plate: printing, or off the bed and waiting for "how did it go?" (`printingAttempts`). */
+  prints: Array<{ item: ItemView; attempt: AttemptView }>;
+  people: ReadonlyMap<string, Person>;
+  via: (createdVia: string | null | undefined) => string | undefined;
+  /** Two cards side by side from `lg` (the Builds list, which has the whole width); Today's column keeps one. */
+  pair?: boolean;
+  className?: string;
+}
+
+/**
+ * The prints on the bed as `PrintingCard`s, on Today and at the top of Builds. On phones the first is the big card and
+ * the ones after it are compact, so three prints don't push the page two screens down. A print that gets its answer
+ * fades and collapses while the others move up, and the next one grows into the big card; with reduced motion
+ * everything is at its end state at once.
+ */
+export function BedCards({ prints, people, via, pair = false, className }: BedCardsProps) {
+  const reduce = useReducedMotion();
+  const isDesktop = useIsDesktop();
+  const cardProps = (item: ItemView, attempt: AttemptView, index: number) => ({
+    compact: index > 0,
+    item,
+    attempt,
+    person: people.get(attempt.createdBy),
+    via: via(attempt.createdVia),
+  });
+  return (
+    <div className={cn("flex flex-col", pair && "lg:grid lg:grid-cols-2 lg:gap-5", className)}>
+      <AnimatePresence initial={false}>
+        {prints.map(({ item, attempt }, index) => (
+          <m.div
+            key={attempt.id}
+            // The space under a card is its own padding, so a card that leaves takes its gap with it (in the pair
+            // grid the gap is the grid's).
+            className={cn("pb-4 last:pb-0", pair && "lg:pb-0")}
+            exit={{
+              opacity: 0,
+              height: 0,
+              paddingBottom: 0,
+              overflow: "hidden",
+              // Faded before the collapse shows a clipped slice of it.
+              transition: reduce
+                ? { duration: 0 }
+                : { duration: duration.base, ease: ease.inOut, opacity: { duration: duration.fast } },
+            }}
+          >
+            {pair && isDesktop ? (
+              // Side by side, the cards of a row are as tall as each other; on desktop a card never changes shape,
+              // so there is nothing for AutoHeight to animate.
+              <PrintingCard {...cardProps(item, attempt, index)} />
+            ) : (
+              <AutoHeight trigger={isDesktop ? "row" : index > 0}>
+                <PrintingCard {...cardProps(item, attempt, index)} />
+              </AutoHeight>
+            )}
+          </m.div>
+        ))}
+      </AnimatePresence>
+    </div>
   );
 }

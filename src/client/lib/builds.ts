@@ -395,6 +395,12 @@ export function findPrinting(items: ItemView[]): { item: ItemView; attempt: Atte
   return found;
 }
 
+/** When anything last happened on a build: its newest attempt, or when it started. */
+export function lastActivity(item: ItemView): number {
+  const last = item.attempts.at(-1);
+  return Math.max(last?.printedAt ?? 0, last?.finishedAt ?? 0, item.startedAt ?? item.createdAt);
+}
+
 /**
  * Every attempt on the bed that still has no outcome. Prints still printing come first (the one that should be
  * done by now, then the newest), then the ones the printer says are off the bed and wait for "how did it go?".

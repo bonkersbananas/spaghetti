@@ -1,9 +1,8 @@
 import type { Person } from "@shared/api";
 import { useQuery, useSuspenseQuery } from "@tanstack/react-query";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { type ReactNode, useMemo } from "react";
-import { BedCards } from "@/components/builds/BedCards";
-import { BuildCard, BuildRow, lastActivity } from "@/components/builds/BuildCard";
+import { lazy, type ReactNode, Suspense, useMemo } from "react";
+import { BuildCard, BuildRow } from "@/components/builds/BuildCard";
 import { SpoolStrand } from "@/components/illustrations/SpoolStrand";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { RecentlyDeletedLink } from "@/components/shell/RecentlyDeletedLink";
@@ -13,9 +12,9 @@ import { PlusIcon } from "@/components/ui/icons";
 import { AddPhotoTile } from "@/components/ui/PhotoTiles";
 import { Reflow } from "@/components/ui/Reflow";
 import { Section as PageSection } from "@/components/ui/Section";
-import { CardSkeleton } from "@/components/ui/Skeleton";
+import { CardSkeleton, Skeleton } from "@/components/ui/Skeleton";
 import { useVia } from "@/lib/agents";
-import { createBuild, printingAttempts } from "@/lib/builds";
+import { createBuild, lastActivity, printingAttempts } from "@/lib/builds";
 import { type ItemView, useBuilds } from "@/lib/items";
 import { useListPicker } from "@/lib/list-picker";
 import { useArrived } from "@/lib/live";
@@ -23,6 +22,12 @@ import { printerQuery } from "@/lib/pantry-queries";
 import { peopleQuery, sessionQuery } from "@/lib/queries";
 import { useIsDesktop } from "@/lib/use-media-query";
 import { useNow } from "@/lib/use-now";
+
+// The printing cards come with their own code (progress, outcome buttons, the camera): only a list with something on
+// the bed loads it, so the first load stays as light as the grid.
+const BedCards = lazy(() =>
+  import("@/components/builds/PrintingCard").then((module) => ({ default: module.BedCards })),
+);
 
 export const Route = createFileRoute("/_app/builds/")({
   component: Builds,
@@ -76,12 +81,21 @@ function Builds() {
           {/* Only what is physically on the plate; with nothing there the section isn't drawn. */}
           {onBed.length > 0 && (
             <Section title="On the bed" count={onBed.length > 1 ? onBed.length : undefined}>
-              <BedCards prints={onBed} people={byId} via={via} pair />
+              <Suspense fallback={<Skeleton className="h-44 rounded-lg lg:w-1/2" />}>
+                <BedCards prints={onBed} people={byId} via={via} pair />
+              </Suspense>
             </Section>
           )}
           <Section
             title="In progress"
             count={inProgress.length || undefined}
+            aside={
+              isDesktop && (
+                <Button variant="quiet" size="sm" icon={PlusIcon} onClick={newBuild} className="-mr-3">
+                  New build
+                </Button>
+              )
+            }
             description={
               inProgress.length === 0 && (
                 <p className="text-body text-ink-soft">
@@ -90,7 +104,7 @@ function Builds() {
               )
             }
           >
-            <ul data-picks className={`${grid} relative`} aria-label="In progress">
+            <ul data-picks className={`${grid} relative empty:hidden`} aria-label="In progress">
               <Reflow>
                 {inProgress.map((item) => (
                   <BuildCard
@@ -102,13 +116,12 @@ function Builds() {
                   />
                 ))}
               </Reflow>
-              <li className="col-span-2 list-none md:col-span-1">
-                {isDesktop ? (
-                  <AddPhotoTile size="card" icon={PlusIcon} label="New build" onClick={newBuild} />
-                ) : (
+              {/* On phones the grid ends with a thumb-sized "New build"; desktop has it beside the heading. */}
+              {!isDesktop && (
+                <li className="col-span-2 list-none">
                   <AddPhotoTile size="row" icon={PlusIcon} label="New build" onClick={newBuild} />
-                )}
-              </li>
+                </li>
+              )}
             </ul>
           </Section>
           {done.length > 0 && (
@@ -140,12 +153,14 @@ function Section({
   title,
   count,
   quiet,
+  aside,
   description,
   children,
 }: {
   title: string;
   count?: number;
   quiet?: boolean;
+  aside?: ReactNode;
   description?: ReactNode;
   children: ReactNode;
 }) {
@@ -155,6 +170,7 @@ function Section({
       title={title}
       size={quiet ? "title" : "headline"}
       count={count}
+      aside={aside}
       description={description}
     >
       {children}

@@ -16,6 +16,7 @@ import { OutcomeStrip } from "@/components/builds/OutcomeStrip";
 import { PhotoReadNote } from "@/components/builds/PhotoReadNote";
 import { PartLine } from "@/components/builds/parts/PartsSection";
 import { TagPicker } from "@/components/builds/TagPicker";
+import { Button } from "@/components/ui/Button";
 import * as Icons from "@/components/ui/icons";
 import { PhotoRow } from "@/components/ui/PhotoRow";
 import { AddPhotoTile } from "@/components/ui/PhotoTiles";
@@ -366,12 +367,14 @@ export function BuildsSection() {
               <span className="text-body text-ink min-w-0 flex-1 font-semibold">A result the keyboard is on</span>
             </PhotoRow>
           </div>
-          <Label>New build tiles</Label>
-          <div className="grid grid-cols-2 gap-3">
-            <AddPhotoTile size="card" icon={Icons.PlusIcon} label="New build" />
-            <div className="flex flex-col justify-end">
-              <AddPhotoTile size="row" icon={Icons.PlusIcon} label="New build" />
-            </div>
+          <Label>
+            New build: a row ending the phone's In progress grid, a quiet button beside the heading on desktop
+          </Label>
+          <div className="grid grid-cols-2 items-center gap-3">
+            <AddPhotoTile size="row" icon={Icons.PlusIcon} label="New build" />
+            <Button variant="quiet" size="sm" icon={Icons.PlusIcon} className="justify-self-start">
+              New build
+            </Button>
           </div>
         </div>
       </div>

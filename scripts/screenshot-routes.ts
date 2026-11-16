@@ -1250,6 +1250,21 @@ async function mockScout(page: Page, mode: "none" | "answered" | "one") {
   await page.getByRole("heading", { level: 1 }).waitFor();
 }
 
+/** The builds list with only the builds `keep` takes (for the Builds list's empty sections). */
+async function keepBuilds(
+  page: Page,
+  keep: (item: { stage: string; attempts?: Array<{ outcome: string | null }> }) => boolean,
+) {
+  await page.route(/\/api\/items\?stage=/, async (route) => {
+    const response = await route.fetch();
+    const json = (await response.json()) as {
+      items: Array<{ stage: string; attempts?: Array<{ outcome: string | null }> }>;
+    };
+    json.items = json.items.filter((item) => item.stage === "idea" || keep(item));
+    await route.fulfill({ response, json });
+  });
+}
+
 async function unmockToday(page: Page) {
   await page.unrouteAll({ behavior: "ignoreErrors" });
 }
@@ -1873,6 +1888,29 @@ export const shots: Shot[] = [
   },
   { name: "builds", path: "/builds", fullPage: true },
   {
+    // Nothing on the plate: no On the bed section, In progress leads.
+    name: "builds-nothing-printing",
+    path: "/builds",
+    prepare: async (page) => {
+      await keepBuilds(page, (item) => !item.attempts?.some((attempt) => attempt.outcome === null));
+      await page.getByRole("heading", { name: /^In progress/ }).waitFor();
+    },
+    cleanup: unmockToday,
+  },
+  {
+    // Every build in progress is printing: In progress says so in a line.
+    name: "builds-all-on-the-bed",
+    path: "/builds",
+    prepare: async (page) => {
+      await keepBuilds(
+        page,
+        (item) => item.stage !== "building" || !!item.attempts?.some((attempt) => attempt.outcome === null),
+      );
+      await page.getByText(/^Everything in progress is on the bed\.$/).waitFor();
+    },
+    cleanup: unmockToday,
+  },
+  {
     // The end of a build page on a phone: "Finish attempt" must sit above the tab bar (try it with --iphone).
     name: "build-bottom",
     path: `/builds/${SEED_BUILD_IDS.tugboat}`,
@@ -1892,6 +1930,8 @@ export const shots: Shot[] = [
     },
   },
   { name: "build", path: `/builds/${SEED_BUILD_IDS.tugboat}`, fullPage: true },
+  // A build between prints: its stage chip says In progress (it isn't on the bed).
+  { name: "build-between-prints", path: `/builds/${SEED_BUILD_IDS.cableChain}` },
   {
     // The first press of Delete on a build: the trash can has turned into the question, in the bar.
     name: "build-delete-confirm",
