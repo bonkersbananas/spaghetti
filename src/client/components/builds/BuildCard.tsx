@@ -1,4 +1,5 @@
 import type { Person } from "@shared/api";
+import { tagLabel } from "@shared/attempts";
 import { isOffTheBed, offTheBedLabel } from "@shared/print-progress";
 import { inlineTime, relativeTime } from "@shared/time";
 import { m } from "motion/react";
@@ -6,12 +7,12 @@ import type { Ref } from "react";
 import { photoAlt } from "@/components/ideas/IdeaCard";
 import { Card } from "@/components/ui/Card";
 import { Chip } from "@/components/ui/Chip";
-import { BuildsIcon } from "@/components/ui/icons";
+import { BuildsIcon, TagIcon } from "@/components/ui/icons";
 import { MetaList } from "@/components/ui/MetaList";
 import { PhotoRow } from "@/components/ui/PhotoRow";
 import { ReactionGlance } from "@/components/ui/ReactionGlance";
 import { useReflow } from "@/components/ui/Reflow";
-import { heroPhoto, newestPhoto } from "@/lib/builds";
+import { heroPhoto, newestPhoto, useTagOptions } from "@/lib/builds";
 import { cn } from "@/lib/cn";
 import { useForLine } from "@/lib/for-whom";
 import type { ItemView } from "@/lib/items";
@@ -76,7 +77,7 @@ const upperFirst = (text: string) => text.charAt(0).toUpperCase() + text.slice(1
 
 /**
  * A build in progress: its newest photo first (what came off the bed last),
- * how the last attempt went over it, and when.
+ * how the last attempt went over it, why when it didn't work (its first failure tag), and when.
  */
 export function BuildCard({
   item,
@@ -96,6 +97,9 @@ export function BuildCard({
   const unread = useUnreadCount(item.id);
   const forLine = useForLine();
   const toThread = useUnreadThreadSearch(item.id);
+  const failureOptions = useTagOptions("failure");
+  // What went wrong last time, under the title: the outcome chip over the photo says how it went, this says why.
+  const tag = last?.outcome && last.outcome !== "success" ? last.failureTags[0] : undefined;
   return (
     <m.li {...useReflow(landing)} ref={ref} className="list-none">
       <Card
@@ -109,6 +113,14 @@ export function BuildCard({
         title={item.title}
         note={item.note || undefined}
         unread={unread}
+        sub={
+          tag && (
+            <span className="flex items-center gap-1">
+              <TagIcon size={14} className="text-ink-faint shrink-0" aria-hidden />
+              <span className="truncate">{tagLabel("failure", tag, failureOptions)}</span>
+            </span>
+          )
+        }
         chips={
           last ? (
             <OutcomeChip outcome={last.outcome} offTheBed={isOffTheBed(last)} onPhoto className="shadow-soft" />

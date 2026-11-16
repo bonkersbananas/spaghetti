@@ -20,17 +20,17 @@ export function startedIdeas(builds: ItemView[]): ItemView[] {
     .sort((a, b) => (b.startedAt ?? 0) - (a.startedAt ?? 0) || (b.id > a.id ? 1 : -1));
 }
 
-/** Where a started idea stands, in a few words: building (with its newest attempt), printed, or on the shelf. */
+/** Where a started idea stands, in a few words: in progress (with its newest attempt), printed, or on the shelf. */
 export function startedStatus(item: ItemView): { stage: string; detail?: string; tone?: "good" | "bad" } {
   if (item.stage === "shelved") return { stage: "On the shelf" };
   const last = item.attempts.at(-1);
   if (item.stage === "done") {
     return { stage: "Printed", detail: last?.outcome === "success" ? "Worked" : undefined, tone: "good" };
   }
-  if (!last) return { stage: "Building", detail: "no attempts yet" };
+  if (!last) return { stage: "In progress", detail: "no attempts yet" };
   if (last.outcome === null) return { stage: "Printing", detail: `attempt ${last.number}` };
   const outcome = { success: "worked", partial: "partly", failed: "didn't work" }[last.outcome];
-  return { stage: "Building", detail: `attempt ${last.number} ${outcome}` };
+  return { stage: "In progress", detail: `attempt ${last.number} ${outcome}` };
 }
 
 /**

@@ -5,7 +5,7 @@ import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link, redirect, useNavigate } from "@tanstack/react-router";
 import { AnimatePresence, m, useReducedMotion } from "motion/react";
 import { lazy, Suspense, useMemo } from "react";
-import { PrintingCard } from "@/components/builds/PrintingCard";
+import { BedCards } from "@/components/builds/BedCards";
 import { EmptyPot } from "@/components/illustrations/EmptyPot";
 import { SpoolStrand } from "@/components/illustrations/SpoolStrand";
 import { PageHeader } from "@/components/shell/PageHeader";
@@ -15,7 +15,6 @@ import { Lately } from "@/components/today/Lately";
 import { PickUpAgain, pickUpAgain } from "@/components/today/PickUpAgain";
 import { Since } from "@/components/today/Since";
 import { UpNext, upNextIdeas } from "@/components/today/UpNext";
-import { AutoHeight } from "@/components/ui/AutoHeight";
 import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { CheckIcon, PlusIcon } from "@/components/ui/icons";
@@ -35,7 +34,6 @@ import { peopleQuery } from "@/lib/queries";
 import { useScout, waitingPicks } from "@/lib/scout";
 import { useStickyColumn } from "@/lib/sticky-column";
 import { useDueUpkeep } from "@/lib/upkeep";
-import { useIsDesktop } from "@/lib/use-media-query";
 import { useNow } from "@/lib/use-now";
 
 const UpkeepLine = lazy(() => import("@/components/today/UpkeepLine"));
@@ -72,7 +70,6 @@ function Today() {
   const stickyColumn = useStickyColumn();
   const navigate = useNavigate();
   const reduce = useReducedMotion();
-  const isDesktop = useIsDesktop();
   const { setOpen } = useCapture();
   const now = useNow(60_000);
   const builds = useBuilds();
@@ -141,39 +138,7 @@ function Today() {
   const bedSection =
     onBed.length > 0 ? (
       <Section id="today-bed" title="On the bed" size="overline" count={onBed.length > 1 ? onBed.length : undefined}>
-        {/* A print that gets its answer fades and collapses while the others move up; on phones the
-            next one grows into the big card. With reduced motion everything is at its end state at once. */}
-        <div className="flex flex-col">
-          <AnimatePresence initial={false}>
-            {onBed.map(({ item, attempt }, index) => (
-              <m.div
-                key={attempt.id}
-                // The space under a card is its own padding, so a card that leaves takes its gap with it.
-                className="pb-4 last:pb-0"
-                exit={{
-                  opacity: 0,
-                  height: 0,
-                  paddingBottom: 0,
-                  overflow: "hidden",
-                  // Faded before the collapse shows a clipped slice of it.
-                  transition: reduce
-                    ? { duration: 0 }
-                    : { duration: duration.base, ease: ease.inOut, opacity: { duration: duration.fast } },
-                }}
-              >
-                <AutoHeight trigger={isDesktop ? "row" : index > 0}>
-                  <PrintingCard
-                    compact={index > 0}
-                    item={item}
-                    attempt={attempt}
-                    person={byId.get(attempt.createdBy)}
-                    via={via(attempt.createdVia)}
-                  />
-                </AutoHeight>
-              </m.div>
-            ))}
-          </AnimatePresence>
-        </div>
+        <BedCards prints={onBed} people={byId} via={via} />
       </Section>
     ) : null;
 

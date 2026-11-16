@@ -41,7 +41,7 @@ export function PaletteSection() {
           id: "c",
           label: "Tugboat",
           title: <Highlight text="Tugboat, take two" terms={terms} />,
-          subtitle: "On the bed · 3 attempts",
+          subtitle: "In progress · 3 attempts",
           photo: { src: vasePhoto, color: "#c9b8a4" }, // design-lint-ignore
           trailing: <OutcomeChip outcome="partial" />,
         },

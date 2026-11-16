@@ -2,6 +2,7 @@ import type { Item, Spool } from "@shared/api";
 import { DEFAULT_PRINTER } from "@shared/spools";
 import { Link } from "@tanstack/react-router";
 import { useState } from "react";
+import { BuildCard } from "@/components/builds/BuildCard";
 import { PrintingCard } from "@/components/builds/PrintingCard";
 import { NowPrintingCard } from "@/components/shell/NowPrinting";
 import { BackBurner } from "@/components/today/BackBurner";
@@ -9,6 +10,7 @@ import { InThePrinter } from "@/components/today/InThePrinter";
 import { PickUpAgain } from "@/components/today/PickUpAgain";
 import { ClockIcon, CommentIcon } from "@/components/ui/icons";
 import { QuietRowContent, quietRowClass } from "@/components/ui/QuietRow";
+import { Reflow } from "@/components/ui/Reflow";
 import { SegmentedControl } from "@/components/ui/SegmentedControl";
 import type { ItemView } from "@/lib/items";
 import { attempt, item, photo, planFile, useSamplePictures } from "./journal";
@@ -142,6 +144,17 @@ export function TodaySection() {
             <div className="w-60">
               <NowPrintingCard item={running} attempt={running.attempts[0] as ItemView["attempts"][number]} />
             </div>
+            <Label>
+              BuildCard: Builds' In progress grid, under On the bed (the same PrintingCards, BedCards): the last outcome
+              over the photo, the first failure tag under the title
+            </Label>
+            <ul className="grid grid-cols-2 gap-3 md:gap-5" aria-label="In progress specimen">
+              <Reflow>
+                {waiting.slice(0, 2).map((build) => (
+                  <BuildCard key={build.id} item={build} person={alex} />
+                ))}
+              </Reflow>
+            </ul>
           </div>
           <div className="flex min-w-0 flex-col gap-8">
             <Panel className="flex flex-col gap-8">
