@@ -76,10 +76,10 @@ test("a title someone types while Claude works is kept, and shows no sign", asyn
   await ideas(page).getByRole("link").first().click();
   const title = page.getByRole("textbox", { name: "Title" });
   // Claude is still at it; the first letter typed ends the sign.
-  await expect(page.getByText("Claude is naming it")).toBeVisible();
+  await expect(page.getByText("Looking at the photo…")).toBeVisible();
   await expect(title).toHaveAttribute("placeholder", "Naming…");
   await title.fill("Tugboat for the bath");
-  await expect(page.getByText("Claude is naming it")).toBeHidden();
+  await expect(page.getByText("Looking at the photo…")).toBeHidden();
   await title.press("Enter");
   await expect
     .poll(async () => (await (await page.request.get("/api/items")).json()).items[0]?.title)

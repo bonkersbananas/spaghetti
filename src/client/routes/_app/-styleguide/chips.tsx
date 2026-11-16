@@ -62,7 +62,6 @@ export function ChipSection() {
         <Label>Claude's marks: one quiet line, a sparkle first</Label>
         <div className="flex flex-col gap-2">
           <ClaudeLine working>Looking at the photo…</ClaudeLine>
-          <ClaudeLine working>Claude is naming it</ClaudeLine>
           <ClaudeLine>Drafted by Claude from MakerWorld</ClaudeLine>
         </div>
         <Label>Toned toggle chips, for tags</Label>

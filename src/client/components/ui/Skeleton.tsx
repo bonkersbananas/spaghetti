@@ -10,15 +10,15 @@ export function Skeleton({ className }: { className?: string }) {
 }
 
 /**
- * The title's line while Claude names an idea (decision 0071): Claude's sparkle, breathing, before a shimmer as long as
- * a short title, where the title will land; screen readers hear "Naming…". Cards and Journal rows show it.
+ * The title's place while Claude names an idea (decision 0071): Claude's sparkle, breathing, and "Naming…" in its quiet
+ * words, as `ClaudeLine working` says it, where the title will land. Cards and Journal rows show it. Here, beside the
+ * other loading looks, because both lists load this file already and the sign must cost them nothing.
  */
-export function NamingSkeleton({ className }: { className?: string }) {
+export function NamingSign({ className }: { className?: string }) {
   return (
-    <span role="status" className={cn("text-ink-faint flex min-h-6 items-center gap-1.5", className)}>
+    <span role="status" className={cn("text-small text-ink-faint flex min-h-6 items-center gap-1.5", className)}>
       <SparkleIcon size={14} weight="fill" aria-hidden className="sg-pulse shrink-0" />
-      <span aria-hidden className="sg-skeleton block h-3.5 w-3/5 max-w-40 rounded-sm" />
-      <span className="sr-only">Naming…</span>
+      Naming…
     </span>
   );
 }

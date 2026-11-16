@@ -1997,7 +1997,7 @@ export const shots: Shot[] = [
       await page.goto(`/ideas/${id}`);
       await page.getByRole("textbox", { name: "Title" }).waitFor();
       await page
-        .getByText("Claude is naming it")
+        .getByText("Looking at the photo…")
         .waitFor({ timeout: 4000 })
         .catch(() => undefined);
       await page.waitForTimeout(300);

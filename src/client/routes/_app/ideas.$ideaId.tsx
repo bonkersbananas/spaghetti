@@ -387,7 +387,7 @@ function Idea({ item }: { item: ItemView }) {
             )}
             {naming && (
               <ClaudeLine working className="-mt-2 md:-mt-1.5">
-                Claude is naming it
+                {photos.some((photo) => !photo.attemptId) ? "Looking at the photo…" : "Reading the note…"}
               </ClaudeLine>
             )}
             {named && (

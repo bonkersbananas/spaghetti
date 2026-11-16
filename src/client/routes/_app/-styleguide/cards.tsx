@@ -7,7 +7,7 @@ import * as Icons from "@/components/ui/icons";
 import { LinkCard } from "@/components/ui/LinkCard";
 import { MiniCard } from "@/components/ui/MiniCard";
 import { Reflow } from "@/components/ui/Reflow";
-import { NamingSkeleton } from "@/components/ui/Skeleton";
+import { NamingSign } from "@/components/ui/Skeleton";
 import { toast } from "@/components/ui/Toast";
 import { UploadBadge } from "@/components/ui/UploadBadge";
 import { Label, people, Section } from "./shared";
@@ -34,7 +34,7 @@ export function CardSection() {
         />
         <Card
           photo={{ src: planterPhoto, alt: "A planter on the print bed" }}
-          naming={<NamingSkeleton />}
+          naming={<NamingSign />}
           meta="Just now"
           person={people[0]}
           aspect="portrait"

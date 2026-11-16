@@ -9,7 +9,7 @@ import { ForLine } from "@/components/ui/ForField";
 import { ModelMark } from "@/components/ui/ModelMark";
 import { ReactionGlance } from "@/components/ui/ReactionGlance";
 import { useReflow } from "@/components/ui/Reflow";
-import { NamingSkeleton } from "@/components/ui/Skeleton";
+import { NamingSign } from "@/components/ui/Skeleton";
 import { UploadBadge } from "@/components/ui/UploadBadge";
 import { cn } from "@/lib/cn";
 import { useForLine } from "@/lib/for-whom";
@@ -104,7 +104,7 @@ export function IdeaCard({ item, person, via, landing, menu, headingLevel = 2, r
           reserveEnd={!!menu && !item.pending}
           photo={coverPhoto(cover, cover.kind === "plate" ? plateAlt(item) : photoAlt(item))}
           title={item.title || (item.draft?.status === "reading" ? "Reading the page…" : item.title)}
-          naming={naming && <NamingSkeleton />}
+          naming={naming && <NamingSign />}
           // Links read better short on a card: printables.com/model/123.
           note={item.note ? shortenLinks(item.note) : undefined}
           unread={unread}

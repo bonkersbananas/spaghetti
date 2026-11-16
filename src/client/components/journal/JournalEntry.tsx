@@ -26,7 +26,7 @@ import { MetaList } from "@/components/ui/MetaList";
 import { Photo } from "@/components/ui/Photo";
 import { PhotoRow } from "@/components/ui/PhotoRow";
 import { PrintProgress } from "@/components/ui/PrintProgress";
-import { NamingSkeleton } from "@/components/ui/Skeleton";
+import { NamingSign } from "@/components/ui/Skeleton";
 import { useTagOptions } from "@/lib/builds";
 import { cn } from "@/lib/cn";
 import { heroClick } from "@/lib/hero";
@@ -342,7 +342,7 @@ const EventRow = forwardRef<HTMLAnchorElement, JournalEntryProps>(function Event
         {
           // While Claude names it (decision 0071) the name's place says so.
           naming ? (
-            <NamingSkeleton />
+            <NamingSign />
           ) : (
             <span
               key={name.titled ? "title" : "note"}
