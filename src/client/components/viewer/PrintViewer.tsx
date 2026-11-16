@@ -454,8 +454,8 @@ export default function PrintViewer({
               live && "min-h-9 md:min-h-8",
             )}
           >
-            {atNow && <PulseDot className="size-2" />}
-            <p className="text-small text-ink-faint tabular min-w-0 flex-1 truncate" data-readout>
+            {atNow && <PulseDot size="sm" />}
+            <p className="text-small text-ink-faint tabular min-w-0 flex-1 truncate md:flex-none" data-readout>
               {state === "ready" || count > 0 ? (
                 <>
                   {atNow && <span className="sr-only">Printing now. </span>}

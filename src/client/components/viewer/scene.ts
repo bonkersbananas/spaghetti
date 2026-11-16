@@ -55,8 +55,8 @@ export type ColorBy = "filament" | "feature";
 const MAX_FILAMENTS = 16;
 const MAX_FEATURES = 16;
 /** The ghost of what is still to print: how far its colour leans to the ink, and how much of it shows. */
-const GHOST_TINT = 0.35;
-const GHOST_ALPHA = 0.16;
+const GHOST_TINT = 0.2;
+const GHOST_ALPHA = 0.18;
 
 /** One segment's box, placed and coloured: shared by the print and its ghost. Leaves `p`, `vNormal` and `base`. */
 const BOX = /* glsl */ `
@@ -127,8 +127,9 @@ void main() {
 
 /**
  * The layers a print in progress hasn't reached yet: the same boxes, only those above the slider's layer, drawn as a
- * faint veil of their own colour over the ink. Blended last, after the print and the plate, and only once per pixel
- * (the stencil), so walls behind walls don't pile up into something solid: one even ghost of what is still to come.
+ * faint veil of their own colour leaning to the ink. Two draws after the print and the plate: the ghost's depth
+ * alone, then its colour only where that depth is, once per pixel (the stencil). So only its nearest surface shows,
+ * shaded, and walls behind walls don't pile up into something solid: one even, glassy ghost of what is still to come.
  */
 const ghostVertex = /* glsl */ `
 attribute vec3 aStart;
@@ -155,6 +156,13 @@ ${BOX}
 }
 `;
 
+const depthOnlyFragment = /* glsl */ `
+precision highp float;
+void main() {
+  gl_FragColor = vec4(0.0);
+}
+`;
+
 const ghostFragment = /* glsl */ `
 precision highp float;
 varying vec3 vColor;
@@ -165,8 +173,9 @@ uniform float uAlpha;
 
 void main() {
   vec3 n = normalize(vNormal);
-  // Barely shaded: enough that a top reads from a side, never enough to look solid.
-  float shade = 0.9 + 0.1 * abs(dot(n, normalize(vec3(-0.45, 0.85, 0.5))));
+  // Shaded like the print, softer: tops, sides and the turn of a wall read, while the veil stays one even layer.
+  float key = abs(dot(n, normalize(vec3(-0.45, 0.85, 0.5))));
+  float shade = 0.62 + 0.38 * key;
   gl_FragColor = vec4(mix(vColor, uInk, uTint) * shade, uAlpha);
 }
 `;
@@ -279,7 +288,8 @@ export class PrintScene {
   private readonly print = new Group();
   private readonly material: ShaderMaterial;
   private readonly ghostMaterial: ShaderMaterial;
-  /** One ghost per chunk, shown only while the print is in progress. */
+  private readonly ghostDepthMaterial: ShaderMaterial;
+  /** Each chunk's ghost (its depth, then its colour), shown only while the print is in progress. */
   private readonly ghosts: Mesh[] = [];
   private live = false;
   private readonly box = boxGeometry();
@@ -345,16 +355,28 @@ export class PrintScene {
       side: DoubleSide,
     });
     const shared = this.material.uniforms;
+    const ghostUniforms = {
+      uTop: shared.uTop as { value: number },
+      uWidth: shared.uWidth as { value: number },
+      uHeight: shared.uHeight as { value: number },
+      uMode: shared.uMode as { value: number },
+      uFilament: shared.uFilament as { value: Color[] },
+      uFeature: shared.uFeature as { value: Color[] },
+    };
+    this.ghostDepthMaterial = new ShaderMaterial({
+      vertexShader: ghostVertex,
+      fragmentShader: depthOnlyFragment,
+      uniforms: ghostUniforms,
+      side: DoubleSide,
+      // Transparent only to be drawn after the plate, like the colour that follows it; it writes depth alone.
+      transparent: true,
+      colorWrite: false,
+    });
     this.ghostMaterial = new ShaderMaterial({
       vertexShader: ghostVertex,
       fragmentShader: ghostFragment,
       uniforms: {
-        uTop: shared.uTop as { value: number },
-        uWidth: shared.uWidth as { value: number },
-        uHeight: shared.uHeight as { value: number },
-        uMode: shared.uMode as { value: number },
-        uFilament: shared.uFilament as { value: Color[] },
-        uFeature: shared.uFeature as { value: Color[] },
+        ...ghostUniforms,
         uInk: { value: new Color(0.3, 0.27, 0.24) },
         uTint: { value: GHOST_TINT },
         uAlpha: { value: GHOST_ALPHA },
@@ -511,13 +533,18 @@ export class PrintScene {
     mesh.frustumCulled = false;
     this.print.add(mesh);
     this.chunks.push(mesh);
-    const ghost = new Mesh(geometry, this.ghostMaterial);
-    ghost.frustumCulled = false;
-    // After the plate and its shadow, which are blended too: the ghost lies over them.
-    ghost.renderOrder = 1;
-    ghost.visible = this.live;
-    this.print.add(ghost);
-    this.ghosts.push(ghost);
+    // After the plate and its shadow, which are blended too: the ghost lies over them, its depth first.
+    for (const [material, order] of [
+      [this.ghostDepthMaterial, 1],
+      [this.ghostMaterial, 2],
+    ] as const) {
+      const ghost = new Mesh(geometry, material);
+      ghost.frustumCulled = false;
+      ghost.renderOrder = order;
+      ghost.visible = this.live;
+      this.print.add(ghost);
+      this.ghosts.push(ghost);
+    }
     this.placeShadow();
     if (!this.fitted && this.bounds) this.fit();
     this.dirty();
@@ -687,6 +714,7 @@ export class PrintScene {
     this.box.dispose();
     this.material.dispose();
     this.ghostMaterial.dispose();
+    this.ghostDepthMaterial.dispose();
     this.renderer.dispose();
   }
 }

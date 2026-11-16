@@ -5,7 +5,7 @@ import { Panel, Section } from "./shared";
 /** The layer slider: scrubbing a print's layers, with the live marker of a print in progress. */
 export function LayerSliderSection() {
   const [layer, setLayer] = useState(112);
-  const [live, setLive] = useState(168);
+  const [live, setLive] = useState(112);
   return (
     <Section
       id="layer-slider"
