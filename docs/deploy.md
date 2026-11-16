@@ -122,7 +122,26 @@ pnpm exec wrangler d1 execute spaghetti --remote --command \
   "SELECT datetime(at/1000,'unixepoch') AS at, item_id, outcome, detail FROM draft_runs ORDER BY at DESC LIMIT 10"
 ```
 
-`outcome` is `drafted`, `refusal`, `not_readable` (Claude said the page wasn't a readable model page), `max_tokens` or another `stop:…`, `bad_json` or `bad_shape` (the answer didn't match the schema; `detail` names the fields), `timeout`, `api_error` or `exception`. `detail` is JSON: `source` (`worker_fetch`: the Worker read the page; `web_fetch`: Anthropic's tool did, because the Worker could not), `pageStatus` (the HTTP status of the Worker's own fetch; `null` = no answer; 403 on a Cloudflare challenge page), `pictures` (`found`, `stored` and a short `refused` reason per picture: host not allowed, not a JPEG or WebP, a download status), `pageUnreadable` (the Worker got a page with nothing in it to read), `httpStatus`, `errorType` and the SDK's `message` for an API error (401 is a wrong key, 404 a model the key can't use, 400 a request the API refused), `stopReason`, and `fetchErrors`, the web fetch tool's codes (`url_not_allowed`, `url_not_accessible`, `unsupported_content_type`, `too_many_requests` …). A draft that failed before calling Claude (the day's cap) has no run.
+`outcome` is `drafted`, `refusal`, `not_readable` (Claude said the page wasn't a readable model page), `max_tokens` or another `stop:…`, `bad_json` or `bad_shape` (the answer didn't match the schema; `detail` names the fields), `timeout`, `api_error` or `exception`. `detail` is JSON: `source` (`worker_fetch`: the Worker read the page; `worker_api`: it read MakerWorld's design API because the page was challenged; `web_fetch`: Anthropic's tool did, because the Worker could not), `pageStatus` (the HTTP status of the Worker's own fetch; `null` = no answer; 403 on a Cloudflare challenge page), `pictures` (`found`, `stored` and a short `refused` reason per picture: host not allowed, not a JPEG or WebP, a download status), `pageUnreadable` (the Worker got a page with nothing in it to read), `unread` (why the Worker read nothing: `challenge`, `not_found`, `no_model`, `unreachable`, `http_<status>`, `not_html`), `httpStatus`, `errorType` and the SDK's `message` for an API error (401 is a wrong key, 404 a model the key can't use, 400 a request the API refused), `stopReason`, and `fetchErrors`, the web fetch tool's codes (`url_not_allowed`, `url_not_accessible`, `unsupported_content_type`, `too_many_requests` …). A draft that failed before calling Claude (the day's cap) has no run.
+
+### The idea scout
+
+The weekly idea scout ([0040](decisions/0040-the-idea-scout-suggests-three-models-a-week.md), its link check [0067](decisions/0067-the-scout-sees-a-link-alive-through-the-api-or-claudes-fetch.md)) uses the same key. Each week is a row in `scout_rounds`:
+
+```sh
+pnpm exec wrangler d1 execute spaghetti --remote --command \
+  "SELECT monday, status, run_outcome, detail, datetime(ran_at/1000,'unixepoch') AS ran FROM scout_rounds ORDER BY monday DESC LIMIT 5"
+```
+
+`run_outcome` is `done`, `nothing` (Claude found nothing), `all_dead` (every link was dropped), `cap`, `refusal`, `timeout`, `api_error` or `exception`. `detail` counts what Claude gave (`asked`, `malformed`, `repeated`, `dead`, `kept`), how many searches and page reads it made (`searches`, `fetches`), how the kept ones were seen alive (`aliveBy`: `api` MakerWorld's design API, `page` the Worker read the page, `web_fetch` Claude's own fetch read it in that answer), and why the others were dropped (`deadBy` and `dropped`, each link with its reason and `inSearch`, whether Claude's search had returned it): `not_found` (the site says there's no such model), `no_model` (a page that names no model, like Thingiverse's soft "not found"), `challenge` (a bot challenge, and Claude hadn't read it either), `http_<status>`, `unreachable`, `not_html`, `no_why`.
+
+To run a week's round again (after a fix), delete its row if it has no picks (`status` `nothing` or `failed`); the next 5-minute cron (from 07:00 Stockholm time) makes a new round and asks Claude again. Picks are never deleted: they are what the scout remembers.
+
+```sh
+pnpm exec wrangler d1 execute spaghetti --remote --command "DELETE FROM scout_rounds WHERE monday = '2026-11-16' AND status <> 'done'"
+```
+
+The cap of 3 Claude runs a UTC day counts rows by `ran_at`, so deleting a round frees its run.
 
 ## Where agents and the bridge point
 

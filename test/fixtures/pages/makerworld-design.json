@@ -1,0 +1,53 @@
+{
+ "id": 2051796,
+ "title": "扫地机拖布收纳盒 抹布收纳盒",
+ "slug": "sweeper-mop-storage-box-rag-storage-box",
+ "titleTranslated": "Sweeper Mop Storage Box Rag Storage Box",
+ "coverUrl": "https://makerworld.bblmw.com/makerworld/model/DSM00000002051796/design/2025-11-28_22b6e31c957f9.jpg",
+ "summary": "<p>通用扫地机拖布的收纳盒，因为有好多拖布，可以集中一次清洗，分为2层，上层放置使用过的拖布，下层放置干净的拖布，节省空间，收纳整齐。</p>",
+ "summaryTranslated": "<p>A storage box for universal sweeper mops. Since there are many mops, they can be cleaned all at once. It is divided into 2 layers: the upper layer holds used mops, and the lower layer holds clean mops, saving space and keeping them neatly organized.</p>",
+ "tags": [
+  "收纳",
+  "扫地机器人",
+  "家居"
+ ],
+ "tagsTranslated": [
+  "Storage",
+  "Robot Vacuum",
+  "Home"
+ ],
+ "license": "MakerWorld Exclusive License",
+ "designCreator": {
+  "name": "user_2210284563"
+ },
+ "categories": [
+  {
+   "name": "Organizers"
+  },
+  {
+   "name": "Tools"
+  }
+ ],
+ "instances": [
+  {
+   "title": "0.2mm 层高, 3 层墙, 无需支撑",
+   "summary": "<p>0.2mm 层高, 3 层墙, 15% 填充，无需支撑。</p>",
+   "weight": 272,
+   "prediction": 18877,
+   "needAms": false,
+   "instanceFilaments": [
+    {
+     "type": "PLA"
+    }
+   ]
+  }
+ ],
+ "designExtension": {
+  "design_pictures": [
+   {
+    "url": "https://makerworld.bblmw.com/makerworld/model/DSM00000002051796/design/2025-11-28_a926669991f63.jpg"
+   }
+  ],
+  "real_pictures": []
+ }
+}
