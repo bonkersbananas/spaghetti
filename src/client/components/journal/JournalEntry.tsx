@@ -345,6 +345,7 @@ const EventRow = forwardRef<HTMLAnchorElement, JournalEntryProps>(function Event
           {name.text}
         </span>
       </span>
+      <ViaText name={via} className="text-small hidden md:inline" />
       {person && <Avatar person={person} size="xs" via={via} className="shrink-0" />}
     </PhotoRow>
   );
@@ -445,6 +446,7 @@ const AttemptRow = forwardRef<HTMLAnchorElement, JournalEntryProps>(function Att
           attemptId={attempt.id}
         />
       )}
+      <ViaText name={via} className="text-small hidden md:inline" />
       {person && <Avatar person={person} size="xs" via={via} className="shrink-0" />}
     </Link>
   );
