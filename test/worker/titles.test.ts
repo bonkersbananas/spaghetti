@@ -221,6 +221,24 @@ describe("Claude names an idea saved without a title", () => {
     expect(content?.[0]?.type).toBe("image");
   }, 20_000);
 
+  it("steps aside when the promised photos don't come in time, and starts again with the first that does", async () => {
+    const web = stubClaude();
+    env.TITLES_ON_SAVE = "off";
+    const itemId = uuid();
+    await asPerson("/api/items", { method: "POST", json: { id: itemId } });
+    const db = getDb(env.DB);
+    expect(await startTitle(db, itemId, 1)).toBe(true);
+    // Nothing came: no job is left, so the screens stop and a photo can start one.
+    await runTitle(env, itemId, db, { settleMs: 0 });
+    expect(await rows()).toEqual([]);
+    expect((await getItem(itemId)).titleJob).toBeNull();
+    expect(web.bodies).toHaveLength(0);
+    env.TITLES_ON_SAVE = "on";
+    await uploadPhoto(itemId, uuid(), cookie);
+    await settled();
+    expect((await getItem(itemId)).title).toBe("Spool holder for the shelf");
+  }, 20_000);
+
   it("leaves an idea that became a build while it waited", async () => {
     const web = stubClaude();
     const itemId = await capture({ note: "a bracket for the shelf" });

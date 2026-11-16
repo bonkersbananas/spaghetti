@@ -207,7 +207,18 @@ export async function runTitle(
     read.push({ bytes: new Uint8Array(await object.arrayBuffer()), contentType });
   }
   if (!read.length && !noteWords(item.note)) {
-    return settle(db, itemId, { status: "none", runOutcome: "nothing_to_read" });
+    // Its photos haven't come (a slow connection): the job steps aside, so the first photo to arrive starts it again.
+    await db.batch([
+      db.delete(itemTitles).where(eq(itemTitles.itemId, itemId)),
+      recordChange(db, {
+        entity: "item",
+        id: itemId,
+        itemId,
+        action: "updated",
+        actor: { kind: "person", id: item.createdBy },
+      }),
+    ]);
+    return;
   }
 
   await db
