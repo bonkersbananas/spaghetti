@@ -357,6 +357,8 @@ export interface Shot {
   fullPage?: boolean;
   /** Only at this width, for screens that exist on one layout. */
   width?: 390 | 1440;
+  /** Why it only exists at that width, printed when the other width is skipped. */
+  why?: string;
   /** Runs after the page loads, to open a sheet or reach a state. */
   prepare?: (page: Page) => Promise<void>;
   /** Runs after every image has loaded, right before the screenshot. */
@@ -1648,7 +1650,10 @@ export const shots: Shot[] = [
     // shots: opening a thread marks it read.
     name: "today-guess",
     path: "/today",
-    selector: "article:has-text('Drawer divider')",
+    width: 1440,
+    why: "Today is desktop-only",
+    // The drawer divider shows twice on Today (its bed card and a pick-up card): the one with the hinted button.
+    selector: "article:has-text('Drawer divider'):has-text('suggested')",
     prepare: async (page) => {
       await page
         .getByRole("radio", { name: /suggested/ })
@@ -1707,11 +1712,18 @@ export const shots: Shot[] = [
     // Only young ideas and nothing else: a quiet kitchen.
     name: "today-quiet",
     path: "/today",
+    width: 1440,
+    why: "Today is desktop-only",
     prepare: async (page) => {
+      // Up next ideas (Desk tidy-up, the knob) are queued, which isn't quiet: take the queue off first.
+      await setQueue(page, 0);
       await mockToday(page, { builds: "none", journal: "none", spools: "none", ideas: "young" });
       await waitUntilEased(page, "All quiet in the kitchen");
     },
-    cleanup: unmockToday,
+    cleanup: async (page) => {
+      await unmockToday(page);
+      await setQueue(page, 2);
+    },
   },
   {
     // A brand-new notebook.
@@ -1796,7 +1808,7 @@ export const shots: Shot[] = [
   },
   {
     // The menu opened from a tile in the strip (a sheet on phones; the popover on desktop's full cards).
-    name: "ideas-up-next-menu",
+    name: "ideas-up-next-menu-tile",
     path: "/ideas",
     prepare: async (page) => {
       await setQueue(page, 4);
@@ -2027,7 +2039,14 @@ export const shots: Shot[] = [
     },
     cleanup: (page) => setQueue(page, 2),
     beforeShot: async (page) => {
+      // The list re-renders as the queue empties (cards leave Up next and rejoin The rest): let it settle, or the card
+      // found now is gone by the time it is scrolled to.
+      await page.waitForTimeout(800);
+      await page.evaluate(() => {
+        for (const animation of document.getAnimations()) animation.finish();
+      });
       const card = page.getByRole("listitem").filter({ hasText: "Desk tidy-up" });
+      await card.waitFor();
       await card.scrollIntoViewIfNeeded();
       await card.locator(".snap-x").evaluate((el) => el.scrollTo({ left: el.clientWidth, behavior: "instant" }));
       if (wide(page) === 1440) await card.hover();
@@ -2109,7 +2128,9 @@ export const shots: Shot[] = [
     name: "build-scrapped",
     path: `/builds/${SEED_BUILD_IDS.headphoneStand}`,
     prepare: async (page) => {
+      // Two steps (decision 0062): the trash can asks "Scrap this build?" in place, then "Scrap" does it.
       await page.getByRole("button", { name: "Scrap build" }).click();
+      await page.getByRole("button", { name: "Scrap", exact: true }).click();
       await page.getByText("Build scrapped").waitFor();
       await page.getByRole("heading", { level: 1, name: "Ideas" }).waitFor();
       await page.waitForTimeout(500);
@@ -3904,6 +3925,8 @@ export const shots: Shot[] = [
   {
     name: "journal-since",
     path: "/journal",
+    width: 390,
+    why: "the catch-up sits on the phone's Journal; on desktop it is at the top of Today (today-since)",
     prepare: async (page) => {
       await catchUpFrom(page, 4);
       await page
