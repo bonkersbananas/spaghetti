@@ -93,6 +93,12 @@ export function PhotoViewer({ photos, index, onIndexChange, alt, className }: Ph
   // Follow the index when it changes from outside: arrow keys, the strip. Opening on a later photo (the one a card was
   // swiped to) is there at once, so it can travel from its card.
   const placed = useRef(false);
+  // Where this viewer is scrolling itself to (the index changed from outside), until it gets there or a person takes
+  // over: on a busy device a smooth scroll can pause longer than the settle below waits, and the photo half in view
+  // then must not count as one picked (it picked the wrong photo after Make cover moved the shown one first).
+  const steering = useRef<number | null>(null);
+  const current = useRef(index);
+  current.current = index;
   useEffect(() => {
     // Opening on the first photo: the strip is at its start already, so there is nothing to measure.
     if (!placed.current && index === 0) {
@@ -102,8 +108,10 @@ export function PhotoViewer({ photos, index, onIndexChange, alt, className }: Ph
     const el = scroller.current;
     if (!el?.clientWidth) return;
     const target = index * el.clientWidth;
-    if (Math.abs(el.scrollLeft - target) > 2)
+    if (Math.abs(el.scrollLeft - target) > 2) {
+      steering.current = target;
       el.scrollTo({ left: target, behavior: placed.current ? scrollBehavior() : "instant" });
+    } else steering.current = null;
     placed.current = true;
   }, [index]);
 
@@ -112,10 +120,27 @@ export function PhotoViewer({ photos, index, onIndexChange, alt, className }: Ph
     settle.current = setTimeout(() => {
       const el = scroller.current;
       if (!el?.clientWidth) return;
+      if (steering.current !== null) {
+        if (Math.abs(el.scrollLeft - steering.current) > 2) return;
+        steering.current = null;
+      }
       const next = Math.round(el.scrollLeft / el.clientWidth);
-      if (next !== index) onIndexChange(next);
+      if (next !== current.current) onIndexChange(next);
     }, 90);
   }
+  // A finger, a wheel or a key on the carousel is a person scrolling: what they land on is theirs.
+  useEffect(() => {
+    const el = scroller.current;
+    if (!el) return;
+    const takeOver = () => {
+      steering.current = null;
+    };
+    const events = ["pointerdown", "wheel", "keydown"] as const;
+    for (const type of events) el.addEventListener(type, takeOver, { passive: true });
+    return () => {
+      for (const type of events) el.removeEventListener(type, takeOver);
+    };
+  }, []);
 
   const many = photos.length > 1;
   return (

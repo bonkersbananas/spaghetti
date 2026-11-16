@@ -6,7 +6,6 @@ import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, type LinkProps, useNavigate } from "@tanstack/react-router";
 import { lazy, type ReactNode, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { EmptyPot } from "@/components/illustrations/EmptyPot";
-import { NoodleSearch } from "@/components/illustrations/NoodleSearch";
 import { Filters } from "@/components/journal/Filters";
 import { LazyRecipeSheet } from "@/components/recipes/LazyRecipeSheet";
 import { AttemptResult, attemptLink, ItemResult, itemLink } from "@/components/search/Results";
@@ -32,6 +31,10 @@ const RecipeResult = lazy(() => import("@/components/search/RecipeResult").then(
 
 /** What only some answers need (a spool, a mended typo, "Start again" on one that worked) loads when one appears. */
 const Extra = lazy(() => import("@/components/search/Extra"));
+// The empty notebook's drawing (a long path): only a brand-new notebook shows it, so it isn't in Search's first load.
+const NoodleSearch = lazy(() =>
+  import("@/components/illustrations/NoodleSearch").then((m) => ({ default: m.NoodleSearch })),
+);
 
 type SearchParams = FilterValues & { q?: string };
 
@@ -466,7 +469,15 @@ function Suggestions({
   if (isPending && !recent.length) return null;
   if (!recent.length && !tags.length && !materials.length) {
     return (
-      <EmptyState illustration={<NoodleSearch />} title="Nothing to untangle yet">
+      <EmptyState
+        illustration={
+          // Its own size held while it arrives (precached), inside the empty state's own fade-in.
+          <Suspense fallback={<div className="aspect-4/3 w-40" />}>
+            <NoodleSearch />
+          </Suspense>
+        }
+        title="Nothing to untangle yet"
+      >
         Once there are ideas and prints, one search finds them all: titles, notes, filaments and settings.
       </EmptyState>
     );
