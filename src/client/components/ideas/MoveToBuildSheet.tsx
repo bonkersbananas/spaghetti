@@ -4,6 +4,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { type ReactNode, useMemo, useState } from "react";
 import { outcomeIcons } from "@/components/builds/Outcome";
+import { coverPhoto } from "@/components/ui/Card";
 import { Chip } from "@/components/ui/Chip";
 import { TextField } from "@/components/ui/Field";
 import { BuildsIcon, PrintingIcon, SearchIcon } from "@/components/ui/icons";
@@ -11,11 +12,11 @@ import { MetaList } from "@/components/ui/MetaList";
 import { Overline } from "@/components/ui/Overline";
 import { PickRow } from "@/components/ui/PickRow";
 import { Sheet } from "@/components/ui/Sheet";
-import { findPrinting, newestPhoto } from "@/lib/builds";
+import { findPrinting } from "@/lib/builds";
 import { cn } from "@/lib/cn";
 import { type AttemptView, type ItemView, useBuilds } from "@/lib/items";
 import { moveIntoBuild } from "@/lib/move";
-import { fileThumbSrc, photoSrc } from "@/lib/previews";
+import { coverOf, fileThumbSrc, photoSrc } from "@/lib/previews";
 import { usePrintProgress } from "@/lib/print-progress";
 import { itemName } from "@/lib/recent";
 import { useIsDesktop } from "@/lib/use-media-query";
@@ -41,12 +42,9 @@ const tiles: Record<Outcome | "printing", string> = {
   printing: "bg-semolina-soft text-semolina-ink",
 };
 
-/** The build's newest photo, else the slicer's picture of its latest plate. Null: the glyph tile stands in. */
+/** The build's cover (`coverOf`), as small as a pick row's picture. Null: the glyph tile stands in for a note. */
 function pictureOf(build: ItemView) {
-  const photo = newestPhoto(build);
-  if (photo) return { src: photoSrc(photo.id, "thumb"), color: photo.color || undefined };
-  const plate = build.attempts.findLast((attempt) => attempt.file?.hasThumb)?.file;
-  return plate ? { src: fileThumbSrc(plate), fit: "contain" as const } : null;
+  return coverPhoto(coverOf(build), "") ?? null;
 }
 
 /** "30 min left", "Done by now" or "On the bed": the progress sentence kept short. */

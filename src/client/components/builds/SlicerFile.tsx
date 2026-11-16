@@ -27,12 +27,12 @@ export function PlateThumb({ src, alt, className }: { src?: string; alt: string;
   return (
     <span
       className={cn(
-        "bg-ink/5 shadow-well flex shrink-0 items-center justify-center overflow-hidden rounded-md",
+        "bg-render-tile shadow-well flex shrink-0 items-center justify-center overflow-hidden rounded-md",
         className,
       )}
     >
       {src ? (
-        <img src={src} alt={alt} className="size-full object-contain" draggable={false} />
+        <img src={src} alt={alt} className="render-shadow-tile size-full object-contain" draggable={false} />
       ) : (
         <SlicerFileIcon size={22} className="text-ink-faint" aria-hidden />
       )}

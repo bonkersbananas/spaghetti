@@ -4,7 +4,7 @@ import { modelOf } from "@shared/model-mark";
 import { relativeTime } from "@shared/time";
 import { m } from "motion/react";
 import { lazy, type Ref, Suspense, useState } from "react";
-import { Card } from "@/components/ui/Card";
+import { Card, coverPhoto } from "@/components/ui/Card";
 import { ForLine } from "@/components/ui/ForField";
 import { ModelMark } from "@/components/ui/ModelMark";
 import { ReactionGlance } from "@/components/ui/ReactionGlance";
@@ -14,35 +14,24 @@ import { cn } from "@/lib/cn";
 import { useForLine } from "@/lib/for-whom";
 import type { ItemView } from "@/lib/items";
 import { useOutbox } from "@/lib/outbox";
-import { fileThumbSrc, hasPreview, photoSrc } from "@/lib/previews";
+import { coverOf, newestPlate, photoAlt, photoSrc, plateAlt } from "@/lib/previews";
+
+// Where they used to live: the idea page and Up next read them from here.
+// The styleguide shows the mark from here, so it stays in the idea card's chunk (its only other user) rather than a
+// chunk of its own on every Ideas first load.
+export { ModelMark, photoAlt, plateAlt };
+
 import { useUnreadCount, useUnreadThreadSearch } from "@/lib/unread-comments";
 
 // The menu's code (popover, sheet) arrives after the first screen: it is only needed once a card is touched.
 const CardMenu = lazy(() => import("./CardMenu").then((m) => ({ default: m.CardMenu })));
 
-/** What a photo shows, for screen readers: the title, else the start of the note. */
-export function photoAlt(item: Pick<ItemView, "title" | "note">): string {
-  const text = item.title || item.note.split("\n")[0]?.slice(0, 80);
-  return text ? `Photo: ${text}` : "Photo of an idea";
-}
-
 /**
  * The newest of an idea's files with a plate picture (a slicer's file, or a model Spaghetti sliced): the idea's cover
- * while it has no photo of its own. A photo always wins. A model being sliced here has its picture on this device
- * before the server does.
+ * while it has no photo of its own (`coverOf` in lib/previews.ts, the rule every cover follows). A photo always wins.
  */
 export function plateCover(item: Pick<ItemView, "files">): AttemptFile | undefined {
-  let newest: AttemptFile | undefined;
-  for (const file of item.files ?? []) {
-    if ((file.hasThumb || hasPreview(file.id)) && (!newest || file.createdAt >= newest.createdAt)) newest = file;
-  }
-  return newest;
-}
-
-/** What a plate picture shows, for screen readers. */
-export function plateAlt(item: Pick<ItemView, "title" | "note">): string {
-  const text = item.title || item.note.split("\n")[0]?.slice(0, 80);
-  return text ? `Slicer preview: ${text}` : "Slicer preview of an idea";
+  return newestPlate({ files: item.files, attempts: [] });
 }
 
 /** Where an idea's uploads stand, summed up for its card. */
@@ -85,8 +74,8 @@ interface IdeaCardProps {
 }
 
 export function IdeaCard({ item, person, via, landing, menu, headingLevel = 2, ref }: IdeaCardProps) {
-  const cover = item.photos[0];
-  const plate = cover ? undefined : plateCover(item);
+  // Its cover by the one rule (lib/previews.ts coverOf): the first photo, else the newest plate picture, else the note.
+  const cover = coverOf(item);
   const upload = useUploadState(item);
   const unread = useUnreadCount(item.id);
   const forLine = useForLine();
@@ -95,7 +84,9 @@ export function IdeaCard({ item, person, via, landing, menu, headingLevel = 2, r
   // The photo swiped to: the idea's page opens on it.
   const [showing, setShowing] = useState<string>();
   const opensOn =
-    showing && showing !== cover?.id && item.photos.some((photo) => photo.id === showing) ? showing : undefined;
+    showing && showing !== item.photos[0]?.id && item.photos.some((photo) => photo.id === showing)
+      ? showing
+      : undefined;
   return (
     <m.li {...useReflow(landing)} ref={ref} className="group/idea relative list-none">
       <div className="h-full rounded-lg">
@@ -108,13 +99,7 @@ export function IdeaCard({ item, person, via, landing, menu, headingLevel = 2, r
           aspect="portrait"
           headingLevel={headingLevel}
           reserveEnd={!!menu && !item.pending}
-          photo={
-            cover
-              ? { id: cover.id, src: photoSrc(cover.id, "thumb"), alt: photoAlt(item), color: cover.color }
-              : plate
-                ? { src: fileThumbSrc(plate), alt: plateAlt(item), fit: "contain" }
-                : undefined
-          }
+          photo={coverPhoto(cover, cover.kind === "plate" ? plateAlt(item) : photoAlt(item))}
           title={item.title || (item.draft?.status === "reading" ? "Reading the page…" : item.title)}
           // Links read better short on a card: printables.com/model/123.
           note={item.note ? shortenLinks(item.note) : undefined}

@@ -119,6 +119,7 @@ export function MiniCard({
                 alt={photo.alt}
                 color={photo.color}
                 fit={photo.fit}
+                frame={photo.fit === "contain" ? "render" : undefined}
                 className={cn("size-full", photo.fit === "contain" && "p-2")}
               />
             ) : note ? (

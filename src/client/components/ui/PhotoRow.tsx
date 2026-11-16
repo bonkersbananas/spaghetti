@@ -25,7 +25,8 @@ export const wordsIndent: Record<PhotoRowSize, string> = {
 interface PhotoRowProps {
   /** Where the row leads: a router `Link`'s own props (`to`, `params`, `search`) plus its handlers. */
   link: LinkComponentProps<"a">;
-  photo: { src: string; color?: string } | null;
+  /** `fit: "contain"` for a slicer's plate picture: the whole model on the render ground. */
+  photo: { src: string; color?: string; fit?: "contain" } | null;
   /**
    * What the tile holds when there is no photo: an icon, a spool. Its own tone goes in `tileClassName`
    * (`bg-well text-ink-ghost` is the default).
@@ -75,7 +76,14 @@ export const PhotoRow = forwardRef<HTMLAnchorElement, PhotoRowProps>(function Ph
           src={photo.src}
           alt=""
           color={photo.color}
-          className={cn("shrink-0 rounded-md", sizes[size], faded && "opacity-75 saturate-50")}
+          fit={photo.fit}
+          frame={photo.fit === "contain" ? (size === "lg" ? "render" : "render-tile") : undefined}
+          className={cn(
+            "shrink-0 rounded-md",
+            sizes[size],
+            photo.fit === "contain" && "p-1",
+            faded && "opacity-75 saturate-50",
+          )}
         />
       ) : (
         <span

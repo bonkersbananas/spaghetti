@@ -4,6 +4,7 @@ import { lazy, type ReactNode, Suspense, useRef, useState } from "react";
 import { cn } from "@/lib/cn";
 import { heroClick } from "@/lib/hero";
 import { scrollBehavior } from "@/lib/motion";
+import { type Cover, fileThumbSrc, photoSrc } from "@/lib/previews";
 import { Avatar } from "./Avatar";
 import { CommentIcon, ImageIcon, SlicerFileIcon } from "./icons";
 import { NoteFace } from "./NoteFace";
@@ -17,7 +18,7 @@ export interface CardPhoto {
   alt: string;
   color?: string /** The photo's id, so it can travel to the page this opens. */;
   id?: string;
-  /** "contain" for a slicer's plate picture standing in for a photo: the whole model on the well, not cropped. */
+  /** "contain" for a slicer's plate picture standing in for a photo: the whole model on the render ground, not cropped. */
   fit?: "cover" | "contain";
 }
 
@@ -151,15 +152,13 @@ export function Card({
             alt={photo.alt}
             color={photo.color}
             fit={photo.fit}
+            frame={photo.fit === "contain" ? "render" : undefined}
             className={cn("size-full", photo.fit === "contain" && "p-3")}
             imgClassName="group-hover:scale-[1.02] transition-[opacity,transform] duration-slow"
           />
-        ) : noteCard ? (
-          <NoteFace note={note} />
         ) : (
-          <div className="bg-well text-ink-ghost flex size-full items-center justify-center">
-            <ImageIcon size={32} weight="light" aria-hidden />
-          </div>
+          // Nothing to show yet, not even a note: a blank index card, never an empty image icon.
+          <NoteFace note={note ?? ""} />
         )}
         {badge && <div className="absolute top-2 right-2">{badge}</div>}
         {slides && (
@@ -173,10 +172,18 @@ export function Card({
             <PhotoDots count={slides.length} index={index} />
           </div>
         )}
-        {!!unread && (
+        {unread ? (
           <div className="absolute top-2 left-2">
             <UnreadBadge count={unread} />
           </div>
+        ) : (
+          // A render isn't the result: from md, where a card has the room, it says so on its corner.
+          !slides &&
+          photo?.fit === "contain" && (
+            <div className="absolute top-2 left-2 max-md:hidden">
+              <SlicerPreviewBadge />
+            </div>
+          )
         )}
         {mark && <div className="absolute right-0 bottom-0 max-w-[70%]">{mark}</div>}
         {chips && <div className="absolute bottom-2 left-2 flex flex-wrap gap-1.5">{chips}</div>}
@@ -310,7 +317,8 @@ export function PhotoCountBadge({ count }: { count: number }) {
 /** "From the model" with the file glyph: a plate's picture where a photo would be, so nobody takes it for the result. */
 export function SlicerPreviewBadge() {
   return (
-    <span className="rounded-pill bg-veil text-caption text-on-veil inline-flex h-6 items-center gap-1 px-2 font-semibold backdrop-blur-md">
+    // On the render's own ground, not over a photo: a quiet cream chip, as the 3D view's chips are, not the veil.
+    <span className="rounded-pill bg-cream/90 shadow-soft text-caption text-ink-soft inline-flex h-6 items-center gap-1 px-2 font-semibold">
       <SlicerFileIcon size={13} weight="fill" aria-hidden />
       From the model
     </span>
@@ -325,4 +333,18 @@ export function UnreadBadge({ count }: { count: number }) {
       {count > 9 ? "9+" : count} <span className="sr-only">new {count === 1 ? "comment" : "comments"}</span>
     </span>
   );
+}
+
+/**
+ * A cover as a `Card`, `MiniCard` or `PhotoRow` takes its picture: the photo, or the plate render shown whole
+ * (`fit="contain"`, which they draw on the render ground). Undefined for a note card: they draw the note themselves.
+ */
+export function coverPhoto(
+  cover: Cover,
+  alt: string,
+): { id?: string; src: string; alt: string; color?: string; fit?: "contain" } | undefined {
+  if (cover.kind === "photo")
+    return { id: cover.photo.id, src: photoSrc(cover.photo.id, "thumb"), alt, color: cover.photo.color || undefined };
+  if (cover.kind === "plate") return { src: fileThumbSrc(cover.file), alt, fit: "contain" };
+  return undefined;
 }

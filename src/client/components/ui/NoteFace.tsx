@@ -1,5 +1,6 @@
 import { linkWords } from "@shared/links";
 import { type NoteSize, noteSize } from "@shared/notes";
+import { keepUnits } from "@shared/typography";
 import { Fragment, type ReactNode } from "react";
 import { cn } from "@/lib/cn";
 
@@ -67,7 +68,8 @@ export function NoteFace({ note, size, className, compact, clearBottom }: NoteFa
                 ),
           )}
         >
-          {link ? text : breakAfterSlashes(note)}
+          {/* A number keeps its unit on the line ("42 mm"); an address may break after its slashes. */}
+          {link ? keepUnits(text) : breakAfterSlashes(keepUnits(note))}
         </p>
         {link && <p className="text-caption text-ink-faint mt-1.5 truncate">{link.site}</p>}
       </div>

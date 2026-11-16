@@ -1,7 +1,7 @@
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
-import type { Locator, Page } from "@playwright/test";
+import type { Locator, Page, Route } from "@playwright/test";
 import {
   hotdogModel,
   makerworldProject,
@@ -363,6 +363,8 @@ export interface Shot {
   beforeShot?: (page: Page) => Promise<void>;
   /** Runs after the screenshot, to undo what prepare changed for the next width. */
   cleanup?: (page: Page) => Promise<void>;
+  /** Shows a picture still on its way, or one that failed, on purpose: skip the check that every image has loaded. */
+  brokenImages?: boolean;
 }
 
 /** An idea made through the API with this note (no draft is started: only a capture starts one by itself). */
@@ -1094,6 +1096,103 @@ async function failedBuild(page: Page, title: string) {
   await page.locator("h1").first().waitFor({ state: "attached" });
   return itemId;
 }
+
+/** Builds a cover shot made, for its cleanup. */
+const coverBuilds: string[] = [];
+
+/** A plate render as a slicer draws it (a clear PNG) from one of the styleguide's sample SVGs, drawn in the page. */
+async function samplePng(page: Page, file: string): Promise<Buffer> {
+  const svg = readFileSync(file, "utf8");
+  const base64 = await page.evaluate(async (source) => {
+    const image = new Image();
+    image.src = `data:image/svg+xml;base64,${btoa(source)}`;
+    await image.decode();
+    const canvas = document.createElement("canvas");
+    canvas.width = 512;
+    canvas.height = 512;
+    canvas.getContext("2d")?.drawImage(image, 0, 0, 512, 512);
+    return canvas.toDataURL("image/png").split(",")[1] ?? "";
+  }, svg);
+  return Buffer.from(base64, "base64");
+}
+
+/**
+ * A build with no photo whose only attempt carries a slicer file with this plate picture: its cover is the render. A
+ * white hook (the fixture's plate) or a black one (black PLA), in the stage and with the outcome asked for.
+ */
+async function renderBuild(
+  page: Page,
+  options: { title: string; black?: boolean; stage?: "building" | "done" | "shelved"; outcome?: "success" | "failed" },
+) {
+  const headers = { Origin: new URL(page.url()).origin };
+  const itemId = crypto.randomUUID();
+  const attemptId = crypto.randomUUID();
+  coverBuilds.push(itemId);
+  await page.request.post("/api/items", { headers, data: { id: itemId, title: options.title, stage: "building" } });
+  await page.request.post(`/api/items/${itemId}/attempts`, {
+    headers,
+    data: {
+      id: attemptId,
+      outcome: options.outcome ?? "failed",
+      printedAt: Date.now() - 50 * 60_000,
+      settings: { filaments: [{ type: "PLA", brand: "Bambu", colorName: options.black ? "Black" : "Jade white" }] },
+    },
+  });
+  const thumb = options.black
+    ? await samplePng(page, "src/client/assets/samples/render-hook-black.svg")
+    : readFileSync("e2e/fixtures/plate-hook.png");
+  const bytes = slicerFile();
+  await page.request.put(`/api/attempts/${attemptId}/file`, {
+    headers,
+    multipart: {
+      id: crypto.randomUUID(),
+      name: SLICER_FILE_NAME,
+      size: String(bytes.length),
+      plate: "2",
+      plateCount: "2",
+      slicer: "BambuStudio 02.01.00.00",
+      prefill: "{}",
+      objects: "[]",
+      file: { name: SLICER_FILE_NAME, mimeType: "application/octet-stream", buffer: Buffer.from(bytes) },
+      thumb: { name: "plate_2.png", mimeType: "image/png", buffer: thumb },
+    },
+  });
+  if (options.stage && options.stage !== "building")
+    await page.request.patch(`/api/items/${itemId}`, { headers, data: { stage: options.stage } });
+  return itemId;
+}
+
+/** Two prints on the bed with no photo and no file: one with a note (the one due), one with only a name. */
+async function printsWithoutPictures(page: Page) {
+  const headers = { Origin: new URL(page.url()).origin };
+  for (const [title, note, startedAgo, minutes] of [
+    ["Shelf peg", "For the hallway shelf, under the coats.", 130, 90],
+    ["Wall hook", "", 20, 75],
+  ] as const) {
+    const itemId = crypto.randomUUID();
+    coverBuilds.push(itemId);
+    await page.request.post("/api/items", { headers, data: { id: itemId, title, note, stage: "building" } });
+    await page.request.post(`/api/items/${itemId}/attempts`, {
+      headers,
+      data: {
+        id: crypto.randomUUID(),
+        printedAt: Date.now() - startedAgo * 60_000,
+        settings: { estimatedMinutes: minutes, filaments: [{ type: "PLA", brand: "Bambu", colorName: "Jade white" }] },
+      },
+    });
+  }
+}
+
+async function removeCoverBuilds(page: Page) {
+  const headers = { Origin: new URL(page.url()).origin };
+  for (const id of coverBuilds.splice(0)) await page.request.delete(`/api/items/${id}`, { headers });
+}
+
+/** Requests a shot holds back (a picture still on its way), let go in its cleanup. */
+const heldRoutes: Route[] = [];
+
+/** Towel hook's card in the Builds grid. */
+const TOWEL_CARD = "li:has(a:has-text('Towel hook'))";
 
 /** Opens the attempt's sheet from its card (the card's open button is under its content: click its corner). */
 async function openOffBedSheet(page: Page) {
@@ -3416,6 +3515,169 @@ export const shots: Shot[] = [
     cleanup: removeModelItems,
   },
   {
+    // An idea led by its model's render, started: the build keeps the render where the idea had it, at its size, with
+    // the add-photo wells row-sized under it (one cover rule, lib/previews.ts coverOf).
+    name: "build-model-cover",
+    path: "/builds",
+    fullPage: true,
+    prepare: async (page) => {
+      await ideaWithModel(page, FUSILLI_IDEA, FUSILLI, /Sliced by Spaghetti/);
+      await sliceSaved(page);
+      const id = modelItems.at(-1) as string;
+      const headers = { Origin: new URL(page.url()).origin };
+      await page.request.patch(`/api/items/${id}`, { headers, data: { stage: "building" } });
+      await page.goto(`/builds/${id}`, { waitUntil: "networkidle" });
+      await page.getByRole("textbox", { name: "Title" }).waitFor();
+      await page.waitForTimeout(1200);
+    },
+    cleanup: removeModelItems,
+  },
+  {
+    // Prints on the bed with neither a photo nor a file: the one with a note shows it (set a size down in the wide
+    // frame), the one with only a name shows the build glyph, since its name is right beside it in Fraunces.
+    name: "today-no-picture",
+    path: "/today",
+    width: 1440,
+    prepare: async (page) => {
+      await printsWithoutPictures(page);
+      await page.goto("/today", { waitUntil: "networkidle" });
+      await page.getByText("Wall hook").first().waitFor();
+      await page.getByText("Shelf peg").first().scrollIntoViewIfNeeded();
+      await page.waitForTimeout(800);
+    },
+    cleanup: removeCoverBuilds,
+  },
+  {
+    name: "journal-now-no-picture",
+    path: "/journal",
+    width: 390,
+    prepare: async (page) => {
+      await printsWithoutPictures(page);
+      await page.goto("/journal", { waitUntil: "networkidle" });
+      await page.getByText("Wall hook").first().waitFor();
+      await page.waitForTimeout(1500);
+    },
+    cleanup: removeCoverBuilds,
+  },
+  {
+    // A render's card with a new comment: the unread badge takes the corner, "From the model" gives way.
+    name: "builds-render-unread",
+    path: "/builds",
+    selector: TOWEL_CARD,
+    prepare: async (page) => {
+      await page.route("**/api/comments/unread", async (route) => {
+        const answer = await route.fetch();
+        const body = (await answer.json()) as { threads: Array<Record<string, unknown>> };
+        const thread = {
+          ...body.threads[0],
+          itemId: SEED_BUILD_IDS.towelHook,
+          count: 1,
+          title: "Towel hook",
+          stage: "building",
+        };
+        await route.fulfill({ response: answer, json: { threads: [thread, ...body.threads] } });
+      });
+      await page.goto("/builds", { waitUntil: "networkidle" });
+      await page.locator(TOWEL_CARD).waitFor();
+      await page.waitForTimeout(1500);
+    },
+    cleanup: (page) => page.unroute("**/api/comments/unread"),
+  },
+  {
+    // A render on its way (held), and one that never comes (the file's picture is gone): the ground alone, calm.
+    name: "builds-render-loading",
+    path: "/builds",
+    selector: TOWEL_CARD,
+    brokenImages: true,
+    prepare: async (page) => {
+      await page.route("**/api/files/*/thumb*", (route) => void heldRoutes.push(route));
+      // The held picture would hold the page's load event too.
+      await page.goto("/builds", { waitUntil: "domcontentloaded" });
+      await page.locator(TOWEL_CARD).waitFor();
+      await page.waitForTimeout(800);
+    },
+    cleanup: async (page) => {
+      for (const route of heldRoutes.splice(0)) await route.abort().catch(() => {});
+      await page.unroute("**/api/files/*/thumb*");
+    },
+  },
+  {
+    name: "builds-render-failed",
+    path: "/builds",
+    selector: TOWEL_CARD,
+    brokenImages: true,
+    prepare: async (page) => {
+      await page.route("**/api/files/*/thumb*", (route) => route.fulfill({ status: 404, body: "" }));
+      await page.goto("/builds");
+      await page.locator(TOWEL_CARD).waitFor();
+      await page.waitForTimeout(800);
+    },
+    cleanup: (page) => page.unroute("**/api/files/*/thumb*"),
+  },
+  {
+    // Renders in 48 px rows: a black-filament build and a white one in Pick up again, on Today's desktop.
+    name: "today-pick-up",
+    path: "/today",
+    width: 1440,
+    selector: "section[aria-labelledby=today-pickup]",
+    prepare: async (page) => {
+      await renderBuild(page, { title: "Coat hook", black: true });
+      await renderBuild(page, { title: "Door hook" });
+      await page.goto("/today", { waitUntil: "networkidle" });
+      await page.locator("section[aria-labelledby=today-pickup]").getByText("Coat hook").waitFor();
+      await page.waitForTimeout(800);
+    },
+    cleanup: removeCoverBuilds,
+  },
+  {
+    // The same renders in the Builds grid (black PLA on the render ground), in Done and on the shelf (48 px tiles).
+    name: "builds-renders",
+    path: "/builds",
+    fullPage: true,
+    prepare: async (page) => {
+      await renderBuild(page, { title: "Coat hook", black: true });
+      await renderBuild(page, { title: "Door hook", stage: "done", outcome: "success" });
+      await renderBuild(page, { title: "Shelf hook", black: true, stage: "shelved" });
+      await page.goto("/builds", { waitUntil: "networkidle" });
+      await page.getByText("Shelf hook").waitFor();
+      // Again from the saved list: cards that arrive by a live update fade in, which the shots' fixed clock never ends.
+      await page.reload({ waitUntil: "networkidle" });
+      await page.getByText("Coat hook").first().waitFor();
+      await page.waitForTimeout(1000);
+    },
+    cleanup: removeCoverBuilds,
+  },
+  {
+    // Search finds builds by the same cover: the best photo from the Worker, else the render this device has.
+    name: "search-covers",
+    path: "/builds",
+    prepare: async (page) => {
+      await page.locator(TOWEL_CARD).waitFor();
+      await page.goto("/search?q=hook");
+      await page.getByRole("region", { name: "Builds" }).getByText("Towel hook").first().waitFor();
+      await page.getByRole("searchbox", { name: "Search" }).blur();
+      await page.waitForTimeout(800);
+    },
+  },
+  {
+    name: "palette-covers",
+    path: "/builds",
+    width: 1440,
+    prepare: async (page) => {
+      await page.locator(TOWEL_CARD).waitFor();
+      await page.keyboard.press("ControlOrMeta+k");
+      await page.getByRole("combobox", { name: "Jump to or run" }).pressSequentially("hook");
+      await page
+        .getByRole("group", { name: "Builds" })
+        .getByRole("option", { name: /^Towel hook\b/ })
+        .waitFor();
+      await page.waitForTimeout(600);
+    },
+    cleanup: async (page) => {
+      await page.keyboard.press("Escape");
+    },
+  },
+  {
     // On desktop, a story card's "Sliced by Spaghetti" opens the settings below the model's card in the attempt.
     name: "build-model-settings",
     path: "/builds",
@@ -4869,6 +5131,15 @@ export const shots: Shot[] = [
   { name: "styleguide-controls", path: "/styleguide", selector: "#controls" },
   { name: "styleguide-buttons", path: "/styleguide", selector: "#buttons" },
   { name: "styleguide-builds", path: "/styleguide", selector: "#builds" },
+  {
+    name: "styleguide-covers",
+    path: "/styleguide",
+    selector: "#covers",
+    prepare: async (page) => {
+      await page.locator("#covers img").first().waitFor();
+      await page.waitForTimeout(600);
+    },
+  },
   { name: "styleguide-search", path: "/styleguide", selector: "#search" },
   { name: "styleguide-spools", path: "/styleguide", selector: "#pantry" },
   { name: "styleguide-recipes", path: "/styleguide", selector: "#recipes" },

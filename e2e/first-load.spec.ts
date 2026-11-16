@@ -29,11 +29,14 @@ import { SEED_PASSWORD, SEED_USERS } from "../scripts/lib/local-app.ts";
  * lazy import adds its dependency list to the gate's chunk, about 1.5 kB gzip).
  * 2026-11-16: /today +1: note faces that are only a link show the link's words (linkWords, 0.3 kB) and mini cards set notes on
  * their own scale (NoteFace), both drawn on Today's cards, and Today's Up next carries the one-line batched toast (lib/up-next).
+ * 2026-11-16: /ideas +1: the one cover rule every card picks its picture with (shared/cover.ts, coverOf in lib/previews.ts),
+ * and the card pieces IdeaCard shared with the build cards (ReactionGlance, ForField) in chunks of their own, now that the
+ * build cards no longer load IdeaCard: that took 3.1 kB off Today and 5.3 kB off Builds.
  */
 const CEILING_KB = {
   "/sign-in": 185,
   "/today": 295,
-  "/ideas": 259,
+  "/ideas": 260,
   "/builds": 267,
   "/journal": 278,
   "/search": 275,

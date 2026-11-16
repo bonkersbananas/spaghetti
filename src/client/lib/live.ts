@@ -92,6 +92,8 @@ export function refresh(queryClient: QueryClient, changes: Change[]) {
         break;
       case "twist":
         roots.add("twists").add("search");
+        // A build that prints it shows the twist's model as its cover (shared/cover.ts).
+        lists = true;
         break;
       case "recipe":
         roots.add("recipes").add("search").add("what-worked");

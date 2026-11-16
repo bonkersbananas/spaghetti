@@ -1,4 +1,5 @@
 import { and, eq, isNull } from "drizzle-orm";
+import { bestPhoto } from "../shared/cover.ts";
 import { getDb } from "./db/index.ts";
 import { attempts, items, photos, twists } from "./db/schema.ts";
 import { setPageHeaders } from "./page-headers.ts";
@@ -60,27 +61,9 @@ interface Pic {
   attemptId: string | null;
   createdAt: number;
   contentType: string;
-  outcome: string | null;
 }
 
-/** The photo an item leads with on its page and cards: its cover, else its first own photo, else the best attempt's newest (client lib/builds.ts heroPhoto). */
-function hero(pics: Pic[], coverId: string | null): Pic | undefined {
-  const newest = (list: Pic[]) =>
-    list.reduce<Pic | undefined>((best, p) => (!best || p.createdAt > best.createdAt ? p : best), undefined);
-  const cover = coverId ? pics.find((p) => p.id === coverId) : undefined;
-  if (cover) return cover;
-  const own = pics.find((p) => !p.attemptId);
-  if (own) return own;
-  const worked = pics.filter((p) => p.outcome === "success");
-  const workedLast = worked.length ? worked[worked.length - 1]?.attemptId : null;
-  return (
-    newest(pics.filter((p) => p.attemptId && p.attemptId === workedLast)) ??
-    newest(pics.filter((p) => p.attemptId)) ??
-    pics[0]
-  );
-}
-
-/** One batch of two small reads. Null when the thing doesn't exist or is deleted. */
+/** One batch of small reads. Null when the thing doesn't exist or is deleted. */
 export async function findPreview(env: Env, kind: PreviewKind, id: string): Promise<Preview | null> {
   const db = getDb(env.DB);
   if (kind === "twists") {
@@ -100,7 +83,7 @@ export async function findPreview(env: Env, kind: PreviewKind, id: string): Prom
       : undefined;
     return { ...words(twist.name, twist.note), photoId: photo?.id ?? null, contentType: photo?.contentType ?? null };
   }
-  const [rows, pics] = await db.batch([
+  const [rows, pics, tries] = await db.batch([
     db
       .select({ title: items.title, note: items.note, coverPhotoId: items.coverPhotoId })
       .from(items)
@@ -112,13 +95,17 @@ export async function findPreview(env: Env, kind: PreviewKind, id: string): Prom
         attemptId: photos.attemptId,
         createdAt: photos.createdAt,
         contentType: photos.contentType,
-        outcome: attempts.outcome,
         attemptDeleted: attempts.deletedAt,
       })
       .from(photos)
       .leftJoin(attempts, eq(attempts.id, photos.attemptId))
       .where(and(eq(photos.itemId, id), isNull(photos.deletedAt)))
       .orderBy(photos.position),
+    db
+      .select({ id: attempts.id, outcome: attempts.outcome })
+      .from(attempts)
+      .where(and(eq(attempts.itemId, id), isNull(attempts.deletedAt)))
+      .orderBy(attempts.printedAt, attempts.createdAt, attempts.id),
   ]);
   const item = rows[0];
   if (!item) return null;
@@ -129,9 +116,9 @@ export async function findPreview(env: Env, kind: PreviewKind, id: string): Prom
       attemptId: p.attemptId,
       createdAt: +p.createdAt,
       contentType: p.contentType,
-      outcome: p.outcome,
     }));
-  const photo = hero(live, item.coverPhotoId);
+  // The photo its page and cards lead with: the same rule as the app's (shared/cover.ts).
+  const photo = bestPhoto(live, tries, item.coverPhotoId);
   return { ...words(item.title, item.note), photoId: photo?.id ?? null, contentType: photo?.contentType ?? null };
 }
 

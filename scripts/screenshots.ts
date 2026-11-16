@@ -203,7 +203,7 @@ async function capture(page: Page, shot: (typeof shots)[number], width: number, 
   await page.locator("h1").first().waitFor();
   await page.evaluate(() => document.fonts.ready);
   await shot.prepare?.(page);
-  await loadAllImages(page, shot.name);
+  if (!shot.brokenImages) await loadAllImages(page, shot.name);
   await shot.beforeShot?.(page);
   // Let entrance animations and sheets settle.
   await page.waitForTimeout(600);

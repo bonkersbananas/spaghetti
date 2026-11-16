@@ -180,6 +180,14 @@ export const Item = z
     draft: z.looseObject({}).nullable().describe("Claude's draft from a model page, while there is one."),
     reactions: z.array(Reaction).describe("Who reacted, and how, oldest first."),
     files: z.array(AttemptFile).describe("Slicer files kept with the idea (and its build), oldest first."),
+    twistModel: AttemptFile.nullable()
+      .optional()
+      .describe(
+        "The model of the twist this build prints, while the twist is live: its cover without a photo or file.",
+      ),
+    twistPhoto: Photo.nullable()
+      .optional()
+      .describe("The photo that twist leads with, while its idea has it: the cover's next fallback."),
   })
   .meta({ id: "Item", description: "An idea, or a build (an idea that is being printed)." });
 

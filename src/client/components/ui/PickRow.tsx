@@ -45,6 +45,7 @@ export function PickRow({ photo, glyph, title, meta, mark, quiet, onSelect, auto
           alt=""
           color={photo.color}
           fit={photo.fit}
+          frame={photo.fit === "contain" ? "render-tile" : undefined}
           className={cn(tile, photo.fit === "contain" && "p-0.5")}
         />
       ) : (

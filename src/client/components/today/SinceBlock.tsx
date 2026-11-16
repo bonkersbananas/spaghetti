@@ -3,28 +3,18 @@ import { displayName } from "@shared/people";
 import { catchUp, sinceLabel } from "@shared/since";
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { useEffect, useMemo } from "react";
+import { coverPhoto } from "@/components/ui/Card";
 import { MiniCard } from "@/components/ui/MiniCard";
 import { Reflow } from "@/components/ui/Reflow";
 import { Section } from "@/components/ui/Section";
-import { heroPhoto, newestPhoto } from "@/lib/builds";
 import { journalQuery } from "@/lib/journal";
-import { fileThumbSrc, photoSrc } from "@/lib/previews";
+import { coverOf } from "@/lib/previews";
 import { peopleQuery, sessionQuery } from "@/lib/queries";
 import { useSinceFrom } from "@/lib/since";
 
 const everything = new URLSearchParams();
 /** A catch-up reads this many pages of the journal at most. */
 const MAX_PAGES = 5;
-
-/** The picture of a thing with no photo: its newest file's plate, else its newest attempt's (the card is named by its title beside it). */
-function plateOf(item: Item) {
-  const files = (item.files ?? []).filter((file) => file.hasThumb);
-  const newest = files.reduce<(typeof files)[number] | undefined>(
-    (best, file) => (!best || file.createdAt >= best.createdAt ? file : best),
-    undefined,
-  );
-  return newest ?? item.attempts.findLast((attempt) => attempt.file?.hasThumb)?.file ?? undefined;
-}
 
 /**
  * "Since Thursday": after a few days away, what the other person did, at the top of Today (desktop) and of the
@@ -68,10 +58,8 @@ export default function SinceBlock() {
         <Reflow>
           {summary.lines.map((line) => {
             const item = line.item;
-            const cover =
-              line.stage === "idea" ? item.photos[0] : (heroPhoto(item as never) ?? newestPhoto(item as never));
-            // A build with no photo yet shows its newest plate picture, as the cards do.
-            const plate = cover ? undefined : plateOf(item);
+            // The cover its page and cards show: the best photo, else the newest plate picture, else the note card.
+            const cover = coverOf(item);
             return (
               <MiniCard
                 key={line.itemId}
@@ -81,15 +69,10 @@ export default function SinceBlock() {
                     ? { to: "/ideas/$ideaId", params: { ideaId: line.itemId } }
                     : { to: "/builds/$buildId", params: { buildId: line.itemId } }
                 }
-                photo={
-                  cover
-                    ? { src: photoSrc(cover.id, "thumb"), alt: "", color: cover.color }
-                    : plate
-                      ? { src: fileThumbSrc(plate), alt: "", fit: "contain" }
-                      : undefined
-                }
-                note={line.stage === "idea" ? item.note : undefined}
-                title={line.title}
+                photo={coverPhoto(cover, "")}
+                note={cover.kind === "note" ? cover.text : item.note || undefined}
+                // A thing with neither a photo nor a note has its name on the index card, once.
+                title={cover.kind === "note" && cover.fromTitle ? undefined : line.title}
                 sub={line.what}
               />
             );

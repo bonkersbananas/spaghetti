@@ -9,6 +9,7 @@ import { type KeyboardEvent, type ReactNode, useEffect, useMemo, useRef, useStat
 import { OutcomeChip } from "@/components/builds/Outcome";
 import { summarizeSettings } from "@/components/builds/settings";
 import { afterWords, attemptLink, itemLink } from "@/components/search/Results";
+import { coverPhoto } from "@/components/ui/Card";
 import { Highlight } from "@/components/ui/Highlight";
 import {
   BuildsIcon,
@@ -37,7 +38,7 @@ import { useCapture } from "@/lib/capture";
 import { comboOf, isMac } from "@/lib/hotkeys";
 import { type ItemView, useBuilds, useIdeas } from "@/lib/items";
 import { type ScreenAction, screenActions, usePalette } from "@/lib/palette";
-import { photoSrc } from "@/lib/previews";
+import { coverOf, photoSrc } from "@/lib/previews";
 import { itemName, type RecentItem, recentItems } from "@/lib/recent";
 import { focusSearch, searchQuery } from "@/lib/search";
 import { useTheme } from "@/lib/theme";
@@ -127,6 +128,11 @@ function PaletteBody({ close, choose }: { close: () => void; choose: (run: () =>
   const unread = useQuery(unreadQuery).data?.threads;
   const ideasList = useIdeas().items;
   const buildsList = useBuilds().items;
+  // What this device holds of each thing, so a row shows its cover by the one rule (coverOf).
+  const cached = useMemo(
+    () => new Map([...ideasList, ...buildsList].map((item) => [item.id, item])),
+    [ideasList, buildsList],
+  );
   const unreadRows = useMemo(
     () =>
       (unread ?? []).flatMap((thread) => {
@@ -261,7 +267,9 @@ function PaletteBody({ close, choose }: { close: () => void; choose: (run: () =>
 
     const unreadEntries = unreadRows.map(({ item, count }) => unreadEntry(item, count, navigate));
     if (!terms.length) {
-      const items = recent.slice(context.length ? 1 : 0).map((item) => recentEntry(item, navigate));
+      const items = recent
+        .slice(context.length ? 1 : 0)
+        .map((item) => recentEntry(item, navigate, cached.get(item.id)));
       return [...here, ...unreadEntries, ...items, ...general, ...goTo];
     }
 
@@ -276,8 +284,12 @@ function PaletteBody({ close, choose }: { close: () => void; choose: (run: () =>
             .filter((hit) => hit.attempt.outcome === "success" && !fixed.has(hit.attempt.id))
             .slice(0, PER_KIND)
             .map((hit) => attemptEntry(hit, foundTerms, navigate, "What worked")),
-          ...found.builds.slice(0, PER_KIND).map((hit) => itemEntry(hit, "Builds", foundTerms, navigate)),
-          ...found.ideas.slice(0, PER_KIND).map((hit) => itemEntry(hit, "Ideas", foundTerms, navigate)),
+          ...found.builds
+            .slice(0, PER_KIND)
+            .map((hit) => itemEntry(hit, "Builds", foundTerms, navigate, cached.get(hit.item.id))),
+          ...found.ideas
+            .slice(0, PER_KIND)
+            .map((hit) => itemEntry(hit, "Ideas", foundTerms, navigate, cached.get(hit.item.id))),
           ...found.attempts
             .filter((hit) => hit.attempt.outcome !== "success" && !fixed.has(hit.attempt.id))
             .slice(0, PER_KIND)
@@ -306,6 +318,7 @@ function PaletteBody({ close, choose }: { close: () => void; choose: (run: () =>
     setPreference,
     setHelpOpen,
     signOut,
+    cached,
   ]);
 
   const groups = useMemo<PaletteGroup[]>(() => {
@@ -378,7 +391,6 @@ function unreadEntry(item: ItemView, count: number, navigate: Navigate): Entry {
   const id = `unread-${item.id}`;
   const isIdea = item.stage === "idea";
   const name = itemName(item, isIdea ? "idea" : "build");
-  const cover = item.photos[0];
   return {
     id,
     group: "New comments",
@@ -393,13 +405,19 @@ function unreadEntry(item: ItemView, count: number, navigate: Navigate): Entry {
       label: name,
       title: name,
       subtitle: `${count === 1 ? "1 new comment" : `${count} new comments`} · ${isIdea ? "Idea" : "Build"}`,
-      photo: cover ? { src: photoSrc(cover.id, "thumb"), color: cover.color || undefined } : null,
+      photo: rowPicture(item, null),
       icon: CommentIcon,
     },
   };
 }
 
-function recentEntry(item: RecentItem, navigate: Navigate): Entry {
+/** A thing's picture in a row: its cover by the one rule when this device has it, else the photo kept or found. */
+function rowPicture(cached: ItemView | undefined, photo: { id: string; color: string | null } | null | undefined) {
+  if (cached) return coverPhoto(coverOf(cached), "") ?? null;
+  return photo ? { src: photoSrc(photo.id, "thumb"), color: photo.color || undefined } : null;
+}
+
+function recentEntry(item: RecentItem, navigate: Navigate, cached?: ItemView): Entry {
   const id = `recent-${item.id}`;
   return {
     id,
@@ -415,7 +433,7 @@ function recentEntry(item: RecentItem, navigate: Navigate): Entry {
       label: item.title,
       title: item.title,
       subtitle: item.kind === "idea" ? "Idea" : "Build",
-      photo: item.photo ? { src: photoSrc(item.photo.id, "thumb"), color: item.photo.color || undefined } : null,
+      photo: rowPicture(cached, item.photo),
       icon: item.kind === "idea" ? IdeasIcon : BuildsIcon,
     },
   };
@@ -423,7 +441,13 @@ function recentEntry(item: RecentItem, navigate: Navigate): Entry {
 
 const stageWords = { idea: "Idea", building: "In progress", done: "Done", shelved: "Shelved" } as const;
 
-function itemEntry(hit: ItemHit, group: string, terms: ReturnType<typeof searchTerms>, navigate: Navigate): Entry {
+function itemEntry(
+  hit: ItemHit,
+  group: string,
+  terms: ReturnType<typeof searchTerms>,
+  navigate: Navigate,
+  cached?: ItemView,
+): Entry {
   const id = `item-${hit.item.id}`;
   const name = itemName(hit.item, hit.item.stage === "idea" ? "idea" : "build");
   const isIdea = hit.item.stage === "idea";
@@ -439,7 +463,7 @@ function itemEntry(hit: ItemHit, group: string, terms: ReturnType<typeof searchT
       label: name,
       title: <Highlight text={name} terms={terms} />,
       subtitle: meta,
-      photo: hit.photo ? { src: photoSrc(hit.photo.id, "thumb"), color: hit.photo.color || undefined } : null,
+      photo: rowPicture(cached, hit.photo),
       icon: isIdea ? IdeasIcon : BuildsIcon,
       trailing: !isIdea && hit.lastOutcome ? <OutcomeChip outcome={hit.lastOutcome} /> : undefined,
     },

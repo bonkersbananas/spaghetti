@@ -1,9 +1,9 @@
-import type { AttemptHit, FixHit, ItemHit, Photo as PhotoData } from "@shared/api";
+import type { AttemptFile, AttemptHit, FixHit, ItemHit, Photo as PhotoData } from "@shared/api";
 import { OUTCOME_LABELS, type TagKind, tagLabel } from "@shared/attempts";
 import { displayName } from "@shared/people";
 import { highlight, type SearchTerm, snippetSegments } from "@shared/search";
 import { inlineTime, relativeTime } from "@shared/time";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { LinkProps } from "@tanstack/react-router";
 import { forwardRef, type ReactNode, useLayoutEffect, useRef, useState } from "react";
 import { OutcomeChip } from "@/components/builds/Outcome";
@@ -25,7 +25,8 @@ import { PhotoRow } from "@/components/ui/PhotoRow";
 import { useTagOptions } from "@/lib/builds";
 import { cn } from "@/lib/cn";
 import { heroClick } from "@/lib/hero";
-import { photoSrc } from "@/lib/previews";
+import { cachedItem } from "@/lib/items";
+import { coverOf, fileThumbSrc, photoSrc } from "@/lib/previews";
 import { peopleQuery, sessionQuery } from "@/lib/queries";
 import { useIsDesktop } from "@/lib/use-media-query";
 
@@ -53,6 +54,8 @@ export function afterWords(after: FixHit["after"], tags: string[]): string {
 interface RowProps {
   link: LinkProps;
   photo: PhotoData | null;
+  /** Without a photo, the plate render the thing's cover falls back to (coverOf), when this device has it. */
+  plate?: AttemptFile;
   fallbackIcon: Icon;
   selected: boolean;
   onPointerEnter?: () => void;
@@ -64,7 +67,7 @@ interface RowProps {
 
 /** A result: its photo first, the words that matched beside it. */
 export const ResultRow = forwardRef<HTMLAnchorElement, RowProps>(function ResultRow(
-  { link, photo, fallbackIcon: FallbackIcon, selected, onPointerEnter, onOpen, inCard, children },
+  { link, photo, plate, fallbackIcon: FallbackIcon, selected, onPointerEnter, onOpen, inCard, children },
   ref,
 ) {
   return (
@@ -80,7 +83,13 @@ export const ResultRow = forwardRef<HTMLAnchorElement, RowProps>(function Result
           onOpen?.();
         },
       }}
-      photo={photo ? { src: photoSrc(photo.id, "thumb"), color: photo.color || undefined } : null}
+      photo={
+        photo
+          ? { src: photoSrc(photo.id, "thumb"), color: photo.color || undefined }
+          : plate
+            ? { src: fileThumbSrc(plate), fit: "contain" }
+            : null
+      }
       tile={<FallbackIcon size={26} aria-hidden />}
       tileClassName="bg-ink/5 text-ink-faint"
       size="lg"
@@ -279,6 +288,10 @@ export const ItemResult = forwardRef<HTMLAnchorElement, ItemResultProps>(functio
   ref,
 ) {
   const { item } = hit;
+  // The server picks the best photo (the cover rule's first step); without one, the render this device knows of.
+  const queryClient = useQueryClient();
+  const cached = hit.photo ? undefined : cachedItem(queryClient, item.id);
+  const cover = cached ? coverOf(cached) : undefined;
   const { data: people } = useQuery(peopleQuery);
   const { data: me } = useQuery(sessionQuery);
   const look = stageLook[item.stage];
@@ -295,6 +308,7 @@ export const ItemResult = forwardRef<HTMLAnchorElement, ItemResultProps>(functio
       ref={ref}
       link={itemLink(hit)}
       photo={hit.photo}
+      plate={cover?.kind === "plate" ? cover.file : undefined}
       fallbackIcon={look.icon}
       selected={selected}
       onPointerEnter={onHover}

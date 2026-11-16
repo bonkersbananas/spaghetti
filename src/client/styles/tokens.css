@@ -24,6 +24,17 @@
   --sg-pressed: #ece3d3;
   /* A note card's face: paper by day, a step lifted at night (an index card under the lamp, not a hole in the card). */
   --sg-note: #f6f1e8;
+  /*
+   * The ground under a slicer's plate render (PlateCover, a card's or a row's picture without a photo): the deep
+   * paper by day; by night the tile's warm step, above a card's cream, never a black hole. The model keeps a hairline
+   * edge and casts a faint shadow on it, so a white model on a light ground still reads, even in a 36 px tile.
+   */
+  --sg-render: #eee6d9;
+  /* A render in a small tile (48 px and under: rows, the sidebar): a deeper ground and a firmer edge, so a white model isn't a pale outline. */
+  --sg-render-tile: #e4d9c7;
+  --sg-render-shadow-tile: drop-shadow(0 0 0.6px rgb(43 36 32 / 0.75)) drop-shadow(0 1px 1px rgb(43 36 32 / 0.25));
+  --sg-render-shadow: drop-shadow(0 0 0.5px rgb(43 36 32 / 0.45)) drop-shadow(0 1px 1px rgb(43 36 32 / 0.16))
+    drop-shadow(0 3px 6px rgb(43 36 32 / 0.1));
   /* A choice tile on a card or sheet (ChoiceTiles, the outcome picker): paper by day, a step above a sheet at night, so it rises instead of sinking. */
   --sg-tile: #f6f1e8;
   /* The 3D viewer's stage: the build plate (a textured PEI sheet, champagne gold), its edge, and the room's light. */
@@ -227,6 +238,11 @@
   --sg-pressed: #3a332c;
   --sg-note: #2e2823;
   --sg-tile: #38312b;
+  --sg-render: #3d352e;
+  /* At night a lit edge too, so a black or dark-filament model keeps its outline on the warm ground. */
+  --sg-render-shadow: drop-shadow(0 0 0.75px rgb(255 236 214 / 0.42)) drop-shadow(0 1px 2px rgb(0 0 0 / 0.4));
+  --sg-render-tile: #4a4139;
+  --sg-render-shadow-tile: drop-shadow(0 0 0.6px rgb(255 236 214 / 0.55)) drop-shadow(0 1px 1px rgb(0 0 0 / 0.45));
   --sg-plate: #4f4536;
   --sg-plate-edge: #382f25;
   --sg-plate-grid: #8a7860;
@@ -294,6 +310,8 @@
   --color-channel: var(--sg-channel);
   --color-note: var(--sg-note);
   --color-tile: var(--sg-tile);
+  --color-render: var(--sg-render);
+  --color-render-tile: var(--sg-render-tile);
   --color-qr-bg: var(--sg-qr-bg);
   --color-qr-ink: var(--sg-qr-ink);
   --color-ink: var(--sg-ink);
@@ -582,6 +600,16 @@
     position: sticky;
     top: var(--sticky-top, 1.5rem);
   }
+}
+
+/* A slicer's render on its ground (`bg-render`): the model casts a faint shadow, so white plastic keeps its edge. */
+@utility render-shadow {
+  filter: var(--sg-render-shadow);
+}
+
+/* The same in a small tile (`bg-render-tile`): a firmer edge for a model drawn at 48 px or less. */
+@utility render-shadow-tile {
+  filter: var(--sg-render-shadow-tile);
 }
 
 /* Text that may run past its box (a long note on a card) fades out at the bottom instead of being cut mid-line. */

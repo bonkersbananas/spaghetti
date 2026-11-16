@@ -11,6 +11,7 @@ import { ColorSection } from "./-styleguide/color";
 import { CommandBlockSection } from "./-styleguide/command-block";
 import { ControlSection } from "./-styleguide/controls";
 import { ConversationSection } from "./-styleguide/conversation";
+import { CoversSection } from "./-styleguide/covers";
 import { ElevationSection } from "./-styleguide/elevation";
 import { EmptySection } from "./-styleguide/empty";
 import { ErrorSection } from "./-styleguide/error";
@@ -67,6 +68,7 @@ const toc = [
   ["conversation", "Conversation"],
   ["cards", "Cards"],
   ["photos", "Photos"],
+  ["covers", "Covers"],
   ["builds", "Builds & attempts"],
   ["pantry", "Pantry & printer"],
   ["slicing", "Slicing"],
@@ -127,6 +129,7 @@ function Styleguide() {
           <ConversationSection />
           <CardSection />
           <PhotoSection />
+          <CoversSection />
           <BuildsSection />
           <PantrySection />
           <SlicingSection />

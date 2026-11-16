@@ -34,9 +34,11 @@ import {
   parts,
   photos,
   reactions,
+  twistFiles,
+  twists,
 } from "../db/schema.ts";
 import type { AppEnv } from "../env.ts";
-import { apiError, toApiItem, toApiPhoto } from "../http.ts";
+import { apiError, toApiFile, toApiItem, toApiPhoto } from "../http.ts";
 import { photoReadsEnabled, readsByAttempt, runRead, startRead, toApiPhotoRead } from "../photo-read/run.ts";
 import { photoKey, photoOwner } from "../photos.ts";
 import { reactionsFor } from "./reactions.ts";
@@ -156,6 +158,59 @@ function groupBy<T extends { itemId: string }>(rows: T[]): Map<string, T[]> {
 }
 
 /**
+ * What each live twist leads with, for the builds that print it: its newest model (a plate render) and the photo it
+ * took from its idea while that photo is there.
+ */
+async function twistPictures(db: Db, twistIds: string[]) {
+  const pictures = new Map<
+    string,
+    { model: ReturnType<typeof toApiFile> | null; photo: ReturnType<typeof toApiPhoto> | null }
+  >();
+  if (!twistIds.length) return pictures;
+  const [rows, files] = await Promise.all([
+    Promise.all(
+      chunked(twistIds).map((ids) =>
+        db
+          .select({ id: twists.id, sourcePhotoId: twists.sourcePhotoId })
+          .from(twists)
+          .where(and(inArray(twists.id, ids), isNull(twists.deletedAt))),
+      ),
+    ).then((slices) => slices.flat()),
+    Promise.all(
+      chunked(twistIds).map((ids) =>
+        db
+          .select()
+          .from(twistFiles)
+          .where(and(inArray(twistFiles.twistId, ids), isNull(twistFiles.deletedAt))),
+      ),
+    ).then((slices) => slices.flat()),
+  ]);
+  const photoIds = rows.flatMap((row) => (row.sourcePhotoId ? [row.sourcePhotoId] : []));
+  // In slices too: D1 binds at most 100 parameters.
+  const sourcePhotos = (
+    await Promise.all(
+      chunked(photoIds).map((ids) =>
+        db
+          .select()
+          .from(photos)
+          .where(and(inArray(photos.id, ids), isNull(photos.deletedAt))),
+      ),
+    )
+  ).flat();
+  for (const row of rows) {
+    const newest = files
+      .filter((file) => file.twistId === row.id)
+      .reduce<(typeof files)[number] | undefined>(
+        (best, file) => (!best || file.createdAt >= best.createdAt ? file : best),
+        undefined,
+      );
+    const photo = sourcePhotos.find((candidate) => candidate.id === row.sourcePhotoId);
+    pictures.set(row.id, { model: newest ? toApiFile(newest) : null, photo: photo ? toApiPhoto(photo) : null });
+  }
+  return pictures;
+}
+
+/**
  * Items with their photos and print attempts: three queries however many
  * items (more past D1's parameter limit). Photos of deleted attempts are left
  * out, so they come back when the attempt is restored.
@@ -205,7 +260,8 @@ export async function loadItems(db: Db, where: ReturnType<typeof and>) {
       ),
     )
   ).flat();
-  const [itemFileSlices, coaches, reactionsByItem] = await Promise.all([
+  const twistIds = [...new Set(rows.flatMap((row) => (row.twistId ? [row.twistId] : [])))];
+  const [itemFileSlices, coaches, reactionsByItem, twistPicture] = await Promise.all([
     Promise.all(
       slices.map((ids) =>
         db
@@ -220,6 +276,8 @@ export async function loadItems(db: Db, where: ReturnType<typeof and>) {
       db,
       rows.map((row) => row.id),
     ),
+    // A build that prints a twist falls back to the twist's picture for its cover (shared/cover.ts).
+    twistPictures(db, twistIds),
   ]);
   const reads = new Map<string, PhotoRead>();
   for (const [attemptId, rows] of await readsByAttempt(db, [...liveAttempts])) {
@@ -237,7 +295,8 @@ export async function loadItems(db: Db, where: ReturnType<typeof and>) {
     const itemPhotos = photosByItem.get(row.id) ?? [];
     // A cover that was removed (or whose attempt was) reads as none, and returns with undo.
     const coverPhotoId = itemPhotos.some((photo) => photo.id === row.coverPhotoId) ? row.coverPhotoId : null;
-    return toApiItem(
+    const picture = row.twistId ? twistPicture.get(row.twistId) : undefined;
+    const item = toApiItem(
       { ...row, coverPhotoId },
       itemPhotos,
       attemptsByItem.get(row.id) ?? [],
@@ -249,6 +308,7 @@ export async function loadItems(db: Db, where: ReturnType<typeof and>) {
       reactionsByItem.get(row.id) ?? [],
       filesByItem.get(row.id) ?? [],
     );
+    return { ...item, twistModel: picture?.model ?? null, twistPhoto: picture?.photo ?? null };
   });
 }
 

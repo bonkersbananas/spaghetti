@@ -22,6 +22,7 @@ import {
   type TagKind,
   tagLabel,
 } from "../../shared/attempts.ts";
+import { bestPhoto } from "../../shared/cover.ts";
 import { findFixes, isFailure } from "../../shared/fixes.ts";
 import { OUTCOME_FILTERS, outcomesFor } from "../../shared/journal.ts";
 import { attemptPartsLabel } from "../../shared/parts.ts";
@@ -160,13 +161,18 @@ function liveAttempts(db: Db, itemIds: string[]): Promise<Attempt[]> {
     .where(and(inArray(attempts.itemId, itemIds), isNull(attempts.deletedAt)));
 }
 
-/** What a build or idea leads with: its chosen cover, its own first photo, else its newest attempt photo. */
-function itemPhoto(itemPhotos: Photo[], coverPhotoId: string | null): Photo | null {
-  return (
-    itemPhotos.find((photo) => photo.id === coverPhotoId) ??
-    itemPhotos.find((photo) => !photo.attemptId) ??
-    itemPhotos.reduce<Photo | null>((best, photo) => (!best || photo.createdAt > best.createdAt ? photo : best), null)
+/** What a build or idea leads with: the one cover rule (shared/cover.ts bestPhoto), its attempts in print order. */
+function itemPhoto(itemPhotos: Photo[], itemAttempts: Attempt[], coverPhotoId: string | null): Photo | null {
+  const ordered = byPrintTime(
+    itemAttempts.map((row) => ({ ...row, printedAt: row.printedAt.getTime(), createdAt: row.createdAt.getTime() })),
   );
+  const timed = itemPhotos.map((photo) => ({
+    photo,
+    id: photo.id,
+    attemptId: photo.attemptId,
+    createdAt: +photo.createdAt,
+  }));
+  return bestPhoto(timed, ordered, coverPhotoId)?.photo ?? null;
 }
 
 const unique = <T>(list: T[]) => [...new Set(list)];
@@ -193,7 +199,13 @@ export async function attemptHits(db: Db, ids: string[]): Promise<AttemptHit[]> 
         .map((row) => ({ id: row.id, printedAt: row.printedAt.getTime(), createdAt: row.createdAt.getTime() })),
     );
     const ownPhotos = itemPhotos.filter((photo) => photo.itemId === item.id);
-    const photo = ownPhotos.find((p) => p.attemptId === attempt.id) ?? itemPhoto(ownPhotos, item.coverPhotoId) ?? null;
+    const photo =
+      ownPhotos.find((p) => p.attemptId === attempt.id) ??
+      itemPhoto(
+        ownPhotos,
+        siblings.filter((row) => row.itemId === item.id),
+        item.coverPhotoId,
+      );
     return [
       {
         attempt: {
@@ -249,6 +261,7 @@ async function itemHits(
     ).at(-1);
     const photo = itemPhoto(
       itemPhotos.filter((p) => p.itemId === id),
+      own,
       item.coverPhotoId,
     );
     return [

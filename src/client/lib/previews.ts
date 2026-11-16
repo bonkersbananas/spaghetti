@@ -1,5 +1,7 @@
-import type { PhotoVariant } from "@shared/api";
+import type { AttemptFile, PhotoVariant } from "@shared/api";
 import { fileThumbUrl, photoUrl } from "@shared/api";
+import { type Coverable, newestPictured, pickCover, type Cover as SharedCover } from "@shared/cover";
+import type { PhotoView } from "./items";
 
 /**
  * Object URLs of photos made on this device. A photo shows from here while
@@ -41,4 +43,39 @@ export function dropPreview(fileId: string) {
   if (!old) return;
   previews.delete(fileId);
   setTimeout(() => URL.revokeObjectURL(old.thumb), 10_000);
+}
+
+/**
+ * What a thing shows where its picture goes (`pickCover` in shared/cover.ts, the one cover rule): the best photo, else
+ * its newest plate picture, else its note card. Used by the idea and build pages, every card, Today, the Journal's
+ * Now, the sidebar and the Since group, so a build never loses its picture on the way. A plate picture counts once
+ * this device has drawn it (a model being sliced here), before the server has it. `file` puts one file first (the
+ * print on the bed shows the plate it is printing).
+ */
+export type Cover = SharedCover<PhotoView, AttemptFile>;
+
+export function coverOf(item: Coverable<PhotoView, AttemptFile>, options: { file?: AttemptFile | null } = {}): Cover {
+  return pickCover(item, pictured, options.file);
+}
+
+/** The newest of a thing's files with a plate picture: its own (an idea's) and its attempts'. */
+export function newestPlate(
+  item: Pick<Coverable<PhotoView, AttemptFile>, "files" | "attempts">,
+): AttemptFile | undefined {
+  return newestPictured(item, pictured);
+}
+
+/** A file with a plate picture: on the server, or drawn on this device. */
+const pictured = (file: Pick<AttemptFile, "id" | "hasThumb">) => file.hasThumb || hasPreview(file.id);
+
+/** What a photo shows, for screen readers: the title, else the start of the note. */
+export function photoAlt(item: { title: string | null; note: string }): string {
+  const text = item.title || item.note.split("\n")[0]?.slice(0, 80);
+  return text ? `Photo: ${text}` : "Photo of an idea";
+}
+
+/** What a plate picture shows, for screen readers. */
+export function plateAlt(item: { title: string | null; note: string }): string {
+  const text = item.title || item.note.split("\n")[0]?.slice(0, 80);
+  return text ? `Slicer preview: ${text}` : "Slicer preview of an idea";
 }

@@ -79,6 +79,18 @@ test("an .stl kept with an idea is sliced in the browser, kept beside its origin
   // The plate is its card's picture in the list too, until the first photo takes its place.
   await page.goto("/ideas");
   await expect(page.getByRole("img", { name: "Slicer preview: Cube" })).toBeVisible();
+
+  // Started, the build keeps the idea's cover where it was, with the add-photo wells under it, and in the Builds list.
+  const origin = { Origin: new URL(page.url()).origin };
+  expect((await page.request.patch(`/api/items/${id}`, { headers: origin, data: { stage: "building" } })).ok()).toBe(
+    true,
+  );
+  await page.goto(`/builds/${id}`);
+  await expect(page.getByRole("img", { name: "Slicer preview: Cube" })).toBeVisible();
+  await expect(page.getByText("From the model")).toBeVisible();
+  await page.goto("/builds");
+  await expect(page.getByRole("img", { name: "Slicer preview: Cube" })).toBeVisible();
+  expect((await page.request.patch(`/api/items/${id}`, { headers: origin, data: { stage: "idea" } })).ok()).toBe(true);
   await page.goto(`/ideas/${id}`);
   await expect(cover).toBeVisible();
   await page.getByTestId("photo-input").setInputFiles("e2e/fixtures/tugboat.jpg");

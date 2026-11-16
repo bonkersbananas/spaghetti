@@ -8,17 +8,16 @@ import { useRef } from "react";
 import { AutoHeight } from "@/components/ui/AutoHeight";
 import { Avatar, ViaText } from "@/components/ui/Avatar";
 import { Button, IconButton } from "@/components/ui/Button";
+import { CoverPicture } from "@/components/ui/CoverPicture";
 import { BuildsIcon, CameraIcon } from "@/components/ui/icons";
 import { MetaList } from "@/components/ui/MetaList";
-import { Photo } from "@/components/ui/Photo";
 import { PrintProgress } from "@/components/ui/PrintProgress";
-import { heroPhoto } from "@/lib/builds";
 import { useCapture } from "@/lib/capture";
 import { cn } from "@/lib/cn";
 import { itemName } from "@/lib/item-name";
 import { type AttemptView, addPhotosToItem, type ItemView } from "@/lib/items";
 import { duration, ease } from "@/lib/motion";
-import { fileThumbSrc, photoSrc } from "@/lib/previews";
+import { coverOf } from "@/lib/previews";
 import { usePrintProgress } from "@/lib/print-progress";
 import { useReadOnly } from "@/lib/read-only";
 import { useIsDesktop } from "@/lib/use-media-query";
@@ -106,8 +105,12 @@ export function PrintingCard({ item, attempt, person, via, compact = false, desk
   const offBed = isOffTheBed(attempt);
   const progress = usePrintProgress(attempt.id, attempt.printedAt, attempt.settings.estimatedMinutes);
   const due = progress.state === "due";
-  const hero = heroPhoto(item);
-  const plate = !hero && attempt.file?.hasThumb ? attempt.file : undefined;
+  // The build's cover, with the plate on the bed first when there is no photo.
+  const cover = coverOf(item, { file: attempt.file });
+  // Its name is right beside the picture, in Fraunces: a build with only a name shows the glyph, not its name twice.
+  // So does a compact card's small square on a phone, too small for words (from md it is the full row).
+  const glyph = cover.kind === "note" ? <BuildsIcon size={compact ? 28 : 36} /> : undefined;
+  const nameOnly = cover.kind === "note" && cover.fromTitle;
   const name = itemName(item);
   const partsLabel = attemptPartsLabel(attempt, item.parts);
   const filaments = attempt.settings.filaments ?? [];
@@ -140,26 +143,39 @@ export function PrintingCard({ item, attempt, person, via, compact = false, desk
         <div
           className={cn(
             "relative overflow-hidden rounded-md md:col-span-2 md:row-span-2 md:aspect-4/3 md:h-auto md:w-full md:self-stretch",
-            // A big card without a picture keeps a shorter strip on phones: an empty 4:3 well would only push the
+            // A big card with only a note keeps a shorter strip on phones: a 4:3 index card would only push the
             // print's state down; the slicer's plate picture (a render, not the result) gets a calmer 16:9.
-            !hero && !plate && !compact ? "aspect-5/2" : plate && !compact ? "aspect-video" : layout.picture,
+            compact
+              ? layout.picture
+              : cover.kind === "note"
+                ? "aspect-5/2"
+                : cover.kind === "plate"
+                  ? "aspect-video"
+                  : layout.picture,
             wide.picture,
           )}
         >
-          {hero ? (
-            <Photo src={photoSrc(hero.id, "thumb")} alt="" color={hero.color || undefined} className="size-full" />
-          ) : plate ? (
-            <Photo
-              src={fileThumbSrc(plate)}
-              alt=""
-              fit="contain"
-              className={cn("size-full", compact ? "p-1 md:p-3" : "p-3")}
-            />
+          {cover.kind === "note" && !nameOnly ? (
+            // A note: in the phone's 5:2 strip (or, compact, the glyph: its square is too small for words), and in
+            // the desktop row's 4:3, each set by the frame's short side.
+            <>
+              <CoverPicture
+                cover={cover}
+                glyph={compact ? glyph : undefined}
+                shape="strip"
+                className="size-full md:hidden"
+              />
+              <CoverPicture cover={cover} shape="wide" className="size-full max-md:hidden" />
+            </>
           ) : (
-            // No picture yet: a plain tile, not the name a second time (it is right under it).
-            <div className="bg-well text-ink-ghost flex size-full items-center justify-center" aria-hidden>
-              <BuildsIcon size={compact ? 28 : 36} />
-            </div>
+            <CoverPicture
+              cover={cover}
+              // A compact card's square on a phone is too small to carry it; from md it is the full row's picture.
+              label={compact ? "md" : true}
+              glyph={nameOnly ? glyph : undefined}
+              inset={compact ? "p-1 md:p-3" : "p-3"}
+              className="size-full"
+            />
           )}
           {/* The picture and the name lead to the build, each with its own area; the progress below has its own, so
               nothing presses through a button. This one is for the pointer only: the name's link is the stop for the keyboard. */}
