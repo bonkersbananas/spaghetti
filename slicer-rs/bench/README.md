@@ -34,20 +34,6 @@ python3 -I bench/run.py --runs 3 --only rust-native --models benchy       # one 
 
 The Orca runners need the engine and the native command line, which are not in the repository: `ORCA_SPIKE` points at the slicing spike's folder (the engine's release zip, its Node and browser runners and the flattened presets), `ORCA_NATIVE` at an extracted OrcaSlicer AppImage (2.5.1, as the app's engine since its release 4). Runners whose tools are missing are skipped. Native Orca reads its presets from `ORCA_PRESETS` (default: the spike's); for the Textured PEI plate, as the app slices, add `"curr_bed_type": "Textured PEI Plate"` to a copy of the machine preset. It leaves the models where the files put them (`--arrange 0`), as ours does (`--keep-placement`), so both slice the same placement.
 
-## The models people slice
-
-The app hands the module more than a file: it reads the model, turns, scales and arranges it, adds copies and fins, matches its colours, and makes the setup from the model's own slicing settings (`src/client/lib/slicing/slice-worker.ts`). To time exactly that, `capture.mts` runs the app's slice worker in Node on a model with its settings, as the browser would, and records each call it makes to the module in a folder (`calls.json` and the bytes each call took). The command line (`--replay`), `wasm-node.mjs` and `wasm-browser.mjs` (`--replay`) make those calls again, and `corpus.py` times every folder on each runner, with each model's memory, and checks that all of them write the same file:
-
-```sh
-node slicer-rs/bench/capture.mts model.stl $CORPUS/model '<its item_files.slicing>' '<the printer row's setup>'
-target/release/spaghetti-slicer --replay $CORPUS/model -o model.gcode.3mf
-node bench/wasm-node.mjs target/wasm32-unknown-unknown/release/spaghetti_slicer.wasm model.gcode.3mf --replay $CORPUS/model
-python3 -I bench/corpus.py $CORPUS --runs 3                  # every model, every runner
-python3 -I bench/corpus.py $CORPUS --runs 3 --only rust-wasm-node --models frame,capybara
-```
-
-`corpus.json` lists the models people had sliced in Spaghetti on Nov 16 (the 13 live ones of `item_files` with `kind = 'model'`): each file's name, size and sha256, the calls the app makes for it and its slicing settings. The files themselves are people's downloads under their designers' licences and stay out of the repository: fetch them through the API with a token of the `read` scope (`GET /api/files/<id>`), and revoke it after.
-
 ## Other settings
 
 The app slices with the settings people choose (`src/shared/slicing/settings.ts`): its `sliceSetup` turns them into Orca's configs through `orca.ts`. `setup.mts` writes that same setup, with the app's own code, for this crate's `--setup` (and the WebAssembly module's `setup`); give it the engine's `presets.json` (from its release zip) and the settings that differ from the defaults:
@@ -98,6 +84,27 @@ target/release/spaghetti-slicer --nozzle 0.2 --keep-placement $BENCH_MODELS/benc
 python3 -I bench/run.py --runs 3 --models benchy-0.2
 python3 -I bench/run.py --runs 3 --only rust-native,orca-native --models benchy-0.6,benchy-0.8
 ```
+
+## Real models
+
+The models people sliced in the app, sliced as the app slices them (the proposal's section 3, "Real models"). `real-models.json` lists them, each with its size, sha256 and the settings it was last sliced with, and the printer's setup; the models themselves are people's downloads under their designers' licences and stay out of the repository (production keeps them: an agent token with the read scope fetches each from `GET /api/files/<id>/file`).
+
+`app-slice.mts` runs the app's own slice worker (`src/client/lib/slicing/slice-worker.ts`) in Node, its import aliases resolved by `app/hooks.mjs`, so the model is read, turned, scaled, arranged and given fins by the app's code and the setup is `sliceSetup`'s. Ours slices it in WebAssembly through the app's `ours.ts`, and it writes down what the worker handed the module: `job.json` with the setup and each object or part as an STL with its filament and paint, which `spaghetti-slicer --job job.json` and `wasm-node.mjs <wasm> <out> --job job.json` replay to the same file, and `orca/`, the setup's presets and the plate as a project (each part where the app put it, painted with `paint_color`) for native Orca with `--arrange 0`. `sweep.py` runs it all for every model and prints the tables:
+
+```sh
+python3 -I bench/sweep.py --corpus <the models' folder> --runs 3     # ENGINE (the engine's release folder) and ORCA_NATIVE as above
+python3 -I bench/sweep.py --corpus <the models' folder> --only capybara_20mm.stl --skip-orca
+python3 -I bench/sweep.py --table
+```
+
+To time them on every runner of ours, `corpus.py` replays each model's `job.json` natively on four threads and on one, in Node and in Chromium (`wasm-browser.mjs --job`), three times each, with the peak memory (the command line's, the WebAssembly heap's, Chromium's growth), and checks that all of them write the same file (the proposal's section 2, "On the models people slice"):
+
+```sh
+python3 -I bench/corpus.py <the folder of app-slice.mts's outputs> --runs 3
+python3 -I bench/corpus.py <that folder> --runs 3 --only rust-wasm-node,rust-wasm-chromium --models frame,capybara
+```
+
+A Bambu Studio project can carry a value Orca's command line refuses outright, without saying which ("Param values in 3mf/config error", return -18): `raft_first_layer_expansion` -1. The sweep gives Orca its default instead and says so in the model's table. (Studio's `enabled` for `ensure_vertical_shell_thickness` Orca takes, as `ensure_all`.)
 
 ## Comparing files
 
