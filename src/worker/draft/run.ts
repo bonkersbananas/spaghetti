@@ -3,7 +3,7 @@ import type { BatchItem } from "drizzle-orm/batch";
 import { DRAFTS_PER_DAY, type DraftFailure, type ItemDraft } from "../../shared/draft.ts";
 import { isModelImageUrl, modelSite, pictureRequestUrl } from "../../shared/model-links.ts";
 import { cleanModelUrl } from "../../shared/model-mark.ts";
-import { printablesApiUrl, printablesId } from "../../shared/model-page.ts";
+import { printablesApiId, printablesApiUrl, printablesId } from "../../shared/model-page.ts";
 import { afterChange, recordChange } from "../changes.ts";
 import { type Db, getDb } from "../db/index.ts";
 import { draftRuns, type ItemDraftRow, itemDrafts, items, linkPreviews, photos } from "../db/schema.ts";
@@ -282,6 +282,11 @@ export async function runDraft(env: Env, itemId: string, db: Db = getDb(env.DB))
         undefined,
         printables ? { url: printablesApiUrl(printables), hint: PRINTABLES_PICTURES } : undefined,
       );
+      if (printables) {
+        // Which way Claude's fetch went with the API's address, for draft_runs: the path that worked, or why not.
+        const apiTry = answer.tried?.find((attempt) => printablesApiId(attempt.url) === printables);
+        answer.diagnosis = { ...answer.diagnosis, apiFetch: apiTry?.result ?? "not_tried" };
+      }
       const fetched = printables ? printablesFromFetched(answer.fetched, printables) : null;
       if (fetched === "missing")
         answer = { ok: false, failure: "unreadable", diagnosis: { ...answer.diagnosis, outcome: "not_found" } };
@@ -290,9 +295,9 @@ export async function runDraft(env: Env, itemId: string, db: Db = getDb(env.DB))
         source = "web_fetch_api";
         // Claude may not take the API's JSON for a model page; the Worker read it, so Claude writes from that.
         if (!answer.ok && answer.diagnosis.outcome === "not_readable") {
-          const { fetchErrors } = answer.diagnosis;
+          const { fetchErrors, apiFetch } = answer.diagnosis;
           answer = await askClaude(apiKey, row.url, site.site, base, facts);
-          answer.diagnosis = { ...answer.diagnosis, ...(fetchErrors ? { fetchErrors } : {}), asked: 2 };
+          answer.diagnosis = { ...answer.diagnosis, ...(fetchErrors ? { fetchErrors } : {}), apiFetch, asked: 2 };
         }
       }
     }

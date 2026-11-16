@@ -3,7 +3,8 @@
 <title>Slicer benchmark</title>
 <script type="module">
   // Runs the WebAssembly slicer on the page's main thread, as the benchmark asks: window.runSlice(paths, keep, setup),
-  // with the slice setup at `setup` when given.
+  // with the slice setup at `setup` when given; or window.runJob(job), what app-slice.mts wrote down that the app
+  // handed the module (its files at /job/<file>), which also says the file's SHA-256.
   let instance;
   async function load() {
     if (instance) return 0;
@@ -57,6 +58,73 @@
       sliceMs,
       wasmMemoryMB: Math.round(memory.byteLength / 1048576),
       fileBytes,
+      timings: summary.timings,
+      stats: summary.stats.summary,
+    };
+  };
+  window.runJob = async (job) => {
+    const instantiateMs = await load();
+    const e = instance.exports;
+    // The job's files, fetched ahead so that fetching isn't timed.
+    const fetched = async (file) => (file ? new Uint8Array(await (await fetch(`/job/${file}`)).arrayBuffer()) : null);
+    const encoder = new TextEncoder();
+    const setup = await fetched(job.setup);
+    let calls = await Promise.all(
+      job.calls.map(async (call) => ({
+        ...call,
+        name: encoder.encode(call.name),
+        stl: await fetched(call.stl),
+        paint: await fetched(call.paint),
+        supports: await fetched(call.supports),
+      })),
+    );
+    const withBytes = (bytes, use) => {
+      const at = e.alloc(bytes.length);
+      new Uint8Array(e.memory.buffer, at, bytes.length).set(bytes);
+      try {
+        return use(at);
+      } finally {
+        e.dealloc(at, bytes.length);
+      }
+    };
+    const t1 = performance.now();
+    let code = withBytes(setup, (at) => e.setup(at, setup.length));
+    for (const call of code === 0 ? calls : []) {
+      code = withBytes(call.name, (n) =>
+        withBytes(call.stl, (d) =>
+          call.op === "add_part"
+            ? e.add_part(n, call.name.length, d, call.stl.length, call.filament, call.first ? 1 : 0)
+            : call.op === "add_in"
+              ? e.add_in(n, call.name.length, d, call.stl.length, call.filament)
+              : e.add(n, call.name.length, d, call.stl.length),
+        ),
+      );
+      if (code === 0 && call.paint) code = withBytes(call.paint, (at) => e.paint(at, call.paint.length));
+      if (code === 0 && call.supports) code = withBytes(call.supports, (at) => e.paint_supports(at, call.supports.length));
+      if (code !== 0) break;
+    }
+    // Dropped as the app drops them: only the module holds the plate while it slices.
+    calls = null;
+    // The app keeps the objects where it put them (flag 1).
+    if (code === 0) code = e.slice(1);
+    const sliceMs = performance.now() - t1;
+    if (code !== 0) {
+      e.clear();
+      return { error: code };
+    }
+    const memory = e.memory.buffer;
+    const summary = JSON.parse(new TextDecoder().decode(new Uint8Array(memory, e.summary_ptr(), e.summary_len())));
+    const file = new Uint8Array(memory, e.output_ptr(), e.output_len()).slice();
+    const sha256 = [...new Uint8Array(await crypto.subtle.digest("SHA-256", file))]
+      .map((b) => b.toString(16).padStart(2, "0"))
+      .join("");
+    e.clear();
+    return {
+      instantiateMs,
+      sliceMs,
+      wasmMemoryMB: Math.round(memory.byteLength / 1048576),
+      fileBytes: file.length,
+      sha256,
       timings: summary.timings,
       stats: summary.stats.summary,
     };
