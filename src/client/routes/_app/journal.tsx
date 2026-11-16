@@ -29,6 +29,7 @@ import { Skeleton } from "@/components/ui/Skeleton";
 import { useVia } from "@/lib/agents";
 import { printingAttempts } from "@/lib/builds";
 import { cn } from "@/lib/cn";
+import { useOnline } from "@/lib/connection";
 import { useHotkeys } from "@/lib/hotkeys";
 import { useBuilds } from "@/lib/items";
 import {
@@ -150,7 +151,8 @@ function Journal() {
   const nothingAtAll = !query.isPending && !entries.length && !filtered;
   // On a phone the notebook also waits for the builds, which Now draws the prints on the bed from (not offline, where
   // they may never come: the notebook then shows every entry).
-  const loading = query.isPending || (showNow && builds.isPending && navigator.onLine);
+  const online = useOnline();
+  const loading = query.isPending || (showNow && builds.isPending && online);
 
   const notebook = nothingAtAll ? (
     <EmptyState illustration={<OpenNotebook />} title="A clean notebook">
