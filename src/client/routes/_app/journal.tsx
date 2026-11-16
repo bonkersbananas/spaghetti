@@ -217,22 +217,17 @@ function Journal() {
           )
         }
       />
-      {showNow ? (
-        <>
-          <Since />
-          {/* Now and the notebook under it show together, once Now's code and what it draws from are here: one
-              skeleton until then, so nothing is pushed down after it first shows. */}
-          {loading ? (
-            <JournalSkeleton />
-          ) : (
-            <Suspense fallback={<JournalSkeleton />}>
-              <Now />
-              {notebook}
-            </Suspense>
-          )}
-        </>
+      {showNow && <Since />}
+      {/* Phones: Now and the notebook under it show together, once Now's code and what it draws from are here, with one
+          skeleton until then, so nothing is pushed down after it first shows. The notebook keeps its place in the tree
+          when a filter hides Now, so the filter row doesn't start over. */}
+      {showNow && loading ? (
+        <JournalSkeleton />
       ) : (
-        notebook
+        <Suspense fallback={<JournalSkeleton />}>
+          {showNow && <Now />}
+          {notebook}
+        </Suspense>
       )}
     </>
   );

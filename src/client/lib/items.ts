@@ -187,14 +187,15 @@ const sortByNewest = (items: Item[]) => items.sort((a, b) => b.createdAt - a.cre
  */
 export function patchCachedItem(queryClient: QueryClient, id: string, change: (item: Item) => Item | null) {
   // The journal's pages carry the items their entries draw: a print logged here reads as logged there at once (the
-  // phone's Journal shows its attempt again only then). First, so the fresher copies below are the last `change` sees.
+  // phone's Journal shows its attempt again only then). Changes only: an item deleted or moved stays until the journal
+  // asks again, so an Undo has nothing to put back. First, so the fresher copies below are the last `change` sees.
   queryClient.setQueriesData<InfiniteData<JournalResponse>>({ queryKey: ["journal", "list"] }, (data) =>
     data?.pages.some((page) => page.items.some((item) => item.id === id))
       ? {
           ...data,
           pages: data.pages.map((page) => ({
             ...page,
-            items: page.items.flatMap((item) => (item.id === id ? (change(item) ?? []) : [item])),
+            items: page.items.map((item) => (item.id === id ? (change(item) ?? item) : item)),
           })),
         }
       : data,
