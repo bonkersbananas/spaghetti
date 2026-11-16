@@ -322,11 +322,33 @@ test("a story column taller than the window scrolls until its end is in view, th
   expect(await column.evaluate((el) => el.scrollHeight <= el.clientHeight)).toBe(true);
 });
 
-test("the summary's attempt tiles are touch targets and mark the open attempt", { tag: "@phone" }, async ({
+test("a build of many attempts folds its earliest steps in the trail, and the folded step unfolds them", async ({
+  page,
+}) => {
+  const id = crypto.randomUUID();
+  const headers = { Origin: origin(page) };
+  await page.request.post("/api/items", { headers, data: { id, title: "Very long story", note: "" } });
+  for (let index = 0; index < 14; index++)
+    await page.request.post(`/api/items/${id}/attempts`, {
+      headers,
+      data: { id: crypto.randomUUID(), outcome: "partial", printedAt: Date.now() - (15 - index) * 3_600_000 },
+    });
+  await page.goto(`/builds/${id}`);
+  const trail = page.getByRole("group", { name: /^14 attempts/ });
+  // Twelve steps: the newest eleven and one for the three before them.
+  await expect(trail.getByRole("button", { name: /^Attempt \d+: partly$/ })).toHaveCount(11);
+  await expect(trail.getByRole("button", { name: "Attempt 3: partly" })).toHaveCount(0);
+  await trail.getByRole("button", { name: "Show 3 earlier attempts" }).click();
+  await expect(trail.getByRole("button", { name: /^Attempt \d+: partly$/ })).toHaveCount(14);
+  await trail.getByRole("button", { name: "Attempt 1: partly" }).click();
+  await expect(trail.getByRole("button", { name: "Attempt 1: partly" })).toHaveAttribute("aria-current", "true");
+});
+
+test("the summary's attempt steps are touch targets and mark the open attempt", { tag: "@phone" }, async ({
   page,
   isMobile,
 }) => {
-  test.skip(!isMobile, "Desktop tiles are compact");
+  test.skip(!isMobile, "Desktop steps are compact");
   const id = crypto.randomUUID();
   const headers = { Origin: origin(page) };
   await page.request.post("/api/items", { headers, data: { id, title: "Tiles", note: "" } });

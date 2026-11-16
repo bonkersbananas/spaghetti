@@ -640,7 +640,13 @@ function Build({ item }: { item: ItemView }) {
               )}
             </div>
 
-            <BuildSummary attempts={item.attempts} open={active} onPick={pickAttempt} selected={selected} />
+            <BuildSummary
+              attempts={item.attempts}
+              photos={item.photos}
+              open={active}
+              onPick={pickAttempt}
+              selected={selected}
+            />
 
             {!!item.files?.length && <ItemFiles itemId={item.id} files={item.files} readOnly={readOnly} />}
 
