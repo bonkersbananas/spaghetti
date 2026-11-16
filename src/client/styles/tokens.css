@@ -417,6 +417,8 @@
   --radius-lg: 1.25rem;
   --radius-xl: 1.75rem;
   --radius-pill: 999px;
+  /* The agent mark on an avatar (a few px square): a share of its size, so it stays a rounded square, not a dot. */
+  --radius-mark: 30%;
 
   --shadow-*: initial;
   --shadow-soft: var(--sg-shadow-soft);

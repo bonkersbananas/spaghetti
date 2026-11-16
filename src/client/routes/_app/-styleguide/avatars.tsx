@@ -51,6 +51,14 @@ export function AvatarSection() {
           {(["tomato", "basil", "semolina", "plum", "sea", "clay"] as const).map((color) => (
             <Avatar key={color} person={{ name: color, color }} size="sm" via="Claude" />
           ))}
+          {(["xs", "sm"] as const).map((size) => (
+            <Avatar
+              key={size}
+              person={{ ...(people[1] as Person), photoUrl: SAMPLE_PHOTO }}
+              size={size}
+              via="Share from iPhone"
+            />
+          ))}
           <p className="text-small text-ink-faint">
             Alex <ViaText name="Claude for Alex" />
           </p>
@@ -65,9 +73,9 @@ export function AvatarSection() {
         </div>
       </Panel>
       <p className="text-small text-ink-faint mt-3 max-w-prose">
-        Done through an agent: small, the owner's color with an agent glyph instead of the letter; larger, the initials
-        with a badge cut out of the circle's corner (<code>via</code>). Where there is room, add “via Claude for Alex”
-        in faint text. Never a loud badge.
+        Done through an agent, it is still the person's: their own initials or picture at every size, with the agent's
+        mark, a small rounded square, cut out of the circle's lower right corner (<code>via</code>), never over the
+        face. Where there is room, add “via Claude for Alex” in faint text. Never a loud badge.
       </p>
     </Section>
   );

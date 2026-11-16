@@ -1,6 +1,6 @@
 import type { Person } from "@shared/api";
 import type { PersonColor } from "@shared/people";
-import { useState } from "react";
+import { type CSSProperties, useState } from "react";
 import { cn } from "@/lib/cn";
 import { initials } from "@/lib/initials";
 import { AgentIcon } from "./icons";
@@ -35,24 +35,46 @@ interface AvatarProps {
   className?: string;
 }
 
-const glyphSizes = { xs: 12, sm: 16, md: 20, lg: 28 } as const;
-const badgeSizes = { md: "size-4.5", lg: "size-5.5" } as const;
-const badgeGlyphs = { md: 11, lg: 14 } as const;
+/**
+ * The agent mark, per size: a small rounded square (an agent is never a circle) at the lower right, standing out
+ * past the edge by `out`, with the glyph inside. `face`, `mark`, `out` and `gap` are px, for the cutout below.
+ */
+const marks = {
+  xs: { face: 24, mark: 10, out: 2, gap: 1.5, glyph: 9, className: "size-2.5 -right-0.5 -bottom-0.5" },
+  sm: { face: 28, mark: 12, out: 2, gap: 1.5, glyph: 10, className: "size-3 -right-0.5 -bottom-0.5" },
+  md: { face: 36, mark: 16, out: 3, gap: 2, glyph: 12, className: "size-4 -right-0.75 -bottom-0.75" },
+  lg: { face: 48, mark: 20, out: 4, gap: 2, glyph: 15, className: "size-5 -right-1 -bottom-1" },
+} as const;
 
 /**
- * A person's initials on their color. Shown beside what they wrote.
+ * Where the mark sits, cut out of the face with a hair of space around it, so it reads on any surface (paper, cream,
+ * a sheet, a photo) without a ring in the surface's color. A mask, so the face's own picture is never covered.
+ */
+const cutouts = Object.fromEntries(
+  Object.entries(marks).map(([size, { face, mark, out, gap }]) => {
+    const from = face + out - mark - gap;
+    const to = face + out + gap + 1;
+    const r = mark * 0.3 + gap;
+    const hole = `M${from + r} ${from}H${to - r}A${r} ${r} 0 0 1 ${to} ${from + r}V${to - r}A${r} ${r} 0 0 1 ${to - r} ${to}H${from + r}A${r} ${r} 0 0 1 ${from} ${to - r}V${from + r}A${r} ${r} 0 0 1 ${from + r} ${from}Z`;
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${face} ${face}"><path fill-rule="evenodd" d="M0 0H${face}V${face}H0Z${hole}"/></svg>`;
+    const url = `url("data:image/svg+xml,${encodeURIComponent(svg)}")`;
+    return [size, { maskImage: url, WebkitMaskImage: url, maskSize: "100% 100%", WebkitMaskSize: "100% 100%" }];
+  }),
+) as Record<keyof typeof sizes, CSSProperties>;
+
+/**
+ * A person's initials on their color (or their picture). Shown beside what they did.
  *
- * With `via`, it was done through that person's agent ("Claude for Alex"):
- * small (xs, sm) the circle keeps their color and shows an agent glyph in place
- * of the letter, so it reads as "Alex's agent" at a glance; larger (md, lg) the
- * initials stay and a badge sits outside the circle, cut out of the surface behind.
+ * With `via`, it was done through one of their agents ("Claude for Alex", "Share from iPhone"): it is still theirs,
+ * so it is still their face, at every size; a small agent mark sits in its lower right corner, cut out of the
+ * circle, and the name reads "Alex, via Claude for Alex".
  */
 export function Avatar({ person, size = "md", ringed = false, decorative = false, via, className }: AvatarProps) {
   const label = via ? `${person.name}, via ${via}` : person.name;
-  const glyphInstead = !!via && (size === "xs" || size === "sm");
   const face = (
     <span
       {...(decorative ? { "aria-hidden": true } : { role: "img", "aria-label": label, title: label })}
+      style={via ? cutouts[size] : undefined}
       className={cn(
         "text-on-accent relative inline-flex shrink-0 items-center justify-center rounded-full font-bold select-none",
         colors[person.color],
@@ -61,24 +83,23 @@ export function Avatar({ person, size = "md", ringed = false, decorative = false
         !via && className,
       )}
     >
-      {glyphInstead ? <AgentIcon size={glyphSizes[size]} weight="fill" aria-hidden /> : initials(person.name)}
-      {!glyphInstead && person.photoUrl && <Picture key={person.photoUrl} url={person.photoUrl} />}
+      {initials(person.name)}
+      {person.photoUrl && <Picture key={person.photoUrl} url={person.photoUrl} />}
     </span>
   );
   if (!via) return face;
-  if (glyphInstead) return className ? <span className={cn("inline-flex shrink-0", className)}>{face}</span> : face;
-  const badge = badgeSizes[size as "md" | "lg"];
+  const mark = marks[size];
   return (
     <span className={cn("relative inline-flex shrink-0", className)}>
       {face}
       <span
         aria-hidden
         className={cn(
-          "bg-select text-on-select ring-cream absolute -right-1.5 -bottom-1.5 inline-flex items-center justify-center rounded-full ring-2",
-          badge,
+          "bg-ink-faint text-paper rounded-mark absolute inline-flex items-center justify-center",
+          mark.className,
         )}
       >
-        <AgentIcon size={badgeGlyphs[size as "md" | "lg"]} weight="fill" />
+        <AgentIcon size={mark.glyph} weight="fill" />
       </span>
     </span>
   );

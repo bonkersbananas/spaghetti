@@ -284,7 +284,7 @@ Never edit a migration that has been merged; add a new one.
 
 - Agents (`agents`, `agent_tokens`) act through `Authorization: Bearer spg_…` with scopes `read`, `capture`, `attempts`, `printer`; full reference in [docs/api.md](docs/api.md). `requireAuth` in `src/worker/app.ts` sets `c.var.user` (the owner), `c.var.actor` (what the feed records), `c.var.via` (the agent id or null) and `c.var.scopes` (null for a person).
 - Every write route records `c.var.actor` in its change and sets `createdVia` / `finishedVia` from `c.var.via` where the row says who. A new route is person-only for tokens until `auth/scopes.ts` lists it.
-- The client shows agent work with `<Avatar via={name} />` and `<ViaText>`, names from `useVia()` (`lib/agents.ts`). The Agents page is `/agents` (account menu on desktop, account sheet on phones), not a tab. Revoking waits out its undo toast before it takes effect.
+- The client shows agent work with `<Avatar via={name} />` (the owner's own face with a small agent mark: an agent's work is its owner's, `createdBy` is always the person) and `<ViaText>`, names from `useVia()` (`lib/agents.ts`). The screenshot seed has such work (`scripts/seed/agents.ts`); the `*-via` shots name its agents. The Agents page is `/agents` (account menu on desktop, account sheet on phones), not a tab. Revoking waits out its undo toast before it takes effect.
 - `pnpm agent:add --owner … --name … --scopes …` makes a token from the command line.
 
 ### The printer bridge
