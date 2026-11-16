@@ -305,7 +305,10 @@ export const ItemResult = forwardRef<HTMLAnchorElement, ItemResultProps>(functio
     item.stage === "idea"
       ? `Captured ${inlineTime(item.createdAt)}`
       : count
-        ? null
+        ? // An untitled build has no name for the count to follow: it stays at the chips' end.
+          title
+          ? null
+          : count
         : `Started ${inlineTime(item.startedAt ?? item.createdAt)}`;
   return (
     <ResultRow
