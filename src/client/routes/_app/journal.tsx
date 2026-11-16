@@ -222,9 +222,9 @@ function Journal() {
           skeleton until then, so nothing is pushed down after it first shows. The notebook keeps its place in the tree
           when a filter hides Now, so the filter row doesn't start over. */}
       {showNow && loading ? (
-        <JournalSkeleton />
+        <Waiting />
       ) : (
-        <Suspense fallback={<JournalSkeleton />}>
+        <Suspense fallback={<Waiting />}>
           {showNow && <Now />}
           {notebook}
         </Suspense>
@@ -363,6 +363,19 @@ function FilteredEmpty({ filters, onClear }: { filters: FilterValues; onClear: (
         ? "No failures logged with these filters. When a print goes wrong, log it: it's how the next one goes right."
         : "Nothing in the journal matches these filters yet."}
     </EmptyState>
+  );
+}
+
+/**
+ * The phone's skeleton while Now and the notebook are on their way. It holds four screens of room: a page opened again
+ * (a reload, or a phone bringing back an app it had put away) gets its scroll position back while this shows, and
+ * would otherwise be cut short at the skeleton's height, landing somewhere in the middle of Now.
+ */
+function Waiting() {
+  return (
+    <div className="min-h-[400dvh]">
+      <JournalSkeleton />
+    </div>
   );
 }
 
