@@ -16,6 +16,7 @@ import { openRoutes } from "./routes/open.ts";
 import { purgeScoutPictures, scoutTick } from "./scout/run.ts";
 import { refreshPrices } from "./shopping/lookup.ts";
 import { spa } from "./spa.ts";
+import { resumeTitles } from "./title/run.ts";
 import { pruneDeliveries, runWebhooks } from "./webhooks/deliver.ts";
 
 const DAILY = "0 4 * * *";
@@ -81,6 +82,7 @@ export default {
       // The gentle daily look at the Prisjakt pages of what's still to buy (decision 0041).
       ctx.waitUntil(refreshPrices(env).catch((error) => console.error("price refresh failed", error)));
       ctx.waitUntil(resumeReads(env).catch((error) => console.error("photo read resume failed", error)));
+      ctx.waitUntil(resumeTitles(env).catch((error) => console.error("title resume failed", error)));
       ctx.waitUntil(resumeLabelReads(env).catch((error) => console.error("label read resume failed", error)));
       ctx.waitUntil(resumeCoaches(env).catch((error) => console.error("coach resume failed", error)));
       // The idea scout's week: the first run of the cron after the morning that finds no round for this week makes it.

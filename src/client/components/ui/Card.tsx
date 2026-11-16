@@ -107,6 +107,8 @@ export function Card({
   const noteCard = !photo && !!note;
   // A note card already shows its note; below a photo the note stands in for a title.
   const heading = title || (noteCard ? null : note);
+  // A title that comes to a card drawn without one (Claude naming an idea just saved) fades in where it lands.
+  const [untitled] = useState(!title);
   const rootClass = cn(
     "group bg-cream shadow-soft flex w-full flex-col rounded-lg p-1.5 text-left",
     (onClick || link) && "pressable focus-ring hover:shadow-raised hover:bg-lifted cursor-pointer",
@@ -191,11 +193,13 @@ export function Card({
       <div className="flex flex-1 flex-col px-2 pt-2.5 pb-1.5">
         {heading ? (
           <Heading
+            key={title ? "title" : "note"}
             className={cn(
               "text-body text-ink font-semibold break-words",
               // Notes standing in for a title read as text, not as a heading, and get a third line
               // so they aren't cut off mid-thought. Real titles stay at two.
               title ? "line-clamp-2" : "line-clamp-3 font-sans font-medium",
+              title && untitled && "sg-arrive",
             )}
           >
             {heading}

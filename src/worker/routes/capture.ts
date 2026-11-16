@@ -13,6 +13,7 @@ import type { AppEnv } from "../env.ts";
 import { apiError } from "../http.ts";
 import { fromBase64, type ImageInfo, readImage } from "../mcp/image.ts";
 import { photoKey } from "../photos.ts";
+import { titleAfterSave } from "../title/run.ts";
 
 const text = z.string().max(20_000).optional();
 const fields = z.object({
@@ -288,6 +289,8 @@ export const captureRoutes = new Hono<AppEnv>().post("/", async (c) => {
     ]);
   }
   await draftFromLink(c, itemId, note, title, images.length);
+  // Saved without a title and without a model link: Claude names it from its photos and note (decision 0070).
+  if (!title) await titleAfterSave(c, itemId);
   const link = `${new URL(c.req.url).origin}/ideas/${itemId}`;
   if (!wantsJson) return c.text(savedSentence(title, note, images.length), 201);
   return c.json<CaptureResponse>(

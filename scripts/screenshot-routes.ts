@@ -411,6 +411,9 @@ async function closeDialog(page: Page) {
   await page.getByRole("dialog").waitFor({ state: "detached" });
 }
 
+/** The build the "no attempts yet" shot makes, and removes again. */
+const NO_ATTEMPTS_BUILD = "5eed0000-0000-4000-8000-0000000b0b01";
+
 export interface Shot {
   /** File name, without width or extension: "ideas" → ideas-390.png. */
   name: string;
@@ -986,6 +989,56 @@ async function setQueue(page: Page, count: number) {
   for (const id of [...SEED_QUEUE, ...more].slice(0, count)) {
     await page.request.patch(`/api/items/${id}`, { headers, data: { upNext: true } });
   }
+}
+
+/** The seed's untitled photo idea (the gear set): the naming shots save a copy of it and let Claude name the copy. */
+const SEED_UNTITLED_PHOTO_IDEA = "5eed0000-0000-4000-8000-000000000007";
+/** The copy a naming shot made, for its cleanup. */
+const namedIdeas: string[] = [];
+const standInClaude = (page: Page) => `http://127.0.0.1:${Number(new URL(page.url()).port) + 100}`;
+
+/**
+ * Saves the seed's untitled gear set again as a new photo-only idea (the seed's own one is put away meanwhile, so
+ * the grid shows one) and waits for Claude's title (decision 0070; the stand-in names it once a shot turns naming on).
+ * On a version without naming the wait just ends and the idea stays untitled: the "before" of the comparison.
+ */
+async function saveUntitledPhotoIdea(page: Page) {
+  const headers = { Origin: new URL(page.url()).origin };
+  await page.request.put(`${standInClaude(page)}/titles`);
+  const seed = (await (await page.request.get(`/api/items/${SEED_UNTITLED_PHOTO_IDEA}`)).json()) as {
+    item: { photos: Array<{ id: string; width: number; height: number; color: string }> };
+  };
+  const photo = seed.item.photos[0];
+  if (!photo) throw new Error("The seed's gear set has no photo");
+  const large = await (await page.request.get(`/api/photos/${photo.id}/large`)).body();
+  const thumb = await (await page.request.get(`/api/photos/${photo.id}/thumb`)).body();
+  await page.request.delete(`/api/items/${SEED_UNTITLED_PHOTO_IDEA}`, { headers });
+  const id = crypto.randomUUID();
+  namedIdeas.push(id);
+  await page.request.post("/api/items", { headers, data: { id, createdAt: Date.now() - 2 * 60_000 } });
+  await page.request.put(`/api/items/${id}/photos/${crypto.randomUUID()}`, {
+    headers,
+    multipart: {
+      width: String(photo.width),
+      height: String(photo.height),
+      color: photo.color,
+      large: { name: "large.jpg", mimeType: "image/jpeg", buffer: large },
+      thumb: { name: "thumb.jpg", mimeType: "image/jpeg", buffer: thumb },
+    },
+  });
+  for (let i = 0; i < 40; i++) {
+    const { item } = (await (await page.request.get(`/api/items/${id}`)).json()) as { item: { title: string | null } };
+    if (item.title) break;
+    await page.waitForTimeout(250);
+  }
+  return id;
+}
+
+async function removeNamedIdeas(page: Page) {
+  const headers = { Origin: new URL(page.url()).origin };
+  for (const id of namedIdeas.splice(0)) await page.request.delete(`/api/items/${id}`, { headers });
+  await page.request.post(`/api/items/${SEED_UNTITLED_PHOTO_IDEA}/restore`, { headers });
+  await page.request.delete(`${standInClaude(page)}/titles`);
 }
 
 /** The ideas and builds the model shots make (removed again by their cleanup, so later shots' lists don't show them). */
@@ -1915,6 +1968,30 @@ export const shots: Shot[] = [
   },
   { name: "ideas", path: "/ideas" },
   {
+    // A photo saved without a title, a few seconds later: Claude's title in its card (decision 0070).
+    name: "ideas-named-by-claude",
+    path: "/ideas",
+    prepare: async (page) => {
+      await saveUntitledPhotoIdea(page);
+      await page.reload();
+      await page.getByRole("list", { name: "Ideas" }).waitFor();
+      await page.waitForTimeout(500);
+    },
+    cleanup: removeNamedIdeas,
+  },
+  {
+    // The same idea's page: the title Claude gave, marked as Claude's under it.
+    name: "idea-named-by-claude",
+    path: "/ideas",
+    prepare: async (page) => {
+      const id = await saveUntitledPhotoIdea(page);
+      await page.goto(`/ideas/${id}`);
+      await page.getByRole("textbox", { name: "Title" }).waitFor();
+      await page.waitForTimeout(500);
+    },
+    cleanup: removeNamedIdeas,
+  },
+  {
     // A photo tile with a long title: two lines, then cut.
     name: "ideas-up-next-long",
     path: "/ideas",
@@ -2454,7 +2531,7 @@ export const shots: Shot[] = [
     },
   },
   {
-    // The end of a build page on a phone: "Finish attempt" must sit above the tab bar (try it with --iphone).
+    // The end of a build page on a phone: the print's "How did it go?" must sit above the tab bar (try it with --iphone).
     name: "build-bottom",
     path: `/builds/${SEED_BUILD_IDS.tugboat}`,
     width: 390,
@@ -4082,6 +4159,40 @@ export const shots: Shot[] = [
     },
   },
   { name: "build-done", path: `/builds/${SEED_BUILD_IDS.headphoneStand}`, fullPage: true },
+  // A build whose latest attempt Worked: Finish build is back in the bar beside Shelve (on phones, at the page's end).
+  { name: "build-worked", path: `/builds/${SEED_IDS.desiccantHook}` },
+  {
+    // While a print is on the bed, Finish build and Shelve wait in the bar's "…" (a sheet on phones).
+    name: "build-bed-menu",
+    path: `/builds/${SEED_BUILD_IDS.tugboat}`,
+    prepare: async (page) => {
+      await page.getByRole("button", { name: "More for this build" }).click();
+      await page.getByRole("button", { name: "Shelve build" }).waitFor();
+      await page.waitForTimeout(500);
+    },
+    cleanup: async (page) => {
+      await page.keyboard.press("Escape");
+    },
+  },
+  {
+    // A build with no attempt yet: Log attempt, with the closing actions where they always are.
+    name: "build-no-attempts",
+    path: "/builds",
+    prepare: async (page) => {
+      const origin = new URL(page.url()).origin;
+      await page.request.post("/api/items", {
+        headers: { Origin: origin },
+        data: { id: NO_ATTEMPTS_BUILD, title: "Spice rack label clips", stage: "building" },
+      });
+      await page.goto(`/builds/${NO_ATTEMPTS_BUILD}`);
+      await page.getByText("The water's still heating").waitFor();
+    },
+    cleanup: async (page) => {
+      await page.request.delete(`/api/items/${NO_ATTEMPTS_BUILD}`, {
+        headers: { Origin: new URL(page.url()).origin },
+      });
+    },
+  },
   // A shelved build: its chip, then when and after how many attempts; no For offer.
   { name: "build-shelved", path: `/builds/${SEED_IDS.planter}` },
   { name: "journal", path: "/journal" },
@@ -5369,6 +5480,8 @@ export const shots: Shot[] = [
   { name: "styleguide-layer-slider", path: "/styleguide", selector: "#layer-slider" },
   { name: "styleguide-buttons", path: "/styleguide", selector: "#buttons" },
   { name: "styleguide-builds", path: "/styleguide", selector: "#builds" },
+  // The "…" menu rows, a build's menu while its print is on the bed among them.
+  { name: "styleguide-sheets", path: "/styleguide", selector: "#sheets" },
   {
     name: "styleguide-covers",
     path: "/styleguide",
@@ -6221,7 +6334,7 @@ async function goOffline(page: Page) {
 /** On the tugboat build (attempt 3 is printing): open the finish sheet offline and fill it in. */
 async function fillFinish(page: Page) {
   await goOffline(page);
-  await page.getByRole("button", { name: "Finish attempt 3" }).first().click();
+  await page.getByRole("button", { name: "How did it go?" }).first().click();
   const sheet = page.getByRole("dialog");
   await sheet.getByRole("radio", { name: "Worked" }).click();
   const note = sheet.getByRole("textbox", { name: "Note" });

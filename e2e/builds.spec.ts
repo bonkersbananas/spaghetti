@@ -194,6 +194,49 @@ test("On the bed holds only what is on the plate; builds between prints are In p
   await expect(page.getByRole("region", { name: /^In progress/ })).toHaveCount(0);
 });
 
+test("a print on the bed has one way to log it; closing the build waits in the … menu until it has its answer", async ({
+  page,
+  isMobile,
+}) => {
+  const id = crypto.randomUUID();
+  const headers = { Origin: origin(page) };
+  await page.request.post("/api/items", { headers, data: { id, title: "Hook", stage: "building" } });
+  await page.request.post(`/api/items/${id}/attempts`, { headers, data: { id: crypto.randomUUID(), outcome: null } });
+  await page.goto(`/builds/${id}`);
+
+  // One question for the print (its card on desktop, the action bar on phones), and nothing that ends the build beside it.
+  const ask = page.getByRole("button", { name: "How did it go?" });
+  await expect(ask).toHaveCount(1);
+  await expect(ask).toBeVisible();
+  await expect(page.getByRole("button", { name: /^Finish attempt/ })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Finish build" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: /^Shelve/ })).toHaveCount(0);
+
+  // They are one menu away.
+  await page.getByRole("button", { name: "More for this build" }).click();
+  await expect(page.getByRole("button", { name: "Finish build" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Shelve build" })).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("button", { name: "Shelve build" })).toHaveCount(0);
+
+  // Desktop's A asks the same question.
+  if (isMobile) await ask.click();
+  else await page.keyboard.press("a");
+  const sheet = page.getByRole("dialog", { name: "Finish attempt 1" });
+  await sheet.getByRole("radio", { name: "Worked" }).click();
+  await sheet.getByRole("button", { name: /^(Done|Finish attempt)$/ }).click();
+  await expect(sheet).toBeHidden();
+
+  // It worked: Finish build is back (desktop's bar; on phones the quiet pair at the page's end), and the menu has gone.
+  await expect(page.getByRole("button", { name: "Finish build" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "More for this build" })).toHaveCount(0);
+  await expect(ask).toHaveCount(0);
+  if (!isMobile) {
+    await expect(page.getByRole("button", { name: "Log attempt" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Shelve", exact: true })).toBeVisible();
+  }
+});
+
 test("adds a capture to the print that's running and finishes it", async ({ page, isMobile }) => {
   const id = crypto.randomUUID();
   const attemptId = crypto.randomUUID();
