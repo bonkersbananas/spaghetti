@@ -16,6 +16,12 @@ interface SectionProps {
   count?: number;
   /** On the heading's right, on its baseline: a hint, a link, a small action or a figure. */
   aside?: ReactNode;
+  /**
+   * The aside belongs to the heading instead of sitting at the row's end: for controls that act on what the section
+   * holds (Ideas' filters for "The rest"). On phones it is the heading's second line, tight under it, so it never
+   * depends on what fits; from `md` it follows the heading on its baseline.
+   */
+  asideAfter?: boolean;
   /** A line under the heading that belongs to it: the outcomes so far, the month in a sentence. */
   description?: ReactNode;
   /** The heading level; h2 unless the section sits inside another. */
@@ -34,6 +40,7 @@ export function Section({
   size = "headline",
   count,
   aside,
+  asideAfter,
   description,
   as = "h2",
   className,
@@ -57,9 +64,16 @@ export function Section({
       <Head
         heading={
           aside ? (
-            <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+            <div
+              className={cn(
+                "flex",
+                asideAfter
+                  ? "flex-col gap-0.5 md:flex-row md:flex-wrap md:items-baseline md:gap-x-5"
+                  : "flex-wrap items-baseline justify-between gap-x-3 gap-y-1",
+              )}
+            >
               {heading}
-              <div className="flex shrink-0 items-baseline">{aside}</div>
+              <div className={cn("flex items-baseline", asideAfter ? "min-w-0" : "shrink-0")}>{aside}</div>
             </div>
           ) : (
             heading

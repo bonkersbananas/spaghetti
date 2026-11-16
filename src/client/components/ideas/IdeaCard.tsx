@@ -154,7 +154,8 @@ export function IdeaCard({ item, person, via, landing, menu, headingLevel = 2, r
   );
 }
 
-function shortenLinks(text: string): string {
+/** Links read better short on a card: printables.com/model/123. */
+export function shortenLinks(text: string): string {
   let result = text;
   for (const { url } of findLinks(text).reverse()) result = result.replace(url, shortUrl(url));
   return result;

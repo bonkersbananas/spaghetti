@@ -816,6 +816,63 @@ async function settleSection(page: Page, section: Locator) {
 /** The seed's Up next queue, in order: the desk tidy-up, then the oven knob. */
 const SEED_QUEUE = [SEED_IDS.deskTidy, "5eed0000-0000-4000-8000-000000000003"];
 
+/** Puts the inbox's first idea in Up next as a person would: U on desktop (where J and K walk the cards), the card's menu on a phone. */
+async function queueFirstInbox(page: Page) {
+  const inbox = page.getByRole("list", { name: "Ideas" });
+  if (wide(page) === 1440) {
+    await inbox.getByRole("link").first().focus();
+    await page.keyboard.press("u");
+  } else {
+    await inbox
+      .getByRole("button", { name: /^Options for / })
+      .first()
+      .click();
+    await page.getByRole("button", { name: "Up next", exact: true }).click();
+  }
+  await page.waitForTimeout(400);
+}
+
+/** Lets a toast and the cards it talks about settle for the shot (the shots' clock is fixed, so fades are finished by hand). */
+async function settleToast(page: Page) {
+  await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+  // Show Up next with the ideas that just joined it (picking them scrolled the page).
+  await page.evaluate(() => window.scrollTo({ top: 0, behavior: "instant" }));
+  await page.waitForTimeout(600);
+  await page.evaluate(() => {
+    for (const animation of document.getAnimations()) animation.finish();
+  });
+}
+
+/** Answers the wishlists with yours empty ("none") or the other person's private ("private"). */
+async function mockWishlists(page: Page, mode: "none" | "private") {
+  const { user } = (await (await page.request.get("/api/session")).json()) as { user: { id: string } };
+  await page.route(/\/api\/wishlists$/, async (route) => {
+    const response = await route.fetch();
+    const json = (await response.json()) as {
+      wishlists: Array<{ personId: string; private?: boolean; entries: unknown[] }>;
+    };
+    const wishlists = json.wishlists.map((list) =>
+      mode === "none" && list.personId === user.id
+        ? { ...list, entries: [] }
+        : mode === "private" && list.personId !== user.id
+          ? { ...list, private: true, entries: [] }
+          : list,
+    );
+    await route.fulfill({ response, json: { ...json, wishlists } });
+  });
+  await page.reload();
+  await page.getByRole("link", { name: /^Wishlists/ }).waitFor();
+  await page.evaluate(() => window.scrollTo({ top: 0, behavior: "instant" }));
+  await page.waitForTimeout(600);
+  // Cards that arrived after the first draw fade in on the shots' fixed clock: finish them.
+  await page.evaluate(() => {
+    for (const animation of document.getAnimations()) animation.finish();
+  });
+}
+
+/** The seed's note-only "Bag clips for the coffee": a bare link for a moment in the shot of every kind of idea in Up next. */
+const COFFEE_CLIPS = "5eed0000-0000-4000-8000-000000000013";
+
 /** Up next holds exactly these ideas, in this order (the first two are the seed's own). */
 async function setQueue(page: Page, count: number) {
   const headers = { Origin: new URL(page.url()).origin };
@@ -1710,6 +1767,138 @@ export const shots: Shot[] = [
       });
     },
     cleanup: (page) => setQueue(page, 2),
+  },
+  {
+    // Every kind of idea in Up next: a photo, a note with no title and a bare link.
+    name: "ideas-up-next-kinds",
+    path: "/ideas",
+    prepare: async (page) => {
+      const headers = { Origin: new URL(page.url()).origin };
+      await setQueue(page, 0);
+      await page.request.patch(`/api/items/${COFFEE_CLIPS}`, {
+        headers,
+        data: { note: "https://www.ikea.com/se/en/p/skadis-pegboard-white-20320802/" },
+      });
+      for (const id of [COFFEE_CLIPS, SEED_QUEUE[1], SEED_IDS.deskTidy]) {
+        await page.request.patch(`/api/items/${id}`, { headers, data: { upNext: true } });
+      }
+      await page.reload();
+      await page.getByRole("heading", { level: 2, name: /^Up next\s*3$/ }).waitFor();
+      await page.waitForTimeout(500);
+      await page.evaluate(() => {
+        for (const animation of document.getAnimations()) animation.finish();
+      });
+    },
+    cleanup: async (page) => {
+      await page.request.patch(`/api/items/${COFFEE_CLIPS}`, {
+        headers: { Origin: new URL(page.url()).origin },
+        data: { note: "Bag clips for the coffee, with a little spoon holder on the side." },
+      });
+      await setQueue(page, 2);
+    },
+  },
+  {
+    // One idea put in Up next: a one-line toast with its place ("In Up next · 3rd"); U on desktop, the menu on phones.
+    name: "ideas-up-next-toast-one",
+    path: "/ideas",
+    prepare: async (page) => {
+      await queueFirstInbox(page);
+      await page.getByText("In Up next · 3rd").waitFor();
+      await settleToast(page);
+    },
+    cleanup: (page) => setQueue(page, 2),
+  },
+  {
+    // Two in a row (keyboard triage): one toast that counts them, not two.
+    name: "ideas-up-next-toast",
+    path: "/ideas",
+    prepare: async (page) => {
+      await queueFirstInbox(page);
+      await queueFirstInbox(page);
+      await page.getByText("2 added to Up next").waitFor();
+      await settleToast(page);
+    },
+    cleanup: (page) => setQueue(page, 2),
+  },
+  {
+    // "Needs designing" picked beside The rest: the ink pill around the label and its count.
+    name: "ideas-needs-designing",
+    path: "/ideas",
+    prepare: async (page) => {
+      await page.getByRole("button", { name: /^Needs designing/ }).click();
+      await page.waitForTimeout(500);
+    },
+  },
+  {
+    // A filter that empties the inbox keeps its own way back, and says which it is. Only ideas with a model are left
+    // beside Up next, so "Needs designing 0" finds nothing.
+    name: "ideas-filter-empty",
+    path: "/ideas",
+    prepare: async (page) => {
+      const keep = new Set([...SEED_QUEUE, SEED_IDS.bigTugboat, "5eed0000-0000-4000-8000-000000000011"]);
+      await page.route(/\/api\/items\?stage=idea/, async (route) => {
+        const response = await route.fetch();
+        const json = (await response.json()) as { items: Array<{ id: string }> };
+        await route.fulfill({ response, json: { ...json, items: json.items.filter((item) => keep.has(item.id)) } });
+      });
+      await page.reload();
+      await page.getByRole("button", { name: /^Needs designing/ }).click();
+      await page.getByText(/Tap “Needs designing” again/).waitFor();
+      await page.evaluate(() => window.scrollTo({ top: 0, behavior: "instant" }));
+      await page.waitForTimeout(400);
+    },
+    cleanup: unmockToday,
+  },
+  {
+    // The phone's Wishlists line when you haven't picked any yet.
+    name: "ideas-wishlists-none",
+    path: "/ideas",
+    width: 390,
+    prepare: (page) => mockWishlists(page, "none"),
+    cleanup: unmockToday,
+  },
+  {
+    // The phone's Wishlists line when Sam keeps theirs private: only yours is counted.
+    name: "ideas-wishlists-private",
+    path: "/ideas",
+    width: 390,
+    prepare: (page) => mockWishlists(page, "private"),
+    cleanup: unmockToday,
+  },
+  {
+    // A long inbox (two-digit counts beside The rest), at the narrowest phones too (--width 375).
+    name: "ideas-many",
+    path: "/ideas",
+    prepare: async (page) => {
+      await page.route(/\/api\/items\?stage=idea/, async (route) => {
+        const response = await route.fetch();
+        const json = (await response.json()) as { items: Array<{ id: string; upNext: number | null }> };
+        const copies = [1, 2].flatMap((round) =>
+          json.items
+            .filter((item) => item.upNext === null)
+            .map((item) => ({ ...item, id: `${item.id.slice(0, -2)}${round}${round}` })),
+        );
+        await route.fulfill({ response, json: { ...json, items: [...json.items, ...copies] } });
+      });
+      await page.reload();
+      await page.getByRole("button", { name: /^Needs designing \d\d/ }).waitFor();
+      await page.waitForTimeout(500);
+      await page.evaluate(() => {
+        for (const animation of document.getAnimations()) animation.finish();
+      });
+    },
+    cleanup: unmockToday,
+  },
+  {
+    // A notebook with no ideas and nothing started: the empty pot.
+    name: "ideas-empty",
+    path: "/ideas",
+    prepare: async (page) => {
+      await mockToday(page, { builds: "none", journal: "none", spools: "none", ideas: "none" });
+      await page.reload();
+      await waitUntilEased(page, "Nothing simmering yet");
+    },
+    cleanup: unmockToday,
   },
   {
     // A card with several photos swiped to its second (and hovered, where a mouse shows the arrows).
@@ -5222,6 +5411,7 @@ export const shots: Shot[] = [
   { name: "styleguide-color", path: "/styleguide", selector: "#color" },
   { name: "styleguide-palette", path: "/styleguide", selector: "#palette" },
   { name: "styleguide-cards", path: "/styleguide", selector: "#cards" },
+  { name: "styleguide-chips", path: "/styleguide", selector: "#chips" },
   {
     name: "styleguide-today",
     path: "/styleguide",
