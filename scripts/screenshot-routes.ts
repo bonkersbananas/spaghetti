@@ -954,6 +954,56 @@ async function setQueue(page: Page, count: number) {
   }
 }
 
+/** The seed's untitled photo idea (the gear set): the naming shots save a copy of it and let Claude name the copy. */
+const SEED_UNTITLED_PHOTO_IDEA = "5eed0000-0000-4000-8000-000000000007";
+/** The copy a naming shot made, for its cleanup. */
+const namedIdeas: string[] = [];
+const standInClaude = (page: Page) => `http://127.0.0.1:${Number(new URL(page.url()).port) + 100}`;
+
+/**
+ * Saves the seed's untitled gear set again as a new photo-only idea (the seed's own one is put away meanwhile, so
+ * the grid shows one) and waits for Claude's title (decision 0070; the stand-in names it once a shot turns naming on).
+ * On a version without naming the wait just ends and the idea stays untitled: the "before" of the comparison.
+ */
+async function saveUntitledPhotoIdea(page: Page) {
+  const headers = { Origin: new URL(page.url()).origin };
+  await page.request.put(`${standInClaude(page)}/titles`);
+  const seed = (await (await page.request.get(`/api/items/${SEED_UNTITLED_PHOTO_IDEA}`)).json()) as {
+    item: { photos: Array<{ id: string; width: number; height: number; color: string }> };
+  };
+  const photo = seed.item.photos[0];
+  if (!photo) throw new Error("The seed's gear set has no photo");
+  const large = await (await page.request.get(`/api/photos/${photo.id}/large`)).body();
+  const thumb = await (await page.request.get(`/api/photos/${photo.id}/thumb`)).body();
+  await page.request.delete(`/api/items/${SEED_UNTITLED_PHOTO_IDEA}`, { headers });
+  const id = crypto.randomUUID();
+  namedIdeas.push(id);
+  await page.request.post("/api/items", { headers, data: { id, createdAt: Date.now() - 2 * 60_000 } });
+  await page.request.put(`/api/items/${id}/photos/${crypto.randomUUID()}`, {
+    headers,
+    multipart: {
+      width: String(photo.width),
+      height: String(photo.height),
+      color: photo.color,
+      large: { name: "large.jpg", mimeType: "image/jpeg", buffer: large },
+      thumb: { name: "thumb.jpg", mimeType: "image/jpeg", buffer: thumb },
+    },
+  });
+  for (let i = 0; i < 40; i++) {
+    const { item } = (await (await page.request.get(`/api/items/${id}`)).json()) as { item: { title: string | null } };
+    if (item.title) break;
+    await page.waitForTimeout(250);
+  }
+  return id;
+}
+
+async function removeNamedIdeas(page: Page) {
+  const headers = { Origin: new URL(page.url()).origin };
+  for (const id of namedIdeas.splice(0)) await page.request.delete(`/api/items/${id}`, { headers });
+  await page.request.post(`/api/items/${SEED_UNTITLED_PHOTO_IDEA}/restore`, { headers });
+  await page.request.delete(`${standInClaude(page)}/titles`);
+}
+
 /** The ideas and builds the model shots make (removed again by their cleanup, so later shots' lists don't show them). */
 const modelItems: string[] = [];
 
@@ -1901,6 +1951,30 @@ export const shots: Shot[] = [
     cleanup: restoreDeskTidy,
   },
   { name: "ideas", path: "/ideas" },
+  {
+    // A photo saved without a title, a few seconds later: Claude's title in its card (decision 0070).
+    name: "ideas-named-by-claude",
+    path: "/ideas",
+    prepare: async (page) => {
+      await saveUntitledPhotoIdea(page);
+      await page.reload();
+      await page.getByRole("list", { name: "Ideas" }).waitFor();
+      await page.waitForTimeout(500);
+    },
+    cleanup: removeNamedIdeas,
+  },
+  {
+    // The same idea's page: the title Claude gave, marked as Claude's under it.
+    name: "idea-named-by-claude",
+    path: "/ideas",
+    prepare: async (page) => {
+      const id = await saveUntitledPhotoIdea(page);
+      await page.goto(`/ideas/${id}`);
+      await page.getByRole("textbox", { name: "Title" }).waitFor();
+      await page.waitForTimeout(500);
+    },
+    cleanup: removeNamedIdeas,
+  },
   {
     // A photo tile with a long title: two lines, then cut.
     name: "ideas-up-next-long",

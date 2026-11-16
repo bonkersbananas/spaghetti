@@ -42,6 +42,7 @@ import type { AppEnv } from "../env.ts";
 import { apiError, toApiFile, toApiItem, toApiPhoto } from "../http.ts";
 import { photoReadsEnabled, readsByAttempt, runRead, startRead, toApiPhotoRead } from "../photo-read/run.ts";
 import { photoKey, photoOwner } from "../photos.ts";
+import { claudeTitles, titleAfterSave } from "../title/run.ts";
 import { reactionsFor } from "./reactions.ts";
 
 const id = z.uuid();
@@ -262,7 +263,7 @@ export async function loadItems(db: Db, where: ReturnType<typeof and>) {
     )
   ).flat();
   const twistIds = [...new Set(rows.flatMap((row) => (row.twistId ? [row.twistId] : [])))];
-  const [itemFileSlices, coaches, reactionsByItem, twistPicture] = await Promise.all([
+  const [itemFileSlices, coaches, reactionsByItem, twistPicture, named] = await Promise.all([
     Promise.all(
       slices.map((ids) =>
         db
@@ -279,6 +280,11 @@ export async function loadItems(db: Db, where: ReturnType<typeof and>) {
     ),
     // A build that prints a twist falls back to the twist's picture for its cover (shared/cover.ts).
     twistPictures(db, twistIds),
+    // The titles Claude gave (decision 0070); only titled items can have one.
+    claudeTitles(
+      db,
+      rows.flatMap((row) => (row.title ? [row.id] : [])),
+    ),
   ]);
   const reads = new Map<string, PhotoRead>();
   for (const [attemptId, rows] of await readsByAttempt(db, [...liveAttempts])) {
@@ -309,7 +315,13 @@ export async function loadItems(db: Db, where: ReturnType<typeof and>) {
       reactionsByItem.get(row.id) ?? [],
       filesByItem.get(row.id) ?? [],
     );
-    return { ...item, twistModel: picture?.model ?? null, twistPhoto: picture?.photo ?? null };
+    return {
+      ...item,
+      twistModel: picture?.model ?? null,
+      twistPhoto: picture?.photo ?? null,
+      // Claude's while the title still says what it wrote: a person's edit makes it theirs.
+      claudeTitle: row.title && named.get(row.id) === row.title ? row.title : null,
+    };
   });
 }
 
@@ -395,6 +407,8 @@ export const itemRoutes = new Hono<AppEnv>()
         actor: c.var.actor,
       }),
     ]);
+    // An idea saved without a title gets one from Claude once it has something to read (decision 0070).
+    if (stage === "idea" && !itemTitle?.trim()) await titleAfterSave(c, itemId);
     const item = await loadItem(c.var.db, itemId);
     if (!item) return apiError(c, 409, "deleted", "That was deleted.");
     return c.json<ItemResponse>({ item }, 201);
@@ -506,6 +520,8 @@ export const itemRoutes = new Hono<AppEnv>()
         .where(and(eq(items.id, itemId), isNull(items.deletedAt))),
       recordChange(db, { entity: "item", id: itemId, itemId, action: "updated", actor: c.var.actor }),
     ]);
+    // The first words in an untitled idea's note are something Claude can name it from (once; decision 0070).
+    if (changes.note !== undefined && !current.title?.trim() && !changes.title?.trim()) await titleAfterSave(c, itemId);
     const item = await loadItem(db, itemId);
     if (!item) return apiError(c, 404, "not_found", notFound);
     return c.json<ItemResponse>({ item });
@@ -1042,6 +1058,8 @@ export const itemRoutes = new Hono<AppEnv>()
           runRead(c.env, photoId, c.var.db).catch((error) => console.error("photo read failed", error)),
         );
     }
+    // An untitled idea's first photo is something Claude can name it from (once; decision 0070).
+    if (row && !attemptId) await titleAfterSave(c, itemId);
     return c.json<PhotoResponse>({ photo: toApiPhoto(photo) }, 201);
   });
 

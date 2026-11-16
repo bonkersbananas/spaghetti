@@ -49,6 +49,7 @@ Both items use the Worker's `ANTHROPIC_API_KEY` secret, set by Carl Oscar in the
   - It only ever suggests. Like the bridge's suggested tag (#24), the suggestion is pre-selected and clearly marked "suggested" in the attempt sheet, and the person confirms or changes it. It never sets an outcome on its own.
   - It reads the attempt's large photo variant from R2 (already resized in the browser) and returns a structured output whose tags are an enum of the built-in tag slugs.
   - On Today's print card and in the "how did it go?" nudge too (#58); on Today the off-the-bed question takes the photo itself and the suggestion arrives within a second (#66). Left for later: a way to ask again for a photo that wasn't read.
+- [x] **Name an idea saved without a title** (see [0070](decisions/0070-claude-names-an-idea-saved-without-a-title.md)): a photo or a note captured with no title and no model link gets a few plain words from Claude (Haiku 5.5) a few seconds later, in place; a person's title always wins.
 
 ## Next: agents using the service
 
