@@ -439,6 +439,35 @@ export const draftRuns = sqliteTable("draft_runs", {
 });
 
 /**
+ * Claude naming an idea saved without a title (decision 0070): the job, its answer and the record of the run, one row
+ * per idea (an idea is named once). Also what the day's cap counts (rows with `ranAt`).
+ */
+export const itemTitles = sqliteTable("item_titles", {
+  itemId: text("item_id")
+    .primaryKey()
+    .references(() => items.id, { onDelete: "cascade" }),
+  /**
+   * naming: waiting or running; titled: Claude's title is in the idea; kept: a person's title was there first (or the
+   * idea got a model link); none: Claude found nothing to call it; failed: the call didn't work.
+   */
+  status: text("status").$type<"naming" | "titled" | "kept" | "none" | "failed">().notNull(),
+  /** What Claude called it, once it did. */
+  title: text("title"),
+  /** When a worker took the job; a claim older than a few minutes is abandoned (the cron picks it up). */
+  claimedAt: integer("claimed_at", { mode: "timestamp_ms" }),
+  tries: integer("tries").notNull().default(0),
+  createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
+  /** When the call to Claude was made (what the cap counts); null when it never got that far. */
+  ranAt: integer("ran_at", { mode: "timestamp_ms" }),
+  /** How it ended: "titled", or why not (see worker/title/claude.ts). */
+  runOutcome: text("run_outcome"),
+  /** The rest of the diagnosis as JSON: model, what it read, stop reason, HTTP status, error type, how long it took. */
+  detail: text("detail"),
+});
+
+export type ItemTitleRow = typeof itemTitles.$inferSelect;
+
+/**
  * Claude looking at one attempt photo (decision 0023): the job, its answer and the record of the run, in one row per
  * photo (a photo is never read twice). Also what the day's cap counts (rows with `ranAt`).
  */

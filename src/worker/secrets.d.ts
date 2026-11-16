@@ -8,6 +8,8 @@ interface Env {
   WEBHOOK_SECRET_KEY?: string;
   /** "off" stops a write from starting a delivery pass (the tests only). */
   WEBHOOKS_ON_WRITE?: string;
+  /** "off" stops a save from asking Claude to name an untitled idea (the Worker tests only; decision 0070). */
+  TITLES_ON_SAVE?: string;
   /** Only the e2e tests and screenshots set this: webhooks may go to http://127.0.0.1 (a stand-in receiver). Never set it for real. */
   WEBHOOKS_ALLOW_LOCAL?: string;
   /** Only the e2e tests and screenshots set this: a stand-in for api.anthropic.com. */
@@ -21,5 +23,6 @@ declare namespace Cloudflare {
     WEBHOOK_SECRET_KEY?: string;
     WEBHOOKS_ALLOW_LOCAL?: string;
     WEBHOOKS_ON_WRITE?: string;
+    TITLES_ON_SAVE?: string;
   }
 }
