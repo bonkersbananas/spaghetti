@@ -1,7 +1,7 @@
 /**
  * When the screens show that Claude is naming an idea (decision 0071): the Worker (which reports a job as done past
- * the timeout), the cards' and the idea page's lazy `NamingSign` and the Journal's rows all read it here. Without
- * imports, so it adds nothing but itself wherever it lands.
+ * the timeout) and the lazy `NamingSign` (cards, the idea page) read it here; the Journal's rows keep a written-out
+ * copy of the timeout, which test/unit/naming.test.ts holds equal. Without imports, so it adds only itself.
  */
 
 /** How long the screens show "Naming…" at most: past it, the idea reads as untitled again. */
