@@ -13,7 +13,7 @@ import { localDay } from "@shared/today";
 import { mondayOfDay, weekRangeLabel } from "@shared/week";
 import { keepPreviousData, useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
+import { type ComponentType, lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { EmptyPot } from "@/components/illustrations/EmptyPot";
 import { OpenNotebook } from "@/components/illustrations/OpenNotebook";
 import { Filters } from "@/components/journal/Filters";
@@ -27,8 +27,10 @@ import { Kbd } from "@/components/ui/Kbd";
 import { Overline } from "@/components/ui/Overline";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { useVia } from "@/lib/agents";
+import { printingAttempts } from "@/lib/builds";
 import { cn } from "@/lib/cn";
 import { useHotkeys } from "@/lib/hotkeys";
+import { useBuilds } from "@/lib/items";
 import {
   type Filters as FilterValues,
   filterParams,
@@ -41,8 +43,17 @@ import { scrollBehavior } from "@/lib/motion";
 import { peopleQuery } from "@/lib/queries";
 import { useAfterPaint, useIsDesktop } from "@/lib/use-media-query";
 
-// Phones only, and the print card with its motion and sheets is heavy: loaded after the journal, off the first load.
-const Now = lazy(() => import("@/components/journal/Now"));
+// Phones only, and the print card with its motion and sheets is heavy: off the first load. A phone asks for it as soon as
+// this screen's code runs, and the notebook under it waits for it (see Journal), so Now never arrives late and pushes the
+// page down. Once it is here, a visit draws it at once instead of suspending for a moment.
+let NowLoaded: ComponentType | undefined;
+const loadNow = () =>
+  import("@/components/journal/Now").then((module) => {
+    NowLoaded = module.default;
+    return module;
+  });
+if (!window.matchMedia("(min-width: 48rem)").matches) loadNow().catch(() => undefined);
+const LazyNow = lazy(loadNow);
 
 export const Route = createFileRoute("/_app/journal")({
   validateSearch: (search: Record<string, unknown>): Omit<FilterValues, "tag"> => {
@@ -73,24 +84,42 @@ function Journal() {
     for (const page of query.data?.pages ?? []) for (const item of page.items) map.set(item.id, item);
     return map;
   }, [query.data]);
-  const months = useMemo(() => groupJournal(entries), [entries]);
   const rest = useAfterPaint();
   const filtered = hasFilters(filters);
   const isDesktop = useIsDesktop();
+  // Phones: what is happening now, above the notebook (desktop has Today for it).
+  const showNow = !filtered && !isDesktop;
+  const [Now] = useState(() => NowLoaded ?? LazyNow);
+
+  // Now shows the prints on the bed, so the notebook under it leaves their attempts out until they are logged, as
+  // Today leaves out the print it shows on the bed. Either copy saying so counts: the builds Now draws from, or the
+  // journal's own (the two refresh apart).
+  const builds = useBuilds();
+  const shown = useMemo(() => {
+    if (!showNow) return entries;
+    const onBed = new Set(printingAttempts(builds.items).map(({ attempt }) => attempt.id));
+    return entries.filter((entry) => {
+      if (!entry.attemptId) return true;
+      if (onBed.has(entry.attemptId)) return false;
+      const item = items.get(entry.itemId);
+      return !(item?.stage === "building" && item.attempts.some((a) => a.id === entry.attemptId && a.outcome === null));
+    });
+  }, [showNow, entries, items, builds.items]);
+  const months = useMemo(() => groupJournal(shown), [shown]);
 
   // J and K walk through the entries, Enter opens one (desktop).
   const [selected, setSelected] = useState<string | null>(null);
   const refs = useRef(new Map<string, HTMLAnchorElement>());
   const move = (by: number) => {
-    const index = entries.findIndex((entry) => entry.key === selected);
+    const index = shown.findIndex((entry) => entry.key === selected);
     const next =
-      entries[index === -1 ? (by > 0 ? 0 : entries.length - 1) : Math.max(0, Math.min(entries.length - 1, index + by))];
+      shown[index === -1 ? (by > 0 ? 0 : shown.length - 1) : Math.max(0, Math.min(shown.length - 1, index + by))];
     if (!next) return;
     setSelected(next.key);
     refs.current.get(next.key)?.scrollIntoView({ block: "nearest", behavior: scrollBehavior() });
   };
   const open = () => {
-    const entry = entries.find((e) => e.key === selected);
+    const entry = shown.find((e) => e.key === selected);
     const item = entry && items.get(entry.itemId);
     if (entry && item) void navigate(entryLink(entry, item));
   };
@@ -118,8 +147,60 @@ function Journal() {
     return () => observer.disconnect();
   }, [hasNextPage, isFetchingNextPage, fetchNextPage, rest]);
 
-  const loading = query.isPending;
-  const nothingAtAll = !loading && !entries.length && !filtered;
+  const nothingAtAll = !query.isPending && !entries.length && !filtered;
+  // On a phone the notebook also waits for the builds: Now draws the prints on the bed from them.
+  const loading = query.isPending || (showNow && builds.isPending);
+
+  const notebook = nothingAtAll ? (
+    <EmptyState illustration={<OpenNotebook />} title="A clean notebook">
+      Every print lands here, the perfect ones and the spaghetti. Failures are worth writing down too.
+    </EmptyState>
+  ) : (
+    <div className="xl:flex xl:items-start xl:gap-14">
+      <div className="min-w-0 flex-1">
+        <div className="mb-6 xl:hidden">
+          <Filters layout="row" value={filters} onChange={setFilters} />
+        </div>
+        {loading ? (
+          <JournalSkeleton />
+        ) : entries.length === 0 ? (
+          <FilteredEmpty filters={filters} onClear={() => setFilters({})} />
+        ) : (
+          <div
+            className={cn(
+              "duration-fast flex flex-col gap-12 transition-opacity md:gap-14",
+              query.isPlaceholderData && "opacity-60",
+            )}
+          >
+            {(rest ? months : months.slice(0, 1)).map((month, index) => (
+              <Month
+                key={month.key}
+                month={month}
+                first={index === 0}
+                items={items}
+                people={byId}
+                selected={selected}
+                refs={refs.current}
+              />
+            ))}
+            {rest && <div ref={sentinel} aria-hidden />}
+            {!rest ? null : isFetchingNextPage ? (
+              <JournalSkeleton short />
+            ) : (
+              !hasNextPage && (
+                <p className="text-small text-ink-faint pb-4 text-center">
+                  {filtered ? "That's all of them." : "The first page of the notebook. It all started here."}
+                </p>
+              )
+            )}
+          </div>
+        )}
+      </div>
+      <aside aria-label="Filters" className="sticky top-10 hidden w-60 shrink-0 xl:block">
+        <Filters layout="column" value={filters} onChange={setFilters} />
+      </aside>
+    </div>
+  );
 
   return (
     <>
@@ -136,64 +217,22 @@ function Journal() {
           )
         }
       />
-      {/* Phones: what is happening now, above the notebook (desktop has Today for it). */}
-      {!filtered && !isDesktop && (
+      {showNow ? (
         <>
           <Since />
-          <Suspense fallback={null}>
-            <Now />
-          </Suspense>
+          {/* Now and the notebook under it show together, once Now's code and what it draws from are here: one
+              skeleton until then, so nothing is pushed down after it first shows. */}
+          {loading ? (
+            <JournalSkeleton />
+          ) : (
+            <Suspense fallback={<JournalSkeleton />}>
+              <Now />
+              {notebook}
+            </Suspense>
+          )}
         </>
-      )}
-      {nothingAtAll ? (
-        <EmptyState illustration={<OpenNotebook />} title="A clean notebook">
-          Every print lands here, the perfect ones and the spaghetti. Failures are worth writing down too.
-        </EmptyState>
       ) : (
-        <div className="xl:flex xl:items-start xl:gap-14">
-          <div className="min-w-0 flex-1">
-            <div className="mb-6 xl:hidden">
-              <Filters layout="row" value={filters} onChange={setFilters} />
-            </div>
-            {loading ? (
-              <JournalSkeleton />
-            ) : entries.length === 0 ? (
-              <FilteredEmpty filters={filters} onClear={() => setFilters({})} />
-            ) : (
-              <div
-                className={cn(
-                  "duration-fast flex flex-col gap-12 transition-opacity md:gap-14",
-                  query.isPlaceholderData && "opacity-60",
-                )}
-              >
-                {(rest ? months : months.slice(0, 1)).map((month, index) => (
-                  <Month
-                    key={month.key}
-                    month={month}
-                    first={index === 0}
-                    items={items}
-                    people={byId}
-                    selected={selected}
-                    refs={refs.current}
-                  />
-                ))}
-                {rest && <div ref={sentinel} aria-hidden />}
-                {!rest ? null : isFetchingNextPage ? (
-                  <JournalSkeleton short />
-                ) : (
-                  !hasNextPage && (
-                    <p className="text-small text-ink-faint pb-4 text-center">
-                      {filtered ? "That's all of them." : "The first page of the notebook. It all started here."}
-                    </p>
-                  )
-                )}
-              </div>
-            )}
-          </div>
-          <aside aria-label="Filters" className="sticky top-10 hidden w-60 shrink-0 xl:block">
-            <Filters layout="column" value={filters} onChange={setFilters} />
-          </aside>
-        </div>
+        notebook
       )}
     </>
   );

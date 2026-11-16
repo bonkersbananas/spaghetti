@@ -5,13 +5,14 @@ import type {
   ItemResponse,
   ItemStage,
   ItemsResponse,
+  JournalResponse,
   Person,
   Photo,
   PhotoResponse,
   UnscrapRequest,
 } from "@shared/api";
 import { byPrintTime, describeChanges, mergeNote, unionTags } from "@shared/attempts";
-import { type QueryClient, queryOptions, useQuery, useQueryClient } from "@tanstack/react-query";
+import { type InfiniteData, type QueryClient, queryOptions, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useRef, useState } from "react";
 import { toast } from "@/components/ui/Toast";
 import { ApiError, api } from "./api";
@@ -185,6 +186,19 @@ const sortByNewest = (items: Item[]) => items.sort((a, b) => b.createdAt - a.cre
  * detail. A change of stage moves it from the ideas to the builds or back.
  */
 export function patchCachedItem(queryClient: QueryClient, id: string, change: (item: Item) => Item | null) {
+  // The journal's pages carry the items their entries draw: a print logged here reads as logged there at once (the
+  // phone's Journal shows its attempt again only then). First, so the fresher copies below are the last `change` sees.
+  queryClient.setQueriesData<InfiniteData<JournalResponse>>({ queryKey: ["journal", "list"] }, (data) =>
+    data?.pages.some((page) => page.items.some((item) => item.id === id))
+      ? {
+          ...data,
+          pages: data.pages.map((page) => ({
+            ...page,
+            items: page.items.flatMap((item) => (item.id === id ? (change(item) ?? []) : [item])),
+          })),
+        }
+      : data,
+  );
   let moved: Item | undefined;
   for (const list of LISTS) {
     queryClient.setQueryData<Item[]>(itemKeys.list(list), (items) =>
