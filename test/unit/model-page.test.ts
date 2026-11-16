@@ -5,8 +5,10 @@ import {
   extractModelPage,
   extractPrintablesPrint,
   isSiteTitle,
+  printablesApiId,
   printablesApiUrl,
   printablesId,
+  WEB_FETCH_MAX_URL,
 } from "../../src/shared/model-page.ts";
 
 const page = (name: string) => readFileSync(new URL(`../fixtures/pages/${name}`, import.meta.url), "utf8");
@@ -117,6 +119,10 @@ describe("reading a model page", () => {
     expect(extractPrintablesPrint({ errors: [{ message: "Cannot query field" }], data: null }, "1")).toBeNull();
     expect(extractPrintablesPrint({ detail: "Request was throttled." }, "1")).toBeNull();
     expect(extractPrintablesPrint("Request was throttled.", "1")).toBeNull();
+    // The short GET address asks for no id: the answer is taken for the model its address names.
+    const { id: _, ...withoutId } = JSON.parse(page("printables-print.json")).data.print;
+    const short = extractPrintablesPrint({ data: { print: withoutId } }, "1577248");
+    expect(short !== "missing" && short?.title).toBe("Carrying handle for IKEA Antilop high chair legs.");
   });
 
   it("finds a Printables model's number in its page's address, and makes the API's GET address", () => {
@@ -127,8 +133,21 @@ describe("reading a model page", () => {
     expect(printablesId("https://makerworld.com/model/1577248")).toBeNull();
     const url = new URL(printablesApiUrl("1577248"));
     expect(url.origin + url.pathname).toBe("https://api.printables.com/graphql/");
-    expect(JSON.parse(url.searchParams.get("variables") ?? "")).toEqual({ id: "1577248" });
-    expect(url.searchParams.get("query")).toContain("print(id: $id)");
+    expect(url.searchParams.get("query")).toMatch(/^\{print\(id:1577248\)\{name,.*images\{filePath\}.*\}\}$/);
+    expect(printablesApiId(url.href)).toBe("1577248");
+    expect(printablesApiId(url.searchParams.get("query") ?? "")).toBeNull();
+    expect(printablesApiId('https://api.printables.com/graphql/?query={print(id:"3161"){name}}')).toBe("3161");
+    expect(printablesApiId("https://www.printables.com/model/3161")).toBeNull();
+  });
+
+  it("keeps the API's GET address within web fetch's 250 characters, even escaped further", () => {
+    // Production, Nov 16: the first address (a full query and variables, ~430 characters) came back url_too_long.
+    for (const id of ["3161", "1577248", "999999999999"]) {
+      const url = printablesApiUrl(id);
+      expect(url.length, id).toBeLessThanOrEqual(WEB_FETCH_MAX_URL - 20);
+      // A fetcher that escapes every comma and colon too still stays within it.
+      expect(url.replace(/[,:()]/g, "%2C").length, id).toBeLessThanOrEqual(WEB_FETCH_MAX_URL);
+    }
   });
 
   it("survives character references that aren't characters", () => {

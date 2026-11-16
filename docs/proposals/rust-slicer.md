@@ -50,6 +50,30 @@ Every runner slices the same placed models with the app's defaults; the Orca run
 - **Most of the time is spent on regions**: the polygon booleans and offsets of walls, shells and gap fill, of the shells on slopes and of the surfaces grown into the infill beside them. For the plate, natively, regions take 2.9 s of 5.3 s; toolpaths and G-code 1.7 s, slicing into outlines 0.28 s, reading 0.1 s, the picture 0.09 s and packing 0.1 s. A corner exactly on a layer's cutting plane leaves pieces of outline that meet only there, which slicing joins end to nearest end, slowly: while the Benchies' lettering lay on the cut at 0.3 mm (from when the layers were cut at floats' heights until the heights were Orca's, Nov 14), the plate took 1.9 s to slice into outlines. Making the outlines as Orca makes them, each object's joined, closed and simplified, costs 0.1 s of that on the plate (simplified once before the closing too, so that it offsets a seventh of the points), and 1 to 4 % in the browser. Toolpaths doubled when solid infill took Orca's monotonic lines and narrow loops: the loops' lines along the middle of a band come from a Voronoi diagram, as gap fill's do, and splitting a region into lines and loops takes polygon operations of its own. That made the four models 3 to 59 % slower to slice (the text, all narrow strokes, the most). Orca's print order, with its local search over each island's chain of paths and its tour of a layer's islands, then cost another 2 to 10 % natively and 7 to 19 % in the browser (the glasses, with the most paths to an island, the most). Overhangs cost nothing measurable: each wall's distance from the layer below is looked up in a grid of that layer's edges, and the polygon offsets that decide where a wall leaves what holds it up run only near where it might; the four models slice within the benchmark's noise of before. Simplifying every path, as Orca does, and gap fill on Orca's medial axis cost nothing measurable either; one wall round top surfaces costs 3 to 5 % on a Benchy, the glasses and the plate (finding the tops wide enough for it, island by island, near the tops only). One thread is 2.7 to 3.6 times slower than four, and WebAssembly another 1.4 to 1.8 times. Orca's infill, joined along the walls, costs about 3 % of the toolpaths' time against straight lines. Lightning's trees grow layer after layer, one object at a time: a Benchy at 10 % slices 7 % slower with them than with crosshatch, the plate 3 % (its objects grow side by side). Brims cost under 1 %: they are worked out once, before the layers, from what lies near each (46 ms for the plate's twelve). When supports are off, only Orca's check for objects that need them runs (section 3), the trees' first pass over the layers with the overhangs that can't reach 6 mm left unmeasured: 3 to 5 % natively (13 ms of a Benchy's slice, 0.16 s of the plate's) and 1 to 5 % in WebAssembly. With normal ones a Benchy slices in 0.86 s natively (native Orca 1.6 s), 0.38 s of it the supports: mostly carrying the columns down the model layer by layer, which can't run in parallel, and finding the overhangs.
 - **Seams cost a fifth.** Placing them as Orca does (section 3) is nearly all Orca's visibility: on a Benchy the 22,600 samples within reach of an outer wall cast 25 rays each, 565,000 in all, which take about 0.25 s of the seam placer's 0.36 s natively on one thread and about half of its 0.48 s in WebAssembly (natively, cutting the mesh down takes 30 ms and the rest 80 ms: the ray tree, the candidates and their overhangs, lining them up; the command line's timings count the seams with the regions). Orca's own seam placer takes 1.7 s of a Benchy on one core and 0.64 s on four (its aligned seams against its back ones, which cast no rays). Side by side with the slicer before seams, a Benchy takes 20 % longer natively on one thread (1.78 s against 2.14 s), 25 % on four (0.52 s against 0.64 s) and 19 % in Node (2.55 s against 3.03 s), and the plate 18 % natively on one thread (20.8 s against 24.5 s) and on four (5.78 s against 6.82 s) and 18 % in Node (28.2 s against 33.3 s). Profiling took a tenth off natively (a sample is measured only when a candidate near it first asks, and the ray tree tests its boxes as Orca's does) and more than a third in WebAssembly, where `hypot` is a slow library call (Orca measures lengths as the square root of the sum of the squares anyway) and V8 ran the ray walk at half speed inlined into the seam placer's one long function: a Benchy's seams there went from 0.85 s to 0.48 s. Fewer rays would move the seams off Orca's: with 9 rays a sample instead of 25, ours started within 0.5 mm of Orca's on 49 to 55 % of a Benchy's outer loops on the four nozzles instead of 68 to 89 %, with half the samples on 49 to 51 %, and with both on 35 to 65 %, while the seam placer still took 43 % of its time. Nor can a plate's copies share one visibility: each cuts down to a mesh of its own (the plate's twelve Benchies to 15,976 to 15,992 triangles), as each does in Orca. So the slicer keeps Orca's sampling (section 5 has what could make it cheaper).
 
+### On the models people slice
+
+On Nov 16 the 13 models people had sliced in Spaghetti (every live model file in production) were timed as the app slices them: `bench/app-slice.mts` runs the app's own slice worker in Node on each, with its own slicing settings, and writes down what it hands the module (the setup, each object or part as the app laid it on the plate, turned, scaled, with copies and fins, and its paint), which every runner then slices again (`bench/corpus.py`; `bench/real-models.json` lists the models, which stay out of the repository). Median of three runs each, in the same sandbox as above; native times are the whole command (reading the files, slicing, writing), WebAssembly's the slice with the module loaded. Memory is the command line's peak resident memory and the WebAssembly heap at its end (it only grows: its peak). Every runner wrote the same file, byte for byte, for every model.
+
+| Model | Triangles, layers | Native, 4 threads | Native, 1 thread | WebAssembly, Node | **WebAssembly, Chromium; its heap** |
+| --- | --- | --- | --- | --- | --- |
+| Steampunk frame (89 MB STL) | 1,777,664, 535 | 2.94 s, 382 MB | 8.40 s | 12.56 s | **12.11 s, 883 MB** |
+| Capybara (18 MB STL), trees where needed | 362,602, 89 | 0.67 s, 95 MB | 1.95 s | 2.85 s | **2.85 s, 144 MB** |
+| Marshmallow (3MF), 0.2 mm nozzle | 1,394,666, 137 | 1.41 s, 280 MB | 3.52 s | 5.43 s | **5.47 s, 554 MB** |
+| Pick your size, plate 2 (3MF) | 112,474, 699 | 7.79 s, 422 MB | 28.45 s | 38.56 s | **38.40 s, 311 MB** |
+| Hummingbird, painted (3MF) | 442,058, 84 | 2.68 s, 182 MB | 7.79 s | 10.85 s | **10.94 s, 240 MB** |
+| Tomato mascot, 3 parts, fins (3MF) | 310,720, 201 | 2.29 s, 135 MB | 7.64 s | 10.49 s | **10.98 s, 148 MB** |
+| Stackable containers, plate 3 (3MF) | 33,104, 288 | 0.73 s, 45 MB | 2.49 s | 3.50 s | **3.52 s, 33 MB** |
+| Poop tray (3MF) | 6,432, 733 | 0.88 s, 52 MB | 3.13 s | 4.34 s | **4.38 s, 36 MB** |
+| Steampunk glasses (STL) | 22,560, 107 | 0.83 s, 45 MB | 2.74 s | 3.80 s | **3.82 s, 31 MB** |
+| Hot dogs, 4 colours (3MF) | 77,568, 250 | 0.76 s, 46 MB | 2.34 s | 3.32 s | **3.34 s, 43 MB** |
+| Spaghetti zipper pull, 0.2 mm nozzle (3MF) | 27,468, 24 | 0.66 s, 35 MB | 1.97 s | 2.78 s | **2.81 s, 26 MB** |
+| UOBF text with clips, fins (STL) | 1,714, 68 | 0.12 s, 23 MB | 0.32 s | 0.54 s | **0.55 s, 21 MB** |
+| fctl zipper pulls, 4 copies, 0.2 mm nozzle (3MF) | 57,760, 24 | 1.60 s, 62 MB | 5.33 s | 7.23 s | **7.26 s, 46 MB** |
+
+- **The 89 MB frame takes 12 seconds in the browser and an 883 MB WebAssembly heap**, the capybara 2.9 s and 144 MB. The heap sits at 134 MB through the whole slice and grows sevenfold only while packing: the file carries every mesh as Bambu Studio's XML (section 3), 144 MB of text for the frame, held whole, grown by doubling and joined into a copy before it is deflated. With what the app's worker holds besides (the file's bytes, its triangles, the turned copy and the STL it hands the module, about 300 MB more), the frame needs about 1.2 GB in the tab: over what Safari gives a tab on an iPhone (about 1 to 1.5 GB), so a phone would most likely lose the page partway. The marshmallow (554 MB) would be near that line; everything else needs under 320 MB.
+- **Where the time goes, by V8's sampling profiler** (one run each, in Node): packing is 31 % of the frame, 32 % of the capybara and 52 % of the marshmallow, nearly all of it deflating the mesh's XML at level 6 in one thread. Everywhere else the polygon library (i_overlay) leads: 35 to 74 % of a slice, its mitred offsets (`geom::offset_mitred`, the walls' and surfaces' shrinking) 17 to 46 % and finding where segments cross 13 to 38 %. Pick your size, a 140 mm part over 699 layers, spends 71 % of its 38 s on regions. The seams take 5 to 18 % (on the big meshes about half of that cutting the mesh down to the 16,000 triangles Orca casts its rays at), painted colours 27 % of the hummingbird, the toolpaths 9 to 45 %.
+- **On a phone** a slice runs on one core, as here, so it takes what one native thread takes times WebAssembly's cost, 1.3 to 1.7 here. Nothing here ran on a phone: a recent iPhone's core is probably at least as fast as this sandbox's ARM core, so these Chromium times are a fair guess for one, and an older phone's a few times longer.
+
 ### With tree supports
 
 With Orca's organic trees everywhere (the X2D's support settings otherwise), the same way:
@@ -176,6 +200,319 @@ In the 3D view the two Benchys look alike from outside (the picture is of the fi
 - **Overhangs are Orca's.** A wall's stretches more than half the nozzle beyond the layer below print as overhang walls, a bridge line wide at the bridge's speed (Orca's `detect_overhang_wall`), and walls and bridges slow down by how far they hang over the layer below's outline: at their own speed while little hangs, down through 50, 30 and 10 mm/s and back up to the bridge's speed where nothing holds them (`enable_overhang_speed`). Orca's passes over each path are ported: the points it adds where a line crosses the outline below, its probes along long lines, and its cuts that keep a slowdown to the stretch beside a slow end. Overhang walls come to within 3 % of Orca's length on a Benchy (184 against 189 mm), the text and the plate (2.21 against 2.27 m), and on the plate, where no layer slows down for cooling, the outer walls print 73.1 m slowed down against Orca's 72.0 m, 39.0 minutes at their speeds against 38.9. One difference: a sliver of the layer below thinner than a third of the nozzle, which Orca leaves out of what holds a wall up, holds ours up; the glasses, with their thin parts, come 4 % short of Orca's overhang walls.
 - **Brims are Orca's.** Its auto brim, the X2D's default, is ported (`Brim.cpp`): an object gets one where its first layer is small for its height. The width grows with the height over the footprint's second moment of area, with the fastest of the profile's speeds (300 mm/s) and with how far the filament curls (Orca's table of materials); under 5 mm there is none, and it is at most 18 mm. A tall object's island too thin to hold on its own gets 5 mm anyway, no wider than the island. A brim people turn on is the profile's 5 mm round every island. The band starts 0.1 mm off the object, stays a line clear of the edges of other objects' openings, on the plate, out of an earlier object's brim and out of what the support's lowest layer prints (its flange, below), and is filled with loops from the outside in, an even number of them. On the first layer each loop prints from the point nearest the nozzle and stops the seam gap short of it, before the object's labels, as Orca's do. The glasses get the same 20 loops as Orca's round the two small islands of their first layer, 648.8 mm of line against 648.4 mm; a Benchy the same three tiny loops by islands of its first layer, 5.4 mm against 5.2 mm; and a fin 4 × 20 mm and 40 mm tall the same 20 loops, 1,544 mm both. Brim ears and brims inside holes are Orca's too (below).
 - **The estimate is Orca's.** Its planner is Orca's estimator with Bambu's changes to it (section 1): timed with it, Orca's own G-code comes to Orca's estimate within 0.3 % for every feature. And our paths are simplified as Orca simplifies its own before printing them, so a line that runs along a wall no longer slows down for moves a few micrometres long: the plate's sparse infill had 33,000 moves under 0.05 mm where Orca's has 125, and took 6 % longer than Orca's; it now has 65, and takes 0.3 % longer. Ours comes within 0.7 % of Orca's on all four: a Benchy and the plate 0.7 % over, the glasses 0.7 % under (their brim takes Orca's 19 s now), and the text 0.1 % over. The Benchy and the plate came 0.6 and 1.2 % under until their seams were Orca's (section 3): their loops started elsewhere, so they retracted less often than Orca's. Feature by feature, the plate's walls, its sparse infill, its bottoms, its internal bridges and its tops take within 1.6 % of Orca's time, its bridges 4 % less for the same plastic; its solid infill 1.6 % more, for 0.9 % more plastic; and its gap fill 3.9 % less, for 3 % less plastic. A single model's short layers slow down for cooling, which hides part of these differences; a plate's layers are long enough not to. They slow as Orca's do, the fastest extrusions first and all to one speed; until Nov 13 every extrusion slowed alike, so a short layer took Orca's time but split it otherwise between its features (on a T with supports, 15 % more of it in the support and 15 % less in the inner walls).
+
+### Real models
+
+The models people actually sliced in the app: the 13 of production's models still there on Nov 16 (`item_files` of kind model; the 11 deleted ones can't be fetched), each sliced as the app slices it, with the settings it was last sliced with and the printer's setup (its main nozzle 0.2 mm, which the models that don't pick a nozzle follow). `bench/app-slice.mts` runs the app's own slice worker in Node, so the model is read, turned, scaled, arranged and given its fins by the app's code, `sliceSetup` makes the setup from the project's settings and the chosen ones, and ours slices in WebAssembly through the app's `ours.ts`; it writes down what the worker handed the module, which the command line (`--job`) and `wasm-node.mjs` replay, and the same plate, each object or part where the app put it with its filament and paint, as a project for native OrcaSlicer 2.5.1 with the setup's presets (`--arrange 0`). `bench/sweep.py` runs it all and prints these tables; `bench/real-models.json` lists the models (names, sizes, sha256 and settings: the models themselves are people's downloads and stay out of the repository). Measured on Nov 16 with main as of PR 486, one run each on the sandbox's 4 cores; the native times include reading the files and writing the `.gcode.3mf`, the WebAssembly times are the module's slice in Node, its memory the module's at the end.
+
+Every model slices with ours, and the app's slice, the native command line's and the WebAssembly module's are the same file byte for byte on all 13. None is refused and none gets a note; ours warns of floating regions on the same four models as Orca, in Orca's words.
+
+| Model | Ours | Layers, ours / Orca | Filament, ours / Orca | Estimate, ours / Orca | Retractions, ours / Orca | Native, ours / Orca | WebAssembly |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| fctl zipper pull, four copies | slices | 24 / 24 | 9.38 / 9.31 g (+0.8 %) | 257.9 / 245.8 min (+4.9 %) | 3,327 / 3,210 | 1.7 / 4.9 s, 58 / 303 MB | 7.5 s, 46 MB |
+| UOBF text with clips | slices | 68 / 68 | 4.21 / 4.20 g (+0.1 %) | 19.8 / 19.7 min (+0.7 %) | 777 / 768 | 0.1 / 0.4 s, 22 / 141 MB | 0.5 s, 21 MB |
+| Spaghetti zipper pull | slices | 24 / 24 | 4.61 / 4.61 g (+0.1 %) | 112.1 / 109.0 min (+2.8 %) | 1,276 / 1,404 | 0.7 / 1.5 s, 35 / 191 MB | 2.8 s, 26 MB |
+| Hot dog hero, four colours | slices | 250 / 249 | 34.35 / 35.95 g (−4.5 %) | 221.9 / 224.2 min (−1.0 %) | 2,033 / 2,120 | 0.8 / 1.7 s, 46 / 212 MB | 3.3 s, 43 MB |
+| Steampunk glasses | slices | 107 / 106 | 7.58 / 7.61 g (−0.4 %) | 60.7 / 62.3 min (−2.5 %) | 6,153 / 6,529 | 0.8 / 1.5 s, 46 / 279 MB | 3.8 s, 31 MB |
+| Poop tray | slices | 733 / 732 | 144.67 / 146.59 g (−1.3 %) | 146.8 / 148.5 min (−1.1 %) | 2,501 / 2,026 | 0.9 / 1.9 s, 46 / 275 MB | 4.3 s, 36 MB |
+| Stackable containers, plate 3 | slices | 288 / 288 | 122.75 / 122.74 g (+0.0 %) | 144.3 / 139.9 min (+3.2 %) | 1,475 / 1,087 | 0.7 / 1.8 s, 46 / 232 MB | 3.5 s, 33 MB |
+| Tomato mascot | slices | 201 / 200 | 13.06 / 12.82 g (+1.9 %) | 98.9 / 92.8 min (+6.6 %) | 2,161 / 2,076 | 2.3 / 2.5 s, 131 / 321 MB | 10.3 s, 148 MB |
+| Hummingbird | slices | 84 / 84 | 27.31 / 27.31 g (−0.0 %) | 175.8 / 174.4 min (+0.8 %) | 2,180 / 2,130 | 2.7 / 3.5 s, 163 / 374 MB | 10.9 s, 240 MB |
+| Pick your size, plate 2 | slices | 699 / 698 | 422.88 / 422.42 g (+0.1 %) | 686.2 / 689.4 min (−0.5 %) | 16,289 / 15,868 | 9.6 / 11.2 s, 419 / 1401 MB | 38.9 s, 311 MB |
+| Marshmallow | slices | 137 / 137 | 0.73 / 0.73 g (+0.1 %) | 17.1 / 17.2 min (−0.6 %) | 271 / 282 | 1.4 / 3.8 s, 280 / 479 MB | 5.4 s, 554 MB |
+| Capybara | slices | 89 / 89 | 1.43 / 1.41 g (+1.2 %) | 14.6 / 14.6 min (+0.1 %) | 289 / 298 | 0.7 / 1.3 s, 95 / 212 MB | 2.8 s, 144 MB |
+| Steampunk frame | slices | 535 / 534 | 29.95 / 29.87 g (+0.2 %) | 68.2 / 68.3 min (−0.1 %) | 2,217 / 2,105 | 3.6 / 6.0 s, 381 / 579 MB | 12.2 s, 883 MB |
+
+What the real models show, in order of how much it matters for a print:
+
+1. **The poop tray's solid infill**: 24 % less internal solid infill than Orca's (12.7 against 16.7 cm³) and more than twice its gap fill (4.6 against 2.0 cm³), 1.3 % less plastic in all. The project asks for zig-zag solid infill and 0.28 mm layers; the cause isn't pinned yet.
+2. **The tomato mascot's solid infill**: 12.5 % more internal solid infill than Orca's (+204 mm³), and 6.6 % over its estimate (+6 min), 7.3 % more time extruding. A project of three parts in two filaments with fins; the cause isn't pinned yet.
+3. **The painted and multi-part plates' flush**: the hot dog's nine parts in four filaments flush 9.8 % less than Orca's (11.7 against 13.0 cm³) at the same 221 tool changes, so its filament comes 4.5 % (1.6 g) short; its prints are otherwise Orca's to 1 %.
+4. **The tower's first layer on the X2D's two nozzles**: Orca takes the tower's first-layer and travel speeds from the nozzle of the first filament printed (`get_extruder_index(config, initial_tool)`), ours from filament 1's. When filament 1 goes on the auxiliary nozzle, whose first layer prints at 20 mm/s against the main nozzle's 40, ours printed the tower's first layer at half Orca's speed: 80 s more on each zipper pull.
+5. **The volumetric limit**: Orca caps a path's speed by the filament's volumetric speed on the plastic it extrudes, the filament's flow ratio counted (`_mm3_per_mm` times `filament_flow_ratio`), ours on the path's flow alone, so where the limit binds (the 0.2 mm nozzle's 2 mm³/s, the auxiliary's 0.5) ours went 2 % slower than Orca (0.98 for Bambu PLA Basic). With 4 and 5 the zipper pulls' estimates come 2.8 and 4.9 % over Orca's.
+6. **The stackable containers' travel**: 35 % more time moving than Orca (+4.4 min, 3.2 % over its estimate) and 36 % more retractions (1,475 against 1,087), for the same plastic to 0.01 %; the cause isn't pinned yet.
+7. **Gap fill**, short of Orca's on most models: the hot dog 44 %, the hummingbird 38 %, the spaghetti zipper pull 32 %, the tomato 14 %, the glasses 5 %, the frame 11 % (section 5's gap fill item). Small in plastic, at most 85 mm³ outside the poop tray.
+8. **An empty last layer**: where a model's top is a few micrometres above a layer's top (the glasses at 21.204 mm), ours keeps the layer above, which is empty, and Orca removes it: one layer more on six models, with its layer change and its timelapse frame.
+9. **Pick your size's walls**: the same plastic as Orca's to the cubic millimetre, but 6.5 min faster on each of the outer and inner walls, and 3.5 min slower on sparse infill (0.5 % under Orca's estimate in all); not pinned yet.
+10. **The hummingbird's paint**: 4.6 % more internal solid infill and 17 % less internal bridge than Orca's, within 0.1 % of its plastic in all.
+11. **WebAssembly memory** on the biggest models: 883 MB for the 89 MB frame and 554 MB for the marshmallow, more than the native command line's peak (381 and 280 MB). For the speed session.
+
+Each model, by feature (mm³ of plastic, counted on moves that change X or Y), with the estimate split as above (extruding is every feature's time, the rest after the start is travel, retractions, lifts and tool changes):
+
+**fctl zipper pull, four copies.** Four copies of a project of three parts in three filaments, on the 0.2 mm nozzle at 0.10 mm.
+
+| | Ours | Orca 2.5.1 | Difference |
+| --- | --- | --- | --- |
+| Layers | 24 | 24 | +0.0 % |
+| Outer wall, mm³ | 849 | 849 | −0.0 % |
+| Inner wall, mm³ | 678 | 676 | +0.3 % |
+| Sparse infill, mm³ | 509 | 509 | −0.0 % |
+| Internal solid infill, mm³ | 2,091 | 2,029 | +3.0 % |
+| Gap infill, mm³ | 78 | 83 | −5.7 % |
+| Top surface, mm³ | 252 | 252 | +0.1 % |
+| Bottom surface, mm³ | 174 | 175 | −0.2 % |
+| Internal Bridge, mm³ | 456 | 457 | −0.1 % |
+| Prime tower, mm³ | 1,158 | 1,158 | +0.0 % |
+| Filament, g | 9.38 | 9.31 | +0.8 % |
+| Estimate, min | 257.9 | 245.8 | +4.9 % |
+| Extruding, min | 191.1 | 184.9 | +3.3 % |
+| Travel, retractions, lifts, min | 61.6 | 55.7 | +10.6 % |
+| Retractions | 3,327 | 3,210 | +3.6 % |
+| Tool changes | 24 | 24 | +0.0 % |
+| Flush, mm³ | 1,200 | 1,200 | +0.0 % |
+
+**UOBF text with clips.** An STL with Fins.
+
+| | Ours | Orca 2.5.1 | Difference |
+| --- | --- | --- | --- |
+| Layers | 68 | 68 | +0.0 % |
+| Outer wall, mm³ | 921 | 921 | +0.0 % |
+| Inner wall, mm³ | 779 | 779 | +0.0 % |
+| Overhang wall, mm³ | 21 | 21 | +0.0 % |
+| Sparse infill, mm³ | 203 | 205 | −0.9 % |
+| Internal solid infill, mm³ | 815 | 814 | +0.2 % |
+| Gap infill, mm³ | 76 | 76 | +0.0 % |
+| Top surface, mm³ | 194 | 194 | −0.0 % |
+| Bottom surface, mm³ | 100 | 102 | −1.2 % |
+| Bridge, mm³ | 21 | 21 | +1.7 % |
+| Internal Bridge, mm³ | 184 | 179 | +2.6 % |
+| Brim, mm³ | 26 | 26 | −0.0 % |
+| Filament, g | 4.21 | 4.20 | +0.1 % |
+| Estimate, min | 19.8 | 19.7 | +0.7 % |
+| Extruding, min | 10.2 | 10.2 | +0.1 % |
+| Travel, retractions, lifts, min | 4.5 | 4.3 | +2.9 % |
+| Retractions | 777 | 768 | +1.2 % |
+
+**Spaghetti zipper pull.** A project of three parts in three filaments, on the 0.2 mm nozzle at 0.10 mm.
+
+| | Ours | Orca 2.5.1 | Difference |
+| --- | --- | --- | --- |
+| Layers | 24 | 24 | +0.0 % |
+| Outer wall, mm³ | 220 | 220 | −0.1 % |
+| Inner wall, mm³ | 185 | 183 | +0.9 % |
+| Sparse infill, mm³ | 127 | 127 | +0.0 % |
+| Internal solid infill, mm³ | 499 | 491 | +1.5 % |
+| Gap infill, mm³ | 11 | 16 | −32.1 % |
+| Top surface, mm³ | 64 | 64 | +0.1 % |
+| Bottom surface, mm³ | 42 | 42 | −0.3 % |
+| Internal Bridge, mm³ | 114 | 114 | −0.1 % |
+| Prime tower, mm³ | 1,203 | 1,203 | +0.0 % |
+| Filament, g | 4.61 | 4.61 | +0.1 % |
+| Estimate, min | 112.1 | 109.0 | +2.8 % |
+| Extruding, min | 67.8 | 65.6 | +3.3 % |
+| Travel, retractions, lifts, min | 39.1 | 38.3 | +2.3 % |
+| Retractions | 1,276 | 1,404 | −9.1 % |
+| Tool changes | 25 | 25 | +0.0 % |
+| Flush, mm³ | 1,200 | 1,200 | +0.0 % |
+
+**Hot dog hero, four colours.** A project of nine parts in four filaments, at 0.12 mm.
+
+| | Ours | Orca 2.5.1 | Difference |
+| --- | --- | --- | --- |
+| Layers | 250 | 249 | +0.4 % |
+| Outer wall, mm³ | 413 | 413 | −0.0 % |
+| Inner wall, mm³ | 299 | 296 | +1.0 % |
+| Overhang wall, mm³ | 1 | 1 | −0.2 % |
+| Sparse infill, mm³ | 143 | 144 | −0.3 % |
+| Internal solid infill, mm³ | 192 | 190 | +0.8 % |
+| Gap infill, mm³ | 11 | 19 | −43.7 % |
+| Top surface, mm³ | 22 | 22 | −0.5 % |
+| Bottom surface, mm³ | 34 | 34 | −0.2 % |
+| Internal Bridge, mm³ | 65 | 65 | +0.6 % |
+| Prime tower, mm³ | 14,348 | 14,348 | +0.0 % |
+| Filament, g | 34.35 | 35.95 | −4.5 % |
+| Estimate, min | 221.9 | 224.2 | −1.0 % |
+| Extruding, min | 68.4 | 69.0 | −0.9 % |
+| Travel, retractions, lifts, min | 148.4 | 150.0 | −1.1 % |
+| Retractions | 2,033 | 2,120 | −4.1 % |
+| Tool changes | 221 | 221 | +0.0 % |
+| Flush, mm³ | 11,734 | 13,002 | −9.8 % |
+
+**Steampunk glasses.** An STL, turned to lie on another face, auto brim.
+
+| | Ours | Orca 2.5.1 | Difference |
+| --- | --- | --- | --- |
+| Layers | 107 | 106 | +0.9 % |
+| Outer wall, mm³ | 3,953 | 3,949 | +0.1 % |
+| Inner wall, mm³ | 475 | 411 | +15.5 % |
+| Overhang wall, mm³ | 86 | 90 | −4.2 % |
+| Gap infill, mm³ | 1,495 | 1,581 | −5.5 % |
+| Top surface, mm³ | 6 | 5 | +15.6 % |
+| Filament, g | 7.58 | 7.61 | −0.4 % |
+| Estimate, min | 60.7 | 62.3 | −2.5 % |
+| Extruding, min | 24.8 | 25.2 | −1.3 % |
+| Travel, retractions, lifts, min | 30.8 | 32.0 | −3.8 % |
+| Retractions | 6,153 | 6,529 | −5.8 % |
+
+**Poop tray.** A project at 0.28 mm, grid infill. Orca's command line refuses the project's raft_first_layer_expansion: it is given 2, its default, which changes nothing here.
+
+| | Ours | Orca 2.5.1 | Difference |
+| --- | --- | --- | --- |
+| Layers | 733 | 732 | +0.1 % |
+| Outer wall, mm³ | 43,917 | 43,918 | −0.0 % |
+| Inner wall, mm³ | 47,241 | 47,308 | −0.1 % |
+| Sparse infill, mm³ | 2,353 | 2,388 | −1.5 % |
+| Internal solid infill, mm³ | 12,693 | 16,748 | −24.2 % |
+| Gap infill, mm³ | 4,638 | 2,000 | +131.9 % |
+| Top surface, mm³ | 2,187 | 2,187 | +0.0 % |
+| Bottom surface, mm³ | 1,789 | 1,794 | −0.2 % |
+| Filament, g | 144.67 | 146.59 | −1.3 % |
+| Estimate, min | 146.8 | 148.5 | −1.1 % |
+| Extruding, min | 124.8 | 126.8 | −1.5 % |
+| Travel, retractions, lifts, min | 16.9 | 16.6 | +1.4 % |
+| Retractions | 2,501 | 2,026 | +23.4 % |
+
+**Stackable containers, plate 3.** A project of three plates, its third, 10 % honeycomb.
+
+| | Ours | Orca 2.5.1 | Difference |
+| --- | --- | --- | --- |
+| Layers | 288 | 288 | +0.0 % |
+| Outer wall, mm³ | 23,804 | 23,801 | +0.0 % |
+| Inner wall, mm³ | 26,071 | 26,070 | +0.0 % |
+| Overhang wall, mm³ | 407 | 409 | −0.6 % |
+| Sparse infill, mm³ | 10,679 | 10,695 | −0.1 % |
+| Internal solid infill, mm³ | 28,352 | 28,330 | +0.1 % |
+| Gap infill, mm³ | 50 | 52 | −5.0 % |
+| Top surface, mm³ | 3,943 | 3,945 | −0.1 % |
+| Bottom surface, mm³ | 4,084 | 4,085 | −0.0 % |
+| Bridge, mm³ | 5 | 5 | −1.9 % |
+| Internal Bridge, mm³ | 23 | 23 | +0.5 % |
+| Filament, g | 122.75 | 122.74 | +0.0 % |
+| Estimate, min | 144.3 | 139.9 | +3.2 % |
+| Extruding, min | 124.4 | 123.8 | +0.5 % |
+| Travel, retractions, lifts, min | 14.8 | 11.0 | +35.4 % |
+| Retractions | 1,475 | 1,087 | +35.7 % |
+
+**Tomato mascot.** A project of three parts in two filaments, with Fins and auto brim.
+
+| | Ours | Orca 2.5.1 | Difference |
+| --- | --- | --- | --- |
+| Layers | 201 | 200 | +0.5 % |
+| Outer wall, mm³ | 2,080 | 2,063 | +0.8 % |
+| Inner wall, mm³ | 1,954 | 1,933 | +1.1 % |
+| Overhang wall, mm³ | 33 | 33 | −0.4 % |
+| Sparse infill, mm³ | 1,098 | 1,133 | −3.1 % |
+| Internal solid infill, mm³ | 1,848 | 1,644 | +12.5 % |
+| Gap infill, mm³ | 32 | 37 | −14.1 % |
+| Top surface, mm³ | 26 | 32 | −17.7 % |
+| Bottom surface, mm³ | 18 | 18 | −0.2 % |
+| Bridge, mm³ | 9 | 12 | −24.2 % |
+| Internal Bridge, mm³ | 49 | 52 | −5.8 % |
+| Brim, mm³ | 37 | 37 | +0.1 % |
+| Prime tower, mm³ | 3,183 | 3,183 | +0.0 % |
+| Filament, g | 13.06 | 12.82 | +1.9 % |
+| Estimate, min | 98.9 | 92.8 | +6.6 % |
+| Extruding, min | 65.3 | 60.9 | +7.3 % |
+| Travel, retractions, lifts, min | 28.5 | 26.8 | +6.5 % |
+| Retractions | 2,161 | 2,076 | +4.1 % |
+| Tool changes | 26 | 26 | +0.0 % |
+| Flush, mm³ | 0 | 0 | – |
+
+**Hummingbird.** A project painted in four filaments, auto brim.
+
+| | Ours | Orca 2.5.1 | Difference |
+| --- | --- | --- | --- |
+| Layers | 84 | 84 | +0.0 % |
+| Outer wall, mm³ | 1,504 | 1,494 | +0.7 % |
+| Inner wall, mm³ | 1,340 | 1,331 | +0.7 % |
+| Overhang wall, mm³ | 5 | 5 | −1.0 % |
+| Sparse infill, mm³ | 415 | 412 | +0.7 % |
+| Internal solid infill, mm³ | 1,533 | 1,466 | +4.5 % |
+| Gap infill, mm³ | 40 | 65 | −38.8 % |
+| Top surface, mm³ | 204 | 221 | −7.6 % |
+| Bottom surface, mm³ | 183 | 184 | −0.7 % |
+| Bridge, mm³ | 9 | 12 | −19.0 % |
+| Internal Bridge, mm³ | 125 | 151 | −17.2 % |
+| Prime tower, mm³ | 6,841 | 6,879 | −0.6 % |
+| Filament, g | 27.31 | 27.31 | −0.0 % |
+| Estimate, min | 175.8 | 174.4 | +0.8 % |
+| Extruding, min | 50.3 | 49.8 | +0.8 % |
+| Travel, retractions, lifts, min | 120.4 | 119.4 | +0.9 % |
+| Retractions | 2,180 | 2,130 | +2.3 % |
+| Tool changes | 140 | 140 | +0.0 % |
+| Flush, mm³ | 9,470 | 9,453 | +0.2 % |
+
+**Pick your size, plate 2.** A project of six plates, its second.
+
+| | Ours | Orca 2.5.1 | Difference |
+| --- | --- | --- | --- |
+| Layers | 699 | 698 | +0.1 % |
+| Outer wall, mm³ | 58,418 | 58,418 | −0.0 % |
+| Inner wall, mm³ | 61,444 | 61,445 | −0.0 % |
+| Overhang wall, mm³ | 5 | 5 | +4.4 % |
+| Sparse infill, mm³ | 195,349 | 195,278 | +0.0 % |
+| Internal solid infill, mm³ | 15,882 | 15,551 | +2.1 % |
+| Gap infill, mm³ | 0 | 1 | −99.7 % |
+| Top surface, mm³ | 886 | 924 | −4.1 % |
+| Bottom surface, mm³ | 2,177 | 2,178 | −0.0 % |
+| Bridge, mm³ | 23 | 24 | −4.6 % |
+| Internal Bridge, mm³ | 1,438 | 1,433 | +0.4 % |
+| Filament, g | 422.88 | 422.42 | +0.1 % |
+| Estimate, min | 686.2 | 689.4 | −0.5 % |
+| Extruding, min | 579.9 | 587.7 | −1.3 % |
+| Travel, retractions, lifts, min | 101.1 | 96.6 | +4.6 % |
+| Retractions | 16,289 | 15,868 | +2.7 % |
+
+**Marshmallow.** A 17 MB project, on the 0.2 mm nozzle at 0.10 mm, grid infill.
+
+| | Ours | Orca 2.5.1 | Difference |
+| --- | --- | --- | --- |
+| Layers | 137 | 137 | +0.0 % |
+| Outer wall, mm³ | 109 | 110 | −0.0 % |
+| Inner wall, mm³ | 106 | 106 | −0.0 % |
+| Overhang wall, mm³ | 1 | 1 | +0.0 % |
+| Sparse infill, mm³ | 239 | 238 | +0.4 % |
+| Internal solid infill, mm³ | 96 | 96 | −0.4 % |
+| Gap infill, mm³ | 0 | 0 | −12.7 % |
+| Top surface, mm³ | 9 | 9 | −0.2 % |
+| Bottom surface, mm³ | 7 | 7 | −0.2 % |
+| Bridge, mm³ | 0 | 0 | −73.0 % |
+| Internal Bridge, mm³ | 16 | 16 | +0.4 % |
+| Filament, g | 0.73 | 0.73 | +0.1 % |
+| Estimate, min | 17.1 | 17.2 | −0.6 % |
+| Extruding, min | 10.3 | 10.3 | −0.2 % |
+| Travel, retractions, lifts, min | 1.7 | 1.7 | −4.1 % |
+| Retractions | 271 | 282 | −3.9 % |
+
+**Capybara.** An 18 MB STL, turned, at 0.12 mm with tree supports where needed.
+
+| | Ours | Orca 2.5.1 | Difference |
+| --- | --- | --- | --- |
+| Layers | 89 | 89 | +0.0 % |
+| Outer wall, mm³ | 273 | 273 | +0.0 % |
+| Inner wall, mm³ | 277 | 276 | +0.5 % |
+| Overhang wall, mm³ | 11 | 11 | −0.1 % |
+| Sparse infill, mm³ | 281 | 281 | +0.2 % |
+| Internal solid infill, mm³ | 255 | 242 | +5.7 % |
+| Gap infill, mm³ | 2 | 5 | −70.6 % |
+| Top surface, mm³ | 2 | 2 | −10.2 % |
+| Bridge, mm³ | 4 | 5 | −13.5 % |
+| Internal Bridge, mm³ | 14 | 11 | +32.0 % |
+| Support, mm³ | 12 | 13 | −3.1 % |
+| Filament, g | 1.43 | 1.41 | +1.2 % |
+| Estimate, min | 14.6 | 14.6 | +0.1 % |
+| Extruding, min | 7.6 | 7.6 | +1.2 % |
+| Travel, retractions, lifts, min | 1.8 | 1.9 | −3.5 % |
+| Retractions | 289 | 298 | −3.0 % |
+
+**Steampunk frame.** An 89 MB STL, turned, at 0.28 mm.
+
+| | Ours | Orca 2.5.1 | Difference |
+| --- | --- | --- | --- |
+| Layers | 535 | 534 | +0.2 % |
+| Outer wall, mm³ | 8,163 | 8,165 | −0.0 % |
+| Inner wall, mm³ | 8,445 | 8,433 | +0.1 % |
+| Sparse infill, mm³ | 5,280 | 5,262 | +0.3 % |
+| Internal solid infill, mm³ | 1,578 | 1,523 | +3.6 % |
+| Gap infill, mm³ | 197 | 221 | −11.0 % |
+| Top surface, mm³ | 27 | 29 | −6.8 % |
+| Bottom surface, mm³ | 32 | 32 | +0.9 % |
+| Internal Bridge, mm³ | 42 | 42 | +0.1 % |
+| Filament, g | 29.95 | 29.87 | +0.2 % |
+| Estimate, min | 68.2 | 68.3 | −0.1 % |
+| Extruding, min | 48.4 | 48.7 | −0.6 % |
+| Travel, retractions, lifts, min | 14.7 | 14.5 | +1.5 % |
+| Retractions | 2,217 | 2,105 | +5.3 % |
 
 ### Seams
 
