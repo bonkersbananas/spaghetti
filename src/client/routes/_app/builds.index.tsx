@@ -6,10 +6,10 @@ import { BuildCard, BuildRow } from "@/components/builds/BuildCard";
 import { SpoolStrand } from "@/components/illustrations/SpoolStrand";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { RecentlyDeletedLink } from "@/components/shell/RecentlyDeletedLink";
+import { ActionBar } from "@/components/ui/ActionBar";
 import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { PlusIcon } from "@/components/ui/icons";
-import { AddPhotoTile } from "@/components/ui/PhotoTiles";
 import { Reflow } from "@/components/ui/Reflow";
 import { Section as PageSection } from "@/components/ui/Section";
 import { CardSkeleton, Skeleton } from "@/components/ui/Skeleton";
@@ -66,7 +66,15 @@ function Builds() {
 
   return (
     <>
-      <PageHeader title="Builds" subtitle="From idea to finished print, attempt by attempt." />
+      <PageHeader
+        title="Builds"
+        subtitle="From idea to finished print, attempt by attempt."
+        actions={
+          <Button variant="secondary" icon={PlusIcon} onClick={newBuild}>
+            New build
+          </Button>
+        }
+      />
       {isPending ? (
         <div className={grid} aria-hidden>
           {Array.from({ length: 4 }, (_, index) => (
@@ -89,13 +97,6 @@ function Builds() {
           <Section
             title="In progress"
             count={inProgress.length || undefined}
-            aside={
-              isDesktop && (
-                <Button variant="quiet" size="sm" icon={PlusIcon} onClick={newBuild} className="-mr-3">
-                  New build
-                </Button>
-              )
-            }
             description={
               inProgress.length === 0 && (
                 <p className="text-body text-ink-soft">
@@ -116,12 +117,6 @@ function Builds() {
                   />
                 ))}
               </Reflow>
-              {/* On phones the grid ends with a thumb-sized "New build"; desktop has it beside the heading. */}
-              {!isDesktop && (
-                <li className="col-span-2 list-none">
-                  <AddPhotoTile size="row" icon={PlusIcon} label="New build" onClick={newBuild} />
-                </li>
-              )}
             </ul>
           </Section>
           {done.length > 0 && (
@@ -145,6 +140,14 @@ function Builds() {
         </div>
       )}
       {!isPending && <RecentlyDeletedLink />}
+      {/* The list's add-action on phones, as on every list: a floating button over the tab bar. */}
+      {!isPending && items.length > 0 && !isDesktop && (
+        <ActionBar>
+          <Button variant="floating" size="lg" icon={PlusIcon} onClick={newBuild} className="mx-auto">
+            New build
+          </Button>
+        </ActionBar>
+      )}
     </>
   );
 }
@@ -153,14 +156,12 @@ function Section({
   title,
   count,
   quiet,
-  aside,
   description,
   children,
 }: {
   title: string;
   count?: number;
   quiet?: boolean;
-  aside?: ReactNode;
   description?: ReactNode;
   children: ReactNode;
 }) {
@@ -170,7 +171,6 @@ function Section({
       title={title}
       size={quiet ? "title" : "headline"}
       count={count}
-      aside={aside}
       description={description}
     >
       {children}

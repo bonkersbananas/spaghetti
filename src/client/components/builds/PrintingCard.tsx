@@ -174,7 +174,7 @@ export function PrintingCard({ item, attempt, person, via, compact = false }: Pr
             )}
           </div>
           <MetaList className="text-small text-ink-faint">
-            <span className="whitespace-nowrap">attempt {attempt.number}</span>
+            <span className="whitespace-nowrap">Attempt {attempt.number}</span>
             {partsLabel && <span>{partsLabel}</span>}
             {filaments.length > 0 && (
               <SettingsLine
@@ -209,7 +209,8 @@ export function PrintingCard({ item, attempt, person, via, compact = false }: Pr
             />
           ) : (
             <>
-              <div className="flex flex-col gap-1.5">
+              {/* At the card's foot, so cards side by side have their Finish buttons on one line. */}
+              <div className="flex flex-col gap-1.5 md:mt-auto">
                 <PrintProgress
                   startedAt={attempt.printedAt}
                   estimatedMinutes={attempt.settings.estimatedMinutes}

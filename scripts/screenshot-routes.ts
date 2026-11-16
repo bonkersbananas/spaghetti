@@ -1906,6 +1906,7 @@ export const shots: Shot[] = [
     // Every build in progress is printing: In progress says so in a line.
     name: "builds-all-on-the-bed",
     path: "/builds",
+    fullPage: true,
     prepare: async (page) => {
       await keepBuilds(
         page,
