@@ -3,7 +3,6 @@ import { Chip, ToggleChip } from "@/components/ui/Chip";
 import { ClaudeLine } from "@/components/ui/ClaudeLine";
 import * as Icons from "@/components/ui/icons";
 import { SectionHeading } from "@/components/ui/SectionHeading";
-import { TextToggle, TextToggles } from "@/components/ui/TextToggle";
 import { Label, Panel, Section } from "./shared";
 
 export function ChipSection() {
@@ -35,26 +34,30 @@ export function ChipSection() {
           ))}
         </div>
         <Label>
-          Text toggles, for a filter or two beside a section's heading: words, a semolina stroke once picked
+          Quiet toggle chips (`appearance="quiet"`), for a filter or two right after a section's heading: words and a
+          count at rest, the picked chip's ink pill once picked
         </Label>
-        <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
-          <SectionHeading id="styleguide-text-toggles">The rest</SectionHeading>
-          <TextToggles label="Filter ideas">
-            <TextToggle
+        <div className="flex flex-wrap items-baseline gap-x-5">
+          <SectionHeading id="styleguide-quiet-chips">The rest</SectionHeading>
+          {/* biome-ignore lint/a11y/useSemanticElements: a group of toggle buttons, not a form fieldset. */}
+          <div role="group" aria-label="Filter ideas" className="-ml-2.5 flex flex-wrap items-baseline">
+            <ToggleChip
+              appearance="quiet"
               selected={filter === "model"}
               count={3}
               onClick={() => setFilter(filter === "model" ? null : "model")}
             >
               Has a model
-            </TextToggle>
-            <TextToggle
+            </ToggleChip>
+            <ToggleChip
+              appearance="quiet"
               selected={filter === "design"}
-              count={7}
+              count={12}
               onClick={() => setFilter(filter === "design" ? null : "design")}
             >
               Needs designing
-            </TextToggle>
-          </TextToggles>
+            </ToggleChip>
+          </div>
         </div>
         <Label>Claude's marks: one quiet line, a sparkle first</Label>
         <div className="flex flex-col gap-2">

@@ -10,7 +10,8 @@ import { useWishlists, wishedIdeas } from "@/lib/wishlist";
 
 /**
  * The way to the wishlists on a phone, where the tab bar has no room for them: one quiet line on Ideas, under Up
- * next, with your top picks' photos as three small dots and how long each list is ("Wishlists · yours 5, Sam's 4").
+ * next, with your top picks' photos as three small overlapping squares (rounded, never round: a circle is a person
+ * here) and how long each list is ("Wishlists · yours 5, Sam's 4").
  */
 export function WishlistLink({
   me,
@@ -52,16 +53,16 @@ export function WishlistLink({
       )}
     >
       {covers.length ? (
-        <span className="flex shrink-0 pl-1.5" aria-hidden>
+        <span className="flex shrink-0 pl-2" aria-hidden>
           {covers.map((photo) => (
-            <span key={photo.id} className="ring-paper -ml-1.5 size-8 overflow-hidden rounded-full ring-2">
+            <span key={photo.id} className="ring-paper -ml-2 size-9 overflow-hidden rounded-sm ring-2">
               <Photo src={photoSrc(photo.id, "thumb")} alt="" color={photo.color || undefined} className="size-full" />
             </span>
           ))}
         </span>
       ) : (
         <span
-          className="bg-semolina-soft text-semolina-ink flex size-8 shrink-0 items-center justify-center rounded-full"
+          className="bg-semolina-soft text-semolina-ink flex size-9 shrink-0 items-center justify-center rounded-sm"
           aria-hidden
         >
           <WishIcon size={16} weight="fill" />

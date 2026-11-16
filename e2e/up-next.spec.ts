@@ -238,4 +238,14 @@ test("the model filters narrow the inbox beside its heading, not Up next", async
   // A second tap shows every idea again.
   await rest.getByRole("button", { name: /^Has a model/ }).click();
   await expect(inbox.getByRole("heading", { name: "Loose idea" })).toBeVisible();
+
+  // A filter that empties the inbox keeps its own way back, and says which it is.
+  await rest.getByRole("button", { name: /^Needs designing/ }).click();
+  await page.getByRole("button", { name: "Options for Loose idea" }).click();
+  await page.getByRole("button", { name: "Up next", exact: true }).click();
+  await expect(
+    rest.getByText("Everything here has a model. Tap “Needs designing” again to see every idea."),
+  ).toBeVisible();
+  await rest.getByRole("button", { name: /^Needs designing/ }).click();
+  await expect(inbox.getByRole("heading", { name: "Bins" })).toBeVisible();
 });

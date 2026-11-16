@@ -9,12 +9,12 @@ import { EmptyPot } from "@/components/illustrations/EmptyPot";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { RecentlyDeletedLink } from "@/components/shell/RecentlyDeletedLink";
 import { Button } from "@/components/ui/Button";
+import { ToggleChip } from "@/components/ui/Chip";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { PlusIcon } from "@/components/ui/icons";
 import { Reflow } from "@/components/ui/Reflow";
 import { Section } from "@/components/ui/Section";
 import { CardSkeleton } from "@/components/ui/Skeleton";
-import { TextToggle, TextToggles } from "@/components/ui/TextToggle";
 import { useVia } from "@/lib/agents";
 import { useCapture } from "@/lib/capture";
 import { shortcutCaps, useHotkeys } from "@/lib/hotkeys";
@@ -125,27 +125,35 @@ function Ideas() {
     />
   );
   const filters = modelCount > 0 && (
-    <TextToggles label="Filter ideas">
-      <TextToggle
+    // biome-ignore lint/a11y/useSemanticElements: a group of toggle buttons, not a form fieldset.
+    <div role="group" aria-label="Filter ideas" className="-ml-2.5 flex flex-wrap items-baseline">
+      <ToggleChip
+        appearance="quiet"
         selected={filter === "model"}
         count={modelCount}
         onClick={() => setModelFilter(filter === "model" ? null : "model")}
       >
         Has a model
-      </TextToggle>
-      <TextToggle
+      </ToggleChip>
+      <ToggleChip
+        appearance="quiet"
         selected={filter === "design"}
         count={inbox.length - modelCount}
         onClick={() => setModelFilter(filter === "design" ? null : "design")}
       >
         Needs designing
-      </TextToggle>
-    </TextToggles>
+      </ToggleChip>
+    </div>
   );
   const grid = (
     <>
       {filter && !rest.length && (
-        <p className="text-body text-ink-soft">Nothing here. Tap it again to see every idea.</p>
+        // The filter that emptied the inbox stays right above, so this says which one takes you back.
+        <p className="text-body text-ink-soft">
+          {filter === "model"
+            ? "Nothing here has a model yet. Tap “Has a model” again to see every idea."
+            : "Everything here has a model. Tap “Needs designing” again to see every idea."}
+        </p>
       )}
       <ul data-picks className={`${gridClass} relative`} aria-label="Ideas">
         <Reflow key={filter ?? "all"}>{rest.map(card)}</Reflow>
@@ -204,7 +212,7 @@ function Ideas() {
           )}
           {inbox.length > 0 &&
             (queue.length > 0 ? (
-              <Section id="inbox-heading" title="The rest" aside={filters || undefined}>
+              <Section id="inbox-heading" title="The rest" aside={filters || undefined} asideAfter>
                 {grid}
               </Section>
             ) : (
