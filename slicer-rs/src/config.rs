@@ -1175,9 +1175,12 @@ impl Settings {
         self.flow_ratio / self.filament_area()
     }
 
-    /// The fastest an extrusion of this cross-section may go (the filament's volumetric limit).
+    /// The fastest an extrusion of this cross-section may go (the filament's volumetric limit): on the plastic it
+    /// extrudes, the filament's flow ratio counted, as Orca's `GCode::_extrude` caps it (its `_mm3_per_mm`, the
+    /// path's flow times `filament_flow_ratio`), so a filament that extrudes 2 % less may go 2 % faster.
     pub fn speed_cap(&self, mm3_per_mm: f64) -> f64 {
-        if mm3_per_mm <= 0.0 { f64::INFINITY } else { self.max_volumetric_speed / mm3_per_mm }
+        let flow = mm3_per_mm * self.flow_ratio;
+        if flow <= 0.0 { f64::INFINITY } else { self.max_volumetric_speed / flow }
     }
 
     /// The file's `project_settings.config`: the keys Spaghetti's reader, Bambu Studio and Orca look at, with
@@ -1247,6 +1250,19 @@ pub fn trim(value: f64) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Orca caps a path's speed by the filament's volumetric speed on the plastic it extrudes (`GCode::_extrude`'s
+    /// `_mm3_per_mm`, times `filament_flow_ratio`): Bambu PLA Basic's 0.98 lets it go 1/0.98 as fast as the path's
+    /// flow alone would.
+    #[test]
+    fn the_volumetric_limit_counts_the_filaments_flow_ratio() {
+        let s = Settings::default();
+        assert_eq!(s.flow_ratio, 0.98);
+        let mm3_per_mm = 0.02;
+        let cap = s.speed_cap(mm3_per_mm);
+        assert!((cap * mm3_per_mm * s.flow_ratio - s.max_volumetric_speed).abs() < 1e-9);
+        assert_eq!(s.speed_cap(0.0), f64::INFINITY);
+    }
 
     /// The X2D's presets, read by Orca's keys, give the numbers that were entered by hand from them before slicing
     /// took presets: every one of them, from the machine, the process and the filament.

@@ -24,7 +24,9 @@ impl Layers {
         let mut top = vec![first];
         let mut heights = vec![first];
         let mut z = first;
-        while z + 1e-6 < model_height {
+        // A layer only where its middle, where it is cut, is under the model's top (Orca's
+        // `generate_object_layers`): a top a few micrometres over a layer's gets no empty layer above it.
+        while z + height / 2.0 < model_height {
             z += height;
             top.push(z);
             heights.push(height);
@@ -37,7 +39,7 @@ impl Layers {
     pub fn on_raft(model_height: f64, height: f64, base: f64) -> Layers {
         let (mut top, mut heights) = (Vec::new(), Vec::new());
         let mut z = 0.0;
-        while z + 1e-6 < model_height || top.is_empty() {
+        while z + height / 2.0 < model_height || top.is_empty() {
             z += height;
             top.push(z + base);
             heights.push(height);
@@ -384,4 +386,20 @@ fn d2(a: Pt, b: Pt) -> u128 {
 #[inline]
 fn d2_of(dx: u64, dy: u64) -> u128 {
     u128::from(dx * dx) + u128::from(dy * dy)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Orca adds a layer only while its middle is under the model's top (`generate_object_layers`): the glasses' top
+    /// at 21.204 mm ends on the layer at 21.2, with no empty layer above it, and a top at 21.35 gets one at 21.4.
+    #[test]
+    fn a_layer_is_added_only_where_its_middle_is_under_the_top() {
+        let layers = Layers::plan(21.204, 0.2, 0.2);
+        assert_eq!(layers.top.len(), 106);
+        assert!((layers.top.last().unwrap() - 21.2).abs() < 1e-9);
+        assert_eq!(Layers::plan(21.35, 0.2, 0.2).top.len(), 107);
+        assert_eq!(Layers::on_raft(21.204, 0.2, 1.0).top.len(), 106);
+    }
 }

@@ -146,7 +146,9 @@ impl Regions {
                     }
                 }
                 if count > 1 {
-                    merged = geom::closing(&merged, EPSILON);
+                    // Orca's `closing_ex`: Clipper's offsets out and back in, mitred (its default limit of 3).
+                    let join = geom::Join::Miter(3.0);
+                    merged = geom::offset_c2(&geom::offset_c2(&merged, EPSILON, join), -EPSILON, join);
                 }
                 own.extend(std::iter::repeat_n(r, merged.len()));
                 out.extend(merged);
@@ -283,6 +285,34 @@ mod tests {
         assert!((area(&of(0)) - 150.0).abs() < 1e-6, "{}", area(&of(0)));
         assert!((area(&of(1)) - 50.0).abs() < 1e-6, "{}", area(&of(1)));
         assert_eq!(of(1).len(), 1);
+    }
+
+    #[test]
+    fn parts_of_one_filament_merge_as_orca_closes_them() {
+        // A round body (a polygon of 720 points, as a sliced curve comes) and a fin clear of it, two parts in one
+        // filament: merged with Orca's `closing_ex` by `EPSILON`, mitred, neither gains points nor leaves slivers.
+        let n = 720;
+        // Each point a few micrometres off the circle, as a sliced and simplified curve's are.
+        let mut seed = 12345u32;
+        let circle: geom::Shape = vec![
+            (0..n)
+                .map(|k| {
+                    seed = seed.wrapping_mul(1_103_515_245).wrapping_add(12345);
+                    let r = 10.0 + f64::from(seed >> 16 & 63) / 63.0 * 0.004;
+                    let a = k as f64 / n as f64 * std::f64::consts::TAU;
+                    geom::pt(geom::sc(20.0 + r * a.cos()), geom::sc(20.0 + r * a.sin()))
+                })
+                .collect(),
+        ];
+        let meshes = [cube(10.0, 10.0, 30.0, 30.0), cube(32.0, 10.0, 33.0, 30.0)];
+        let r = Regions::new(&[0, 0], &[0, 0]);
+        let mut slices = vec![vec![circle.clone(), square(32.0, 10.0, 33.0, 30.0)]];
+        let mut owners = vec![vec![0, 1]];
+        r.assign(&mut slices, &mut owners, &meshes);
+        assert_eq!(slices[0].len(), 2);
+        let round = slices[0].iter().find(|s| geom::shape_area_mm2(s) > 100.0).expect("the body");
+        assert!((geom::shape_area_mm2(round) - geom::shape_area_mm2(&circle)).abs() < 1e-2);
+        assert!(round[0].len() <= n, "{} points", round[0].len());
     }
 
     #[test]
