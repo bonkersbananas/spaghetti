@@ -12,6 +12,7 @@ import {
 } from "../e2e/fixtures/model-3mf.ts";
 import { boxesStl, boxStl, fusilliStl, glassesStl } from "../e2e/fixtures/model-stl.ts";
 import { SLICER_FILE_NAME, slicerFile } from "../e2e/fixtures/slicer-file.ts";
+import { SEED_AGENTS } from "./seed/agents.ts";
 import { SEED_BUILD_IDS } from "./seed/builds.ts";
 import { commentId } from "./seed/comments.ts";
 import { SEED_IDS } from "./seed/ideas.ts";
@@ -1422,6 +1423,46 @@ async function keepBuilds(
     await route.fulfill({ response, json });
   });
   await page.reload({ waitUntil: "networkidle" });
+}
+
+/**
+ * The seed's agents (scripts/seed/agents.ts) by name, so the work done through them shows the agent's mark: the seed
+ * keeps them out of the database to leave the Agents page's shots alone. The page is reloaded to show them.
+ */
+async function withSeedAgents(page: Page) {
+  const { people } = (await (await page.request.get("/api/people")).json()) as {
+    people: Array<{ id: string; username: string }>;
+  };
+  await page.route(/\/api\/agents$/, async (route) => {
+    const response = await route.fetch();
+    const json = (await response.json()) as { agents: object[] };
+    const seeded = Object.values(SEED_AGENTS).map(({ id, name, owner }) => ({
+      id,
+      name,
+      ownerId: people.find((person) => person.username === owner)?.id ?? owner,
+      createdAt: SEED_NOW - 30 * 24 * 3_600_000,
+      tokens: [],
+      connection: null,
+    }));
+    await route.fulfill({ response, json: { agents: [...json.agents, ...seeded] } });
+  });
+  await page.reload({ waitUntil: "networkidle" });
+}
+
+/** Back to the real agents list, also in the persisted cache, for the next shot. */
+async function withoutSeedAgents(page: Page) {
+  await page.unroute(/\/api\/agents$/);
+  await page.reload({ waitUntil: "networkidle" });
+}
+
+/** The row of a Journal event (or a card) whose title is this, scrolled to the middle of the screen. */
+async function scrollToRow(page: Page, title: string) {
+  await page.getByText(title, { exact: true }).first().scrollIntoViewIfNeeded();
+  await page
+    .getByText(title, { exact: true })
+    .first()
+    .evaluate((node) => node.scrollIntoView({ block: "center" }));
+  await page.waitForTimeout(400);
 }
 
 async function unmockToday(page: Page) {
@@ -3921,6 +3962,41 @@ export const shots: Shot[] = [
   // A shelved build: its chip, then when and after how many attempts; no For offer.
   { name: "build-shelved", path: `/builds/${SEED_IDS.planter}` },
   { name: "journal", path: "/journal" },
+  // Work done through an agent among the rest (scripts/seed/agents.ts): the person's own avatar, with the agent's mark.
+  {
+    name: "journal-via",
+    path: "/journal",
+    prepare: async (page) => {
+      await withSeedAgents(page);
+      await scrollToRow(page, "Hook for the bike helmet");
+    },
+    cleanup: withoutSeedAgents,
+  },
+  {
+    name: "ideas-via",
+    path: "/ideas",
+    prepare: async (page) => {
+      await withSeedAgents(page);
+      await scrollToRow(page, "Desk tidy-up");
+    },
+    cleanup: withoutSeedAgents,
+  },
+  { name: "idea-via", path: `/ideas/${SEED_IDS.deskTidy}`, prepare: withSeedAgents, cleanup: withoutSeedAgents },
+  {
+    name: "build-via",
+    path: `/builds/${SEED_BUILD_IDS.tugboat}`,
+    fullPage: true,
+    prepare: withSeedAgents,
+    cleanup: withoutSeedAgents,
+  },
+  {
+    name: "today-via",
+    path: "/today",
+    width: 1440,
+    fullPage: true,
+    prepare: withSeedAgents,
+    cleanup: withoutSeedAgents,
+  },
   // The same catch-up at the top of the phone's Journal (above Now).
   {
     name: "journal-since",

@@ -58,7 +58,8 @@ test("reacts to your own idea, keeps it, and takes it back with a tap", { tag: "
   await page.getByRole("button", { name: "React to this idea" }).click();
   const picker = page.getByRole("group", { name: "Reactions" });
   await expect(picker).toBeVisible();
-  await expect(picker.getByRole("button")).toHaveCount(7);
+  // Two rows of seven: 13 emoji and the "more" tile.
+  await expect(picker.getByRole("button")).toHaveCount(14);
   // The pill shows at once (optimistic); a reload before the request lands would cancel it.
   const saved = page.waitForResponse((r) => r.url().includes("/reactions/") && r.request().method() === "PUT");
   await picker.getByRole("button", { name: "🤌" }).click();

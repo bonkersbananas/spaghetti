@@ -417,6 +417,8 @@
   --radius-lg: 1.25rem;
   --radius-xl: 1.75rem;
   --radius-pill: 999px;
+  /* The agent mark on an avatar (a few px square): a share of its size, so it stays a rounded square, not a dot. */
+  --radius-mark: 30%;
 
   --shadow-*: initial;
   --shadow-soft: var(--sg-shadow-soft);
@@ -623,4 +625,46 @@
  */
 @utility fade-lines {
   mask-image: linear-gradient(to bottom, black calc(100% - 3lh), transparent calc(100% - 1lh));
+}
+/*
+ * The agent mark's cutout on an avatar (ui/Avatar.tsx), one per size: the face with a rounded square taken out of its
+ * lower right corner, a hair wider than the mark that sits there. A mask, so it reads on any surface (paper, cream, a
+ * sheet, a photo) without a ring in the surface's color, and never covers the face. Kept here, not built in
+ * JavaScript, so it costs no first-load script. Geometry per size (px): face, mark, how far the mark stands out, gap.
+ */
+/* xs: 24, 10, 2, 1.5 */
+@utility agent-cut-xs {
+  -webkit-mask:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill-rule='evenodd' d='M0 0H24V24H0ZM19 14.5H24A4.5 4.5 0 0 1 28.5 19V24A4.5 4.5 0 0 1 24 28.5H19A4.5 4.5 0 0 1 14.5 24V19A4.5 4.5 0 0 1 19 14.5Z'/%3E%3C/svg%3E")
+    0 0 / 100% 100%;
+  mask:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill-rule='evenodd' d='M0 0H24V24H0ZM19 14.5H24A4.5 4.5 0 0 1 28.5 19V24A4.5 4.5 0 0 1 24 28.5H19A4.5 4.5 0 0 1 14.5 24V19A4.5 4.5 0 0 1 19 14.5Z'/%3E%3C/svg%3E")
+    0 0 / 100% 100%;
+}
+/* sm: 28, 12, 2, 1.5 */
+@utility agent-cut-sm {
+  -webkit-mask:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 28 28'%3E%3Cpath fill-rule='evenodd' d='M0 0H28V28H0ZM21.6 16.5H27.4A5.1 5.1 0 0 1 32.5 21.6V27.4A5.1 5.1 0 0 1 27.4 32.5H21.6A5.1 5.1 0 0 1 16.5 27.4V21.6A5.1 5.1 0 0 1 21.6 16.5Z'/%3E%3C/svg%3E")
+    0 0 / 100% 100%;
+  mask:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 28 28'%3E%3Cpath fill-rule='evenodd' d='M0 0H28V28H0ZM21.6 16.5H27.4A5.1 5.1 0 0 1 32.5 21.6V27.4A5.1 5.1 0 0 1 27.4 32.5H21.6A5.1 5.1 0 0 1 16.5 27.4V21.6A5.1 5.1 0 0 1 21.6 16.5Z'/%3E%3C/svg%3E")
+    0 0 / 100% 100%;
+}
+/* md: 36, 16, 3, 2 */
+@utility agent-cut-md {
+  -webkit-mask:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 36 36'%3E%3Cpath fill-rule='evenodd' d='M0 0H36V36H0ZM27.8 21H35.2A6.8 6.8 0 0 1 42 27.8V35.2A6.8 6.8 0 0 1 35.2 42H27.8A6.8 6.8 0 0 1 21 35.2V27.8A6.8 6.8 0 0 1 27.8 21Z'/%3E%3C/svg%3E")
+    0 0 / 100% 100%;
+  mask:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 36 36'%3E%3Cpath fill-rule='evenodd' d='M0 0H36V36H0ZM27.8 21H35.2A6.8 6.8 0 0 1 42 27.8V35.2A6.8 6.8 0 0 1 35.2 42H27.8A6.8 6.8 0 0 1 21 35.2V27.8A6.8 6.8 0 0 1 27.8 21Z'/%3E%3C/svg%3E")
+    0 0 / 100% 100%;
+}
+/* lg: 48, 20, 4, 2 */
+@utility agent-cut-lg {
+  -webkit-mask:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 48 48'%3E%3Cpath fill-rule='evenodd' d='M0 0H48V48H0ZM38 30H47A8 8 0 0 1 55 38V47A8 8 0 0 1 47 55H38A8 8 0 0 1 30 47V38A8 8 0 0 1 38 30Z'/%3E%3C/svg%3E")
+    0 0 / 100% 100%;
+  mask:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 48 48'%3E%3Cpath fill-rule='evenodd' d='M0 0H48V48H0ZM38 30H47A8 8 0 0 1 55 38V47A8 8 0 0 1 47 55H38A8 8 0 0 1 30 47V38A8 8 0 0 1 38 30Z'/%3E%3C/svg%3E")
+    0 0 / 100% 100%;
 }

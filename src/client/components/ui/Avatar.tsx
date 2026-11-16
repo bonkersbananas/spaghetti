@@ -1,5 +1,5 @@
 import type { Person } from "@shared/api";
-import type { PersonColor } from "@shared/people";
+import { type PersonColor, withoutOwner } from "@shared/people";
 import { useState } from "react";
 import { cn } from "@/lib/cn";
 import { initials } from "@/lib/initials";
@@ -35,21 +35,27 @@ interface AvatarProps {
   className?: string;
 }
 
-const glyphSizes = { xs: 12, sm: 16, md: 20, lg: 28 } as const;
-const badgeSizes = { md: "size-4.5", lg: "size-5.5" } as const;
-const badgeGlyphs = { md: 11, lg: 14 } as const;
+/**
+ * The agent mark, per size: a small rounded square (an agent is never a circle) at the lower right, standing a little
+ * past the circle, with the glyph inside; `cut` takes its place out of the face (the agent-cut utilities in tokens.css,
+ * whose geometry matches these sizes).
+ */
+const marks = {
+  xs: { glyph: 9, cut: "agent-cut-xs", className: "size-2.5 -right-0.5 -bottom-0.5" },
+  sm: { glyph: 10, cut: "agent-cut-sm", className: "size-3 -right-0.5 -bottom-0.5" },
+  md: { glyph: 12, cut: "agent-cut-md", className: "size-4 -right-0.75 -bottom-0.75" },
+  lg: { glyph: 15, cut: "agent-cut-lg", className: "size-5 -right-1 -bottom-1" },
+} as const;
 
 /**
- * A person's initials on their color. Shown beside what they wrote.
+ * A person's initials on their color (or their picture). Shown beside what they did.
  *
- * With `via`, it was done through that person's agent ("Claude for Alex"):
- * small (xs, sm) the circle keeps their color and shows an agent glyph in place
- * of the letter, so it reads as "Alex's agent" at a glance; larger (md, lg) the
- * initials stay and a badge sits outside the circle, cut out of the surface behind.
+ * With `via`, it was done through one of their agents ("Claude for Alex", "Share from iPhone"): it is still theirs,
+ * so it is still their face, at every size; a small agent mark sits in its lower right corner, cut out of the
+ * circle, and the name reads "Alex, via Claude for Alex".
  */
 export function Avatar({ person, size = "md", ringed = false, decorative = false, via, className }: AvatarProps) {
   const label = via ? `${person.name}, via ${via}` : person.name;
-  const glyphInstead = !!via && (size === "xs" || size === "sm");
   const face = (
     <span
       {...(decorative ? { "aria-hidden": true } : { role: "img", "aria-label": label, title: label })}
@@ -58,27 +64,28 @@ export function Avatar({ person, size = "md", ringed = false, decorative = false
         colors[person.color],
         sizes[size],
         ringed && "ring-paper ring-2",
+        // Small, two letters fill the circle: nudged a pixel up and left, they keep clear of the mark's cutout.
+        via && marks[size].cut,
+        via && (size === "xs" || size === "sm") && "pr-0.5 pb-0.5",
         !via && className,
       )}
     >
-      {glyphInstead ? <AgentIcon size={glyphSizes[size]} weight="fill" aria-hidden /> : initials(person.name)}
-      {!glyphInstead && person.photoUrl && <Picture key={person.photoUrl} url={person.photoUrl} />}
+      {initials(person.name)}
+      {person.photoUrl && <Picture key={person.photoUrl} url={person.photoUrl} />}
     </span>
   );
   if (!via) return face;
-  if (glyphInstead) return className ? <span className={cn("inline-flex shrink-0", className)}>{face}</span> : face;
-  const badge = badgeSizes[size as "md" | "lg"];
   return (
     <span className={cn("relative inline-flex shrink-0", className)}>
       {face}
       <span
         aria-hidden
         className={cn(
-          "bg-select text-on-select ring-cream absolute -right-1.5 -bottom-1.5 inline-flex items-center justify-center rounded-full ring-2",
-          badge,
+          "bg-ink-faint text-paper rounded-mark absolute inline-flex items-center justify-center",
+          marks[size].className,
         )}
       >
-        <AgentIcon size={badgeGlyphs[size as "md" | "lg"]} weight="fill" />
+        <AgentIcon size={marks[size].glyph} weight="fill" />
       </span>
     </span>
   );
@@ -141,9 +148,15 @@ export function AgentAvatar({
   );
 }
 
-/** "via Claude for Alex", quietly, in the place that says who did something. Renders nothing without an agent. */
-export function ViaText({ name, className }: { name?: string; className?: string }) {
-  return name ? <span className={cn("text-ink-faint whitespace-nowrap", className)}>via {name}</span> : null;
+/**
+ * "via Claude for Alex", quietly, in the place that says who did something. Renders nothing without an agent.
+ * With `person`, the one already named or shown beside it, a name that ends with them is said once:
+ * "Alex captured this via Claude", not "via Claude for Alex".
+ */
+export function ViaText({ name, person, className }: { name?: string; person?: string; className?: string }) {
+  return name ? (
+    <span className={cn("text-ink-faint whitespace-nowrap", className)}>via {withoutOwner(name, person)}</span>
+  ) : null;
 }
 
 export function AvatarStack({ people, size = "sm" }: { people: Person[]; size?: keyof typeof sizes }) {
