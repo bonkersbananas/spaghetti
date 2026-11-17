@@ -1003,7 +1003,21 @@ mod dump {
             wall_maximum_resolution: scaled(0.5),
             wall_maximum_deviation: scaled(0.025),
         };
-        let t = WallToolPaths::generate(&outline, scaled(0.42), scaled(0.45), walls, 0, 0.2, &params);
+        // As Orca's `process_arachne` calls it with the presets' widths 0.42 and 0.45 at 0.2 mm layers and
+        // `precise_outer_wall`: spacings, the outline drawn in by the difference of the outer width and spacing.
+        let spacing = |w: f64| (w as f32 - 0.2f32 * (1.0 - 0.25 * std::f32::consts::PI)) as f64;
+        let (w0, wx) = (0.42f64, 0.45f64);
+        let (s0, sx) = (spacing(w0), spacing(wx));
+        let outline = geom::offset_c2(&outline, -(w0 - s0), Join::Miter(3.0));
+        let t = WallToolPaths::generate(
+            &outline,
+            scaled(s0),
+            scaled(sx),
+            walls,
+            -scaled(w0 / 2.0 - s0 / 2.0),
+            0.2,
+            &params,
+        );
         for l in t.toolpaths.iter().flatten() {
             println!("line {} {} {}", l.inset_idx, l.is_odd as u8, l.is_closed as u8);
             for j in &l.junctions {
