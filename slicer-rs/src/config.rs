@@ -461,6 +461,17 @@ pub struct Fuzzy {
     pub ripples_per_layer: i64,
     pub ripple_offset: f64,
     pub layers_between_ripple_offset: i64,
+    /// What moves on Arachne's walls (`fuzzy_skin_mode`): the points sideways, the line's width, or both.
+    pub mode: FuzzyMode,
+}
+
+/// `fuzzy_skin_mode`.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum FuzzyMode {
+    #[default]
+    Displacement,
+    Extrusion,
+    Combined,
 }
 
 impl Fuzzy {
@@ -491,6 +502,11 @@ impl Fuzzy {
             ripples_per_layer: p.int("fuzzy_skin_ripples_per_layer"),
             ripple_offset: p.float("fuzzy_skin_ripple_offset"),
             layers_between_ripple_offset: p.int("fuzzy_skin_layers_between_ripple_offset"),
+            mode: match p.text("fuzzy_skin_mode") {
+                "extrusion" => FuzzyMode::Extrusion,
+                "combined" => FuzzyMode::Combined,
+                _ => FuzzyMode::Displacement,
+            },
         }
     }
 
@@ -1368,13 +1384,13 @@ impl Settings {
             }
         }
         // (Spiral vase mode keeps the classic walls, so these notes would describe walls never made.)
-        if self.wall_generator == "arachne" && !self.spiral_mode {
-            if self.only_one_wall_top && self.top_surface_expansion > 0.0 && self.top_surface_density > 0.0 {
-                out.push("arachne walls over a top surface printed with all their walls (only_one_wall_top with top_surface_expansion)".into());
-            }
-            if self.fuzzy.on() {
-                out.push("fuzzy skin on arachne walls printed smooth".into());
-            }
+        if self.wall_generator == "arachne"
+            && !self.spiral_mode
+            && self.only_one_wall_top
+            && self.top_surface_expansion > 0.0
+            && self.top_surface_density > 0.0
+        {
+            out.push("arachne walls over a top surface printed with all their walls (only_one_wall_top with top_surface_expansion)".into());
         }
         if self.elephant_foot > 0.0 && self.elephant_foot_layers > 1 && self.support.raft_layers <= 0 {
             out.push("elephant's foot compensated on the first layer only".into());
