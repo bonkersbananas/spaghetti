@@ -90,6 +90,7 @@ export function LinkCard({
         </span>
         <span className="text-small text-ink-faint truncate">
           {site}
+          {model?.via && ` · via ${hostOf(model.via)}`}
           <span className="sr-only"> (opens in a new tab)</span>
         </span>
       </span>

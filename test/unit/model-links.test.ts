@@ -18,6 +18,26 @@ describe("model links", () => {
     expect(modelSite("https://127.0.0.1/x")).toBeNull();
   });
 
+  it("reads a mirror's page as the source model's page", () => {
+    const mw = modelSite("https://3dgo.app/models/makerworld/2487194");
+    expect(mw?.site.id).toBe("makerworld");
+    expect(mw?.url.href).toBe("https://makerworld.com/models/2487194");
+    expect(modelSite("https://www.3dgo.app/en/models/printables/123")?.url.href).toBe(
+      "https://www.printables.com/model/123",
+    );
+    expect(modelSite("https://3dgo.app/models/thingiverse/456")?.url.href).toBe(
+      "https://www.thingiverse.com/thing:456",
+    );
+    expect(modelSite("https://3dgo.app/models/cults/456")).toBeNull();
+    expect(modelSite("https://3dgo.app/models/constructor/12")).toBeNull();
+    expect(modelSite("https://3dgo.app/")).toBeNull();
+    expect(modelSite("https://3dgo.app.evil.example/models/makerworld/1")).toBeNull();
+    expect(lonelyModelLink("https://3dgo.app/models/makerworld/2487194")?.url).toBe(
+      "https://makerworld.com/models/2487194",
+    );
+    expect(firstModelLink("look https://3dgo.app/models/makerworld/2487194 !")?.site.name).toBe("MakerWorld");
+  });
+
   it("only allows the sites' own image hosts", () => {
     expect(isModelImageUrl("https://media.printables.com/media/prints/1.jpg")).toBe(true);
     expect(isModelImageUrl("https://cdn.thingiverse.com/a.jpg")).toBe(true);

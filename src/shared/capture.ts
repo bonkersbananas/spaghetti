@@ -22,5 +22,18 @@ export function captureTitle(
   const t = title?.trim() ?? "";
   if (!t) return null;
   if (t === url?.trim() || t === text?.trim()) return null;
-  return t;
+  return tidyPageTitle(t) ?? t;
+}
+
+/**
+ * A page title without its site's name: "Infinity Heart | MakerWorld" is "Infinity Heart". Only a model site's name or a
+ * domain goes ("Plate - 3.5mm" and "Cats | Dogs" stay).
+ */
+export function tidyPageTitle(title: string): string | null {
+  const [, head = "", suffix = ""] = /^(.*\S)\s+[|\-–—·•]\s+([^|\-–—·•]{1,40})$/.exec(title) ?? [];
+  return /^(makerworld|printables|thingiverse|thangs|cults|myminifactory|creality cloud|[\w-]+\.[a-z]{2,})$/i.test(
+    suffix,
+  )
+    ? head
+    : null;
 }

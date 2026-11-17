@@ -716,14 +716,14 @@ describe("drafting an idea from a model page", () => {
       headers: { Authorization: `Bearer ${sharing.token}` },
     });
     const { id } = await viaShortcut.json<{ id: string }>();
-    expect((await getItem(id)).title).toBe("Cable comb by Mila | MakerWorld");
+    expect((await getItem(id)).title).toBe("Cable comb by Mila");
     await draftIt(id);
     const item = await getItem(id);
     expect(item.draft).toMatchObject({ status: "drafted", applied: expect.arrayContaining(["title", "note"]) });
     expect(item.title).toBe("Cable comb");
     // Undo gives the shared title back.
     await asPerson(`/api/items/${id}/draft`, { method: "DELETE" });
-    expect((await getItem(id)).title).toBe("Cable comb by Mila | MakerWorld");
+    expect((await getItem(id)).title).toBe("Cable comb by Mila");
 
     // The same from a signed-in person's capture (a script, the bookmarklet's server path).
     const viaSession = await asPerson("/api/capture", { method: "POST", json: { url: PAGE, title: "Shared title" } });

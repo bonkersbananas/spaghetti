@@ -65,7 +65,11 @@ describe("model marks", () => {
   it("counts a kept slicer file as a model, after any link", () => {
     const files = [{ id: "f1", name: "bin.gcode.3mf" }];
     const mark = modelOf({ note: "just words", files });
-    expect(mark).toMatchObject({ kind: "file", name: ".3mf", url: "/api/files/f1" });
+    expect(mark).toMatchObject({
+      kind: "file",
+      name: ".3mf",
+      url: "/api/files/f1",
+    });
     expect(mark && modelLetter(mark)).toBe("3MF");
     expect(mark && modelPlace(mark)).toBe("3MF file");
     expect(modelOf({ note: "https://www.printables.com/model/9-x", files })?.site).toBe("printables");
@@ -128,5 +132,26 @@ describe("model links without their tracking bits", () => {
     );
     expect(tidyModelLinks("no links")).toBe("no links");
     expect(tidyModelLinks(FLEXI)).toBe("https://makerworld.com/en/models/3531476-flexi-mini-hummingbird");
+  });
+});
+
+describe("mirror links", () => {
+  const mirror = "https://3dgo.app/models/makerworld/2487194";
+  it("are the source model's link, and stay as pasted", () => {
+    const mark = modelMarkOf(mirror);
+    expect(mark).toMatchObject({
+      kind: "page",
+      site: "makerworld",
+      url: "https://makerworld.com/models/2487194",
+      via: mirror,
+    });
+    expect(cleanModelUrl(mirror)).toBe(mirror);
+    expect(tidyModelLinks(`see ${mirror}`)).toBe(`see ${mirror}`);
+    expect(modelMarkIn(`see ${mirror}`)?.name).toBe("MakerWorld");
+  });
+  it("are the same model as the source's own address", () => {
+    expect(sameModel(mirror, "https://makerworld.com/en/models/2487194-infinity-heart")).toBe(true);
+    expect(linkKey(mirror)).toBe(linkKey("https://makerworld.com/models/2487194"));
+    expect(sameModel(mirror, "https://makerworld.com/models/1")).toBe(false);
   });
 });

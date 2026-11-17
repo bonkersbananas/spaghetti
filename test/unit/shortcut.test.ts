@@ -15,6 +15,17 @@ describe("what a share becomes", () => {
     expect(captureTitle("https://a.example", "", "https://a.example")).toBeNull();
     expect(captureTitle("  ", "x", "y")).toBeNull();
   });
+
+  it("drops the site's name from a page title", () => {
+    expect(captureTitle("Infinity Heart Balloon | MakerWorld", "", "https://3dgo.app/models/makerworld/1")).toBe(
+      "Infinity Heart Balloon",
+    );
+    expect(captureTitle("Hook - Printables", "", "https://www.printables.com/model/1")).toBe("Hook");
+    expect(captureTitle("Hook - Printables.com", "", "https://example.com/1")).toBe("Hook");
+    expect(captureTitle("Plate - 3.5mm", "", "https://example.com/1")).toBe("Plate - 3.5mm");
+    expect(captureTitle("Cats | Dogs", "", "https://example.com/1")).toBe("Cats | Dogs");
+    expect(captureTitle("Bracket - 2 inch", "", "https://example.com/1")).toBe("Bracket - 2 inch");
+  });
 });
 
 describe("the iPhone Shortcut and the bookmarklet", () => {
