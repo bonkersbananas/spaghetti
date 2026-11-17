@@ -1413,7 +1413,7 @@ impl Settings {
         if self.elephant_foot > 0.0 && self.elephant_foot_layers > 1 && self.support.raft_layers <= 0 {
             out.push("elephant's foot compensated on the first layer only".into());
         }
-        if matches!(self.seam_position.as_str(), "nearest" | "random") && !self.spiral_mode {
+        if self.seam_position == "nearest" && !self.spiral_mode {
             out.push(format!("{} seams placed as aligned ones", self.seam_position));
         }
         // In spiral vase mode every lift goes straight up, as Orca's do there.

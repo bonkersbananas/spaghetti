@@ -45,14 +45,18 @@ pub enum Mode {
     AlignedBack,
     /// At the back of each loop, strung up the print.
     Rear,
+    /// Anywhere on each loop, by a pseudo-random number worked out from the loop's first candidate (no visibility,
+    /// no strings).
+    Random,
 }
 
 impl Mode {
-    /// The mode of a `seam_position`: nearest and random seams (not ported) are placed as aligned ones.
+    /// The mode of a `seam_position`: nearest seams (not ported) are placed as aligned ones.
     pub fn of(seam_position: &str) -> Mode {
         match seam_position {
             "aligned_back" => Mode::AlignedBack,
             "back" => Mode::Rear,
+            "random" => Mode::Random,
             _ => Mode::Aligned,
         }
     }
@@ -222,6 +226,7 @@ fn norm(x: f64, y: f64) -> f64 {
 #[derive(Clone, Copy)]
 struct Comparator {
     rear: bool,
+    random: bool,
 }
 
 impl Comparator {
@@ -250,6 +255,9 @@ impl Comparator {
         }
         if let Some(first) = hidden_first(a, b) {
             return first;
+        }
+        if self.random {
+            return true;
         }
         if self.rear {
             return a.position[1] + SCORE_TOLERANCE * 5.0 > b.position[1];
@@ -450,7 +458,12 @@ fn segment_distance2(s: &[f64; 4], x: f64, y: f64) -> f64 {
 /// Places the seams of every object on every layer, into each layer's `seams` (indexed by the islands' group: all of
 /// an object's regions together, as Orca places an object's seams). `meshes` are the objects as sliced, one for each
 /// group, each its parts in order, `slice_z` and `heights` each layer's slicing plane and height.
-pub fn place(regions: &mut [LayerRegions], meshes: &[Vec<&Mesh>], slice_z: &[f64], heights: &[f64], s: &Settings) {
+pub fn place(
+    regions: &mut [LayerRegions],
+    meshes: &[Vec<&Mesh>],
+    (middles, slice_z, heights): (&[[f32; 2]], &[f64], &[f64]),
+    s: &Settings,
+) {
     let mode = Mode::of(&s.seam_position);
     let regions_ref: &[LayerRegions] = regions;
     // Each object's on its own: Orca places each object's seams apart from the others'.
@@ -459,7 +472,7 @@ pub fn place(regions: &mut [LayerRegions], meshes: &[Vec<&Mesh>], slice_z: &[f64
         if !regions_ref.iter().any(|r| r.islands.iter().any(|i| i.group == object)) {
             return Vec::new();
         }
-        object_seams(regions_ref, object, &meshes[o], mode, slice_z, heights, s)
+        object_seams(regions_ref, object, &meshes[o], mode, (middles[o], slice_z, heights), s)
     });
     for layer in regions.iter_mut() {
         layer.seams = vec![LayerSeams::default(); meshes.len()];
@@ -477,11 +490,10 @@ fn object_seams(
     object: u32,
     parts: &[&Mesh],
     mode: Mode,
-    slice_z: &[f64],
-    heights: &[f64],
+    (middle, slice_z, heights): ([f32; 2], &[f64], &[f64]),
     s: &Settings,
 ) -> Vec<LayerSeams> {
-    let comparator = Comparator { rear: mode == Mode::Rear };
+    let comparator = Comparator { rear: mode == Mode::Rear, random: mode == Mode::Random };
     let nozzle = s.nozzle_diameter as f32;
     let mut layers: Vec<LayerSeams> = crate::par::map_range(regions.len(), |l| {
         let width = crate::plan::flow(crate::region::Role::OuterWall, s.on_plate(l), heights[l], s).0 as f32;
@@ -517,7 +529,7 @@ fn object_seams(
         seams
     });
     // How visible each candidate is, from the samples round it.
-    if mode != Mode::Rear {
+    if !matches!(mode, Mode::Rear | Mode::Random) {
         let v = Visibility::of(parts, mode == Mode::AlignedBack);
         let seen: Vec<Vec<f32>> =
             crate::par::map_range(layers.len(), |l| layers[l].points.iter().map(|p| v.at(p.position)).collect());
@@ -528,6 +540,13 @@ fn object_seams(
         }
     }
     for seams in &mut layers {
+        if mode == Mode::Random {
+            for k in 0..seams.perimeters.len() {
+                pick_random(seams, k, comparator, middle);
+            }
+            seams.cells = Cells::new(&seams.points, 2.0);
+            continue;
+        }
         // Each loop's best candidate (Orca's `pick_seam_point`).
         for perimeter in &mut seams.perimeters {
             let mut seam = perimeter.start;
@@ -540,8 +559,72 @@ fn object_seams(
         }
         seams.cells = Cells::new(&seams.points, 2.0);
     }
-    align(&mut layers, comparator, mode, nozzle);
+    if mode != Mode::Random {
+        align(&mut layers, comparator, mode, nozzle);
+    }
     layers
+}
+
+/// Orca's `pick_random_seam_point`: among the loop's candidates as good as its best (`are_similar`), one chosen with
+/// a probability by the length of the edge after it, by a number fixed by where the loop's first candidate is; the
+/// seam lies that far along the edge. All single precision, as Orca's.
+fn pick_random(seams: &mut LayerSeams, k: usize, comparator: Comparator, middle: [f32; 2]) {
+    let perimeter = &seams.perimeters[k];
+    let (start, end, width) = (perimeter.start, perimeter.end, perimeter.width);
+    let pts = &seams.points;
+    let mut example = start;
+    // Orca's `edge_from`: to the next candidate round the loop.
+    let edge_from = |i: usize| -> [f32; 3] {
+        let next = if i == end - 1 { start } else { i + 1 };
+        [
+            pts[next].position[0] - pts[i].position[0],
+            pts[next].position[1] - pts[i].position[1],
+            pts[next].position[2] - pts[i].position[2],
+        ]
+    };
+    let length = |e: [f32; 3]| (e[0] * e[0] + e[1] * e[1] + e[2] * e[2]).sqrt();
+    // Orca's candidates are in the object's own coordinates, about its middle.
+    let seed = [pts[example].position[0] - middle[0], pts[example].position[1] - middle[1], pts[example].position[2]];
+    let dot = seed[0] * 12.9898f32 + seed[1] * 78.233f32 + seed[2] * 133.3333f32;
+    let mut rand = (libm::sinf(dot) * 43758.5453f32).abs();
+    rand -= (rand as i32) as f32;
+    let mut viables: Vec<(usize, f32, [f32; 3])> = Vec::new();
+    for i in start..end {
+        let similar = comparator.not_much_worse(&pts[i], &pts[example], width)
+            && comparator.not_much_worse(&pts[example], &pts[i], width);
+        if similar {
+            let e = edge_from(i);
+            viables.push((i, length(e), e));
+        } else if comparator.not_much_worse(&pts[example], &pts[i], width) {
+            // Worse than the example: skipped.
+        } else {
+            example = i;
+            viables.clear();
+            let e = edge_from(i);
+            viables.push((i, length(e), e));
+        }
+    }
+    let sum = viables.iter().fold(0.0f32, |acc, v| acc + v.1);
+    let mut picked = sum * rand;
+    let mut at = 0;
+    while at + 1 < viables.len() && picked - viables[at].1 > 0.0 {
+        picked -= viables[at].1;
+        at += 1;
+    }
+    let (index, edge_length, edge) = viables[at];
+    picked = picked.clamp(0.0, edge_length);
+    let base = pts[index].position;
+    let along = if edge_length > 0.0 {
+        let n = length(edge);
+        // Eigen's `normalized()` divides by the norm; the scaling by the length follows.
+        [edge[0] / n * picked, edge[1] / n * picked, edge[2] / n * picked]
+    } else {
+        [0.0; 3]
+    };
+    let perimeter = &mut seams.perimeters[k];
+    perimeter.seam = index;
+    perimeter.finalized = true;
+    perimeter.at = [base[0] + along[0], base[1] + along[1], base[2] + along[2]];
 }
 
 /// One wall loop of the layer below or above, as Orca's `SeamContour` sees it: a loop's candidates, counter-clockwise.
@@ -1403,6 +1486,58 @@ fn split_at(mut points: Vec<Pt>, p: Pt) -> Vec<Pt> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A 20 mm square loop of 40 candidates (every half millimetre of each side is not needed: 10 a side), on layer `z`.
+    fn square_layer(z: f32, x0: f32) -> LayerSeams {
+        let mut points = Vec::new();
+        for side in 0..4 {
+            for k in 0..10 {
+                let a = k as f32 * 2.0;
+                let (x, y) = match side {
+                    0 => (a, 0.0),
+                    1 => (20.0, a),
+                    2 => (20.0 - a, 20.0),
+                    _ => (0.0, 20.0 - a),
+                };
+                points.push(Candidate {
+                    position: [x0 + x, 100.0 + y, z],
+                    perimeter: 0,
+                    visibility: 0.0,
+                    overhang: 0.0,
+                    embedded: 0.0,
+                    angle: 0.0,
+                });
+            }
+        }
+        let perimeter =
+            Perimeter { hole: false, start: 0, end: 40, seam: 0, width: 0.42, finalized: false, at: [0.0; 3] };
+        LayerSeams { perimeters: vec![perimeter], points, cells: Cells::default() }
+    }
+
+    #[test]
+    fn random_seams_are_fixed_by_the_loop_and_spread_over_it() {
+        let comparator = Comparator { rear: false, random: true };
+        let mut near_corner = 0;
+        let mut seen = std::collections::HashSet::new();
+        for layer in 0..200 {
+            let mut a = square_layer(0.1 + layer as f32 * 0.2, 90.0);
+            pick_random(&mut a, 0, comparator, [100.0, 110.0]);
+            let mut b = square_layer(0.1 + layer as f32 * 0.2, 90.0);
+            pick_random(&mut b, 0, comparator, [100.0, 110.0]);
+            let at = a.perimeters[0].at;
+            assert_eq!(at, b.perimeters[0].at, "the same loop gets the same seam");
+            assert!(a.perimeters[0].finalized);
+            // On the loop: on one of the square's sides.
+            let (dx, dy) = (at[0] - 90.0, at[1] - 100.0);
+            let on = |v: f32, edge: f32| (v - edge).abs() < 1e-3;
+            assert!(on(dx, 0.0) || on(dx, 20.0) || on(dy, 0.0) || on(dy, 20.0), "{at:?}");
+            near_corner += usize::from((dx < 1.0 || dx > 19.0) && (dy < 1.0 || dy > 19.0));
+            seen.insert(((dx / 4.0) as i32, (dy / 4.0) as i32));
+        }
+        // A fifth of the loop's length lies on its four 1 mm corner stretches at most; most of 20 cells are reached.
+        assert!(near_corner < 40, "{near_corner}");
+        assert!(seen.len() >= 14, "{}", seen.len());
+    }
 
     #[test]
     fn a_concave_corner_costs_least_and_a_straight_wall_most() {
