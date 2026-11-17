@@ -50,8 +50,8 @@ const SHARP_TAIL_MAX_HEIGHT: f64 = 16.0;
 /// mm: how far support keeps off a sharp tail, and off object layers it doesn't overlap in height.
 const SHARP_TAIL_XY_GAP: f64 = 0.2;
 const NO_OVERLAP_XY_GAP: f64 = 0.2;
-/// mm: support paths are simplified to this, the tolerance Orca fits them to when it fits arcs (`SCALED_SUPPORT_RESOLUTION`,
-/// the profile's default). We write the chords, not the arcs: round a tree's circles they print 0.4 % less plastic.
+/// mm: support paths are fitted with arcs to this, as Orca fits them when it fits arcs (`SCALED_SUPPORT_RESOLUTION`,
+/// the profile's default); without arcs they are simplified to the profile's resolution.
 const RESOLUTION: f64 = 0.0375;
 
 /// What a brim keeps the first layer's support out of: the object's footprint, its outlines grown by `gap` where a
@@ -161,6 +161,9 @@ pub struct Params {
     /// island a loop round lines of the support pattern, straight ones where the trees have walls (Orca's
     /// `base_fill_pattern`), rather than the loops alone (`tree_paths`).
     organic_lines: Option<bool>,
+    /// How support paths are simplified: to 0.0375 mm with arcs fitted, where Orca fits them (`enable_arc_fitting`
+    /// enabled, outside spiral vase mode), else to the profile's resolution.
+    simplify: (f64, bool),
 }
 
 impl Params {
@@ -196,7 +199,9 @@ impl Params {
         let fw = ((s.outer_wall_width as f32 as f64 * 1e6) as i64) as f32 as f64 / 1e6;
         let threshold = (sp.threshold_angle + 1.0).min(89.0).to_radians();
         let min_height = s.layer_height.max(0.01).min(sp.min_layer_height.max(0.01));
+        let arcs = s.arc_fitting == crate::config::ArcFitting::Enabled && !s.spiral_mode;
         Params {
+            simplify: if arcs { (RESOLUTION, true) } else { (s.resolution, false) },
             threshold,
             fw,
             extrusion_width: s.line_width,
@@ -343,6 +348,15 @@ pub struct Path {
     pub width: f64,
     /// mm: the height of the support layer it belongs to, which may differ from the layer it prints on.
     pub height: f64,
+    /// The stretches of its points that print as arcs (Orca's `Layer::simplify_support_path`).
+    pub arcs: Vec<crate::plan::ArcRun>,
+}
+
+/// A support path of `points` simplified as Orca simplifies support paths (`simplify`: the tolerance, and whether arcs
+/// are fitted, `Params::simplify`).
+fn support_path(role: Role, points: &[Pt], width: f64, height: f64, simplify: (f64, bool)) -> Path {
+    let (points, arcs) = crate::plan::fit(points, simplify.0, simplify.1);
+    Path { role, points, width, height, arcs }
 }
 
 /// What a support layer prints, in Orca's order before it chains them: single paths, which may be chained in any
@@ -2118,12 +2132,7 @@ fn raft_paths(arena: &[Gen], rafts: &[usize], trees: &[usize], origin: (f64, f64
     par::map_range(rafts.len(), |k| {
         let g = &arena[rafts[k]];
         let h = g.height;
-        let path = |role: Role, points: Vec<Pt>, width: f64| Path {
-            role,
-            points: geom::simplify_line(&points, RESOLUTION),
-            width,
-            height: h,
-        };
+        let path = |role: Role, points: Vec<Pt>, width: f64| support_path(role, &points, width, h, p.simplify);
         // Organic trees cut through the raft above its first layer (Orca takes the k-th layer of their branches
         // where it is at this height): the raft prints round them, and they print as branches.
         let tree = trees
@@ -2142,7 +2151,7 @@ fn raft_paths(arena: &[Gen], rafts: &[usize], trees: &[usize], origin: (f64, f64
             let fill = |shape: &Shape| base_support::fill(shape, direction(angles.base), origin, p.spacing, p.density);
             if p.raft_sheath {
                 // A loop round each part, as wide as a support line of the layer's height.
-                let line = Line { width: p.width, height: h, spacing: flow_spacing(p.width, h) };
+                let line = Line { width: p.width, height: h, spacing: flow_spacing(p.width, h), simplify: p.simplify };
                 items.extend(sheath_paths(&area, line, Role::Support, false, fill));
             } else {
                 for shape in &geom::closing(&area, SCALED_EPSILON) {
@@ -2158,7 +2167,7 @@ fn raft_paths(arena: &[Gen], rafts: &[usize], trees: &[usize], origin: (f64, f64
         let role = if k < r.base_layers { Role::Support } else { Role::SupportInterface };
         if k == 0 {
             let (angle, sp) = (direction(angles.first), p.first_spacing);
-            let line = Line { width: p.first_width, height: p.first_layer_height, spacing: sp };
+            let line = Line { width: p.first_width, height: p.first_layer_height, spacing: sp, simplify: p.simplify };
             items.extend(sheath_paths(&g.polygons, line, role, true, |inner: &Shape| {
                 if rectilinear {
                     monotonic::rectilinear(inner, angle, origin, sp, p.first_density)
@@ -2194,6 +2203,8 @@ struct Line {
     width: f64,
     height: f64,
     spacing: f64,
+    /// How its paths are simplified (`Params::simplify`).
+    simplify: (f64, bool),
 }
 
 /// The spacing of a line this wide and high, mm, as Orca's float `Flow::spacing` works it out.
@@ -2211,13 +2222,8 @@ fn sheath_paths(
     fixed: bool,
     fill: impl Fn(&Shape) -> Vec<Vec<Pt>>,
 ) -> Vec<Item> {
-    let Line { width: w, height: h, spacing: sp } = line;
-    let path = |points: Vec<Pt>, role: Role| Path {
-        role,
-        points: geom::simplify_line(&points, RESOLUTION),
-        width: w,
-        height: h,
-    };
+    let Line { width: w, height: h, spacing: sp, simplify } = line;
+    let path = |points: Vec<Pt>, role: Role| support_path(role, &points, w, h, simplify);
     let mut out = Vec::new();
     let closed = geom::offset(&geom::offset(area, SCALED_EPSILON), -(SCALED_EPSILON + 0.5 * w));
     for shape in &closed {
@@ -2472,12 +2478,7 @@ fn layer_paths(
             }
         }
     }
-    let path = |role: Role, points: Vec<Pt>, width: f64, h: f64| Path {
-        role,
-        points: geom::simplify_line(&points, RESOLUTION),
-        width,
-        height: h,
-    };
+    let path = |role: Role, points: Vec<Pt>, width: f64, h: f64| support_path(role, &points, width, h, p.simplify);
     // Interfaces: the support pattern a quarter turn from the columns', denser.
     let interface_angle = interface_direction(p, id);
     // Orca's interface filler (`contact_fill_pattern`): the grid where it is set, else the support pattern, or
@@ -2572,7 +2573,7 @@ fn layer_paths(
                 // that fills them each island is a loop round the pattern's lines (`fill_expolygons_with_sheath_
                 // generate_paths`): the support's own pattern, or straight lines where the trees have walls.
                 let angle = (p.base_angle + std::f32::consts::FRAC_PI_2) as f64;
-                let line = Line { width: p.width, height: g.height, spacing: p.spacing };
+                let line = Line { width: p.width, height: g.height, spacing: p.spacing, simplify: p.simplify };
                 item.paths.extend(sheath_paths(&area, line, Role::Support, false, |inner: &Shape| {
                     if straight {
                         monotonic::rectilinear(inner, angle, origin, p.spacing, p.density)
@@ -2655,12 +2656,7 @@ pub fn classic_layers(
         let sp = flow_spacing(p.width, h);
         let support_spacing = p.base_spacing() + sp;
         let support_density = (sp / support_spacing).min(1.0);
-        let path = |role: Role, points: Vec<Pt>| Path {
-            role,
-            points: geom::simplify_line(&points, RESOLUTION),
-            width: p.width,
-            height: h,
-        };
+        let path = |role: Role, points: Vec<Pt>| support_path(role, &points, p.width, h, p.simplify);
         let mut items: Vec<Item> = Vec::new();
         let first = layer_id == 0;
         for g in &d.groups {
@@ -2759,12 +2755,7 @@ fn walled_infill(
     h: f64,
     p: &Params,
 ) -> Vec<Path> {
-    let path = |points: Vec<Pt>| Path {
-        role: Role::Support,
-        points: geom::simplify_line(&points, RESOLUTION),
-        width: p.width,
-        height: h,
-    };
+    let path = |points: Vec<Pt>| support_path(Role::Support, &points, p.width, h, p.simplify);
     let mut outline = geom::offset_square(area, -0.5 * sp);
     let to_infill = geom::offset_square(area, -(walls as f64) * sp);
     let mut lines: Vec<Path> = Vec::new();
@@ -2814,7 +2805,7 @@ fn walled_infill(
 /// then rectilinear lines at `angle`, dense, each part's printed as it comes.
 fn flange_paths(area: &Shapes, angle: f64, origin: (f64, f64), p: &Params) -> Vec<Item> {
     let sp = p.first_spacing;
-    let line = Line { width: p.first_width, height: p.first_layer_height, spacing: sp };
+    let line = Line { width: p.first_width, height: p.first_layer_height, spacing: sp, simplify: p.simplify };
     sheath_paths(area, line, Role::Support, true, |inner: &Shape| {
         monotonic::rectilinear(inner, angle, origin, sp, p.first_density)
     })
@@ -2829,12 +2820,7 @@ fn tree_paths(area: &Shapes, height: f64, p: &Params) -> Vec<Item> {
     let to_units = |mm: f64| mm * geom::SCALE;
     let clip = to_units(0.15 * sp);
     let anchor_length = to_units(6.0 * sp);
-    let path = |points: Vec<Pt>| Path {
-        role: Role::Support,
-        points: geom::simplify_line(&points, RESOLUTION),
-        width: w,
-        height,
-    };
+    let path = |points: Vec<Pt>| support_path(Role::Support, &points, w, height, p.simplify);
     let closed = geom::offset_c2(
         &geom::offset_c2(area, SCALED_EPSILON, geom::Join::Miter(3.0)),
         -(SCALED_EPSILON + 0.5 * w),
