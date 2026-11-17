@@ -95,6 +95,28 @@ export const INTENT_KEYS = [
   "support_on_build_plate_only",
   "brim_type",
   "brim_width",
+  // How the model is finished and how its surface looks: ironing on flat tops, fuzzy skin's texture. Left out:
+  // ironing_speed (a speed tuned to the project's own printer's motion system, so the X2D's own stays).
+  "ironing_type",
+  "ironing_pattern",
+  "ironing_flow",
+  "ironing_spacing",
+  "ironing_inset",
+  "ironing_angle",
+  "ironing_angle_fixed",
+  "ironing_expansion",
+  "fuzzy_skin",
+  "fuzzy_skin_thickness",
+  "fuzzy_skin_point_distance",
+  "fuzzy_skin_first_layer",
+  "fuzzy_skin_noise_type",
+  "fuzzy_skin_scale",
+  "fuzzy_skin_octaves",
+  "fuzzy_skin_persistence",
+  "fuzzy_skin_mode",
+  "fuzzy_skin_ripples_per_layer",
+  "fuzzy_skin_ripple_offset",
+  "fuzzy_skin_layers_between_ripple_offset",
 ] as const;
 
 /** Keys that name a preset or a printer rather than say how to print: never copied from a project. */
