@@ -1439,11 +1439,13 @@ fn arachne_walls(
     s: &Settings,
 ) -> Vec<Path> {
     use crate::arachne::width;
+    // Inner-outer-inner starts from the outer-first order (on every layer but the first, where it is off).
+    let sandwich = s.wall_sequence == "inner-outer-inner wall" && !first;
+    let outer_first = s.outer_wall_first || sandwich;
     // `all_extrusions`: the insets from the innermost out (or the outermost in), each in its own order.
     let max_inset = lines.iter().map(|l| l.inset).max().unwrap_or(0);
     let mut all: Vec<usize> = Vec::new();
-    let insets: Vec<usize> =
-        if s.outer_wall_first { (0..=max_inset).collect() } else { (0..=max_inset).rev().collect() };
+    let insets: Vec<usize> = if outer_first { (0..=max_inset).collect() } else { (0..=max_inset).rev().collect() };
     for inset in insets {
         all.extend((0..lines.len()).filter(|&i| lines[i].inset == inset));
     }
@@ -1481,7 +1483,7 @@ fn arachne_walls(
                             if d > reach {
                                 continue;
                             }
-                            if (nearby.inset < here.inset) == s.outer_wall_first {
+                            if (nearby.inset < here.inset) == outer_first {
                                 pairs.insert((ni, hi));
                             } else {
                                 pairs.insert((hi, ni));
@@ -1525,6 +1527,24 @@ fn arachne_walls(
         }
         let l = &lines[best];
         current = if l.closed { l.points[0] } else { *l.points.last().unwrap() };
+    }
+    if sandwich {
+        use crate::arachne::ioi::{Wall, sandwich};
+        let walls: Vec<Wall> = lines
+            .iter()
+            .map(|l| Wall {
+                inset: l.inset,
+                closed: l.closed,
+                // Arachne's contours run clockwise, its holes counter-clockwise.
+                contour: l.closed && geom::area2(&l.points) < 0,
+                points: &l.points,
+                widths: &l.widths,
+            })
+            .collect();
+        let nm = |mm: f64| (mm * 1e6) as i64 as f64 / 1e6;
+        let (ext, int) = (Settings::spacing(s.outer_wall_width, h), Settings::spacing(s.inner_wall_width, h));
+        let external = if s.precise_outer_wall { nm(ext) + nm(int) / 2.0 } else { nm(ext) / 2.0 + nm(int) / 2.0 };
+        ordered = sandwich(&walls, ordered, external, nm(int));
     }
     let mut out = Vec::new();
     for li in ordered {
