@@ -35,8 +35,8 @@ export function ChipSection() {
           ))}
         </div>
         <Label>
-          Quiet toggle chips (`appearance="quiet"`), for a filter or two right after a section's heading: words and a
-          count at rest, the picked chip's ink pill once picked
+          Quiet toggle chips (`appearance="quiet"`), for a filter that must sit in running text: words and a count at
+          rest, the picked chip's ink pill once picked
         </Label>
         <div className="flex flex-wrap items-baseline gap-x-5">
           <SectionHeading id="styleguide-quiet-chips">The rest</SectionHeading>

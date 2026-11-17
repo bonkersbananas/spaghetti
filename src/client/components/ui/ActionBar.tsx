@@ -8,7 +8,8 @@ interface ActionBarProps {
 
 /**
  * A screen's main action within thumb reach on phones: a bar that sits on
- * top of the tab bar (such as "Log attempt" on a build). Hidden on desktop,
+ * top of the tab bar (such as "Log attempt" on a build): the page's own paper behind the buttons, fading in from above, so
+ * content scrolling under it never shows through a quiet button. Hidden on desktop,
  * where the action lives in the page. It keeps room for itself at the end
  * of the page, and toasts move up above it while it shows.
  */
@@ -26,7 +27,7 @@ export function ActionBar({ children, className }: ActionBarProps) {
       <div
         data-action-bar
         className={cn(
-          "bottom-tabbar from-paper via-paper/95 fixed inset-x-0 z-20 bg-linear-to-t to-transparent px-5 pt-5 pb-3 md:hidden",
+          "bottom-tabbar bg-paper before:from-paper fixed inset-x-0 z-20 px-5 pt-3 pb-3 before:pointer-events-none before:absolute before:inset-x-0 before:bottom-full before:h-6 before:bg-linear-to-t before:to-transparent md:hidden",
           className,
         )}
       >
