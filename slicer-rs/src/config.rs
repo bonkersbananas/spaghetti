@@ -1253,9 +1253,9 @@ impl Settings {
         if self.honeycomb_complete_top && self.sparse_infill_pattern == "3dhoneycomb" {
             out.push("3D honeycomb's cells left open at the top".into());
         }
-        // Orca grades only these (`is_adaptive_infill_pattern`).
+        // Orca grades gyroid and the TPMS patterns (`is_adaptive_infill_pattern`); TPMS-FK, not ported, has its note.
         if !matches!(self.adaptive_infill_mode.as_str(), "disabled" | "")
-            && matches!(self.sparse_infill_pattern.as_str(), "gyroid" | "tpmsd" | "tpmsfk")
+            && matches!(self.sparse_infill_pattern.as_str(), "gyroid" | "tpmsd")
         {
             out.push(format!("{} sparse infill printed even, not graded", self.sparse_infill_pattern));
         }
