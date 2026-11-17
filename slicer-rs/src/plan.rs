@@ -675,14 +675,7 @@ fn island_paths(
             return region.clone();
         }
         let grown = geom::offset(region, overlap);
-        // Alone in the island (the common case): nothing else to keep out of.
-        if (geom::area_mm2(island_inner) - geom::area_mm2(region)).abs() < 1e-3 {
-            return grown;
-        }
-        // What else fills the island: not the hairline slivers the booleans leave between the region and the inner
-        // area when they are one, which no line fits in and which would cut every line short of the walls.
-        let mut others = geom::difference(island_inner, region);
-        others.retain(|shape| geom::shape_area_mm2(shape) >= 1e-3);
+        let others = others_in(island_inner, region);
         if others.is_empty() { grown } else { geom::difference(&grown, &others) }
     };
     let origin = (centre.0, centre.1);
@@ -1059,14 +1052,15 @@ pub fn sparse_overlap(h: f64, s: &Settings) -> f64 {
     if inset > 0.0 { s.infill_wall_overlap * (inset + Settings::spacing(s.solid_infill_width, h) / 2.0) } else { 0.0 }
 }
 
-/// What else fills an island beside its sparse infill (its infill area less `sparse`), without the hairline slivers
-/// the booleans leave between them where they are one, which no line fits in and which would cut every line short of
-/// the walls: what the sparse infill keeps out of as it reaches into the walls.
-pub fn others_in(inner: &Shapes, sparse: &Shapes) -> Shapes {
-    if sparse.is_empty() || (geom::area_mm2(inner) - geom::area_mm2(sparse)).abs() < 1e-3 {
+/// What else fills an island beside one kind of its infill (its infill area less `region`), without the hairline
+/// slivers the booleans leave between them where they are one, which no line fits in and which would cut every line
+/// short of the walls: what that kind keeps out of as it reaches into the walls. Nothing where the region is alone in
+/// the island (the common case).
+pub fn others_in(inner: &Shapes, region: &Shapes) -> Shapes {
+    if region.is_empty() || (geom::area_mm2(inner) - geom::area_mm2(region)).abs() < 1e-3 {
         return Vec::new();
     }
-    let mut others = geom::difference(inner, sparse);
+    let mut others = geom::difference(inner, region);
     others.retain(|shape| geom::shape_area_mm2(shape) >= 1e-3);
     others
 }

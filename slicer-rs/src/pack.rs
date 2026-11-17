@@ -169,7 +169,7 @@ pub struct Model<'a> {
 /// shows the sliced preview, but drops it when anything changes (a filament, say) and finds an empty plate.
 /// Writes the resources and build to `out` (a big mesh's run to over 100 MB of text, packed as they are written) and
 /// returns the objects' settings and the plate's instances.
-fn model_xml(out: &mut impl std::fmt::Write, model: &Model, objects: &[Object]) -> (String, String) {
+fn model_xml(out: &mut zip::Deflater, model: &Model, objects: &[Object]) -> (String, String) {
     use std::fmt::Write;
     let (mut build, mut settings, mut instances) = (String::new(), String::new(), String::new());
     let mut next = 1;
@@ -187,12 +187,32 @@ fn model_xml(out: &mut impl std::fmt::Write, model: &Model, objects: &[Object]) 
             ids.push(id);
             let _ = writeln!(out, r#"  <object id="{id}" name="{}" type="model">"#, xml(&mesh.name));
             let _ = out.write_str("   <mesh>\n    <vertices>\n");
+            // The numbers as `{}` writes them, written here rather than through the formatter: most of a big
+            // mesh's packing went on formatting its millions of them (`push_f32`, `push_u32`).
+            let mut line = Vec::with_capacity(96);
+            let mut floats = ryu::Buffer::new();
             for v in &mesh.vertices {
-                let _ = writeln!(out, r#"     <vertex x="{}" y="{}" z="{}"/>"#, v[0], v[1], v[2]);
+                line.clear();
+                line.extend_from_slice(b"     <vertex x=\"");
+                push_f32(&mut line, v[0], &mut floats);
+                line.extend_from_slice(b"\" y=\"");
+                push_f32(&mut line, v[1], &mut floats);
+                line.extend_from_slice(b"\" z=\"");
+                push_f32(&mut line, v[2], &mut floats);
+                line.extend_from_slice(b"\"/>\n");
+                out.write(&line);
             }
             let _ = out.write_str("    </vertices>\n    <triangles>\n");
             for t in &mesh.triangles {
-                let _ = writeln!(out, r#"     <triangle v1="{}" v2="{}" v3="{}"/>"#, t[0], t[1], t[2]);
+                line.clear();
+                line.extend_from_slice(b"     <triangle v1=\"");
+                push_u32(&mut line, t[0]);
+                line.extend_from_slice(b"\" v2=\"");
+                push_u32(&mut line, t[1]);
+                line.extend_from_slice(b"\" v3=\"");
+                push_u32(&mut line, t[2]);
+                line.extend_from_slice(b"\"/>\n");
+                out.write(&line);
             }
             let _ = out.write_str("    </triangles>\n   </mesh>\n  </object>\n");
             faces += mesh.triangles.len();
@@ -232,6 +252,116 @@ fn model_xml(out: &mut impl std::fmt::Write, model: &Model, objects: &[Object]) 
     }
     let _ = write!(out, " </resources>\n <build>\n{build} </build>\n");
     (settings, instances)
+}
+
+/// `n` in decimal, as `{}` writes it.
+fn push_u32(out: &mut Vec<u8>, mut n: u32) {
+    let mut digits = [0u8; 10];
+    let mut at = digits.len();
+    loop {
+        at -= 1;
+        digits[at] = b'0' + (n % 10) as u8;
+        n /= 10;
+        if n == 0 {
+            break;
+        }
+    }
+    out.extend_from_slice(&digits[at..]);
+}
+
+/// A finite `v` as `{}` writes it: the shortest digits that read back as `v` (ryu's, which are Rust's own), never
+/// with an exponent and without a trailing `.0` (`1`, `0.0000001`, `10000000000000000`, `-0`). Three to four times
+/// as fast as the formatter in WebAssembly; `every_f32_is_written_as_display_writes_it` holds it to `{}` for every
+/// f32 there is.
+fn push_f32(out: &mut Vec<u8>, v: f32, buffer: &mut ryu::Buffer) {
+    if !v.is_finite() {
+        use std::io::Write;
+        let _ = write!(out, "{v}");
+        return;
+    }
+    let text = buffer.format_finite(v).as_bytes();
+    let (negative, text) = match text.split_first() {
+        Some((b'-', rest)) => (true, rest),
+        _ => (false, text),
+    };
+    // ryu writes `d.ddd`, `0.000ddd`, `ddd.0` or `d.ddde-7`/`de16`: its digits, and where the point falls among
+    // them (`point` digits before it).
+    let (mantissa, exponent) = match text.iter().position(|&c| c == b'e') {
+        Some(e) => {
+            (&text[..e], std::str::from_utf8(&text[e + 1..]).ok().and_then(|x| x.parse::<i32>().ok()).unwrap_or(0))
+        }
+        None => (text, 0),
+    };
+    let mut digits = [0u8; 24];
+    let mut count = 0;
+    let mut point = None;
+    for &c in mantissa {
+        if c == b'.' {
+            point = Some(count);
+        } else {
+            digits[count] = c;
+            count += 1;
+        }
+    }
+    let mut point = point.unwrap_or(count) as i32 + exponent;
+    let mut digits = &digits[..count];
+    while let Some((b'0', rest)) = digits.split_first() {
+        digits = rest;
+        point -= 1;
+    }
+    while let Some((b'0', rest)) = digits.split_last() {
+        digits = rest;
+    }
+    // Exactly halfway between two shortest candidates, ryu takes the even one and Rust the one further from zero.
+    let mut last_up = false;
+    if let Some(&last) = digits.last()
+        && (last - b'0').is_multiple_of(2)
+    {
+        let d = digits.iter().fold(0u64, |n, &c| n * 10 + u64::from(c - b'0'));
+        last_up = halfway(f64::from(v.abs()), d * 10 + 5, point - digits.len() as i32 - 1);
+    }
+    if negative {
+        out.push(b'-');
+    }
+    let mut owned = [0u8; 24];
+    if last_up {
+        owned[..digits.len()].copy_from_slice(digits);
+        owned[digits.len() - 1] += 1;
+        digits = &owned[..digits.len()];
+    }
+    if digits.is_empty() {
+        out.push(b'0');
+    } else if point <= 0 {
+        out.extend_from_slice(b"0.");
+        out.extend(std::iter::repeat_n(b'0', (-point) as usize));
+        out.extend_from_slice(digits);
+    } else if (point as usize) < digits.len() {
+        out.extend_from_slice(&digits[..point as usize]);
+        out.push(b'.');
+        out.extend_from_slice(&digits[point as usize..]);
+    } else {
+        out.extend_from_slice(digits);
+        out.extend(std::iter::repeat_n(b'0', point as usize - digits.len()));
+    }
+}
+
+/// Whether `v` is exactly `n`·10^`q` (`n` under 10^11): only then can it lie halfway between two shortest
+/// decimals. Such an f32 has few digits, so 10^|q| is exact in an f64 (|q| ≤ 22), and a product that rounds to the
+/// other side is exact when the fused multiply-add finds nothing left over.
+fn halfway(v: f64, n: u64, q: i32) -> bool {
+    const POWERS: [f64; 23] = [
+        1e0, 1e1, 1e2, 1e3, 1e4, 1e5, 1e6, 1e7, 1e8, 1e9, 1e10, 1e11, 1e12, 1e13, 1e14, 1e15, 1e16, 1e17, 1e18, 1e19,
+        1e20, 1e21, 1e22,
+    ];
+    let Some(&p) = POWERS.get(q.unsigned_abs() as usize) else { return false };
+    let n = n as f64;
+    if q >= 0 {
+        let t = n * p;
+        t == v && n.mul_add(p, -t) == 0.0
+    } else {
+        let t = v * p;
+        t == n && v.mul_add(p, -t) == 0.0
+    }
 }
 
 /// The `.gcode.3mf`. `title` names the archive inside (the original file's name).
@@ -327,8 +457,9 @@ pub fn gcode_3mf(
     rels.push("</Relationships>".into());
     rels.push(String::new());
     files.push(("_rels/.rels", rels.join("\n").into_bytes()));
-    // The model, packed as it is written (`model_xml`): the same bytes as the whole text packed at once.
-    let mut model_entry = zip::Deflater::new(6);
+    // The model, packed as it is written (`model_xml`), at level 4 as the G-code is: a big mesh's XML packs 3.2 times
+    // faster than at level 6 and 2 % larger (the 89 MB frame's 144 MB of it to 19.2 MB, against 18.7 MB).
+    let mut model_entry = zip::Deflater::new(4);
     model_entry.write(
         [
             r#"<?xml version="1.0" encoding="UTF-8"?>"#.to_string(),
@@ -580,6 +711,58 @@ fn bed_type_key(bed_type: &str) -> &'static str {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn numbers_are_written_as_display_writes_them() {
+        let mut buffer = ryu::Buffer::new();
+        let mut check = |v: f32| {
+            let mut out = Vec::new();
+            super::push_f32(&mut out, v, &mut buffer);
+            assert_eq!(String::from_utf8(out).unwrap(), format!("{v}"), "{:#x}", v.to_bits());
+        };
+        for v in [0.0, -0.0, 1.0, -1.0, 0.1, 1e-7, 1.5e-5, 1e16, 123456790.0, f32::MAX, f32::MIN_POSITIVE, 1e-45] {
+            check(v);
+        }
+        // Every 65,537th f32 there is (`every_f32_is_written_as_display_writes_it` checks them all).
+        for bits in (0..=u32::MAX).step_by(65_537) {
+            let v = f32::from_bits(bits);
+            if v.is_finite() {
+                check(v);
+            }
+        }
+        for n in [0, 1, 9, 10, 99, 100, 4_294_967_295, 1_234_567] {
+            let mut out = Vec::new();
+            super::push_u32(&mut out, n);
+            assert_eq!(String::from_utf8(out).unwrap(), n.to_string());
+        }
+    }
+
+    /// Every f32 there is, on every core (a few minutes): `cargo test --release -- --ignored every_f32`.
+    #[test]
+    #[ignore]
+    fn every_f32_is_written_as_display_writes_it() {
+        let bad = crate::par::map_range(1 << 16, |high| {
+            let mut buffer = ryu::Buffer::new();
+            let (mut out, mut want) = (Vec::new(), String::new());
+            for low in 0..1u32 << 16 {
+                let v = f32::from_bits(((high as u32) << 16) | low);
+                if !v.is_finite() {
+                    continue;
+                }
+                out.clear();
+                super::push_f32(&mut out, v, &mut buffer);
+                want.clear();
+                use std::fmt::Write;
+                let _ = write!(want, "{v}");
+                if out != want.as_bytes() {
+                    return Some(v.to_bits());
+                }
+            }
+            None
+        });
+        let bad: Vec<u32> = bad.into_iter().flatten().collect();
+        assert!(bad.is_empty(), "written otherwise than by Display: {bad:x?}");
+    }
+
     use super::*;
 
     #[test]
