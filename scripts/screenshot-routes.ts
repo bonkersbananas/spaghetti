@@ -1141,7 +1141,12 @@ async function printWithPhoto(page: Page, title: string, { ended = true }: { end
   await page.request.post("/api/items", { headers, data: { id: itemId, title, stage: "building" } });
   await page.request.post(`/api/items/${itemId}/attempts`, {
     headers,
-    data: { id: attemptId, printedAt: Date.now() - 95 * 60_000, settings: { estimatedMinutes: 90 } },
+    data: {
+      id: attemptId,
+      // The shots' clock is the seed's: a print that is due started well before it.
+      printedAt: ended ? Date.now() - 95 * 60_000 : SEED_NOW - 4 * 60 * 60_000,
+      settings: { estimatedMinutes: 90 },
+    },
   });
   if (ended)
     await page.request.patch(`/api/attempts/${attemptId}`, { headers, data: { endedAt: Date.now() - 12 * 60_000 } });
