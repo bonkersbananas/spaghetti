@@ -983,6 +983,10 @@ fn wall_group(
     let (gap_min, gap_max) = gap_widths(layer, height, s);
     // A hair more than nothing: keeps touching edges from counting as gaps (Orca's safety offset).
     let safety = 1.0 / geom::SCALE;
+    // Clipper2's offsets with mitres up to three times the offset, as Orca's walls take them (`offset_ex`,
+    // `offset2_ex`, `opening_ex`): the general offset reaches into a sharp tip or a narrow end further, which put
+    // inner walls where Orca leaves room for gap fill.
+    let off = |shapes: &Shapes, delta: f64| geom::offset_c2(shapes, delta, geom::Join::Miter(3.0));
 
     // Bambu's narrow loops: an island with no room for the outer wall and most of a spacing beside it, and small (a
     // band of that width 10 mm long at most), gets one outer wall of a thinner line instead, and nothing inside it.
@@ -992,8 +996,7 @@ fn wall_group(
         let narrow: Vec<bool> = slice
             .iter()
             .map(|shape| {
-                geom::shape_area_mm2(shape) < small
-                    && geom::offset(&vec![shape.clone()], -(w_outer + room) / 2.0).is_empty()
+                geom::shape_area_mm2(shape) < small && off(&vec![shape.clone()], -(w_outer + room) / 2.0).is_empty()
             })
             .collect();
         if narrow.contains(&true) {
@@ -1004,7 +1007,7 @@ fn wall_group(
     // Where Orca fits arcs it simplifies the walls' outlines to a fifth of the resolution, which keeps the points
     // of a curve close enough for its arcs (`surface_simplify_resolution`).
     let wall_resolution = if s.arc_fitting == ArcFitting::Enabled { 0.2 * s.resolution } else { PATH_RESOLUTION };
-    let mut region = geom::simplify_shapes(&geom::offset(slice, -w_outer / 2.0), wall_resolution);
+    let mut region = geom::simplify_shapes(&off(slice, -w_outer / 2.0), wall_resolution);
     if around.largest && region.len() > 1 {
         crate::section::keep_largest(&mut region);
     }
@@ -1034,10 +1037,10 @@ fn wall_group(
             // so the outer wall keeps to the model's outline).
             let d = if k == 1 { (w_outer + w_inner) / 2.0 } else { sp_inner };
             let next = geom::simplify_shapes(
-                &geom::offset(&geom::offset(&region, -(d + min_spacing / 2.0)), min_spacing / 2.0),
+                &off(&off(&region, -(d + min_spacing / 2.0)), min_spacing / 2.0),
                 wall_resolution,
             );
-            let gap = geom::difference(&geom::offset(&region, -d / 2.0), &geom::offset(&next, d / 2.0 + safety));
+            let gap = geom::difference(&off(&region, -d / 2.0), &off(&next, d / 2.0 + safety));
             // Most of what this finds is the crumbs offsets leave in corners: too small to fill.
             gaps.extend(gap.into_iter().filter(|shape| geom::shape_area_mm2(shape) >= MIN_GAP_AREA));
             if k == loops || next.is_empty() {
@@ -1054,8 +1057,11 @@ fn wall_group(
     let gaps = if gaps.is_empty() {
         Vec::new()
     } else {
-        let wide = geom::offset(&geom::offset(&gaps, -gap_max / 2.0), gap_max / 2.0 + safety);
-        geom::simplify_shapes(&geom::difference(&geom::opening(&gaps, gap_min / 2.0), &wide), 0.2 * s.resolution)
+        let wide = off(&off(&gaps, -gap_max / 2.0), gap_max / 2.0 + safety);
+        geom::simplify_shapes(
+            &geom::difference(&off(&off(&gaps, -gap_min / 2.0), gap_min / 2.0), &wide),
+            0.2 * s.resolution,
+        )
     };
     // Infill goes inside the last wall, but not where gap fill already goes (as Orca: the gaps come out of the
     // area first), nor in parts too narrow for its lines.
@@ -1065,7 +1071,7 @@ fn wall_group(
         let inset = last_spacing / 2.0;
         let room = if gaps.is_empty() { region } else { geom::difference(&region, &gaps) };
         geom::simplify_shapes(
-            &geom::offset(&geom::offset(&room, -(inset + min_infill_spacing / 2.0)), min_infill_spacing / 2.0),
+            &off(&off(&room, -(inset + min_infill_spacing / 2.0)), min_infill_spacing / 2.0),
             PATH_RESOLUTION,
         )
     };
@@ -1082,7 +1088,7 @@ fn wall_group(
     // (nothing on the first layer) rather than the infill's overlap.
     if let Some(fill) = top {
         let top_overlap = if first { 0.0 } else { s.top_bottom_infill_wall_overlap * (inset + sp_solid / 2.0) };
-        let fill = if (top_overlap - overlap).abs() > 1e-6 { geom::offset(&fill, top_overlap - overlap) } else { fill };
+        let fill = if (top_overlap - overlap).abs() > 1e-6 { off(&fill, top_overlap - overlap) } else { fill };
         inner = geom::simplify_shapes(&geom::union(&inner, &fill), PATH_RESOLUTION);
     }
 
@@ -1218,6 +1224,21 @@ mod tests {
         assert!(!geom::contains(&below.inner, geom::pt(sc(0.6), sc(10.0))));
         // The small block's last layer has one wall.
         assert_eq!(regions[n - 1].islands[0].walls.len(), 1);
+    }
+
+    #[test]
+    fn a_narrow_wedge_leaves_orcas_gap_at_its_tip() {
+        // A wedge 10 mm long and 3 mm wide at its base: where it narrows, the walls stop and the rest is gap fill,
+        // 1.09 mm² of it, which native Orca fills with the same 19 lines on a layer as ours. The general offset reached
+        // further into the tip and left 0.79 mm² (16 lines).
+        let s = Settings::default();
+        let layers = Layers::plan(3.0, 0.2, 0.2);
+        let wedge = vec![vec![geom::pt(sc(0.0), sc(0.0)), geom::pt(sc(10.0), sc(1.5)), geom::pt(sc(0.0), sc(3.0))]];
+        let slices: Vec<Shapes> = (0..layers.top.len()).map(|_| vec![wedge.clone()]).collect();
+        let owners: Vec<Vec<u32>> = slices.iter().map(|slice| vec![0; slice.len()]).collect();
+        let regions = regions(&slices, &owners, &[], &layers, &[(0.0, 0.0)], &[], &s);
+        let gaps = geom::area_mm2(&regions[5].islands[0].gaps);
+        assert!((gaps - 1.089).abs() < 0.01, "{gaps}");
     }
 
     #[test]
