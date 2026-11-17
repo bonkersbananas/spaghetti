@@ -3516,6 +3516,35 @@ fn arachne_walls_have_one_wall_beside_a_top_surface() {
     assert!(within(all_inner, 1065.8, 0.005), "every wall printed: {all_inner} mm³");
 }
 
+/// Fuzzy skin on Arachne walls (Orca's `apply_fuzzy_skin` on an `ExtrusionLine`) in each `fuzzy_skin_mode`: a 30 mm
+/// block with a 10 mm one on it, three Arachne walls, external fuzzy skin 0.3 mm thick with points 0.8 mm apart,
+/// against native Orca 2.5.1, whose random generator is seeded by the system, so its slices differ by up to 1 %
+/// (outer walls 523.7 mm³ smooth; with displacement 541.7 to 542.5, extrusion 601.4 to 607.1, combined 615.2 to 616.8;
+/// the extrusion mode's print takes 878.5 s). No note says fuzzy skin is printed smooth.
+#[test]
+fn fuzzy_skin_on_arachne_walls_in_each_mode() {
+    let stl = boxes_stl(&[([100.0, 100.0, 0.0], [130.0, 130.0, 10.0]), ([110.0, 110.0, 10.0], [120.0, 120.0, 16.0])]);
+    let run = |mode: &str| {
+        let json = format!(
+            r#"{{"process": {{"wall_generator": "arachne", "wall_loops": "3", "fuzzy_skin": "external",
+                "fuzzy_skin_mode": "{mode}", "fuzzy_skin_thickness": "0.3", "fuzzy_skin_point_distance": "0.8"}}}}"#
+        );
+        let settings = setup::read(&json).unwrap().settings;
+        let out = slice(&[Input { name: "step.stl", bytes: &stl }], &settings, &Options::default()).unwrap();
+        assert!(out.fallbacks.is_empty(), "{:?}", out.fallbacks);
+        let outer = out.stats.features[Role::ALL.iter().position(|&r| r == Role::OuterWall).unwrap()].volume;
+        (outer, out.stats.total_time)
+    };
+    let within = |got: f64, want: f64, share: f64| (got - want).abs() < want * share;
+    let (displaced, _) = run("displacement");
+    assert!(within(displaced, 542.0, 0.01), "displacement {displaced} mm³");
+    let (extruded, time) = run("extrusion");
+    assert!(within(extruded, 604.0, 0.02), "extrusion {extruded} mm³");
+    assert!(within(time, 878.5, 0.01), "extrusion {time} s");
+    let (combined, _) = run("combined");
+    assert!(within(combined, 616.0, 0.01), "combined {combined} mm³");
+}
+
 /// Concentric top, bottom and internal solid surfaces print as Orca's Arachne loops, not zig-zag with a note: a
 /// cube's plastic stays within 2 % of the lines' (a Benchy is within 0.1 % of native Orca 2.5.1's).
 #[test]

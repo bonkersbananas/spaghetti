@@ -158,6 +158,229 @@ impl<'a> Layer<'a> {
         if out.len() >= 3 { out } else { contour.clone() }
     }
 
+    /// One line of Arachne's walls, given fuzzy skin where Orca gives it some (`apply_fuzzy_skin` on an
+    /// `ExtrusionLine`): the loops and lines of `lines`, `depth` their inset. The line's junctions move sideways, or
+    /// their widths change, or both, by `fuzzy_skin_mode`.
+    pub fn fuzz_line(
+        &mut self,
+        line: &mut crate::region::ArachneLine,
+        supported: Option<&Shapes>,
+        centre: (f64, f64),
+        layer_height: f64,
+    ) {
+        // Arachne's contours run clockwise; a line that isn't closed counts as a contour.
+        let contour = !line.closed || geom::area2(&line.points) < 0;
+        if line.points.len() < 2 || !self.fuzzy.fuzzes(self.layer_id, line.inset, contour) {
+            return;
+        }
+        let closed = line.closed;
+        let Some(area) = supported else {
+            self.extrusion_line(&mut line.points, &mut line.widths, closed, centre, layer_height);
+            return;
+        };
+        let cuts = split_path(&line.points, false, area);
+        // Nothing of it over the area: it stays smooth.
+        if cuts.is_empty() || cuts.iter().all(|c| !c.inside) {
+            return;
+        }
+        if cuts.iter().all(|c| c.inside) {
+            self.extrusion_line(&mut line.points, &mut line.widths, closed, centre, layer_height);
+            return;
+        }
+        let (points, widths) = (std::mem::take(&mut line.points), std::mem::take(&mut line.widths));
+        let junction = |c: &Cut| (if c.is_src { points[c.src] } else { c.p }, widths[c.src]);
+        let mut segment: Vec<(Pt, f64)> = Vec::new();
+        let finish = |segment: &mut Vec<(Pt, f64)>, line: &mut crate::region::ArachneLine, this: &mut Self| {
+            // The unmoved ends of a fuzzy run isolate it (a closed loop's own end isn't added twice).
+            let front = segment[0];
+            let back = segment[segment.len() - 1];
+            let (mut sp, mut sw): (Vec<Pt>, Vec<f64>) = segment.iter().copied().unzip();
+            this.extrusion_line(&mut sp, &mut sw, false, centre, layer_height);
+            if !line.points.is_empty() && line.points[0] != front.0 {
+                line.points.push(front.0);
+                line.widths.push(front.1);
+            }
+            line.points.extend(sp);
+            line.widths.extend(sw);
+            if !line.points.is_empty() && line.points[line.points.len() - 1] != front.0 {
+                line.points.push(back.0);
+                line.widths.push(back.1);
+            }
+            segment.clear();
+        };
+        for c in &cuts {
+            if c.inside {
+                segment.push(junction(c));
+            } else if segment.is_empty() {
+                let (p, w) = junction(c);
+                line.points.push(p);
+                line.widths.push(w);
+            } else {
+                segment.push(junction(c));
+                finish(&mut segment, line, self);
+            }
+        }
+        if !segment.is_empty() {
+            finish(&mut segment, line, self);
+        }
+        // A loop is closed after the fuzz.
+        if closed && line.points.len() > 1 && line.points[0] != line.points[line.points.len() - 1] {
+            let last = line.points.len() - 1;
+            line.points[last] = line.points[0];
+            line.widths[last] = line.widths[0];
+        }
+    }
+
+    /// Orca's `fuzzy_extrusion_line`: `points` with their `widths` (mm) walked as `polyline` does, each new point
+    /// moved by the noise sideways (displacement), or its line's width changed by it (extrusion), or both
+    /// (combined); a closed one's ends stay joined.
+    fn extrusion_line(
+        &mut self,
+        points: &mut Vec<Pt>,
+        widths: &mut Vec<f64>,
+        closed: bool,
+        centre: (f64, f64),
+        layer_height: f64,
+    ) {
+        use crate::config::FuzzyMode;
+        let f = self.fuzzy;
+        if f.noise == FuzzyNoise::Ripple {
+            if points.len() >= 3 {
+                self.ripple_line(points, widths, centre);
+            }
+            return;
+        }
+        let source = self.source();
+        let scale = geom::SCALE;
+        let distance = f.point_distance * scale;
+        if distance.is_nan() || distance <= 0.0 {
+            return;
+        }
+        let min_between = distance * 3.0 / 4.0;
+        let range = distance / 2.0;
+        // The narrowest a fuzzy width goes: the line has to keep a flow (`Flow::rounded_rectangle_extrusion_spacing`).
+        let min_width = layer_height * (1.0 - 0.25 * std::f64::consts::PI) * 1.05;
+        let mut left_over = self.rng.unit() * (min_between / 2.0);
+        let n = points.len();
+        let mut out: Vec<(Pt, f64)> = Vec::with_capacity(n);
+        let mut p0 = points[0];
+        for k in 0..n {
+            let (p1, w1) = (points[k], widths[k]);
+            if closed && p0 == p1 {
+                out.push((p1, w1));
+                continue;
+            }
+            let (dx, dy) = ((p1.x - p0.x) as f64, (p1.y - p0.y) as f64);
+            let size = (dx * dx + dy * dy).sqrt();
+            let mut along = left_over;
+            while along < size {
+                let t = along / size;
+                let a = geom::pt(p0.x + (dx * t) as i32, p0.y + (dy * t) as i32);
+                let r = match &source {
+                    Source::Uniform => self.rng.unit() * 2.0 - 1.0,
+                    Source::Coherent(noise) => {
+                        let x = (a.x as f64 - centre.0) / scale;
+                        let y = (a.y as f64 - centre.1) / scale;
+                        noise.value(x, y, self.slice_z)
+                    }
+                } * f.thickness;
+                // Orca's `perp`, (−y, x), normalised.
+                let (px, py) = (-dy / size, dx / size);
+                match f.mode {
+                    FuzzyMode::Displacement => {
+                        let d = r * scale;
+                        out.push((geom::pt(a.x + (px * d) as i32, a.y + (py * d) as i32), w1));
+                    }
+                    FuzzyMode::Extrusion => out.push((a, (w1 + r + min_width).max(min_width))),
+                    FuzzyMode::Combined => {
+                        let width = (w1 + r + min_width).max(min_width);
+                        let d = (width - w1) / 2.0 * scale;
+                        out.push((geom::pt(a.x + (px * d) as i32, a.y + (py * d) as i32), width));
+                    }
+                }
+                along += min_between + self.rng.unit() * range;
+            }
+            left_over = along - size;
+            p0 = p1;
+        }
+        while out.len() < 3 {
+            out.push((points[n - 2], widths[n - 2]));
+            if n == 2 {
+                break;
+            }
+        }
+        if points[n - 1] == points[0] {
+            let back = out[out.len() - 1];
+            out[0] = back;
+        }
+        if out.len() >= 3 {
+            (*points, *widths) = out.into_iter().unzip();
+        }
+    }
+
+    /// Orca's `fuzzy_extrusion_line_ripple`: `fuzzy_polyline_ripple` on a line, whose junctions keep the width of the
+    /// one each point follows.
+    fn ripple_line(&mut self, points: &mut Vec<Pt>, widths: &mut Vec<f64>, centre: (f64, f64)) {
+        let f = self.fuzzy;
+        let waves = f.ripples_per_layer as f64;
+        let step = f.point_distance;
+        if waves <= 0.0 || step < 1e-6 {
+            return;
+        }
+        let scale = geom::SCALE;
+        let mm = |p: Pt| ((p.x as f64 - centre.0) / scale, (p.y as f64 - centre.1) / scale);
+        let n = points.len();
+        let length: f64 = (0..n - 1)
+            .map(|i| {
+                let (a, b) = (points[i], points[i + 1]);
+                ((b.x - a.x) as f64).hyp((b.y - a.y) as f64) / scale
+            })
+            .sum();
+        if length < 1e-6 {
+            return;
+        }
+        let anchor = ripple_anchor(points, &mm);
+        let shift = if f.ripple_offset == 0.0 || f.layers_between_ripple_offset <= 0 {
+            0.0
+        } else {
+            let period = self.layer_id as i64 / f.layers_between_ripple_offset.max(1);
+            (period as f64 * (f.ripple_offset / 100.0) * (2.0 * std::f64::consts::PI)) % (2.0 * std::f64::consts::PI)
+        };
+        let at_anchor = std::f64::consts::PI * 2.0 + shift;
+        let phase = |s: f64| waves * (2.0 * std::f64::consts::PI) * (s - anchor) / length + at_anchor;
+        let mut out: Vec<(Pt, f64)> = Vec::with_capacity((length / step) as usize + n * 2);
+        let mut accum = 0.0;
+        for i in 0..n - 1 {
+            let (p0, p1) = (points[i], points[i + 1]);
+            let (dx, dy) = ((p1.x - p0.x) as f64, (p1.y - p0.y) as f64);
+            let len = (dx * dx + dy * dy).sqrt();
+            if len < 1e-4 {
+                continue;
+            }
+            let len_mm = len / scale;
+            let (px, py) = (-dy / len, dx / len);
+            let end = accum + len_mm;
+            let mut s = (accum / step).ceil() * step;
+            while s < end {
+                let t = (s - accum) / len_mm;
+                let d = libm::sin(phase(s)) * f.thickness * scale;
+                let base = geom::pt(p0.x + (dx * t) as i32, p0.y + (dy * t) as i32);
+                out.push((geom::pt(base.x + (px * d) as i32, base.y + (py * d) as i32), widths[i + 1]));
+                s += step;
+            }
+            accum = end;
+        }
+        while out.len() < 3 {
+            out.push((points[n - 2], widths[n - 2]));
+            if n == 2 {
+                break;
+            }
+        }
+        if out.len() >= 3 {
+            (*points, *widths) = out.into_iter().unzip();
+        }
+    }
+
     /// Orca's `fuzzy_polyline`: `poly`'s new points, moved by the noise, when there are at least three (a closed
     /// loop starts with the stretch from its last point to its first; an open line's first point only starts it).
     /// Ripples resample the line as a loop whether or not it is one, as Orca's do.
@@ -337,7 +560,27 @@ fn contour_box(c: &[Pt]) -> [i32; 4] {
 /// in `area` (Orca's `split_line` on a closed polygon): its own points, and a new one wherever it crosses `area`'s
 /// edge.
 fn split(contour: &Contour, area: &Shapes) -> Vec<(Pt, bool)> {
-    let b = geom::inflate(contour_box(contour), 0.01);
+    split_path(contour, true, area).into_iter().map(|j| (j.p, j.inside)).collect()
+}
+
+/// A junction of a split path: its point, the junction of the path it follows (or is) and whether it is one of them,
+/// and whether the stretch from it to the next lies in the area (Orca's `SplitLineJunction`, its `clipped`).
+#[derive(Clone, Copy, Debug)]
+struct Cut {
+    p: Pt,
+    src: usize,
+    is_src: bool,
+    inside: bool,
+}
+
+/// `split` of any path: with `wrap` the closed loop of `points`, else the open line from the first to the last, whose
+/// last junction ends it (outside).
+fn split_path(points: &[Pt], wrap: bool, area: &Shapes) -> Vec<Cut> {
+    let n = points.len();
+    if n < 2 {
+        return Vec::new();
+    }
+    let b = geom::inflate(contour_box(points), 0.01);
     let near: Vec<&Contour> = area
         .iter()
         .flatten()
@@ -346,16 +589,22 @@ fn split(contour: &Contour, area: &Shapes) -> Vec<(Pt, bool)> {
             cb[0] <= b[2] && cb[2] >= b[0] && cb[1] <= b[3] && cb[3] >= b[1]
         })
         .collect();
-    let n = contour.len();
     let inside = |p: (f64, f64)| geom::contains(area, geom::pt(p.0.round() as i32, p.1.round() as i32));
+    let stretches = if wrap { n } else { n - 1 };
     if near.is_empty() {
-        let at = (contour[0].x as f64, contour[0].y as f64);
-        return contour.iter().map(|&p| (p, inside(at))).collect();
+        let at = (points[0].x as f64, points[0].y as f64);
+        let here = inside(at);
+        let mut out: Vec<Cut> =
+            points.iter().enumerate().map(|(k, &p)| Cut { p, src: k, is_src: true, inside: here }).collect();
+        if !wrap {
+            out[n - 1].inside = false;
+        }
+        return out;
     }
-    let mut out: Vec<(Pt, bool)> = Vec::with_capacity(n);
+    let mut out: Vec<Cut> = Vec::with_capacity(n);
     let mut cuts: Vec<f64> = Vec::new();
-    for i in 0..n {
-        let (a, b) = (contour[i], contour[(i + 1) % n]);
+    for i in 0..stretches {
+        let (a, b) = (points[i], points[(i + 1) % n]);
         let (fa, fb) = ((a.x as f64, a.y as f64), (b.x as f64, b.y as f64));
         cuts.clear();
         for c in &near {
@@ -380,14 +629,22 @@ fn split(contour: &Contour, area: &Shapes) -> Vec<(Pt, bool)> {
         let mut start = a;
         for &t in cuts.iter().chain(std::iter::once(&1.0)) {
             if t - from > 1e-9 {
-                out.push((start, inside(at((from + t) / 2.0))));
+                out.push(Cut {
+                    p: start,
+                    src: i,
+                    is_src: from == 0.0 && start == a,
+                    inside: inside(at((from + t) / 2.0)),
+                });
             }
             let q = at(t);
             start = geom::pt(q.0.round() as i32, q.1.round() as i32);
             from = t;
         }
     }
-    out.dedup_by(|b, a| a.0 == b.0);
+    if !wrap {
+        out.push(Cut { p: points[n - 1], src: n - 1, is_src: true, inside: false });
+    }
+    out.dedup_by(|b, a| a.p == b.p);
     out
 }
 
@@ -399,10 +656,11 @@ pub fn islands(
     lower: Option<&Shapes>,
     slice_z: f64,
     layer_id: usize,
+    layer_height: f64,
     s: &crate::config::Settings,
 ) {
     let f = &s.fuzzy;
-    if !f.on() || islands.iter().all(|i| i.walls.is_empty()) {
+    if !f.on() || islands.iter().all(|i| i.walls.is_empty() && i.lines.is_empty()) {
         return;
     }
     // Walls further from the layer below than an outer wall's width and the thickness bridge: they stay smooth.
@@ -410,6 +668,14 @@ pub fn islands(
     let mut layer = Layer::new(f, slice_z, layer_id);
     for island in islands {
         let centre = centres.get(island.object as usize).copied().unwrap_or((0.0, 0.0));
+        if !island.lines.is_empty() {
+            // Arachne's lines, each in its place, then the loops the seam placer reads from them.
+            for line in island.lines.iter_mut() {
+                layer.fuzz_line(line, supported.as_ref(), centre, layer_height);
+            }
+            island.walls = crate::region::walls_of(&island.lines);
+            continue;
+        }
         for (depth, loops) in island.walls.iter_mut().enumerate() {
             for contour in loops.iter_mut() {
                 *contour = layer.fuzz_loop(contour, depth, supported.as_ref(), centre);
