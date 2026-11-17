@@ -182,8 +182,9 @@ pub struct Settings {
     /// Whether inner walls start a little further along than the outer wall (`staggered_inner_seams`).
     pub staggered_inner_seams: bool,
     pub only_one_wall_top: bool,
-    /// `top_surface_expansion` (mm) and `top_surface_density` (percent): with both above 0, Orca's `only_one_wall_top`
-    /// on Arachne walls cuts the inner walls over the top surface instead of walling round it.
+    /// `top_surface_expansion` (mm) and `top_surface_density` (percent): with both above 0, Orca grows top surfaces
+    /// (not ported) and its `only_one_wall_top` on Arachne walls cuts the inner walls over the top surface instead of
+    /// walling round it.
     pub top_surface_expansion: f64,
     pub top_surface_density: f64,
     /// Whether the first inner wall goes a whole line width in from the outer wall (`precise_outer_wall`, which Orca
@@ -1402,13 +1403,8 @@ impl Settings {
             }
         }
         // (Spiral vase mode keeps the classic walls, so these notes would describe walls never made.)
-        if self.wall_generator == "arachne"
-            && !self.spiral_mode
-            && self.only_one_wall_top
-            && self.top_surface_expansion > 0.0
-            && self.top_surface_density > 0.0
-        {
-            out.push("arachne walls over a top surface printed with all their walls (only_one_wall_top with top_surface_expansion)".into());
+        if self.top_surface_expansion > 0.0 && self.top_surface_density > 0.0 && self.top_shell_layers > 0 {
+            out.push("top surfaces not grown by top_surface_expansion".into());
         }
         if self.elephant_foot > 0.0 && self.elephant_foot_layers > 1 && self.support.raft_layers <= 0 {
             out.push("elephant's foot compensated on the first layer only".into());

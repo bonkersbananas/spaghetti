@@ -1290,9 +1290,6 @@ fn arachne_group(
         (groups, result.inner_contour)
     };
     let one_wall_top = !last && s.only_one_wall_top && s.top_shell_layers > 0 && loops > 1 && around.upper.is_some();
-    // The clipping of inner walls over the top surface (`top_surface_expansion`) isn't ported: such a layer keeps all
-    // its walls.
-    let one_wall_top = one_wall_top && !(s.top_surface_expansion > 0.0 && s.top_surface_density > 0.0);
     let top_params = top::Params {
         ext_spacing: sp_outer,
         spacing: sp_inner,
@@ -1301,6 +1298,7 @@ fn arachne_group(
         precise,
         min_width_top: s.min_width_top_surface.of(w_inner),
         wall_loops: loops,
+        clip_over_top: s.top_surface_expansion > 0.0 && s.top_surface_density > 0.0,
     };
     slice
         .iter()
