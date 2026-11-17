@@ -88,9 +88,9 @@ const layouts = {
 
 /**
  * A print on the bed, big and warm: the build's picture, its name in Fraunces (the one card title that is,
- * because this is the screen's focal point), how far along it is, and a way to finish it. The card leads to
- * the build; Finish goes to the build with the attempt's sheet open. When the print should be done, the button
- * gives way to the question people came to answer: how did it go?
+ * because this is the screen's focal point), how far along it is, and one way to log it. The card leads to
+ * the build; "How did it go?", as on the build page, before the print is due and after, goes to the build with the
+ * attempt's sheet open.
  */
 export function PrintingCard({
   item,
@@ -287,7 +287,7 @@ export function PrintingCard({
             />
           ) : (
             <>
-              {/* At the card's foot, so cards side by side have their Finish buttons on one line. */}
+              {/* At the card's foot, so cards side by side have their "How did it go?" buttons on one line. */}
               <div className="flex flex-col gap-1.5 md:mt-auto">
                 <PrintProgress
                   startedAt={attempt.printedAt}
