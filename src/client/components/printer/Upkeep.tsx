@@ -7,6 +7,7 @@ import { TickBox } from "@/components/ui/Checklist";
 import { CheckIcon, PlusIcon } from "@/components/ui/icons";
 import { Section } from "@/components/ui/Section";
 import { UpkeepMeter } from "@/components/ui/UpkeepMeter";
+import { cn } from "@/lib/cn";
 import { useReadOnly } from "@/lib/read-only";
 import { upkeepQuery } from "@/lib/upkeep";
 import { UpkeepSkeleton } from "./UpkeepSkeleton";
@@ -42,7 +43,8 @@ export function Upkeep() {
   const { data, isPending } = useQuery(upkeepQuery);
   const readOnly = useReadOnly();
   const [open, setOpen] = useState<Open>(null);
-  const tasks = data?.tasks ?? [];
+  // What is due first, the rest by how near: the due rows are what the page is for, the others rest quietly below.
+  const tasks = [...(data?.tasks ?? [])].sort((a, b) => Number(b.due) - Number(a.due) || b.fraction - a.fraction);
   const current = open && open.kind !== "new" ? tasks.find((task) => task.id === open.id) : undefined;
 
   return (
@@ -64,15 +66,33 @@ export function Upkeep() {
           {tasks.map((task) => (
             <li
               key={task.id}
-              className="after:bg-hairline relative flex items-center gap-3 px-4 py-3 after:absolute after:inset-x-4 after:bottom-0 after:h-px last:after:hidden"
+              className={cn(
+                "after:bg-hairline relative flex items-center gap-3 px-4 after:absolute after:inset-x-4 after:bottom-0 after:h-px last:after:hidden",
+                task.due ? "py-3" : "py-1.5",
+              )}
             >
               <button
                 type="button"
                 onClick={() => setOpen({ kind: "edit", id: task.id })}
-                className="focus-ring hover:bg-ink/4 duration-fast -mx-2 flex min-h-12 min-w-0 flex-1 flex-col justify-center gap-1.5 rounded-md px-2 py-1 text-left transition-colors"
+                className={cn(
+                  "focus-ring hover:bg-ink/4 duration-fast -mx-2 flex min-w-0 flex-1 flex-col justify-center rounded-md px-2 py-1 text-left transition-colors",
+                  task.due ? "min-h-12 gap-1.5" : "min-h-11 gap-1",
+                )}
               >
-                <span className="text-body text-ink truncate font-semibold">{task.name}</span>
-                <UpkeepMeter fraction={task.fraction} label={upkeepRowText(task)} />
+                {/* Not due yet: the name steps back and the bar thins out, so the rows that need doing stand alone. */}
+                <span
+                  className={cn(
+                    "text-body truncate",
+                    task.due ? "text-ink font-semibold" : "text-ink-soft font-medium",
+                  )}
+                >
+                  {task.name}
+                </span>
+                <UpkeepMeter
+                  fraction={task.fraction}
+                  label={upkeepRowText(task)}
+                  className={cn(!task.due && "h-1 opacity-60")}
+                />
                 <span className="text-small text-ink-faint tabular truncate">{upkeepRowText(task)}</span>
               </button>
               {/* A column of one width, so every row's meter ends at the same place whether it holds Done or a ring. */}

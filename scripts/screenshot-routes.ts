@@ -569,6 +569,9 @@ async function openCompare(page: Page) {
     .click();
 }
 
+/** Photos the compare-many-photos shot adds to one attempt (and takes away again). */
+const manyPhotoIds = Array.from({ length: 8 }, (_, i) => `5eed0000-0000-4000-8000-0000000d00${10 + i}`);
+
 const FUSILLI = { name: "fusilli-knob.stl", bytes: fusilliStl() };
 const FUSILLI_IDEA = { title: "Fusilli jar knob", note: "A fusilli knob for the pasta jar lid: twist to open." };
 /**
@@ -916,8 +919,15 @@ async function fitStockNozzles(page: Page) {
   await page.request.put("/api/printer", { headers, data: { nozzles: STOCK_NOZZLES, slicing: null } });
 }
 
+/** The Printer page's Setup fold (nozzles, plates, slicing, drying), opened. */
+async function openSetup(page: Page) {
+  const fold = page.getByRole("button", { name: /^Nozzles, plates, slicing and drying/ });
+  if ((await fold.getAttribute("aria-expanded")) !== "true") await fold.click();
+}
+
 /** The slicing defaults, unfolded, their tiles in place. Returns the section. */
 async function openSlicingDefaults(page: Page) {
+  await openSetup(page);
   const section = slicingDefaults(page);
   await section.getByRole("button", { name: /^How new models are sliced/ }).click();
   await section.getByRole("group", { name: "Quality" }).waitFor();
@@ -2039,6 +2049,7 @@ export const shots: Shot[] = [
     cleanup: restoreDeskTidy,
   },
   { name: "ideas", path: "/ideas" },
+  { name: "ideas-full", path: "/ideas", fullPage: true },
   {
     // A photo saved without a title, a few seconds later: Claude's title in its card (decision 0070).
     name: "ideas-named-by-claude",
@@ -4255,6 +4266,39 @@ export const shots: Shot[] = [
     },
   },
   {
+    // An attempt with many photos: its row of thumbnails scrolls inside its column instead of running into the other one.
+    name: "compare-many-photos",
+    path: `/builds/${SEED_BUILD_IDS.headphoneStand}`,
+    prepare: async (page) => {
+      const headers = { Origin: new URL(page.url()).origin };
+      const file = { name: "frame.jpg", mimeType: "image/jpeg", buffer: readFileSync("e2e/fixtures/tugboat.jpg") };
+      for (const id of manyPhotoIds) {
+        await page.request.put(`/api/items/${SEED_BUILD_IDS.headphoneStand}/photos/${id}`, {
+          headers,
+          multipart: {
+            width: "1280",
+            height: "960",
+            color: "#8d7a66",
+            attemptId: "5eed0000-0000-4000-8000-0000000b0003",
+            large: file,
+            thumb: file,
+          },
+        });
+      }
+      await page.reload();
+      await openCompare(page);
+      await page.getByRole("dialog", { name: /^Attempt \d+ and attempt \d+$/ }).waitFor();
+      await page.waitForTimeout(800);
+    },
+    cleanup: async (page) => {
+      await page.keyboard.press("Escape");
+      const headers = { Origin: new URL(page.url()).origin };
+      for (const id of manyPhotoIds) {
+        await page.request.delete(`/api/photos/${id}`, { headers });
+      }
+    },
+  },
+  {
     // The lower half of the comparison: what stayed the same (opened) and how each attempt went.
     name: "compare-details",
     path: `/builds/${SEED_BUILD_IDS.headphoneStand}`,
@@ -5812,12 +5856,9 @@ export const shots: Shot[] = [
     name: "printer",
     path: "/printer",
     fullPage: true,
-    // Upkeep and the slicing defaults load once the page is idle: wait for them, or the shot shows their skeletons.
+    // Upkeep loads once the page is idle: wait for it, or the shot shows its skeleton. Setup stays folded.
     prepare: async (page) => {
       await page.getByRole("list", { name: "Upkeep tasks" }).waitFor();
-      await slicingDefaults(page)
-        .getByRole("button", { name: /^How new models are sliced/ })
-        .waitFor();
     },
   },
   {
@@ -5827,6 +5868,7 @@ export const shots: Shot[] = [
     path: "/printer",
     selector: "section[aria-labelledby=printer-slicing]",
     prepare: async (page) => {
+      await openSetup(page);
       await slicingDefaults(page)
         .getByRole("button", { name: /^How new models are sliced/ })
         .waitFor();
@@ -5880,6 +5922,7 @@ export const shots: Shot[] = [
       await fitSmallNozzle(page);
       await page.reload();
       await page.getByRole("list", { name: "Upkeep tasks" }).waitFor();
+      await openSetup(page);
       await slicingDefaults(page)
         .getByRole("button", { name: /^How new models are sliced/ })
         .waitFor();

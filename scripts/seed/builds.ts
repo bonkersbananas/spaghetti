@@ -222,7 +222,7 @@ export const SEED_BUILDS: SeedBuild[] = [
         ago: 3 * DAY + 5 * HOUR,
         outcome: "partial",
         finishedAfter: 4 * HOUR,
-        note: "Layer shift at the hook, about two thirds up. Base is perfect now.",
+        note: "Layer shift at the hook, about two thirds up. Base is perfect now: the brim held all the way round and nothing lifted. Slowed the outer walls and cooled the hook a little more for the next go, and I will check the belts before then.",
         failureTags: ["layer-shift"],
         successNotes: ["great-first-layer"],
         settings: {
@@ -244,7 +244,7 @@ export const SEED_BUILDS: SeedBuild[] = [
         ago: 8 * HOUR,
         outcome: "success",
         finishedAfter: 4 * HOUR + 30 * MIN,
-        note: "Clean all the way up, and the brim peeled right off.",
+        note: "Clean all the way up, and the brim peeled right off. Dried the filament overnight first, and the hook held the headphones without a flicker. The slower outer walls made the surface noticeably smoother. Keeping these settings.",
         successNotes: ["great-first-layer", "clean-supports", "settings-worth-reusing"],
         settings: {
           ...standBase,

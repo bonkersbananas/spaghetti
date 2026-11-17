@@ -33,6 +33,8 @@ interface NoteFaceProps {
    * desktop's wider card) and as many lines as fit, fading out a whole line before the edge.
    */
   compact?: boolean | "fill";
+  /** The largest size a short note may take (a card in a grid caps it at "lg": two words needn't shout). */
+  maxSize?: NoteSize;
   /** Keeps the bottom corner free for a badge laid over the card (the rank on a picked tile). */
   clearBottom?: boolean;
 }
@@ -46,10 +48,12 @@ interface NoteFaceProps {
  * what it links to in words ("Skadis pegboard white") over its site, not the
  * address. Fills its parent.
  */
-export function NoteFace({ note, size, className, compact, clearBottom }: NoteFaceProps) {
+export function NoteFace({ note, size, className, compact, clearBottom, maxSize }: NoteFaceProps) {
   const link = BARE_LINK.test(note.trim()) ? linkWords(note) : undefined;
   const text = link?.words ?? note;
-  const face = size ?? noteSize(text);
+  const order: NoteSize[] = ["xl", "lg", "md", "sm"];
+  const sized = noteSize(text);
+  const face = size ?? (maxSize && order.indexOf(sized) < order.indexOf(maxSize) ? maxSize : sized);
   return (
     <div className={cn("paper-grain bg-note @container relative flex size-full flex-col", className)}>
       <div className={cn("p-note-inset flex min-h-0 flex-1 flex-col", clearBottom && "pb-9")}>
