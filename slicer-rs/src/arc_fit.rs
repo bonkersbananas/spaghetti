@@ -556,6 +556,7 @@ mod tests {
     #[test]
     fn a_repeated_point_fits_no_circle_through_it() {
         let c = Circle { center: [0, 0], radius: 1_000_000.0 };
-        assert!(c.over_deviation(&[[1_000_000, 0], [1_000_000, 0], [0, 1_000_000]], 100_000.0));
+        let mut probe = usize::MAX;
+        assert!(c.over_deviation(&[[1_000_000, 0], [1_000_000, 0], [0, 1_000_000]], 100_000.0, &mut probe));
     }
 }
