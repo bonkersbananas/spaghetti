@@ -219,6 +219,11 @@ pub struct LayerGcode {
     /// the layer's text then holds Orca's own `;_OVERHANG_FAN_START` and `…_END` markers, which `write` turns into
     /// the fan's `M106` lines as Orca's cooling buffer does.
     over: [Option<f64>; 2],
+    /// With several filaments, each one's `fans` and `over`: the layer's text then keeps its tool changes' fan
+    /// markers (`;_FORCE_RESUME_FAN_SPEED`), which `write` resolves with the `T` lines as Orca's cooling buffer does.
+    by_tool: Vec<ToolFans>,
+    /// The filament the layer starts with.
+    tool: usize,
     /// Whether the layer starts what Orca's cooling buffer takes as one (the support's own layers come with the
     /// object layer after them).
     group_start: bool,
@@ -229,6 +234,10 @@ pub struct LayerGcode {
     /// A rising layer's turn as written, which a smoothed spiral's next turn eases away from (`spiral.rs`).
     pub(crate) turn: Vec<[f64; 2]>,
 }
+
+/// A filament's fans for a layer: its part and auxiliary fans (`layer_fans`) and its overhang fans
+/// (`layer_overhang_fans`).
+type ToolFans = ([f64; 2], [Option<f64>; 2]);
 
 /// The part and auxiliary fans for layer `i`, in percent, as Orca's cooling sets them at a layer's start
 /// (`CoolingBuffer::apply_layer_cooldown`): off for the first layers, then by how long the layer takes
@@ -308,13 +317,14 @@ pub fn layers(group: &[(&LayerPlan, &LayerRegions, f64)], job: &Job, mut known: 
             (moves, notes, start, first, turn, ends_known, tail)
         })
         .collect();
-    let cooling_time = match job.colours.filter(|c| !c.towered) {
-        // Without a prime tower, each filament's moves apart, as Orca's cooling slows them.
+    let cooling_time = match job.colours {
+        // Each filament's moves apart, as Orca's cooling slows them, with the tower's and the tool change's G-code,
+        // from the layer's first extrusion on.
         Some(c) => {
             let layers: Vec<CoolingLayer> = group
                 .iter()
                 .zip(&built)
-                .map(|(g, b)| (b.0.as_slice(), b.1.as_slice(), b.2, c.start(g.0.index)))
+                .map(|(g, b)| (b.0.as_slice(), b.1.as_slice(), b.2, c.start(g.0.index), b.6.0))
                 .collect();
             let (slows, time) = slowdown_by_filament(&layers, c);
             let starts: Vec<usize> = group.iter().map(|g| c.start(g.0.index)).collect();
@@ -338,9 +348,17 @@ pub fn layers(group: &[(&LayerPlan, &LayerRegions, f64)], job: &Job, mut known: 
         }
     };
     let id = group.last().map_or(0, |g| g.0.id);
-    let fans = layer_fans(id, cooling_time, s);
-    // Several filaments each have their own (`FORCE_RESUME_FAN_SPEED`): not modelled there yet.
-    let over = if job.colours.is_some() { [None, None] } else { layer_overhang_fans(id, fans[0], s) };
+    // With several filaments, each its own fans for the layer's time, which Orca's cooling sets as each takes over
+    // (`change_extruder_set_fan`, at the layer's start and at each tool change).
+    let by_tool: Vec<ToolFans> = job.colours.map_or_else(Vec::new, |c| {
+        c.settings
+            .iter()
+            .map(|fs| {
+                let fans = layer_fans(id, cooling_time, fs);
+                (fans, layer_overhang_fans(id, fans[0], fs))
+            })
+            .collect()
+    });
     group
         .iter()
         .zip(built)
@@ -358,9 +376,23 @@ pub fn layers(group: &[(&LayerPlan, &LayerRegions, f64)], job: &Job, mut known: 
             );
             let progress_at = text.len();
             let tool = job.colours.map_or(0, |c| c.start(plan.index));
+            let (fans, over) = match by_tool.get(tool) {
+                Some(&t) => t,
+                None => {
+                    let fans = layer_fans(id, cooling_time, s);
+                    (fans, layer_overhang_fans(id, fans[0], s))
+                }
+            };
             let before = plan.course.as_ref().and_then(|c| c.before);
-            let out =
-                finish_layer(&moves, &notes, start, job, (text, before), plan.header_height, (fans, over, tool, tail));
+            let out = finish_layer(
+                &moves,
+                &notes,
+                start,
+                job,
+                (text, before),
+                plan.header_height,
+                (fans, over, &by_tool, tool, tail),
+            );
             // Held until the whole file is written: without the room its estimate left (three quarters more than a
             // tall print's 42 MB of G-code).
             let mut text = out.text;
@@ -384,6 +416,8 @@ pub fn layers(group: &[(&LayerPlan, &LayerRegions, f64)], job: &Job, mut known: 
                 features: out.features,
                 fans,
                 over,
+                by_tool: by_tool.clone(),
+                tool,
                 group_start: n == 0,
                 by_filament: out.by_filament,
                 again: turn.as_ref().is_some_and(|t| t.again),
@@ -520,6 +554,8 @@ struct FanNow {
     current: f64,
     /// Whether the overhang fan and the internal bridge fan are asked for (`fan_speed_change_requests`).
     asked: [bool; 2],
+    /// With several filaments, the one printing (`m_current_extruder`).
+    tool: usize,
 }
 
 impl FanNow {
@@ -532,31 +568,90 @@ impl FanNow {
         while let Some(found) = find_marker(&text[at..]) {
             let from = at + found;
             let end = text[from..].iter().position(|&b| b == b'\n').map_or(text.len(), |n| from + n + 1);
-            let line = &text[from..end];
-            let kind = usize::from(line.starts_with(b";_INTERNAL_BRIDGE"));
-            let start = line.windows(6).any(|w| w == b"_START");
-            if over[kind].is_some() {
-                self.asked[kind] = start;
-            }
-            let speed = if self.asked[0] {
-                over[0]
-            } else if self.asked[1] {
-                over[1]
-            } else {
-                None
-            }
-            .unwrap_or(base);
             out.put(&text[done..from]);
             done = end;
             at = end;
-            if speed != self.current {
-                let mut line = Vec::new();
-                set_fan(&mut line, speed);
-                out.put(&line);
-                self.current = speed;
+            self.mark(out, &text[from..end], (over, base));
+        }
+        out.put(&text[done..]);
+    }
+
+    /// Puts a stretch of a layer's text on a plate in several filaments, as Orca's cooling buffer writes it
+    /// (`apply_layer_cooldown`): at a tool change (`T…`) the new filament's fans before it, where they differ from
+    /// what runs (`change_extruder_set_fan`); after the printer's change G-code (`;_FORCE_RESUME_FAN_SPEED`) the
+    /// auxiliary fan and the part fan again, unless an overhang fan is asked for; and the overhang markers by the
+    /// filament printing them. `fans` is the part and auxiliary fans as the cooling last set them (`m_fan_speed`,
+    /// `m_additional_fan_speed`), `by_tool` each filament's for the layer.
+    fn put_tools(&mut self, out: &mut impl Sink, text: &[u8], by_tool: &[ToolFans], fans: &mut [f64; 2], aux: bool) {
+        let mut done = 0;
+        let mut at = 0;
+        while at < text.len() {
+            let end = text[at..].iter().position(|&b| b == b'\n').map_or(text.len(), |n| at + n + 1);
+            let line = &text[at..end];
+            let from = at;
+            at = end;
+            if line.first() == Some(&b'T') && line.get(1).is_some_and(u8::is_ascii_digit) {
+                let digits = line[1..].iter().take_while(|b| b.is_ascii_digit()).count();
+                let tool = std::str::from_utf8(&line[1..1 + digits]).ok().and_then(|d| d.parse::<usize>().ok());
+                let Some(tool) = tool.filter(|&t| t < by_tool.len() && t != self.tool) else { continue };
+                self.tool = tool;
+                let new = by_tool[tool].0;
+                out.put(&text[done..from]);
+                done = from;
+                let mut lines = Vec::new();
+                if new[0] != fans[0] || self.current != new[0] {
+                    set_fan(&mut lines, new[0]);
+                    (fans[0], self.current) = (new[0], new[0]);
+                }
+                if new[1] != fans[1] {
+                    fans[1] = new[1];
+                    if aux {
+                        lines.extend_from_slice(format!("M106 P2 S{}\n", (255.0 * new[1] / 100.0) as i64).as_bytes());
+                    }
+                }
+                out.put(&lines);
+            } else if line.starts_with(b";_FORCE_RESUME_FAN_SPEED") {
+                out.put(&text[done..from]);
+                done = end;
+                let mut lines = Vec::new();
+                if aux && fans[1].is_finite() {
+                    lines.extend_from_slice(format!("M106 P2 S{}\n", (255.0 * fans[1] / 100.0) as i64).as_bytes());
+                }
+                if fans[0].is_finite() && !self.asked.iter().any(|&a| a) && self.current.is_finite() {
+                    set_fan(&mut lines, self.current);
+                }
+                out.put(&lines);
+            } else if line.starts_with(b";_OVERHANG_FAN_") || line.starts_with(b";_INTERNAL_BRIDGE_FAN_") {
+                out.put(&text[done..from]);
+                done = end;
+                let over = by_tool.get(self.tool).map_or([None; 2], |t| t.1);
+                self.mark(out, line, (over, fans[0]));
             }
         }
         out.put(&text[done..]);
+    }
+
+    /// An overhang marker `line` turned into the `M106` line Orca's cooling buffer writes in its place, if any.
+    fn mark(&mut self, out: &mut impl Sink, line: &[u8], (over, base): ([Option<f64>; 2], f64)) {
+        let kind = usize::from(line.starts_with(b";_INTERNAL_BRIDGE"));
+        let start = line.windows(6).any(|w| w == b"_START");
+        if over[kind].is_some() {
+            self.asked[kind] = start;
+        }
+        let speed = if self.asked[0] {
+            over[0]
+        } else if self.asked[1] {
+            over[1]
+        } else {
+            None
+        }
+        .unwrap_or(base);
+        if speed != self.current {
+            let mut line = Vec::new();
+            set_fan(&mut line, speed);
+            out.put(&line);
+            self.current = speed;
+        }
     }
 }
 
@@ -647,7 +742,7 @@ pub fn write(layers: Vec<LayerGcode>, stats: &Stats, job: &Job, out: &mut impl S
     let mut fans = [f64::NAN; 2];
     // What the fan runs at now, which an overhang's fan changes from the layer's (`current`), and which of the
     // overhang fans were asked for since the cooling buffer's last layer began.
-    let mut fan = FanNow { current: f64::NAN, asked: [false; 2] };
+    let mut fan = FanNow { current: f64::NAN, asked: [false; 2], tool: 0 };
     let mut pending: Vec<u8> = Vec::new();
     let mut before: Option<[f64; 3]> = None;
     for (i, mut l) in layers.into_iter().enumerate() {
@@ -688,7 +783,12 @@ pub fn write(layers: Vec<LayerGcode>, stats: &Stats, job: &Job, out: &mut impl S
         let end = l.tail_at.unwrap_or(l.text.len());
         debug_assert!(cut_to <= end || cut_from == cut_to);
         let (cut_from, cut_to) = (cut_from.min(end), cut_to.min(end));
-        if l.over == [None, None] {
+        if !l.by_tool.is_empty() {
+            fan.tool = l.tool;
+            for (from, to) in [(l.progress_at, cut_from), (cut_to, end)] {
+                fan.put_tools(out, &l.text[from..to], &l.by_tool, &mut fans, s.aux_fan);
+            }
+        } else if l.over == [None, None] {
             out.put(&l.text[l.progress_at..cut_from]);
             out.put(&l.text[cut_to..end]);
         } else {
@@ -1266,6 +1366,65 @@ pub fn cooling_time(text: &str, from: [f64; 3], feed: f64) -> [f64; 2] {
         at = to;
     }
     secs
+}
+
+/// What Orca's cooling reads in a stretch of G-code (`read_cooling`).
+struct CoolingRead {
+    /// Seconds before its tool change (`T…`), with the old filament, and after it, with the new one.
+    secs: [f64; 2],
+    /// The last `E` it gives (the one before it where it gives none).
+    e: f64,
+    /// Whether a move in it sets a speed.
+    sets_feed: bool,
+}
+
+/// Seconds the moves of the prime tower's G-code `text` take as Orca's cooling reckons a layer's time
+/// (`CoolingBuffer::parse_layer_gcode`): each move's length (an arc's along it, a full turn for a lift's) over its
+/// speed, from `from` at `feed` mm/s; a move that goes nowhere moves the extruder by its `E`, or by the last one read
+/// (`e` before the text) where it gives none.
+fn read_cooling(text: &str, from: [f64; 3], feed: f64, e: f64) -> CoolingRead {
+    let (mut at, mut feed, mut out) = (from, feed, CoolingRead { secs: [0.0; 2], e, sets_feed: false });
+    let mut side = 0;
+    for line in text.lines() {
+        if line.starts_with('T') && line[1..].starts_with(|c: char| c.is_ascii_digit()) {
+            side = 1;
+        }
+        let code = line.split(';').next().unwrap_or("");
+        let mut words = code.split_whitespace();
+        let Some(cmd) = words.next().filter(|c| matches!(*c, "G0" | "G1" | "G2" | "G3")) else { continue };
+        let (mut to, mut ij, mut turn) = (at, [0.0f64; 2], false);
+        for w in words {
+            let Ok(v) = w[1..].parse::<f64>() else { continue };
+            match w.as_bytes()[0] {
+                b'X' => to[0] = v,
+                b'Y' => to[1] = v,
+                b'Z' => to[2] = v,
+                b'E' => out.e = v,
+                b'F' => {
+                    feed = v / 60.0;
+                    out.sets_feed = true;
+                }
+                b'I' => ij[0] = v,
+                b'J' => ij[1] = v,
+                b'P' => turn = v == 1.0,
+                _ => {}
+            }
+        }
+        let xy = if cmd == "G0" || cmd == "G1" {
+            (to[0] - at[0]).hyp(to[1] - at[1])
+        } else if turn {
+            2.0 * PI * ij[0].hyp(ij[1])
+        } else {
+            arc_length(at, [to[0], to[1]], ArcMove { i: ij[0], j: ij[1], ccw: cmd == "G3" })
+        };
+        let d = xy.hyp(to[2] - at[2]);
+        let d = if d > 1e-9 { d } else { out.e.abs() };
+        if feed > 0.0 {
+            out.secs[side] += d / feed;
+        }
+        at = to;
+    }
+    out
 }
 
 /// Whether custom G-code `text` moves at a speed of its own (an F word in a move).
@@ -2057,9 +2216,9 @@ fn for_each_filament(
     }
 }
 
-/// A layer as `slowdown_by_filament` takes it: its moves and notes, where the nozzle comes from, and the filament it
-/// starts with.
-type CoolingLayer<'m> = (&'m [Move], &'m [(usize, Note)], [f64; 3], usize);
+/// A layer as `slowdown_by_filament` takes it: its moves and notes, where the nozzle comes from, the filament it
+/// starts with, and where its last retraction and wipe begin when they are the next layer's (`Tail`).
+type CoolingLayer<'m> = (&'m [Move], &'m [(usize, Note)], [f64; 3], usize, Option<(usize, usize)>);
 
 /// A filament's moves on a layer (or the layers cooled with it), as Orca's cooling slows them
 /// (`PerExtruderAdjustments`).
@@ -2225,8 +2384,8 @@ fn slow_range(shares: &mut [Share], range: &[usize], mut stretch: f64) {
     }
 }
 
-/// How Orca's cooling slows a layer printed in several filaments without a tower (`calculate_layer_slowdown`), and
-/// how long the layer takes then: each filament's moves apart (its tool change's G-code reckoned in), the filaments in
+/// How Orca's cooling slows a layer printed in several filaments (`calculate_layer_slowdown`), and how long the layer
+/// takes then: each filament's moves apart (its tool change's and prime tower's G-code reckoned in), the filaments in
 /// turn, those with the shortest slow-down time first, each pass over a filament and those after it. As Orca does, a
 /// pass slows the filaments it reaches to one speed and leaves each one's total at its extrusions' time alone, so the
 /// pass over the next filament finds it short by its other moves' time and slows it again by that much.
@@ -2237,18 +2396,53 @@ fn slowdown_by_filament(layers: &[CoolingLayer], c: &crate::toolchange::Colours)
         .iter()
         .map(|s| Share { min: s.slow_down_min_speed, layer_time: s.slow_down_layer_time, ..Default::default() })
         .collect();
-    for &(moves, notes, start, first) in layers {
+    // Orca's cooling reads every move of the layer's G-code, the prime tower's and the tool change's too, but none
+    // before the layer's first extrusion (its `layer_had_extrusion`; the cooling buffer's layer is the support's layers
+    // with the object layer after them): neither the retraction and wipe the layer before left to it
+    // (`Colours::defers_tail`), nor a visit to the tower the layer starts with.
+    //
+    // It also reads a line that only sets the speed (`G1 F…`) as moving the extruder by the last `E` it read, its
+    // parser keeping each axis's last value (`parse_layer_gcode`'s `new_pos`): such a line takes that over the speed.
+    // Our writer sets the speed on a line of its own before an extrusion or a wipe whose speed differs from the last
+    // (`Writer::feed`), and the layer's first; an extrusion's counts with the path it starts, as it does in Orca.
+    let towered = c.towered;
+    let mut counting = false;
+    let mut last_e = 0.0;
+    for &(moves, notes, start, first, tail) in layers {
         let (mut at, mut f) = (start, first.min(n - 1));
+        let mut feed = c.settings[f].travel_speed;
+        // The speed our writer last wrote, in whole mm/min (none at a layer's start).
+        let mut written = -1;
         let mut next_note = 0;
+        let ends = if towered { tail.map_or(moves.len(), |t| t.0) } else { moves.len() };
         for k in 0..=moves.len() {
             while let Some((at_k, note)) = notes.get(next_note).filter(|(i, _)| *i <= k) {
                 let _ = at_k;
                 match note {
                     Note::Tool(g) => f = (*g).min(n - 1),
                     Note::Tower(t) if t.plain => {
-                        shares[f].fixed += t.cooling[0];
-                        shares[t.filament.min(n - 1)].fixed += t.cooling[1];
-                        shares[f].any = true;
+                        if counting {
+                            shares[f].fixed += t.cooling[0];
+                            shares[t.filament.min(n - 1)].fixed += t.cooling[1];
+                            shares[f].any = true;
+                        }
+                        if let Some(e) = t.end {
+                            at = e;
+                        }
+                    }
+                    Note::Tower(t) if towered => {
+                        // The tower's G-code from where the nozzle is, its first moves at the speed the last one
+                        // set where they set none.
+                        let read = read_cooling(&t.text, at, feed, last_e);
+                        if counting {
+                            shares[f].fixed += read.secs[0];
+                            shares[t.filament.min(n - 1)].fixed += read.secs[1];
+                            shares[f].any = true;
+                        }
+                        last_e = read.e;
+                        if read.sets_feed {
+                            written = -1;
+                        }
                         if let Some(e) = t.end {
                             at = e;
                         }
@@ -2260,11 +2454,24 @@ fn slowdown_by_filament(layers: &[CoolingLayer], c: &crate::toolchange::Colours)
             let Some(m) = moves.get(k) else { break };
             let t = simple_time(m, at);
             at = [m.x, m.y, m.z];
+            feed = m.f;
+            let mm_min = (m.f * 60.0) as i64;
+            // A line of its own setting the speed before an extrusion or a wipe.
+            let own_line = matches!(m.kind, Kind::Extrude(_) | Kind::Wipe) && mm_min != written;
+            let speed_line = if own_line && m.f > 0.0 { last_e.abs() / m.f } else { 0.0 };
+            written = mm_min;
+            counting |= matches!(m.kind, Kind::Extrude(_));
+            if matches!(m.kind, Kind::Extrude(_) | Kind::Wipe | Kind::Retract) {
+                last_e = m.e;
+            }
+            if !counting || k >= ends {
+                continue;
+            }
             let share = &mut shares[f];
             share.any = true;
             match m.kind {
-                Kind::Extrude(_) if m.f > share.min => share.lines.push((t, m.f)),
-                _ => share.fixed += t,
+                Kind::Extrude(_) if m.f > share.min => share.lines.push((t + speed_line, m.f)),
+                _ => share.fixed += t + speed_line,
             }
         }
     }
@@ -2740,7 +2947,7 @@ fn finish_layer(
     job: &Job,
     (text, before): (Vec<u8>, Option<(Role, f32)>),
     header_height: f32,
-    (fans, over, mut tool, (tail, first_lift)): ([f64; 2], [Option<f64>; 2], usize, Tail),
+    (fans, over, by_tool, mut tool, (tail, first_lift)): ([f64; 2], [Option<f64>; 2], &[ToolFans], usize, Tail),
 ) -> LayerOut {
     let s = job.settings;
     // Where the prime tower's G-code leaves the nozzle, the planner starts again.
@@ -2799,10 +3006,15 @@ fn finish_layer(
             }
             match &notes[next_note].1 {
                 Note::Tower(tower) => {
-                    let mut text = tower.text.replace(
-                        ";_FORCE_RESUME_FAN_SPEED\n",
-                        &format!("M106 P2 S{}\n{}", (255.0 * fans[1] / 100.0) as i64, fan_line(fans[0])),
-                    );
+                    // With each filament's own fans, `write` resolves the marker.
+                    let mut text = if by_tool.is_empty() {
+                        tower.text.replace(
+                            ";_FORCE_RESUME_FAN_SPEED\n",
+                            &format!("M106 P2 S{}\n{}", (255.0 * fans[1] / 100.0) as i64, fan_line(fans[0])),
+                        )
+                    } else {
+                        tower.text.clone()
+                    };
                     if tower.plain {
                         text = drop_repeated_feeds(&text, &mut w.feed);
                     }
@@ -2887,6 +3099,7 @@ fn finish_layer(
                     t.push(b'\n');
                     w.height = m.height;
                 }
+                let over = by_tool.get(tool).map_or(over, |t| t.1);
                 let want =
                     [over[0].is_some() && m.form & FORM_FAN != 0, over[1].is_some() && role == Role::InternalBridge];
                 let mark = (over[0].is_some() || over[1].is_some()) && (want != marked || no_marks_yet);
@@ -3654,13 +3867,31 @@ mod tests {
         assert_eq!(layer_overhang_fans(5, 40.0, &s), [None, None]);
     }
 
+    /// Orca's cooling reads the prime tower's G-code as it reads the rest: arcs along their length, and a line that
+    /// only sets the speed as moving the extruder by the last `E` read (`parse_layer_gcode` keeps each axis's value).
+    #[test]
+    fn the_towers_gcode_takes_the_time_orcas_cooling_reads_in_it() {
+        let text = "G1 X10 Y0 E1 F600\nG1 F1200\nG3 X0 Y10 I-10 J0 E.5\nT1\nG1 E-2 F2400\n";
+        let read = read_cooling(text, [0.0, 0.0, 0.0], 100.0, 0.0);
+        // 10 mm at 10 mm/s, then the speed line's 1 mm at 20 mm/s, then a quarter turn of radius 10 at 20 mm/s.
+        let quarter = 10.0 * PI / 2.0;
+        assert!((read.secs[0] - (1.0 + 0.05 + quarter / 20.0)).abs() < 1e-9, "{:?}", read.secs);
+        // After the tool change, the new filament's.
+        assert!((read.secs[1] - 2.0 / 40.0).abs() < 1e-9, "{:?}", read.secs);
+        assert_eq!(read.e, -2.0);
+        assert!(read.sets_feed);
+        // A speed line before any `E` takes the one read before the text.
+        let read = read_cooling("G1 F600\n", [0.0; 3], 100.0, 0.8);
+        assert!((read.secs[0] - 0.08).abs() < 1e-9, "{:?}", read.secs);
+    }
+
     #[test]
     fn overhang_fan_markers_become_the_cooling_buffers_fan_lines() {
         let text =
             b"G1 X1 E1\n;_OVERHANG_FAN_START\nG1 X2 E1\n;_OVERHANG_FAN_START\nG1 X3 E1\n;_OVERHANG_FAN_END\nG1 X4 E1\n\
                      ;_INTERNAL_BRIDGE_FAN_START\nG1 X5 E1\n;_OVERHANG_FAN_START\n;_INTERNAL_BRIDGE_FAN_END\nG1 X6 E1\n\
                      ;_OVERHANG_FAN_END\nG1 X7 E1\n";
-        let mut fan = FanNow { current: 45.0, asked: [false; 2] };
+        let mut fan = FanNow { current: 45.0, asked: [false; 2], tool: 0 };
         let mut out = Vec::new();
         fan.put(&mut out, text, ([Some(90.0), Some(70.0)], 45.0));
         // The overhang's 90 % once (a second start asks for what is on), the layer's 45 % at the end, the internal
