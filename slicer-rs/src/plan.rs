@@ -209,8 +209,10 @@ pub fn plan_layer_of(
         let under = below.get(island.group as usize).and_then(Option::as_ref);
         let trees = r.lightning.get(island.group as usize).map_or(&[][..], Vec::as_slice);
         let octree = r.octrees.get(island.group as usize).and_then(Option::as_ref);
+        let size = r.sizes.get(island.group as usize).copied().unwrap_or((0.0, 0.0));
         let seams = r.seams.get(island.group as usize);
-        island_paths(k as u32, island, &r.fills[k], under, i, (z, h), centre, (trees, octree), seams, (at, rising), s)
+        let frame = (centre, size);
+        island_paths(k as u32, island, &r.fills[k], under, i, (z, h), frame, (trees, octree), seams, (at, rising), s)
     };
     let mut per_island: Vec<Vec<Path>> = (0..r.islands.len()).map(|k| island_at(k, None, false)).collect();
     // In spiral vase mode, a layer that is one island's wall loop and nothing else rises as it goes round, as Orca's
@@ -611,7 +613,7 @@ fn island_paths(
     below: Option<&Below>,
     layer: usize,
     (z, h): (f64, f64),
-    centre: (f64, f64),
+    (centre, size): ((f64, f64), (f64, f64)),
     (trees, octree): (&[Vec<Pt>], Option<&crate::adaptive::Octree>),
     seams: Option<&crate::seam::LayerSeams>,
     (mut at, rises): (Option<Pt>, bool),
@@ -702,7 +704,7 @@ fn island_paths(
             let others = others_in(island_inner, region);
             for shape in region {
                 let one = vec![shape.clone()];
-                let paths: Vec<Path> = sparse_lines(&one, &others, layer, z, h, centre, trees, octree, s)
+                let paths: Vec<Path> = sparse_lines(&one, &others, layer, z, h, (centre, size), trees, octree, s)
                     .into_iter()
                     .filter(|points| points.len() >= 2)
                     .map(|points| path(role, points, false, island, first, h, s))
@@ -1033,7 +1035,7 @@ pub fn sparse_lines(
     layer: usize,
     z: f64,
     h: f64,
-    centre: (f64, f64),
+    frame: ((f64, f64), (f64, f64)),
     trees: &[Vec<Pt>],
     octree: Option<&crate::adaptive::Octree>,
     s: &Settings,
@@ -1043,7 +1045,7 @@ pub fn sparse_lines(
         return Vec::new();
     }
     let pattern = fill::Pattern::of(&s.sparse_infill_pattern).unwrap_or(fill::Pattern::Rectilinear);
-    sparse_runs(region, others, pattern, layer, (z, h), centre, (trees, octree), s)
+    sparse_runs(region, others, pattern, layer, (z, h), frame, (trees, octree), s)
 }
 
 /// mm Orca's sparse infill area reaches into the walls on a layer `h` high: a share of half the last wall's and half
@@ -1079,7 +1081,7 @@ fn sparse_runs(
     pattern: fill::Pattern,
     layer: usize,
     (z, h): (f64, f64),
-    centre: (f64, f64),
+    (centre, size): ((f64, f64), (f64, f64)),
     (trees, octree): (&[Vec<Pt>], Option<&crate::adaptive::Octree>),
     s: &Settings,
 ) -> Vec<Vec<Pt>> {
@@ -1099,6 +1101,8 @@ fn sparse_runs(
         trees,
         octree,
         lattice_angles: s.lateral_lattice_angles,
+        size,
+        resolution: s.resolution,
     };
     // Lightning's trees grow in the area grown all round (`region::lightning_lines`), which its lines keep to: with
     // the area Orca's generator takes, ours came out further from Orca's (+11.5 % against −0.3 % on a Benchy).

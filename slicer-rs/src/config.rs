@@ -137,6 +137,8 @@ pub struct Settings {
     /// Lateral lattice infill's two angles, degrees (Orca's `lateral_lattice_angle_1` and `_2`): how far from upright
     /// each of its two sets of walls leans.
     pub lateral_lattice_angles: [f64; 2],
+    /// How much Orca rounds the corners of some sparse patterns (`sparse_infill_smooth_factor`, %), which ours doesn't.
+    pub sparse_smooth_factor: f64,
     /// mm the first layer is pulled in against elephant's foot, where it is wide enough (`elephant.rs`).
     pub elephant_foot: f64,
     /// How many layers Orca pulls in, by less on each (`elefant_foot_compensation_layers`): this pulls in the first.
@@ -924,6 +926,7 @@ impl Settings {
             lateral_lattice_angles: [("lateral_lattice_angle_1", -45.0), ("lateral_lattice_angle_2", 45.0)]
                 .map(|(key, default)| if p.text(key).is_empty() { default } else { p.float(key) }),
             infill_anchor_max,
+            sparse_smooth_factor: p.float("sparse_infill_smooth_factor"),
             elephant_foot: p.float("elefant_foot_compensation"),
             elephant_foot_layers: p.int("elefant_foot_compensation_layers").max(1) as usize,
             resolution: p.float("resolution"),
@@ -1223,9 +1226,21 @@ impl Settings {
                 | "lateral-lattice"
                 | "adaptivecubic"
                 | "supportcubic"
+                | "archimedeanchords"
+                | "hilbertcurve"
+                | "octagramspiral"
                 | ""
         ) {
             out.push(format!("{} sparse infill printed as rectilinear", self.sparse_infill_pattern));
+        }
+        // Orca rounds these patterns' corners by the smoothing factor (`is_smoothable_infill_pattern`).
+        if self.sparse_smooth_factor > 0.0
+            && matches!(
+                self.sparse_infill_pattern.as_str(),
+                "hilbertcurve" | "octagramspiral" | "lightning" | "honeycomb" | "crosshatch"
+            )
+        {
+            out.push(format!("{} sparse infill's corners printed unrounded", self.sparse_infill_pattern));
         }
         for (what, pattern) in [
             ("top surfaces", &self.top_surface_pattern),
