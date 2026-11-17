@@ -32,11 +32,13 @@ import { SEED_PASSWORD, SEED_USERS } from "../scripts/lib/local-app.ts";
  * 2026-11-16: /ideas +1: the one cover rule every card picks its picture with (shared/cover.ts, coverOf in lib/previews.ts),
  * and the card pieces IdeaCard shared with the build cards (ReactionGlance, ForField) in chunks of their own, now that the
  * build cards no longer load IdeaCard: that took 3.1 kB off Today and 5.3 kB off Builds.
+ * 2026-11-17: /ideas +2: mirror links (3dgo.app) read as their source model (shared/mirrors.ts, in modelSite and the model mark
+ * every card and the idea's note use), a note that is only a link shows it once as its card, and a shared title loses its site's name.
  */
 const CEILING_KB = {
   "/sign-in": 185,
   "/today": 295,
-  "/ideas": 260,
+  "/ideas": 262,
   "/builds": 267,
   "/journal": 278,
   "/search": 275,
