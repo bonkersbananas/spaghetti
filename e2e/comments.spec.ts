@@ -292,18 +292,18 @@ test("Today has one quiet line for what Sam wrote, until it is read", async ({ p
   const other = await newIdea(page, "Lamp base", "building");
   await page.goto("/today");
   const line = page.getByRole("link", { name: /on Bath tugboat/ });
-  // No block at all: its label is the heading "New comment(s)".
-  await expect(page.getByRole("heading", { name: /^New comments?/ })).toHaveCount(0);
+  // No line at all.
+  await expect(page.getByRole("link", { name: /^Sam Okafor on/ })).toHaveCount(0);
   const sams = await samSession(page);
   await sams.say(id, "Started it tonight, the first layer looked great.");
   await page.reload();
   await expect(line).toHaveText(/Sam Okafor on Bath tugboat: Started it tonight/);
 
-  // Several: the label counts them, and the one line is for the newest thread.
+  // Several: the line counts them, and the one line is for the newest thread.
   await sams.say(other, "Could it be taller?");
   await sams.say(other, "Maybe 12 cm.");
   await page.reload();
-  await expect(page.getByRole("heading", { name: /^New comments\s*3$/ })).toBeVisible();
+  await expect(page.getByRole("link", { name: /^Sam Okafor on Lamp base.*3 new$/ })).toBeVisible();
   await expect(page.getByRole("link", { name: /^Sam Okafor on Lamp base/ })).toHaveCount(1);
 
   // Reading a thread clears it from the line; reading all clears the line.
