@@ -445,7 +445,8 @@ impl Fuzzy {
                 _ => FuzzyWalls::None,
             },
             thickness: p.float("fuzzy_skin_thickness"),
-            point_distance: p.float("fuzzy_skin_point_distance"),
+            // At least Orca's minimum (0.01 mm): without one, a walk along the loop would never advance.
+            point_distance: p.float("fuzzy_skin_point_distance").max(0.01),
             first_layer: p.bool("fuzzy_skin_first_layer"),
             noise: match p.text("fuzzy_skin_noise_type") {
                 "perlin" => FuzzyNoise::Perlin,

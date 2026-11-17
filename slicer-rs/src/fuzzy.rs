@@ -172,6 +172,9 @@ impl<'a> Layer<'a> {
         let scale = geom::SCALE;
         let distance = f.point_distance * scale;
         let thickness = f.thickness * scale;
+        if distance.is_nan() || distance <= 0.0 {
+            return;
+        }
         let min_between = distance * 3.0 / 4.0;
         let range = distance / 2.0;
         let mut left_over = self.rng.unit() * (min_between / 2.0);
@@ -417,6 +420,19 @@ pub fn islands(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_point_distance_of_nothing_still_ends() {
+        // Orca refuses a point distance under 0.01 mm; ours reads one as that, so the walk along a loop ends.
+        let s = crate::setup::read(r#"{"process": {"fuzzy_skin": "external", "fuzzy_skin_point_distance": "0"}}"#)
+            .unwrap()
+            .settings;
+        assert_eq!(s.fuzzy.point_distance, 0.01);
+        let square: Contour =
+            vec![geom::pt(0, 0), geom::pt(100_000, 0), geom::pt(100_000, 100_000), geom::pt(0, 100_000)];
+        let fuzzed = Layer::new(&s.fuzzy, 1.0, 1).fuzz_loop(&square, 0, None, (0.0, 0.0));
+        assert!(fuzzed.len() > 1000 && fuzzed.len() < 100_000, "{} points", fuzzed.len());
+    }
 
     #[test]
     fn mt19937_gives_the_standard_sequence() {
