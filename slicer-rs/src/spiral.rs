@@ -291,7 +291,7 @@ mod tests {
     use super::*;
 
     fn mv(x: f64, y: f64, z: f64, e: f64, kind: Kind) -> Move {
-        Move { x, y, z, e, f: 100.0, accel: f64::NAN, kind, width: 0.42, height: 0.2, form: 0 }
+        Move { x, y, z, e, f: 100.0, accel: f64::NAN, kind, width: 0.42, height: 0.2, form: 0, arc: None }
     }
 
     /// A square loop 10 mm a side at z 1.0, reached by a lift up from the layer below (0.8), a retraction, a lift,

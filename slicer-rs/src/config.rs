@@ -143,6 +143,8 @@ pub struct Settings {
     pub elephant_foot_layers: usize,
     /// mm: how far a contour may be simplified.
     pub resolution: f64,
+    /// Which paths Orca fits arcs to (`enable_arc_fitting`): `G2`/`G3` where its points lie on a circle (`arc_fit.rs`).
+    pub arc_fitting: ArcFitting,
     /// mm: gaps and notches in a layer's outline narrower than twice this are closed (`slice_closing_radius`).
     pub slice_closing_radius: f64,
     /// mm between the first layer and a skirt (there is none, but Orca levels the bed that far around the first
@@ -492,6 +494,28 @@ pub struct SpiralSettings {
     /// (`spiral_starting_flow_ratio`, `spiral_finishing_flow_ratio`).
     pub starting_flow: f64,
     pub finishing_flow: f64,
+}
+
+/// Which paths Orca fits arcs to (`ArcFittingMode`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ArcFitting {
+    /// Straight lines only.
+    Disabled,
+    /// Every path the object's layers and its support print (the X2D's presets).
+    Enabled,
+    /// The sparse infill only (`sparse_infill`).
+    SparseInfill,
+}
+
+impl ArcFitting {
+    /// Orca's `enable_arc_fitting`, as its presets and its older ones (a bool) give it.
+    pub fn read(value: &str) -> ArcFitting {
+        match value.trim().to_ascii_lowercase().as_str() {
+            "1" | "true" | "enabled" => ArcFitting::Enabled,
+            "sparse_infill" => ArcFitting::SparseInfill,
+            _ => ArcFitting::Disabled,
+        }
+    }
 }
 
 /// Which of Orca's support generators makes a raft when supports are off (`SupportSettings::raft_maker`).
@@ -902,6 +926,7 @@ impl Settings {
             elephant_foot: p.float("elefant_foot_compensation"),
             elephant_foot_layers: p.int("elefant_foot_compensation_layers").max(1) as usize,
             resolution: p.float("resolution"),
+            arc_fitting: ArcFitting::read(p.text("enable_arc_fitting")),
             slice_closing_radius: p.float("slice_closing_radius"),
             skirt_distance: p.float("skirt_distance"),
             brim_width: p.float("brim_width"),

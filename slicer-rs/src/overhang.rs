@@ -15,7 +15,7 @@ use crate::config::Settings;
 use crate::fill::{self, EdgeGrid};
 use crate::fmath::Hyp;
 use crate::geom::{self, Contour, Pt, Shapes};
-use crate::plan::{Part, Path};
+use crate::plan::{self, ArcRun, Part, Path};
 use crate::region::Role;
 use std::cell::RefCell;
 
@@ -117,12 +117,14 @@ impl Below {
             Vec::new()
         };
         if !candidates.contains(&true) {
-            // On the layer below all the way round: only its speed may change.
+            // On the layer below all the way round: only its speed may change. Where it does, Orca writes the path
+            // point by point, as lines.
             if let Some((points, speeds)) =
                 self.slow(&path.points, Some(&signed), path.role, path.width, path.mm3_per_mm, path.speed, s)
             {
                 path.parts = speeds.into_iter().map(|speed| Part { overhang: false, speed }).collect();
                 path.points = points;
+                path.arcs.clear();
             }
             return path;
         }
@@ -158,11 +160,13 @@ impl Below {
             {
                 path.parts = speeds.into_iter().map(|speed| Part { overhang: false, speed }).collect();
                 path.points = points;
+                path.arcs.clear();
             }
             return path;
         }
         let mut points: Vec<Pt> = Vec::with_capacity(n + 8);
         let mut parts: Vec<Part> = Vec::with_capacity(n + 8);
+        let mut arcs: Vec<ArcRun> = Vec::new();
         for (run, over) in runs {
             if run.len() < 2 {
                 continue;
@@ -172,11 +176,15 @@ impl Below {
             } else {
                 (path.role, path.width, path.mm3_per_mm, path.speed)
             };
-            let (run, speeds) = match self.slow(&run, None, role, width, mm3_per_mm, speed, s) {
-                Some(slowed) => slowed,
+            // Each stretch is a path of its own to Orca, its arcs fitted on their own (here to the points the
+            // loop kept), unless its speed changes along it, which it writes as lines.
+            let (run, speeds, own) = match self.slow(&run, None, role, width, mm3_per_mm, speed, s) {
+                Some((run, speeds)) => (run, speeds, Vec::new()),
                 None => {
+                    let (tolerance, fits) = plan::resolution(role, s);
+                    let (run, own) = if fits { plan::fit(&run, tolerance, true) } else { (run, Vec::new()) };
                     let k = run.len() - 1;
-                    (run, vec![speed as f32; k])
+                    (run, vec![speed as f32; k], own)
                 }
             };
             let from = if points.last() == Some(&run[0]) { 1 } else { 0 };
@@ -184,12 +192,15 @@ impl Below {
                 // Stretches meet end to start; should one not, the gap prints as the stretch it leads to.
                 parts.push(Part { overhang: over, speed: speeds[0] });
             }
+            let offset = points.len() - from;
+            arcs.extend(own.into_iter().map(|a| ArcRun { start: a.start + offset, end: a.end + offset, ..a }));
             points.extend_from_slice(&run[from..]);
             parts.extend(speeds.into_iter().map(|speed| Part { overhang: over, speed }));
         }
         if points.len() >= 2 {
             path.points = points;
             path.parts = parts;
+            path.arcs = arcs;
         }
         path
     }
@@ -201,6 +212,7 @@ impl Below {
         {
             path.parts = speeds.into_iter().map(|speed| Part { overhang: false, speed }).collect();
             path.points = points;
+            path.arcs.clear();
         }
         path
     }
@@ -869,6 +881,7 @@ mod tests {
             island: 0,
             object: 0,
             parts: Vec::new(),
+            arcs: Vec::new(),
         };
         let wall = below.wall(path, (0.4, Settings::mm3_per_mm(0.4, 0.2), 50.0, 2500.0), &s);
         assert_eq!(wall.parts.len(), wall.points.len() - 1);
@@ -908,6 +921,7 @@ mod tests {
             island: 0,
             object: 0,
             parts: Vec::new(),
+            arcs: Vec::new(),
         };
         let wall = below.wall(path, (0.4, Settings::mm3_per_mm(0.4, 0.2), 50.0, 2500.0), &s);
         assert!(wall.parts.is_empty());
