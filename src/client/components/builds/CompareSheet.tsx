@@ -82,7 +82,7 @@ function AttemptPhotos({
   onPick: (photoId: string) => void;
   /** Crossfade when the attempt changes (the phone's switch). */
   fade?: boolean;
-  /** Desktop: the other attempt has several photos. Keeps one row of 40 px thumbnails here too (a caption when there is one photo), so both columns are the same height. */
+  /** Desktop: the other attempt has several photos. Keeps one row of 40 px thumbnails here too , so both columns are the same height. */
   thumbsRow?: boolean;
 }) {
   const reduce = useReducedMotion();
@@ -129,7 +129,7 @@ function AttemptPhotos({
         ))}
       </div>
     ) : thumbsRow ? (
-      <p className="text-small text-ink-faint flex h-10 items-center">{photos.length === 1 ? "One photo" : ""}</p>
+      <div className="h-10" aria-hidden />
     ) : null;
   return (
     <div className="flex flex-col gap-2.5">

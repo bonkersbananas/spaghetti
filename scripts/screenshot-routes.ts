@@ -545,6 +545,9 @@ async function openCompare(page: Page) {
     .click();
 }
 
+/** Photos the compare-many-photos shot adds to one attempt (and takes away again). */
+const manyPhotoIds = Array.from({ length: 8 }, (_, i) => `5eed0000-0000-4000-8000-0000000d00${10 + i}`);
+
 const FUSILLI = { name: "fusilli-knob.stl", bytes: fusilliStl() };
 const FUSILLI_IDEA = { title: "Fusilli jar knob", note: "A fusilli knob for the pasta jar lid: twist to open." };
 /**
@@ -4187,6 +4190,39 @@ export const shots: Shot[] = [
     cleanup: async (page) => {
       await page.keyboard.press("Escape");
       await page.setViewportSize({ width: 1440, height: 900 });
+    },
+  },
+  {
+    // An attempt with many photos: its row of thumbnails scrolls inside its column instead of running into the other one.
+    name: "compare-many-photos",
+    path: `/builds/${SEED_BUILD_IDS.headphoneStand}`,
+    prepare: async (page) => {
+      const headers = { Origin: new URL(page.url()).origin };
+      const file = { name: "frame.jpg", mimeType: "image/jpeg", buffer: readFileSync("e2e/fixtures/tugboat.jpg") };
+      for (const id of manyPhotoIds) {
+        await page.request.put(`/api/items/${SEED_BUILD_IDS.headphoneStand}/photos/${id}`, {
+          headers,
+          multipart: {
+            width: "1280",
+            height: "960",
+            color: "#8d7a66",
+            attemptId: "5eed0000-0000-4000-8000-0000000b0003",
+            large: file,
+            thumb: file,
+          },
+        });
+      }
+      await page.reload();
+      await openCompare(page);
+      await page.getByRole("dialog", { name: /^Attempt \d+ and attempt \d+$/ }).waitFor();
+      await page.waitForTimeout(800);
+    },
+    cleanup: async (page) => {
+      await page.keyboard.press("Escape");
+      const headers = { Origin: new URL(page.url()).origin };
+      for (const id of manyPhotoIds) {
+        await page.request.delete(`/api/photos/${id}`, { headers });
+      }
     },
   },
   {
