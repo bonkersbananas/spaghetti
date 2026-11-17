@@ -726,7 +726,9 @@ fn each_nozzle_slices_a_cube_with_bambus_presets_for_it() {
             f = word(line, 'F').unwrap_or(f);
             let chord = (nx - x).hypot(ny - y);
             // An arc's length: its radius by the angle it turns through (a lift's has no E).
+            // (An arc under 0.2 mm across is left out: its centre is written to 0.001 mm, which is a percent of its length.)
             let length = match (word(line, 'I'), word(line, 'J')) {
+                (Some(i), Some(j)) if !line.starts_with("G1") && i.hypot(j) < 0.1 => 0.0,
                 (Some(i), Some(j)) if !line.starts_with("G1") => {
                     let r = i.hypot(j);
                     let turn = (2.0 * (chord / (2.0 * r)).min(1.0).asin()).abs();
