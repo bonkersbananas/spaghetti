@@ -3794,7 +3794,6 @@ mod tests {
         assert!(b.photo_taken && !b.known);
     }
 
-    /// A builder on a 0.2 mm layer at the plate's origin, an overhang wall 0.4 mm wide at 50 mm/s.
     #[test]
     fn the_first_lift_is_a_spiral_where_the_turn_fits_and_straight_where_it_does_not() {
         let s = Settings::default();
@@ -3808,6 +3807,7 @@ mod tests {
         assert_eq!(text([1.0, 100.0, 1.0], [0.0, 100.0], false), "G1 Z1.2");
     }
 
+    /// A builder on a 0.2 mm layer at the plate's origin, an overhang wall 0.4 mm wide at 50 mm/s.
     fn builder(s: &Settings) -> Builder<'_> {
         Builder {
             s,
