@@ -159,6 +159,22 @@ Again every file stays byte for byte as it was, on the 13 models and the 19 benc
 
 The heap in Chromium is the WebAssembly memory at the end, which only grows, so its peak. The frame's is now its 85 MB file and the mesh read from it; pick your size's is the regions of its 699 layers, all made before the first layer's toolpaths. A few small models' heaps grow by 1 to 3 MB (the tomato with the welding, the glasses and the hot dogs with the regions let go): where the allocator places what comes next, not more held. The times are within the drift.
 
+- **Arc fitting looks first where the last circle was off.** Orca's arc fitter (`arc_fit.rs`) tries circle after circle through a growing run of points, and each check walks every point and every segment's nearest point to the centre until one is off the tolerance: on pick your size 900 million steps, most of them finding again the point the circle before had failed on. That point is now looked at first; a point off anywhere gives the same answer, so which circles fit and which deviates least stay as they were. Arc fitting on pick your size natively 5.6 → 4.1 s; the slice, medians of five, interleaved: in Chromium 38.73 → 37.26 s (−3.8 %), in Node −2.8 %, natively on one thread −5.1 %; the frame −3 % in Chromium, the tomato and the hummingbird, with little to fit, within the drift. Tried and left out, each slower or barely faster: looking at the newest point first, stopping a circle's sum once it passes the least so far or the last best circle's, and checking the segments before the points.
+- **Arachne (#518 and since): nothing cheap left that keeps the files.** Its own code (the trapezoidation, the beading, the toolpaths) is under 2 % of any model. What it costs, up to 24 % of a slice (the containers 24 %, the poop tray 21 %, the tomato 11 % in Node), is the Voronoi diagram it builds of each narrow piece, and that is nearly all Boost's exact predicates: at Arachne's nanometre coordinates the quick ones give up for 70 % of the point–segment–segment circle events and 96 % of the segment–segment–segment ones (the coordinates' size against the short edges between them). Moving the pieces to the origin would let the quick ones decide more, but their answers differ from the exact ones in the last bits, which can move a vertex and a line; Orca's Boost takes the same exact path. Pieces repeat too rarely to cache (none on the containers, 12 % of the points on the poop tray).
+
+Round three's before and after, in Chromium: main with Arachne's narrow solid infill (#518) against the same main with the memory change (#523) and the arc fitting's, interleaved model by model, medians of three, the same files before and after.
+
+| Model | **Heap** | Chromium's processes | Time |
+| --- | --- | --- | --- |
+| Pick your size, plate 2 | **169 → 146 MB (−14 %)** | 251 → 255 MB | 36.71 → 34.75 s (−5 %) |
+| Steampunk frame (89 MB STL) | **134 → 125 MB (−7 %)** | 309 → 299 MB | 9.13 → 8.94 s (−2 %) |
+| Marshmallow | **109 → 100 MB (−8 %)** | 276 → 253 MB | 3.54 → 3.47 s (−2 %) |
+| Capybara (18 MB STL) | **38 → 31 MB (−18 %)** | 130 → 128 MB | 2.26 → 2.31 s (+2 %) |
+| Stackable containers, plate 3 | **29 → 27 MB (−7 %)** | 106 → 107 MB | 3.24 → 3.27 s (+1 %) |
+| Poop tray | **29 → 30 MB (+3 %)** | 114 → 114 MB | 4.55 → 4.56 s (0 %) |
+
+What's left: pick your size's heap is the regions of all its layers, made before the first layer's toolpaths (holding fewer at once would mean making them layer by layer, after the supports and seams that read them all); the frame's is the file the app hands in and the mesh read from it; and of the time, the polygon library's operations, the Voronoi diagram's exact predicates (now Arachne's too) and arc fitting's successful fits.
+
 ### With tree supports
 
 With Orca's organic trees everywhere (the X2D's support settings otherwise), the same way:
