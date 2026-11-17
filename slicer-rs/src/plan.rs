@@ -1442,6 +1442,7 @@ fn order_runs(runs: &mut Vec<Vec<Pt>>, at: &mut Option<Pt>) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::fmath::Hyp;
 
     fn square(x0: f64, y0: f64, x1: f64, y1: f64, clockwise: bool) -> Contour {
         let mut c = vec![
@@ -1521,7 +1522,7 @@ mod tests {
             assert_eq!(from_nm(run.arc.start), points[run.start]);
             assert_eq!(from_nm(run.arc.end), points[run.end]);
             for p in [run.arc.start, run.arc.end] {
-                let r = ((p[0] - run.arc.center[0]) as f64).hypot((p[1] - run.arc.center[1]) as f64);
+                let r = ((p[0] - run.arc.center[0]) as f64).hyp((p[1] - run.arc.center[1]) as f64);
                 assert!((r - run.arc.radius).abs() < 100.0, "{r} against {}", run.arc.radius);
             }
         }
