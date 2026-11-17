@@ -31,7 +31,7 @@ const PICTURES = 3;
 
 /**
  * The phone's fourth tab: the places that are not a tab of their own, each drawn with what is in it. On a phone
- * the four tiles are one column of wide tiles (each caption on one line); from md, two by two, so no tile is left
+ * the four tiles are one column of wide tiles (each caption on one line); from xl, two by two, so no tile is left
  * alone on a row. The sidebar lists the same places, so on desktop this page is a picture of the workshop.
  */
 function Workshop() {
@@ -82,7 +82,7 @@ function Workshop() {
   return (
     <>
       <PageHeader title="Workshop" subtitle="Spools, printer, shopping and twists." />
-      <div className="grid grid-cols-1 gap-3 md:grid-cols-2 md:gap-5">
+      <div className="grid grid-cols-1 gap-3 md:gap-5 xl:grid-cols-2">
         <HubTile
           to="/pantry"
           title="Pantry"
