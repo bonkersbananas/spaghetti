@@ -1,5 +1,4 @@
 use super::builder::OutlineBuilder;
-use crate::core::extract::BooleanExtractionBuffer;
 use crate::core::fill_rule::FillRule;
 use crate::core::integer::OverlayInt;
 use crate::core::overlay::{ContourDirection, IntOverlayOptions, Overlay, ShapeType};
@@ -67,7 +66,6 @@ where
 
     let mut contour_overlay = Overlay::new_custom(0, contour_options, Default::default());
     let mut segments = Vec::new();
-    let mut extraction = BooleanExtractionBuffer::default();
     let mut contours = FlatContoursBuffer::default();
 
     for path in paths {
@@ -97,10 +95,8 @@ where
         contour_overlay.options.output_direction = direction;
         contour_overlay.clear();
         contour_overlay.add_segments(&segments);
-        if let Some(graph) = contour_overlay.build_graph_view(fill) {
-            graph.extract_contours_into(OverlayRule::Subject, &mut extraction, &mut contours);
-            overlay.add_source(&contours, ShapeType::Subject);
-        }
+        contour_overlay.overlay_into(OverlayRule::Subject, fill, &mut contours);
+        overlay.add_source(&contours, ShapeType::Subject);
     }
     overlay
 }
