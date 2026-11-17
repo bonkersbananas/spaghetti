@@ -134,7 +134,17 @@ export function FileCard({
     </span>
   );
   const named = !!leadNode || !!lead?.length;
-  const text = (
+  // A story card's plain file is quiet meta on one line ("tugboat.gcode.3mf · 27 KB"), not a second heading under the note.
+  const oneLine = !!compact && !named && !opener && !note && !status && meta.length > 0;
+  const text = oneLine ? (
+    <span className="text-small text-ink-faint tabular flex min-w-0 flex-1 items-baseline gap-1.5">
+      <span className="text-ink-soft truncate font-medium" title={name}>
+        {name}
+      </span>
+      <span aria-hidden>·</span>
+      <span className="whitespace-nowrap">{meta.join(" · ")}</span>
+    </span>
+  ) : (
     <div className={cn("flex min-w-0 flex-1 flex-col gap-0.5", !!status && "md:self-end")}>
       {named ? (
         <>
@@ -152,7 +162,10 @@ export function FileCard({
           </span>
         </>
       ) : (
-        <span className="text-small text-ink truncate font-semibold" title={name}>
+        <span
+          className={cn("text-small truncate", compact ? "text-ink-soft font-medium" : "text-ink font-semibold")}
+          title={name}
+        >
           {name}
         </span>
       )}

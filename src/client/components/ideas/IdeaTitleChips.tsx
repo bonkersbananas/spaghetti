@@ -44,9 +44,11 @@ export function IdeaTitleChips({ item, forWhom, setForWhom, readOnly }: IdeaTitl
         onOpen={() => setAsking(true)}
         onDone={() => setAsking(false)}
       />
-      <div className="flex flex-wrap gap-2">
+      <div className="-ml-2.5 flex flex-wrap items-center gap-1">
         <ToggleChip
           selected={item.upNext !== null}
+          appearance="quiet"
+          tone="semolina"
           icon={UpNextIcon}
           disabled={locked}
           onClick={() => setUpNext(queryClient, item, item.upNext === null)}
@@ -55,6 +57,8 @@ export function IdeaTitleChips({ item, forWhom, setForWhom, readOnly }: IdeaTitl
         </ToggleChip>
         <ToggleChip
           selected={wished}
+          appearance="quiet"
+          tone="tomato"
           icon={WishIcon}
           disabled={locked || !user}
           onClick={() => user && toggleWishlist(queryClient, user.id, item)}
