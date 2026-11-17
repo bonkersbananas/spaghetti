@@ -88,11 +88,7 @@ export function Upkeep() {
                 >
                   {task.name}
                 </span>
-                <UpkeepMeter
-                  fraction={task.fraction}
-                  label={upkeepRowText(task)}
-                  className={cn(!task.due && "h-1 opacity-60")}
-                />
+                <UpkeepMeter fraction={task.fraction} label={upkeepRowText(task)} thin={!task.due} />
                 <span className="text-small text-ink-faint tabular truncate">{upkeepRowText(task)}</span>
               </button>
               {/* A column of one width, so every row's meter ends at the same place whether it holds Done or a ring. */}

@@ -7,12 +7,15 @@ import { cn } from "@/lib/cn";
 export function UpkeepMeter({
   fraction,
   label,
+  thin,
   className,
 }: {
   /** 0 at "just done", 1 when due; more than 1 is shown full. */
   fraction: number;
   /** What it says in words, for screen readers: "12 of 20 print hours". */
   label: string;
+  /** A thinner, fainter bar, for a task that isn't due yet. */
+  thin?: boolean;
   className?: string;
 }) {
   const filled = Math.min(1, Math.max(0, fraction));
@@ -25,7 +28,7 @@ export function UpkeepMeter({
       aria-valuemax={100}
       aria-valuenow={Math.round(filled * 100)}
       aria-valuetext={label}
-      className={cn("bg-ink/8 block h-1.5 w-full overflow-hidden rounded-full", className)}
+      className={cn("bg-ink/8 block w-full overflow-hidden rounded-full", thin ? "h-1 opacity-60" : "h-1.5", className)}
     >
       <span
         className={cn(
