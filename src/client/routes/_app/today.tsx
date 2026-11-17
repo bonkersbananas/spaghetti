@@ -24,6 +24,7 @@ import { CardSkeleton, RowSkeleton } from "@/components/ui/Skeleton";
 import { useVia } from "@/lib/agents";
 import { printingAttempts } from "@/lib/builds";
 import { useCapture } from "@/lib/capture";
+import { cn } from "@/lib/cn";
 import { itemName } from "@/lib/item-name";
 import { useBuilds, useIdeas } from "@/lib/items";
 import { journalQuery, summaryQuery } from "@/lib/journal";
@@ -132,6 +133,9 @@ function Today() {
     !hasPrinter &&
     !lately;
 
+  // The left column holds the prints, the scout's picks and the back burner; with none of them it is not drawn.
+  const leftHasContent = loading || onBed.length > 0 || hasScoutPicks || !!burner;
+
   const subtitle = new Date(now).toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" });
 
   const bedSection =
@@ -178,7 +182,13 @@ function Today() {
         // again and the month in the sticky column on the right (a tall column of rows beside the cards, instead of a
         // blank half page); the wrappers vanish (display: contents) until then so `order` can mix them.
         <div className="flex flex-col gap-10 lg:flex-row lg:items-start lg:gap-14">
-          <div data-picks className="contents lg:flex lg:min-w-0 lg:flex-3 lg:flex-col lg:gap-10">
+          <div
+            data-picks
+            className={cn(
+              "contents lg:min-w-0 lg:flex-3 lg:flex-col lg:gap-10",
+              leftHasContent ? "lg:flex" : "lg:hidden",
+            )}
+          >
             <div className="order-1 empty:hidden">
               {loading ? (
                 <div className="flex flex-col gap-4" aria-hidden>
@@ -216,9 +226,23 @@ function Today() {
               {!loading && <BackBurner idea={burner} person={burner ? byId.get(burner.createdBy) : undefined} />}
             </div>
           </div>
-          <div ref={stickyColumn} className="sticky-column contents lg:flex lg:min-w-0 lg:flex-2 lg:flex-col lg:gap-10">
-            <div className="order-2 empty:hidden lg:order-2">{!loading && <UpNext ideas={ideas.items} />}</div>
-            <div className="order-3 empty:hidden">{!loading && <PickUpAgain builds={builds.items} />}</div>
+          <div
+            ref={stickyColumn}
+            className={cn(
+              "sticky-column contents lg:min-w-0 lg:gap-10",
+              // Alone (nothing on the bed, no picks, no back burner) it is the page: two columns of blocks, not a
+              // narrow strip beside a blank half.
+              leftHasContent
+                ? "lg:flex lg:flex-2 lg:flex-col"
+                : "lg:grid lg:flex-1 lg:grid-cols-2 lg:items-start lg:gap-x-14",
+            )}
+          >
+            <div data-picks className="order-2 empty:hidden lg:order-2">
+              {!loading && <UpNext ideas={ideas.items} />}
+            </div>
+            <div data-picks className="order-3 empty:hidden">
+              {!loading && <PickUpAgain builds={builds.items} />}
+            </div>
             <div className="order-4 empty:hidden lg:order-1">
               {printer.data && spools.data && (
                 <InThePrinter setup={printer.data.setup} slots={printer.data.slots} spools={spools.data} />
