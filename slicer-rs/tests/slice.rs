@@ -3369,3 +3369,23 @@ fn top_surfaces_in_a_curve_pattern_print_as_orcas_do() {
         assert!((top.time - time).abs() < time * within, "{pattern}: {} s", top.time);
     }
 }
+
+#[test]
+fn line_infill_lays_its_leaning_lines_as_orcas_does() {
+    // The stepped boxes at 15 %: native OrcaSlicer 2.5.1 with the X2D's presets prints 1,265.51 mm³ of line sparse
+    // infill in 125.3 s (Nov 17).
+    let steps = boxes_stl(&[
+        ([108., 108., 0.], [148., 148., 5.]),
+        ([116., 116., 0.], [140., 140., 10.]),
+        ([123., 123., 0.], [133., 133., 15.]),
+        ([137., 137., 0.], [146., 146., 8.]),
+    ]);
+    let options = Options { arrange: false, thumbnail: false, ..Options::default() };
+    let json = r#"{"process": {"sparse_infill_pattern": "line"}}"#;
+    let out =
+        slice(&[Input { name: "steps.stl", bytes: &steps }], &setup::read(json).unwrap().settings, &options).unwrap();
+    assert!(out.fallbacks.is_empty(), "{:?}", out.fallbacks);
+    let sparse = out.stats.features[Role::ALL.iter().position(|&r| r == Role::SparseInfill).unwrap()];
+    assert!((sparse.volume - 1265.51).abs() < 1265.51 * 0.01, "{} mm³", sparse.volume);
+    assert!((sparse.time - 125.3).abs() < 125.3 * 0.01, "{} s", sparse.time);
+}

@@ -60,6 +60,9 @@ pub enum Pattern {
     Honeycomb3D,
     /// Waves tracing the Schwarz diamond surface at the layer's height (`FillTpmsD`).
     TpmsD,
+    /// Lines one way, every other one leaning by the gap between lines, turned a quarter every other layer, each
+    /// joined to the next where it is near (`FillLine`).
+    Line,
 }
 
 impl Pattern {
@@ -84,6 +87,7 @@ impl Pattern {
             "octagramspiral" => Some(Pattern::OctagramSpiral),
             "3dhoneycomb" => Some(Pattern::Honeycomb3D),
             "tpmsd" => Some(Pattern::TpmsD),
+            "line" => Some(Pattern::Line),
             "adaptivecubic" => Some(Pattern::AdaptiveCubic),
             "supportcubic" => Some(Pattern::SupportCubic),
             _ => None,
@@ -216,6 +220,7 @@ fn fill_part(part: &Shape, p: &Sparse) -> Vec<Vec<Pt>> {
         Pattern::HilbertCurve => return plane_path(part, crate::plane_path::Curve::Hilbert, p),
         Pattern::OctagramSpiral => return plane_path(part, crate::plane_path::Curve::OctagramSpiral, p),
         Pattern::Honeycomb3D => return honeycomb3d(part, p),
+        Pattern::Line => return line(part, p),
     };
     let grid = EdgeGrid::new(part, 2.0 * geom::SCALE, 0.0);
     let pieces: Vec<Piece> = clip(&lines, &grid).into_iter().filter(|c| c.points.len() >= 2).collect();
@@ -351,6 +356,111 @@ pub fn surface_curve(
                 out.push(l);
             }
         }
+    }
+    out
+}
+
+/// Orca's line pattern (`FillLine::_fill_surface_single`), in the object's frame turned by the infill direction (a
+/// quarter more on odd layers) and a quarter: lines across the part's box on a grid through the object's centre, the
+/// line distance (the spacing over the density, in whole nanometres) apart, every other one leaning by the distance
+/// less a spacing; cut to the part grown by 0.02 mm, each piece's ends pushed out by 0.3 spacings along the frame's
+/// y; chained (Orca's `chain_polylines`), each joined to the one before where it starts a line's distance across (give
+/// or take the lean) and no more than two distances along, and the join stays within the part grown by half a
+/// spacing.
+fn line(part: &Shape, p: &Sparse) -> Vec<Vec<Pt>> {
+    let quarter = std::f32::consts::FRAC_PI_2;
+    let mut angle = p.angle.to_radians() as f32;
+    if p.layer % 2 == 1 {
+        angle += quarter;
+    }
+    let frame = Frame::new(p.origin, (angle + quarter) as f64);
+    let min_spacing = (p.spacing / 0.000001) as i64;
+    let line_spacing = (min_spacing as f64 / (p.density as f32 as f64)) as i64;
+    if min_spacing <= 0 || line_spacing <= 0 {
+        return Vec::new();
+    }
+    let (diagonal, oscillation) = (2 * line_spacing, line_spacing - min_spacing);
+    let mut bb = [i64::MAX, i64::MAX, i64::MIN, i64::MIN];
+    for &q in &part[0] {
+        let (x, y) = frame.to(q);
+        let (x, y) = (x.round() as i64, y.round() as i64);
+        bb = [bb[0].min(x), bb[1].min(y), bb[2].max(x), bb[3].max(y)];
+    }
+    // On the object's grid (its centre is the frame's origin).
+    bb[0] = align(bb[0], line_spacing);
+    bb[1] = align(bb[1], line_spacing);
+    let mut lines: Vec<Vec<(f64, f64)>> = Vec::new();
+    let mut x = bb[0];
+    while x <= bb[2] + 100 {
+        let osc = if lines.len() % 2 == 1 { oscillation } else { 0 };
+        lines.push(vec![frame.from(((x - osc) as f64, bb[1] as f64)), frame.from(((x + osc) as f64, bb[3] as f64))]);
+        x += line_spacing;
+    }
+    let grown = geom::offset(&vec![part.clone()], 0.02);
+    let contours: Vec<Contour> = grown.iter().flatten().cloned().collect();
+    if contours.is_empty() {
+        return Vec::new();
+    }
+    let grid = EdgeGrid::new(&contours, 2.0 * geom::SCALE, 0.0);
+    let extra = (min_spacing as f32 * 0.3f32 + 0.5f32).floor() as f64;
+    let to_plate = |q: (f64, f64)| {
+        let (x, y) = frame.from(q);
+        geom::pt(x.round() as i32, y.round() as i32)
+    };
+    // Each piece in the frame (nm), its ends pushed apart along y.
+    let pieces: Vec<[(f64, f64); 2]> = clip(&lines, &grid)
+        .into_iter()
+        .filter(|c| c.points.len() >= 2)
+        .map(|c| {
+            let (a, b) = (c.points[0], c.points[c.points.len() - 1]);
+            let (mut a, mut b) = (frame.to(a), frame.to(b));
+            let (a, b) = if a.1 > b.1 { (&mut b, &mut a) } else { (&mut a, &mut b) };
+            a.1 -= extra;
+            b.1 += extra;
+            [*a, *b]
+        })
+        .collect();
+    if pieces.is_empty() {
+        return Vec::new();
+    }
+    let ends: Vec<(Pt, Pt)> = pieces.iter().map(|q| (to_plate(q[0]), to_plate(q[1]))).collect();
+    let off = geom::offset(&vec![part.clone()], (min_spacing / 2) as f64 * 1e-6);
+    let off_contours: Vec<Contour> = off.iter().flatten().cloned().collect();
+    let off_grid = (!off_contours.is_empty()).then(|| EdgeGrid::new(&off_contours, 2.0 * geom::SCALE, 0.0));
+    // Whether the segment between two points (plate units) stays inside the part grown by half a spacing.
+    let inside = |a: Pt, b: Pt| -> bool {
+        let Some(g) = &off_grid else { return false };
+        let seg = vec![(a.x as f64, a.y as f64), (b.x as f64, b.y as f64)];
+        let cut = clip(&[seg], g);
+        cut.len() == 1 && {
+            let c = &cut[0].points;
+            let near = |u: Pt, v: Pt| (u.x - v.x).abs() <= 1 && (u.y - v.y).abs() <= 1;
+            near(c[0], a) && near(c[c.len() - 1], b)
+        }
+    };
+    let mut out: Vec<Vec<Pt>> = Vec::new();
+    let mut last_frame = (0.0, 0.0);
+    for (k, back) in crate::order::chain(&ends, &vec![true; ends.len()], None, false) {
+        let [mut a, mut b] = pieces[k];
+        if back {
+            std::mem::swap(&mut a, &mut b);
+        }
+        let (pa, pb) = (to_plate(a), to_plate(b));
+        if let Some(prev) = out.last_mut() {
+            let (dx, dy) = ((last_frame.0 - a.0).abs(), (last_frame.1 - a.1).abs());
+            let tolerance = 1000.0;
+            let reach = dx >= (line_spacing - oscillation) as f64 - tolerance
+                && dx <= (line_spacing + oscillation) as f64 + tolerance
+                && dy <= diagonal as f64;
+            if reach && inside(*prev.last().unwrap(), pa) {
+                prev.push(pa);
+                prev.push(pb);
+                last_frame = b;
+                continue;
+            }
+        }
+        out.push(vec![pa, pb]);
+        last_frame = b;
     }
     out
 }

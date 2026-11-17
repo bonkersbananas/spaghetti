@@ -1242,6 +1242,7 @@ impl Settings {
                 | "octagramspiral"
                 | "3dhoneycomb"
                 | "tpmsd"
+                | "line"
                 | ""
         ) {
             out.push(format!("{} sparse infill printed as rectilinear", self.sparse_infill_pattern));
