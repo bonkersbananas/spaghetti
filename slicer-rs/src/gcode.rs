@@ -584,6 +584,16 @@ fn put_first_lift(
     first: [f64; 2],
     s: &Settings,
 ) {
+    let was = &l.text[from..to];
+    let had_speed = was.starts_with(b"G17") || was.windows(2).any(|w| w == b" F");
+    let line = first_lift_line((z, f), at, first, had_speed, s);
+    splice_lift(l, (from, to), line);
+}
+
+/// The text of a layer's first lift for a nozzle at `at` going to `first`: a spiral to the left of the way, or straight
+/// up where the turn would leave the plate (with its speed when `had_speed`: where the lift was written with one, or
+/// was a spiral, which always has it).
+fn first_lift_line((z, f): (f64, f64), at: [f64; 3], first: [f64; 2], had_speed: bool, s: &Settings) -> Vec<u8> {
     let r = s.z_hop / (2.0 * PI * (s.travel_slope.to_radians()).atan());
     let d = (first[0] - at[0]).hyp(first[1] - at[1]);
     let (i, j) = if d > 0.0 { (-(first[1] - at[1]) / d * r, (first[0] - at[0]) / d * r) } else { (r, 0.0) };
@@ -591,16 +601,13 @@ fn put_first_lift(
     let fits = cx.min(s.bed[0] - cx).min(cy).min(s.bed[1] - cy) >= r;
     let mut line = Vec::new();
     if !fits {
-        // The turn would leave the plate from where the nozzle really is: straight up, as `lift` does there. The
-        // speed goes where it was written, or where the spiral wrote it.
-        let had_speed = l.text[from..to].starts_with(b"G17") || l.text[from..to].windows(2).any(|w| w == b" F");
         line.extend_from_slice(b"G1 Z");
         num(&mut line, z, 3);
         if had_speed {
             line.extend_from_slice(b" F");
             num(&mut line, f * 60.0, 3);
         }
-        return splice_lift(l, (from, to), line);
+        return line;
     }
     line.extend_from_slice(b"G17\nG3 Z");
     num(&mut line, z, 3);
@@ -610,7 +617,7 @@ fn put_first_lift(
     num(&mut line, j, 3);
     line.extend_from_slice(b" P1  F");
     num(&mut line, f * 60.0, 3);
-    splice_lift(l, (from, to), line);
+    line
 }
 
 /// Puts `line` in place of the layer's first lift, at bytes `from..to` of its text.
@@ -3788,6 +3795,19 @@ mod tests {
     }
 
     /// A builder on a 0.2 mm layer at the plate's origin, an overhang wall 0.4 mm wide at 50 mm/s.
+    #[test]
+    fn the_first_lift_is_a_spiral_where_the_turn_fits_and_straight_where_it_does_not() {
+        let s = Settings::default();
+        let text = |at: [f64; 3], first: [f64; 2], had_speed: bool| {
+            String::from_utf8(first_lift_line((1.2, 1000.0), at, first, had_speed, &s)).unwrap()
+        };
+        // Mid-plate: a turn to the left of the way to the travel's end, whichever form the lift was written in.
+        assert_eq!(text([100.0, 100.0, 1.0], [110.0, 100.0], false), "G17\nG3 Z1.2 I0 J1.217 P1  F60000");
+        // On the plate's edge the turn would leave it: straight up, with the speed it had or the spiral's.
+        assert_eq!(text([1.0, 100.0, 1.0], [0.0, 100.0], true), "G1 Z1.2 F60000");
+        assert_eq!(text([1.0, 100.0, 1.0], [0.0, 100.0], false), "G1 Z1.2");
+    }
+
     fn builder(s: &Settings) -> Builder<'_> {
         Builder {
             s,
