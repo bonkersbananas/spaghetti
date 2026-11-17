@@ -105,6 +105,12 @@ What's left, by V8's profiler on the final module (shares of a slice in WebAssem
 - **Painted colours: 23 % of the hummingbird; toolpaths 11 to 41 % (the poop tray 41 %).**
 - **Memory:** pick your size's 311 MB is now the largest heap: the regions of its 699 layers held at once (33 to 141 MB) and its 78 MB of G-code text (to 236 MB, and to 311 while packing). Medium (G-code packed as it is written, as the mesh's now is).
 
+#### Then the polygon library, the G-code and the Voronoi diagram, Nov 17
+
+Each change again leaves every file byte for byte as it was, on the 13 models and the 19 bench cases, natively and in WebAssembly, against main just before it.
+
+- **Each contour's offset links only the edges it keeps.** The polygon library's outline (an offset) resolves each contour's offset path on its own before the union of them all, and took the subject's contours from a graph of every edge's links; it now builds only the subject's links, as its overlay of a single rule does (vendor/i_overlay, with a test that compares both on paths that fold over themselves). In Node, interleaved, medians of three: pick your size 51.29 → 48.58 s (−5.3 %), the hummingbird 11.12 → 10.61 s (−4.6 %), the tomato 11.00 → 10.47 s (−4.8 %), the poop tray 4.98 → 4.76 s (−4.5 %); natively on one thread 4 to 6 %. Finding where segments cross is still 37 % of pick your size in WebAssembly and the fill sweep 16 %; the walls' offsets and differences (`region::wall_group`) are 30 % of it. Tried and left out: skipping two of the four orientation tests when a segment's ends lie on one side of the other (−0.6 %, within the sandbox's drift).
+
 ### With tree supports
 
 With Orca's organic trees everywhere (the X2D's support settings otherwise), the same way:
