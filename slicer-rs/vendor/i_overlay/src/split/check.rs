@@ -1,5 +1,8 @@
-//! Spaghetti's check of its patch to how segments are split where they cross (see `Cargo.toml`), for its own tests
-//! to call: built only with the `spaghetti_checks` feature, which they turn on.
+//! Spaghetti's checks of its patches (see `Cargo.toml`), for its own tests to call: built only with the
+//! `spaghetti_checks` feature, which they turn on. Here, how segments are split where they cross; and the outline's
+//! contours (`outline_contours`).
+
+pub use crate::mesh::int::outline::build::outline_contours;
 
 use crate::core::solver::Solver;
 use crate::segm::boolean::ShapeCountBoolean;

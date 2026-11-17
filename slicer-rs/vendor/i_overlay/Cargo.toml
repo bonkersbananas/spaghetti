@@ -1,5 +1,5 @@
-# i_overlay 9.1.0 (https://github.com/iShape-Rust/iOverlay, MIT OR Apache-2.0), vendored with two changes to how it
-# splits segments where they cross (src/split/), each leaving every result as it was, bit for bit:
+# i_overlay 9.1.0 (https://github.com/iShape-Rust/iOverlay, MIT OR Apache-2.0), vendored with three changes, each
+# leaving every result as it was, bit for bit. Two to how it splits segments where they cross (src/split/):
 # - It finds the crossings in passes, as each rounds its crossings to the integer grid and so can make new ones, and
 #   passes again until one makes none: up to 13 in a layer of tree supports, each over every pair of segments, for a
 #   few crossings after the first. Now a pass after the first tests only the pairs with a piece of a segment the last
@@ -7,8 +7,12 @@
 #   tested before, found apart, and is unchanged since.
 # - After a pass splits segments, it no longer sorts them all again: the ones not split are still in order, and the
 #   pieces are sorted and merged in (`SplitSolver::apply`).
-# Its tests, examples and README are left out. Spaghetti's tests check both changes against a pass over every pair
-# and a full sort (src/split/check.rs, in the `spaghetti_checks` feature, which only they turn on).
+# And an outline (an offset) resolves each contour's path on its own before the union of them all: it built the links
+# of every edge there and kept the subject's, and now builds only the subject's, as an overlay of one rule does
+# (`build_outline_overlay_with_math`, src/mesh/int/outline/build.rs).
+# Its tests, examples and README are left out. Spaghetti's tests check the first two against a pass over every pair
+# and a full sort, and the third against every link (src/split/check.rs, in the `spaghetti_checks` feature, which only
+# they turn on).
 [package]
 name = "i_overlay"
 version = "9.1.0"

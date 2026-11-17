@@ -1386,6 +1386,34 @@ mod tests {
     }
 
     #[test]
+    fn the_polygon_engines_outline_resolves_each_contour_as_it_did_with_every_link() {
+        // vendor/i_overlay's outline resolves each contour's offset path building only the subject's links, where it
+        // built them all and kept the subject's: the same contours either way (`spaghetti_checks::outline_contours`),
+        // on paths that fold over themselves (random points on a small grid), with sharp corners mitred or bevelled,
+        // grown and shrunk, and holes.
+        let mut state = 7u64;
+        let mut next = move |n: u64| {
+            state = state.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+            ((state >> 33) % n) as i32
+        };
+        let mut contours = 0;
+        for k in 0..300 {
+            let scale = [1, 7, 1000][k % 3];
+            let n = 3 + next(12) as usize;
+            let path: Vec<[i32; 2]> = (0..n).map(|_| [next(41) * scale, next(41) * scale]).collect();
+            let hole: Vec<[i32; 2]> =
+                path.iter().rev().map(|p| [p[0] / 2 + 10 * scale, p[1] / 2 + 10 * scale]).collect();
+            for offset in [-3 * scale, -scale / 2, 1, scale, 4 * scale] {
+                for min_angle in [0.6, 0.0] {
+                    contours +=
+                        i_overlay::spaghetti_checks::outline_contours(&[path.clone(), hole.clone()], offset, min_angle);
+                }
+            }
+        }
+        assert!(contours > 1000, "{contours} contours");
+    }
+
+    #[test]
     fn the_polygon_engines_patched_passes_split_segments_as_full_passes_would() {
         // vendor/i_overlay finds where segments cross in passes, and after the first tests only the pairs with a piece
         // the last pass split, while those are under a quarter of the segments. A few segments tangled on a small grid

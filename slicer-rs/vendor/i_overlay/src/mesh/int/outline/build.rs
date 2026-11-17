@@ -101,6 +101,66 @@ where
     overlay
 }
 
+/// Spaghetti's check of its patch here (see `Cargo.toml`), for its own tests to call through `spaghetti_checks`:
+/// offsets each closed path by `offset` with mitred corners down to `min_angle` radians, resolves the offset path as
+/// the outline now does (building only the subject's links) and as it did before (every link, the subject's kept), and
+/// panics where the contours differ. Returns how many contours came out.
+#[cfg(feature = "spaghetti_checks")]
+pub fn outline_contours(paths: &[Vec<[i32; 2]>], offset: i32, min_angle: f64) -> usize {
+    use crate::core::extract::BooleanExtractionBuffer;
+    use crate::mesh::int::style::IntLineJoin;
+    use i_float::int::angle::Angle;
+
+    let join = match Angle::from_radians(min_angle) {
+        Some(angle) => IntLineJoin::Miter(angle),
+        None => IntLineJoin::Bevel,
+    };
+    let style = IntOutlineStyle::<i32>::new(offset).line_join(join);
+    let mut options = IntOverlayOptions::<u64>::default();
+    options.min_output_area = 0;
+    let mut outer = OutlineBuilder::new(
+        style.outer_offset,
+        Join::<i32, IntegerMath>::new(style.join, style.miter_min_turn),
+    );
+    let mut inner = OutlineBuilder::new(
+        style.inner_offset,
+        Join::<i32, IntegerMath>::new(style.join, style.miter_min_turn),
+    );
+    let mut now = Overlay::new_custom(0, options, Default::default());
+    let mut before = Overlay::new_custom(0, options, Default::default());
+    let (mut segments, mut extraction) = (Vec::new(), BooleanExtractionBuffer::default());
+    let (mut ours, mut theirs) = (FlatContoursBuffer::default(), FlatContoursBuffer::default());
+    let mut count = 0;
+    for path in paths {
+        let path: Vec<IntPoint<i32>> = path.iter().map(|p| IntPoint::new(p[0], p[1])).collect();
+        let area = path.iter().copied().area_two();
+        if path.len() < 3 || area == 0 {
+            continue;
+        }
+        let (builder, direction, fill) = if area > 0 {
+            (&mut outer, ContourDirection::CounterClockwise, FillRule::Positive)
+        } else {
+            (&mut inner, ContourDirection::Clockwise, FillRule::Negative)
+        };
+        segments.clear();
+        builder.build(path.iter().copied(), &mut segments);
+        for overlay in [&mut now, &mut before] {
+            overlay.options.output_direction = direction;
+            overlay.clear();
+            overlay.add_segments(&segments);
+        }
+        now.overlay_into(OverlayRule::Subject, fill, &mut ours);
+        theirs.clear_and_reserve(0, 0);
+        if let Some(graph) = before.build_graph_view(fill) {
+            graph.extract_contours_into(OverlayRule::Subject, &mut extraction, &mut theirs);
+        }
+        assert_eq!(ours.points, theirs.points, "a path of {} points offset by {offset}", path.len());
+        assert_eq!(ours.ranges, theirs.ranges, "a path of {} points offset by {offset}", path.len());
+        count += ours.ranges.len();
+    }
+    count
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
