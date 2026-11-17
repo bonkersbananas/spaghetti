@@ -7,6 +7,6 @@ hook=${HOOK_SO:-$(dirname "$(realpath "$0")")/hook.so}
 root=${ORCA_NATIVE:-/home/agent/orca}/squashfs-root
 cd "$case" && taskset -c 0 env HOOK_OUT="$out/hook.out" HOOK_ADDRS="${HOOK_ADDRS:-2c3a040:1}" LD_PRELOAD="$hook" \
   XDG_RUNTIME_DIR=/tmp LD_LIBRARY_PATH="$root/lib:$root/usr/lib" "$root/bin/orca-slicer" --arrange 0 \
-  --load-settings "orca/machine.json;orca/process.json" --load-filaments orca/filament-1.json --slice 0 \
+  --load-settings "orca/machine.json;orca/process.json" --load-filaments "${FILS:-orca/filament-1.json}" --slice 0 \
   --outputdir "$out" orca/plate.3mf > "$out/log.txt" 2>&1
 echo "exit $?"

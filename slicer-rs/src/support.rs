@@ -293,6 +293,9 @@ pub struct Object<'a> {
     pub height: &'a [f64],
     /// The object's slice on each layer (Orca's `lslices`: the first layer as sliced, before elephant's foot).
     pub slices: Vec<Shapes>,
+    /// Each layer's slices by region, for an object whose parts print in more than one filament (empty for one region):
+    /// Orca's normal supports find overhangs region by region.
+    pub region_slices: Vec<Vec<Shapes>>,
     /// Its top surfaces on each layer (Orca's `stTop` slices).
     pub tops: Vec<Shapes>,
     /// Units on the plate: the middle of its bounding box, the origin of Orca's frame for it.
@@ -1002,11 +1005,65 @@ fn buildplate_covered(o: &Object) -> Vec<Shapes> {
 /// find none here: their painted enforcers come in with the contacts.
 fn detect_overhangs(o: &Object, l: usize, p: &Params, covered: Option<&Shapes>, blocker: Option<&Shapes>) -> Detected {
     let lower = &o.slices[l - 1];
-    let region = &o.slices[l];
     let mut out = Detected::default();
-    if region.is_empty() || !p.auto {
+    if o.slices[l].is_empty() || !p.auto {
         return out;
     }
+    let fw = p.fw;
+    // Orca finds a layer's overhangs region by region (`layerm->slices`), each against the whole layer below, and
+    // keeps those that survive; one region is the object's whole slice.
+    let regions: Vec<&Shapes> = match o.region_slices.get(l) {
+        Some(r) if !r.is_empty() => r.iter().collect(),
+        _ => vec![&o.slices[l]],
+    };
+    let mut polys: Shapes = Vec::new();
+    for region in regions {
+        let (d, tails, heights) = detect_region(o, l, p, covered, blocker, region);
+        polys.extend(d);
+        out.tails.extend(tails);
+        out.tail_heights.extend(heights);
+    }
+    if polys.is_empty() {
+        return out;
+    }
+    let llo = ((o.height[l - 1] / p.threshold.tan()) * 1e6) as f32 as f64 / 1e6;
+    let overhangs = geom::union_all(&[&polys]);
+    // Cantilevers: overhangs whose farthest point is over 3 mm from where they rest on the layer below.
+    let rest = geom::offset(lower, fw.max(llo) + 0.1);
+    for poly in &overhangs {
+        let boundary = geom::intersection(&one(poly), &rest);
+        if boundary.is_empty() {
+            continue;
+        }
+        let vertices: Vec<Pt> = boundary.iter().flatten().flatten().copied().collect();
+        let mut far = 0.0f64;
+        for q in &poly[0] {
+            let near = vertices
+                .iter()
+                .map(|v| ((v.x - q.x) as f64).powi(2) + ((v.y - q.y) as f64).powi(2))
+                .fold(f64::INFINITY, f64::min);
+            far = far.max(near.sqrt());
+        }
+        if far > 3.0 * geom::SCALE {
+            out.cantilevers.push(poly.clone());
+        }
+    }
+    out.overhangs = overhangs;
+    out
+}
+
+/// One region's share of `detect_overhangs`: its overhangs (those that survive Orca's checks), its sharp tails and
+/// their heights.
+fn detect_region(
+    o: &Object,
+    l: usize,
+    p: &Params,
+    covered: Option<&Shapes>,
+    blocker: Option<&Shapes>,
+    region: &Shapes,
+) -> (Shapes, Vec<Shape>, Vec<f64>) {
+    let lower = &o.slices[l - 1];
+    let mut out = Detected::default();
     let fw = p.fw;
     let lower_expolys: Shapes =
         lower.iter().filter(|isl| !geom::offset(&one(isl), -fw / 2.0).is_empty()).cloned().collect();
@@ -1035,7 +1092,7 @@ fn detect_overhangs(o: &Object, l: usize, p: &Params, covered: Option<&Shapes>, 
         }
     }
     if d.is_empty() {
-        return out;
+        return (Vec::new(), out.tails, out.tail_heights);
     }
     if let Some(blocker) = blocker {
         d = geom::difference(&d, blocker);
@@ -1049,31 +1106,10 @@ fn detect_overhangs(o: &Object, l: usize, p: &Params, covered: Option<&Shapes>, 
         }
     }
     if d.is_empty() || geom::offset(&d, -0.1 * fw).is_empty() {
-        return out;
+        return (Vec::new(), out.tails, out.tail_heights);
     }
     let overhangs = geom::union_all(&[&d]);
-    // Cantilevers: overhangs whose farthest point is over 3 mm from where they rest on the layer below.
-    let rest = geom::offset(lower, fw.max(llo) + 0.1);
-    for poly in &overhangs {
-        let boundary = geom::intersection(&one(poly), &rest);
-        if boundary.is_empty() {
-            continue;
-        }
-        let vertices: Vec<Pt> = boundary.iter().flatten().flatten().copied().collect();
-        let mut far = 0.0f64;
-        for q in &poly[0] {
-            let near = vertices
-                .iter()
-                .map(|v| ((v.x - q.x) as f64).powi(2) + ((v.y - q.y) as f64).powi(2))
-                .fold(f64::INFINITY, f64::min);
-            far = far.max(near.sqrt());
-        }
-        if far > 3.0 * geom::SCALE {
-            out.cantilevers.push(poly.clone());
-        }
-    }
-    out.overhangs = overhangs;
-    out
+    (overhangs, out.tails, out.tail_heights)
 }
 
 /// What a layer bridges, as Orca's `remove_bridges_from_contacts` finds it over the layer below (`lower`): each piece

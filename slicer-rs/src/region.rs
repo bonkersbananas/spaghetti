@@ -180,6 +180,34 @@ impl LayerRegions {
 
     /// An object's slice on this layer, by its group (all of its regions together), as the layer above sees it
     /// (Orca's `lslices`).
+    /// The slices of each region of an object on this layer (one per filament its parts print in, in the order of the
+    /// regions' first appearance), which Orca's support detection works on region by region; empty for an object of
+    /// one region.
+    pub fn region_slices_of(&self, group: u32) -> Vec<Shapes> {
+        let it: Vec<(Shapes, u32)> = if self.unpulled.is_empty() {
+            self.islands.iter().filter(|i| i.group == group).map(|i| (vec![i.outline.clone()], i.object)).collect()
+        } else {
+            self.unpulled
+                .iter()
+                .filter(|(_, _, g)| *g == group)
+                .map(|(shape, o, _)| (vec![shape.clone()], *o))
+                .collect()
+        };
+        let mut objects: Vec<u32> = Vec::new();
+        for (_, o) in &it {
+            if !objects.contains(o) {
+                objects.push(*o);
+            }
+        }
+        if objects.len() < 2 {
+            return Vec::new();
+        }
+        objects
+            .iter()
+            .map(|o| it.iter().filter(|(_, x)| x == o).flat_map(|(sh, _)| sh.iter().cloned()).collect())
+            .collect()
+    }
+
     pub fn slice_of(&self, group: u32) -> Shapes {
         let (shapes, objects): (Shapes, Vec<u32>) = if self.unpulled.is_empty() {
             self.islands.iter().filter(|i| i.group == group).map(|i| (i.outline.clone(), i.object)).unzip()
