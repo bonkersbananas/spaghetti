@@ -21,6 +21,7 @@ import { Skeleton } from "@/components/ui/Skeleton";
 import { loadSlot, savePrinterSetup } from "@/lib/pantry";
 import { printerQuery } from "@/lib/pantry-queries";
 import { useReadOnly } from "@/lib/read-only";
+import { unsent } from "@/lib/unsent";
 import { useLiveFields } from "@/lib/use-autosave";
 import { useIdle } from "@/lib/use-idle";
 
@@ -134,7 +135,8 @@ function Setup({ initial }: { initial: PrinterSetup }) {
   const [adding, setAdding] = useState<string | null>(null);
   const idle = useIdle();
   const [dryingOpen, setDryingOpen] = useState(false);
-  const [setupOpen, setSetupOpen] = useState(false);
+  // Open from the start when slicing defaults were left unsent: they are saved by their own form, which only exists while it is open.
+  const [setupOpen, setSetupOpen] = useState(() => unsent("slicing-defaults") !== undefined);
   // The add-a-spool sheet's code loads with the first tap and stays mounted after, so it can slide away.
   const [sheetLoaded, setSheetLoaded] = useState(false);
   if (adding !== null && !sheetLoaded) setSheetLoaded(true);
