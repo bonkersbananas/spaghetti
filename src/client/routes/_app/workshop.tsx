@@ -30,9 +30,9 @@ const Attention = ({ children }: { children: string }) => (
 const PICTURES = 3;
 
 /**
- * The phone's fourth tab: the places that are not a tab of their own, each drawn with what is in it. On desktop the
- * sidebar lists the same three, so this page is only a way in for phones. The tiles flow to as many columns as fit,
- * so a fourth place (twists) joins without a new layout.
+ * The phone's fourth tab: the places that are not a tab of their own, each drawn with what is in it. On a phone
+ * the four tiles are one column of wide tiles (each caption on one line); from md, two by two, so no tile is left
+ * alone on a row. The sidebar lists the same places, so on desktop this page is a picture of the workshop.
  */
 function Workshop() {
   const spools = useQuery(spoolsQuery).data;
@@ -41,7 +41,7 @@ function Workshop() {
   const due = useDueUpkeep();
   const { toBuy, isPending: shoppingPending } = useShopping();
   const { twists } = useTwists();
-  // Two tiles across on a phone, so the pictures are drawn smaller there (still as large as the tile allows).
+  // The pictures are drawn smaller on a phone, where the tile is as wide as the screen but not as tall.
   const isDesktop = useIsDesktop();
 
   // The first AMS unit as the printer has it, drawn as the unit: four bays, an empty ring in a free one (the printer's
@@ -49,7 +49,7 @@ function Workshop() {
   const unit = printer ? amsUnitLetters(printer.setup.amsUnits)[0] : undefined;
   const slots = unit ? unitSlots(unit) : [];
   const pictured = toBuy.filter((thing) => thing.picture);
-  const shown = pictured.slice(0, isDesktop ? PICTURES : PICTURES - 1);
+  const shown = pictured.slice(0, PICTURES);
 
   const pantryLine = spools ? (
     spools.length === 0 ? (
@@ -82,14 +82,14 @@ function Workshop() {
   return (
     <>
       <PageHeader title="Workshop" subtitle="Spools, printer, shopping and twists." />
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-[repeat(auto-fit,minmax(15rem,1fr))] md:gap-5">
+      <div className="grid grid-cols-1 gap-3 md:grid-cols-2 md:gap-5">
         <HubTile
           to="/pantry"
           title="Pantry"
           summary={pantryLine}
           visual={
             <span className="flex">
-              {(spools ?? []).slice(0, isDesktop ? 5 : 4).map((spool) => (
+              {(spools ?? []).slice(0, isDesktop ? 7 : 6).map((spool) => (
                 <SpoolDisc
                   key={spool.id}
                   color={spool.colorHex}
