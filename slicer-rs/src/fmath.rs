@@ -1,10 +1,12 @@
 //! Maths that WebAssembly runs slowly otherwise, with the same results.
 //!
-//! `f64::hypot` is correctly rounded on both targets (glibc's natively, CORE-MATH's in Rust's own maths library in
-//! WebAssembly), but CORE-MATH's takes three fused multiply-adds, which WebAssembly lacks: each is a long call into
-//! software. [`Hyp::hyp`] takes CORE-MATH's fast path with each of them worked out exactly from Dekker's products
-//! instead, and hands what that path doesn't settle (special values, very different sizes, hard cases to round) to
-//! `f64::hypot` itself, so it gives the same bits, several times faster in WebAssembly.
+//! In WebAssembly `f64::hypot` is CORE-MATH's (Rust's own maths library), correctly rounded, but it takes three fused
+//! multiply-adds, which WebAssembly lacks: each is a long call into software. [`Hyp::hyp`] takes CORE-MATH's fast path
+//! with each of them worked out exactly from Dekker's products instead, and hands what that path doesn't settle
+//! (special values, very different sizes, hard cases to round) to `f64::hypot` itself, so it gives the same bits,
+//! several times faster. Natively `f64::hypot` is the C library's, which needn't be correctly rounded (glibc 2.41's on
+//! aarch64 is an ulp off for one random pair in eight), so natively too [`Hyp::hyp`] takes the fast path, and only what
+//! it leaves goes to the C library.
 
 /// √(x² + y²) as `f64::hypot` gives it.
 pub trait Hyp {
@@ -14,7 +16,6 @@ pub trait Hyp {
 impl Hyp for f64 {
     #[inline]
     fn hyp(self, y: f64) -> f64 {
-        #[cfg(target_arch = "wasm32")]
         if let Some(h) = hypot_fast(self, y) {
             return h;
         }
@@ -40,7 +41,6 @@ fn square_error(a: f64, p: f64) -> f64 {
 
 /// CORE-MATH's `cr_hypot` (Rust's `libm`, `hypot.rs`) on its fast path, its fused multiply-adds worked out exactly;
 /// `None` where it leaves that path, for `f64::hypot` to take over.
-#[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
 #[inline]
 fn hypot_fast(x: f64, y: f64) -> Option<f64> {
     const EMSK: u64 = 0x7ff << 52;
@@ -147,9 +147,8 @@ mod tests {
 
     #[test]
     fn the_fast_path_rounds_correctly_as_hypot_does_in_webassembly() {
-        // Natively the fast path isn't taken, and glibc's `hypot` is now and then a unit in the last place off (as
-        // for these two): so it is held to √(x² + y²) correctly rounded, which is what Rust's `hypot` gives in
-        // WebAssembly (CORE-MATH's).
+        // glibc's `hypot` is now and then a unit in the last place off (as for these two), so the fast path is held
+        // to √(x² + y²) correctly rounded, which is what Rust's `hypot` gives in WebAssembly (CORE-MATH's).
         let (x, y) = (4.6977823272256376e2, 5.647994514654128e-6);
         assert_eq!(hypot_fast(x, y).map(f64::to_bits), Some(4_646_972_042_261_283_179));
         let (xs, ys) = (doubles(300_000, 0x9e37_79b9_7f4a_7c15, 1000), doubles(300_000, 0xdead_beef_cafe_f00d, 16));
