@@ -1460,13 +1460,13 @@ impl Settings {
         (gap(sp.top_z_distance), bottom)
     }
 
-    /// Whether an object's layer prints on the plate, as the print's first layer: its first one, unless a raft is
-    /// under it (`raft.rs`), whose own first layer is then the print's.
     /// Whether Orca grows the top surfaces (`top_surface_expansion`): it needs top fill to grow.
     pub fn grows_tops(&self) -> bool {
         self.top_surface_expansion > 0.0 && self.top_surface_density > 0.0 && self.top_shell_layers > 0
     }
 
+    /// Whether an object's layer prints on the plate, as the print's first layer: its first one, unless a raft is
+    /// under it (`raft.rs`), whose own first layer is then the print's.
     pub fn on_plate(&self, layer: usize) -> bool {
         layer == 0 && self.support.raft_layers <= 0
     }
