@@ -166,7 +166,7 @@ test("On the bed holds only what is on the plate; builds between prints are In p
   await page.goto("/builds");
   const bed = page.getByRole("region", { name: "On the bed" });
   await expect(bed.getByRole("link", { name: /Hook/ }).first()).toBeVisible();
-  await expect(bed.getByRole("button", { name: "Finish" })).toBeVisible();
+  await expect(bed.getByRole("button", { name: "How did it go?" })).toBeVisible();
   await expect(bed.getByText("Cable chain")).toHaveCount(0);
   const inProgress = page.getByRole("list", { name: "In progress" });
   const card = inProgress.getByRole("link", { name: /Cable chain/ });
