@@ -248,6 +248,53 @@ describe("a 3MF project's settings", () => {
     expect(supported.process).toMatchObject({ enable_support: "1", wall_loops: "4", layer_height: "0.16" });
   });
 
+  it("bring ironing and fuzzy skin from another printer's project, but not its ironing speed", () => {
+    const finish = {
+      ironing_type: "top",
+      ironing_flow: "15%",
+      ironing_speed: "80",
+      fuzzy_skin: "external",
+      fuzzy_skin_thickness: "0.3",
+    };
+    const other = { ...x2d, printer_model: "Bambu Lab P1S", ...finish };
+    const setup = sliceSetup(presets, {
+      project: { settings: other },
+      filaments: 1,
+    });
+    expect(setup.settings.project).toBe("some");
+    expect(setup.process).toMatchObject({
+      ironing_type: "top",
+      ironing_flow: "15%",
+      ironing_speed: "30",
+      fuzzy_skin: "external",
+      fuzzy_skin_thickness: "0.3",
+    });
+    // The X2D's own project brings the lot, as before.
+    const own = sliceSetup(presets, {
+      project: { settings: { ...x2d, ...finish } },
+      filaments: 1,
+    });
+    expect(own.process).toMatchObject({
+      ironing_type: "top",
+      ironing_speed: "80",
+      fuzzy_skin: "external",
+    });
+    // And without them in the project, Orca's stay.
+    expect(
+      sliceSetup(presets, {
+        project: { settings: { ...x2d, printer_model: "Bambu Lab P1S" } },
+      }).process,
+    ).toMatchObject({
+      ironing_type: "no ironing",
+      fuzzy_skin: "none",
+    });
+    // Both reach the sliced file.
+    expect(mergedSettings(setup)).toMatchObject({
+      ironing_type: "top",
+      fuzzy_skin: "external",
+    });
+  });
+
   it("go into the sliced file as one config, each filament key a list with a value per filament", () => {
     const setup = sliceSetup(presets, { project: { settings: x2d }, filaments: 2 });
     const merged = mergedSettings(setup);

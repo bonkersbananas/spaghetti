@@ -47,7 +47,7 @@ test("phones: the journal opens on what is on the bed, and Finish leads to that 
   // The notebook itself is still on the same screen, under it.
   await expect(page.getByRole("heading", { level: 1, name: "Journal" })).toBeVisible();
 
-  await bed.getByRole("button", { name: "Finish" }).click();
+  await bed.getByRole("button", { name: "How did it go?" }).click();
   await expect(page).toHaveURL(new RegExp(`/builds/${id}`));
 });
 

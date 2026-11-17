@@ -182,11 +182,21 @@ pub struct Settings {
     /// Whether inner walls start a little further along than the outer wall (`staggered_inner_seams`).
     pub staggered_inner_seams: bool,
     pub only_one_wall_top: bool,
+    /// `top_surface_expansion` (mm) and `top_surface_density` (percent): with both above 0, Orca's `only_one_wall_top`
+    /// on Arachne walls cuts the inner walls over the top surface instead of walling round it.
+    pub top_surface_expansion: f64,
+    pub top_surface_density: f64,
     /// Whether the first inner wall goes a whole line width in from the outer wall (`precise_outer_wall`, which Orca
     /// heeds only with inner walls before the outer one); else half the two walls' spacings.
     pub precise_outer_wall: bool,
     /// How wide a top must be before it gets one wall (`min_width_top_surface`, a share of the inner wall's width).
     pub min_width_top_surface: Share,
+    /// What Arachne reads (`min_bead_width`… as Orca's `make_paths_params`): numbers as the profile has them (shares
+    /// of the nozzle in percent, lengths in mm).
+    pub arachne: ArachneSettings,
+    /// Walls in `wall_sequence`'s order: inner walls first (the default), or the outer wall first.
+    pub outer_wall_first: bool,
+    pub wall_sequence: String,
     /// mm: how wide bridge lines are (`bridge_line_width`, a share of the nozzle); 0 for solid infill's width.
     pub bridge_width: f64,
     /// Whether bridges over air and over sparse infill print as round threads, a bridge line wide and as high
@@ -232,6 +242,10 @@ pub struct Settings {
     /// printer has G-code for it (`wrapping_detection_gcode`), which Orca writes there.
     pub wrapping_detection: bool,
     pub wrapping_gcode: bool,
+    /// Orca's farthest-point timelapse (`farthest_point_timelapse`, with a traditional timelapse on a printer that
+    /// isn't an i3): each layer's photo where the nozzle passes the point of the layer farthest from the camera
+    /// (`gcode.rs`), or at a spot near it.
+    pub farthest_photo: bool,
     /// With wrapping detection, the first layers that print a prime tower whatever they print
     /// (`wrapping_detection_layers`).
     pub wrapping_layers: usize,
@@ -276,6 +290,14 @@ pub struct Settings {
     /// The overhang fan: how much of a line's width may rest on the layer below for the fan to come on (from
     /// `overhang_fan_threshold`), or below zero where it never does (`enable_overhang_bridge_fan` off).
     pub overhang_fan_overlap: f64,
+    /// `enable_overhang_bridge_fan`: the fan runs faster over overhangs and bridges (`overhang_fan_speed`, as a
+    /// fraction), and with `overhang_fan_threshold` at "0%" over every outer wall (`overhang_fan_all_outer`).
+    pub overhang_fan: bool,
+    pub overhang_fan_all_outer: bool,
+    pub overhang_fan_speed: f64,
+    /// The fan over internal bridges (`internal_bridge_fan_speed` as a fraction), or below zero where it is the
+    /// overhang fan's.
+    pub internal_bridge_fan_speed: f64,
 
     // Accelerations, mm/s².
     pub default_accel: f64,
@@ -447,6 +469,17 @@ pub struct Fuzzy {
     pub ripples_per_layer: i64,
     pub ripple_offset: f64,
     pub layers_between_ripple_offset: i64,
+    /// What moves on Arachne's walls (`fuzzy_skin_mode`): the points sideways, the line's width, or both.
+    pub mode: FuzzyMode,
+}
+
+/// `fuzzy_skin_mode`.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum FuzzyMode {
+    #[default]
+    Displacement,
+    Extrusion,
+    Combined,
 }
 
 impl Fuzzy {
@@ -477,6 +510,11 @@ impl Fuzzy {
             ripples_per_layer: p.int("fuzzy_skin_ripples_per_layer"),
             ripple_offset: p.float("fuzzy_skin_ripple_offset"),
             layers_between_ripple_offset: p.int("fuzzy_skin_layers_between_ripple_offset"),
+            mode: match p.text("fuzzy_skin_mode") {
+                "extrusion" => FuzzyMode::Extrusion,
+                "combined" => FuzzyMode::Combined,
+                _ => FuzzyMode::Displacement,
+            },
         }
     }
 
@@ -497,6 +535,22 @@ impl Fuzzy {
             matches!(w, FuzzyWalls::Holes | FuzzyWalls::Outer | FuzzyWalls::All) && (depth == 0 || w == FuzzyWalls::All)
         }
     }
+}
+
+/// Arachne's settings (Orca's `make_paths_params`), as the profile gives them: shares of the nozzle in percent,
+/// lengths in mm.
+#[derive(Clone, Debug, Default)]
+pub struct ArachneSettings {
+    pub min_feature_size: f64,
+    pub min_length_factor: f64,
+    pub min_bead_width: f64,
+    pub initial_layer_min_bead_width: f64,
+    pub wall_transition_filter_deviation: f64,
+    pub wall_transition_length: f64,
+    pub wall_transition_angle: f64,
+    pub wall_distribution_count: i32,
+    pub wall_maximum_resolution: f64,
+    pub wall_maximum_deviation: f64,
 }
 
 /// How a spiral vase's wall rises (`spiral.rs`), by Orca's keys.
@@ -960,10 +1014,42 @@ impl Settings {
             seam_position: p.text("seam_position").to_string(),
             staggered_inner_seams: p.bool("staggered_inner_seams"),
             only_one_wall_top: p.bool("only_one_wall_top"),
+            top_surface_expansion: p.float("top_surface_expansion"),
+            top_surface_density: if p.text("top_surface_density").is_empty() {
+                100.0
+            } else {
+                Share::parse(p.text("top_surface_density")).value
+            },
             // Orca's defaults where a setup leaves them out: precise, inner walls first.
             precise_outer_wall: !matches!(p.text("precise_outer_wall"), "0" | "false")
                 && matches!(p.text("wall_sequence"), "" | "inner wall/outer wall"),
             min_width_top_surface: Share::parse(p.text("min_width_top_surface")),
+            arachne: ArachneSettings {
+                min_feature_size: p.float("min_feature_size"),
+                min_length_factor: if p.text("min_length_factor").is_empty() {
+                    0.5
+                } else {
+                    p.float("min_length_factor")
+                },
+                min_bead_width: p.float("min_bead_width"),
+                initial_layer_min_bead_width: p.float("initial_layer_min_bead_width"),
+                wall_transition_filter_deviation: p.float("wall_transition_filter_deviation"),
+                wall_transition_length: p.float("wall_transition_length"),
+                wall_transition_angle: p.float("wall_transition_angle"),
+                wall_distribution_count: p.int("wall_distribution_count") as i32,
+                wall_maximum_resolution: if p.text("wall_maximum_resolution").is_empty() {
+                    0.5
+                } else {
+                    p.float("wall_maximum_resolution")
+                },
+                wall_maximum_deviation: if p.text("wall_maximum_deviation").is_empty() {
+                    0.025
+                } else {
+                    p.float("wall_maximum_deviation")
+                },
+            },
+            outer_wall_first: p.text("wall_sequence") == "outer wall/inner wall",
+            wall_sequence: p.text("wall_sequence").to_string(),
             bridge_width: p.float_of("bridge_line_width", nozzle_diameter).max(0.0),
             thick_bridges: p.bool("thick_bridges"),
             thick_internal_bridges: p.bool("thick_internal_bridges"),
@@ -998,6 +1084,9 @@ impl Settings {
                 None
             },
             wrapping_detection: p.bool("enable_wrapping_detection"),
+            farthest_photo: p.bool("farthest_point_timelapse")
+                && matches!(p.text("timelapse_type"), "0" | "")
+                && p.text("printer_structure") != "i3",
             wrapping_gcode: !p.text("wrapping_detection_gcode").is_empty(),
             wrapping_layers: p.int("wrapping_detection_layers").max(0) as usize,
             used_filaments: 0,
@@ -1091,6 +1180,16 @@ impl Settings {
             overhang_speeds: ["overhang_1_4_speed", "overhang_2_4_speed", "overhang_3_4_speed", "overhang_4_4_speed"]
                 .map(|key| Share::parse(p.list(key).first().copied().unwrap_or("0"))),
             slow_for_curls: p.bool("slowdown_for_curled_perimeters"),
+            overhang_fan: p.bool("enable_overhang_bridge_fan"),
+            overhang_fan_all_outer: overhang_fan_overlap(p.text("overhang_fan_threshold")) < 0.0
+                && matches!(p.text("overhang_fan_threshold").trim(), "0%" | "0"),
+            overhang_fan_speed: at("overhang_fan_speed") / 100.0,
+            // Orca's default, -1, where a profile leaves it out: the overhang fan's speed.
+            internal_bridge_fan_speed: p
+                .list("internal_bridge_fan_speed")
+                .first()
+                .map_or(-1.0, |v| v.trim().parse().unwrap_or(-1.0))
+                / 100.0,
             overhang_fan_overlap: if p.bool("enable_overhang_bridge_fan") {
                 overhang_fan_overlap(p.text("overhang_fan_threshold"))
             } else {
@@ -1252,6 +1351,7 @@ impl Settings {
                 | "3dhoneycomb"
                 | "tpmsd"
                 | "line"
+                | "concentric"
                 | ""
         ) {
             out.push(format!("{} sparse infill printed as rectilinear", self.sparse_infill_pattern));
@@ -1281,7 +1381,12 @@ impl Settings {
         ] {
             let curve = what != "solid infill"
                 && matches!(pattern.as_str(), "hilbertcurve" | "archimedeanchords" | "octagramspiral");
-            if !curve && !matches!(pattern.as_str(), "monotonic" | "monotonicline" | "zig-zag" | "rectilinear" | "") {
+            if !curve
+                && !matches!(
+                    pattern.as_str(),
+                    "monotonic" | "monotonicline" | "zig-zag" | "rectilinear" | "concentric" | ""
+                )
+            {
                 out.push(format!("{pattern} {what} printed as zig-zag"));
             }
         }
@@ -1296,16 +1401,19 @@ impl Settings {
                 out.push(format!("{pattern} {what} printed in the nearest order, not {order}"));
             }
         }
-        if self.wall_generator == "arachne" {
-            out.push("arachne walls printed as classic walls".into());
+        // (Spiral vase mode keeps the classic walls, so these notes would describe walls never made.)
+        if self.wall_generator == "arachne"
+            && !self.spiral_mode
+            && self.only_one_wall_top
+            && self.top_surface_expansion > 0.0
+            && self.top_surface_density > 0.0
+        {
+            out.push("arachne walls over a top surface printed with all their walls (only_one_wall_top with top_surface_expansion)".into());
         }
         if self.elephant_foot > 0.0 && self.elephant_foot_layers > 1 && self.support.raft_layers <= 0 {
             out.push("elephant's foot compensated on the first layer only".into());
         }
-        if self.iron.on() && self.iron.concentric {
-            out.push("concentric ironing printed as lines".into());
-        }
-        if matches!(self.seam_position.as_str(), "nearest" | "random") && !self.spiral_mode {
+        if self.seam_position == "nearest" && !self.spiral_mode {
             out.push(format!("{} seams placed as aligned ones", self.seam_position));
         }
         // In spiral vase mode every lift goes straight up, as Orca's do there.

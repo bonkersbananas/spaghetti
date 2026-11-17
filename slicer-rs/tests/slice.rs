@@ -3405,3 +3405,226 @@ fn line_infill_lays_its_leaning_lines_as_orcas_does() {
     assert!((sparse.volume - 1265.51).abs() < 1265.51 * 0.01, "{} mm³", sparse.volume);
     assert!((sparse.time - 125.3).abs() < 125.3 * 0.01, "{} s", sparse.time);
 }
+
+/// Arachne walls (`wall_generator = arachne`) print as Orca's do: a cube's plastic comes within 1 % of the classic
+/// walls' (native Orca 2.5.1 gives 0.2 % apart on a Benchy), each layer's inner wall before its outer one, a tube
+/// whose wall is thinner than two beads one wide outer wall and no inner one, and no note says they print as classic
+/// ones; in spiral vase mode the classic walls stay.
+#[test]
+fn arachne_walls_fill_what_classic_walls_do() {
+    let arachne = |extra: &dyn Fn(&mut Settings)| {
+        let mut settings = Settings { wall_generator: "arachne".into(), ..Settings::default() };
+        extra(&mut settings);
+        settings
+    };
+    let stl = cube_stl(20.0);
+    let classic = slice(&[Input { name: "cube.stl", bytes: &stl }], &Settings::default(), &Options::default()).unwrap();
+    let out = slice(&[Input { name: "cube.stl", bytes: &stl }], &arachne(&|_| {}), &Options::default()).unwrap();
+    assert!(
+        (out.stats.volume / classic.stats.volume - 1.0).abs() < 0.01,
+        "{} against {}",
+        out.stats.volume,
+        classic.stats.volume
+    );
+    assert!(!out.fallbacks.iter().any(|f| f.contains("arachne walls printed as classic")), "{:?}", out.fallbacks);
+    let gcode = String::from_utf8(out.gcode.clone()).unwrap();
+    let layer = gcode.split("; CHANGE_LAYER").nth(5).unwrap();
+    let (inner, outer) = (layer.find("; FEATURE: Inner wall").unwrap(), layer.find("; FEATURE: Outer wall").unwrap());
+    assert!(inner < outer, "inner walls print first");
+
+    // A tube whose wall is 0.7 mm: one bead, an outer wall alone, as wide as the wall.
+    let thin = tube_stl(15.0, 14.3, 10.0, 200);
+    let out = slice(&[Input { name: "tube.stl", bytes: &thin }], &arachne(&|_| {}), &Options::default()).unwrap();
+    let gcode = String::from_utf8(out.gcode.clone()).unwrap();
+    assert!(gcode.contains("; FEATURE: Outer wall") && !gcode.contains("; FEATURE: Inner wall"));
+    let wall = out.stats.features[Role::ALL.iter().position(|&r| r == Role::OuterWall).unwrap()].volume;
+    let ring = std::f64::consts::PI * (15.0f64.powi(2) - 14.3f64.powi(2)) * 10.0;
+    // (The top and bottom layers print as surfaces, so the wall is most of the tube's plastic, not all of it.)
+    assert!(wall > 0.8 * ring && wall < 1.02 * ring, "{wall} of {ring}");
+
+    // Spiral vase mode keeps the classic walls (Orca runs Arachne only outside it): the same file whatever the
+    // generator, and no note about walls that were never made.
+    let vase = |generator: &str| {
+        let mut settings = Settings { wall_generator: generator.into(), ..Settings::default() };
+        settings.spiral_mode = true;
+        settings.wall_loops = 1;
+        slice(&[Input { name: "cube.stl", bytes: &stl }], &settings, &Options::default()).unwrap()
+    };
+    let (classic_vase, arachne_vase) = (vase("classic"), vase("arachne"));
+    assert_eq!(classic_vase.gcode, arachne_vase.gcode);
+    assert!(!arachne_vase.fallbacks.iter().any(|f| f.contains("arachne")), "{:?}", arachne_vase.fallbacks);
+}
+
+/// `wall_sequence = inner-outer-inner wall` on Arachne walls (Orca's sandwich in `process_arachne`): with three walls
+/// a layer prints the innermost, then the outer, then the one between, as native Orca 2.5.1 does on a cube (and on a
+/// Benchy 224 of 240 layers print their walls in Orca's order of types, the others differ in their islands' order);
+/// the first layer keeps inner to outer, and no note says the order is not kept.
+#[test]
+fn arachne_walls_in_inner_outer_inner_order() {
+    let stl = cube_stl(20.0);
+    let order = |sequence: &str, layer: usize| {
+        let settings = Settings {
+            wall_generator: "arachne".into(),
+            wall_loops: 3,
+            wall_sequence: sequence.into(),
+            outer_wall_first: sequence == "outer wall/inner wall",
+            ..Settings::default()
+        };
+        let out = slice(&[Input { name: "cube.stl", bytes: &stl }], &settings, &Options::default()).unwrap();
+        assert!(!out.fallbacks.iter().any(|f| f.contains("inner-outer-inner")), "{:?}", out.fallbacks);
+        let gcode = String::from_utf8(out.gcode).unwrap();
+        let layer = gcode.split("; CHANGE_LAYER").nth(layer + 1).unwrap();
+        layer
+            .lines()
+            .filter_map(|l| l.strip_prefix("; FEATURE: "))
+            .filter(|f| f.ends_with("wall"))
+            .map(|f| f.chars().next().unwrap())
+            .collect::<String>()
+    };
+    assert_eq!(order("inner-outer-inner wall", 5), "IOI");
+    // (A marker is written where the feature changes: the two inner walls of the usual order share one.)
+    assert_eq!(order("inner wall/outer wall", 5), "IO");
+    assert_eq!(order("inner-outer-inner wall", 0), "IO", "off on the first layer");
+}
+
+/// `only_one_wall_top` on Arachne walls (Orca's "one wall top surface for Arachne"): where the layer above leaves a top
+/// surface, an island has its outer wall alone beside it and the inner walls go round the rest. A 30 mm block 10 mm
+/// high with a 10 mm one 6 mm high on it, three walls, against native Orca 2.5.1 (inner walls 1,047.7 mm³, outer
+/// 523.7, top surface 170.0, the whole print 4,004.1; with all the walls the inner walls take 1,065.8).
+#[test]
+fn arachne_walls_have_one_wall_beside_a_top_surface() {
+    let stl = boxes_stl(&[([100.0, 100.0, 0.0], [130.0, 130.0, 10.0]), ([110.0, 110.0, 10.0], [120.0, 120.0, 16.0])]);
+    let run = |one_wall: bool| {
+        let settings = Settings {
+            wall_generator: "arachne".into(),
+            wall_loops: 3,
+            only_one_wall_top: one_wall,
+            ..Settings::default()
+        };
+        let out = slice(&[Input { name: "step.stl", bytes: &stl }], &settings, &Options::default()).unwrap();
+        assert!(!out.fallbacks.iter().any(|f| f.contains("only_one_wall_top")), "{:?}", out.fallbacks);
+        let feature = |role: Role| out.stats.features[Role::ALL.iter().position(|&r| r == role).unwrap()].volume;
+        (feature(Role::InnerWall), feature(Role::OuterWall), feature(Role::TopSurface), out.stats.volume)
+    };
+    let (inner, outer, top, total) = run(true);
+    let within = |got: f64, want: f64, share: f64| (got - want).abs() < want * share;
+    assert!(within(inner, 1047.7, 0.005), "inner walls {inner} mm³");
+    assert!(within(outer, 523.7, 0.005), "outer walls {outer} mm³");
+    assert!(within(top, 170.0, 0.01), "top surface {top} mm³");
+    assert!(within(total, 4004.1, 0.005), "whole print {total} mm³");
+    let (all_inner, ..) = run(false);
+    assert!(within(all_inner, 1065.8, 0.005), "every wall printed: {all_inner} mm³");
+}
+
+/// Fuzzy skin on Arachne walls (Orca's `apply_fuzzy_skin` on an `ExtrusionLine`) in each `fuzzy_skin_mode`: a 30 mm
+/// block with a 10 mm one on it, three Arachne walls, external fuzzy skin 0.3 mm thick with points 0.8 mm apart,
+/// against native Orca 2.5.1, whose random generator is seeded by the system, so its slices differ by up to 1 %
+/// (outer walls 523.7 mm³ smooth; with displacement 541.7 to 542.5, extrusion 601.4 to 607.1, combined 615.2 to 616.8;
+/// the extrusion mode's print takes 878.5 s). No note says fuzzy skin is printed smooth.
+#[test]
+fn fuzzy_skin_on_arachne_walls_in_each_mode() {
+    let stl = boxes_stl(&[([100.0, 100.0, 0.0], [130.0, 130.0, 10.0]), ([110.0, 110.0, 10.0], [120.0, 120.0, 16.0])]);
+    let run = |mode: &str| {
+        let json = format!(
+            r#"{{"process": {{"wall_generator": "arachne", "wall_loops": "3", "fuzzy_skin": "external",
+                "fuzzy_skin_mode": "{mode}", "fuzzy_skin_thickness": "0.3", "fuzzy_skin_point_distance": "0.8"}}}}"#
+        );
+        let settings = setup::read(&json).unwrap().settings;
+        let out = slice(&[Input { name: "step.stl", bytes: &stl }], &settings, &Options::default()).unwrap();
+        assert!(out.fallbacks.is_empty(), "{:?}", out.fallbacks);
+        let outer = out.stats.features[Role::ALL.iter().position(|&r| r == Role::OuterWall).unwrap()].volume;
+        (outer, out.stats.total_time)
+    };
+    let within = |got: f64, want: f64, share: f64| (got - want).abs() < want * share;
+    let (displaced, _) = run("displacement");
+    assert!(within(displaced, 542.0, 0.01), "displacement {displaced} mm³");
+    let (extruded, time) = run("extrusion");
+    assert!(within(extruded, 604.0, 0.02), "extrusion {extruded} mm³");
+    assert!(within(time, 878.5, 0.01), "extrusion {time} s");
+    let (combined, _) = run("combined");
+    assert!(within(combined, 616.0, 0.01), "combined {combined} mm³");
+}
+
+/// Concentric sparse infill and concentric ironing are Orca's classic concentric fill (`FillConcentric` without
+/// Arachne: that takes only full-density solid surfaces): a 30 mm block 10 mm high with a 10 mm one 6 mm high on it,
+/// against native Orca 2.5.1, takes the sparse infill's plastic within 0.1 % (1,258.2 mm³) and its time within 1 %
+/// (146.5 s), and the ironing's plastic within 0.1 % (16.69 mm³) and time exactly (189.8 s); no note says they print
+/// otherwise.
+#[test]
+fn concentric_infill_and_ironing_print_as_loops() {
+    let stl = boxes_stl(&[([100.0, 100.0, 0.0], [130.0, 130.0, 10.0]), ([110.0, 110.0, 10.0], [120.0, 120.0, 16.0])]);
+    let run = |process: &str, role: Role| {
+        let json = format!(r#"{{"process": {{{process}}}}}"#);
+        let settings = setup::read(&json).unwrap().settings;
+        let out = slice(&[Input { name: "step.stl", bytes: &stl }], &settings, &Options::default()).unwrap();
+        assert!(out.fallbacks.is_empty(), "{:?}", out.fallbacks);
+        out.stats.features[Role::ALL.iter().position(|&r| r == role).unwrap()]
+    };
+    let within = |got: f64, want: f64, share: f64| (got - want).abs() < want * share;
+    let sparse = run(r#""sparse_infill_pattern": "concentric""#, Role::SparseInfill);
+    assert!(within(sparse.volume, 1258.2, 0.001), "{} mm³", sparse.volume);
+    assert!(within(sparse.time, 146.5, 0.01), "{} s", sparse.time);
+    let ironing = run(r#""ironing_type": "top", "ironing_pattern": "concentric""#, Role::Ironing);
+    assert!(within(ironing.volume, 16.69, 0.001), "{} mm³", ironing.volume);
+    assert!(within(ironing.time, 189.8, 0.002), "{} s", ironing.time);
+}
+
+/// Concentric top, bottom and internal solid surfaces print as Orca's Arachne loops, not zig-zag with a note: a
+/// cube's plastic stays within 2 % of the lines' (a Benchy is within 0.1 % of native Orca 2.5.1's).
+#[test]
+fn concentric_surfaces_print_as_loops() {
+    let stl = cube_stl(20.0);
+    let lines = slice(&[Input { name: "cube.stl", bytes: &stl }], &Settings::default(), &Options::default()).unwrap();
+    let mut settings = Settings::default();
+    for pattern in [
+        &mut settings.top_surface_pattern,
+        &mut settings.bottom_surface_pattern,
+        &mut settings.internal_solid_infill_pattern,
+    ] {
+        *pattern = "concentric".into();
+    }
+    assert!(!settings.fallbacks().iter().any(|f| f.contains("concentric")), "{:?}", settings.fallbacks());
+    let loops = slice(&[Input { name: "cube.stl", bytes: &stl }], &settings, &Options::default()).unwrap();
+    assert!(
+        (loops.stats.volume / lines.stats.volume - 1.0).abs() < 0.02,
+        "{} against {}",
+        loops.stats.volume,
+        lines.stats.volume
+    );
+    assert_ne!(loops.gcode, lines.gcode);
+}
+
+#[test]
+fn after_a_farthest_point_photo_the_next_layer_starts_as_the_last_one_ended() {
+    // Orca's writer forgets where the nozzle is when it takes the timelapse photo, and learns it again at the next
+    // travel. With the farthest-point timelapse, a cube's photo comes mid-layer, where its outer wall ends at its far
+    // corner, and the travels after it tell the writer where the nozzle is, so the wrapping detection's lift at the next
+    // layer's start goes up in a spiral. A round wall's arcs end nowhere near its far point, so its photo comes after
+    // the layer, and the next layer's lift goes straight up. Here a cube stands on a cylinder: each layer's lift
+    // follows the photo of the layer before it, not its own.
+    let tube = String::from_utf8(tube_stl(8.0, 0.0, 5.0, 96)).unwrap();
+    let cube = String::from_utf8(boxes_stl(&[([124.0, 124.0, 5.0], [132.0, 132.0, 10.0])])).unwrap();
+    let model =
+        format!("{}{}", tube.trim_end().trim_end_matches("endsolid tube"), cube.trim_start_matches("solid boxes\n"));
+    let options = Options { arrange: false, thumbnail: false, ..Options::default() };
+    let setup = r#"{"process": {"enable_wrapping_detection": "1", "farthest_point_timelapse": "1"}}"#;
+    let settings = setup::read(setup).unwrap().settings;
+    let gcode = slice(&[Input { name: "model.stl", bytes: model.as_bytes() }], &settings, &options).unwrap().gcode;
+    let gcode = String::from_utf8(gcode).unwrap();
+    let layers: Vec<&str> = gcode.split("; CHANGE_LAYER\n").skip(1).collect();
+    // Each layer's photo taken mid-layer, and its start's lift in a spiral.
+    let pattern: Vec<(bool, bool)> = layers
+        .iter()
+        .map(|l| {
+            let start = &l[..l.find("M624").unwrap()];
+            (l.contains("M971 S11 C10 O0"), start.contains("G17\nG3 Z") || start.contains("G17\nG2 Z"))
+        })
+        .collect();
+    assert_eq!(layers.len(), 50);
+    // The cylinder's walls take their photos after the layer (its top surface's lines may end near the point), the
+    // cube's mid-layer: some layers start otherwise than they themselves end.
+    assert!(pattern[..20].iter().all(|p| !p.0) && pattern[25..].iter().all(|p| p.0), "{pattern:?}");
+    for k in 1..layers.len() {
+        assert_eq!(pattern[k].1, pattern[k - 1].0, "layer {k}");
+    }
+}

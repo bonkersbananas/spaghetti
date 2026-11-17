@@ -9,6 +9,7 @@ pub mod bambu;
 pub mod base_support;
 pub mod bridges;
 pub mod brim;
+pub mod concentric;
 pub mod config;
 pub mod elephant;
 pub mod filaments;
@@ -651,7 +652,13 @@ impl Plate {
         if !settings.spiral_mode {
             let by_part: Vec<Vec<&Mesh>> =
                 parts.members.iter().map(|members| members.iter().map(|&m| &meshes[m]).collect()).collect();
-            seam::place(&mut regions, &by_part, &layers.slice_z(), &layers.height, settings);
+            // Each object's middle, mm, which Orca's coordinates are about (a random seam's number comes from them).
+            let middles: Vec<[f32; 2]> = parts
+                .members
+                .iter()
+                .map(|m| [(centres[m[0]].0 / geom::SCALE) as f32, (centres[m[0]].1 / geom::SCALE) as f32])
+                .collect();
+            seam::place(&mut regions, &by_part, (&middles, &layers.slice_z(), &layers.height), settings);
         }
         // Where travels lift in spirals rather than slopes, for filaments that lift as Orca's Auto Lift does.
         let auto_lift = match &settings.palette {
@@ -831,6 +838,7 @@ impl Plate {
             frame: &frame,
             objects: &objects,
             photos: &photos,
+            photo_objects: &group_objects,
             start: frame.start_position(),
             colours: colours.as_ref(),
             lift_overhangs: &lift_overhangs,
@@ -872,7 +880,7 @@ impl Plate {
         };
         let empty = std::sync::Arc::new(empty);
         // In spiral vase mode each layer starts where the one before ended, so the layers go one after another.
-        let group_texts = |k: usize, mut spiral: Option<&mut spiral::State>| -> Vec<gcode::LayerGcode> {
+        let group_texts = |k: usize, mut spiral: Option<&mut spiral::State>, known: bool| -> Vec<gcode::LayerGcode> {
             let plans: Vec<(plan::LayerPlan, std::sync::Arc<region::LayerRegions>, f64)> = groups[k]
                 .clone()
                 .map(|g| {
@@ -948,7 +956,7 @@ impl Plate {
                 .collect();
             let group: Vec<(&plan::LayerPlan, &region::LayerRegions, f64)> =
                 plans.iter().map(|(plan, r, z)| (plan, &**r, *z)).collect();
-            let texts = gcode::layers(&group, &job);
+            let texts = gcode::layers(&group, &job, known);
             if let Some(st) = spiral {
                 st.turned(&texts);
             }
@@ -961,11 +969,22 @@ impl Plate {
             }
             texts
         };
-        let texts: Vec<Vec<gcode::LayerGcode>> = if settings.spiral_mode {
+        // So do they where a layer's first lift depends on how the layer before ended: with one filament, the nozzle's
+        // wrapping detection lifts in a spiral where Orca's writer knows where the nozzle is, which with the
+        // farthest-point timelapse depends on where the layer before took its photo. Elsewhere it changes nothing.
+        let in_turn = settings.farthest_photo && settings.wrapping_detection && colours.is_none();
+        let texts: Vec<Vec<gcode::LayerGcode>> = if settings.spiral_mode || in_turn {
             let mut st = spiral::State::new(job.start);
-            (0..groups.len()).map(|k| group_texts(k, Some(&mut st))).collect()
+            let mut known = false;
+            (0..groups.len())
+                .map(|k| {
+                    let texts = group_texts(k, settings.spiral_mode.then_some(&mut st), known);
+                    known = texts.last().map_or(known, |t| t.ends_known);
+                    texts
+                })
+                .collect()
         } else {
-            par::map_range(groups.len(), |k| group_texts(k, None))
+            par::map_range(groups.len(), |k| group_texts(k, None, false))
         };
         let texts: Vec<gcode::LayerGcode> = texts.into_iter().flatten().collect();
         drop(regions);
@@ -1079,7 +1098,7 @@ fn timelapse_spots(objects: &[Object], zs: &[f64], s: &Settings) -> Vec<Option<[
         let standing: Vec<bool> = objects.iter().map(|o| (o.min[2] as i64) <= at && at <= (o.max[2] as i64)).collect();
         let spot = match &last {
             Some((before, spot)) if *before == standing => *spot,
-            _ => bambu::timelapse_position(objects, z, s.bed, s.extruder_clearance_radius),
+            _ => bambu::timelapse_position(objects, z, s.bed, s.extruder_clearance_radius, None),
         };
         spots.push(spot);
         last = Some((standing, spot));
@@ -1237,9 +1256,12 @@ fn object_supports(
             } else {
                 Vec::new()
             };
+            let region_slices: Vec<Vec<geom::Shapes>> =
+                regions[..=top].iter().map(|r| r.region_slices_of(g as u32)).collect();
             let object = support::Object {
                 print_z: &layers.top[..=top],
                 height: &layers.height[..=top],
+                region_slices,
                 slices,
                 tops,
                 origin: centres[o],

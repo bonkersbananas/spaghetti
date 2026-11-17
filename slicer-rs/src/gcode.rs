@@ -131,6 +131,10 @@ pub(crate) struct ArcMove {
 pub(crate) const FORM_Z: u8 = 1;
 /// A move whose filament Orca's spiral vase set: written to five decimals (`E0.00003`).
 pub(crate) const FORM_E: u8 = 2;
+/// An extrusion the overhang fan runs over (`enable_overhang_bridge_fan`).
+pub(crate) const FORM_FAN: u8 = 4;
+/// The first move Orca writes of a path: its fan marker comes after the speed, not before.
+pub(crate) const FORM_FIRST: u8 = 8;
 
 /// What the G-code says between two moves.
 #[derive(Clone, Debug)]
@@ -158,6 +162,8 @@ pub struct Job<'a> {
     pub objects: &'a [Object],
     /// Where the printer takes the timelapse photo after each layer (None: it picks its own spot).
     pub photos: &'a [Option<[i64; 2]>],
+    /// The objects Orca's timelapse picker steers round (one for each object, all its parts together).
+    pub photo_objects: &'a [Object],
     /// Where the start G-code leaves the nozzle.
     pub start: [f64; 3],
     /// The plate's filaments, their tool changes and prime tower, when it prints in several (`toolchange.rs`).
@@ -191,6 +197,8 @@ pub struct LayerGcode {
     /// The acceleration the layer ends at (NaN when it sets none).
     last_accel: f64,
     z: f64,
+    /// Whether Orca's writer knows where the nozzle is when the layer ends (not when its timelapse photo came last).
+    pub ends_known: bool,
     /// Where the layer's first travel goes, and where the layer ends.
     first: Option<[f64; 2]>,
     end: Option<[f64; 3]>,
@@ -202,6 +210,13 @@ pub struct LayerGcode {
     features: [Feature; Role::ALL.len()],
     /// The part and auxiliary fans for the layer, in percent (`layer_fans`).
     fans: [f64; 2],
+    /// The fan over overhangs and over internal bridges where it runs faster than the layer's (`layer_overhang_fans`):
+    /// the layer's text then holds Orca's own `;_OVERHANG_FAN_START` and `…_END` markers, which `write` turns into
+    /// the fan's `M106` lines as Orca's cooling buffer does.
+    over: [Option<f64>; 2],
+    /// Whether the layer starts what Orca's cooling buffer takes as one (the support's own layers come with the
+    /// object layer after them).
+    group_start: bool,
     /// With several filaments: mm of each, and mm³ of each on the prime tower.
     by_filament: Vec<[f64; 2]>,
     /// A spiral vase's last layer that ran round again flat: Orca's estimate counts that as a layer of its own.
@@ -237,6 +252,23 @@ fn layer_fans(i: usize, layer_time: f64, s: &Settings) -> [f64; 2] {
     [fan, (s.aux_fan_speed * 100.0).round()]
 }
 
+/// The part fan over overhangs and bridges (Orca's cooling: `overhang_fan_speed`, ramped up with the first layers as
+/// the layer's own fan is) and over internal bridges (`internal_bridge_fan_speed`, the overhang fan's where it is
+/// negative), for layer `i` whose part fan is `fan`, in percent; None where it runs no faster than `fan`.
+fn layer_overhang_fans(i: usize, fan: f64, s: &Settings) -> [Option<f64>; 2] {
+    if !s.overhang_fan || i < s.fan_off_layers {
+        return [None, None];
+    }
+    let mut over = (s.overhang_fan_speed * 100.0).round();
+    if i + 1 < s.full_fan_speed_layer {
+        let factor = (i + 1 - s.fan_off_layers) as f32 / (s.full_fan_speed_layer - s.fan_off_layers) as f32;
+        over = ((over as f32 * factor + 0.5) as i32).clamp(0, 255) as f64;
+    }
+    let faster = (over > fan).then_some(over);
+    let own = (s.internal_bridge_fan_speed * 100.0).round();
+    [faster, if own >= 0.0 { Some(own) } else { faster }]
+}
+
 /// `M106 S…`: the part fan at `percent`, as Orca's writer turns it into the fan's 0–255.
 fn set_fan(t: &mut Vec<u8>, percent: f64) {
     let speed = percent.max(0.0) as u32;
@@ -251,13 +283,15 @@ fn set_fan(t: &mut Vec<u8>, percent: f64) {
 /// with its regions and the height the nozzle travels at onto it (the layer before's top, lifted; for the first,
 /// where the start G-code leaves the nozzle). They are cooled as one, as Orca's cooling buffer holds the support's
 /// own layers until an object layer comes: the last is an object layer (or the print's last), any before it the
-/// support's alone.
-pub fn layers(group: &[(&LayerPlan, &LayerRegions, f64)], job: &Job) -> Vec<LayerGcode> {
+/// support's alone. `known` is whether Orca's writer knows where the nozzle is as the group starts (`LayerGcode`'s
+/// `ends_known` of the layer before).
+pub fn layers(group: &[(&LayerPlan, &LayerRegions, f64)], job: &Job, mut known: bool) -> Vec<LayerGcode> {
     let s = job.settings;
     let mut built: Vec<_> = group
         .iter()
         .map(|&(plan, regions, from_z)| {
-            let (moves, notes, turn) = build_layer(plan, regions, job, from_z);
+            let (moves, notes, turn, ends_known) = build_layer(plan, regions, job, from_z, known);
+            known = ends_known;
             // In spiral vase mode the nozzle travels onto the layer from where the one before ended, in its moves.
             let (start, first) = match &plan.course {
                 Some(c) => (c.from, None),
@@ -266,7 +300,7 @@ pub fn layers(group: &[(&LayerPlan, &LayerRegions, f64)], job: &Job) -> Vec<Laye
                     (first.map(|[x, y]| [x, y, from_z]).unwrap_or([job.start[0], job.start[1], from_z]), first)
                 }
             };
-            (moves, notes, start, first, turn)
+            (moves, notes, start, first, turn, ends_known)
         })
         .collect();
     let cooling_time = match job.colours.filter(|c| !c.towered) {
@@ -298,11 +332,15 @@ pub fn layers(group: &[(&LayerPlan, &LayerRegions, f64)], job: &Job) -> Vec<Laye
             time
         }
     };
-    let fans = layer_fans(group.last().map_or(0, |g| g.0.id), cooling_time, s);
+    let id = group.last().map_or(0, |g| g.0.id);
+    let fans = layer_fans(id, cooling_time, s);
+    // Several filaments each have their own (`FORCE_RESUME_FAN_SPEED`): not modelled there yet.
+    let over = if job.colours.is_some() { [None, None] } else { layer_overhang_fans(id, fans[0], s) };
     group
         .iter()
         .zip(built)
-        .map(|(&(plan, _, _), (moves, notes, start, first, turn))| {
+        .enumerate()
+        .map(|(n, (&(plan, _, _), (moves, notes, start, first, turn, ends_known)))| {
             // The layer's markers (its fans go before them, in `assemble`), then its moves.
             let mut text = Vec::with_capacity(moves.len() * 28 + 4096);
             text.extend_from_slice(
@@ -316,7 +354,7 @@ pub fn layers(group: &[(&LayerPlan, &LayerRegions, f64)], job: &Job) -> Vec<Laye
             let progress_at = text.len();
             let tool = job.colours.map_or(0, |c| c.start(plan.index));
             let before = plan.course.as_ref().and_then(|c| c.before);
-            let out = finish_layer(&moves, &notes, start, job, (text, before), plan.header_height, (fans, tool));
+            let out = finish_layer(&moves, &notes, start, job, (text, before), plan.header_height, (fans, over, tool));
             // Held until the whole file is written: without the room its estimate left (three quarters more than a
             // tall print's 42 MB of G-code).
             let mut text = out.text;
@@ -327,6 +365,7 @@ pub fn layers(group: &[(&LayerPlan, &LayerRegions, f64)], job: &Job) -> Vec<Laye
                 first_accel: out.first_accel,
                 last_accel: out.last_accel,
                 z: plan.z,
+                ends_known,
                 first,
                 end: moves.last().map(|m| [m.x, m.y, m.z]),
                 time: out.time,
@@ -336,6 +375,8 @@ pub fn layers(group: &[(&LayerPlan, &LayerRegions, f64)], job: &Job) -> Vec<Laye
                 filament_mm: out.filament_mm,
                 features: out.features,
                 fans,
+                over,
+                group_start: n == 0,
                 by_filament: out.by_filament,
                 again: turn.as_ref().is_some_and(|t| t.again),
                 turn: turn.map(|t| t.points).unwrap_or_default(),
@@ -465,6 +506,67 @@ pub fn totals(layers: &[LayerGcode], job: &Job) -> Stats {
     stats
 }
 
+/// The part fan as Orca's cooling buffer follows it through the overhang markers a layer's text holds.
+struct FanNow {
+    /// The part fan's speed now (`m_current_fan_speed`), percent.
+    current: f64,
+    /// Whether the overhang fan and the internal bridge fan are asked for (`fan_speed_change_requests`).
+    asked: [bool; 2],
+}
+
+impl FanNow {
+    /// Puts a stretch of a layer's text, its fan markers turned into the `M106` lines Orca's cooling buffer writes
+    /// in their place: at a start the overhang's speed, at an end the speed of what is still asked for, else the
+    /// layer's, each only where the fan isn't at it already.
+    fn put(&mut self, out: &mut impl Sink, text: &[u8], (over, base): ([Option<f64>; 2], f64)) {
+        let mut done = 0;
+        let mut at = 0;
+        while let Some(found) = find_marker(&text[at..]) {
+            let from = at + found;
+            let end = text[from..].iter().position(|&b| b == b'\n').map_or(text.len(), |n| from + n + 1);
+            let line = &text[from..end];
+            let kind = usize::from(line.starts_with(b";_INTERNAL_BRIDGE"));
+            let start = line.windows(6).any(|w| w == b"_START");
+            if over[kind].is_some() {
+                self.asked[kind] = start;
+            }
+            let speed = if self.asked[0] {
+                over[0]
+            } else if self.asked[1] {
+                over[1]
+            } else {
+                None
+            }
+            .unwrap_or(base);
+            out.put(&text[done..from]);
+            done = end;
+            at = end;
+            if speed != self.current {
+                let mut line = Vec::new();
+                set_fan(&mut line, speed);
+                out.put(&line);
+                self.current = speed;
+            }
+        }
+        out.put(&text[done..]);
+    }
+}
+
+/// Where a layer's text has its next overhang marker line (`;_OVERHANG_FAN_…` or `;_INTERNAL_BRIDGE_FAN_…`).
+fn find_marker(text: &[u8]) -> Option<usize> {
+    let mut at = 0;
+    while let Some(found) = text[at..].windows(2).position(|w| w == b";_") {
+        let from = at + found;
+        if (from == 0 || text[from - 1] == b'\n')
+            && (text[from..].starts_with(b";_OVERHANG_FAN_") || text[from..].starts_with(b";_INTERNAL_BRIDGE_FAN_"))
+        {
+            return Some(from);
+        }
+        at = from + 2;
+    }
+    None
+}
+
 /// The whole file from its layers and their `totals`, into `out`; each layer's text is let go once written.
 pub fn write(layers: Vec<LayerGcode>, stats: &Stats, job: &Job, out: &mut impl Sink) {
     let s = job.settings;
@@ -481,9 +583,18 @@ pub fn write(layers: Vec<LayerGcode>, stats: &Stats, job: &Job, out: &mut impl S
     let (mut last_index, mut last_z) = (0, 0.0);
     // The fans as Orca's cooling last set them (unknown before the first layer, so it sets both there).
     let mut fans = [f64::NAN; 2];
+    // What the fan runs at now, which an overhang's fan changes from the layer's (`current`), and which of the
+    // overhang fans were asked for since the cooling buffer's last layer began.
+    let mut fan = FanNow { current: f64::NAN, asked: [false; 2] };
     for (i, l) in layers.into_iter().enumerate() {
-        if l.fans[0] != fans[0] {
+        if l.group_start {
+            fan.asked = [false; 2];
+        }
+        if l.fans[0] != fans[0] || (l.group_start && fan.current != l.fans[0]) {
             set_fan(&mut text, l.fans[0]);
+        }
+        if l.group_start {
+            fan.current = l.fans[0];
         }
         if l.fans[1] != fans[1] && s.aux_fan {
             text.extend_from_slice(format!("M106 P2 S{}\n", (255.0 * l.fans[1] / 100.0) as i64).as_bytes());
@@ -497,8 +608,13 @@ pub fn write(layers: Vec<LayerGcode>, stats: &Stats, job: &Job, out: &mut impl S
         m73(&mut text, elapsed, stats.total_time);
         out.put(&text);
         text.clear();
-        out.put(&l.text[l.progress_at..cut_from]);
-        out.put(&l.text[cut_to..]);
+        if l.over == [None, None] {
+            out.put(&l.text[l.progress_at..cut_from]);
+            out.put(&l.text[cut_to..]);
+        } else {
+            fan.put(out, &l.text[l.progress_at..cut_from], (l.over, l.fans[0]));
+            fan.put(out, &l.text[cut_to..], (l.over, l.fans[0]));
+        }
         if l.last_accel.is_finite() {
             accel = l.last_accel;
         }
@@ -559,6 +675,10 @@ struct Builder<'a> {
     /// Whether the layer has moved the nozzle yet: until it does, Orca's writer takes it at the layer's height (its
     /// `change_layer`), whatever lift the layer before left it at, so a lift at once goes up from there.
     fresh: bool,
+    /// With Orca's farthest-point timelapse, the layer's point farthest from the camera and the photo taken there,
+    /// mid-path, the first time an extrusion ends within half a millimetre of it; and whether it was.
+    photo: Option<([f64; 2], String)>,
+    photo_taken: bool,
 }
 
 impl<'a> Builder<'a> {
@@ -800,6 +920,7 @@ impl<'a> Builder<'a> {
         let mut written = path.speed * 60.0;
         let mut arcs = path.arcs.iter().peekable();
         let mut k = 0;
+        let mut first = FORM_FIRST;
         while k + 1 < path.points.len() {
             let q = path.points[k + 1];
             let part = path.parts.get(k);
@@ -853,6 +974,12 @@ impl<'a> Builder<'a> {
                 None => written = own * 60.0,
             }
             self.accel = accel;
+            // The overhang fan runs over bridges and overhang walls, over every outer wall at "0%", and where a line
+            // hangs enough (Orca's `overhang_fan_active`).
+            let fan = self.s.overhang_fan
+                && (matches!(role, Role::Bridge | Role::OverhangWall)
+                    || (self.s.overhang_fan_all_outer && role == Role::OuterWall)
+                    || part.map_or(path.fan, |p| p.fan));
             let m = Move {
                 x,
                 y,
@@ -863,10 +990,21 @@ impl<'a> Builder<'a> {
                 kind: Kind::Extrude(role),
                 width: width as f32,
                 height: height as f32,
-                form: 0,
+                form: first | if fan { FORM_FAN } else { 0 },
                 arc,
             };
+            first = 0;
             self.push(m);
+            if let Some((at, _)) = &self.photo
+                && (x - at[0]).hyp(y - at[1]) < 0.5
+                && let Some((_, text)) = self.photo.take()
+            {
+                // Orca's `check_and_insert_timelapse`: the photo where the nozzle is, after which its writer no
+                // longer knows where that is.
+                self.note(Note::Text(text));
+                self.known = false;
+                self.photo_taken = true;
+            }
         }
         self.wipe = Some((path, written / 60.0));
         self.speed = written / 60.0;
@@ -1204,21 +1342,26 @@ impl<'a> Internal<'a> {
     }
 }
 
-/// The layer's moves and what is said between them, in Orca's order: the printer's layer change G-code, each object's
-/// labels around its moves, retractions that wipe and spiral lifts on travels, and after the last path a retraction,
-/// a lift and the timelapse photo.
 /// What a spiral vase's rising layer gave besides its moves (`spiral.rs`).
 struct Turned {
     again: bool,
     points: Vec<[f64; 2]>,
 }
 
+/// A layer's moves, its notes by move, what a spiral vase's rising layer gave, and whether the writer knows where the
+/// nozzle is at its end (Orca's writer forgets after a timelapse photo).
+type Built = (Vec<Move>, Vec<(usize, Note)>, Option<Turned>, bool);
+
+/// The layer's moves and what is said between them, in Orca's order: the printer's layer change G-code, each object's
+/// labels around its moves, retractions that wipe and spiral lifts on travels, and after the last path a retraction,
+/// a lift and the timelapse photo.
 fn build_layer<'a>(
     plan: &'a LayerPlan,
     regions: &'a LayerRegions,
     job: &'a Job<'a>,
     from_z: f64,
-) -> (Vec<Move>, Vec<(usize, Note)>, Option<Turned>) {
+    before_known: bool,
+) -> Built {
     let i = plan.index;
     let s = job.colours.map_or(job.settings, |c| &c.settings[c.start(i)]);
     let first_layer = i == 0;
@@ -1226,6 +1369,10 @@ fn build_layer<'a>(
     // In spiral vase mode the nozzle comes from where the layer before ended, neither retracted nor lifted: Orca
     // turns off retracting at layer changes there, and moves up to the layer's height at once.
     let course = plan.course.as_ref();
+    // Orca's farthest-point timelapse, here with one filament, the layer's photo taken where the nozzle passes the
+    // point farthest from the camera, else after the layer at a spot near that point.
+    let farthest =
+        if s.farthest_photo && job.colours.is_none() && course.is_none() { farthest_point(plan) } else { None };
     let (x0, y0) = match course {
         Some(c) => (c.from[0], c.from[1]),
         None => layer_start(plan).map(|[x, y]| (x, y)).unwrap_or((job.start[0], job.start[1])),
@@ -1249,11 +1396,19 @@ fn build_layer<'a>(
         prior: 0.0,
         overhang: crate::plan::overhang_flow(first_layer, plan.height, s),
         // Orca's writer knows where the nozzle is when the layer starts unless the layer before took its timelapse
-        // photo last (after its paths: always with one filament), or this is the first layer (after the start G-code).
-        known: i > 0 && job.colours.is_some_and(|c| c.photo_in_layer(i - 1)),
+        // photo last (after its paths; with one filament, as the layer before ended: with the farthest-point
+        // timelapse it may have taken it mid-path, before the travels that came after), or this is the first layer
+        // (after the start G-code).
+        known: i > 0
+            && match job.colours {
+                Some(c) => c.photo_in_layer(i - 1),
+                None => before_known,
+            },
         lost: false,
         change_from: (x0, y0),
         fresh: true,
+        photo: farthest.map(|at| (at, layer_photo(plan, job, None, true, true))),
+        photo_taken: false,
     };
     if course.is_some() {
         b.line(x0, y0, plan.z, 0.0, s.travel_speed, Kind::Lift);
@@ -1307,7 +1462,9 @@ fn build_layer<'a>(
     let mut next_visit = 0;
     let mut photo_taken = false;
     let mut open_label: Option<u32> = None;
-    let photo_note = |b: &Builder| -> Note { Note::Text(layer_photo(plan, job, b.z)) };
+    let photo_note = |_: &Builder| -> Note {
+        Note::Text(layer_photo(plan, job, job.photos.get(i).copied().flatten(), false, false))
+    };
     for (k, path) in plan.paths.iter().enumerate() {
         while let Some(colours) = job.colours
             && let Some(visit) = plan.visits.get(next_visit).filter(|v| v.at == k)
@@ -1524,10 +1681,25 @@ fn build_layer<'a>(
     } else if let Some(o) = open_label.take() {
         b.note(Note::LabelEnd(o));
     }
-    if !photo_taken {
-        b.note(Note::Text(layer_photo(plan, job, plan.z)));
+    if !photo_taken && !b.photo_taken {
+        let photo = match farthest {
+            Some(at) => {
+                let spot = crate::bambu::timelapse_position(
+                    job.photo_objects,
+                    plan.z,
+                    s.bed,
+                    s.extruder_clearance_radius,
+                    Some(at),
+                );
+                layer_photo(plan, job, spot, true, false)
+            }
+            None => layer_photo(plan, job, job.photos.get(i).copied().flatten(), false, false),
+        };
+        b.note(Note::Text(photo));
+        b.known = false;
     }
-    let Some(course) = course else { return (b.moves, b.notes, None) };
+    let known = b.known;
+    let Some(course) = course else { return (b.moves, b.notes, None, known) };
     let mut turned = None;
     if plan.spiral {
         let r = crate::spiral::rise(&b.moves, course, s);
@@ -1556,7 +1728,7 @@ fn build_layer<'a>(
         b.retract();
         b.lift_straight();
     }
-    (b.moves, b.notes, turned)
+    (b.moves, b.notes, turned, known)
 }
 
 /// Where a layer's first travel goes: its first visit to the prime tower when that comes first, else its first path.
@@ -1569,11 +1741,42 @@ fn layer_start(plan: &LayerPlan) -> Option<[f64; 2]> {
     plan.paths.first().map(|p| [geom::unsc(p.points[0].x), geom::unsc(p.points[0].y)])
 }
 
-/// The timelapse photo after the layer, which the printer skips with the layer's objects when all of them are skipped.
-fn layer_photo(plan: &LayerPlan, job: &Job, _z: f64) -> String {
+/// The point of the layer farthest from the camera (the plate's corner), as Orca's farthest-point timelapse finds it
+/// (`GCode::compute_farthest_point`): on its outer walls, but not where they hang over (Orca's overhang walls), else
+/// on its sparse, solid and top infill and its supports; the first of equals; none on the plate's corner.
+fn farthest_point(plan: &LayerPlan) -> Option<[f64; 2]> {
+    let mut best = [(0i64, None::<Pt>); 2];
+    for path in &plan.paths {
+        let k = match path.role {
+            Role::OuterWall => 0,
+            Role::SparseInfill | Role::SolidInfill | Role::TopSurface | Role::Support | Role::SupportInterface => 1,
+            _ => continue,
+        };
+        let n = path.points.len();
+        let hangs = |j: usize| path.parts.get(j).is_some_and(|q| q.overhang);
+        for (j, p) in path.points.iter().enumerate() {
+            // A point only overhang stretches meet is the overhang wall's.
+            let (before, after) = (j > 0 && hangs(j - 1), j + 1 < n && hangs(j));
+            if k == 0 && (before || after) && (j == 0 || before) && (j + 1 == n || after) {
+                continue;
+            }
+            let d = i64::from(p.x) * i64::from(p.x) + i64::from(p.y) * i64::from(p.y);
+            if d > best[k].0 {
+                best[k] = (d, Some(*p));
+            }
+        }
+    }
+    let p = best[0].1.or(best[1].1)?;
+    Some([geom::unsc(p.x), geom::unsc(p.y)])
+}
+
+/// The timelapse photo after the layer, at `spot` (none: the printer picks its own), which the printer skips with the
+/// layer's objects when all of them are skipped; with Orca's farthest-point timelapse (`farthest`), and `inline`,
+/// taken mid-path where the nozzle is.
+fn layer_photo(plan: &LayerPlan, job: &Job, spot: Option<[i64; 2]>, farthest: bool, inline: bool) -> String {
     let i = plan.index;
     let labels = job.labels();
-    let mut photo = job.frame.timelapse(i, plan.z, plan.z, job.photos.get(i).copied().flatten());
+    let mut photo = job.frame.photo(i, plan.z, plan.z, spot, farthest, inline);
     let mut printed: Vec<u32> =
         plan.paths.iter().map(|p| job.objects.get(p.object as usize).map_or(0, |o| o.label)).collect();
     printed.sort_unstable();
@@ -2411,7 +2614,7 @@ fn finish_layer(
     job: &Job,
     (text, before): (Vec<u8>, Option<(Role, f32)>),
     header_height: f32,
-    (fans, mut tool): ([f64; 2], usize),
+    (fans, over, mut tool): ([f64; 2], [Option<f64>; 2], usize),
 ) -> LayerOut {
     let s = job.settings;
     // Where the prime tower's G-code leaves the nozzle, the planner starts again.
@@ -2449,6 +2652,10 @@ fn finish_layer(
     let mut wiping = false;
     let mut at = start;
     let mut next_note = 0;
+    // The fan markers last written (the overhang fan, the internal bridge fan), and whether none has been yet: a
+    // layer's first extrusion that wants none says so, as Orca does when the layer before ended with one on.
+    let mut marked = [false; 2];
+    let mut no_marks_yet = true;
     let t = &mut out.text;
     // Each move with what is said before it, then what is said after the last one.
     for (k, m) in moves.iter().map(Some).chain([None]).enumerate() {
@@ -2544,7 +2751,18 @@ fn finish_layer(
                     t.push(b'\n');
                     w.height = m.height;
                 }
+                let want =
+                    [over[0].is_some() && m.form & FORM_FAN != 0, over[1].is_some() && role == Role::InternalBridge];
+                let mark = (over[0].is_some() || over[1].is_some()) && (want != marked || no_marks_yet);
+                // Orca writes a path's speed and then its fan, and a piece's fan and then its speed.
+                if mark && m.form & FORM_FIRST == 0 {
+                    fan_markers(t, over, (&mut marked, want), no_marks_yet);
+                }
                 w.feed(t, m.f, true);
+                if mark && m.form & FORM_FIRST != 0 {
+                    fan_markers(t, over, (&mut marked, want), no_marks_yet);
+                }
+                no_marks_yet = false;
                 // A spiral vase's rising line, as Orca's spiral writes it: the height first, to three decimals.
                 if m.form & FORM_Z != 0 {
                     t.extend_from_slice(format!("G1 Z{:.3} X", m.z).as_bytes());
@@ -2629,6 +2847,22 @@ fn finish_layer(
     out.first_accel = w.first_accel;
     out.last_accel = w.accel;
     out
+}
+
+/// Orca's markers for the fans that change over a path (`append_role_based_fan_marker`): a start where one is wanted
+/// and wasn't, an end where one is and isn't wanted (or, the layer's first, isn't: the layer before may have left
+/// one on).
+fn fan_markers(t: &mut Vec<u8>, over: [Option<f64>; 2], (marked, want): (&mut [bool; 2], [bool; 2]), first: bool) {
+    const NAMES: [&str; 2] = ["_OVERHANG", "_INTERNAL_BRIDGE"];
+    for k in 0..2 {
+        if over[k].is_none() {
+            continue;
+        }
+        if want[k] != marked[k] || (first && !want[k]) {
+            t.extend_from_slice(format!(";{}_FAN_{}\n", NAMES[k], if want[k] { "START" } else { "END" }).as_bytes());
+            marked[k] = want[k];
+        }
+    }
 }
 
 fn write_note(t: &mut Vec<u8>, note: &Note, job: &Job, w: &mut Writer) {
@@ -3253,6 +3487,47 @@ mod tests {
     }
 
     #[test]
+    fn the_overhang_fan_runs_where_orcas_cooling_runs_it() {
+        // Generic PETG on the X2D: no fan for three layers, 40 % to 90 % by the layer's time, 90 % over overhangs.
+        let mut s = Settings::default();
+        (s.fan_off_layers, s.fan_min_speed, s.fan_max_speed) = (3, 0.4, 0.9);
+        (s.overhang_fan, s.overhang_fan_speed, s.internal_bridge_fan_speed) = (true, 0.9, -0.01);
+        assert_eq!(layer_overhang_fans(2, 0.0, &s), [None, None]);
+        // Faster than the layer's fan: asked for, over internal bridges too while their own speed is below zero.
+        assert_eq!(layer_overhang_fans(3, 40.0, &s), [Some(90.0), Some(90.0)]);
+        // No faster, nothing to ask.
+        assert_eq!(layer_overhang_fans(3, 90.0, &s), [None, None]);
+        // Their own speed asked for even where it is slower.
+        s.internal_bridge_fan_speed = 0.3;
+        assert_eq!(layer_overhang_fans(3, 90.0, &s), [None, Some(30.0)]);
+        s.internal_bridge_fan_speed = -0.01;
+        // The ramp over the first layers scales it as it does the layer's fan.
+        s.full_fan_speed_layer = 6;
+        assert_eq!(layer_overhang_fans(3, 20.0, &s)[0], Some(30.0));
+        s.overhang_fan = false;
+        assert_eq!(layer_overhang_fans(5, 40.0, &s), [None, None]);
+    }
+
+    #[test]
+    fn overhang_fan_markers_become_the_cooling_buffers_fan_lines() {
+        let text =
+            b"G1 X1 E1\n;_OVERHANG_FAN_START\nG1 X2 E1\n;_OVERHANG_FAN_START\nG1 X3 E1\n;_OVERHANG_FAN_END\nG1 X4 E1\n\
+                     ;_INTERNAL_BRIDGE_FAN_START\nG1 X5 E1\n;_OVERHANG_FAN_START\n;_INTERNAL_BRIDGE_FAN_END\nG1 X6 E1\n\
+                     ;_OVERHANG_FAN_END\nG1 X7 E1\n";
+        let mut fan = FanNow { current: 45.0, asked: [false; 2] };
+        let mut out = Vec::new();
+        fan.put(&mut out, text, ([Some(90.0), Some(70.0)], 45.0));
+        // The overhang's 90 % once (a second start asks for what is on), the layer's 45 % at the end, the internal
+        // bridge's 70 % while only it is asked for, back to 90 % when the overhang is asked for too (which wins).
+        assert_eq!(
+            String::from_utf8(out).unwrap(),
+            "G1 X1 E1\nM106 S229\nG1 X2 E1\nG1 X3 E1\nM106 S114\nG1 X4 E1\nM106 S178\nG1 X5 E1\nM106 S229\n\
+             G1 X6 E1\nM106 S114\nG1 X7 E1\n"
+        );
+        assert_eq!(fan.current, 45.0);
+    }
+
+    #[test]
     fn travels_retract_where_orcas_do() {
         // An island 20 mm square with a 4 mm hole in its middle, and a top surface in a corner of it.
         let mm = geom::SCALE as i32;
@@ -3284,6 +3559,7 @@ mod tests {
             island,
             object: 0,
             parts: Vec::new(),
+            fan: false,
             arcs: Vec::new(),
         };
         let (sparse, solid, gap) = (path(Role::SparseInfill, 0), path(Role::SolidInfill, 0), path(Role::GapFill, 0));
@@ -3303,8 +3579,73 @@ mod tests {
         // Off a wall that ends over an overhang, as off an outer wall.
         let mut hanging = path(Role::InnerWall, 0);
         hanging.points = vec![p(2.0, 2.0), p(3.0, 2.0), p(4.0, 2.0)];
-        hanging.parts = vec![Part { overhang: false, speed: 100.0 }, Part { overhang: true, speed: 50.0 }];
+        hanging.parts =
+            vec![Part { overhang: false, speed: 100.0, fan: false }, Part { overhang: true, speed: 50.0, fan: false }];
         assert!(retracts(&hanging, &sparse, 16.0, p(2.0, 2.0), p(18.0, 2.0), &internal, &s));
+    }
+
+    fn line(role: Role, points: &[(f64, f64)]) -> Path {
+        Path {
+            role,
+            points: points.iter().map(|&(x, y)| geom::pt(geom::sc(x), geom::sc(y))).collect(),
+            closed: false,
+            width: 0.42,
+            height: 0.2,
+            mm3_per_mm: 0.08,
+            speed: 100.0,
+            accel: 1000.0,
+            island: 0,
+            object: 0,
+            parts: Vec::new(),
+            fan: false,
+            arcs: Vec::new(),
+        }
+    }
+
+    /// The farthest-point timelapse aims at the outer walls' point farthest from the plate's corner, not where they
+    /// hang over (Orca's overhang walls), and at the infill only on a layer without outer walls.
+    #[test]
+    fn the_photo_aims_at_the_outer_walls_point_farthest_from_the_camera() {
+        let mut outer = line(Role::OuterWall, &[(100.0, 100.0), (120.0, 100.0), (130.0, 130.0), (110.0, 120.0)]);
+        let infill = line(Role::SparseInfill, &[(150.0, 150.0), (151.0, 150.0)]);
+        let mut plan = LayerPlan {
+            index: 3,
+            id: 3,
+            z: 0.8,
+            height: 0.2,
+            header_height: 0.2,
+            paths: vec![infill.clone(), outer.clone()],
+            support_islands: Vec::new(),
+            visits: Vec::new(),
+            spiral: false,
+            course: None,
+        };
+        assert_eq!(farthest_point(&plan), Some([130.0, 130.0]));
+        // The stretches on from (120, 100) hang over: of the points left, the one the plain stretch shares with them.
+        outer.parts = vec![
+            Part { overhang: false, speed: 100.0, fan: false },
+            Part { overhang: true, speed: 50.0, fan: false },
+            Part { overhang: true, speed: 50.0, fan: false },
+        ];
+        plan.paths = vec![infill.clone(), outer];
+        assert_eq!(farthest_point(&plan), Some([120.0, 100.0]));
+        plan.paths = vec![infill];
+        assert_eq!(farthest_point(&plan), Some([151.0, 150.0]));
+    }
+
+    /// The photo goes in after the first extrusion that ends within half a millimetre of the point, once.
+    #[test]
+    fn the_photo_is_taken_where_an_extrusion_first_ends_near_the_point() {
+        let s = Settings::default();
+        let mut b = builder(&s);
+        b.photo = Some(([10.0, 0.3], "PHOTO".into()));
+        let wall = line(Role::InnerWall, &[(0.0, 0.0), (5.0, 0.0), (10.0, 0.0), (10.2, 0.0), (15.0, 0.0)]);
+        b.extrude(&wall);
+        b.extrude(&wall);
+        let photos: Vec<usize> =
+            b.notes.iter().filter(|(_, n)| matches!(n, Note::Text(t) if t == "PHOTO")).map(|(k, _)| *k).collect();
+        assert_eq!(photos, vec![2]);
+        assert!(b.photo_taken && !b.known);
     }
 
     /// A builder on a 0.2 mm layer at the plate's origin, an overhang wall 0.4 mm wide at 50 mm/s.
@@ -3331,6 +3672,8 @@ mod tests {
             lost: false,
             change_from: (0.0, 0.0),
             fresh: false,
+            photo: None,
+            photo_taken: false,
         }
     }
 
@@ -3360,6 +3703,7 @@ mod tests {
             island: 0,
             object: 0,
             parts: Vec::new(),
+            fan: false,
             arcs,
         };
         b.extrude(&wall);
@@ -3407,7 +3751,8 @@ mod tests {
             accel: 5000.0,
             island: 0,
             object: 0,
-            parts: speeds.iter().enumerate().map(|(k, &speed)| Part { overhang: k >= 5, speed }).collect(),
+            fan: false,
+            parts: speeds.iter().enumerate().map(|(k, &speed)| Part { overhang: k >= 5, speed, fan: false }).collect(),
             arcs: Vec::new(),
         };
         b.extrude(&wall);

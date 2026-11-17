@@ -607,7 +607,7 @@ test("Today opens with no connection from what was last seen, and a print can st
   await expect(page.getByRole("status").filter({ hasText: "Offline" })).toContainText("Showing what you saw");
   await expect(bed.getByRole("heading", { name: "Bath tugboat" })).toBeVisible();
   // Finishing goes through the outbox, so it is still possible next to the printer.
-  await bed.getByRole("button", { name: "Finish" }).click();
+  await bed.getByRole("button", { name: "How did it go?" }).click();
   await expect(page.getByRole("dialog", { name: "Finish attempt 1" })).toBeVisible();
 });
 
