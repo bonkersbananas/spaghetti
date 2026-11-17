@@ -968,9 +968,9 @@ mod tests {
     }
 }
 
-/// Prints the walls of a shape (a JSON list of contours in mm: `[[[x, y], …], …]`, counter-clockwise outlines and
-/// clockwise holes) in the app's setup, as `inset odd closed` and then `x y width` for each junction: for comparing
-/// with native Orca's G-code (`bench/arachne.py`). Ignored: it takes the shape from `ARACHNE_SHAPE`.
+/// Prints the walls of a shape in the app's setup, as `line <inset> <odd> <closed>` and then `x y width` for each
+/// junction: for comparing with native Orca's G-code (`bench/arachne.py`). The shape comes from the file named by
+/// `ARACHNE_SHAPE`: one contour a line, `x y x y …` in mm (outlines counter-clockwise, holes clockwise). Ignored.
 #[cfg(test)]
 mod dump {
     use super::*;
