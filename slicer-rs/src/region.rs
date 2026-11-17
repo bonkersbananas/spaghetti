@@ -684,7 +684,11 @@ fn regularise(shell: &Shapes, internal: &Shapes, spacing: f64, around: Option<(&
     let sparse = 0.5 * 1.2 * spacing;
     let overlap = 0.2 * spacing;
     let shell = geom::simplify_shapes(shell, PATH_RESOLUTION);
-    let mut out = geom::offset(&geom::offset(&geom::offset(&shell, -narrow), narrow + sparse), -(sparse - overlap));
+    // Clipper2's offsets with square corners, as Orca's (`offset2_ex` and `shrink_ex` with `jtSquare`): the general
+    // offset grows the thin, tapering cores the opening leaves of a sloping wall's band by up to twice as much, which
+    // makes pieces Orca finds small large enough to stay.
+    let square = |shapes: &Shapes, delta: f64| geom::offset_c2(shapes, delta, geom::Join::Square);
+    let mut out = square(&square(&square(&shell, -narrow), narrow + sparse), -(sparse - overlap));
     // mm²: Orca's thresholds are the spacing times 1.5 mm and 8 mm.
     let (tiny, small) = (spacing * 1.5, spacing * 8.0);
     out.retain(|piece| {
@@ -1119,6 +1123,36 @@ mod tests {
             geom::pt(sc(x1), sc(y1)),
             geom::pt(sc(x0), sc(y1)),
         ]]
+    }
+
+    #[test]
+    fn a_band_along_a_slope_hidden_in_the_object_goes_when_orca_finds_it_small() {
+        // A lens 0.45 mm wide at its middle along a 40° arc of a 10 mm circle, as the shell along a sloping wall is:
+        // Orca's regularising leaves 2.7 mm² of it, under its 8 mm times 0.396 mm, so inside the layers around it
+        // goes; the general offset made 3.2 mm² of it, and kept it.
+        let lens = |r: f64| {
+            let mut c: geom::Contour = Vec::new();
+            for k in 0..=40 {
+                let a = f64::from(k).to_radians();
+                c.push(geom::pt(sc(r * a.cos()), sc(r * a.sin())));
+            }
+            for k in (0..=40).rev() {
+                let a = f64::from(k).to_radians();
+                let w = 0.45 * (1.0 - (f64::from(k) / 20.0 - 1.0).powi(2));
+                c.push(geom::pt(sc((r + w) * a.cos()), sc((r + w) * a.sin())));
+            }
+            c.reverse();
+            vec![vec![c]]
+        };
+        let spacing = 0.396;
+        let around = vec![square(-20.0, -20.0, 20.0, 20.0)];
+        let internal = vec![square(-15.0, -15.0, 15.0, 15.0)];
+        let hidden = regularise(&lens(10.0), &internal, spacing, Some((&around, &around)));
+        assert!(hidden.is_empty(), "{}", geom::area_mm2(&hidden));
+        // Where it is not hidden, it is not small, and stays.
+        let shown = regularise(&lens(10.0), &internal, spacing, None);
+        let area = geom::area_mm2(&shown);
+        assert!((area - 2.73).abs() < 0.02, "{area}");
     }
 
     #[test]
