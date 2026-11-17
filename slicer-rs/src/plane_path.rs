@@ -225,7 +225,11 @@ pub fn curve(
     });
     let mut out = Output { scale: between, clip, out: Vec::new(), sides_prev: 0, sides_this: 0 };
     match curve {
-        Curve::ArchimedeanChords => archimedean_chords(max_x, max_y, resolution * 1e6 / between, &mut out),
+        Curve::ArchimedeanChords => {
+            // A resolution of nothing would never step round the spiral (Orca's too loops for ever): Orca's default.
+            let resolution = if resolution > 0.0 { resolution } else { 0.01 };
+            archimedean_chords(max_x, max_y, resolution * 1e6 / between, &mut out)
+        }
         Curve::Hilbert => hilbert((min_x, min_y), (max_x, max_y), &mut out),
         Curve::OctagramSpiral => octagram_spiral(max_x, max_y, &mut out),
     }
@@ -263,6 +267,19 @@ mod tests {
             out.add(q);
         }
         assert_eq!(out.out, vec![(5, 5), (12, 5), (12, 7), (5, 7)]);
+    }
+
+    #[test]
+    fn archimedean_chords_end_with_a_resolution_of_nothing() {
+        let points = curve(
+            Curve::ArchimedeanChords,
+            [-1_000_000, -1_000_000, 1_000_000, 1_000_000],
+            (2_000_000, 2_000_000),
+            0.0,
+            (0.4, 0.15),
+            0.0,
+        );
+        assert!(points.len() > 10);
     }
 
     #[test]
