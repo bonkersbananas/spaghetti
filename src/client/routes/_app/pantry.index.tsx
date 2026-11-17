@@ -36,7 +36,7 @@ export const Route = createFileRoute("/_app/pantry/")({
   component: Pantry,
 });
 
-const grid = "grid grid-cols-1 gap-3 md:grid-cols-2 md:gap-4 xl:grid-cols-3";
+const grid = "grid grid-cols-2 gap-3 md:grid-cols-2 md:gap-4 xl:grid-cols-3";
 
 const GroupRecipes = lazy(() => import("@/components/recipes/GroupRecipes").then((m) => ({ default: m.GroupRecipes })));
 
@@ -164,7 +164,7 @@ function Pantry() {
           <div className={grid}>
             {Array.from({ length: 4 }, (_, index) => (
               // biome-ignore lint/suspicious/noArrayIndexKey: placeholders have no identity.
-              <Skeleton key={index} className="h-[4.75rem] rounded-lg" />
+              <Skeleton key={index} className="h-44 rounded-lg md:h-[4.75rem]" />
             ))}
           </div>
         </div>
