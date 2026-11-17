@@ -135,6 +135,30 @@ The offsets' change is 3 to 7 % on most models in WebAssembly and 3 to 8 % nativ
 
 What's left, as profiled on pick your size in WebAssembly: the polygon library is still most of a slice (its splitting of segments where they cross 37 %, the fill sweep 16 %, the walls' offsets and differences in `region::wall_group` 30 % between them), now nearly all inherent to each operation rather than repeated work; arc fitting (`arc_fit::fit_and_simplify`, session 1540's) is 12 % of it; the Voronoi diagram's exact predicates 12 % of the poop tray (above); and memory, the regions of every layer held until the toolpaths are done.
 
+#### Round three: the phone's heap, arc fitting and Arachne, Nov 17
+
+Again every file stays byte for byte as it was, on the 13 models and the 19 bench cases, natively and in WebAssembly, against main just before each change.
+
+- **Less held whole.** Each layer's regions go as soon as the last group of layers that reads them (its own, and the next one's, which hangs over them) has made its G-code, so the layers' texts take their place instead of adding to them. Welding an STL's corners into vertices keeps an open-addressed table of vertex indices instead of a map keyed by the corners (8 MB rather than 35 for the frame's 1.8 million triangles, held beside the 85 MB file the app hands in). Packing keeps the deflated pieces as they come instead of one buffer doubling as it grows, and sizes the archive once: the frame's 19 MB packed model was held twice over while it moved. Main (with Clipper2's walls, #510) against main with these, every model, three runs in each of Chromium and Node, model by model (with Arachne's narrow solid infill, #518, merged since, the four largest heaps fall the same: 134 → 125, 169 → 146, 109 → 100 and 38 → 31 MB):
+
+| Model | **Heap, Chromium** | Chromium's processes | Chromium | Node |
+| --- | --- | --- | --- | --- |
+| Steampunk frame (89 MB STL) | **134 → 125 MB (−7 %)** | 305 → 287 MB | 8.99 → 8.83 s (−2 %) | 9.10 → 9.05 s (−1 %) |
+| Capybara (18 MB STL) | **38 → 31 MB (−18 %)** | 121 → 128 MB | 2.26 → 2.24 s (−1 %) | 2.26 → 2.23 s (−1 %) |
+| Marshmallow | **109 → 100 MB (−8 %)** | 267 → 258 MB | 3.76 → 3.56 s (−5 %) | 3.90 → 3.73 s (−4 %) |
+| Pick your size, plate 2 | **169 → 146 MB (−14 %)** | 238 → 253 MB | 35.12 → 35.57 s (+1 %) | 35.03 → 35.86 s (+2 %) |
+| Hummingbird, painted | **84 → 84 MB (0 %)** | 204 → 210 MB | 10.19 → 10.13 s (−1 %) | 10.11 → 10.17 s (+1 %) |
+| Tomato mascot | **92 → 95 MB (+3 %)** | 173 → 173 MB | 9.27 → 9.07 s (−2 %) | 9.14 → 8.98 s (−2 %) |
+| Stackable containers, plate 3 | **28 → 27 MB (−4 %)** | 102 → 106 MB | 3.18 → 2.99 s (−6 %) | 3.07 → 3.11 s (+1 %) |
+| Poop tray | **29 → 30 MB (+3 %)** | 117 → 96 MB | 4.45 → 4.52 s (+1 %) | 4.38 → 4.42 s (+1 %) |
+| Steampunk glasses | **26 → 28 MB (+8 %)** | 79 → 91 MB | 3.55 → 3.51 s (−1 %) | 3.49 → 3.46 s (−1 %) |
+| Hot dogs, 4 colours | **29 → 30 MB (+3 %)** | 109 → 114 MB | 3.20 → 2.92 s (−8 %) | 2.97 → 2.99 s (+1 %) |
+| Spaghetti zipper pull | **28 → 26 MB (−7 %)** | 100 → 97 MB | 2.56 → 2.83 s (+11 %) | 2.69 → 2.76 s (+3 %) |
+| UOBF text with clips | **20 → 20 MB (0 %)** | 81 → 84 MB | 0.57 → 0.62 s (+10 %) | 0.55 → 0.55 s (−1 %) |
+| fctl zipper pulls, 4 copies | **57 → 55 MB (−4 %)** | 114 → 106 MB | 6.44 → 6.45 s (0 %) | 6.22 → 6.48 s (+4 %) |
+
+The heap in Chromium is the WebAssembly memory at the end, which only grows, so its peak. The frame's is now its 85 MB file and the mesh read from it; pick your size's is the regions of its 699 layers, all made before the first layer's toolpaths. A few small models' heaps grow by 1 to 3 MB (the tomato with the welding, the glasses and the hot dogs with the regions let go): where the allocator places what comes next, not more held. The times are within the drift.
+
 ### With tree supports
 
 With Orca's organic trees everywhere (the X2D's support settings otherwise), the same way:
