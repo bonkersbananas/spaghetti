@@ -3342,3 +3342,50 @@ fn tpms_d_traces_the_diamond_surface_as_orcas_does() {
     assert!((sparse.volume - 1362.04).abs() < 1362.04 * 0.01, "{} mm³", sparse.volume);
     assert!((sparse.time - 218.0).abs() < 218.0 * 0.01, "{} s", sparse.time);
 }
+
+#[test]
+fn top_surfaces_in_a_curve_pattern_print_as_orcas_do() {
+    // The stepped boxes: native OrcaSlicer 2.5.1 with the X2D's presets prints these top surfaces (mm³, s) in a
+    // Hilbert curve, Archimedean chords and an octagram spiral (Nov 17). Archimedean chords' come 8 % slower here, as
+    // ours chains the spiral's pieces otherwise and so fits arcs to other runs of its chords.
+    let steps = boxes_stl(&[
+        ([108., 108., 0.], [148., 148., 5.]),
+        ([116., 116., 0.], [140., 140., 10.]),
+        ([123., 123., 0.], [133., 133., 15.]),
+        ([137., 137., 0.], [146., 146., 8.]),
+    ]);
+    let options = Options { arrange: false, thumbnail: false, ..Options::default() };
+    for (pattern, volume, time, within) in [
+        ("hilbertcurve", 292.27, 207.3, 0.01),
+        ("archimedeanchords", 292.24, 48.1, 0.1),
+        ("octagramspiral", 292.1, 78.0, 0.01),
+    ] {
+        let json = format!(r#"{{"process": {{"top_surface_pattern": "{pattern}"}}}}"#);
+        let out = slice(&[Input { name: "steps.stl", bytes: &steps }], &setup::read(&json).unwrap().settings, &options)
+            .unwrap();
+        assert!(out.fallbacks.is_empty(), "{:?}", out.fallbacks);
+        let top = out.stats.features[Role::ALL.iter().position(|&r| r == Role::TopSurface).unwrap()];
+        assert!((top.volume - volume).abs() < volume * 0.01, "{pattern}: {} mm³", top.volume);
+        assert!((top.time - time).abs() < time * within, "{pattern}: {} s", top.time);
+    }
+}
+
+#[test]
+fn line_infill_lays_its_leaning_lines_as_orcas_does() {
+    // The stepped boxes at 15 %: native OrcaSlicer 2.5.1 with the X2D's presets prints 1,265.51 mm³ of line sparse
+    // infill in 125.3 s (Nov 17).
+    let steps = boxes_stl(&[
+        ([108., 108., 0.], [148., 148., 5.]),
+        ([116., 116., 0.], [140., 140., 10.]),
+        ([123., 123., 0.], [133., 133., 15.]),
+        ([137., 137., 0.], [146., 146., 8.]),
+    ]);
+    let options = Options { arrange: false, thumbnail: false, ..Options::default() };
+    let json = r#"{"process": {"sparse_infill_pattern": "line"}}"#;
+    let out =
+        slice(&[Input { name: "steps.stl", bytes: &steps }], &setup::read(json).unwrap().settings, &options).unwrap();
+    assert!(out.fallbacks.is_empty(), "{:?}", out.fallbacks);
+    let sparse = out.stats.features[Role::ALL.iter().position(|&r| r == Role::SparseInfill).unwrap()];
+    assert!((sparse.volume - 1265.51).abs() < 1265.51 * 0.01, "{} mm³", sparse.volume);
+    assert!((sparse.time - 125.3).abs() < 125.3 * 0.01, "{} s", sparse.time);
+}
