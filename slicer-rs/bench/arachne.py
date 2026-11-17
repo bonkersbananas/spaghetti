@@ -15,6 +15,7 @@ CRATE = os.path.dirname(HERE)
 PROFILES = os.path.join(CRATE, "profiles", "x2d")
 ORCA = os.environ.get("ORCA_NATIVE", os.path.expanduser("~/orca-native/squashfs-root"))
 LAYER_HEIGHT = 0.2
+FLOW_RATIO = 0.98  # the filament's flow ratio: E carries it, widths here don't
 ORIGIN = 100.0  # shapes sit here on the plate
 
 SHAPES = {
@@ -75,7 +76,7 @@ def orca_walls(polys, work, layer):
                 new = (w["X"] - ORIGIN, w["Y"] - ORIGIN)
                 if "E" in w and w["E"] > 0 and pos is not None and "wall" in (typ or "").lower():
                     length = math.dist(pos, new)
-                    segs.append((pos, new, w["E"] * cross / length / LAYER_HEIGHT + LAYER_HEIGHT * (1 - math.pi / 4)))
+                    segs.append((pos, new, w["E"] / FLOW_RATIO * cross / length / LAYER_HEIGHT + LAYER_HEIGHT * (1 - math.pi / 4)))
                 pos = new
             elif "X" in w or "Y" in w:
                 pass
@@ -125,11 +126,10 @@ def main():
         with tempfile.TemporaryDirectory() as work:
             o = orca_walls(polys, work, 4)
             ours = our_walls(polys, work)
-        print(name, len(o), len(ours), file=sys.stderr)
         osegs = [(a, b) for a, b, _ in o]
         usegs = [((l[i][0], l[i][1]), (l[i + 1][0], l[i + 1][1])) for l in ours for i in range(len(l) - 1)]
         oplastic = sum(math.dist(a, b) * w for a, b, w in o)
-        uplastic = sum(math.dist((l[i][0], l[i][1]), (l[i + 1][0], l[i + 1][1])) * (l[i][2] + l[i + 1][2]) / 2 for l in ours for i in range(len(l) - 1))
+        uplastic = sum(math.dist((l[i][0], l[i][1]), (l[i + 1][0], l[i + 1][1])) * ((l[i][2] + l[i + 1][2]) / 2 + LAYER_HEIGHT * (1 - math.pi / 4)) for l in ours for i in range(len(l) - 1))
         opts = [p for a, b in osegs for p in (a, b)]
         upts = [(p[0], p[1]) for l in ours for p in l]
         print(f"{name}: orca {len(osegs)} moves, ours {len(usegs)}; every Orca point within {far(opts, usegs):.3f} mm of ours, "
