@@ -4,7 +4,7 @@ import { attemptPartsLabel } from "@shared/parts";
 import { isOffTheBed } from "@shared/print-progress";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { AnimatePresence, m, useReducedMotion } from "motion/react";
-import { useRef } from "react";
+import { Fragment, useRef } from "react";
 import { AutoHeight } from "@/components/ui/AutoHeight";
 import { Avatar, ViaText } from "@/components/ui/Avatar";
 import { Button, IconButton } from "@/components/ui/Button";
@@ -306,11 +306,11 @@ export function PrintingCard({
                     )}
                   >
                     {/* "Layer 70 of 205 · 30 min left" breaks between its parts, never inside "30 min left". */}
-                    {progress.label.split(" · ").map((part, index, parts) => (
-                      <span key={part} className="whitespace-nowrap">
-                        {part}
-                        {index < parts.length - 1 ? " · " : ""}
-                      </span>
+                    {progress.label.split(" · ").map((part, index) => (
+                      <Fragment key={part}>
+                        {index > 0 && " · "}
+                        <span className="whitespace-nowrap">{part}</span>
+                      </Fragment>
                     ))}
                   </p>
                   <div className="pointer-events-auto flex shrink-0 items-center gap-1.5">
