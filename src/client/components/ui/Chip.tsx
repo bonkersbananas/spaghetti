@@ -61,8 +61,7 @@ interface ToggleChipProps extends Omit<ComponentPropsWithRef<"button">, "childre
   /** Starts with a picture (a spool disc, a swatch) that sits closer to the edge than a word would. */
   lead?: boolean;
   /**
-   * `quiet`: words with no chip around them until picked, for a filter or two beside a section's heading (Ideas'
-   * "Has a model" beside "The rest"); picked, the same ink pill as a picked chip, tight around the label and count.
+   * `quiet`: words with no chip around them until picked, for a filter that must sit in running text (nothing uses it now; Ideas' filters are plain chips); picked, the same ink pill as a picked chip, tight around the label and count.
    */
   appearance?: "chip" | "quiet";
   /** How many it would show, after the label: faint at rest, in the pill's own ink once picked. */
