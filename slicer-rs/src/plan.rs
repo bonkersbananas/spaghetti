@@ -736,6 +736,20 @@ fn island_paths(
         let sortable = !matches!(style, SolidStyle::Monotonic { .. });
         for (part, angle) in parts {
             for shape in &into_walls(&part) {
+                let concentric = |shape: &geom::Shape| -> Group {
+                    let mut paths = Vec::new();
+                    for p in
+                        solid::concentric_loops(&vec![shape.clone()], spacing, s.nozzle_diameter, h, geom::pt(0, 0))
+                    {
+                        let (points, widths) = simplify_thick(&p.points, &p.widths, s.resolution);
+                        paths.extend(thick_paths(role, &points, &widths, island, first, h, s));
+                    }
+                    Group { paths, sortable: false }
+                };
+                if style == SolidStyle::Concentric && !(role == Role::SolidInfill && s.narrow_solid_loops) {
+                    groups.push(concentric(shape));
+                    continue;
+                }
                 if let SolidStyle::Curve(curve) = style {
                     let lines = fill::surface_curve(shape, curve, spacing, (origin, size), s);
                     let paths =
@@ -748,6 +762,10 @@ fn island_paths(
                     && let Some((normal, narrow)) = solid::split_narrow(shape, spacing, angle.to_radians())
                 {
                     for n in &normal {
+                        if style == SolidStyle::Concentric {
+                            groups.push(concentric(n));
+                            continue;
+                        }
                         let paths = solid_lines(n, role, style, angle, spacing, origin, island, first, h, s);
                         groups.push(Group { paths, sortable });
                     }
@@ -761,6 +779,10 @@ fn island_paths(
                         paths.extend(thick_paths(role, &points, &widths, island, first, h, s));
                     }
                     groups.push(Group { paths, sortable: false });
+                    continue;
+                }
+                if style == SolidStyle::Concentric {
+                    groups.push(concentric(shape));
                     continue;
                 }
                 let mut paths = solid_lines(shape, role, style, angle, spacing, origin, island, first, h, s);
@@ -962,6 +984,8 @@ enum SolidStyle {
     ZigZag,
     /// One of Orca's plane-path curves, on a top or bottom surface (`fill::surface_curve`).
     Curve(crate::plane_path::Curve),
+    /// Concentric loops: Orca's Arachne fill (`solid::concentric_loops`).
+    Concentric,
 }
 
 fn solid_style(role: Role, s: &Settings) -> SolidStyle {
@@ -976,6 +1000,7 @@ fn solid_style(role: Role, s: &Settings) -> SolidStyle {
     };
     let surface = matches!(role, Role::TopSurface | Role::BottomSurface);
     match pattern {
+        "concentric" if role != Role::Bridge && role != Role::InternalBridge => SolidStyle::Concentric,
         "monotonicline" => SolidStyle::Monotonic { connect: false },
         "monotonic" | "" => SolidStyle::Monotonic { connect: true },
         "hilbertcurve" if surface => SolidStyle::Curve(crate::plane_path::Curve::Hilbert),
