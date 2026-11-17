@@ -3454,3 +3454,28 @@ fn arachne_walls_fill_what_classic_walls_do() {
     .unwrap();
     assert!(vase.stats.volume > 0.0);
 }
+
+/// Concentric top, bottom and internal solid surfaces print as Orca's Arachne loops, not zig-zag with a note: a
+/// cube's plastic stays within 2 % of the lines' (a Benchy is within 0.1 % of native Orca 2.5.1's).
+#[test]
+fn concentric_surfaces_print_as_loops() {
+    let stl = cube_stl(20.0);
+    let lines = slice(&[Input { name: "cube.stl", bytes: &stl }], &Settings::default(), &Options::default()).unwrap();
+    let mut settings = Settings::default();
+    for pattern in [
+        &mut settings.top_surface_pattern,
+        &mut settings.bottom_surface_pattern,
+        &mut settings.internal_solid_infill_pattern,
+    ] {
+        *pattern = "concentric".into();
+    }
+    assert!(!settings.fallbacks().iter().any(|f| f.contains("concentric")), "{:?}", settings.fallbacks());
+    let loops = slice(&[Input { name: "cube.stl", bytes: &stl }], &settings, &Options::default()).unwrap();
+    assert!(
+        (loops.stats.volume / lines.stats.volume - 1.0).abs() < 0.02,
+        "{} against {}",
+        loops.stats.volume,
+        lines.stats.volume
+    );
+    assert_ne!(loops.gcode, lines.gcode);
+}

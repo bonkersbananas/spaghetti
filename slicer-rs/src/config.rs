@@ -1329,7 +1329,12 @@ impl Settings {
         ] {
             let curve = what != "solid infill"
                 && matches!(pattern.as_str(), "hilbertcurve" | "archimedeanchords" | "octagramspiral");
-            if !curve && !matches!(pattern.as_str(), "monotonic" | "monotonicline" | "zig-zag" | "rectilinear" | "") {
+            if !curve
+                && !matches!(
+                    pattern.as_str(),
+                    "monotonic" | "monotonicline" | "zig-zag" | "rectilinear" | "concentric" | ""
+                )
+            {
                 out.push(format!("{pattern} {what} printed as zig-zag"));
             }
         }
