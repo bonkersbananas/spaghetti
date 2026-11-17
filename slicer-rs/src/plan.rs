@@ -208,8 +208,9 @@ pub fn plan_layer_of(
         let centre = centres.get(island.object as usize).copied().unwrap_or((0.0, 0.0));
         let under = below.get(island.group as usize).and_then(Option::as_ref);
         let trees = r.lightning.get(island.group as usize).map_or(&[][..], Vec::as_slice);
+        let octree = r.octrees.get(island.group as usize).and_then(Option::as_ref);
         let seams = r.seams.get(island.group as usize);
-        island_paths(k as u32, island, &r.fills[k], under, i, (z, h), centre, trees, seams, (at, rising), s)
+        island_paths(k as u32, island, &r.fills[k], under, i, (z, h), centre, (trees, octree), seams, (at, rising), s)
     };
     let mut per_island: Vec<Vec<Path>> = (0..r.islands.len()).map(|k| island_at(k, None, false)).collect();
     // In spiral vase mode, a layer that is one island's wall loop and nothing else rises as it goes round, as Orca's
@@ -611,7 +612,7 @@ fn island_paths(
     layer: usize,
     (z, h): (f64, f64),
     centre: (f64, f64),
-    trees: &[Vec<Pt>],
+    (trees, octree): (&[Vec<Pt>], Option<&crate::adaptive::Octree>),
     seams: Option<&crate::seam::LayerSeams>,
     (mut at, rises): (Option<Pt>, bool),
     s: &Settings,
@@ -672,14 +673,7 @@ fn island_paths(
             return region.clone();
         }
         let grown = geom::offset(region, overlap);
-        // Alone in the island (the common case): nothing else to keep out of.
-        if (geom::area_mm2(island_inner) - geom::area_mm2(region)).abs() < 1e-3 {
-            return grown;
-        }
-        // What else fills the island: not the hairline slivers the booleans leave between the region and the inner
-        // area when they are one, which no line fits in and which would cut every line short of the walls.
-        let mut others = geom::difference(island_inner, region);
-        others.retain(|shape| geom::shape_area_mm2(shape) >= 1e-3);
+        let others = others_in(island_inner, region);
         if others.is_empty() { grown } else { geom::difference(&grown, &others) }
     };
     let origin = (centre.0, centre.1);
@@ -698,8 +692,10 @@ fn island_paths(
         }
         if role == Role::SparseInfill {
             // A collection for each region, as Orca fills them one by one.
+            let others = others_in(island_inner, region);
             for shape in region {
-                let paths: Vec<Path> = sparse_lines(&vec![shape.clone()], layer, z, h, centre, trees, s)
+                let one = vec![shape.clone()];
+                let paths: Vec<Path> = sparse_lines(&one, &others, layer, z, h, centre, trees, octree, s)
                     .into_iter()
                     .filter(|points| points.len() >= 2)
                     .map(|points| path(role, points, false, island, first, h, s))
@@ -1020,28 +1016,27 @@ fn solid_lines(
 }
 
 /// The sparse infill lines of a region on a layer, as printed: Orca's pattern where there is one (lightning's from
-/// `trees`, the object's lightning lines on the layer), else straight lines at the infill direction, turned a
-/// quarter every other layer.
+/// `trees`, the object's lightning lines on the layer), else Orca's rectilinear (with a note, `Settings::fallbacks`).
+/// `others` is what else fills the island (`others_in`): the region reaches into the
+/// walls, but not into that.
+#[allow(clippy::too_many_arguments)]
 pub fn sparse_lines(
     region: &Shapes,
+    others: &Shapes,
     layer: usize,
     z: f64,
     h: f64,
     centre: (f64, f64),
     trees: &[Vec<Pt>],
+    octree: Option<&crate::adaptive::Octree>,
     s: &Settings,
 ) -> Vec<Vec<Pt>> {
     // No sparse infill at all (spiral vase mode's): Orca fills nothing there.
     if s.sparse_density <= 0.0 {
         return Vec::new();
     }
-    if let Some(pattern) = fill::Pattern::of(&s.sparse_infill_pattern) {
-        return sparse_runs(region, pattern, layer, (z, h), centre, trees, s);
-    }
-    let (width, _, _) = flow(Role::SparseInfill, s.on_plate(layer), h, s);
-    let grown = geom::offset(region, s.infill_wall_overlap * width);
-    let angle = if layer.is_multiple_of(2) { s.infill_direction } else { s.infill_direction + 90.0 };
-    infill::fill(&grown, angle, Settings::spacing(width, h) / s.sparse_density, 0.0)
+    let pattern = fill::Pattern::of(&s.sparse_infill_pattern).unwrap_or(fill::Pattern::Rectilinear);
+    sparse_runs(region, others, pattern, layer, (z, h), centre, (trees, octree), s)
 }
 
 /// mm Orca's sparse infill area reaches into the walls on a layer `h` high: a share of half the last wall's and half
@@ -1055,15 +1050,31 @@ pub fn sparse_overlap(h: f64, s: &Settings) -> f64 {
     if inset > 0.0 { s.infill_wall_overlap * (inset + Settings::spacing(s.solid_infill_width, h) / 2.0) } else { 0.0 }
 }
 
+/// What else fills an island beside one kind of its infill (its infill area less `region`), without the hairline
+/// slivers the booleans leave between them where they are one, which no line fits in and which would cut every line
+/// short of the walls: what that kind keeps out of as it reaches into the walls. Nothing where the region is alone in
+/// the island (the common case).
+pub fn others_in(inner: &Shapes, region: &Shapes) -> Shapes {
+    if region.is_empty() || (geom::area_mm2(inner) - geom::area_mm2(region)).abs() < 1e-3 {
+        return Vec::new();
+    }
+    let mut others = geom::difference(inner, region);
+    others.retain(|shape| geom::shape_area_mm2(shape) >= 1e-3);
+    others
+}
+
 /// Sparse infill in Orca's pattern (`fill.rs`), where Orca puts its lines' middles: into the walls by Orca's
-/// overlap (`sparse_overlap`), less half the infill's spacing.
+/// overlap (`sparse_overlap`), less half the infill's spacing. Orca grows the infill area into the walls before it
+/// splits it by kind, so the sparse infill stops half a spacing short of the solid infill beside it (`others`).
+#[allow(clippy::too_many_arguments)]
 fn sparse_runs(
     region: &Shapes,
+    others: &Shapes,
     pattern: fill::Pattern,
     layer: usize,
     (z, h): (f64, f64),
     centre: (f64, f64),
-    trees: &[Vec<Pt>],
+    (trees, octree): (&[Vec<Pt>], Option<&crate::adaptive::Octree>),
     s: &Settings,
 ) -> Vec<Vec<Pt>> {
     let overlap = sparse_overlap(h, s);
@@ -1080,9 +1091,16 @@ fn sparse_runs(
         anchor: s.infill_anchor,
         anchor_max: s.infill_anchor_max,
         trees,
+        octree,
         lattice_angles: s.lateral_lattice_angles,
     };
-    fill::sparse(region, overlap - spacing / 2.0, &params)
+    // Lightning's trees grow in the area grown all round (`region::lightning_lines`), which its lines keep to: with
+    // the area Orca's generator takes, ours came out further from Orca's (+11.5 % against −0.3 % on a Benchy).
+    if overlap <= 0.0 || others.is_empty() || pattern == fill::Pattern::Lightning {
+        return fill::sparse(region, overlap - spacing / 2.0, &params);
+    }
+    let grown = geom::difference(&geom::offset(region, overlap), others);
+    fill::sparse(&grown, -spacing / 2.0, &params)
 }
 
 /// A line of varying width as paths (Orca's `variable_width`): each a stretch whose width stays within 0.05 mm,

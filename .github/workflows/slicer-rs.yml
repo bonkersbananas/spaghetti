@@ -133,3 +133,9 @@ jobs:
           ./target/release/spaghetti-slicer --setup /tmp/perlin.json tests/models/bridge.stl -o /tmp/perlin.gcode.3mf
           node bench/wasm-node.mjs target/wasm32-unknown-unknown/release/spaghetti_slicer.wasm /tmp/perlin-wasm.gcode.3mf --setup /tmp/perlin.json tests/models/bridge.stl
           cmp /tmp/perlin.gcode.3mf /tmp/perlin-wasm.gcode.3mf
+      - name: The same, in adaptive cubic infill (its octree of the mesh)
+        run: |
+          echo '{"process": {"sparse_infill_pattern": "adaptivecubic"}}' > /tmp/adaptive.json
+          ./target/release/spaghetti-slicer --setup /tmp/adaptive.json tests/models/bridge.stl -o /tmp/adaptive.gcode.3mf
+          node bench/wasm-node.mjs target/wasm32-unknown-unknown/release/spaghetti_slicer.wasm /tmp/adaptive-wasm.gcode.3mf --setup /tmp/adaptive.json tests/models/bridge.stl
+          cmp /tmp/adaptive.gcode.3mf /tmp/adaptive-wasm.gcode.3mf

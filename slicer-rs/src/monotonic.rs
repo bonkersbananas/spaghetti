@@ -1641,6 +1641,18 @@ pub(crate) fn vertical_runs(
 /// (radians, Orca's `_infill_direction` angle), `spacing` mm wide at `density`, joined along the edge where they
 /// can in Orca's sweep from left to right (`traverse_graph_generate_polylines`), and printed in that order.
 pub fn rectilinear(shape: &Shape, angle: f64, origin: (f64, f64), spacing: f64, density: f64) -> Vec<Vec<Pt>> {
+    rectilinear_linked(shape, angle, origin, (spacing, density), Some(0.0))
+}
+
+/// `rectilinear` with Orca's limit on the joins along the edge (`link_max_length`, mm: 0 any length, `None` none at
+/// all, Orca's `dont_connect`), as sparse infill takes it.
+pub fn rectilinear_linked(
+    shape: &Shape,
+    angle: f64,
+    origin: (f64, f64),
+    (spacing, density): (f64, f64),
+    link_max: Option<f64>,
+) -> Vec<Vec<Pt>> {
     let sp_units = spacing * geom::SCALE;
     if shape.is_empty() || sp_units < 1.0 || density <= 0.0 {
         return Vec::new();
@@ -1682,7 +1694,7 @@ pub fn rectilinear(shape: &Shape, angle: f64, origin: (f64, f64), spacing: f64, 
         grid_lines(bb[0] as i64, bb[2] as i64, ox, ls_nm)
     };
     let Some(mut segs) = slice_at(&contours, n_outer, &positions) else { return Vec::new() };
-    connect(&contours, &mut segs, true, 0);
+    connect(&contours, &mut segs, link_max.is_some(), (link_max.unwrap_or(0.0) * geom::SCALE) as i64);
     let mut lines = traverse(&contours, &mut segs);
     let (s, c) = angle.sin_cos();
     for line in &mut lines {

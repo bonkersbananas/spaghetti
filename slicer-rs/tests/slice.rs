@@ -3234,3 +3234,47 @@ fn curves_print_as_arcs_as_orcas_do() {
     let slower = with.model_time / without.model_time - 1.0;
     assert!((0.0..0.03).contains(&slower), "{} against {} s", with.model_time, without.model_time);
 }
+
+#[test]
+fn adaptive_and_support_cubic_fill_as_orcas_do() {
+    // The stepped boxes at 15 %: native OrcaSlicer 2.5.1 with the X2D's presets prints 924.66 mm³ of sparse infill in
+    // 100.8 s either way (its tops all face straight up, so support cubic's octree is adaptive cubic's) (Nov 17).
+    let steps = boxes_stl(&[
+        ([108., 108., 0.], [148., 148., 5.]),
+        ([116., 116., 0.], [140., 140., 10.]),
+        ([123., 123., 0.], [133., 133., 15.]),
+        ([137., 137., 0.], [146., 146., 8.]),
+    ]);
+    let options = Options { arrange: false, thumbnail: false, ..Options::default() };
+    for pattern in ["adaptivecubic", "supportcubic"] {
+        let json = format!(r#"{{"process": {{"sparse_infill_pattern": "{pattern}"}}}}"#);
+        let out = slice(&[Input { name: "steps.stl", bytes: &steps }], &setup::read(&json).unwrap().settings, &options)
+            .unwrap();
+        assert!(out.fallbacks.is_empty(), "{:?}", out.fallbacks);
+        let sparse = out.stats.features[Role::ALL.iter().position(|&r| r == Role::SparseInfill).unwrap()];
+        assert!((sparse.volume - 924.66).abs() < 924.66 * 0.01, "{pattern}: {} mm³", sparse.volume);
+        assert!((sparse.time - 100.8).abs() < 100.8 * 0.02, "{pattern}: {} s", sparse.time);
+    }
+}
+
+#[test]
+fn rectilinear_sparse_infill_lays_and_joins_its_lines_as_orcas_does() {
+    // The stepped boxes at 15 %: native OrcaSlicer 2.5.1 with the X2D's presets prints 1,351.41 mm³ of rectilinear
+    // sparse infill in 135.8 s, and 1,345.45 mm³ in 134.8 s aligned (the same way on every layer) (Nov 17).
+    let steps = boxes_stl(&[
+        ([108., 108., 0.], [148., 148., 5.]),
+        ([116., 116., 0.], [140., 140., 10.]),
+        ([123., 123., 0.], [133., 133., 15.]),
+        ([137., 137., 0.], [146., 146., 8.]),
+    ]);
+    let options = Options { arrange: false, thumbnail: false, ..Options::default() };
+    for (pattern, volume, time) in [("rectilinear", 1351.41, 135.8), ("alignedrectilinear", 1345.45, 134.8)] {
+        let json = format!(r#"{{"process": {{"sparse_infill_pattern": "{pattern}"}}}}"#);
+        let out = slice(&[Input { name: "steps.stl", bytes: &steps }], &setup::read(&json).unwrap().settings, &options)
+            .unwrap();
+        assert!(out.fallbacks.is_empty(), "{:?}", out.fallbacks);
+        let sparse = out.stats.features[Role::ALL.iter().position(|&r| r == Role::SparseInfill).unwrap()];
+        assert!((sparse.volume - volume).abs() < volume * 0.01, "{pattern}: {} mm³", sparse.volume);
+        assert!((sparse.time - time).abs() < time * 0.01, "{pattern}: {} s", sparse.time);
+    }
+}
