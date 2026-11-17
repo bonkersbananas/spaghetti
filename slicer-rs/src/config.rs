@@ -1220,6 +1220,8 @@ impl Settings {
                 | "tri-hexagon"
                 | "quartercubic"
                 | "lateral-lattice"
+                | "adaptivecubic"
+                | "supportcubic"
                 | ""
         ) {
             out.push(format!("{} sparse infill printed as straight lines", self.sparse_infill_pattern));

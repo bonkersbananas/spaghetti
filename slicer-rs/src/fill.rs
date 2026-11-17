@@ -42,6 +42,10 @@ pub enum Pattern {
     Honeycomb,
     /// Trees that hold up the top surfaces from inside and nothing else (`FillLightning`), from `Sparse::trees`.
     Lightning,
+    /// Cubes standing on a corner, small near the surface and large inside (`FillAdaptive`), from `Sparse::octree`;
+    /// support cubic's are small only under the tops.
+    AdaptiveCubic,
+    SupportCubic,
 }
 
 impl Pattern {
@@ -57,6 +61,8 @@ impl Pattern {
             "lateral-lattice" => Some(Pattern::LateralLattice),
             "honeycomb" => Some(Pattern::Honeycomb),
             "lightning" => Some(Pattern::Lightning),
+            "adaptivecubic" => Some(Pattern::AdaptiveCubic),
+            "supportcubic" => Some(Pattern::SupportCubic),
             _ => None,
         }
     }
@@ -84,6 +90,8 @@ pub struct Sparse<'a> {
     pub anchor_max: f64,
     /// Lightning's lines on this layer for the whole object (units), each from a tip towards its tree's root.
     pub trees: &'a [Vec<Pt>],
+    /// The object's octree, for adaptive and support cubic.
+    pub octree: Option<&'a crate::adaptive::Octree>,
     /// Lateral lattice's two angles, degrees from upright.
     pub lattice_angles: [f64; 2],
 }
@@ -131,6 +139,7 @@ pub fn support_grid(shape: &Shape, angle: f64, origin: (f64, f64), spacing: f64,
         anchor: 1000.0,
         anchor_max: 1000.0,
         trees: &[],
+        octree: None,
         lattice_angles: [0.0; 2],
     };
     // Orca's box is the shape's own here: its support filler has no overlap with walls.
@@ -166,6 +175,7 @@ fn fill_part(part: &Shape, p: &Sparse) -> Vec<Vec<Pt>> {
         Pattern::Lightning => {
             p.trees.iter().map(|line| line.iter().map(|q| (q.x as f64, q.y as f64)).collect()).collect()
         }
+        Pattern::AdaptiveCubic | Pattern::SupportCubic => return adaptive(part, p),
     };
     let grid = EdgeGrid::new(part, 2.0 * geom::SCALE, 0.0);
     let pieces: Vec<Piece> = clip(&lines, &grid).into_iter().filter(|c| c.points.len() >= 2).collect();
@@ -189,6 +199,40 @@ fn fill_part(part: &Shape, p: &Sparse) -> Vec<Vec<Pt>> {
         }
     }
     joined
+}
+
+/// Adaptive and support cubic (Orca's `FillAdaptive::Filler`): the octree's lines on the layer, cut to the part,
+/// each kept as its ends alone, joined where they meet as Ts (`adaptive::hooks`), then along the edge.
+fn adaptive(part: &Shape, p: &Sparse) -> Vec<Vec<Pt>> {
+    let Some(octree) = p.octree else { return Vec::new() };
+    let lines: Vec<Vec<(f64, f64)>> = octree
+        .lines(p.z)
+        .into_iter()
+        .map(|l| {
+            l.iter()
+                .map(|&(x, y)| (p.origin.0 + x as f64 * UNITS_PER_NM, p.origin.1 + y as f64 * UNITS_PER_NM))
+                .collect()
+        })
+        .collect();
+    let grid = EdgeGrid::new(part, 2.0 * geom::SCALE, 0.0);
+    let mut pieces: Vec<Piece> = clip(&lines, &grid).into_iter().filter(|c| c.points.len() >= 2).collect();
+    for piece in &mut pieces {
+        if piece.points.len() > 2 {
+            let last = piece.points[piece.points.len() - 1];
+            piece.points.truncate(1);
+            piece.points.push(last);
+        }
+    }
+    let spacing = p.spacing * geom::SCALE;
+    let (hook, hook_max) = (p.anchor.min(p.anchor_max) * geom::SCALE, p.anchor_max * geom::SCALE);
+    let pieces = crate::adaptive::hooks(pieces, part, spacing, hook, hook_max);
+    if pieces.is_empty() {
+        return Vec::new();
+    }
+    if p.anchor_max < 0.05 {
+        return pieces.into_iter().map(|c| c.points).collect();
+    }
+    connect(pieces, part, spacing, hook, hook_max)
 }
 
 /// Crosshatch and gyroid: their pattern in the object's frame, cut to the part, short bits dropped, joined.
@@ -821,7 +865,7 @@ pub(crate) struct End {
 }
 
 /// A stretch of pattern inside the area, and where each of its ends meets the edge (none if it ends inside).
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub(crate) struct Piece {
     pub(crate) points: Vec<Pt>,
     pub(crate) ends: [Option<End>; 2],
@@ -1976,6 +2020,7 @@ mod tests {
             anchor: 4.0 * 0.407,
             anchor_max: 20.0,
             trees: &[],
+            octree: None,
             lattice_angles: [-45.0, 45.0],
         }
     }
