@@ -3545,6 +3545,30 @@ fn fuzzy_skin_on_arachne_walls_in_each_mode() {
     assert!(within(combined, 616.0, 0.01), "combined {combined} mm³");
 }
 
+/// Concentric sparse infill and concentric ironing are Orca's classic concentric fill (`FillConcentric` without
+/// Arachne: that takes only full-density solid surfaces): a 30 mm block 10 mm high with a 10 mm one 6 mm high on it,
+/// against native Orca 2.5.1, takes the sparse infill's plastic within 0.1 % (1,258.2 mm³) and its time within 1 %
+/// (146.5 s), and the ironing's plastic within 0.1 % (16.69 mm³) and time exactly (189.8 s); no note says they print
+/// otherwise.
+#[test]
+fn concentric_infill_and_ironing_print_as_loops() {
+    let stl = boxes_stl(&[([100.0, 100.0, 0.0], [130.0, 130.0, 10.0]), ([110.0, 110.0, 10.0], [120.0, 120.0, 16.0])]);
+    let run = |process: &str, role: Role| {
+        let json = format!(r#"{{"process": {{{process}}}}}"#);
+        let settings = setup::read(&json).unwrap().settings;
+        let out = slice(&[Input { name: "step.stl", bytes: &stl }], &settings, &Options::default()).unwrap();
+        assert!(out.fallbacks.is_empty(), "{:?}", out.fallbacks);
+        out.stats.features[Role::ALL.iter().position(|&r| r == role).unwrap()]
+    };
+    let within = |got: f64, want: f64, share: f64| (got - want).abs() < want * share;
+    let sparse = run(r#""sparse_infill_pattern": "concentric""#, Role::SparseInfill);
+    assert!(within(sparse.volume, 1258.2, 0.001), "{} mm³", sparse.volume);
+    assert!(within(sparse.time, 146.5, 0.01), "{} s", sparse.time);
+    let ironing = run(r#""ironing_type": "top", "ironing_pattern": "concentric""#, Role::Ironing);
+    assert!(within(ironing.volume, 16.69, 0.001), "{} mm³", ironing.volume);
+    assert!(within(ironing.time, 189.8, 0.002), "{} s", ironing.time);
+}
+
 /// Concentric top, bottom and internal solid surfaces print as Orca's Arachne loops, not zig-zag with a note: a
 /// cube's plastic stays within 2 % of the lines' (a Benchy is within 0.1 % of native Orca 2.5.1's).
 #[test]
@@ -3568,4 +3592,39 @@ fn concentric_surfaces_print_as_loops() {
         lines.stats.volume
     );
     assert_ne!(loops.gcode, lines.gcode);
+}
+
+#[test]
+fn after_a_farthest_point_photo_the_next_layer_starts_as_the_last_one_ended() {
+    // Orca's writer forgets where the nozzle is when it takes the timelapse photo, and learns it again at the next
+    // travel. With the farthest-point timelapse, a cube's photo comes mid-layer, where its outer wall ends at its far
+    // corner, and the travels after it tell the writer where the nozzle is, so the wrapping detection's lift at the next
+    // layer's start goes up in a spiral. A round wall's arcs end nowhere near its far point, so its photo comes after
+    // the layer, and the next layer's lift goes straight up. Here a cube stands on a cylinder: each layer's lift
+    // follows the photo of the layer before it, not its own.
+    let tube = String::from_utf8(tube_stl(8.0, 0.0, 5.0, 96)).unwrap();
+    let cube = String::from_utf8(boxes_stl(&[([124.0, 124.0, 5.0], [132.0, 132.0, 10.0])])).unwrap();
+    let model =
+        format!("{}{}", tube.trim_end().trim_end_matches("endsolid tube"), cube.trim_start_matches("solid boxes\n"));
+    let options = Options { arrange: false, thumbnail: false, ..Options::default() };
+    let setup = r#"{"process": {"enable_wrapping_detection": "1", "farthest_point_timelapse": "1"}}"#;
+    let settings = setup::read(setup).unwrap().settings;
+    let gcode = slice(&[Input { name: "model.stl", bytes: model.as_bytes() }], &settings, &options).unwrap().gcode;
+    let gcode = String::from_utf8(gcode).unwrap();
+    let layers: Vec<&str> = gcode.split("; CHANGE_LAYER\n").skip(1).collect();
+    // Each layer's photo taken mid-layer, and its start's lift in a spiral.
+    let pattern: Vec<(bool, bool)> = layers
+        .iter()
+        .map(|l| {
+            let start = &l[..l.find("M624").unwrap()];
+            (l.contains("M971 S11 C10 O0"), start.contains("G17\nG3 Z") || start.contains("G17\nG2 Z"))
+        })
+        .collect();
+    assert_eq!(layers.len(), 50);
+    // The cylinder's walls take their photos after the layer (its top surface's lines may end near the point), the
+    // cube's mid-layer: some layers start otherwise than they themselves end.
+    assert!(pattern[..20].iter().all(|p| !p.0) && pattern[25..].iter().all(|p| p.0), "{pattern:?}");
+    for k in 1..layers.len() {
+        assert_eq!(pattern[k].1, pattern[k - 1].0, "layer {k}");
+    }
 }

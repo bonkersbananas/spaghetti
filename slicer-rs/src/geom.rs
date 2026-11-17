@@ -415,6 +415,49 @@ pub fn clip_clipper2(
     }
 }
 
+/// Orca's `union_pt_chained_outside_in`: closed loops resolved by Clipper2's even-odd union into the tree of what lies
+/// inside what, then read from the outside in, each loop followed by those inside it (a hole turned counter-clockwise),
+/// the loops of one level in a nearest-first chain from the first.
+pub fn union_chained_outside_in(paths: &[Contour]) -> Vec<Contour> {
+    let subjects: clipper2_rs::Paths64 =
+        paths.iter().map(|c| c.iter().map(|p| clipper2_rs::Point64::new(p.x as i64, p.y as i64)).collect()).collect();
+    let mut clipper = clipper2_rs::Clipper64::new();
+    clipper.set_preserve_collinear(false);
+    clipper.add_subject(&subjects);
+    let Ok((tree, _)) = clipper.execute_tree(clipper2_rs::ClipType::Union, clipper2_rs::FillRule::EvenOdd) else {
+        return paths.to_vec();
+    };
+    fn walk(tree: &clipper2_rs::PolyTree64, ids: &[usize], out: &mut Vec<Contour>) {
+        let loops: Vec<Contour> =
+            ids.iter().map(|&id| tree.node(id).polygon.iter().map(|p| pt(p.x as i32, p.y as i32)).collect()).collect();
+        // Chained nearest first, from the first loop's first point.
+        let mut left: Vec<usize> = (0..ids.len()).collect();
+        let mut at = left.first().map(|&k| loops[k].first().copied().unwrap_or(pt(0, 0)));
+        while let Some(here) = at {
+            let (best, _) = left
+                .iter()
+                .enumerate()
+                .map(|(i, &k)| (i, dist(loops[k].first().copied().unwrap_or(here), here)))
+                .fold((0, f64::MAX), |b, c| if c.1 < b.1 { c } else { b });
+            let k = left.remove(best);
+            let mut one = loops[k].clone();
+            let hole = area2(&one) < 0;
+            if hole {
+                one.reverse();
+            }
+            out.push(one);
+            walk(tree, &tree.node(ids[k]).children, out);
+            at = left.first().map(|_| loops[k].first().copied().unwrap_or(here));
+            if left.is_empty() {
+                break;
+            }
+        }
+    }
+    let mut out = Vec::new();
+    walk(&tree, tree.roots(), &mut out);
+    out
+}
+
 /// The parts of open paths outside an area (Clipper's `diff_pl`), with Clipper2's boolean of open subjects.
 pub fn difference_open(lines: &[Vec<Pt>], area: &Shapes) -> Vec<Vec<Pt>> {
     let paths = |contours: &mut dyn Iterator<Item = &Vec<Pt>>| -> clipper2_rs::Paths64 {

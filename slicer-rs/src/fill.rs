@@ -63,6 +63,8 @@ pub enum Pattern {
     /// Lines one way, every other one leaning by the gap between lines, turned a quarter every other layer, each
     /// joined to the next where it is near (`FillLine`).
     Line,
+    /// Loops drawn in from the region's edge a spacing over its density apart (`FillConcentric`, `concentric.rs`).
+    Concentric,
 }
 
 impl Pattern {
@@ -88,6 +90,7 @@ impl Pattern {
             "3dhoneycomb" => Some(Pattern::Honeycomb3D),
             "tpmsd" => Some(Pattern::TpmsD),
             "line" => Some(Pattern::Line),
+            "concentric" => Some(Pattern::Concentric),
             "adaptivecubic" => Some(Pattern::AdaptiveCubic),
             "supportcubic" => Some(Pattern::SupportCubic),
             _ => None,
@@ -127,6 +130,8 @@ pub struct Sparse<'a> {
     pub resolution: f64,
     /// The layer's height, mm (3D honeycomb's cells are sliced by it).
     pub layer_height: f64,
+    /// mm a concentric loop stops short of where it started (`seam_gap`).
+    pub loop_clip: f64,
 }
 
 /// The infill of `area`, each of its shapes grown by `grow` mm first (Orca's overlap with the walls, less half a
@@ -134,6 +139,20 @@ pub struct Sparse<'a> {
 pub fn sparse(area: &Shapes, grow: f64, p: &Sparse) -> Vec<Contour> {
     if matches!(p.pattern, Pattern::Rectilinear | Pattern::AlignedRectilinear) {
         return rectilinear(area, grow, p);
+    }
+    if p.pattern == Pattern::Concentric {
+        // Orca's `Fill::fill_surface` draws the fill area (which reaches the walls' overlap) in by half a spacing,
+        // and the outermost loop runs on its edge: where the lines' middles may go, which is `grow`.
+        if p.density <= 0.0 || p.spacing <= 0.0 {
+            return Vec::new();
+        }
+        let mut out = Vec::new();
+        for shape in area {
+            for region in geom::offset(&vec![shape.clone()], grow) {
+                out.extend(crate::concentric::fill(&region, p.spacing, p.density, true, p.loop_clip));
+            }
+        }
+        return out;
     }
     let mut out = Vec::new();
     for shape in area {
@@ -180,6 +199,7 @@ pub fn support_grid(shape: &Shape, angle: f64, origin: (f64, f64), spacing: f64,
         size: (0.0, 0.0),
         resolution: 0.0,
         layer_height: 0.0,
+        loop_clip: 0.0,
     };
     // Orca's box is the shape's own here: its support filler has no overlap with walls.
     let lines = multilines_across(&shape[0], 0, angle as f32, &p);
@@ -221,6 +241,7 @@ fn fill_part(part: &Shape, p: &Sparse) -> Vec<Vec<Pt>> {
         Pattern::OctagramSpiral => return plane_path(part, crate::plane_path::Curve::OctagramSpiral, p),
         Pattern::Honeycomb3D => return honeycomb3d(part, p),
         Pattern::Line => return line(part, p),
+        Pattern::Concentric => unreachable!("filled by `sparse`"),
     };
     let grid = EdgeGrid::new(part, 2.0 * geom::SCALE, 0.0);
     let pieces: Vec<Piece> = clip(&lines, &grid).into_iter().filter(|c| c.points.len() >= 2).collect();
@@ -2394,6 +2415,7 @@ mod tests {
             size: (0.0, 0.0),
             resolution: 0.0125,
             layer_height: 0.2,
+            loop_clip: 0.0,
         }
     }
 
