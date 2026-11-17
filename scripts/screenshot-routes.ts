@@ -474,6 +474,30 @@ async function ideaWithLink(page: Page, title: string, note: string) {
   await page.waitForTimeout(600);
 }
 
+/** An idea whose whole note is one link, as a share leaves it, with its page open. */
+async function ideaWithMirrorLink(page: Page, link: string, title?: string) {
+  await page.route(/\/api\/links\/preview\?url=/, (route) =>
+    route.fulfill({
+      json: {
+        url: link,
+        title: title ?? "Infinity Heart Balloon | Pop Art Wall Decor",
+        site: title ? "IKEA" : "MakerWorld",
+      },
+    }),
+  );
+  const id = crypto.randomUUID();
+  modelItems.push(id);
+  const headers = { Origin: new URL(page.url()).origin };
+  await page.request.post("/api/items", { headers, data: { id, note: link } });
+  await openIdea(page, id);
+  await page
+    .getByRole("link")
+    .filter({ hasText: /Model on|ikea|Skadis|3dgo/ })
+    .first()
+    .waitFor();
+  await page.waitForTimeout(600);
+}
+
 async function removeLinkIdeas(page: Page) {
   await page.unrouteAll({ behavior: "ignoreErrors" });
   await removeModelItems(page);
@@ -2790,6 +2814,25 @@ export const shots: Shot[] = [
     path: "/ideas",
     prepare: async (page) => {
       await ideaWithLink(page, "Flexi Mini Hummingbird", FLEXI_LINK);
+    },
+    cleanup: removeLinkIdeas,
+  },
+  {
+    // A 3dgo.app link (a mirror of MakerWorld) as the whole note, on an idea with no title: its address names the
+    // MakerWorld model, so the card is the model's, once.
+    name: "idea-3dgo-link",
+    path: "/ideas",
+    prepare: async (page) => {
+      await ideaWithMirrorLink(page, "https://3dgo.app/models/makerworld/2487194");
+    },
+    cleanup: removeLinkIdeas,
+  },
+  {
+    // A note that is only a link to a site the app doesn't know: shown once, as its card.
+    name: "idea-plain-link",
+    path: "/ideas",
+    prepare: async (page) => {
+      await ideaWithMirrorLink(page, "https://www.ikea.com/se/en/p/skadis-pegboard-white-20320802/", "Skadis pegboard");
     },
     cleanup: removeLinkIdeas,
   },
