@@ -46,6 +46,11 @@ pub enum Pattern {
     /// support cubic's are small only under the tops.
     AdaptiveCubic,
     SupportCubic,
+    /// Lines one way, turned a quarter every other layer, joined along the edge in Orca's sweep from left to right
+    /// (`FillRectilinear::fill_surface_by_lines`, `monotonic.rs`'s `rectilinear`).
+    Rectilinear,
+    /// Rectilinear's lines, the same way on every layer (`FillAlignedRectilinear`).
+    AlignedRectilinear,
 }
 
 impl Pattern {
@@ -61,6 +66,10 @@ impl Pattern {
             "lateral-lattice" => Some(Pattern::LateralLattice),
             "honeycomb" => Some(Pattern::Honeycomb),
             "lightning" => Some(Pattern::Lightning),
+            // "zig-zag" is Bambu Studio's name for rectilinear, which Orca reads as that (Orca's own zig-zag is
+            // "zigzag", not ported).
+            "rectilinear" | "zig-zag" => Some(Pattern::Rectilinear),
+            "alignedrectilinear" => Some(Pattern::AlignedRectilinear),
             "adaptivecubic" => Some(Pattern::AdaptiveCubic),
             "supportcubic" => Some(Pattern::SupportCubic),
             _ => None,
@@ -99,6 +108,9 @@ pub struct Sparse<'a> {
 /// The infill of `area`, each of its shapes grown by `grow` mm first (Orca's overlap with the walls, less half a
 /// spacing: where the lines' middles may go), as polylines each printed in one go.
 pub fn sparse(area: &Shapes, grow: f64, p: &Sparse) -> Vec<Contour> {
+    if matches!(p.pattern, Pattern::Rectilinear | Pattern::AlignedRectilinear) {
+        return rectilinear(area, grow, p);
+    }
     let mut out = Vec::new();
     for shape in area {
         let mut lines = Vec::new();
@@ -176,6 +188,7 @@ fn fill_part(part: &Shape, p: &Sparse) -> Vec<Vec<Pt>> {
             p.trees.iter().map(|line| line.iter().map(|q| (q.x as f64, q.y as f64)).collect()).collect()
         }
         Pattern::AdaptiveCubic | Pattern::SupportCubic => return adaptive(part, p),
+        Pattern::Rectilinear | Pattern::AlignedRectilinear => unreachable!("filled by `rectilinear`"),
     };
     let grid = EdgeGrid::new(part, 2.0 * geom::SCALE, 0.0);
     let pieces: Vec<Piece> = clip(&lines, &grid).into_iter().filter(|c| c.points.len() >= 2).collect();
@@ -199,6 +212,38 @@ fn fill_part(part: &Shape, p: &Sparse) -> Vec<Vec<Pt>> {
         }
     }
     joined
+}
+
+/// Rectilinear and aligned rectilinear (Orca's `FillRectilinear::fill_surface` with one line, `fill_surface_by_lines`):
+/// each shape grown by Orca's overlap (`grow` and half a spacing), filled as `monotonic::rectilinear` fills it, joined
+/// along the edge at any length (up to three spacings above 80 % density, not at all without anchors).
+fn rectilinear(area: &Shapes, grow: f64, p: &Sparse) -> Vec<Contour> {
+    if p.density <= 0.0 || p.spacing <= 0.0 {
+        return Vec::new();
+    }
+    // Orca's `_infill_direction` (floats): the infill angle, a quarter turn on odd layers but for aligned
+    // rectilinear, and a quarter turn.
+    let quarter = std::f32::consts::FRAC_PI_2;
+    let mut angle = p.angle.to_radians() as f32;
+    if p.pattern == Pattern::Rectilinear && p.layer % 2 == 1 {
+        angle += quarter;
+    }
+    let angle = (angle + quarter) as f64;
+    let link_max = if p.anchor_max < 0.05 {
+        None
+    } else if p.density > 0.8 {
+        Some(3.0 * p.spacing)
+    } else {
+        Some(0.0)
+    };
+    let mut out = Vec::new();
+    for shape in area {
+        for part in geom::offset(&vec![shape.clone()], grow + 0.5 * p.spacing) {
+            let lines = crate::monotonic::rectilinear_linked(&part, angle, p.origin, (p.spacing, p.density), link_max);
+            out.extend(lines.into_iter().filter(|l| l.len() >= 2));
+        }
+    }
+    out
 }
 
 /// Adaptive and support cubic (Orca's `FillAdaptive::Filler`): the octree's lines on the layer, cut to the part,
