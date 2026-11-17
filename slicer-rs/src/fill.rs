@@ -288,7 +288,8 @@ fn plane_path(part: &Shape, curve: crate::plane_path::Curve, p: &Sparse) -> Vec<
     }
     // Orca's object size in whole nanometres.
     let size = ((p.size.0 * 1e6) as i64, (p.size.1 * 1e6) as i64);
-    let points = crate::plane_path::curve(curve, bb, size, angle, (p.spacing, p.density), p.resolution);
+    let lay = crate::plane_path::Lay::Sparse;
+    let points = crate::plane_path::curve(curve, lay, bb, size, angle, (p.spacing, p.density), p.resolution);
     if points.len() < 2 {
         return Vec::new();
     }
@@ -302,6 +303,56 @@ fn plane_path(part: &Shape, curve: crate::plane_path::Curve, p: &Sparse) -> Vec<
         return pieces.into_iter().map(|c| c.points).collect();
     }
     connect(pieces, part, p.spacing * geom::SCALE, p.anchor.min(p.anchor_max) * geom::SCALE, p.anchor_max * geom::SCALE)
+}
+
+/// A top or bottom surface in one of Orca's plane-path curves (`FillPlanePath::_fill_surface_single` for a solid
+/// surface): `shape` (its area into the walls) drawn in by half a `spacing` (mm), each part filled with the curve at
+/// full density, centred as `center_of_surface_pattern` asks, in the object's frame turned by the solid infill direction
+/// and a quarter (never alternated), cut to the part and chained (Orca's `chain_polylines`, from nowhere in particular).
+/// `object` is the object's centre on the plate (units) and size (mm).
+pub fn surface_curve(
+    shape: &Shape,
+    curve: crate::plane_path::Curve,
+    spacing: f64,
+    (origin, size): ((f64, f64), (f64, f64)),
+    s: &crate::config::Settings,
+) -> Vec<Vec<Pt>> {
+    use crate::plane_path::Lay;
+    let lay = match s.surface_pattern_center.as_str() {
+        "each_model" | "each_assembly" => Lay::EachModel,
+        _ => Lay::EachSurface,
+    };
+    let angle = (s.solid_infill_direction.to_radians() as f32 + std::f32::consts::FRAC_PI_2) as f64;
+    let frame = Frame::new(origin, angle);
+    let size = ((size.0 * 1e6) as i64, (size.1 * 1e6) as i64);
+    let mut out = Vec::new();
+    for part in geom::offset(&vec![shape.clone()], -0.5 * spacing) {
+        let mut bb = [i64::MAX, i64::MAX, i64::MIN, i64::MIN];
+        for &q in &part[0] {
+            let (x, y) = frame.to(q);
+            let (x, y) = (x.round() as i64, y.round() as i64);
+            bb = [bb[0].min(x), bb[1].min(y), bb[2].max(x), bb[3].max(y)];
+        }
+        let points = crate::plane_path::curve(curve, lay, bb, size, angle, (spacing, 1.0), s.resolution);
+        if points.len() < 2 {
+            continue;
+        }
+        let line: Vec<(f64, f64)> = points.into_iter().map(|(x, y)| frame.from((x as f64, y as f64))).collect();
+        let grid = EdgeGrid::new(&part, 2.0 * geom::SCALE, 0.0);
+        let pieces: Vec<Vec<Pt>> =
+            clip(&[line], &grid).into_iter().map(|c| c.points).filter(|l| l.len() >= 2).collect();
+        let ends: Vec<(Pt, Pt)> = pieces.iter().map(|l| (l[0], l[l.len() - 1])).collect();
+        let mut taken: Vec<Option<Vec<Pt>>> = pieces.into_iter().map(Some).collect();
+        for (k, back) in crate::order::chain(&ends, &vec![true; ends.len()], None, false) {
+            if let Some(mut l) = taken[k].take() {
+                if back {
+                    l.reverse();
+                }
+                out.push(l);
+            }
+        }
+    }
+    out
 }
 
 /// 3D honeycomb (`honeycomb3d.rs`): the pattern in the object's frame, turned by the infill direction alone (a

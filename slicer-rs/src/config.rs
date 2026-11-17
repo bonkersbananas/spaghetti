@@ -112,6 +112,12 @@ pub struct Settings {
     /// Degrees from the X axis.
     pub infill_direction: f64,
     pub solid_infill_direction: f64,
+    /// Where top and bottom surfaces in a curve pattern are centred (`center_of_surface_pattern`: `each_surface`,
+    /// `each_model` or `each_assembly`).
+    pub surface_pattern_center: String,
+    /// The order top and bottom surfaces in Archimedean chords or an octagram spiral print in
+    /// (`top_surface_fill_order`, `bottom_surface_fill_order`): `default` chains them, which is all ours does.
+    pub surface_fill_orders: [String; 2],
     pub outer_wall_width: f64,
     pub inner_wall_width: f64,
     pub sparse_infill_width: f64,
@@ -912,6 +918,8 @@ impl Settings {
             sparse_density: if spiral { 0.0 } else { share("sparse_infill_density") },
             infill_direction: p.float("infill_direction"),
             solid_infill_direction: p.float("solid_infill_direction"),
+            surface_pattern_center: p.text("center_of_surface_pattern").to_string(),
+            surface_fill_orders: ["top_surface_fill_order", "bottom_surface_fill_order"].map(|k| p.text(k).to_string()),
             outer_wall_width: width("outer_wall_line_width"),
             inner_wall_width: width("inner_wall_line_width"),
             sparse_infill_width: width("sparse_infill_line_width"),
@@ -1255,8 +1263,21 @@ impl Settings {
             ("bottom surfaces", &self.bottom_surface_pattern),
             ("solid infill", &self.internal_solid_infill_pattern),
         ] {
-            if !matches!(pattern.as_str(), "monotonic" | "monotonicline" | "zig-zag" | "rectilinear" | "") {
+            let curve = what != "solid infill"
+                && matches!(pattern.as_str(), "hilbertcurve" | "archimedeanchords" | "octagramspiral");
+            if !curve && !matches!(pattern.as_str(), "monotonic" | "monotonicline" | "zig-zag" | "rectilinear" | "") {
                 out.push(format!("{pattern} {what} printed as zig-zag"));
+            }
+        }
+        for ((what, pattern), order) in
+            [("top surfaces", &self.top_surface_pattern), ("bottom surfaces", &self.bottom_surface_pattern)]
+                .into_iter()
+                .zip(&self.surface_fill_orders)
+        {
+            if matches!(pattern.as_str(), "archimedeanchords" | "octagramspiral")
+                && !matches!(order.as_str(), "default" | "")
+            {
+                out.push(format!("{pattern} {what} printed in the nearest order, not {order}"));
             }
         }
         if self.wall_generator == "arachne" {

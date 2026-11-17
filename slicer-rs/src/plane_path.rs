@@ -13,7 +13,7 @@
 //! (`sparse_infill_smooth_factor`) isn't ported.
 
 /// Which curve.
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Curve {
     ArchimedeanChords,
     Hilbert,
@@ -179,12 +179,25 @@ fn octagram_spiral(max_x: i64, max_y: i64, out: &mut Output) {
     }
 }
 
-/// The curve for one part of the area, as Orca's `FillPlanePath::_fill_surface_single` lays it for sparse infill:
-/// `part_box` is the part's box in the object's turned frame (nm, its points rounded as Orca turns them), `size` the object's (nm, Orca's `m_size`), `angle`
-/// the frame's turn (radians, Orca's `_infill_direction`), `spacing` (mm) over `density` between lines, `resolution`
-/// mm. Points in the turned frame, nm, not yet cut to the part.
+/// Over which box a curve is laid (Orca's choice in `FillPlanePath::_fill_surface_single`).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum Lay {
+    /// Sparse infill: the object's box, points far outside the part dropped (Orca's `InfillPolylineClipper`).
+    Sparse,
+    /// A solid surface centred on itself (`center_of_surface_pattern` `each_surface`): the part's own box.
+    EachSurface,
+    /// A solid surface centred on its object (`each_model`, and here also `each_assembly`): the object's box.
+    EachModel,
+}
+
+/// The curve for one part of the area, as Orca's `FillPlanePath::_fill_surface_single` lays it: `part_box` is the
+/// part's box in the object's turned frame (nm, its points rounded as Orca turns them), `size` the object's (nm,
+/// Orca's `m_size`), `angle` the frame's turn (radians, Orca's `_infill_direction`), `spacing` (mm) over `density`
+/// between lines, `resolution` mm. Points in the turned frame, nm, not yet cut to the part.
+#[allow(clippy::too_many_arguments)]
 pub fn curve(
     curve: Curve,
+    lay: Lay,
     part_box: [i64; 4],
     size: (i64, i64),
     angle: f64,
@@ -193,23 +206,24 @@ pub fn curve(
 ) -> Vec<(i64, i64)> {
     // The object's box about its centre, turned into the frame.
     let object = Box2 { min: (-size.0 / 2, -size.1 / 2), max: (size.0 / 2, size.1 / 2) }.rotated(-angle);
-    let centered = curve != Curve::Hilbert;
-    let shift = if centered { object.center() } else { object.min };
-    // The part's box grown by a hair and a spacing: points beyond it are dropped where the curve doesn't need them.
+    // The part's box grown by a hair and a spacing.
     let epsilon = 100;
     let grow = (spacing * 1e6).round() as i64 + epsilon;
-    let snug = Box2 {
-        min: (part_box[0] - grow - shift.0, part_box[1] - grow - shift.1),
-        max: (part_box[2] + grow - shift.0, part_box[3] + grow - shift.1),
-    };
-    let bb = Box2 {
-        min: (object.min.0 - shift.0, object.min.1 - shift.1),
-        max: (object.max.0 - shift.0, object.max.1 - shift.1),
-    };
+    let snug = Box2 { min: (part_box[0] - grow, part_box[1] - grow), max: (part_box[2] + grow, part_box[3] + grow) };
+    let laid = if lay == Lay::EachSurface { snug } else { object };
+    let centered = curve != Curve::Hilbert;
+    let shift = if centered { laid.center() } else { laid.min };
+    let bb =
+        Box2 { min: (laid.min.0 - shift.0, laid.min.1 - shift.1), max: (laid.max.0 - shift.0, laid.max.1 - shift.1) };
     let between = spacing * 1e6 / (density as f32 as f64);
     let cell = |v: i64| (v as f64 / between).ceil() as i64;
     let (min_x, min_y, max_x, max_y) = (cell(bb.min.0), cell(bb.min.1), cell(bb.max.0), cell(bb.max.1));
-    let mut out = Output { scale: between, clip: Some(snug), out: Vec::new(), sides_prev: 0, sides_this: 0 };
+    // Sparse infill drops the points beyond the part's box where the curve doesn't need them.
+    let clip = (lay == Lay::Sparse).then_some(Box2 {
+        min: (snug.min.0 - shift.0, snug.min.1 - shift.1),
+        max: (snug.max.0 - shift.0, snug.max.1 - shift.1),
+    });
+    let mut out = Output { scale: between, clip, out: Vec::new(), sides_prev: 0, sides_this: 0 };
     match curve {
         Curve::ArchimedeanChords => archimedean_chords(max_x, max_y, resolution * 1e6 / between, &mut out),
         Curve::Hilbert => hilbert((min_x, min_y), (max_x, max_y), &mut out),
