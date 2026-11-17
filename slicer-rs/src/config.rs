@@ -1376,10 +1376,13 @@ impl Settings {
             }
         }
         // (Spiral vase mode keeps the classic walls, so these notes would describe walls never made.)
-        if self.wall_generator == "arachne" && !self.spiral_mode {
-            if self.only_one_wall_top && self.top_surface_expansion > 0.0 && self.top_surface_density > 0.0 {
-                out.push("arachne walls over a top surface printed with all their walls (only_one_wall_top with top_surface_expansion)".into());
-            }
+        if self.wall_generator == "arachne"
+            && !self.spiral_mode
+            && self.only_one_wall_top
+            && self.top_surface_expansion > 0.0
+            && self.top_surface_density > 0.0
+        {
+            out.push("arachne walls over a top surface printed with all their walls (only_one_wall_top with top_surface_expansion)".into());
         }
         if self.elephant_foot > 0.0 && self.elephant_foot_layers > 1 && self.support.raft_layers <= 0 {
             out.push("elephant's foot compensated on the first layer only".into());
