@@ -94,11 +94,12 @@ jobs:
           grep -q '; FEATURE: Support interface' /tmp/supports.gcode
           node bench/wasm-node.mjs target/wasm32-unknown-unknown/release/spaghetti_slicer.wasm /tmp/supports-wasm.gcode.3mf --setup /tmp/supports.json tests/models/bridge.stl
           cmp /tmp/supports.gcode.3mf /tmp/supports-wasm.gcode.3mf
-      - name: The same, with tree supports under the bridge
+      - name: The same, with tree supports under the bridge (their loops as arcs)
         run: |
           echo '{"process": {"enable_support": "1", "support_type": "tree(auto)"}}' > /tmp/trees.json
           ./target/release/spaghetti-slicer --setup /tmp/trees.json tests/models/bridge.stl -o /tmp/trees.gcode.3mf --gcode /tmp/trees.gcode
           grep -q '; FEATURE: Support$' /tmp/trees.gcode
+          grep -qE '^G[23] X[0-9.]+ Y[0-9.]+ I-?[0-9.]+ J-?[0-9.]+ E[0-9.]+$' /tmp/trees.gcode
           node bench/wasm-node.mjs target/wasm32-unknown-unknown/release/spaghetti_slicer.wasm /tmp/trees-wasm.gcode.3mf --setup /tmp/trees.json tests/models/bridge.stl
           cmp /tmp/trees.gcode.3mf /tmp/trees-wasm.gcode.3mf
       - name: The same, for the 0.2 mm nozzle (its presets as a setup in WebAssembly)
@@ -115,3 +116,10 @@ jobs:
           grep -qE '^G1 X[0-9.]+ Y[0-9.]+ Z[0-9.]+ F60000$' /tmp/lift.gcode
           node bench/wasm-node.mjs target/wasm32-unknown-unknown/release/spaghetti_slicer.wasm /tmp/lift-wasm.gcode.3mf --setup /tmp/lift.json tests/models/bridge.stl
           cmp /tmp/lift.gcode.3mf /tmp/lift-wasm.gcode.3mf
+      - name: The same, with its top surfaces ironed
+        run: |
+          echo '{"process": {"ironing_type": "top"}}' > /tmp/iron.json
+          ./target/release/spaghetti-slicer --setup /tmp/iron.json tests/models/bridge.stl -o /tmp/iron.gcode.3mf --gcode /tmp/iron.gcode
+          grep -q '; FEATURE: Ironing$' /tmp/iron.gcode
+          node bench/wasm-node.mjs target/wasm32-unknown-unknown/release/spaghetti_slicer.wasm /tmp/iron-wasm.gcode.3mf --setup /tmp/iron.json tests/models/bridge.stl
+          cmp /tmp/iron.gcode.3mf /tmp/iron-wasm.gcode.3mf

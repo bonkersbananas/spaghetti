@@ -3,7 +3,7 @@
 //! the layers around it. Every pass is per layer and runs in parallel; a pass only reads what earlier passes made.
 
 use crate::bridges;
-use crate::config::Settings;
+use crate::config::{ArcFitting, Settings};
 use crate::fill;
 use crate::geom::{self, Contour, Shapes};
 use crate::lightning;
@@ -26,6 +26,8 @@ pub enum Role {
     SolidInfill,
     SparseInfill,
     TopSurface,
+    /// Thin lines over a top surface that smooth it (Orca's `erIroning`, `make_ironing`).
+    Ironing,
     /// Loops round an object's first layer that hold it to the plate (`brim.rs`).
     Brim,
     /// Normal supports' columns and their dense interfaces with the object (`support.rs`).
@@ -36,7 +38,7 @@ pub enum Role {
 }
 
 impl Role {
-    pub const ALL: [Role; 14] = [
+    pub const ALL: [Role; 15] = [
         Role::InnerWall,
         Role::OuterWall,
         Role::OverhangWall,
@@ -47,6 +49,7 @@ impl Role {
         Role::SolidInfill,
         Role::SparseInfill,
         Role::TopSurface,
+        Role::Ironing,
         Role::Brim,
         Role::Support,
         Role::SupportInterface,
@@ -65,6 +68,7 @@ impl Role {
             Role::SolidInfill => "Internal solid infill",
             Role::SparseInfill => "Sparse infill",
             Role::TopSurface => "Top surface",
+            Role::Ironing => "Ironing",
             Role::Brim => "Brim",
             Role::Support => "Support",
             Role::SupportInterface => "Support interface",
@@ -116,6 +120,8 @@ pub struct Fills {
     pub internal_bridge_angles: Vec<f64>,
     pub solid: Shapes,
     pub sparse: Shapes,
+    /// What is ironed (`ironing.rs`): each shape filled on its own, after the island's infill.
+    pub ironing: Shapes,
 }
 
 #[derive(Default)]
@@ -431,6 +437,7 @@ pub fn regions(
                     internal_bridge_angles: Vec::new(),
                     solid: grown.solid,
                     sparse: grown.sparse,
+                    ironing: Vec::new(),
                 }
             })
             .collect()
@@ -447,7 +454,10 @@ pub fn regions(
         let trees = lightning.get(g).and_then(|o| o.get(layer)).map_or(&[][..], Vec::as_slice);
         plan::sparse_lines(sparse, layer, layers.top[layer], layers.height[layer], centre, trees, s)
     };
-    let fills = bridges::bridge_over_infill(&islands, fills, candidates, layers, &lines, s);
+    let mut fills = bridges::bridge_over_infill(&islands, fills, candidates, layers, &lines, s);
+    if s.iron.on() {
+        crate::ironing::areas(&islands, &mut fills, &exposed, slices.first(), s);
+    }
 
     let mut out: Vec<LayerRegions> = islands
         .into_iter()
@@ -921,7 +931,10 @@ fn wall_group(
         }
     }
 
-    let mut region = geom::simplify_shapes(&geom::offset(slice, -w_outer / 2.0), PATH_RESOLUTION);
+    // Where Orca fits arcs it simplifies the walls' outlines to a fifth of the resolution, which keeps the points
+    // of a curve close enough for its arcs (`surface_simplify_resolution`).
+    let wall_resolution = if s.arc_fitting == ArcFitting::Enabled { 0.2 * s.resolution } else { PATH_RESOLUTION };
+    let mut region = geom::simplify_shapes(&geom::offset(slice, -w_outer / 2.0), wall_resolution);
     if around.largest && region.len() > 1 {
         crate::section::keep_largest(&mut region);
     }
@@ -952,7 +965,7 @@ fn wall_group(
             let d = if k == 1 { (w_outer + w_inner) / 2.0 } else { sp_inner };
             let next = geom::simplify_shapes(
                 &geom::offset(&geom::offset(&region, -(d + min_spacing / 2.0)), min_spacing / 2.0),
-                PATH_RESOLUTION,
+                wall_resolution,
             );
             let gap = geom::difference(&geom::offset(&region, -d / 2.0), &geom::offset(&next, d / 2.0 + safety));
             // Most of what this finds is the crumbs offsets leave in corners: too small to fill.

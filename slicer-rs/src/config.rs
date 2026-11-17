@@ -143,6 +143,8 @@ pub struct Settings {
     pub elephant_foot_layers: usize,
     /// mm: how far a contour may be simplified.
     pub resolution: f64,
+    /// Which paths Orca fits arcs to (`enable_arc_fitting`): `G2`/`G3` where its points lie on a circle (`arc_fit.rs`).
+    pub arc_fitting: ArcFitting,
     /// mm: gaps and notches in a layer's outline narrower than twice this are closed (`slice_closing_radius`).
     pub slice_closing_radius: f64,
     /// mm between the first layer and a skirt (there is none, but Orca levels the bed that far around the first
@@ -222,6 +224,8 @@ pub struct Settings {
     pub used_filaments: usize,
     pub prime_tower: bool,
     pub ironing_type: String,
+    /// Ironing over top surfaces (`ironing_*`, Orca's `make_ironing`).
+    pub iron: Ironing,
     pub fuzzy_skin: String,
     /// How the nozzle lifts on a retraction (`z_hop_types`, the filament's own first).
     pub z_hop_type: String,
@@ -314,6 +318,68 @@ pub struct Settings {
     pub aux_fan_speed: f64,
 }
 
+/// Which surfaces are ironed (`ironing_type`).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum IronWhere {
+    #[default]
+    Nowhere,
+    /// Every top surface (`top`).
+    Tops,
+    /// The object's last layer's top surfaces only (`topmost`).
+    Topmost,
+    /// Every solid surface (`solid`): tops, bottoms on the plate and solid infill.
+    Solid,
+}
+
+/// Ironing as Orca's `make_ironing` reads it: the process's values, each unless the filament gives its own
+/// (`filament_ironing_*`, "nil" where it doesn't).
+#[derive(Clone, Debug, Default)]
+pub struct Ironing {
+    pub surfaces: IronWhere,
+    /// Concentric loops (`ironing_pattern` concentric) rather than lines.
+    pub concentric: bool,
+    /// mm between the lines (`ironing_spacing`, at least Orca's `IRONING_SPACING_MIN`, 0.05 mm).
+    pub spacing: f64,
+    /// Share of a layer's flow (`ironing_flow`).
+    pub flow: f64,
+    /// mm/s (`ironing_speed`).
+    pub speed: f64,
+    /// mm the ironed area keeps off the slice's edge (`ironing_inset`; 0: half the nozzle).
+    pub inset: f64,
+    /// Degrees added to the top surface's direction (`ironing_angle`), or the direction itself with `fixed`
+    /// (`ironing_angle_fixed`).
+    pub angle: f64,
+    pub fixed: bool,
+}
+
+impl Ironing {
+    fn read(p: &Profile) -> Ironing {
+        let own = |filament_key: &str, key: &str| match p.list(filament_key).first() {
+            Some(v) if *v != "nil" && !v.is_empty() => v.trim_end_matches('%').parse().unwrap_or(0.0),
+            _ => p.float(key),
+        };
+        Ironing {
+            surfaces: match p.text("ironing_type") {
+                "top" => IronWhere::Tops,
+                "topmost" => IronWhere::Topmost,
+                "solid" => IronWhere::Solid,
+                _ => IronWhere::Nowhere,
+            },
+            concentric: p.text("ironing_pattern") == "concentric",
+            spacing: own("filament_ironing_spacing", "ironing_spacing").max(0.05),
+            flow: own("filament_ironing_flow", "ironing_flow") / 100.0,
+            speed: own("filament_ironing_speed", "ironing_speed"),
+            inset: own("filament_ironing_inset", "ironing_inset"),
+            angle: p.float("ironing_angle"),
+            fixed: p.bool("ironing_angle_fixed"),
+        }
+    }
+
+    pub fn on(&self) -> bool {
+        self.surfaces != IronWhere::Nowhere
+    }
+}
+
 /// How a spiral vase's wall rises (`spiral.rs`), by Orca's keys.
 #[derive(Clone, Debug, Default)]
 pub struct SpiralSettings {
@@ -325,6 +391,28 @@ pub struct SpiralSettings {
     /// (`spiral_starting_flow_ratio`, `spiral_finishing_flow_ratio`).
     pub starting_flow: f64,
     pub finishing_flow: f64,
+}
+
+/// Which paths Orca fits arcs to (`ArcFittingMode`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ArcFitting {
+    /// Straight lines only.
+    Disabled,
+    /// Every path the object's layers and its support print (the X2D's presets).
+    Enabled,
+    /// The sparse infill only (`sparse_infill`).
+    SparseInfill,
+}
+
+impl ArcFitting {
+    /// Orca's `enable_arc_fitting`, as its presets and its older ones (a bool) give it.
+    pub fn read(value: &str) -> ArcFitting {
+        match value.trim().to_ascii_lowercase().as_str() {
+            "1" | "true" | "enabled" => ArcFitting::Enabled,
+            "sparse_infill" => ArcFitting::SparseInfill,
+            _ => ArcFitting::Disabled,
+        }
+    }
 }
 
 /// Which of Orca's support generators makes a raft when supports are off (`SupportSettings::raft_maker`).
@@ -735,6 +823,7 @@ impl Settings {
             elephant_foot: p.float("elefant_foot_compensation"),
             elephant_foot_layers: p.int("elefant_foot_compensation_layers").max(1) as usize,
             resolution: p.float("resolution"),
+            arc_fitting: ArcFitting::read(p.text("enable_arc_fitting")),
             slice_closing_radius: p.float("slice_closing_radius"),
             skirt_distance: p.float("skirt_distance"),
             brim_width: p.float("brim_width"),
@@ -787,6 +876,7 @@ impl Settings {
             used_filaments: 0,
             prime_tower: false,
             ironing_type: text("ironing_type"),
+            iron: Ironing::read(p),
             fuzzy_skin: text("fuzzy_skin"),
             z_hop_type,
 
@@ -1044,8 +1134,8 @@ impl Settings {
         if self.elephant_foot > 0.0 && self.elephant_foot_layers > 1 && self.support.raft_layers <= 0 {
             out.push("elephant's foot compensated on the first layer only".into());
         }
-        if !matches!(self.ironing_type.as_str(), "no ironing" | "") {
-            out.push("no ironing".into());
+        if self.iron.on() && self.iron.concentric {
+            out.push("concentric ironing printed as lines".into());
         }
         if !matches!(self.fuzzy_skin.as_str(), "disabled_fuzzy" | "none" | "") {
             out.push("no fuzzy skin".into());

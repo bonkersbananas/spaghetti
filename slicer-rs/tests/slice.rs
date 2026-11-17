@@ -44,6 +44,37 @@ fn cube_stl(size: f32) -> Vec<u8> {
     text.into_bytes()
 }
 
+/// A tube standing at (128, 128): a cylinder `r` mm round a hole `hole` mm round, `h` mm high, its circles of `n`
+/// sides, as an ASCII STL.
+fn tube_stl(r: f32, hole: f32, h: f32, n: usize) -> Vec<u8> {
+    let at = |radius: f32, k: usize, z: f32| {
+        let a = 2.0 * std::f32::consts::PI * (k % n) as f32 / n as f32;
+        [128.0 + radius * a.cos(), 128.0 + radius * a.sin(), z]
+    };
+    let mut text = String::from("solid tube\n");
+    let mut facet = |c: [[f32; 3]; 3]| {
+        text.push_str(" facet normal 0 0 0\n  outer loop\n");
+        for p in c {
+            text.push_str(&format!("   vertex {} {} {}\n", p[0], p[1], p[2]));
+        }
+        text.push_str("  endloop\n endfacet\n");
+    };
+    for k in 0..n {
+        let (a0, a1, b0, b1) = (at(r, k, 0.0), at(r, k + 1, 0.0), at(hole, k, 0.0), at(hole, k + 1, 0.0));
+        let up = |p: [f32; 3]| [p[0], p[1], h];
+        facet([a0, a1, up(a1)]);
+        facet([a0, up(a1), up(a0)]);
+        facet([b1, b0, up(b0)]);
+        facet([b1, up(b0), up(b1)]);
+        facet([up(a0), up(a1), up(b1)]);
+        facet([up(a0), up(b1), up(b0)]);
+        facet([a1, a0, b0]);
+        facet([a1, b0, b1]);
+    }
+    text.push_str("endsolid tube\n");
+    text.into_bytes()
+}
+
 fn entry(file: &[u8], name: &str) -> Vec<u8> {
     let entries = zip::entries(file).expect("a zip");
     entries.iter().find(|e| e.name == name).unwrap_or_else(|| panic!("no {name}")).read().expect("readable")
@@ -455,8 +486,9 @@ fn word(line: &str, letter: char) -> Option<f64> {
 
 /// Walks every move between the printer's start and end G-code and checks what keeps a print safe: the nozzle
 /// prints only at its layer's height and never travels below it, stays on the plate, retracts and pushes back the
-/// filament in pairs, lifts by the z-hop in a spiral that stays on the plate, and every object's moves sit inside its
-/// skip labels (a brim's outside them all, as Orca prints it). Returns the labels each layer printed.
+/// filament in pairs, lifts by the z-hop in a spiral that stays on the plate, prints arcs that start and end on their
+/// circle, and every object's moves sit inside its skip labels (a brim's outside them all, as Orca prints it). Returns
+/// the labels each layer printed.
 fn check_moves(gcode: &str, s: &Settings) -> Vec<Vec<u32>> {
     let body = gcode.split("M981 S1 P20000 ;open spaghetti detector\n").nth(1).expect("the start G-code's end");
     let body = body.split("M981 S0 P20000 ; close spaghetti detector\n").next().expect("the end G-code's start");
@@ -534,6 +566,41 @@ fn check_moves(gcode: &str, s: &Settings) -> Vec<Vec<u32>> {
                 assert!(pulled > -1e-4 && pulled < s.retract_length + 1e-4, "{pulled} mm pulled back: {}", at());
             }
             (x, y, z) = (nx, ny, nz);
+        } else if (code.starts_with("G2 ") || code.starts_with("G3 ")) && word(code, 'Z').is_none() {
+            // An extrusion along an arc (Orca's arc fitting): from where the nozzle is to its end round its centre,
+            // both on the circle (to the micrometres the G-code writes), on the plate all the way, as a line prints.
+            let (nx, ny) = (word(code, 'X').unwrap_or(x), word(code, 'Y').unwrap_or(y));
+            let (i, j) = (word(code, 'I').unwrap_or(0.0), word(code, 'J').unwrap_or(0.0));
+            let e = word(code, 'E').unwrap_or(0.0);
+            assert!(e > 0.0, "an arc extrudes: {}", at());
+            let (cx, cy, r) = (x + i, y + j, i.hypot(j));
+            assert!(r > 0.0 && r <= 2000.0, "a circle of under 2 m: {}", at());
+            assert!(((nx - cx).hypot(ny - cy) - r).abs() < 0.003, "ends on its circle: {}", at());
+            let (a0, a1) = ((y - cy).atan2(x - cx), (ny - cy).atan2(nx - cx));
+            let mut sweep = a1 - a0;
+            if code.starts_with("G3") && sweep <= 0.0 {
+                sweep += 2.0 * std::f64::consts::PI;
+            }
+            if code.starts_with("G2") && sweep >= 0.0 {
+                sweep -= 2.0 * std::f64::consts::PI;
+            }
+            for k in 0..=16 {
+                let a = a0 + sweep * k as f64 / 16.0;
+                let (px, py) = (cx + r * a.cos(), cy + r * a.sin());
+                assert!(
+                    (-0.01..=s.bed[0] + 0.01).contains(&px) && (-0.01..=s.bed[1] + 0.01).contains(&py),
+                    "on the plate: {}",
+                    at()
+                );
+            }
+            assert!(at_height(z, layer_z), "prints at the layer's height: {}", at());
+            assert!(pulled.abs() < 1e-4, "prints only with the filament pushed back: {}", at());
+            if feature == "Brim" {
+                assert!(layers.len() == 1 && label.is_none(), "a brim prints first, outside the labels: {}", at());
+            } else {
+                assert!(label.is_some(), "prints only inside an object's label: {}", at());
+            }
+            (x, y) = (nx, ny);
         } else if code.starts_with("G3 ") {
             let (i, j) = (word(code, 'I').unwrap(), word(code, 'J').unwrap());
             let nz = word(code, 'Z').unwrap();
@@ -654,10 +721,21 @@ fn each_nozzle_slices_a_cube_with_bambus_presets_for_it() {
         let body = body.split("M981 S0 P20000 ; close spaghetti detector\n").next().unwrap();
         let area = std::f64::consts::PI * (settings.filament_diameter / 2.0).powi(2);
         let (mut x, mut y, mut f, mut fastest) = (f64::NAN, f64::NAN, 0.0, 0.0f64);
-        for line in body.lines().filter(|l| l.starts_with("G1 ")) {
+        for line in body.lines().filter(|l| ["G1 ", "G2 ", "G3 "].iter().any(|g| l.starts_with(g))) {
             let (nx, ny) = (word(line, 'X').unwrap_or(x), word(line, 'Y').unwrap_or(y));
             f = word(line, 'F').unwrap_or(f);
-            let length = (nx - x).hypot(ny - y);
+            let chord = (nx - x).hypot(ny - y);
+            // An arc's length: its radius by the angle it turns through (a lift's has no E).
+            let length = match (word(line, 'I'), word(line, 'J')) {
+                (Some(i), Some(j)) if !line.starts_with("G1") => {
+                    let r = i.hypot(j);
+                    let turn = (2.0 * (chord / (2.0 * r)).min(1.0).asin()).abs();
+                    let (cross, ccw) = (i * (ny - y - j) - j * (nx - x - i), line.starts_with("G3"));
+                    // The short way round where the arc turns the way its end lies, else the long way.
+                    r * if (-cross > 0.0) == ccw { turn } else { 2.0 * std::f64::consts::PI - turn }
+                }
+                _ => chord,
+            };
             if let Some(e) = word(line, 'E').filter(|&e| e > 0.0 && length > 0.05) {
                 fastest = fastest.max(e * area / length * f / 60.0);
             }
@@ -2990,4 +3068,126 @@ fn wrapping_detection_with_a_prime_tower_lifts_before_each_layers_first_visit_as
     let head = one.find("M220 B\nM220 S100\n; WIPE_TOWER_START\n").unwrap();
     assert!(one[..head].contains("G3 Z.8 I1.217 J0 P1  F60000\n"), "{}", &one[..head]);
     assert!(one[head..].starts_with("M220 B\nM220 S100\n; WIPE_TOWER_START\nG1 Z1.2\n"), "{}", &one[head..head + 80]);
+}
+
+/// Per layer (from `; Z_HEIGHT:`), the length (mm) of one feature's extrusions, and every feed rate it prints at.
+fn feature_lengths(gcode: &str, want: &str) -> (Vec<(f64, f64)>, std::collections::BTreeSet<i64>) {
+    let (mut x, mut y, mut f) = (f64::NAN, f64::NAN, 0.0);
+    let (mut feature, mut z) = ("", 0.0);
+    let mut out: Vec<(f64, f64)> = Vec::new();
+    let mut feeds = std::collections::BTreeSet::new();
+    for line in gcode.lines() {
+        if let Some(h) = line.strip_prefix("; Z_HEIGHT: ") {
+            z = h.trim().parse().unwrap();
+        } else if let Some(name) = line.strip_prefix("; FEATURE: ") {
+            feature = name;
+        }
+        let code = line.split(';').next().unwrap().trim();
+        if !code.starts_with("G1 ") {
+            continue;
+        }
+        f = word(code, 'F').unwrap_or(f);
+        let (nx, ny) = (word(code, 'X').unwrap_or(x), word(code, 'Y').unwrap_or(y));
+        if feature == want && word(code, 'E').is_some_and(|e| e > 0.0) && (nx != x || ny != y) {
+            if out.last().is_none_or(|&(lz, _)| lz != z) {
+                out.push((z, 0.0));
+            }
+            out.last_mut().unwrap().1 += (nx - x).hypot(ny - y);
+            feeds.insert(f as i64);
+        }
+        (x, y) = (nx, ny);
+    }
+    (out, feeds)
+}
+
+#[test]
+fn ironing_smooths_the_surfaces_it_is_asked_to_as_orcas_does() {
+    // Steps: a 40 mm square 5 mm high, a 24 mm one 10 mm high, a 10 mm one 15 mm high and a 9 mm one 8 mm high in a
+    // corner. Native OrcaSlicer 2.5.1 with the X2D's presets irons (mm of line, mm³): every top 10,213.0 and 30.0,
+    // the last layer's top only 611.4 and 1.8, every solid surface 72,471.6 and 213.1 (Nov 16).
+    let steps = boxes_stl(&[
+        ([108., 108., 0.], [148., 148., 5.]),
+        ([116., 116., 0.], [140., 140., 10.]),
+        ([123., 123., 0.], [133., 133., 15.]),
+        ([137., 137., 0.], [146., 146., 8.]),
+    ]);
+    let options = Options { arrange: false, thumbnail: false, ..Options::default() };
+    let ironed = |kind: &str| {
+        let json = format!(r#"{{"process": {{"ironing_type": "{kind}"}}}}"#);
+        let out = slice(&[Input { name: "steps.stl", bytes: &steps }], &setup::read(&json).unwrap().settings, &options)
+            .unwrap();
+        assert!(out.fallbacks.is_empty(), "{:?}", out.fallbacks);
+        let volume = out.stats.features[Role::ALL.iter().position(|&r| r == Role::Ironing).unwrap()].volume;
+        let (layers, feeds) = feature_lengths(&String::from_utf8(out.gcode).unwrap(), "Ironing");
+        (layers, feeds, volume)
+    };
+    let (none, _, volume) = ironed("no ironing");
+    assert!(none.is_empty() && volume == 0.0);
+    // Each step's top layer, at the ironing's 30 mm/s, a trickle of a tenth of the layer's flow over 0.15 mm.
+    let (tops, feeds, volume) = ironed("top");
+    assert_eq!(tops.iter().map(|&(z, _)| z).collect::<Vec<_>>(), [5.0, 8.0, 10.0, 15.0]);
+    assert_eq!(feeds, [1800].into());
+    let length: f64 = tops.iter().map(|&(_, l)| l).sum();
+    assert!((length - 10213.0).abs() < 10.0, "{length} mm of ironing");
+    assert!((volume - 30.0).abs() < 0.3, "{volume} mm³ of ironing");
+    let (topmost, _, _) = ironed("topmost");
+    assert_eq!(topmost.len(), 1);
+    assert!((topmost[0].0 - 15.0).abs() < 1e-9 && (topmost[0].1 - 611.4).abs() < 1.0, "{topmost:?}");
+    // Every solid surface: the first layers whole, the shells under each top, and the tops.
+    let (solid, _, volume) = ironed("solid");
+    let length: f64 = solid.iter().map(|&(_, l)| l).sum();
+    assert!((length - 72471.6).abs() < 72471.6 * 0.01, "{length} mm of ironing");
+    assert!((volume - 213.1).abs() < 213.1 * 0.01, "{volume} mm³ of ironing");
+}
+
+/// Each feature's extrusions as lines (`G1`) and as arcs (`G2`/`G3`).
+fn lines_and_arcs(gcode: &str) -> std::collections::BTreeMap<String, (usize, usize)> {
+    let mut out: std::collections::BTreeMap<String, (usize, usize)> = Default::default();
+    let mut feature = String::new();
+    for line in gcode.lines() {
+        if let Some(f) = line.strip_prefix("; FEATURE: ") {
+            feature = f.to_string();
+        }
+        let printing = word(line, 'E').is_some_and(|e| e > 0.0) && word(line, 'X').is_some();
+        if printing && line.starts_with("G1 ") {
+            out.entry(feature.clone()).or_default().0 += 1;
+        } else if printing && (line.starts_with("G2 ") || line.starts_with("G3 ")) {
+            out.entry(feature.clone()).or_default().1 += 1;
+        }
+    }
+    out
+}
+
+/// Curves print as arcs, as native OrcaSlicer 2.5.1 writes them with the X2D's presets (`enable_arc_fitting`): a
+/// tube's walls go round in a few arcs a loop, each starting and ending on its circle (`check_moves`), with the
+/// plastic the lines took; with arc fitting off they print as lines. On this tube (200 sides) native Orca's outer wall
+/// took 250 arcs and 50 lines over its 50 layers, its inner walls 245 arcs and 147 lines (Nov 16; ours 181 and 35,
+/// 194 and 2).
+#[test]
+fn curves_print_as_arcs_as_orcas_do() {
+    let stl = tube_stl(15.0, 6.0, 10.0, 200);
+    let options = Options { arrange: false, ..Options::default() };
+    let run = |settings: &Settings| {
+        let out = slice(&[Input { name: "tube.stl", bytes: &stl }], settings, &options).unwrap();
+        let gcode = String::from_utf8(out.gcode).unwrap();
+        assert_eq!(check_moves(&gcode, settings).len(), 50);
+        (out.stats, lines_and_arcs(&gcode))
+    };
+    let arcs_on = Settings::default();
+    let (with, moves) = run(&arcs_on);
+    let off = setup::read(r#"{"process": {"enable_arc_fitting": "0"}}"#).unwrap().settings;
+    let (without, lines) = run(&off);
+    for wall in ["Outer wall", "Inner wall"] {
+        let ((l, a), (only_lines, none)) = (moves[wall], lines[wall]);
+        assert_eq!(none, 0, "{wall}");
+        assert!(a >= 150 && l + a < 300, "{wall}: {l} lines and {a} arcs");
+        assert!((l + a) * 4 < only_lines, "{wall}: {} moves as arcs, {only_lines} as lines", l + a);
+    }
+    // Sparse infill keeps its lines straight, but its turns along the walls fit arcs too.
+    assert!(moves["Sparse infill"].1 > 0);
+    assert!((with.volume / without.volume - 1.0).abs() < 0.002, "{} against {} mm³", with.volume, without.volume);
+    // Orca's estimator splits an arc into pieces 0.0125 mm from it, which slow down round the curve: the tube takes
+    // Orca 391 s printing with arcs, 386 s without (ours 384 and 377 s).
+    let slower = with.model_time / without.model_time - 1.0;
+    assert!((0.0..0.03).contains(&slower), "{} against {} s", with.model_time, without.model_time);
 }
