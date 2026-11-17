@@ -196,6 +196,11 @@ pub struct LayerGcode {
     first_accel: Option<(usize, usize, f64)>,
     /// The acceleration the layer ends at (NaN when it sets none).
     last_accel: f64,
+    /// Where in the text the layer's last retraction and wipe begin when Orca writes them after the next layer's
+    /// `; CHANGE_LAYER` (`Colours::defers_tail`): `write` puts them there.
+    tail_at: Option<usize>,
+    /// The layer's first lift, written for a nozzle at the layer's first point (`LayerOut::lift_at`).
+    lift_at: Option<(usize, usize, f64, f64)>,
     z: f64,
     /// Whether Orca's writer knows where the nozzle is when the layer ends (not when its timelapse photo came last).
     pub ends_known: bool,
@@ -290,7 +295,7 @@ pub fn layers(group: &[(&LayerPlan, &LayerRegions, f64)], job: &Job, mut known: 
     let mut built: Vec<_> = group
         .iter()
         .map(|&(plan, regions, from_z)| {
-            let (moves, notes, turn, ends_known) = build_layer(plan, regions, job, from_z, known);
+            let (moves, notes, turn, ends_known, tail) = build_layer(plan, regions, job, from_z, known);
             known = ends_known;
             // In spiral vase mode the nozzle travels onto the layer from where the one before ended, in its moves.
             let (start, first) = match &plan.course {
@@ -300,7 +305,7 @@ pub fn layers(group: &[(&LayerPlan, &LayerRegions, f64)], job: &Job, mut known: 
                     (first.map(|[x, y]| [x, y, from_z]).unwrap_or([job.start[0], job.start[1], from_z]), first)
                 }
             };
-            (moves, notes, start, first, turn, ends_known)
+            (moves, notes, start, first, turn, ends_known, tail)
         })
         .collect();
     let cooling_time = match job.colours.filter(|c| !c.towered) {
@@ -340,7 +345,7 @@ pub fn layers(group: &[(&LayerPlan, &LayerRegions, f64)], job: &Job, mut known: 
         .iter()
         .zip(built)
         .enumerate()
-        .map(|(n, (&(plan, _, _), (moves, notes, start, first, turn, ends_known)))| {
+        .map(|(n, (&(plan, _, _), (moves, notes, start, first, turn, ends_known, tail)))| {
             // The layer's markers (its fans go before them, in `assemble`), then its moves.
             let mut text = Vec::with_capacity(moves.len() * 28 + 4096);
             text.extend_from_slice(
@@ -354,7 +359,8 @@ pub fn layers(group: &[(&LayerPlan, &LayerRegions, f64)], job: &Job, mut known: 
             let progress_at = text.len();
             let tool = job.colours.map_or(0, |c| c.start(plan.index));
             let before = plan.course.as_ref().and_then(|c| c.before);
-            let out = finish_layer(&moves, &notes, start, job, (text, before), plan.header_height, (fans, over, tool));
+            let out =
+                finish_layer(&moves, &notes, start, job, (text, before), plan.header_height, (fans, over, tool, tail));
             // Held until the whole file is written: without the room its estimate left (three quarters more than a
             // tall print's 42 MB of G-code).
             let mut text = out.text;
@@ -364,6 +370,8 @@ pub fn layers(group: &[(&LayerPlan, &LayerRegions, f64)], job: &Job, mut known: 
                 progress_at,
                 first_accel: out.first_accel,
                 last_accel: out.last_accel,
+                tail_at: out.tail_at,
+                lift_at: out.lift_at,
                 z: plan.z,
                 ends_known,
                 first,
@@ -567,6 +575,60 @@ fn find_marker(text: &[u8]) -> Option<usize> {
     None
 }
 
+/// A layer's first lift, written for a nozzle at the layer's first point, as Orca's spiral lift has it for the nozzle
+/// where the layer before left it, `at` (the turn goes to the left of the way to the travel's end, `first`).
+fn put_first_lift(
+    l: &mut LayerGcode,
+    (from, to, z, f): (usize, usize, f64, f64),
+    at: [f64; 3],
+    first: [f64; 2],
+    s: &Settings,
+) {
+    let was = &l.text[from..to];
+    let had_speed = was.starts_with(b"G17") || was.windows(2).any(|w| w == b" F");
+    let line = first_lift_line((z, f), at, first, had_speed, s);
+    splice_lift(l, (from, to), line);
+}
+
+/// The text of a layer's first lift for a nozzle at `at` going to `first`: a spiral to the left of the way, or straight
+/// up where the turn would leave the plate (with its speed when `had_speed`: where the lift was written with one, or
+/// was a spiral, which always has it).
+fn first_lift_line((z, f): (f64, f64), at: [f64; 3], first: [f64; 2], had_speed: bool, s: &Settings) -> Vec<u8> {
+    let r = s.z_hop / (2.0 * PI * (s.travel_slope.to_radians()).atan());
+    let d = (first[0] - at[0]).hyp(first[1] - at[1]);
+    let (i, j) = if d > 0.0 { (-(first[1] - at[1]) / d * r, (first[0] - at[0]) / d * r) } else { (r, 0.0) };
+    let (cx, cy) = (at[0] + i, at[1] + j);
+    let fits = cx.min(s.bed[0] - cx).min(cy).min(s.bed[1] - cy) >= r;
+    let mut line = Vec::new();
+    if !fits {
+        line.extend_from_slice(b"G1 Z");
+        num(&mut line, z, 3);
+        if had_speed {
+            line.extend_from_slice(b" F");
+            num(&mut line, f * 60.0, 3);
+        }
+        return line;
+    }
+    line.extend_from_slice(b"G17\nG3 Z");
+    num(&mut line, z, 3);
+    line.extend_from_slice(b" I");
+    num(&mut line, i, 3);
+    line.extend_from_slice(b" J");
+    num(&mut line, j, 3);
+    line.extend_from_slice(b" P1  F");
+    num(&mut line, f * 60.0, 3);
+    line
+}
+
+/// Puts `line` in place of the layer's first lift, at bytes `from..to` of its text.
+fn splice_lift(l: &mut LayerGcode, (from, to): (usize, usize), line: Vec<u8>) {
+    let delta = line.len() as isize - (to - from) as isize;
+    l.text.splice(from..to, line);
+    let shift = |k: usize| if k >= to { (k as isize + delta) as usize } else { k };
+    l.tail_at = l.tail_at.map(shift);
+    l.first_accel = l.first_accel.map(|(a, b, v)| (shift(a), shift(b), v));
+}
+
 /// The whole file from its layers and their `totals`, into `out`; each layer's text is let go once written.
 pub fn write(layers: Vec<LayerGcode>, stats: &Stats, job: &Job, out: &mut impl Sink) {
     let s = job.settings;
@@ -586,7 +648,19 @@ pub fn write(layers: Vec<LayerGcode>, stats: &Stats, job: &Job, out: &mut impl S
     // What the fan runs at now, which an overhang's fan changes from the layer's (`current`), and which of the
     // overhang fans were asked for since the cooling buffer's last layer began.
     let mut fan = FanNow { current: f64::NAN, asked: [false; 2] };
-    for (i, l) in layers.into_iter().enumerate() {
+    let mut pending: Vec<u8> = Vec::new();
+    let mut before: Option<[f64; 3]> = None;
+    for (i, mut l) in layers.into_iter().enumerate() {
+        if let (Some((from, to, z, f)), Some(at), Some(first)) = (l.lift_at, before, l.first) {
+            put_first_lift(
+                &mut l,
+                (from, to, z, f),
+                at,
+                first,
+                job.colours.map_or(job.settings, |c| &c.settings[c.start(i)]),
+            );
+        }
+        before = l.end;
         if l.group_start {
             fan.asked = [false; 2];
         }
@@ -605,16 +679,23 @@ pub fn write(layers: Vec<LayerGcode>, stats: &Stats, job: &Job, out: &mut impl S
             _ => (l.text.len(), l.text.len()),
         };
         text.extend_from_slice(&l.text[..l.progress_at]);
+        // The layer before's last retraction and wipe, which Orca writes after the layer's header.
+        text.extend_from_slice(&pending);
+        pending.clear();
         m73(&mut text, elapsed, stats.total_time);
         out.put(&text);
         text.clear();
+        let end = l.tail_at.unwrap_or(l.text.len());
+        debug_assert!(cut_to <= end || cut_from == cut_to);
+        let (cut_from, cut_to) = (cut_from.min(end), cut_to.min(end));
         if l.over == [None, None] {
             out.put(&l.text[l.progress_at..cut_from]);
-            out.put(&l.text[cut_to..]);
+            out.put(&l.text[cut_to..end]);
         } else {
             fan.put(out, &l.text[l.progress_at..cut_from], (l.over, l.fans[0]));
-            fan.put(out, &l.text[cut_to..], (l.over, l.fans[0]));
+            fan.put(out, &l.text[cut_to..end], (l.over, l.fans[0]));
         }
+        pending.extend_from_slice(&l.text[end..]);
         if l.last_accel.is_finite() {
             accel = l.last_accel;
         }
@@ -679,6 +760,10 @@ struct Builder<'a> {
     /// mid-path, the first time an extrusion ends within half a millimetre of it; and whether it was.
     photo: Option<([f64; 2], String)>,
     photo_taken: bool,
+    /// After a layer that left its retraction to this one: whether the layer's first lift is yet to come, and the move
+    /// that is (a spiral toward the travel after it, from where the layer before ended, which only `write` knows).
+    unlifted_start: bool,
+    first_lift: Option<usize>,
 }
 
 impl<'a> Builder<'a> {
@@ -850,6 +935,9 @@ impl<'a> Builder<'a> {
         let (cx, cy) = (self.x + i, self.y + j);
         let fits = cx.min(s.bed[0] - cx).min(cy).min(s.bed[1] - cy) >= r;
         let kind = if fits { Kind::Spiral { i, j } } else { Kind::Lift };
+        if std::mem::take(&mut self.unlifted_start) && toward.is_some() {
+            self.first_lift = Some(self.moves.len());
+        }
         self.line(self.x, self.y, z, 0.0, s.travel_speed, kind);
         self.lifted = true;
     }
@@ -1350,7 +1438,11 @@ struct Turned {
 
 /// A layer's moves, its notes by move, what a spiral vase's rising layer gave, and whether the writer knows where the
 /// nozzle is at its end (Orca's writer forgets after a timelapse photo).
-type Built = (Vec<Move>, Vec<(usize, Note)>, Option<Turned>, bool);
+type Built = (Vec<Move>, Vec<(usize, Note)>, Option<Turned>, bool, Tail);
+
+/// Where a layer's last retraction and wipe begin when they belong to the next layer (its move and note indexes), and
+/// the move that lifts the nozzle at the layer's start when the layer before left it unlifted.
+type Tail = (Option<(usize, usize)>, Option<usize>);
 
 /// The layer's moves and what is said between them, in Orca's order: the printer's layer change G-code, each object's
 /// labels around its moves, retractions that wipe and spiral lifts on travels, and after the last path a retraction,
@@ -1369,6 +1461,11 @@ fn build_layer<'a>(
     // In spiral vase mode the nozzle comes from where the layer before ended, neither retracted nor lifted: Orca
     // turns off retracting at layer changes there, and moves up to the layer's height at once.
     let course = plan.course.as_ref();
+    // With several filaments and a tower, a layer that took its photo before a visit to the tower leaves its last
+    // retraction and wipe to the next layer, which starts where this one's last extrusion left the nozzle (spaghetti#421).
+    let defers = course.is_none() && job.colours.is_some_and(|c| c.defers_tail(i));
+    let after_deferred = course.is_none() && i > 0 && job.colours.is_some_and(|c| c.defers_tail(i - 1));
+    let mut tail = None;
     // Orca's farthest-point timelapse, here with one filament, the layer's photo taken where the nozzle passes the
     // point farthest from the camera, else after the layer at a spot near that point.
     let farthest =
@@ -1386,7 +1483,7 @@ fn build_layer<'a>(
         z: from_z,
         layer_z: plan.z,
         retracted: course.is_none(),
-        lifted: course.is_none(),
+        lifted: course.is_none() && !after_deferred,
         accel: f64::NAN,
         first_layer,
         layer_height: plan.height,
@@ -1409,6 +1506,8 @@ fn build_layer<'a>(
         fresh: true,
         photo: farthest.map(|at| (at, layer_photo(plan, job, None, true, true))),
         photo_taken: false,
+        unlifted_start: after_deferred,
+        first_lift: None,
     };
     if course.is_some() {
         b.line(x0, y0, plan.z, 0.0, s.travel_speed, Kind::Lift);
@@ -1563,7 +1662,14 @@ fn build_layer<'a>(
                     b.note(Note::LabelStart(o));
                     open_label = Some(o);
                 }
-                b.travel(x, y, false);
+                if after_deferred && b.moves.is_empty() {
+                    // The layer before left the nozzle unlifted (its retraction follows this layer's header): the
+                    // first travel lifts it in a spiral, to this layer's height plus the z-hop, and lowers at its end.
+                    b.lift(Some((x, y)));
+                    b.travel(x, y, true);
+                } else {
+                    b.travel(x, y, false);
+                }
                 if first_layer && wrapping {
                     // Down at the travel's end, then to the first layer's height again: Orca's move onto the first
                     // layer, which waits for its first travel.
@@ -1672,14 +1778,29 @@ fn build_layer<'a>(
             b.note(Note::Stopped(o));
         }
         if course.is_none() {
+            // With the photo taken before a tower visit, the retraction and wipe (and the label's end) are the next
+            // layer's, which starts retracted at the height it ends at.
+            let deferred = defers && photo_taken;
+            if deferred {
+                tail = Some((b.moves.len(), b.notes.len()));
+            }
             b.retract();
-            b.lift(None);
+            if !deferred {
+                b.lift(None);
+            }
         }
         if let Some(o) = owner(prev).filter(|_| labels) {
             b.note(Note::LabelEnd(o));
         }
-    } else if let Some(o) = open_label.take() {
-        b.note(Note::LabelEnd(o));
+    } else {
+        // Ending on the tower, the nozzle is lifted and retracted already; the next layer starts at this one's height.
+        if defers && b.z > plan.z + 1e-6 {
+            b.lift_to(plan.z);
+            b.lifted = false;
+        }
+        if let Some(o) = open_label.take() {
+            b.note(Note::LabelEnd(o));
+        }
     }
     if !photo_taken && !b.photo_taken {
         let photo = match farthest {
@@ -1699,7 +1820,7 @@ fn build_layer<'a>(
         b.known = false;
     }
     let known = b.known;
-    let Some(course) = course else { return (b.moves, b.notes, None, known) };
+    let Some(course) = course else { return (b.moves, b.notes, None, known, (tail, b.first_lift)) };
     let mut turned = None;
     if plan.spiral {
         let r = crate::spiral::rise(&b.moves, course, s);
@@ -1728,7 +1849,7 @@ fn build_layer<'a>(
         b.retract();
         b.lift_straight();
     }
-    (b.moves, b.notes, turned, known)
+    (b.moves, b.notes, turned, known, (None, None))
 }
 
 /// Where a layer's first travel goes: its first visit to the prime tower when that comes first, else its first path.
@@ -2559,6 +2680,11 @@ struct LayerOut {
     filament_mm: f64,
     features: [Feature; Role::ALL.len()],
     by_filament: Vec<[f64; 2]>,
+    /// Where in the text the last retraction and wipe begin, when they belong to the next layer.
+    tail_at: Option<usize>,
+    /// The text of the layer's first lift when it was written for a nozzle at the layer's first point: its bytes,
+    /// its height and its speed in mm/s (the nozzle's place is the layer before's end, which `write` knows).
+    lift_at: Option<(usize, usize, f64, f64)>,
 }
 
 fn role_index(role: Role) -> usize {
@@ -2614,7 +2740,7 @@ fn finish_layer(
     job: &Job,
     (text, before): (Vec<u8>, Option<(Role, f32)>),
     header_height: f32,
-    (fans, over, mut tool): ([f64; 2], [Option<f64>; 2], usize),
+    (fans, over, mut tool, (tail, first_lift)): ([f64; 2], [Option<f64>; 2], usize, Tail),
 ) -> LayerOut {
     let s = job.settings;
     // Where the prime tower's G-code leaves the nozzle, the planner starts again.
@@ -2638,6 +2764,8 @@ fn finish_layer(
         filament_mm: 0.0,
         features: Default::default(),
         by_filament: vec![[0.0; 2]; filaments],
+        tail_at: None,
+        lift_at: None,
     };
     let area = s.filament_area();
     // The feature and width the layer before ended with, where the G-code carries them over (spiral vase mode).
@@ -2656,6 +2784,8 @@ fn finish_layer(
     // layer's first extrusion that wants none says so, as Orca does when the layer before ended with one on.
     let mut marked = [false; 2];
     let mut no_marks_yet = true;
+    let mut tail_at = None;
+    let mut out_lift = None;
     let t = &mut out.text;
     // Each move with what is said before it, then what is said after the last one.
     for (k, m) in moves.iter().map(Some).chain([None]).enumerate() {
@@ -2664,6 +2794,9 @@ fn finish_layer(
             wiping = false;
         }
         while next_note < notes.len() && notes[next_note].0 == k {
+            if tail_at.is_none() && tail == Some((k, next_note)) {
+                tail_at = Some(t.len());
+            }
             match &notes[next_note].1 {
                 Note::Tower(tower) => {
                     let mut text = tower.text.replace(
@@ -2706,6 +2839,9 @@ fn finish_layer(
                 note => write_note(t, note, job, &mut w),
             }
             next_note += 1;
+        }
+        if tail_at.is_none() && tail.is_some_and(|(at, _)| at == k) {
+            tail_at = Some(t.len());
         }
         let Some(m) = m else { break };
         let secs = times[k];
@@ -2820,6 +2956,7 @@ fn finish_layer(
                 w.feed(t, m.f, false);
             }
             Kind::Lift => {
+                let from = t.len();
                 if m.form & FORM_Z != 0 {
                     t.extend_from_slice(format!("G1 Z{:.3}", m.z).as_bytes());
                 } else {
@@ -2827,8 +2964,12 @@ fn finish_layer(
                     num(t, m.z, 3);
                 }
                 w.feed(t, m.f, false);
+                if first_lift == Some(k) {
+                    out_lift = Some((from, t.len(), m.z, m.f));
+                }
             }
             Kind::Spiral { i, j } => {
+                let from = t.len();
                 t.extend_from_slice(b"G17\nG3 Z");
                 num(t, m.z, 3);
                 t.extend_from_slice(b" I");
@@ -2839,6 +2980,9 @@ fn finish_layer(
                 t.extend_from_slice(b" P1  F");
                 num(t, m.f * 60.0, 3);
                 w.feed = (m.f * 60.0) as i64;
+                if first_lift == Some(k) {
+                    out_lift = Some((from, t.len(), m.z, m.f));
+                }
             }
         }
         t.push(b'\n');
@@ -2846,6 +2990,8 @@ fn finish_layer(
     }
     out.first_accel = w.first_accel;
     out.last_accel = w.accel;
+    out.tail_at = tail_at;
+    out.lift_at = out_lift;
     out
 }
 
@@ -3648,6 +3794,19 @@ mod tests {
         assert!(b.photo_taken && !b.known);
     }
 
+    #[test]
+    fn the_first_lift_is_a_spiral_where_the_turn_fits_and_straight_where_it_does_not() {
+        let s = Settings::default();
+        let text = |at: [f64; 3], first: [f64; 2], had_speed: bool| {
+            String::from_utf8(first_lift_line((1.2, 1000.0), at, first, had_speed, &s)).unwrap()
+        };
+        // Mid-plate: a turn to the left of the way to the travel's end, whichever form the lift was written in.
+        assert_eq!(text([100.0, 100.0, 1.0], [110.0, 100.0], false), "G17\nG3 Z1.2 I0 J1.217 P1  F60000");
+        // On the plate's edge the turn would leave it: straight up, with the speed it had or the spiral's.
+        assert_eq!(text([1.0, 100.0, 1.0], [0.0, 100.0], true), "G1 Z1.2 F60000");
+        assert_eq!(text([1.0, 100.0, 1.0], [0.0, 100.0], false), "G1 Z1.2");
+    }
+
     /// A builder on a 0.2 mm layer at the plate's origin, an overhang wall 0.4 mm wide at 50 mm/s.
     fn builder(s: &Settings) -> Builder<'_> {
         Builder {
@@ -3674,6 +3833,8 @@ mod tests {
             fresh: false,
             photo: None,
             photo_taken: false,
+            unlifted_start: false,
+            first_lift: None,
         }
     }
 

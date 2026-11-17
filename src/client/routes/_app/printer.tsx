@@ -21,6 +21,7 @@ import { Skeleton } from "@/components/ui/Skeleton";
 import { loadSlot, savePrinterSetup } from "@/lib/pantry";
 import { printerQuery } from "@/lib/pantry-queries";
 import { useReadOnly } from "@/lib/read-only";
+import { unsent } from "@/lib/unsent";
 import { useLiveFields } from "@/lib/use-autosave";
 import { useIdle } from "@/lib/use-idle";
 
@@ -91,6 +92,17 @@ interface SetupFields extends Record<string, unknown> {
   dryingDays: Record<string, number>;
 }
 
+/** The folded setup in a line: the nozzles fitted and the plates owned. */
+function setupWords(setup: PrinterSetup): string {
+  const { main, auxiliary } = setup.nozzles;
+  const nozzles =
+    main.diameter === auxiliary.diameter
+      ? `Two ${main.diameter} mm nozzles`
+      : `${main.diameter} mm and ${auxiliary.diameter} mm nozzles`;
+  const plates = setup.plates.length === 1 ? "1 plate" : `${setup.plates.length} plates`;
+  return `${nozzles} · ${plates}`;
+}
+
 function Setup({ initial }: { initial: PrinterSetup }) {
   const queryClient = useQueryClient();
   // Each part follows the server's copy (the other person's edit) except the one being edited here, and a
@@ -123,6 +135,8 @@ function Setup({ initial }: { initial: PrinterSetup }) {
   const [adding, setAdding] = useState<string | null>(null);
   const idle = useIdle();
   const [dryingOpen, setDryingOpen] = useState(false);
+  // Open from the start when slicing defaults were left unsent: they are saved by their own form, which only exists while it is open.
+  const [setupOpen, setSetupOpen] = useState(() => unsent("slicing-defaults") !== undefined);
   // The add-a-spool sheet's code loads with the first tap and stays mounted after, so it can slide away.
   const [sheetLoaded, setSheetLoaded] = useState(false);
   if (adding !== null && !sheetLoaded) setSheetLoaded(true);
@@ -216,84 +230,100 @@ function Setup({ initial }: { initial: PrinterSetup }) {
         <UpkeepSkeleton />
       )}
 
-      <fieldset disabled={readOnly} className="contents">
-        <PrinterSection title="Nozzles">
-          <div className="grid gap-3 md:grid-cols-2">
-            {(["main", "auxiliary"] as const).map((nozzle) => {
-              const fitted = setup.nozzles[nozzle];
-              return (
-                <section
-                  key={nozzle}
-                  className="bg-cream shadow-soft flex flex-col gap-4 rounded-lg p-4"
-                  aria-label={NOZZLE_NAMES[nozzle].title}
+      <PrinterSection title="Setup">
+        {/* What people change once and seldom again: folded, so the page leads with the printer and what it needs. */}
+        <Disclosure
+          open={setupOpen}
+          onOpenChange={setSetupOpen}
+          title="Nozzles, plates, slicing and drying"
+          summary={setupWords(setup)}
+        >
+          {setupOpen && (
+            <fieldset disabled={readOnly} className="flex flex-col gap-10 px-4 pt-2 pb-5">
+              <PrinterSection title="Nozzles">
+                <div className="grid gap-3 md:grid-cols-2">
+                  {(["main", "auxiliary"] as const).map((nozzle) => {
+                    const fitted = setup.nozzles[nozzle];
+                    return (
+                      <section
+                        key={nozzle}
+                        className="bg-cream shadow-soft flex flex-col gap-4 rounded-lg p-4"
+                        aria-label={NOZZLE_NAMES[nozzle].title}
+                      >
+                        <div className="flex flex-col">
+                          <span className="text-body text-ink font-semibold">{NOZZLE_NAMES[nozzle].title}</span>
+                          <span className="text-small text-ink-faint">{NOZZLE_NAMES[nozzle].detail}</span>
+                        </div>
+                        {/* Four sizes side by side: never a lone 0.8 mm wrapped onto its own line. */}
+                        <SegmentedControl
+                          label={`${NOZZLE_NAMES[nozzle].title} size`}
+                          labelHidden
+                          options={NOZZLE_DIAMETERS.map((diameter) => ({
+                            value: String(diameter),
+                            label: `${diameter} mm`,
+                          }))}
+                          value={String(fitted.diameter)}
+                          onChange={(diameter) => setNozzle(nozzle, { diameter: Number(diameter) })}
+                          className="w-full"
+                        />
+                        <ToggleChip
+                          tone="basil"
+                          icon={HardenedIcon}
+                          selected={fitted.hardened}
+                          onClick={() => setNozzle(nozzle, { hardened: !fitted.hardened })}
+                          className="self-start"
+                        >
+                          {fitted.hardened ? "Hardened steel" : "Not hardened"}
+                        </ToggleChip>
+                      </section>
+                    );
+                  })}
+                </div>
+              </PrinterSection>
+
+              <PrinterSection title="Plates you own" description="Tap the ones you have.">
+                {/* biome-ignore lint/a11y/useSemanticElements: a row of chips, not a form field set. */}
+                <div className="flex flex-wrap gap-2" role="group" aria-label="Plates you own">
+                  {[
+                    ...BED_TYPES,
+                    ...setup.plates.filter((plate) => !(BED_TYPES as readonly string[]).includes(plate)),
+                  ].map((plate) => (
+                    <ToggleChip key={plate} selected={setup.plates.includes(plate)} onClick={() => togglePlate(plate)}>
+                      {plateName(plate)}
+                    </ToggleChip>
+                  ))}
+                </div>
+              </PrinterSection>
+
+              {idle ? (
+                <Suspense fallback={<SlicingDefaultsSkeleton />}>
+                  <SlicingDefaults />
+                </Suspense>
+              ) : (
+                <SlicingDefaultsSkeleton />
+              )}
+
+              <PrinterSection title="Staying dry">
+                <Disclosure
+                  open={dryingOpen}
+                  onOpenChange={setDryingOpen}
+                  title="Days each material stays dry"
+                  summary="Past that, Spaghetti says to dry it before printing. Starting values are a guide, not Bambu's word."
                 >
-                  <div className="flex flex-col">
-                    <span className="text-body text-ink font-semibold">{NOZZLE_NAMES[nozzle].title}</span>
-                    <span className="text-small text-ink-faint">{NOZZLE_NAMES[nozzle].detail}</span>
-                  </div>
-                  {/* Four sizes side by side: never a lone 0.8 mm wrapped onto its own line. */}
-                  <SegmentedControl
-                    label={`${NOZZLE_NAMES[nozzle].title} size`}
-                    labelHidden
-                    options={NOZZLE_DIAMETERS.map((diameter) => ({ value: String(diameter), label: `${diameter} mm` }))}
-                    value={String(fitted.diameter)}
-                    onChange={(diameter) => setNozzle(nozzle, { diameter: Number(diameter) })}
-                    className="w-full"
-                  />
-                  <ToggleChip
-                    tone="basil"
-                    icon={HardenedIcon}
-                    selected={fitted.hardened}
-                    onClick={() => setNozzle(nozzle, { hardened: !fitted.hardened })}
-                    className="self-start"
-                  >
-                    {fitted.hardened ? "Hardened steel" : "Not hardened"}
-                  </ToggleChip>
-                </section>
-              );
-            })}
-          </div>
-        </PrinterSection>
-
-        <PrinterSection title="Plates you own" description="Tap the ones you have.">
-          {/* biome-ignore lint/a11y/useSemanticElements: a row of chips, not a form field set. */}
-          <div className="flex flex-wrap gap-2" role="group" aria-label="Plates you own">
-            {[...BED_TYPES, ...setup.plates.filter((plate) => !(BED_TYPES as readonly string[]).includes(plate))].map(
-              (plate) => (
-                <ToggleChip key={plate} selected={setup.plates.includes(plate)} onClick={() => togglePlate(plate)}>
-                  {plateName(plate)}
-                </ToggleChip>
-              ),
-            )}
-          </div>
-        </PrinterSection>
-
-        {idle ? (
-          <Suspense fallback={<SlicingDefaultsSkeleton />}>
-            <SlicingDefaults />
-          </Suspense>
-        ) : (
-          <SlicingDefaultsSkeleton />
-        )}
-
-        <PrinterSection title="Staying dry">
-          <Disclosure
-            open={dryingOpen}
-            onOpenChange={setDryingOpen}
-            title="Days each material stays dry"
-            summary="Past that, Spaghetti says to dry it before printing. Starting values are a guide, not Bambu's word."
-          >
-            {dryingOpen && (
-              <Suspense fallback={null}>
-                <DryingTable
-                  days={{ ...DRYING_DAYS, ...value.dryingDays }}
-                  onChange={(dryingDays) => change({ dryingDays })}
-                />
-              </Suspense>
-            )}
-          </Disclosure>
-        </PrinterSection>
-      </fieldset>
+                  {dryingOpen && (
+                    <Suspense fallback={null}>
+                      <DryingTable
+                        days={{ ...DRYING_DAYS, ...value.dryingDays }}
+                        onChange={(dryingDays) => change({ dryingDays })}
+                      />
+                    </Suspense>
+                  )}
+                </Disclosure>
+              </PrinterSection>
+            </fieldset>
+          )}
+        </Disclosure>
+      </PrinterSection>
       <p className="text-small text-ink-faint flex items-start gap-2">
         <InfoIcon size={16} className="mt-0.5 shrink-0" aria-hidden />
         These are the checks behind the gentle hints while logging an attempt: temperatures past the X2D's limits, TPU
