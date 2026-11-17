@@ -178,6 +178,34 @@ impl LayerRegions {
             })
     }
 
+    /// The slices of each region of an object on this layer (one per filament its parts print in, in the order of the
+    /// regions' first appearance), which Orca's support detection works on region by region; empty for an object of
+    /// one region.
+    pub fn region_slices_of(&self, group: u32) -> Vec<Shapes> {
+        let it: Vec<(Shapes, u32)> = if self.unpulled.is_empty() {
+            self.islands.iter().filter(|i| i.group == group).map(|i| (vec![i.outline.clone()], i.object)).collect()
+        } else {
+            self.unpulled
+                .iter()
+                .filter(|(_, _, g)| *g == group)
+                .map(|(shape, o, _)| (vec![shape.clone()], *o))
+                .collect()
+        };
+        let mut objects: Vec<u32> = Vec::new();
+        for (_, o) in &it {
+            if !objects.contains(o) {
+                objects.push(*o);
+            }
+        }
+        if objects.len() < 2 {
+            return Vec::new();
+        }
+        objects
+            .iter()
+            .map(|o| it.iter().filter(|(_, x)| x == o).flat_map(|(sh, _)| sh.iter().cloned()).collect())
+            .collect()
+    }
+
     /// An object's slice on this layer, by its group (all of its regions together), as the layer above sees it
     /// (Orca's `lslices`).
     pub fn slice_of(&self, group: u32) -> Shapes {
@@ -1262,9 +1290,6 @@ fn arachne_group(
         (groups, result.inner_contour)
     };
     let one_wall_top = !last && s.only_one_wall_top && s.top_shell_layers > 0 && loops > 1 && around.upper.is_some();
-    // The clipping of inner walls over the top surface (`top_surface_expansion`) isn't ported: such a layer keeps all
-    // its walls.
-    let one_wall_top = one_wall_top && !(s.top_surface_expansion > 0.0 && s.top_surface_density > 0.0);
     let top_params = top::Params {
         ext_spacing: sp_outer,
         spacing: sp_inner,
@@ -1273,6 +1298,7 @@ fn arachne_group(
         precise,
         min_width_top: s.min_width_top_surface.of(w_inner),
         wall_loops: loops,
+        clip_over_top: s.top_surface_expansion > 0.0 && s.top_surface_density > 0.0,
     };
     slice
         .iter()

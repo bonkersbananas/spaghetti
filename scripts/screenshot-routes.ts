@@ -545,6 +545,9 @@ async function openCompare(page: Page) {
     .click();
 }
 
+/** Photos the compare-many-photos shot adds to one attempt (and takes away again). */
+const manyPhotoIds = Array.from({ length: 8 }, (_, i) => `5eed0000-0000-4000-8000-0000000d00${10 + i}`);
+
 const FUSILLI = { name: "fusilli-knob.stl", bytes: fusilliStl() };
 const FUSILLI_IDEA = { title: "Fusilli jar knob", note: "A fusilli knob for the pasta jar lid: twist to open." };
 /**
@@ -1132,7 +1135,7 @@ const photoReadBuilds: string[] = [];
  * A build whose print is off the bed, with a camera photo on it, so Claude reads it (the stand-in answers from a word in
  * the title, scripts/lib/fake-claude.ts); opens the build's page. The photo goes in the bridge's way.
  */
-async function printWithPhoto(page: Page, title: string) {
+async function printWithPhoto(page: Page, title: string, { ended = true }: { ended?: boolean } = {}) {
   const origin = new URL(page.url()).origin;
   const headers = { Origin: origin };
   const itemId = crypto.randomUUID();
@@ -1141,16 +1144,22 @@ async function printWithPhoto(page: Page, title: string) {
   await page.request.post("/api/items", { headers, data: { id: itemId, title, stage: "building" } });
   await page.request.post(`/api/items/${itemId}/attempts`, {
     headers,
-    data: { id: attemptId, printedAt: Date.now() - 95 * 60_000, settings: { estimatedMinutes: 90 } },
+    data: {
+      id: attemptId,
+      // The shots' clock is the seed's: a print that is due started well before it.
+      printedAt: ended ? Date.now() - 95 * 60_000 : SEED_NOW - 4 * 60 * 60_000,
+      settings: { estimatedMinutes: 90 },
+    },
   });
-  await page.request.patch(`/api/attempts/${attemptId}`, { headers, data: { endedAt: Date.now() - 12 * 60_000 } });
+  if (ended)
+    await page.request.patch(`/api/attempts/${attemptId}`, { headers, data: { endedAt: Date.now() - 12 * 60_000 } });
   const file = { name: "frame.jpg", mimeType: "image/jpeg", buffer: readFileSync("e2e/fixtures/tugboat.jpg") };
   await page.request.put(`/api/items/${itemId}/photos/${crypto.randomUUID()}`, {
     headers,
     multipart: { width: "1280", height: "960", color: "#8d7a66", attemptId, large: file, thumb: file },
   });
   await page.goto(`/builds/${itemId}`);
-  await page.getByRole("button", { name: "Attempt 1: off the bed. Open" }).waitFor();
+  if (ended) await page.getByRole("button", { name: "Attempt 1: off the bed. Open" }).waitFor();
   return { itemId, attemptId };
 }
 
@@ -1873,6 +1882,22 @@ export const shots: Shot[] = [
         .first()
         .waitFor({ timeout: 20_000 });
     },
+  },
+  {
+    // A print that is due (the printer hasn't said it stopped) whose camera photo Claude has read: its answer
+    // dashed on the picker, with what it saw under it. Run last on Today: it adds a build, removed again.
+    name: "today-due-read",
+    path: "/today",
+    fullPage: true,
+    prepare: async (page) => {
+      await printWithPhoto(page, "Spice jar lid", { ended: false });
+      await page.goto("/today");
+      await page
+        .getByRole("radio", { name: /suggested/ })
+        .first()
+        .waitFor({ timeout: 30_000 });
+    },
+    cleanup: (page) => removePhotoReadBuilds(page),
   },
   {
     // Back after a few days: "Since Thursday", what Sam did meanwhile, at the top of Today (desktop).
@@ -4188,6 +4213,39 @@ export const shots: Shot[] = [
     cleanup: async (page) => {
       await page.keyboard.press("Escape");
       await page.setViewportSize({ width: 1440, height: 900 });
+    },
+  },
+  {
+    // An attempt with many photos: its row of thumbnails scrolls inside its column instead of running into the other one.
+    name: "compare-many-photos",
+    path: `/builds/${SEED_BUILD_IDS.headphoneStand}`,
+    prepare: async (page) => {
+      const headers = { Origin: new URL(page.url()).origin };
+      const file = { name: "frame.jpg", mimeType: "image/jpeg", buffer: readFileSync("e2e/fixtures/tugboat.jpg") };
+      for (const id of manyPhotoIds) {
+        await page.request.put(`/api/items/${SEED_BUILD_IDS.headphoneStand}/photos/${id}`, {
+          headers,
+          multipart: {
+            width: "1280",
+            height: "960",
+            color: "#8d7a66",
+            attemptId: "5eed0000-0000-4000-8000-0000000b0003",
+            large: file,
+            thumb: file,
+          },
+        });
+      }
+      await page.reload();
+      await openCompare(page);
+      await page.getByRole("dialog", { name: /^Attempt \d+ and attempt \d+$/ }).waitFor();
+      await page.waitForTimeout(800);
+    },
+    cleanup: async (page) => {
+      await page.keyboard.press("Escape");
+      const headers = { Origin: new URL(page.url()).origin };
+      for (const id of manyPhotoIds) {
+        await page.request.delete(`/api/photos/${id}`, { headers });
+      }
     },
   },
   {
