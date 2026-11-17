@@ -3,6 +3,7 @@
 //! exact integer geometry. See `docs/proposals/rust-slicer.md` for what it does, how fast, and what it lacks.
 
 pub mod adaptive;
+pub mod arachne;
 pub mod arc_fit;
 pub mod bambu;
 pub mod base_support;
