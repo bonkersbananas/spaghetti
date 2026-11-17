@@ -30,14 +30,8 @@ export function captureTitle(
  * when what follows it is the link's own site ("Hook - Printables" for printables.com, "Bracket - 2 inch" stays).
  */
 export function tidyPageTitle(title: string, url?: string | null): string | null {
-  const found = /^(.*\S)\s+(\||[-–—·•])\s+([^|–—·•-]{1,40})$/.exec(title);
-  if (!found) return null;
-  const [, head = "", separator = "", suffix = ""] = found;
-  let host = "";
-  try {
-    host = new URL(url ?? "").hostname.toLowerCase().replace(/[^a-z0-9.]/g, "");
-  } catch {}
+  const [, head = "", bar = "", suffix = ""] = /^(.*\S)\s+(\||[-–—·•])\s+([^|–—·•-]{1,40})$/.exec(title) ?? [];
   const name = suffix.toLowerCase().replace(/[^a-z0-9.]/g, "");
-  const isSite = separator === "|" || /\.\w{2,}$/.test(suffix.trim()) || (name.length >= 3 && host.includes(name));
-  return isSite && head.trim() && !/^https?:\/\//i.test(head) ? head.trim() : null;
+  const host = url?.split("/")[2]?.toLowerCase() ?? "";
+  return head && (bar === "|" || /\.\w{2,}$/.test(name) || (name.length > 2 && host.includes(name))) ? head : null;
 }
