@@ -202,6 +202,7 @@ test("the spool page and the printer setup follow the other person's edits, and 
     // The printer's setup works the same way, a part at a time.
     await page.goto("/printer");
     await expect(page.getByText("Combo · 1 AMS 2 Pro")).toBeVisible();
+    await page.getByRole("button", { name: /^Nozzles, plates, slicing and drying/ }).click();
     const sent = await samPage.request.put("/api/printer", { headers, data: { amsUnits: 2 } });
     expect(sent.ok()).toBe(true);
     await page.getByRole("button", { name: "Cool Plate" }).click();

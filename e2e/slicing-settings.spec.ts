@@ -235,6 +235,8 @@ test("the Printer page's defaults are how a model nobody set up is sliced, until
   const defaults = async () => (await (await page.request.get("/api/printer")).json()).setup.slicing;
   try {
     await page.goto("/printer");
+    const setup = page.getByRole("button", { name: /^Nozzles, plates, slicing and drying/ });
+    await setup.click();
     const section = page.locator("section[aria-labelledby=printer-slicing]");
     // Folded, they say what they are in the model card's words.
     const fold = section.getByRole("button", { name: /^How new models are sliced/ });
@@ -251,6 +253,7 @@ test("the Printer page's defaults are how a model nobody set up is sliced, until
     expect((await fileOf(page, id)).slice.settings.slicing.layerHeight).toBe(0.12);
 
     await page.goto("/printer");
+    await setup.click();
     await expect(fold).toContainText("Fine");
     await fold.click();
     await section.getByRole("button", { name: "Back to the usual settings" }).click();
