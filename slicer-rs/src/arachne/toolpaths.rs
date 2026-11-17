@@ -1019,9 +1019,14 @@ mod dump {
             &params,
         );
         for l in t.toolpaths.iter().flatten() {
-            println!("line {} {} {}", l.inset_idx, l.is_odd as u8, l.is_closed as u8);
-            for j in &l.junctions {
-                println!("{:.4} {:.4} {:.4}", j.p.x as f64 / 1e6, j.p.y as f64 / 1e6, j.w as f64 / 1e6);
+            let pts: Vec<_> = l.junctions.iter().map(|j| j.p).collect();
+            let widths: Vec<f64> = l.junctions.iter().map(|j| j.w as f64).collect();
+            let seg = super::super::width::per_segment_widths(&widths);
+            for path in super::super::width::thick_polyline_to_multi_path(&pts, &seg, 0.2, 50_000.0, 100.0) {
+                println!("path {:.4}", path.width);
+                for q in &path.points {
+                    println!("{:.4} {:.4}", q.x as f64 / 1e6, q.y as f64 / 1e6);
+                }
             }
         }
     }
