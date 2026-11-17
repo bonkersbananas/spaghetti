@@ -1184,7 +1184,12 @@ impl Settings {
             overhang_fan_all_outer: overhang_fan_overlap(p.text("overhang_fan_threshold")) < 0.0
                 && matches!(p.text("overhang_fan_threshold").trim(), "0%" | "0"),
             overhang_fan_speed: at("overhang_fan_speed") / 100.0,
-            internal_bridge_fan_speed: at("internal_bridge_fan_speed") / 100.0,
+            // Orca's default, -1, where a profile leaves it out: the overhang fan's speed.
+            internal_bridge_fan_speed: p
+                .list("internal_bridge_fan_speed")
+                .first()
+                .map_or(-1.0, |v| v.trim().parse().unwrap_or(-1.0))
+                / 100.0,
             overhang_fan_overlap: if p.bool("enable_overhang_bridge_fan") {
                 overhang_fan_overlap(p.text("overhang_fan_threshold"))
             } else {
