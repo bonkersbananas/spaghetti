@@ -30,8 +30,13 @@ export function captureTitle(
  * when what follows it is the link's own site ("Hook - Printables" for printables.com, "Bracket - 2 inch" stays).
  */
 export function tidyPageTitle(title: string, url?: string | null): string | null {
-  const [, head = "", bar = "", suffix = ""] = /^(.*\S)\s+(\||[-–—·•])\s+([^|–—·•-]{1,40})$/.exec(title) ?? [];
-  const name = suffix.toLowerCase().replace(/[^a-z0-9.]/g, "");
+  const [, head = "", , suffix = ""] = /^(.*\S)\s+(\||[-–—·•])\s+([^|–—·•-]{1,40})$/.exec(title) ?? [];
+  const name = suffix.trim().toLowerCase();
   const host = url?.split("/")[2]?.toLowerCase() ?? "";
-  return head && (bar === "|" || /\.\w{2,}$/.test(name) || (name.length > 2 && host.includes(name))) ? head : null;
+  // Only a site's name goes: a model site's, the link's own, or a domain ("Plate - 3.5mm" and "Cats | Dogs" stay).
+  const isSite =
+    /^[a-z0-9-]+\.[a-z]{2,}$/.test(name) ||
+    /^(makerworld|printables|thingiverse|thangs|cults|myminifactory|creality cloud)$/.test(name) ||
+    (name.length > 2 && host.includes(name.replace(/\s/g, "")));
+  return head && isSite ? head : null;
 }

@@ -29,6 +29,7 @@ describe("model links", () => {
       "https://www.thingiverse.com/thing:456",
     );
     expect(modelSite("https://3dgo.app/models/cults/456")).toBeNull();
+    expect(modelSite("https://3dgo.app/models/constructor/12")).toBeNull();
     expect(modelSite("https://3dgo.app/")).toBeNull();
     expect(modelSite("https://3dgo.app.evil.example/models/makerworld/1")).toBeNull();
     expect(lonelyModelLink("https://3dgo.app/models/makerworld/2487194")?.url).toBe(

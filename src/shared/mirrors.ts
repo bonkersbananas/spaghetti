@@ -27,7 +27,7 @@ export function mirrorSource(url: URL): string | null {
   for (const { domain, path } of MIRRORS) {
     const [, site = "", id = ""] =
       (host === domain || host.endsWith(`.${domain}`) ? path.exec(url.pathname) : null) ?? [];
-    const source = SOURCES[site.toLowerCase()];
+    const source = Object.hasOwn(SOURCES, site.toLowerCase()) ? SOURCES[site.toLowerCase()] : undefined;
     if (source) return source.replace("$", id);
   }
   return null;
