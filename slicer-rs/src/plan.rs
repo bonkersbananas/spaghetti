@@ -7,7 +7,8 @@
 //! layer below (`overhang.rs`): a wall's stretches beyond it print as overhang walls, and both slow down where they
 //! hang.
 
-use crate::config::Settings;
+use crate::arc_fit;
+use crate::config::{ArcFitting, Settings};
 use crate::fill;
 use crate::geom::{self, Contour, Pt, Shapes};
 use crate::infill;
@@ -38,6 +39,17 @@ pub struct Path {
     pub object: u32,
     /// How each segment prints, where they don't all print alike: one per segment (empty when they do).
     pub parts: Vec<Part>,
+    /// The stretches of its points that print as arcs (`G2`/`G3`), in order: Orca's arc fitting (`fit`).
+    pub arcs: Vec<ArcRun>,
+}
+
+/// A stretch of a path's points, `start` to `end` (indexes), that prints as one arc round `arc` (in Orca's
+/// nanometres): Orca's `PathFittingData` of an arc move. The points between stay, for the wipe and the overhangs.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct ArcRun {
+    pub start: usize,
+    pub end: usize,
+    pub arc: arc_fit::Arc,
 }
 
 /// How one segment of a path prints, over an overhang: a wall's stretch beyond the layer below prints as an overhang
@@ -62,6 +74,18 @@ impl Path {
 
     pub fn last_role(&self) -> Role {
         self.role_at(self.points.len().saturating_sub(2))
+    }
+
+    /// The same path the other way round, its arcs too (Orca's `Polyline::reverse`).
+    pub fn reverse(&mut self) {
+        self.points.reverse();
+        self.parts.reverse();
+        let last = self.points.len().saturating_sub(1);
+        for run in &mut self.arcs {
+            (run.start, run.end) = (last - run.end, last - run.start);
+            run.arc.reverse();
+        }
+        self.arcs.reverse();
     }
 }
 
@@ -335,6 +359,7 @@ fn support_paths(layer: &support::Layer, object: u32, part: support::Part, at: P
             island: u32::MAX,
             object,
             parts: Vec::new(),
+            arcs: p.arcs.clone(),
         }
     };
     // The base or the interface alone, where they print in different filaments: Orca then leaves out what is both.
@@ -357,7 +382,7 @@ fn support_paths(layer: &support::Layer, object: u32, part: support::Part, at: P
             support::Item::Path(p) => {
                 let mut path = make(p);
                 if reversed {
-                    path.points.reverse();
+                    path.reverse();
                 }
                 out.push(path);
             }
@@ -414,6 +439,7 @@ fn brim_paths(brims: &[Contour], object: u32, mut at: Pt, h: f64, s: &Settings) 
             island: u32::MAX,
             object,
             parts: Vec::new(),
+            arcs: Vec::new(),
         });
     }
     out
@@ -448,7 +474,7 @@ fn brim_loop(contour: &Contour, at: Pt, gap: f64) -> Option<Vec<Pt>> {
     if f != points[points.len() - 1] {
         points.push(f);
     }
-    clip_end(&mut points, &mut Vec::new(), gap).then_some(points)
+    clip_end(&mut points, &mut Vec::new(), &mut Vec::new(), gap).then_some(points)
 }
 
 /// Starts a loop (closed: its last point its first) at the point on it nearest `at`, on a segment if need be, as
@@ -496,10 +522,12 @@ fn split_loop(points: &mut Vec<Pt>, at: Pt) {
     *points = out;
 }
 
-/// Takes `gap` mm off the end of a loop, and off its segments' parts, so that it stops short of where it started
-/// rather than print over it (Orca's `ExtrusionLoop::clip_end`, by its seam gap); false if nothing is left of it.
-fn clip_end(points: &mut Vec<Pt>, parts: &mut Vec<Part>, gap: f64) -> bool {
+/// Takes `gap` mm off the end of a loop, and off its segments' parts and arcs, so that it stops short of where it
+/// started rather than print over it (Orca's `ExtrusionLoop::clip_end`, by its seam gap); false if nothing is left
+/// of it. An arc cut short ends where the circle comes nearest the cut, as Orca's `Polyline::clip_end` ends it.
+fn clip_end(points: &mut Vec<Pt>, parts: &mut Vec<Part>, arcs: &mut Vec<ArcRun>, gap: f64) -> bool {
     let mut left = gap * geom::SCALE;
+    let mut inserted = false;
     while left > 0.0 && points.len() >= 2 {
         let n = points.len();
         let (a, b) = (points[n - 2], points[n - 1]);
@@ -509,7 +537,8 @@ fn clip_end(points: &mut Vec<Pt>, parts: &mut Vec<Part>, gap: f64) -> bool {
             let x = b.x as f64 + (a.x - b.x) as f64 * t;
             let y = b.y as f64 + (a.y - b.y) as f64 * t;
             points[n - 1] = geom::pt(x.round() as i32, y.round() as i32);
-            return true;
+            inserted = true;
+            break;
         }
         left -= l;
         points.pop();
@@ -517,7 +546,29 @@ fn clip_end(points: &mut Vec<Pt>, parts: &mut Vec<Part>, gap: f64) -> bool {
             parts.pop();
         }
     }
-    points.len() >= 2
+    if points.len() < 2 {
+        return false;
+    }
+    let last = points.len() - 1;
+    arcs.retain(|run| run.start < last);
+    if let Some(run) = arcs.last_mut()
+        && (run.end > last || (inserted && run.end == last))
+    {
+        let p = points[last];
+        if run.arc.clip_end([i64::from(p.x) * 100, i64::from(p.y) * 100]) {
+            run.end = last;
+            points[last] = from_nm(run.arc.end);
+        } else {
+            // Orca prints it as lines then.
+            arcs.pop();
+        }
+    }
+    true
+}
+
+/// A point in Orca's nanometres, on our grid.
+pub fn from_nm(p: arc_fit::P) -> Pt {
+    geom::pt((p[0] as f64 / 100.0).round() as i32, (p[1] as f64 / 100.0).round() as i32)
 }
 
 /// The point of segment a–b nearest p (Orca's `Point::projection_onto`).
@@ -597,7 +648,7 @@ fn island_paths(
             None => wall,
         };
         // It stops the seam gap short of where it started, as Orca's walls do.
-        if rises || clip_end(&mut wall.points, &mut wall.parts, s.seam_gap) {
+        if rises || clip_end(&mut wall.points, &mut wall.parts, &mut wall.arcs, s.seam_gap) {
             if at.is_some() {
                 at = wall.points.last().copied();
             }
@@ -725,7 +776,7 @@ fn island_paths(
         if flip {
             g.paths.reverse();
             for p in &mut g.paths {
-                p.points.reverse();
+                p.reverse();
             }
         }
         if g.sortable && g.paths.len() > 1 {
@@ -737,7 +788,7 @@ fn island_paths(
                 .filter_map(|(i, back)| {
                     let mut p = taken[i].take()?;
                     if back {
-                        p.points.reverse();
+                        p.reverse();
                     }
                     Some(p)
                 })
@@ -1045,9 +1096,11 @@ fn thick_paths(role: Role, points: &[Pt], widths: &[f64], island: u32, first: bo
         }
         let width = sum / length + h * (1.0 - std::f64::consts::FRAC_PI_4);
         let mm3_per_mm = Settings::mm3_per_mm(width, h);
+        let (tolerance, arcs) = resolution(role, s);
+        let (points, arcs) = fit(&pts[from..=to], tolerance, arcs);
         out.push(Path {
             role,
-            points: geom::simplify_line(&pts[from..=to], resolution(role, s)),
+            points,
             closed: false,
             width,
             height: h,
@@ -1057,6 +1110,7 @@ fn thick_paths(role: Role, points: &[Pt], widths: &[f64], island: u32, first: bo
             island,
             object: 0,
             parts: Vec::new(),
+            arcs,
         });
     };
     let mut start = 0;
@@ -1194,13 +1248,38 @@ fn accel(role: Role, first: bool, s: &Settings) -> f64 {
     }
 }
 
-/// mm a sparse infill line may stray from its course when simplified (Orca's `SPARSE_INFILL_RESOLUTION`); other
+/// mm a sparse infill line may stray from its course when Orca fits arcs to it (`SPARSE_INFILL_RESOLUTION`); other
 /// paths keep to the profile's resolution.
 const SPARSE_INFILL_RESOLUTION: f64 = 0.04;
 
-/// How far a path of a role may stray from its course as Orca simplifies it before printing (mm).
-fn resolution(role: Role, s: &Settings) -> f64 {
-    if role == Role::SparseInfill { SPARSE_INFILL_RESOLUTION } else { s.resolution }
+/// How Orca simplifies a path of a role before printing it (`LayerRegion::simplify_path`): how far it may stray from
+/// its course (mm), and whether arcs are fitted to it. Where arcs are fitted, sparse infill keeps to 0.04 mm and
+/// everything else to the profile's resolution; where they aren't (and always in spiral vase mode), to the
+/// resolution.
+pub(crate) fn resolution(role: Role, s: &Settings) -> (f64, bool) {
+    let sparse = role == Role::SparseInfill;
+    let arcs = !s.spiral_mode
+        && match s.arc_fitting {
+            ArcFitting::Enabled => true,
+            ArcFitting::SparseInfill => sparse,
+            ArcFitting::Disabled => false,
+        };
+    (if arcs && sparse { SPARSE_INFILL_RESOLUTION } else { s.resolution }, arcs)
+}
+
+/// A path's points simplified to within `tolerance` mm, as Orca simplifies them: with `arcs`, its arcs fitted first
+/// and each stretch simplified on its own (`Polyline::simplify_by_fitting_arc`, `arc_fit.rs`), else Douglas–Peucker
+/// over the whole path (`Polyline::simplify`). The points kept are the path's own.
+pub fn fit(points: &[Pt], tolerance: f64, arcs: bool) -> (Vec<Pt>, Vec<ArcRun>) {
+    if !arcs || tolerance <= 0.0 || points.len() < 3 {
+        return (geom::simplify_line(points, tolerance), Vec::new());
+    }
+    let mut nm: Vec<arc_fit::P> = points.iter().map(|p| [i64::from(p.x) * 100, i64::from(p.y) * 100]).collect();
+    // Orca's `scaled<double>` of the tolerance, to the bit.
+    let runs = arc_fit::fit_and_simplify(&mut nm, tolerance / 1e-6);
+    let points = nm.iter().map(|p| geom::pt((p[0] / 100) as i32, (p[1] / 100) as i32)).collect();
+    let arcs = runs.into_iter().filter_map(|r| r.arc.map(|arc| ArcRun { start: r.start, end: r.end, arc })).collect();
+    (points, arcs)
 }
 
 /// A path of a role, simplified as Orca simplifies every path before printing it: without the points it can lose and
@@ -1209,9 +1288,11 @@ fn resolution(role: Role, s: &Settings) -> f64 {
 fn path(role: Role, points: Vec<Pt>, closed: bool, island: u32, first: bool, h: f64, s: &Settings) -> Path {
     let (width, mm3_per_mm, speed) = flow(role, first, h, s);
     let speed = speed.min(s.speed_cap(mm3_per_mm));
+    let (tolerance, arcs) = resolution(role, s);
+    let (points, arcs) = fit(&points, tolerance, arcs);
     Path {
         role,
-        points: geom::simplify_line(&points, resolution(role, s)),
+        points,
         closed,
         width,
         height: path_height(role, h, s),
@@ -1221,6 +1302,7 @@ fn path(role: Role, points: Vec<Pt>, closed: bool, island: u32, first: bool, h: 
         island,
         object: 0,
         parts: Vec::new(),
+        arcs,
     }
 }
 
@@ -1322,17 +1404,96 @@ mod tests {
         let slow = Part { overhang: true, speed: 10.0 };
         let mut parts = vec![Part { overhang: false, speed: 200.0 }; 3];
         parts.push(slow);
-        assert!(clip_end(&mut points, &mut parts, 0.04));
+        assert!(clip_end(&mut points, &mut parts, &mut Vec::new(), 0.04));
         assert_eq!((points.len(), parts.len()), (5, 4));
         assert!((geom::dist(points[4], start) / geom::SCALE - 0.04).abs() < 1e-3, "{:?}", points[4]);
         assert_eq!(parts[3], slow);
         // A gap past the last corner takes the last side and its part with it.
         let mut points = seam_loop(&square(0.0, 0.0, 10.0, 10.0, false), true);
         let mut parts = vec![Part { overhang: false, speed: 200.0 }; 4];
-        assert!(clip_end(&mut points, &mut parts, 10.5));
+        assert!(clip_end(&mut points, &mut parts, &mut Vec::new(), 10.5));
         assert_eq!((points.len(), parts.len()), (4, 3));
         // One no longer than the gap is gone.
         let mut points = seam_loop(&square(0.0, 0.0, 0.005, 0.005, false), true);
-        assert!(!clip_end(&mut points, &mut Vec::new(), 0.04));
+        assert!(!clip_end(&mut points, &mut Vec::new(), &mut Vec::new(), 0.04));
+    }
+
+    /// A circle of radius `r` mm round (100, 100) in `n` points, counter-clockwise from angle 0, closed.
+    fn circle(r: f64, n: usize) -> Vec<Pt> {
+        (0..=n)
+            .map(|k| {
+                let a = 2.0 * std::f64::consts::PI * (k % n) as f64 / n as f64;
+                geom::pt(geom::sc(100.0 + r * a.cos()), geom::sc(100.0 + r * a.sin()))
+            })
+            .collect()
+    }
+
+    /// Whether every arc of a path starts and ends at its points (to Orca's nanometres on our 0.1 µm), on its circle.
+    fn arcs_fit(points: &[Pt], arcs: &[ArcRun]) {
+        for run in arcs {
+            assert!(run.start < run.end && run.end < points.len(), "{run:?}");
+            assert_eq!(from_nm(run.arc.start), points[run.start]);
+            assert_eq!(from_nm(run.arc.end), points[run.end]);
+            for p in [run.arc.start, run.arc.end] {
+                let r = ((p[0] - run.arc.center[0]) as f64).hypot((p[1] - run.arc.center[1]) as f64);
+                assert!((r - run.arc.radius).abs() < 100.0, "{r} against {}", run.arc.radius);
+            }
+        }
+        assert!(arcs.windows(2).all(|w| w[0].end <= w[1].start));
+    }
+
+    #[test]
+    fn a_round_loop_fits_arcs_that_follow_it_backwards_and_round_its_seam_gap() {
+        let s = Settings::default();
+        assert_eq!(resolution(Role::OuterWall, &s), (s.resolution, true));
+        assert_eq!(resolution(Role::SparseInfill, &s), (0.04, true));
+        let off = Settings { arc_fitting: ArcFitting::Disabled, ..s.clone() };
+        assert_eq!(resolution(Role::SparseInfill, &off), (s.resolution, false));
+        let sparse_only = Settings { arc_fitting: ArcFitting::SparseInfill, ..s.clone() };
+        assert_eq!(resolution(Role::OuterWall, &sparse_only), (s.resolution, false));
+        assert_eq!(resolution(Role::SparseInfill, &sparse_only), (0.04, true));
+        let spiral = Settings { spiral_mode: true, ..s.clone() };
+        assert_eq!(resolution(Role::OuterWall, &spiral), (s.resolution, false));
+
+        // Without arcs, the path simplified as before; with them, a 10 mm circle in a few arcs, counter-clockwise.
+        let raw = circle(10.0, 360);
+        assert_eq!(fit(&raw, 0.012, false), (geom::simplify_line(&raw, 0.012), Vec::new()));
+        let (points, arcs) = fit(&raw, 0.012, true);
+        assert!(!arcs.is_empty() && arcs.len() <= 4, "{}", arcs.len());
+        assert!(arcs.iter().all(|a| a.arc.ccw && (a.arc.radius / 1e6 - 10.0).abs() < 0.012));
+        let covered: usize = arcs.iter().map(|a| a.end - a.start).sum();
+        assert!(covered + 2 >= points.len() - 1, "{covered} of {} segments", points.len() - 1);
+        arcs_fit(&points, &arcs);
+        let mut path = path(Role::OuterWall, raw.clone(), true, 0, false, 0.2, &s);
+        assert_eq!((&path.points, &path.arcs), (&points, &arcs));
+
+        // Backwards: the same arcs the other way round, clockwise.
+        let length = |arcs: &[ArcRun]| arcs.iter().map(|a| a.arc.length).sum::<f64>();
+        let before = length(&path.arcs);
+        path.reverse();
+        assert!(path.arcs.iter().all(|a| !a.arc.ccw && a.arc.angle < 0.0));
+        arcs_fit(&path.points, &path.arcs);
+        assert_eq!(length(&path.arcs), before);
+
+        // The seam gap cuts the loop 0.5 mm short of where it started, its last arc ending on its circle where the
+        // cut falls (Orca's `Polyline::clip_end`).
+        path.reverse();
+        let start = path.points[0];
+        // mm the path prints: its arcs, and its segments outside them.
+        let printed = |p: &Path| {
+            let mut mm = length(&p.arcs) / 1e6;
+            for k in 0..p.points.len() - 1 {
+                if !p.arcs.iter().any(|a| a.start <= k && k < a.end) {
+                    mm += geom::dist(p.points[k], p.points[k + 1]) / geom::SCALE;
+                }
+            }
+            mm
+        };
+        let whole = printed(&path);
+        assert!(clip_end(&mut path.points, &mut path.parts, &mut path.arcs, 0.5));
+        arcs_fit(&path.points, &path.arcs);
+        let chord = geom::dist(start, path.points[path.points.len() - 1]) / geom::SCALE;
+        assert!((chord - 0.5).abs() < 0.01, "{chord}");
+        assert!((whole - printed(&path) - 0.5).abs() < 0.01, "{} of {whole} mm", printed(&path));
     }
 }
