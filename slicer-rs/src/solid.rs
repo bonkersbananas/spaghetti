@@ -7,13 +7,9 @@
 //! runs of short lines that would only zig-zag are dropped (PrusaSlicer's filter against vibrating extrusions,
 //! which Orca took over); the strips the remaining lines cover are lines, the rest of the region loops.
 //!
-//! `narrow_loops` stands in for Orca's Arachne fill of the narrow parts (`FillConcentricInternal`), with Arachne's
-//! bead counts and widths but not its skeleton: a band holds as many beads, a solid line's spacing wide, as
-//! Arachne's thresholds give (measured against the line's width, as Arachne measures them), and the middle one or
-//! two take up what is left. So a band too thin for two beads is one line along its middle, as wide as the band (at
-//! least 85 % of the nozzle); one that holds two is a loop of two half-bands; a wider one gets a loop half a bead in
-//! from its edge, and so on inwards. The odd middle beads run along the region's medial axis, which also gives each
-//! loop the band's width beside it.
+//! `narrow_loops` fills the narrow parts as Orca's `FillConcentricInternal` does, with the Arachne port
+//! (`crate::arachne`): `WallToolPaths` on each piece, as many insets as fit, so a band too thin for two beads is one
+//! line along its middle and wider ones are loops with the odd bead down the middle, their widths following the band.
 
 use crate::geom::{self, Pt, Shape, Shapes};
 
