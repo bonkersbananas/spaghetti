@@ -139,6 +139,10 @@ pub struct Settings {
     pub lateral_lattice_angles: [f64; 2],
     /// How much Orca rounds the corners of some sparse patterns (`sparse_infill_smooth_factor`, %), which ours doesn't.
     pub sparse_smooth_factor: f64,
+    /// Whether 3D honeycomb caps its cells where they close (`infill_complete_top`), which ours doesn't.
+    pub honeycomb_complete_top: bool,
+    /// How Orca grades gyroid and TPMS infill through the object (`adaptive_infill_mode`), which ours doesn't.
+    pub adaptive_infill_mode: String,
     /// mm the first layer is pulled in against elephant's foot, where it is wide enough (`elephant.rs`).
     pub elephant_foot: f64,
     /// How many layers Orca pulls in, by less on each (`elefant_foot_compensation_layers`): this pulls in the first.
@@ -172,6 +176,9 @@ pub struct Settings {
     /// Whether inner walls start a little further along than the outer wall (`staggered_inner_seams`).
     pub staggered_inner_seams: bool,
     pub only_one_wall_top: bool,
+    /// Whether the first inner wall goes a whole line width in from the outer wall (`precise_outer_wall`, which Orca
+    /// heeds only with inner walls before the outer one); else half the two walls' spacings.
+    pub precise_outer_wall: bool,
     /// How wide a top must be before it gets one wall (`min_width_top_surface`, a share of the inner wall's width).
     pub min_width_top_surface: Share,
     /// mm: how wide bridge lines are (`bridge_line_width`, a share of the nozzle); 0 for solid infill's width.
@@ -927,6 +934,8 @@ impl Settings {
                 .map(|(key, default)| if p.text(key).is_empty() { default } else { p.float(key) }),
             infill_anchor_max,
             sparse_smooth_factor: p.float("sparse_infill_smooth_factor"),
+            honeycomb_complete_top: p.bool("infill_complete_top"),
+            adaptive_infill_mode: p.text("adaptive_infill_mode").to_string(),
             elephant_foot: p.float("elefant_foot_compensation"),
             elephant_foot_layers: p.int("elefant_foot_compensation_layers").max(1) as usize,
             resolution: p.float("resolution"),
@@ -943,6 +952,9 @@ impl Settings {
             seam_position: p.text("seam_position").to_string(),
             staggered_inner_seams: p.bool("staggered_inner_seams"),
             only_one_wall_top: p.bool("only_one_wall_top"),
+            // Orca's defaults where a setup leaves them out: precise, inner walls first.
+            precise_outer_wall: !matches!(p.text("precise_outer_wall"), "0" | "false")
+                && matches!(p.text("wall_sequence"), "" | "inner wall/outer wall"),
             min_width_top_surface: Share::parse(p.text("min_width_top_surface")),
             bridge_width: p.float_of("bridge_line_width", nozzle_diameter).max(0.0),
             thick_bridges: p.bool("thick_bridges"),
@@ -1229,6 +1241,8 @@ impl Settings {
                 | "archimedeanchords"
                 | "hilbertcurve"
                 | "octagramspiral"
+                | "3dhoneycomb"
+                | "tpmsd"
                 | ""
         ) {
             out.push(format!("{} sparse infill printed as rectilinear", self.sparse_infill_pattern));
@@ -1241,6 +1255,15 @@ impl Settings {
             )
         {
             out.push(format!("{} sparse infill's corners printed unrounded", self.sparse_infill_pattern));
+        }
+        if self.honeycomb_complete_top && self.sparse_infill_pattern == "3dhoneycomb" {
+            out.push("3D honeycomb's cells left open at the top".into());
+        }
+        // Orca grades gyroid and the TPMS patterns (`is_adaptive_infill_pattern`); TPMS-FK, not ported, has its note.
+        if !matches!(self.adaptive_infill_mode.as_str(), "disabled" | "")
+            && matches!(self.sparse_infill_pattern.as_str(), "gyroid" | "tpmsd")
+        {
+            out.push(format!("{} sparse infill printed even, not graded", self.sparse_infill_pattern));
         }
         for (what, pattern) in [
             ("top surfaces", &self.top_surface_pattern),
@@ -1542,6 +1565,23 @@ mod tests {
         assert_eq!((s.filament_type.as_str(), s.filament_colour.as_str()), ("PLA", "#F2754E"));
         assert_eq!((s.filament_tray.as_str(), s.bed_type.as_str()), ("GFA00", "Textured PEI Plate"));
         assert_eq!(s.unsupported(), None);
+    }
+
+    #[test]
+    fn a_precise_outer_wall_counts_only_with_inner_walls_first() {
+        use crate::json::Json;
+        use std::collections::BTreeMap;
+        let precise = |pairs: &[(&str, &str)]| {
+            let process: BTreeMap<String, Json> =
+                pairs.iter().map(|(k, v)| (k.to_string(), Json::Array(vec![Json::String(v.to_string())]))).collect();
+            Settings::from_profile(Arc::new(Profile::over_x2d(BTreeMap::new(), process, BTreeMap::new())), None)
+                .precise_outer_wall
+        };
+        assert!(precise(&[]));
+        assert!(!precise(&[("precise_outer_wall", "0")]));
+        assert!(!precise(&[("wall_sequence", "outer wall/inner wall")]));
+        assert!(!precise(&[("wall_sequence", "inner-outer-inner wall")]));
+        assert!(precise(&[("precise_outer_wall", "1"), ("wall_sequence", "inner wall/outer wall")]));
     }
 
     #[test]

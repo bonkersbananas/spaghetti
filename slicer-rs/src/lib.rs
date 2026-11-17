@@ -17,6 +17,7 @@ pub mod fuzzy;
 pub mod gcode;
 pub mod geom;
 pub mod grid;
+pub mod honeycomb3d;
 pub mod infill;
 pub mod ironing;
 pub mod json;
