@@ -621,6 +621,7 @@ fn island_paths(
 ) -> Vec<Path> {
     let first = s.on_plate(layer);
     let (walls, gaps) = (&island.walls, &island.gaps);
+    let lines = &island.lines;
     let narrow = island.narrow;
     let island_inner = &island.inner;
     let overlap = island.overlap;
@@ -631,7 +632,10 @@ fn island_paths(
     // from the object's centre.
     let centre_pt = geom::pt(centre.0.round() as i32, centre.1.round() as i32);
     let overhang = overhang_flow(first, h, s);
-    for (contour, depth, outline) in wall_order(walls, centre_pt) {
+    if !lines.is_empty() {
+        out.extend(arachne_walls(lines, below, overhang, seams, island, first, h, s));
+    }
+    for (contour, depth, outline) in wall_order(walls, centre_pt).into_iter().filter(|_| lines.is_empty()) {
         let role = if depth == 0 { Role::OuterWall } else { Role::InnerWall };
         // From where the seam placer starts it (`seam.rs`), else from the back; in spiral vase mode, which places no
         // seams, from the point nearest the nozzle, as Orca's loops start there.
@@ -1390,6 +1394,175 @@ fn path(role: Role, points: Vec<Pt>, closed: bool, island: u32, first: bool, h: 
         parts: Vec::new(),
         arcs,
     }
+}
+
+/// Arachne's lines as paths, in the order Orca's `process_arachne` prints them: the lines nearest where the nozzle is
+/// first (open lines before closed ones among those free to go), each only after the lines it must follow (those
+/// within 1.9 line widths of it whose inset differs by one: inner lines first, or outer first with
+/// `wall_sequence`). A closed line starts where the seam placer puts it, as the classic walls do, and every line is
+/// cut into pieces of one width (`thick_polyline_to_multi_path`), each slowed where it hangs.
+#[allow(clippy::too_many_arguments)]
+fn arachne_walls(
+    lines: &[region::ArachneLine],
+    below: Option<&Below>,
+    overhang: (f64, f64, f64, f64),
+    seams: Option<&crate::seam::LayerSeams>,
+    island: u32,
+    first: bool,
+    h: f64,
+    s: &Settings,
+) -> Vec<Path> {
+    use crate::arachne::width;
+    // `all_extrusions`: the insets from the innermost out (or the outermost in), each in its own order.
+    let max_inset = lines.iter().map(|l| l.inset).max().unwrap_or(0);
+    let mut all: Vec<usize> = Vec::new();
+    let insets: Vec<usize> =
+        if s.outer_wall_first { (0..=max_inset).collect() } else { (0..=max_inset).rev().collect() };
+    for inset in insets {
+        all.extend((0..lines.len()).filter(|&i| lines[i].inset == inset));
+    }
+    // `getRegionOrder`: which line must come before which.
+    let max_w = lines.iter().flat_map(|l| l.widths.iter().copied()).fold(0.0f64, f64::max);
+    let mut blocked = vec![0usize; lines.len()];
+    let mut blocking: Vec<Vec<usize>> = vec![Vec::new(); lines.len()];
+    if max_w > 0.0 {
+        let radius = max_w * 1.9;
+        let cell = (radius * geom::SCALE).max(1.0);
+        let key = |p: Pt| ((p.x as f64 / cell).floor() as i64, (p.y as f64 / cell).floor() as i64);
+        let mut grid: std::collections::HashMap<(i64, i64), Vec<(usize, usize)>> = std::collections::HashMap::new();
+        for (li, l) in lines.iter().enumerate() {
+            for (k, &p) in l.points.iter().enumerate() {
+                grid.entry(key(p)).or_default().push((li, k));
+            }
+        }
+        let mut pairs: std::collections::BTreeSet<(usize, usize)> = std::collections::BTreeSet::new();
+        for (hi, here) in lines.iter().enumerate() {
+            for (k, &p) in here.points.iter().enumerate() {
+                let (cx, cy) = key(p);
+                for gx in cx - 1..=cx + 1 {
+                    for gy in cy - 1..=cy + 1 {
+                        let Some(v) = grid.get(&(gx, gy)) else { continue };
+                        for &(ni, nk) in v {
+                            let nearby = &lines[ni];
+                            if ni == hi || nearby.inset == here.inset {
+                                continue;
+                            }
+                            if nearby.inset > here.inset + 1 || here.inset > nearby.inset + 1 {
+                                continue;
+                            }
+                            let reach = (here.widths[k] + nearby.widths[nk]) / 2.0 * 1.9 * geom::SCALE;
+                            let d = geom::dist(p, nearby.points[nk]);
+                            if d > reach {
+                                continue;
+                            }
+                            if (nearby.inset < here.inset) == s.outer_wall_first {
+                                pairs.insert((ni, hi));
+                            } else {
+                                pairs.insert((hi, ni));
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        for (before, after) in pairs {
+            blocked[after] += 1;
+            blocking[before].push(after);
+        }
+    }
+    let mut processed = vec![false; lines.len()];
+    let mut ordered: Vec<usize> = Vec::with_capacity(lines.len());
+    let mut current = all.first().map(|&i| lines[i].points[0]).unwrap_or(geom::pt(0, 0));
+    while ordered.len() < all.len() {
+        let mut available: Vec<usize> = all.iter().copied().filter(|&i| !processed[i] && blocked[i] == 0).collect();
+        available.sort_by_key(|&i| lines[i].closed);
+        let (mut best, mut best_d, mut best_closed) = (all[0], f64::MAX, false);
+        for &c in &available {
+            let l = &lines[c];
+            let d = geom::dist(current, l.points[0]);
+            if d < best_d && (l.closed || best_d != f64::MAX || !best_closed) {
+                best = c;
+                best_d = d;
+                best_closed = l.closed;
+            }
+        }
+        if best_d == f64::MAX {
+            // Every line is blocked (a cycle): take the first not yet printed.
+            if let Some(&c) = all.iter().find(|&&i| !processed[i]) {
+                best = c;
+            }
+        }
+        processed[best] = true;
+        ordered.push(best);
+        for &u in &blocking[best] {
+            blocked[u] = blocked[u].saturating_sub(1);
+        }
+        let l = &lines[best];
+        current = if l.closed { l.points[0] } else { *l.points.last().unwrap() };
+    }
+    let mut out = Vec::new();
+    for li in ordered {
+        let l = &lines[li];
+        let role = if l.inset == 0 { Role::OuterWall } else { Role::InnerWall };
+        let (mut points, mut widths) = (l.points.clone(), l.widths.clone());
+        if l.closed && points.len() > 3 {
+            // A loop starts where the seam placer puts it, counter-clockwise round an outline and clockwise round a
+            // hole (Arachne's contours run the other way round).
+            let contour: Vec<Pt> = points[..points.len() - 1].to_vec();
+            let outline = geom::area2(&contour) < 0;
+            if let Some(seam) = seams.and_then(|seams| seams.wall_loop(&contour, outline, l.inset == 0, s)) {
+                widths = seam.iter().map(|&p| width_at(&points, &widths, p)).collect();
+                points = seam;
+            }
+        }
+        let pts: Vec<crate::arachne::graph::P> = points
+            .iter()
+            .map(|q| crate::arachne::graph::P { x: i64::from(q.x) * 100, y: i64::from(q.y) * 100 })
+            .collect();
+        let per_segment = width::per_segment_widths(&widths.iter().map(|w| w * 1e6).collect::<Vec<_>>());
+        let pieces = width::thick_polyline_to_multi_path(&pts, &per_segment, h, 0.05 * 1e6, 100.0);
+        let count = pieces.len();
+        for (k, piece) in pieces.into_iter().enumerate() {
+            let points: Vec<Pt> = piece
+                .points
+                .iter()
+                .map(|q| geom::pt((q.x as f64 / 100.0).round() as i32, (q.y as f64 / 100.0).round() as i32))
+                .collect();
+            let mut p = path(role, points, false, island, first, h, s);
+            p.width = piece.width;
+            p.mm3_per_mm = Settings::mm3_per_mm(piece.width, h);
+            p.speed = p.speed.min(s.speed_cap(p.mm3_per_mm));
+            let mut p = match below {
+                Some(below) => below.wall(p, overhang, s),
+                None => p,
+            };
+            // A loop stops the seam gap short of where it started, as Orca's walls do.
+            if l.closed && k + 1 == count && !clip_end(&mut p.points, &mut p.parts, &mut p.arcs, s.seam_gap) {
+                continue;
+            }
+            if p.points.len() >= 2 {
+                out.push(p);
+            }
+        }
+    }
+    out
+}
+
+/// A line's width (mm) at the point of it nearest `p`, interpolated along its segment.
+fn width_at(points: &[Pt], widths: &[f64], p: Pt) -> f64 {
+    let mut best = (f64::MAX, widths[0]);
+    for k in 0..points.len() - 1 {
+        let (a, b) = (points[k], points[k + 1]);
+        let (dx, dy) = ((b.x - a.x) as f64, (b.y - a.y) as f64);
+        let l2 = dx * dx + dy * dy;
+        let t =
+            if l2 == 0.0 { 0.0 } else { (((p.x - a.x) as f64 * dx + (p.y - a.y) as f64 * dy) / l2).clamp(0.0, 1.0) };
+        let d = ((a.x as f64 + t * dx - p.x as f64).powi(2) + (a.y as f64 + t * dy - p.y as f64).powi(2)).sqrt();
+        if d < best.0 {
+            best = (d, widths[k] + (widths[k + 1] - widths[k]) * t);
+        }
+    }
+    best.1
 }
 
 /// A wall loop as printed: counter-clockwise, from the rearmost point (largest y, then smallest x), closed.
