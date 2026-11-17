@@ -178,8 +178,6 @@ impl LayerRegions {
             })
     }
 
-    /// An object's slice on this layer, by its group (all of its regions together), as the layer above sees it
-    /// (Orca's `lslices`).
     /// The slices of each region of an object on this layer (one per filament its parts print in, in the order of the
     /// regions' first appearance), which Orca's support detection works on region by region; empty for an object of
     /// one region.
@@ -208,6 +206,8 @@ impl LayerRegions {
             .collect()
     }
 
+    /// An object's slice on this layer, by its group (all of its regions together), as the layer above sees it
+    /// (Orca's `lslices`).
     pub fn slice_of(&self, group: u32) -> Shapes {
         let (shapes, objects): (Shapes, Vec<u32>) = if self.unpulled.is_empty() {
             self.islands.iter().filter(|i| i.group == group).map(|i| (i.outline.clone(), i.object)).unzip()
