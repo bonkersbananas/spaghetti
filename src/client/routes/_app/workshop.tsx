@@ -89,16 +89,16 @@ function Workshop() {
           summary={pantryLine}
           visual={
             <span className="flex">
-              {(spools ?? []).slice(0, isDesktop ? 7 : 6).map((spool) => (
+              {(spools ?? []).slice(0, isDesktop ? 5 : 6).map((spool) => (
                 <SpoolDisc
                   key={spool.id}
                   color={spool.colorHex}
                   colors={spool.colors}
-                  size={isDesktop ? "lg" : "md"}
-                  className="-ml-4 first:ml-0"
+                  size={isDesktop ? "xl" : "lg"}
+                  className="-ml-6 first:ml-0 md:-ml-9"
                 />
               ))}
-              {spools?.length === 0 && <SpoolDisc empty size="lg" />}
+              {spools?.length === 0 && <SpoolDisc empty size="xl" />}
             </span>
           }
         />
@@ -108,16 +108,13 @@ function Workshop() {
           summary={printerLine}
           visual={
             slots.length > 0 ? (
-              <span className="grid w-full max-w-72 grid-cols-4 gap-1 md:gap-2">
+              <span className="grid w-full max-w-sm grid-cols-4 gap-2">
                 {slots.map((slot) => {
                   const spoolId = printer?.slots[slot];
                   return (
-                    <span
-                      key={slot}
-                      className="bg-cream shadow-soft flex flex-col items-center gap-1 rounded-md px-0.5 pt-2 pb-1.5 md:px-1 md:pt-2.5"
-                    >
+                    <span key={slot} className="flex flex-col items-center gap-1">
                       <SpoolDisc
-                        size={isDesktop ? "md" : "sm"}
+                        size="lg"
                         color={spools?.find((spool) => spool.id === spoolId)?.colorHex}
                         colors={spools?.find((spool) => spool.id === spoolId)?.colors}
                         empty={!spoolId}
@@ -147,12 +144,12 @@ function Workshop() {
                       key={thing.id}
                       src={thing.picture.url}
                       alt=""
-                      className="ring-cream -ml-2 size-12 rounded-md ring-2 first:ml-0 md:-ml-3 md:size-16"
+                      className="ring-cream -ml-3 size-16 rounded-md ring-2 first:ml-0 md:-ml-4 md:size-20"
                     />
                   ) : null,
                 )}
                 {toBuy.length > shown.length && (
-                  <span className="bg-cream text-ink-soft shadow-soft ring-cream tabular text-small -ml-2 flex size-12 items-center justify-center rounded-md font-semibold ring-2 md:-ml-3 md:size-16">
+                  <span className="bg-cream text-ink-soft shadow-soft ring-cream tabular text-small -ml-3 flex size-16 items-center justify-center rounded-md font-semibold ring-2 md:-ml-4 md:size-20">
                     +{toBuy.length - shown.length}
                   </span>
                 )}
@@ -176,7 +173,7 @@ function Workshop() {
                     alt=""
                     color={photo.color || undefined}
                     className={cn(
-                      "ring-cream shadow-raised h-14 w-20 rounded-md ring-2 md:h-20 md:w-28 md:ring-4",
+                      "ring-cream shadow-raised h-[4.5rem] w-24 rounded-md ring-2 md:h-24 md:w-32 md:ring-4",
                       index === 0 ? "z-10 -rotate-3" : "-ml-5 rotate-6 opacity-90 md:-ml-8",
                     )}
                   />
