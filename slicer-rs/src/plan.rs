@@ -1103,6 +1103,7 @@ fn sparse_runs(
         lattice_angles: s.lateral_lattice_angles,
         size,
         resolution: s.resolution,
+        layer_height: h,
     };
     // Lightning's trees grow in the area grown all round (`region::lightning_lines`), which its lines keep to: with
     // the area Orca's generator takes, ours came out further from Orca's (+11.5 % against −0.3 % on a Benchy).

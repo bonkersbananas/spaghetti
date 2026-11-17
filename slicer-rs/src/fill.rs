@@ -56,6 +56,8 @@ pub enum Pattern {
     ArchimedeanChords,
     HilbertCurve,
     OctagramSpiral,
+    /// The edges of a stack of truncated octahedra, sliced at the layer (`Fill3DHoneycomb`, `honeycomb3d.rs`).
+    Honeycomb3D,
 }
 
 impl Pattern {
@@ -78,6 +80,7 @@ impl Pattern {
             "archimedeanchords" => Some(Pattern::ArchimedeanChords),
             "hilbertcurve" => Some(Pattern::HilbertCurve),
             "octagramspiral" => Some(Pattern::OctagramSpiral),
+            "3dhoneycomb" => Some(Pattern::Honeycomb3D),
             "adaptivecubic" => Some(Pattern::AdaptiveCubic),
             "supportcubic" => Some(Pattern::SupportCubic),
             _ => None,
@@ -115,6 +118,8 @@ pub struct Sparse<'a> {
     pub size: (f64, f64),
     /// mm: how far the Archimedean chords may stray from the spiral (the profile's `resolution`).
     pub resolution: f64,
+    /// The layer's height, mm (3D honeycomb's cells are sliced by it).
+    pub layer_height: f64,
 }
 
 /// The infill of `area`, each of its shapes grown by `grow` mm first (Orca's overlap with the walls, less half a
@@ -167,6 +172,7 @@ pub fn support_grid(shape: &Shape, angle: f64, origin: (f64, f64), spacing: f64,
         lattice_angles: [0.0; 2],
         size: (0.0, 0.0),
         resolution: 0.0,
+        layer_height: 0.0,
     };
     // Orca's box is the shape's own here: its support filler has no overlap with walls.
     let lines = multilines_across(&shape[0], 0, angle as f32, &p);
@@ -206,6 +212,7 @@ fn fill_part(part: &Shape, p: &Sparse) -> Vec<Vec<Pt>> {
         Pattern::ArchimedeanChords => return plane_path(part, crate::plane_path::Curve::ArchimedeanChords, p),
         Pattern::HilbertCurve => return plane_path(part, crate::plane_path::Curve::Hilbert, p),
         Pattern::OctagramSpiral => return plane_path(part, crate::plane_path::Curve::OctagramSpiral, p),
+        Pattern::Honeycomb3D => return honeycomb3d(part, p),
     };
     let grid = EdgeGrid::new(part, 2.0 * geom::SCALE, 0.0);
     let pieces: Vec<Piece> = clip(&lines, &grid).into_iter().filter(|c| c.points.len() >= 2).collect();
@@ -285,6 +292,34 @@ fn plane_path(part: &Shape, curve: crate::plane_path::Curve, p: &Sparse) -> Vec<
     let line: Vec<(f64, f64)> = points.into_iter().map(|(x, y)| frame.from((x as f64, y as f64))).collect();
     let grid = EdgeGrid::new(part, 2.0 * geom::SCALE, 0.0);
     let pieces: Vec<Piece> = clip(&[line], &grid).into_iter().filter(|c| c.points.len() >= 2).collect();
+    if pieces.is_empty() {
+        return Vec::new();
+    }
+    if p.anchor_max < 0.05 || p.density > 0.5 {
+        return pieces.into_iter().map(|c| c.points).collect();
+    }
+    connect(pieces, part, p.spacing * geom::SCALE, p.anchor.min(p.anchor_max) * geom::SCALE, p.anchor_max * geom::SCALE)
+}
+
+/// 3D honeycomb (`honeycomb3d.rs`): the pattern in the object's frame, turned by the infill direction alone (a
+/// float, and not at all under 1e-4 rad), cut to the part, pieces under 0.8 spacings dropped, joined along the edge
+/// (only chained above half density).
+fn honeycomb3d(part: &Shape, p: &Sparse) -> Vec<Vec<Pt>> {
+    let angle = p.angle.to_radians() as f32 as f64;
+    let frame = Frame::new(p.origin, if angle.abs() < 1e-4 { 0.0 } else { angle });
+    let mut bb = [i64::MAX, i64::MAX, i64::MIN, i64::MIN];
+    for &q in &part[0] {
+        let (x, y) = frame.to(q);
+        let (x, y) = (x.round() as i64, y.round() as i64);
+        bb = [bb[0].min(x), bb[1].min(y), bb[2].max(x), bb[3].max(y)];
+    }
+    let lines: Vec<Vec<(f64, f64)>> = crate::honeycomb3d::lines(bb, p.z, p.layer_height, p.spacing, p.density)
+        .into_iter()
+        .map(|l| l.into_iter().map(|(x, y)| frame.from((x as f64, y as f64))).collect())
+        .collect();
+    let grid = EdgeGrid::new(part, 2.0 * geom::SCALE, 0.0);
+    let min_length = 0.8 * p.spacing * geom::SCALE;
+    let pieces: Vec<Piece> = clip(&lines, &grid).into_iter().filter(|c| length(&c.points) >= min_length).collect();
     if pieces.is_empty() {
         return Vec::new();
     }
@@ -2117,6 +2152,7 @@ mod tests {
             lattice_angles: [-45.0, 45.0],
             size: (0.0, 0.0),
             resolution: 0.0125,
+            layer_height: 0.2,
         }
     }
 
