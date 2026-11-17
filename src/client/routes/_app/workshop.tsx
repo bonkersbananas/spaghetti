@@ -30,9 +30,9 @@ const Attention = ({ children }: { children: string }) => (
 const PICTURES = 3;
 
 /**
- * The phone's fourth tab: the places that are not a tab of their own, each drawn with what is in it. On desktop the
- * sidebar lists the same three, so this page is only a way in for phones. The tiles flow to as many columns as fit,
- * so a fourth place (twists) joins without a new layout.
+ * The phone's fourth tab: the places that are not a tab of their own, each drawn with what is in it. On a phone
+ * the four tiles are one column of wide tiles (each caption on one line); from xl, two by two, so no tile is left
+ * alone on a row. The sidebar lists the same places, so on desktop this page is a picture of the workshop.
  */
 function Workshop() {
   const spools = useQuery(spoolsQuery).data;
@@ -41,7 +41,7 @@ function Workshop() {
   const due = useDueUpkeep();
   const { toBuy, isPending: shoppingPending } = useShopping();
   const { twists } = useTwists();
-  // Two tiles across on a phone, so the pictures are drawn smaller there (still as large as the tile allows).
+  // The pictures are drawn smaller on a phone, where the tile is as wide as the screen but not as tall.
   const isDesktop = useIsDesktop();
 
   // The first AMS unit as the printer has it, drawn as the unit: four bays, an empty ring in a free one (the printer's
@@ -49,7 +49,7 @@ function Workshop() {
   const unit = printer ? amsUnitLetters(printer.setup.amsUnits)[0] : undefined;
   const slots = unit ? unitSlots(unit) : [];
   const pictured = toBuy.filter((thing) => thing.picture);
-  const shown = pictured.slice(0, isDesktop ? PICTURES : PICTURES - 1);
+  const shown = pictured.slice(0, PICTURES);
 
   const pantryLine = spools ? (
     spools.length === 0 ? (
@@ -82,23 +82,23 @@ function Workshop() {
   return (
     <>
       <PageHeader title="Workshop" subtitle="Spools, printer, shopping and twists." />
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-[repeat(auto-fit,minmax(15rem,1fr))] md:gap-5">
+      <div className="grid grid-cols-1 gap-3 md:gap-5 xl:grid-cols-2">
         <HubTile
           to="/pantry"
           title="Pantry"
           summary={pantryLine}
           visual={
             <span className="flex">
-              {(spools ?? []).slice(0, isDesktop ? 5 : 4).map((spool) => (
+              {(spools ?? []).slice(0, isDesktop ? 5 : 6).map((spool) => (
                 <SpoolDisc
                   key={spool.id}
                   color={spool.colorHex}
                   colors={spool.colors}
-                  size={isDesktop ? "lg" : "md"}
-                  className="-ml-4 first:ml-0"
+                  size={isDesktop ? "xl" : "lg"}
+                  className="-ml-6 first:ml-0 md:-ml-9"
                 />
               ))}
-              {spools?.length === 0 && <SpoolDisc empty size="lg" />}
+              {spools?.length === 0 && <SpoolDisc empty size="xl" />}
             </span>
           }
         />
@@ -108,16 +108,13 @@ function Workshop() {
           summary={printerLine}
           visual={
             slots.length > 0 ? (
-              <span className="grid w-full max-w-72 grid-cols-4 gap-1 md:gap-2">
+              <span className="grid w-full max-w-sm grid-cols-4 gap-2">
                 {slots.map((slot) => {
                   const spoolId = printer?.slots[slot];
                   return (
-                    <span
-                      key={slot}
-                      className="bg-cream shadow-soft flex flex-col items-center gap-1 rounded-md px-0.5 pt-2 pb-1.5 md:px-1 md:pt-2.5"
-                    >
+                    <span key={slot} className="flex flex-col items-center gap-1">
                       <SpoolDisc
-                        size={isDesktop ? "md" : "sm"}
+                        size="lg"
                         color={spools?.find((spool) => spool.id === spoolId)?.colorHex}
                         colors={spools?.find((spool) => spool.id === spoolId)?.colors}
                         empty={!spoolId}
@@ -147,12 +144,12 @@ function Workshop() {
                       key={thing.id}
                       src={thing.picture.url}
                       alt=""
-                      className="ring-cream -ml-2 size-12 rounded-md ring-2 first:ml-0 md:-ml-3 md:size-16"
+                      className="ring-cream -ml-3 size-16 rounded-md ring-2 first:ml-0 md:-ml-4 md:size-20"
                     />
                   ) : null,
                 )}
                 {toBuy.length > shown.length && (
-                  <span className="bg-cream text-ink-soft shadow-soft ring-cream tabular text-small -ml-2 flex size-12 items-center justify-center rounded-md font-semibold ring-2 md:-ml-3 md:size-16">
+                  <span className="bg-cream text-ink-soft shadow-soft ring-cream tabular text-small -ml-3 flex size-16 items-center justify-center rounded-md font-semibold ring-2 md:-ml-4 md:size-20">
                     +{toBuy.length - shown.length}
                   </span>
                 )}
@@ -176,7 +173,7 @@ function Workshop() {
                     alt=""
                     color={photo.color || undefined}
                     className={cn(
-                      "ring-cream shadow-raised h-14 w-20 rounded-md ring-2 md:h-20 md:w-28 md:ring-4",
+                      "ring-cream shadow-raised h-[4.5rem] w-24 rounded-md ring-2 md:h-24 md:w-32 md:ring-4",
                       index === 0 ? "z-10 -rotate-3" : "-ml-5 rotate-6 opacity-90 md:-ml-8",
                     )}
                   />

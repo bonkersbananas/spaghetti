@@ -128,6 +128,8 @@ node scripts/ci-report.ts  # where CI's time goes: queue, setup, servers and tes
 
 Run `pnpm lint && pnpm typecheck && pnpm test` before every commit; CI also runs the e2e tests, and the Images workflow builds the container and the bridge's image when a pull request touches what goes into them. How CI is laid out, why the number of jobs matters (20 at once for the whole repository) and how to measure it (`node scripts/ci-report.ts`): [docs/ci.md](docs/ci.md).
 
+Before pushing `slicer-rs/`, run `cargo fmt --check` in it: the Rust slicer workflow runs it first and fails on any diff. Before running that workflow's end-to-end steps locally, build the WebAssembly into the default target dir (`slicer-rs/target/wasm32-unknown-unknown/release/spaghetti_slicer.wasm`): with another `CARGO_TARGET_DIR` that file is stale, and the comparison fails or passes on an old build.
+
 ### Setting up a sandbox
 
 Node 24 or later is required (the scripts run TypeScript with Node's own type stripping; `pnpm run doctor` says so if yours is older). Bare `pnpm doctor` is pnpm's own command: run ours as `pnpm run doctor`. The Playwright browser is `pnpm exec playwright install chromium-headless-shell`. Where that download is blocked, or a Chromium is already installed, point `SPAGHETTI_BROWSER` at its executable and `pnpm screenshots`, `pnpm screenshots:compare`, `pnpm test:e2e` and the doctor all use it:
@@ -135,6 +137,8 @@ Node 24 or later is required (the scripts run TypeScript with Node's own type st
 ```sh
 SPAGHETTI_BROWSER=/usr/bin/chromium pnpm screenshots
 ```
+
+Never stop processes with `pkill -f` or wait with `pgrep -f` from the agent's shell: the pattern matches the shell running it (and may match Claude Code), so it kills the calling shell or a wait loop never ends. Start long runs with `setsid`, stop the process group with `kill -- -<pid>`, and wait on an output file (its log's summary line) rather than on a process name.
 
 ## How to…
 

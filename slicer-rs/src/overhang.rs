@@ -119,12 +119,12 @@ impl Below {
         if !candidates.contains(&true) {
             // On the layer below all the way round: only its speed may change. Where it does, Orca writes the path
             // point by point, as lines.
-            if let Some((points, speeds)) =
-                self.slow(&path.points, Some(&signed), path.role, path.width, path.mm3_per_mm, path.speed, s)
-            {
-                path.parts = speeds.into_iter().map(|speed| Part { overhang: false, speed }).collect();
-                path.points = points;
-                path.arcs.clear();
+            match self.slow(&path.points, Some(&signed), path.role, path.width, path.mm3_per_mm, path.speed, s) {
+                (Some(slow), _) => {
+                    (path.points, path.parts) = slow.parts(false);
+                    path.arcs.clear();
+                }
+                (None, whole) => path.fan = whole,
             }
             return path;
         }
@@ -155,12 +155,12 @@ impl Below {
             }
         }
         if runs.len() == 1 && !runs[0].1 {
-            if let Some((points, speeds)) =
-                self.slow(&path.points, Some(&signed), path.role, path.width, path.mm3_per_mm, path.speed, s)
-            {
-                path.parts = speeds.into_iter().map(|speed| Part { overhang: false, speed }).collect();
-                path.points = points;
-                path.arcs.clear();
+            match self.slow(&path.points, Some(&signed), path.role, path.width, path.mm3_per_mm, path.speed, s) {
+                (Some(slow), _) => {
+                    (path.points, path.parts) = slow.parts(false);
+                    path.arcs.clear();
+                }
+                (None, whole) => path.fan = whole,
             }
             return path;
         }
@@ -178,24 +178,27 @@ impl Below {
             };
             // Each stretch is a path of its own to Orca, its arcs fitted on their own (here to the points the
             // loop kept), unless its speed changes along it, which it writes as lines.
-            let (run, speeds, own) = match self.slow(&run, None, role, width, mm3_per_mm, speed, s) {
-                Some((run, speeds)) => (run, speeds, Vec::new()),
-                None => {
+            let (run, run_parts, own) = match self.slow(&run, None, role, width, mm3_per_mm, speed, s) {
+                (Some(slow), _) => {
+                    let (run, parts) = slow.parts(over);
+                    (run, parts, Vec::new())
+                }
+                (None, whole) => {
                     let (tolerance, fits) = plan::resolution(role, s);
                     let (run, own) = if fits { plan::fit(&run, tolerance, true) } else { (run, Vec::new()) };
                     let k = run.len() - 1;
-                    (run, vec![speed as f32; k], own)
+                    (run, vec![Part { overhang: over, speed: speed as f32, fan: whole }; k], own)
                 }
             };
             let from = if points.last() == Some(&run[0]) { 1 } else { 0 };
             if from == 0 && !points.is_empty() {
                 // Stretches meet end to start; should one not, the gap prints as the stretch it leads to.
-                parts.push(Part { overhang: over, speed: speeds[0] });
+                parts.push(run_parts[0]);
             }
             let offset = points.len() - from;
             arcs.extend(own.into_iter().map(|a| ArcRun { start: a.start + offset, end: a.end + offset, ..a }));
             points.extend_from_slice(&run[from..]);
-            parts.extend(speeds.into_iter().map(|speed| Part { overhang: over, speed }));
+            parts.extend(run_parts);
         }
         if points.len() >= 2 {
             path.points = points;
@@ -207,12 +210,12 @@ impl Below {
 
     /// A bridge line, slowed where it hangs (Orca slows bridges as it slows walls).
     pub fn bridge(&self, mut path: Path, s: &Settings) -> Path {
-        if let Some((points, speeds)) =
-            self.slow(&path.points, None, path.role, path.width, path.mm3_per_mm, path.speed, s)
-        {
-            path.parts = speeds.into_iter().map(|speed| Part { overhang: false, speed }).collect();
-            path.points = points;
-            path.arcs.clear();
+        match self.slow(&path.points, None, path.role, path.width, path.mm3_per_mm, path.speed, s) {
+            (Some(slow), _) => {
+                (path.points, path.parts) = slow.parts(false);
+                path.arcs.clear();
+            }
+            (None, whole) => path.fan = whole,
         }
         path
     }
@@ -230,9 +233,9 @@ impl Below {
         mm3_per_mm: f64,
         speed: f64,
         s: &Settings,
-    ) -> Option<(Vec<Pt>, Vec<f32>)> {
-        if !s.overhang_speed || points.len() < 2 {
-            return None;
+    ) -> (Option<Slow>, bool) {
+        if !(s.overhang_speed || s.overhang_fan) || points.len() < 2 {
+            return (None, false);
         }
         let table = Slowdown::new(role, width, mm3_per_mm, speed, s);
         let input: Vec<(f64, f64)> = points.iter().map(|q| (geom::unsc(q.x), geom::unsc(q.y))).collect();
@@ -245,20 +248,33 @@ impl Below {
         let width_inv = 1.0 / table.width;
         for i in 0..n {
             let (curr, next) = (ext[i], ext[(i + 1).min(n - 1)]);
-            speeds.push(table.calc(curr.d).min(table.calc(next.d)).min(table.speed));
+            // Without `enable_overhang_speed` the path still splits where the fan switches, at its own speed.
+            speeds.push(if s.overhang_speed {
+                table.calc(curr.d).min(table.calc(next.d)).min(table.speed)
+            } else {
+                table.speed
+            });
             overlaps.push((1.0 - curr.d * width_inv).min(1.0 - next.d * width_inv));
         }
         let slows = speeds.iter().any(|&v| (v as f64 - speed).abs() > 1.0);
         let fans = table.fan >= 0.0 && overlaps.windows(2).any(|w| (w[0] <= table.fan) != (w[1] <= table.fan));
+        // A path printed whole has the fan on all along if it is on at its first point (`path_overhang_fan_active`).
+        let whole = table.fan >= 0.0 && overlaps[0] <= table.fan;
         if !slows && !fans {
-            return None;
+            return (None, whole);
         }
+        // A piece has the fan on where both its ends call for it (Orca's `pre_fan_enabled && cur_fan_enabled`).
+        let on: Vec<bool> = if table.fan >= 0.0 {
+            overlaps.windows(2).map(|w| w[0] <= table.fan && w[1] <= table.fan).collect()
+        } else {
+            vec![false; n - 1]
+        };
         let points = ext
             .iter()
             .map(|p| geom::pt((p.x * geom::SCALE).round() as i32, (p.y * geom::SCALE).round() as i32))
             .collect();
         speeds.pop();
-        Some((points, speeds))
+        (Some(Slow { points, speeds, fans: on }), whole)
     }
 
     /// Orca's `estimate_points_properties` (scaled input, crossings added, the layer below's outline offset by half
@@ -401,6 +417,22 @@ impl Below {
             out.push(next);
         }
         out
+    }
+}
+
+/// A path cut where its speed or its overhang fan changes: its points, each piece's speed, and whether the fan is on
+/// over it.
+struct Slow {
+    points: Vec<Pt>,
+    speeds: Vec<f32>,
+    fans: Vec<bool>,
+}
+
+impl Slow {
+    fn parts(self, over: bool) -> (Vec<Pt>, Vec<Part>) {
+        let parts =
+            self.speeds.into_iter().zip(self.fans).map(|(speed, fan)| Part { overhang: over, speed, fan }).collect();
+        (self.points, parts)
     }
 }
 
@@ -881,6 +913,7 @@ mod tests {
             island: 0,
             object: 0,
             parts: Vec::new(),
+            fan: false,
             arcs: Vec::new(),
         };
         let wall = below.wall(path, (0.4, Settings::mm3_per_mm(0.4, 0.2), 50.0, 2500.0), &s);
@@ -921,6 +954,7 @@ mod tests {
             island: 0,
             object: 0,
             parts: Vec::new(),
+            fan: false,
             arcs: Vec::new(),
         };
         let wall = below.wall(path, (0.4, Settings::mm3_per_mm(0.4, 0.2), 50.0, 2500.0), &s);
