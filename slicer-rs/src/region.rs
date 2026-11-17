@@ -3,7 +3,7 @@
 //! the layers around it. Every pass is per layer and runs in parallel; a pass only reads what earlier passes made.
 
 use crate::bridges;
-use crate::config::Settings;
+use crate::config::{ArcFitting, Settings};
 use crate::fill;
 use crate::geom::{self, Contour, Shapes};
 use crate::lightning;
@@ -931,7 +931,10 @@ fn wall_group(
         }
     }
 
-    let mut region = geom::simplify_shapes(&geom::offset(slice, -w_outer / 2.0), PATH_RESOLUTION);
+    // Where Orca fits arcs it simplifies the walls' outlines to a fifth of the resolution, which keeps the points
+    // of a curve close enough for its arcs (`surface_simplify_resolution`).
+    let wall_resolution = if s.arc_fitting == ArcFitting::Enabled { 0.2 * s.resolution } else { PATH_RESOLUTION };
+    let mut region = geom::simplify_shapes(&geom::offset(slice, -w_outer / 2.0), wall_resolution);
     if around.largest && region.len() > 1 {
         crate::section::keep_largest(&mut region);
     }
@@ -962,7 +965,7 @@ fn wall_group(
             let d = if k == 1 { (w_outer + w_inner) / 2.0 } else { sp_inner };
             let next = geom::simplify_shapes(
                 &geom::offset(&geom::offset(&region, -(d + min_spacing / 2.0)), min_spacing / 2.0),
-                PATH_RESOLUTION,
+                wall_resolution,
             );
             let gap = geom::difference(&geom::offset(&region, -d / 2.0), &geom::offset(&next, d / 2.0 + safety));
             // Most of what this finds is the crumbs offsets leave in corners: too small to fill.
