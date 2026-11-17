@@ -19,12 +19,7 @@ import {
   readSlicing,
   STAND_IN_COLOURS,
 } from "./orca.ts";
-import {
-  layerRange,
-  type SlicingFilament,
-  type SlicingSettings,
-  withNozzle,
-} from "./settings.ts";
+import { layerRange, type SlicingFilament, type SlicingSettings, withNozzle } from "./settings.ts";
 import type { SliceSettings } from "./types.ts";
 
 export type { PresetSet } from "./orca.ts";
@@ -35,10 +30,7 @@ export interface ProjectSettings {
 }
 
 /** The temperature keys a filament preset sets the nozzle with: the layers, and the first layer. */
-const NOZZLE_TEMPERATURES = [
-  "nozzle_temperature",
-  "nozzle_temperature_initial_layer",
-] as const;
+const NOZZLE_TEMPERATURES = ["nozzle_temperature", "nozzle_temperature_initial_layer"] as const;
 
 /**
  * A filament preset with its nozzle temperatures inside the maker's range for that spool (`nozzleTempMin` and
@@ -57,9 +49,7 @@ export function withinRange(
     if (value === undefined) continue;
     const clamp = (item: string) => {
       const n = Number.parseFloat(item);
-      return Number.isFinite(n)
-        ? String(Math.min(high, Math.max(low, n)))
-        : item;
+      return Number.isFinite(n) ? String(Math.min(high, Math.max(low, n))) : item;
     };
     out[key] = Array.isArray(value) ? value.map(clamp) : clamp(value);
   }
@@ -170,18 +160,11 @@ export function filamentsNamed(project: Config | undefined): number {
 export function projectIsFor(project: Config, machine: Config): boolean {
   const model = first(project.printer_model);
   const nozzle = first(project.nozzle_diameter);
-  return (
-    !!model &&
-    model === first(machine.printer_model) &&
-    (!nozzle || nozzle === first(machine.nozzle_diameter))
-  );
+  return !!model && model === first(machine.printer_model) && (!nozzle || nozzle === first(machine.nozzle_diameter));
 }
 
 /** A value of the project's that fits where ours goes: the same shape (a list of the same length, or one value). */
-function fits(
-  ours: ConfigValue,
-  theirs: ConfigValue | undefined,
-): theirs is ConfigValue {
+function fits(ours: ConfigValue, theirs: ConfigValue | undefined): theirs is ConfigValue {
   if (theirs === undefined) return false;
   if (Array.isArray(ours) !== Array.isArray(theirs)) return false;
   return !Array.isArray(ours) || ours.length === (theirs as string[]).length;
@@ -216,30 +199,21 @@ export function sliceSetup(
   const range = layerRange(nozzle);
   const layer = Math.min(
     range.max,
-    Math.max(
-      range.min,
-      chosen.layerHeight ??
-        (Number.isFinite(projectLayer) ? projectLayer : defaults.layerHeight),
-    ),
+    Math.max(range.min, chosen.layerHeight ?? (Number.isFinite(projectLayer) ? projectLayer : defaults.layerHeight)),
   );
   const projectProcess = own ? first(project?.print_settings_id) : undefined;
   const processName =
-    projectProcess &&
-    presets.process[projectProcess] &&
-    Math.abs(projectLayer - layer) < 0.001
+    projectProcess && presets.process[projectProcess] && Math.abs(projectLayer - layer) < 0.001
       ? projectProcess
       : processPreset(presets, machineName, layer);
-  if (!processName || !presets.process[processName])
-    throw new MissingPreset(`a process for ${machineName}`);
+  if (!processName || !presets.process[processName]) throw new MissingPreset(`a process for ${machineName}`);
   const process: Config = { ...(presets.process[processName] as Config) };
   const machine: Config = { ...machineBase, printer_settings_id: machineName };
 
   // What the project says: all of its settings when it is for this printer, else only how its model should print.
   const said = new Set<string>();
   if (project) {
-    const keys = own
-      ? Object.keys(process)
-      : INTENT_KEYS.filter((key) => key in process);
+    const keys = own ? Object.keys(process) : INTENT_KEYS.filter((key) => key in process);
     for (const key of keys) {
       if (IDENTITY_KEYS.has(key)) continue;
       const value = project[key];
@@ -254,17 +228,12 @@ export function sliceSetup(
       said.add("curr_bed_type");
     }
   }
-  const fromProject = readSlicing(
-    { machine, process, filaments: [] },
-    defaults,
-  );
+  const fromProject = readSlicing({ machine, process, filaments: [] }, defaults);
   // A project made for this printer says everything (what it leaves out, its process preset says); another
   // printer's only what it has of the keys that say how to print.
-  const says = (key: keyof typeof ORCA_KEYS) =>
-    own || ORCA_KEYS[key].some((orcaKey) => said.has(orcaKey));
+  const says = (key: keyof typeof ORCA_KEYS) => own || ORCA_KEYS[key].some((orcaKey) => said.has(orcaKey));
   const pick = <K extends keyof typeof ORCA_KEYS>(key: K): SlicingSettings[K] =>
-    (chosen[key] as SlicingSettings[K] | undefined) ??
-    (says(key) ? fromProject[key] : defaults[key]);
+    (chosen[key] as SlicingSettings[K] | undefined) ?? (says(key) ? fromProject[key] : defaults[key]);
 
   // The filaments: chosen ones (a spool for filament 1), else the project's own (material and colour), else defaults;
   // one that nothing names (a file that lists none of the filaments its parts print in) a stand-in of the first's
@@ -278,9 +247,7 @@ export function sliceSetup(
     const colorHex = colourOf(projectColours[index]);
     filaments.push(
       chosen.filaments?.[index] ??
-        (type
-          ? { material: type, ...(colorHex ? { colorHex } : {}) }
-          : undefined) ??
+        (type ? { material: type, ...(colorHex ? { colorHex } : {}) } : undefined) ??
         defaults.filaments[index] ??
         (index === 0
           ? (defaults.filaments[0] as SlicingFilament)
@@ -300,10 +267,7 @@ export function sliceSetup(
     plate: pick("plate"),
     nozzle,
     scale: chosen.scale ?? defaults.scale,
-    orientation:
-      chosen.orientation !== undefined
-        ? chosen.orientation
-        : defaults.orientation,
+    orientation: chosen.orientation !== undefined ? chosen.orientation : defaults.orientation,
     // Which slicer is no setting of Orca's: what was chosen, else the defaults' (decision 0055).
     slicer: chosen.slicer ?? defaults.slicer,
   };
@@ -311,10 +275,7 @@ export function sliceSetup(
   // The presets' names go into the sliced file's settings, where Orca, Bambu Studio and Spaghetti's reader look.
   process.print_settings_id = processName;
 
-  const fallback = filamentPreset(
-    DEFAULT_SLICING.filaments[0] as SlicingFilament,
-    nozzle,
-  );
+  const fallback = filamentPreset(DEFAULT_SLICING.filaments[0] as SlicingFilament, nozzle);
   const filamentNames: string[] = [];
   const filamentConfigs: Config[] = [];
   const colours: string[] = [];
@@ -325,11 +286,7 @@ export function sliceSetup(
     if (!base) throw new MissingPreset(name);
     // A filament that names no colour of its own takes the project's for its place, else a stand-in's.
     const own = filament.colorHex ?? colourOf(projectColours[index]);
-    const colour = (
-      own ??
-      STAND_IN_COLOURS[index % STAND_IN_COLOURS.length] ??
-      STAND_IN_COLOURS[0]
-    ).toUpperCase();
+    const colour = (own ?? STAND_IN_COLOURS[index % STAND_IN_COLOURS.length] ?? STAND_IN_COLOURS[0]).toUpperCase();
     filamentNames.push(name);
     filamentConfigs.push({
       ...withinRange(base, filament),
@@ -342,21 +299,14 @@ export function sliceSetup(
 
   const towerX = Number(first(project?.wipe_tower_x));
   const towerY = Number(first(project?.wipe_tower_y));
-  const slicing = readSlicing(
-    { machine, process, filaments: filamentConfigs },
-    target,
-    colourChosen,
-  );
+  const slicing = readSlicing({ machine, process, filaments: filamentConfigs }, target, colourChosen);
   return {
     machine,
     process,
     filaments: filamentConfigs,
     colours,
     chosen: colourChosen,
-    ...(own &&
-    Number.isFinite(towerX) &&
-    Number.isFinite(towerY) &&
-    project?.wipe_tower_x !== undefined
+    ...(own && Number.isFinite(towerX) && Number.isFinite(towerY) && project?.wipe_tower_x !== undefined
       ? { tower: { x: towerX, y: towerY } }
       : {}),
     settings: {
@@ -364,16 +314,10 @@ export function sliceSetup(
       process: processName,
       filaments: filamentNames,
       layerHeight: slicing.layerHeight,
-      materials: filamentConfigs.map(
-        (filament) => first(filament.filament_type) ?? "PLA",
-      ),
+      materials: filamentConfigs.map((filament) => first(filament.filament_type) ?? "PLA"),
       bedType: first(machine.curr_bed_type) ?? slicing.plate,
-      supports:
-        slicing.supports === "where-needed" ||
-        slicing.supports === "everywhere",
-      ...(project
-        ? { project: own ? ("own" as const) : ("some" as const) }
-        : {}),
+      supports: slicing.supports === "where-needed" || slicing.supports === "everywhere",
+      ...(project ? { project: own ? ("own" as const) : ("some" as const) } : {}),
     },
     slicing,
   };
@@ -383,13 +327,9 @@ export function sliceSetup(
  * Every setting of a slice in one config, as a sliced file's `project_settings.config` holds it: the machine, the
  * process, and each filament key as a list with one value per filament.
  */
-export function mergedSettings(
-  setup: Pick<SliceSetup, "machine" | "process" | "filaments">,
-): Config {
+export function mergedSettings(setup: Pick<SliceSetup, "machine" | "process" | "filaments">): Config {
   const merged: Config = { ...setup.machine, ...setup.process };
-  const keys = new Set(
-    setup.filaments.flatMap((filament) => Object.keys(filament)),
-  );
+  const keys = new Set(setup.filaments.flatMap((filament) => Object.keys(filament)));
   for (const key of keys) {
     if (IDENTITY_KEYS.has(key) && key !== "filament_settings_id") continue;
     const values = setup.filaments.flatMap((filament) => list(filament[key]));

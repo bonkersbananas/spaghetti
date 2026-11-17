@@ -9,10 +9,7 @@ import {
   sliceSetup,
 } from "../../../src/shared/slicing/configs.ts";
 import { DEFAULT_SLICING } from "../../../src/shared/slicing/defaults.ts";
-import {
-  presetRecord,
-  STAND_IN_COLOURS,
-} from "../../../src/shared/slicing/orca.ts";
+import { presetRecord, STAND_IN_COLOURS } from "../../../src/shared/slicing/orca.ts";
 import { presets } from "./presets.ts";
 
 const orange = {
@@ -117,9 +114,7 @@ describe("chosen settings", () => {
 
   it("slice with a spool from the Pantry: its preset and its colour, which was chosen", () => {
     const setup = sliceSetup(presets, { settings: { filaments: [orange] } });
-    expect(setup.settings.filaments).toEqual([
-      "Bambu PLA Basic @BBL X2D 0.4 nozzle",
-    ]);
+    expect(setup.settings.filaments).toEqual(["Bambu PLA Basic @BBL X2D 0.4 nozzle"]);
     expect(setup.colours).toEqual(["#F2711C"]);
     expect(setup.chosen).toEqual([true]);
     expect(setup.slicing.filaments).toEqual([orange]);
@@ -151,9 +146,7 @@ describe("chosen settings", () => {
   });
 
   it("refuse a nozzle the engine's presets don't have", () => {
-    expect(() => sliceSetup(presets, { settings: { nozzle: 0.6 } })).toThrow(
-      MissingPreset,
-    );
+    expect(() => sliceSetup(presets, { settings: { nozzle: 0.6 } })).toThrow(MissingPreset);
   });
 
   it("keep layer heights within the nozzle's range", () => {
@@ -177,14 +170,9 @@ describe("another nozzle", () => {
   });
 
   it("takes each quality from the nozzle's nearest process", () => {
-    const sliced = (layerHeight: number) =>
-      sliceSetup(presets, { settings: { nozzle: 0.2, layerHeight } });
-    expect(sliced(0.08).settings.process).toBe(
-      "0.08mm High Quality @BBL X2D 0.2 nozzle",
-    );
-    expect(sliced(0.12).settings.process).toBe(
-      "0.12mm Balanced Quality @BBL X2D 0.2 nozzle",
-    );
+    const sliced = (layerHeight: number) => sliceSetup(presets, { settings: { nozzle: 0.2, layerHeight } });
+    expect(sliced(0.08).settings.process).toBe("0.08mm High Quality @BBL X2D 0.2 nozzle");
+    expect(sliced(0.12).settings.process).toBe("0.12mm Balanced Quality @BBL X2D 0.2 nozzle");
     // Extra draft is the 0.12 mm process at the tallest layer the 0.2 mm prints.
     const extra = sliced(0.14);
     expect(extra.settings).toMatchObject({
@@ -223,9 +211,7 @@ describe("a 3MF project's settings", () => {
   };
 
   it("are its own when it was made for this printer: its process, plate, filaments and prime tower", () => {
-    expect(
-      projectIsFor(x2d, presets.machine["Bambu Lab X2D 0.4 nozzle"] ?? {}),
-    ).toBe(true);
+    expect(projectIsFor(x2d, presets.machine["Bambu Lab X2D 0.4 nozzle"] ?? {})).toBe(true);
     const setup = sliceSetup(presets, {
       project: { settings: x2d },
       filaments: 2,
@@ -234,10 +220,7 @@ describe("a 3MF project's settings", () => {
       process: "0.16mm High Quality @BBL X2D",
       layerHeight: 0.16,
       materials: ["PLA", "PETG"],
-      filaments: [
-        "Bambu PLA Basic @BBL X2D 0.4 nozzle",
-        "Generic PETG @BBL X2D 0.4 nozzle",
-      ],
+      filaments: ["Bambu PLA Basic @BBL X2D 0.4 nozzle", "Generic PETG @BBL X2D 0.4 nozzle"],
       bedType: "Cool Plate",
       project: "own",
     });
@@ -248,9 +231,7 @@ describe("a 3MF project's settings", () => {
       sparse_infill_density: "40",
     });
     // Names of presets and printers are never taken from a file.
-    expect(setup.process.compatible_printers).toEqual([
-      "Bambu Lab X2D 0.4 nozzle",
-    ]);
+    expect(setup.process.compatible_printers).toEqual(["Bambu Lab X2D 0.4 nozzle"]);
     expect(setup.colours).toEqual(["#00AE42", "#1D1D1F"]);
     expect(setup.chosen).toEqual([true, true]);
     expect(setup.tower).toEqual({ x: 165, y: 216 });
@@ -288,10 +269,7 @@ describe("a 3MF project's settings", () => {
       outer_wall_speed: ["150", "150"],
     });
     expect(setup.colours).toEqual(["#F2711C", "#1D1D1F"]);
-    expect(setup.slicing.filaments).toEqual([
-      orange,
-      { material: "PETG", colorHex: "#1d1d1f" },
-    ]);
+    expect(setup.slicing.filaments).toEqual([orange, { material: "PETG", colorHex: "#1d1d1f" }]);
     expect(setup.machine.curr_bed_type).toBe("Cool Plate");
   });
 
@@ -405,10 +383,7 @@ describe("a 3MF project's settings", () => {
       layer_height: "0.16",
       filament_type: ["PLA", "PETG"],
       filament_colour: ["#00AE42", "#1D1D1F"],
-      filament_settings_id: [
-        "Bambu PLA Basic @BBL X2D 0.4 nozzle",
-        "Generic PETG @BBL X2D 0.4 nozzle",
-      ],
+      filament_settings_id: ["Bambu PLA Basic @BBL X2D 0.4 nozzle", "Generic PETG @BBL X2D 0.4 nozzle"],
       curr_bed_type: "Cool Plate",
     });
   });
@@ -433,18 +408,9 @@ describe("filaments a file names but doesn't describe", () => {
       filaments: 3,
     });
     // Not three of the same spool: the first is the workshop's, the others wait for a spool of their own.
-    expect(
-      setup.slicing.filaments.map((filament) => filament.material),
-    ).toEqual(["PETG", "PETG", "PETG"]);
-    expect(setup.slicing.filaments.slice(1)).toEqual([
-      { material: "PETG" },
-      { material: "PETG" },
-    ]);
-    expect(setup.colours).toEqual([
-      "#F2711C",
-      STAND_IN_COLOURS[1],
-      STAND_IN_COLOURS[2],
-    ]);
+    expect(setup.slicing.filaments.map((filament) => filament.material)).toEqual(["PETG", "PETG", "PETG"]);
+    expect(setup.slicing.filaments.slice(1)).toEqual([{ material: "PETG" }, { material: "PETG" }]);
+    expect(setup.colours).toEqual(["#F2711C", STAND_IN_COLOURS[1], STAND_IN_COLOURS[2]]);
     expect(setup.chosen).toEqual([true, false, false]);
     // Sliced again from what the slice said: the same.
     const again = sliceSetup(presets, {
