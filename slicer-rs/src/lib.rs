@@ -845,9 +845,35 @@ impl Plate {
                 groups.push(groups.last().map_or(0, |r| r.end)..g + 1);
             }
         }
+        // Each layer's regions go as soon as the last group that reads them (its own, and the next one's, which
+        // hangs over them) has made its G-code: the layers' texts take their place rather than adding to them.
+        let mut readers: Vec<std::sync::atomic::AtomicUsize> = Vec::with_capacity(regions.len());
+        readers.resize_with(regions.len(), Default::default);
+        let read_by = |k: usize| -> Vec<usize> {
+            let mut read: Vec<usize> = groups[k]
+                .clone()
+                .filter_map(|g| schedule[g].layer)
+                .flat_map(|l| [Some(l), l.checked_sub(1)])
+                .flatten()
+                .collect();
+            read.sort_unstable();
+            read.dedup();
+            read
+        };
+        for k in 0..groups.len() {
+            for l in read_by(k) {
+                *readers[l].get_mut() += 1;
+            }
+        }
+        let regions: Vec<std::sync::Mutex<Option<std::sync::Arc<region::LayerRegions>>>> =
+            regions.into_iter().map(|r| std::sync::Mutex::new(Some(std::sync::Arc::new(r)))).collect();
+        let held = |l: usize| -> std::sync::Arc<region::LayerRegions> {
+            regions[l].lock().unwrap().clone().expect("a layer's regions, until its last reader is done")
+        };
+        let empty = std::sync::Arc::new(empty);
         // In spiral vase mode each layer starts where the one before ended, so the layers go one after another.
         let group_texts = |k: usize, mut spiral: Option<&mut spiral::State>| -> Vec<gcode::LayerGcode> {
-            let plans: Vec<(plan::LayerPlan, &region::LayerRegions, f64)> = groups[k]
+            let plans: Vec<(plan::LayerPlan, std::sync::Arc<region::LayerRegions>, f64)> = groups[k]
                 .clone()
                 .map(|g| {
                     let slot = &schedule[g];
@@ -855,11 +881,13 @@ impl Plate {
                         slot.supports.iter().enumerate().map(|(o, k)| k.map(|k| &supports[o][k])).collect();
                     // A layer of the support's own is planned as an object layer with nothing in it (`next` stands
                     // in for its index: no first layer, no layer below to hang over).
-                    let (l, regions_here) = match slot.layer {
-                        Some(l) => (l, &regions[l]),
-                        None => (slot.next, &empty),
+                    let (l, held_here) = match slot.layer {
+                        Some(l) => (l, held(l)),
+                        None => (slot.next, empty.clone()),
                     };
-                    let lower = slot.layer.and_then(|l| l.checked_sub(1)).map(|j| &regions[j]);
+                    let regions_here = &*held_here;
+                    let held_lower = slot.layer.and_then(|l| l.checked_sub(1)).map(held);
+                    let lower = held_lower.as_deref();
                     let h = slot.layer.map_or(slot.header_height as f64, |l| layers.height[l]);
                     let mut plan = match &colours {
                         Some(c) if !c.orders[g].is_empty() => {
@@ -915,14 +943,21 @@ impl Plate {
                         }
                         None => from_z,
                     };
-                    (plan, regions_here, from_z)
+                    (plan, held_here, from_z)
                 })
                 .collect();
             let group: Vec<(&plan::LayerPlan, &region::LayerRegions, f64)> =
-                plans.iter().map(|(plan, r, z)| (plan, *r, *z)).collect();
+                plans.iter().map(|(plan, r, z)| (plan, &**r, *z)).collect();
             let texts = gcode::layers(&group, &job);
             if let Some(st) = spiral {
                 st.turned(&texts);
+            }
+            drop(group);
+            drop(plans);
+            for l in read_by(k) {
+                if readers[l].fetch_sub(1, std::sync::atomic::Ordering::AcqRel) == 1 {
+                    regions[l].lock().unwrap().take();
+                }
             }
             texts
         };
