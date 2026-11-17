@@ -1008,7 +1008,7 @@ fn wall_group(
     s: &Settings,
 ) -> Vec<Island> {
     if s.wall_generator == "arachne" && loops > 0 && !s.spiral_mode {
-        return arachne_group(slice, loops, last, layer, height, s);
+        return arachne_group(slice, loops, last, layer, height, around, s);
     }
     let first = s.on_plate(layer);
     let (w_outer, w_inner) =
@@ -1175,10 +1175,19 @@ fn wall_group(
 /// what the outer wall's spacing leaves of its width (with `precise_outer_wall`, all of it), turned into lines of
 /// beads by `WallToolPaths`, and what is left inside them (Arachne's inner contour) kept as infill's area, reaching
 /// into the walls by the infill overlap of the innermost one's spacing. Arachne has no gap fill: the beads widen
-/// and split to fill what a wall can't. Not done: the one wall a top surface gets (`only_one_wall_top`), which the
-/// settings list as a note.
-fn arachne_group(slice: &Shapes, loops: usize, last: bool, layer: usize, height: f64, s: &Settings) -> Vec<Island> {
+/// and split to fill what a wall can't. With `only_one_wall_top`, an island under a top surface gets its outer wall
+/// alone beside it (`arachne::top`).
+fn arachne_group(
+    slice: &Shapes,
+    loops: usize,
+    last: bool,
+    layer: usize,
+    height: f64,
+    around: &Around,
+    s: &Settings,
+) -> Vec<Island> {
     use crate::arachne::toolpaths::{WallParams, WallToolPaths};
+    use crate::arachne::top;
     let first = s.on_plate(layer);
     let (w_outer, w_inner) =
         if first { (s.first_layer_width, s.first_layer_width) } else { (s.outer_wall_width, s.inner_wall_width) };
@@ -1203,56 +1212,94 @@ fn arachne_group(slice: &Shapes, loops: usize, last: bool, layer: usize, height:
     let precise = s.precise_outer_wall;
     let (w0, s0) = (f64::from(w_outer as f32), sp_outer);
     let draw_in = if precise { w0 - s0 } else { w0 / 2.0 - s0 / 2.0 };
-    let wall_0_inset = if precise { -nm(w0 / 2.0 - s0 / 2.0) } else { 0 };
+    let wall_0_inset_mm = if precise { -(w0 / 2.0 - s0 / 2.0) } else { 0.0 };
     let wall_resolution = if s.arc_fitting == ArcFitting::Enabled { 0.2 * s.resolution } else { PATH_RESOLUTION };
     let off = |shapes: &Shapes, delta: f64| geom::offset_c2(shapes, delta, geom::Join::Miter(3.0));
     let min_infill_spacing = Settings::spacing(w_solid, height) * (1.0 - INSET_OVERLAP_TOLERANCE);
-    let spacing_for_overlap = if loops == 1 { sp_outer } else { sp_inner };
     let share = if first || last { s.top_bottom_infill_wall_overlap } else { s.infill_wall_overlap };
     let ext_spacing2 = 0.5 * (sp_outer + sp_inner);
+    // `WallToolPaths` on an outline, its lines by inset.
+    let generate = |outline: &Shapes, spacing_0: f64, spacing: f64, count: usize, inset_0: f64| {
+        let result = WallToolPaths::generate(outline, nm(spacing_0), nm(spacing), count, nm(inset_0), height, &params);
+        let mut groups: top::Groups = Vec::new();
+        for (inset, group) in result.toolpaths.iter().enumerate() {
+            groups.push(Vec::new());
+            for line in group {
+                if line.junctions.len() < 2 {
+                    continue;
+                }
+                groups[inset].push(ArachneLine {
+                    inset: line.inset_idx,
+                    odd: line.is_odd,
+                    closed: line.is_closed,
+                    widths: line.junctions.iter().map(|j| j.w as f64 / 1e6).collect(),
+                    points: line
+                        .junctions
+                        .iter()
+                        .map(|j| geom::pt((j.p.x as f64 / 100.0).round() as i32, (j.p.y as f64 / 100.0).round() as i32))
+                        .collect(),
+                });
+            }
+        }
+        (groups, result.inner_contour)
+    };
+    let one_wall_top = !last && s.only_one_wall_top && s.top_shell_layers > 0 && loops > 1 && around.upper.is_some();
+    // The clipping of inner walls over the top surface (`top_surface_expansion`) isn't ported: such a layer keeps all
+    // its walls.
+    let one_wall_top = one_wall_top && !(s.top_surface_expansion > 0.0 && s.top_surface_density > 0.0);
+    let top_params = top::Params {
+        ext_spacing: sp_outer,
+        spacing: sp_inner,
+        width: w_inner,
+        wall_0_inset: wall_0_inset_mm,
+        precise,
+        min_width_top: s.min_width_top_surface.of(w_inner),
+        wall_loops: loops,
+    };
     slice
         .iter()
         .map(|shape| {
             let one = vec![shape.clone()];
             let outline = off(&geom::simplify_shapes(&one, wall_resolution), -draw_in);
-            let result =
-                WallToolPaths::generate(&outline, nm(sp_outer), nm(sp_inner), loops, wall_0_inset, height, &params);
+            let (groups, inside, fill) = if one_wall_top {
+                let w = top::walls(&outline, &top_params, around, &generate);
+                (w.groups, w.inner, w.top)
+            } else {
+                let (groups, inside) = generate(&outline, sp_outer, sp_inner, loops, wall_0_inset_mm);
+                (groups, inside, Vec::new())
+            };
+            // Orca's `loop_number + 1`: the groups it has (the single wall of a layer's top is one).
+            let count = groups.len();
+            let spacing_for_overlap = if count == 1 { sp_outer } else { sp_inner };
             let mut island =
                 Island { outline: shape.clone(), overlap: share * spacing_for_overlap, ..Island::default() };
-            for line in result.toolpaths.iter().flatten() {
-                if line.junctions.len() < 2 {
-                    continue;
-                }
-                let points: Vec<geom::Pt> = line
-                    .junctions
-                    .iter()
-                    .map(|j| geom::pt((j.p.x as f64 / 100.0).round() as i32, (j.p.y as f64 / 100.0).round() as i32))
-                    .collect();
-                if line.is_closed && !line.is_odd && line.junctions.len() >= 4 {
-                    while island.walls.len() <= line.inset_idx {
+            for line in groups.into_iter().flatten() {
+                if line.closed && !line.odd && line.points.len() >= 4 {
+                    while island.walls.len() <= line.inset {
                         island.walls.push(Vec::new());
                     }
                     // Arachne's contours run clockwise round an outline and counter-clockwise round a hole; the seam
                     // placer (and everything else reading `walls`) takes outlines counter-clockwise.
-                    let mut contour = points[..points.len() - 1].to_vec();
+                    let mut contour = line.points[..line.points.len() - 1].to_vec();
                     contour.reverse();
-                    island.walls[line.inset_idx].push(contour);
+                    island.walls[line.inset].push(contour);
                 }
-                island.lines.push(ArachneLine {
-                    inset: line.inset_idx,
-                    odd: line.is_odd,
-                    closed: line.is_closed,
-                    widths: line.junctions.iter().map(|j| j.w as f64 / 1e6).collect(),
-                    points,
-                });
+                island.lines.push(line);
             }
             // What is left inside: too small to fill when no spacing's half fits; else drawn in and out again so
             // that what a line can't fill is left out.
-            let spacing = if loops == 1 { ext_spacing2 } else { sp_inner };
-            let inside = result.inner_contour;
+            let spacing = if count == 1 { ext_spacing2 } else { sp_inner };
             if !inside.is_empty() && !off(&inside, -spacing / 2.0).is_empty() {
                 let simple = geom::simplify_shapes(&inside, PATH_RESOLUTION);
                 island.inner = off(&off(&simple, -min_infill_spacing / 2.0), min_infill_spacing / 2.0);
+            }
+            if !fill.is_empty() {
+                // The top surface's fill reaches the wall by the top share of the spacing, the rest by the infill's
+                // (which the planner adds to all of `inner`).
+                let base = spacing_for_overlap;
+                let grow = (s.top_bottom_infill_wall_overlap - share) * base;
+                let fill = if grow.abs() > 1e-6 { off(&fill, grow) } else { fill };
+                island.inner = geom::simplify_shapes(&geom::union(&island.inner, &fill), PATH_RESOLUTION);
             }
             island
         })
@@ -1357,7 +1404,8 @@ mod tests {
         hole.reverse();
         ring.push(hole);
         let s = Settings { wall_generator: "arachne".into(), ..Settings::default() };
-        let islands = arachne_group(&vec![ring], 2, false, 5, 0.2, &s);
+        let around = Around { upper: None, lower: None, top: &Vec::new(), last: &[false], largest: false };
+        let islands = arachne_group(&vec![ring], 2, false, 5, 0.2, &around, &s);
         let walls = &islands[0].walls;
         assert_eq!(walls.len(), 2, "two insets");
         for inset in walls {

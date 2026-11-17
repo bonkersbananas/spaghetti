@@ -182,6 +182,10 @@ pub struct Settings {
     /// Whether inner walls start a little further along than the outer wall (`staggered_inner_seams`).
     pub staggered_inner_seams: bool,
     pub only_one_wall_top: bool,
+    /// `top_surface_expansion` (mm) and `top_surface_density` (percent): with both above 0, Orca's `only_one_wall_top`
+    /// on Arachne walls cuts the inner walls over the top surface instead of walling round it.
+    pub top_surface_expansion: f64,
+    pub top_surface_density: f64,
     /// Whether the first inner wall goes a whole line width in from the outer wall (`precise_outer_wall`, which Orca
     /// heeds only with inner walls before the outer one); else half the two walls' spacings.
     pub precise_outer_wall: bool,
@@ -986,6 +990,12 @@ impl Settings {
             seam_position: p.text("seam_position").to_string(),
             staggered_inner_seams: p.bool("staggered_inner_seams"),
             only_one_wall_top: p.bool("only_one_wall_top"),
+            top_surface_expansion: p.float("top_surface_expansion"),
+            top_surface_density: if p.text("top_surface_density").is_empty() {
+                100.0
+            } else {
+                Share::parse(p.text("top_surface_density")).value
+            },
             // Orca's defaults where a setup leaves them out: precise, inner walls first.
             precise_outer_wall: !matches!(p.text("precise_outer_wall"), "0" | "false")
                 && matches!(p.text("wall_sequence"), "" | "inner wall/outer wall"),
@@ -1358,8 +1368,8 @@ impl Settings {
         }
         // (Spiral vase mode keeps the classic walls, so these notes would describe walls never made.)
         if self.wall_generator == "arachne" && !self.spiral_mode {
-            if self.only_one_wall_top {
-                out.push("arachne walls under a top surface printed with all their walls (only_one_wall_top)".into());
+            if self.only_one_wall_top && self.top_surface_expansion > 0.0 && self.top_surface_density > 0.0 {
+                out.push("arachne walls over a top surface printed with all their walls (only_one_wall_top with top_surface_expansion)".into());
             }
             if self.fuzzy.on() {
                 out.push("fuzzy skin on arachne walls printed smooth".into());

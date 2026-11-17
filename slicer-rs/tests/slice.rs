@@ -3487,6 +3487,35 @@ fn arachne_walls_in_inner_outer_inner_order() {
     assert_eq!(order("inner-outer-inner wall", 0), "IO", "off on the first layer");
 }
 
+/// `only_one_wall_top` on Arachne walls (Orca's "one wall top surface for Arachne"): where the layer above leaves a top
+/// surface, an island has its outer wall alone beside it and the inner walls go round the rest. A 30 mm block 10 mm
+/// high with a 10 mm one 6 mm high on it, three walls, against native Orca 2.5.1 (inner walls 1,047.7 mm³, outer
+/// 523.7, top surface 170.0, the whole print 4,004.1; with all the walls the inner walls take 1,065.8).
+#[test]
+fn arachne_walls_have_one_wall_beside_a_top_surface() {
+    let stl = boxes_stl(&[([100.0, 100.0, 0.0], [130.0, 130.0, 10.0]), ([110.0, 110.0, 10.0], [120.0, 120.0, 16.0])]);
+    let run = |one_wall: bool| {
+        let settings = Settings {
+            wall_generator: "arachne".into(),
+            wall_loops: 3,
+            only_one_wall_top: one_wall,
+            ..Settings::default()
+        };
+        let out = slice(&[Input { name: "step.stl", bytes: &stl }], &settings, &Options::default()).unwrap();
+        assert!(!out.fallbacks.iter().any(|f| f.contains("only_one_wall_top")), "{:?}", out.fallbacks);
+        let feature = |role: Role| out.stats.features[Role::ALL.iter().position(|&r| r == role).unwrap()].volume;
+        (feature(Role::InnerWall), feature(Role::OuterWall), feature(Role::TopSurface), out.stats.volume)
+    };
+    let (inner, outer, top, total) = run(true);
+    let within = |got: f64, want: f64, share: f64| (got - want).abs() < want * share;
+    assert!(within(inner, 1047.7, 0.005), "inner walls {inner} mm³");
+    assert!(within(outer, 523.7, 0.005), "outer walls {outer} mm³");
+    assert!(within(top, 170.0, 0.01), "top surface {top} mm³");
+    assert!(within(total, 4004.1, 0.005), "whole print {total} mm³");
+    let (all_inner, ..) = run(false);
+    assert!(within(all_inner, 1065.8, 0.005), "every wall printed: {all_inner} mm³");
+}
+
 /// Concentric top, bottom and internal solid surfaces print as Orca's Arachne loops, not zig-zag with a note: a
 /// cube's plastic stays within 2 % of the lines' (a Benchy is within 0.1 % of native Orca 2.5.1's).
 #[test]
