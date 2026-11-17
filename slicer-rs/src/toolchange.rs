@@ -154,6 +154,9 @@ pub struct Colours {
     flushing: Vec<bool>,
     /// Whether a prime tower prints: without one each change happens where the nozzle is (`change_steps`).
     pub towered: bool,
+    /// Orca's farthest-point timelapse on a plate with a tower (`farthest_point_timelapse`, without wrapping
+    /// detection): where each layer's photo comes follows from its paths (`gcode.rs`), so `photo_in_layer` knows none.
+    pub farthest_photo: bool,
     /// Whether the nozzle's wrapping detection retracts and lifts before each layer's first visit to the tower.
     wrapping: bool,
     /// Without a tower, what each change finds, in the order of `flushes`.
@@ -671,8 +674,12 @@ impl Colours {
         // Where each layer's photo comes, as `gcode.rs` takes it: before the first visit to the tower (or change, without
         // one) that starts in a filament on the camera's extruder, as `combine` makes the visits.
         let photo_head = |f: usize| extruder_of.get(f) == Some(&most_used_extruder);
+        let farthest_photo = towered && settings.farthest_photo && !settings.wrapping_detection;
         let photo_in_layer: Vec<bool> = (0..layers)
             .map(|g| {
+                if farthest_photo {
+                    return false;
+                }
                 let order = &orders[g];
                 let mut current = starts[g];
                 if !towered {
@@ -724,6 +731,7 @@ impl Colours {
             support_passes,
             flushing,
             towered,
+            farthest_photo,
             wrapping: settings.wrapping_detection,
             untowered,
             photo_in_layer,

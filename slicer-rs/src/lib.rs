@@ -879,10 +879,12 @@ impl Plate {
             regions[l].lock().unwrap().clone().expect("a layer's regions, until its last reader is done")
         };
         let empty = std::sync::Arc::new(empty);
-        // Whether a layer leaves its last retraction to the next one follows from its paths: one filament with the
-        // farthest-point timelapse, its photo taken mid-path.
-        let deferral_unknown =
-            settings.farthest_photo && !settings.spiral_mode && !settings.wrapping_detection && colours.is_none();
+        // Whether a layer leaves its last retraction to the next one follows from its paths with the farthest-point
+        // timelapse: its photo taken mid-path, or before a visit to the tower.
+        let deferral_unknown = settings.farthest_photo
+            && !settings.spiral_mode
+            && !settings.wrapping_detection
+            && colours.as_ref().is_none_or(|c| c.farthest_photo);
         // In spiral vase mode each layer starts where the one before ended, so the layers go one after another.
         let group_texts = |k: usize, mut spiral: Option<&mut spiral::State>, known: bool| -> Vec<gcode::LayerGcode> {
             let plans: Vec<(plan::LayerPlan, std::sync::Arc<region::LayerRegions>, f64, Option<f64>)> = groups[k]

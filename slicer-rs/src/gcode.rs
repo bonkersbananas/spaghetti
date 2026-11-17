@@ -204,6 +204,8 @@ pub struct LayerGcode {
     /// Where the layer before's end isn't known as it is built: its start as built and as it would be after a layer
     /// that left it its last retraction (`Start::Deferred`), for `join`.
     start: Option<Box<(StartCut, StartCut)>>,
+    /// Whether the layer leaves the next one its start unlifted, found as it is built (`Tail`).
+    leaves: bool,
     z: f64,
     /// Whether Orca's writer knows where the nozzle is when the layer ends (not when its timelapse photo came last).
     pub ends_known: bool,
@@ -324,7 +326,7 @@ pub fn layers(group: &[(&LayerPlan, &LayerRegions, f64, Option<f64>)], job: &Job
             known = ends_known;
             let (start, first) = start_at(plan, from_z);
             let deferred = unlifted.map(|z| {
-                let (moves, notes, _, _, (_, lift)) = build_layer(plan, regions, job, z, true, Start::Deferred);
+                let (moves, notes, _, _, (_, lift, _)) = build_layer(plan, regions, job, z, true, Start::Deferred);
                 (moves, notes, start_at(plan, z).0, lift)
             });
             (moves, notes, start, first, turn, ends_known, tail, deferred)
@@ -419,7 +421,7 @@ pub fn layers(group: &[(&LayerPlan, &LayerRegions, f64, Option<f64>)], job: &Job
                     job,
                     (text.clone(), before),
                     plan.header_height,
-                    (fans, over, &by_tool, tool, (None, lift)),
+                    (fans, over, &by_tool, tool, (None, lift, false)),
                     Some(cut),
                 );
                 let mut at = out.cut.unwrap_or_default();
@@ -451,6 +453,7 @@ pub fn layers(group: &[(&LayerPlan, &LayerRegions, f64, Option<f64>)], job: &Job
                 tail_at: out.tail_at,
                 lift_at: out.lift_at,
                 start: out.cut.zip(alt).map(|(c, a)| Box::new((c, *a))),
+                leaves: tail.2 || out.tail_at.is_some(),
                 z: plan.z,
                 ends_known,
                 first,
@@ -481,7 +484,7 @@ pub fn layers(group: &[(&LayerPlan, &LayerRegions, f64, Option<f64>)], job: &Job
 /// over at its height plus the z-hop; what that takes goes into the layer's time.
 pub fn join(layers: &mut [LayerGcode]) {
     for g in 1..layers.len() {
-        let deferred = layers[g - 1].tail_at.is_some();
+        let deferred = layers[g - 1].leaves;
         let l = &mut layers[g];
         let Some(start) = l.start.take() else { continue };
         if !deferred {
@@ -936,6 +939,9 @@ struct Builder<'a> {
     /// mid-path, the first time an extrusion ends within half a millimetre of it; and whether it was.
     photo: Option<([f64; 2], String)>,
     photo_taken: bool,
+    /// Whether the filament printing is on the nozzle the camera follows (with one filament, always), which alone takes
+    /// the farthest-point photo mid-path.
+    head: bool,
     /// After a layer that left its retraction to this one: whether the layer's first lift is yet to come, and the move
     /// that is (a spiral toward the travel after it, from where the layer before ended, which only `write` knows).
     unlifted_start: bool,
@@ -1260,6 +1266,7 @@ impl<'a> Builder<'a> {
             first = 0;
             self.push(m);
             if let Some((at, _)) = &self.photo
+                && self.head
                 && (x - at[0]).hyp(y - at[1]) < 0.5
                 && let Some((_, text)) = self.photo.take()
             {
@@ -1360,6 +1367,7 @@ impl<'a> Builder<'a> {
                 Step::Ready => self.ready(),
                 Step::EndLabels => end_labels(self),
                 Step::Use { filament, prior } => {
+                    self.head = colours.photo_head(*filament);
                     if let Some(s) = colours.settings.get(*filament) {
                         self.s = s;
                         self.overhang = crate::plan::overhang_flow(self.first_layer, self.layer_height, s);
@@ -1376,6 +1384,7 @@ impl<'a> Builder<'a> {
                 }
                 Step::LiftAgain => self.lift_again(),
                 Step::Switch { filament, pulled_back } => {
+                    self.head = colours.photo_head(*filament);
                     if let Some(s) = colours.settings.get(*filament) {
                         self.s = s;
                         self.overhang = crate::plan::overhang_flow(self.first_layer, self.layer_height, s);
@@ -1684,9 +1693,10 @@ enum Start {
     Deferred,
 }
 
-/// Where a layer's last retraction and wipe begin when they belong to the next layer (its move and note indexes), and
-/// the move that lifts the nozzle at the layer's start when the layer before left it unlifted.
-type Tail = (Option<(usize, usize)>, Option<usize>);
+/// Where a layer's last retraction and wipe begin when they belong to the next layer (its move and note indexes), the
+/// move that lifts the nozzle at the layer's start when the layer before left it unlifted, and whether the layer
+/// leaves the next one its start so (also when it ends on the prime tower, retracted already).
+type Tail = (Option<(usize, usize)>, Option<usize>, bool);
 
 /// The layer's moves and what is said between them, in Orca's order: the printer's layer change G-code, each object's
 /// labels around its moves, retractions that wipe and spiral lifts on travels, and after the last path a retraction,
@@ -1714,13 +1724,23 @@ fn build_layer<'a>(
         Start::Deferred => true,
     };
     let mut tail = None;
-    // Orca's farthest-point timelapse, here with one filament, the layer's photo taken where the nozzle passes the
-    // point farthest from the camera, else after the layer at a spot near that point.
-    let farthest =
-        if s.farthest_photo && job.colours.is_none() && course.is_none() { farthest_point(plan) } else { None };
-    // Taken there (inline), mid-layer, the photo leaves the layer's last retraction and wipe to the next layer too, as
-    // a photo before the tower does (Orca's layer end retracts only to take the photo itself).
-    let defers_inline = farthest.is_some() && !s.wrapping_detection;
+    let mut leaves = false;
+    // Orca's farthest-point timelapse: the point of the layer farthest from the camera and the filament printing it
+    // (`compute_farthest_point`). Where the camera's nozzle prints it, the photo is taken where that nozzle's extrusion
+    // passes the point, else after the layer at a spot near it; where another nozzle prints it, before the layer's first
+    // change away from a filament on another nozzle than the camera's, else after the layer (`process_layer`).
+    let tower_farthest = job.colours.is_some_and(|c| c.farthest_photo) && course.is_none();
+    let far = if (s.farthest_photo && job.colours.is_none() && course.is_none()) || tower_farthest {
+        farthest_point(plan)
+    } else {
+        None
+    };
+    let on_head = |f: usize| job.colours.is_none_or(|c| c.photo_head(f));
+    let far_on_head = far.is_some_and(|(_, k)| on_head(path_filament(plan, job, k)));
+    let farthest = far.filter(|_| job.colours.is_none() || far_on_head).map(|(at, _)| at);
+    // Taken mid-layer, the photo leaves the layer's last retraction and wipe to the next layer, as Orca's layer end
+    // retracts only to take the photo itself: inline, or before a change (with a tower).
+    let defers_inline = (farthest.is_some() || tower_farthest) && !s.wrapping_detection;
     let last_layer = i + 1 >= job.photos.len();
     let (x0, y0) = match course {
         Some(c) => (c.from[0], c.from[1]),
@@ -1758,6 +1778,7 @@ fn build_layer<'a>(
         change_from: (x0, y0),
         fresh: true,
         photo: farthest.map(|at| (at, layer_photo(plan, job, None, true, true))),
+        head: job.colours.is_none_or(|c| c.photo_head(c.start(i))),
         photo_taken: false,
         unlifted_start: after_deferred,
         first_lift: None,
@@ -1814,13 +1835,24 @@ fn build_layer<'a>(
     let mut next_visit = 0;
     let mut photo_taken = false;
     let mut open_label: Option<u32> = None;
-    let photo_note = |_: &Builder| -> Note {
-        Note::Text(layer_photo(plan, job, job.photos.get(i).copied().flatten(), false, false))
+    // The photo at the printer's spot, or with the farthest-point timelapse at a spot near the farthest point.
+    let photo_at_spot = || match far {
+        Some((at, _)) => {
+            let spot = crate::bambu::timelapse_position(
+                job.photo_objects,
+                plan.z,
+                s.bed,
+                s.extruder_clearance_radius,
+                Some(at),
+            );
+            layer_photo(plan, job, spot, true, false)
+        }
+        None => layer_photo(plan, job, job.photos.get(i).copied().flatten(), false, false),
     };
     for (k, path) in plan.paths.iter().enumerate() {
         // Only the layer's start is wanted: its first path is enough to time it.
         if start == Start::Deferred && k > 0 {
-            return (b.moves, b.notes, None, b.known, (None, b.first_lift));
+            return (b.moves, b.notes, None, b.known, (None, b.first_lift, false));
         }
         while let Some(colours) = job.colours
             && let Some(visit) = plan.visits.get(next_visit).filter(|v| v.at == k)
@@ -1829,14 +1861,17 @@ fn build_layer<'a>(
             if let Some(o) = last.and_then(owner) {
                 b.note(Note::Stopped(o));
             }
-            if !photo_taken && colours.photo_head(visit.from) {
+            let photo_here = match tower_farthest {
+                true => !far_on_head && !colours.photo_head(visit.from),
+                false => colours.photo_head(visit.from),
+            };
+            if !photo_taken && !b.photo_taken && photo_here {
                 b.retract();
                 b.lift_again();
                 if let Some(o) = open_label.take() {
                     b.note(Note::LabelEnd(o));
                 }
-                let photo = photo_note(&b);
-                b.note(photo);
+                b.note(Note::Text(photo_at_spot()));
                 b.known = false;
                 photo_taken = true;
             }
@@ -2031,7 +2066,7 @@ fn build_layer<'a>(
         }
     }
     if start == Start::Deferred {
-        return (b.moves, b.notes, None, b.known, (None, b.first_lift));
+        return (b.moves, b.notes, None, b.known, (None, b.first_lift, false));
     }
     if let Some(prev) = last {
         if let Some(o) = owner(prev) {
@@ -2041,9 +2076,10 @@ fn build_layer<'a>(
             // With the photo taken before a tower visit, or mid-path with the farthest-point timelapse, the retraction
             // and wipe (and the label's end) are the next layer's, which starts retracted at the height it ends at.
             // The last layer leaves them where they are, unlifted, for the printer's end.
-            let deferred = (defers && photo_taken) || (defers_inline && b.photo_taken);
+            let deferred = (defers && photo_taken) || (defers_inline && (photo_taken || b.photo_taken));
             if deferred && !(defers_inline && last_layer) {
                 tail = Some((b.moves.len(), b.notes.len()));
+                leaves = true;
             }
             b.retract();
             if !deferred {
@@ -2055,33 +2091,22 @@ fn build_layer<'a>(
         }
     } else {
         // Ending on the tower, the nozzle is lifted and retracted already; the next layer starts at this one's height.
-        if defers && b.z > plan.z + 1e-6 {
+        let deferred = defers || (tower_farthest && !last_layer && (photo_taken || b.photo_taken));
+        if deferred && b.z > plan.z + 1e-6 {
             b.lift_to(plan.z);
             b.lifted = false;
         }
+        leaves = deferred && tower_farthest;
         if let Some(o) = open_label.take() {
             b.note(Note::LabelEnd(o));
         }
     }
     if !photo_taken && !b.photo_taken {
-        let photo = match farthest {
-            Some(at) => {
-                let spot = crate::bambu::timelapse_position(
-                    job.photo_objects,
-                    plan.z,
-                    s.bed,
-                    s.extruder_clearance_radius,
-                    Some(at),
-                );
-                layer_photo(plan, job, spot, true, false)
-            }
-            None => layer_photo(plan, job, job.photos.get(i).copied().flatten(), false, false),
-        };
-        b.note(Note::Text(photo));
+        b.note(Note::Text(photo_at_spot()));
         b.known = false;
     }
     let known = b.known;
-    let Some(course) = course else { return (b.moves, b.notes, None, known, (tail, b.first_lift)) };
+    let Some(course) = course else { return (b.moves, b.notes, None, known, (tail, b.first_lift, leaves)) };
     let mut turned = None;
     if plan.spiral {
         let r = crate::spiral::rise(&b.moves, course, s);
@@ -2110,7 +2135,7 @@ fn build_layer<'a>(
         b.retract();
         b.lift_straight();
     }
-    (b.moves, b.notes, turned, known, (None, None))
+    (b.moves, b.notes, turned, known, (None, None, false))
 }
 
 /// Where a layer's first travel goes: its first visit to the prime tower when that comes first, else its first path.
@@ -2126,9 +2151,9 @@ fn layer_start(plan: &LayerPlan) -> Option<[f64; 2]> {
 /// The point of the layer farthest from the camera (the plate's corner), as Orca's farthest-point timelapse finds it
 /// (`GCode::compute_farthest_point`): on its outer walls, but not where they hang over (Orca's overhang walls), else
 /// on its sparse, solid and top infill and its supports; the first of equals; none on the plate's corner.
-fn farthest_point(plan: &LayerPlan) -> Option<[f64; 2]> {
-    let mut best = [(0i64, None::<Pt>); 2];
-    for path in &plan.paths {
+fn farthest_point(plan: &LayerPlan) -> Option<([f64; 2], usize)> {
+    let mut best = [(0i64, None::<(Pt, usize)>); 2];
+    for (at, path) in plan.paths.iter().enumerate() {
         let k = match path.role {
             Role::OuterWall => 0,
             Role::SparseInfill | Role::SolidInfill | Role::TopSurface | Role::Support | Role::SupportInterface => 1,
@@ -2149,12 +2174,19 @@ fn farthest_point(plan: &LayerPlan) -> Option<[f64; 2]> {
             }
             let d = i64::from(p.x) * i64::from(p.x) + i64::from(p.y) * i64::from(p.y);
             if d > best[k].0 {
-                best[k] = (d, Some(*p));
+                best[k] = (d, Some((*p, at)));
             }
         }
     }
-    let p = best[0].1.or(best[1].1)?;
-    Some([geom::unsc(p.x), geom::unsc(p.y)])
+    let (p, at) = best[0].1.or(best[1].1)?;
+    Some(([geom::unsc(p.x), geom::unsc(p.y)], at))
+}
+
+/// The filament printing path `k` of a layer in several filaments: the layer's first, then each visit's to the tower
+/// (or change) before it.
+fn path_filament(plan: &LayerPlan, job: &Job, k: usize) -> usize {
+    let Some(c) = job.colours else { return 0 };
+    plan.visits.iter().filter(|v| v.at <= k).last().map_or(c.start(plan.index), |v| v.to)
 }
 
 /// The timelapse photo after the layer, at `spot` (none: the printer picks its own), which the printer skips with the
@@ -3098,7 +3130,7 @@ fn finish_layer(
     job: &Job,
     (text, before): (Vec<u8>, Option<(Role, f32)>),
     header_height: f32,
-    (fans, over, by_tool, mut tool, (tail, first_lift)): ([f64; 2], [Option<f64>; 2], &[ToolFans], usize, Tail),
+    (fans, over, by_tool, mut tool, (tail, first_lift, _)): ([f64; 2], [Option<f64>; 2], &[ToolFans], usize, Tail),
     cut: Option<usize>,
 ) -> LayerOut {
     let s = job.settings;
