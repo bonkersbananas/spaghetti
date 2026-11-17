@@ -61,7 +61,7 @@ interface ToggleChipProps extends Omit<ComponentPropsWithRef<"button">, "childre
   /** Starts with a picture (a spool disc, a swatch) that sits closer to the edge than a word would. */
   lead?: boolean;
   /**
-   * `quiet`: words with no chip around them until picked, for a filter that must sit in running text (nothing uses it now; Ideas' filters are plain chips); picked, the same ink pill as a picked chip, tight around the label and count.
+   * `quiet`: words with no chip around them until picked, for a filter that must sit in running text (Ideas' filters are plain chips); picked, the same ink pill as a picked chip, tight around the label and count. With a `tone` other than neutral it is a status instead (Up next, My wishlist on an idea): picked, the tone's soft fill.
    */
   appearance?: "chip" | "quiet";
   /** How many it would show, after the label: faint at rest, in the pill's own ink once picked. */
@@ -74,6 +74,14 @@ const selectedTones: Record<ChipTone, string> = {
   tomato: "bg-tomato-soft text-tomato-ink ring-1 ring-inset ring-tomato/40",
   basil: "bg-basil-soft text-basil-ink ring-1 ring-inset ring-basil/40",
   semolina: "bg-semolina-soft text-semolina-ink ring-1 ring-inset ring-semolina/50",
+};
+
+/** A quiet toggle that is on and has a status colour (Up next, My wishlist): the tone's soft fill, no ring, never the ink pill that means "picked filter". */
+const quietSelectedTones: Record<ChipTone, string> = {
+  neutral: "bg-ink/8 text-ink",
+  tomato: "bg-tomato-soft text-tomato-ink",
+  basil: "bg-basil-soft text-basil-ink",
+  semolina: "bg-semolina-soft text-semolina-ink",
 };
 
 /** A chip people tap to filter or pick. Without `selected` it is a button that adds something (a spool for a filament, a kind of change). */
@@ -98,7 +106,9 @@ export function ToggleChip({
         "pressable focus-ring touch-target relative",
         quiet ? "h-7 px-2.5" : cn("h-9 md:h-8", lead ? "gap-2 pr-3.5 pl-2" : "px-3.5"),
         selected
-          ? selectedTones[tone]
+          ? quiet && tone !== "neutral"
+            ? quietSelectedTones[tone]
+            : selectedTones[tone]
           : quiet
             ? "text-ink-soft hover:bg-ink/5 hover:text-ink"
             : "bg-cream text-ink-soft shadow-soft hover:text-ink",

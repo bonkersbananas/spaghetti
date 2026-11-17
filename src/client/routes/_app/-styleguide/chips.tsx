@@ -9,6 +9,7 @@ export function ChipSection() {
   const [selected, setSelected] = useState("PLA");
   const [tags, setTags] = useState(["warping"]);
   const [filter, setFilter] = useState<"model" | "design" | null>("model");
+  const [status, setStatus] = useState<string[]>(["up"]);
   return (
     <Section id="chips" title="Chips" note="Labels for status and materials; toggle chips for filters.">
       <Panel className="flex flex-col gap-5">
@@ -58,6 +59,32 @@ export function ChipSection() {
               Needs designing
             </ToggleChip>
           </div>
+        </div>
+        <Label>
+          Quiet status toggles (`appearance="quiet"` with a tone), on an idea: words at rest, the tone's soft fill when
+          on. Ink is for a picked filter only
+        </Label>
+        <div className="-ml-2.5 flex flex-wrap items-center gap-1">
+          <ToggleChip
+            appearance="quiet"
+            tone="semolina"
+            icon={Icons.UpNextIcon}
+            selected={status.includes("up")}
+            onClick={() => setStatus(status.includes("up") ? status.filter((x) => x !== "up") : [...status, "up"])}
+          >
+            Up next
+          </ToggleChip>
+          <ToggleChip
+            appearance="quiet"
+            tone="tomato"
+            icon={Icons.WishIcon}
+            selected={status.includes("wish")}
+            onClick={() =>
+              setStatus(status.includes("wish") ? status.filter((x) => x !== "wish") : [...status, "wish"])
+            }
+          >
+            My wishlist
+          </ToggleChip>
         </div>
         <Label>Claude's marks: one quiet line, a sparkle first</Label>
         <div className="flex flex-col gap-2">
