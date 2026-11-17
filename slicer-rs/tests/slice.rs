@@ -183,6 +183,20 @@ fn the_same_models_give_the_same_file() {
 }
 
 #[test]
+fn the_gcode_packed_as_it_is_written_makes_the_file_the_whole_text_does() {
+    // Without `Options::gcode` (as in the app) the G-code is deflated as it's written and never held whole: the same
+    // file, with no plain G-code in the output but its size.
+    let stl = std::fs::read(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/models/bridge.stl")).unwrap();
+    let whole = Options { arrange: false, thumbnail: false, ..Options::default() };
+    let packed = Options { gcode: false, ..whole };
+    let a = slice(&[Input { name: "bridge.stl", bytes: &stl }], &Settings::default(), &whole).unwrap();
+    let b = slice(&[Input { name: "bridge.stl", bytes: &stl }], &Settings::default(), &packed).unwrap();
+    assert_eq!(a.file, b.file);
+    assert_eq!((a.gcode.len(), a.gcode_bytes), (b.gcode_bytes, b.gcode_bytes));
+    assert!(b.gcode.is_empty() && b.gcode_bytes > 100_000);
+}
+
+#[test]
 fn painted_cubes_slice_unless_their_filaments_interlock() {
     use spaghetti_slicer::{Plate, paint::Paint};
     let cube = cube_stl(10.0);

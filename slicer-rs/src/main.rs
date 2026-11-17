@@ -162,7 +162,12 @@ fn main() -> ExitCode {
     if let (Some(map), Some(palette)) = (&args.filament_map, &mut settings.palette) {
         std::sync::Arc::make_mut(palette).manual_map = Some(map.iter().map(|n| n - 1).collect());
     }
-    let options = Options { arrange: !args.keep_placement, thumbnail: args.thumbnail, scale: setup.scale };
+    let options = Options {
+        arrange: !args.keep_placement,
+        thumbnail: args.thumbnail,
+        scale: setup.scale,
+        gcode: args.gcode.is_some(),
+    };
     // One file at a time: each file's bytes go once it is read.
     let mut plate = Plate::default();
     for (k, path) in args.inputs.iter().enumerate() {
@@ -292,7 +297,8 @@ fn replay(path: &str, args: &Args) -> ExitCode {
                 }
             }
         }
-        let options = Options { arrange: false, thumbnail: args.thumbnail, scale: setup.scale };
+        let options =
+            Options { arrange: false, thumbnail: args.thumbnail, scale: setup.scale, gcode: args.gcode.is_some() };
         let out = plate.slice(&setup.settings, &options).map_err(|e| format!("can't slice: {e}"))?;
         let output = args.output.clone().unwrap_or_else(|| "job.gcode.3mf".into());
         write_out(&out, &setup.settings, &output, args)
