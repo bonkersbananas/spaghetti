@@ -568,6 +568,7 @@ fn object_seams(
 /// Orca's `pick_random_seam_point`: among the loop's candidates as good as its best (`are_similar`), one chosen with
 /// a probability by the length of the edge after it, by a number fixed by where the loop's first candidate is; the
 /// seam lies that far along the edge. All single precision, as Orca's.
+#[allow(clippy::excessive_precision)]
 fn pick_random(seams: &mut LayerSeams, k: usize, comparator: Comparator, middle: [f32; 2]) {
     let perimeter = &seams.perimeters[k];
     let (start, end, width) = (perimeter.start, perimeter.end, perimeter.width);
