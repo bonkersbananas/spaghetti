@@ -5,3 +5,4 @@ pub mod graph;
 pub mod toolpaths;
 pub mod trapezoidation;
 pub mod voronoi;
+pub mod width;
