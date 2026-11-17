@@ -463,7 +463,8 @@ pub fn regions(
         let g = islands[layer][island].group as usize;
         let trees = lightning.get(g).and_then(|o| o.get(layer)).map_or(&[][..], Vec::as_slice);
         let octree = octrees.get(g).and_then(Option::as_ref);
-        plan::sparse_lines(sparse, layer, layers.top[layer], layers.height[layer], centre, trees, octree, s)
+        let others = plan::others_in(&islands[layer][island].inner, sparse);
+        plan::sparse_lines(sparse, &others, layer, layers.top[layer], layers.height[layer], centre, trees, octree, s)
     };
     let mut fills = bridges::bridge_over_infill(&islands, fills, candidates, layers, &lines, s);
     if s.iron.on() {

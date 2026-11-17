@@ -1210,6 +1210,7 @@ impl Settings {
             self.sparse_infill_pattern.as_str(),
             "zig-zag"
                 | "rectilinear"
+                | "alignedrectilinear"
                 | "crosshatch"
                 | "gyroid"
                 | "grid"
@@ -1224,7 +1225,7 @@ impl Settings {
                 | "supportcubic"
                 | ""
         ) {
-            out.push(format!("{} sparse infill printed as straight lines", self.sparse_infill_pattern));
+            out.push(format!("{} sparse infill printed as rectilinear", self.sparse_infill_pattern));
         }
         for (what, pattern) in [
             ("top surfaces", &self.top_surface_pattern),
