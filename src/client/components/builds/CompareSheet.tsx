@@ -74,7 +74,7 @@ function AttemptPhotos({
   picked,
   onPick,
   fade = false,
-  thumbsOver = false,
+  thumbsRow = false,
 }: {
   attempt: AttemptView;
   photos: PhotoView[];
@@ -82,8 +82,8 @@ function AttemptPhotos({
   onPick: (photoId: string) => void;
   /** Crossfade when the attempt changes (the phone's switch). */
   fade?: boolean;
-  /** Desktop: the thumbnails sit on the photo's lower edge instead of under it, so both columns are the same height whatever each has. */
-  thumbsOver?: boolean;
+  /** Desktop: the other attempt has several photos. Keeps one row of 40 px thumbnails here too (a caption when there is one photo), so both columns are the same height. */
+  thumbsRow?: boolean;
 }) {
   const reduce = useReducedMotion();
   const shown = photos.find((photo) => photo.id === picked) ?? photos[0];
@@ -108,21 +108,24 @@ function AttemptPhotos({
       )}
     </>
   );
-  const thumbs = photos.length > 1 && (
-    <div className={cn("flex flex-wrap gap-2", thumbsOver && "absolute bottom-2 left-2 z-10 max-w-[calc(100%-1rem)]")}>
-      {photos.map((photo, index) => (
-        <PhotoThumb
-          key={photo.id}
-          size="sm"
-          src={photoSrc(photo.id, "thumb")}
-          alt={`Attempt ${attempt.number}, photo ${index + 1}`}
-          color={photo.color || undefined}
-          selected={photo.id === shown?.id}
-          onSelect={() => onPick(photo.id)}
-        />
-      ))}
-    </div>
-  );
+  const thumbs =
+    photos.length > 1 ? (
+      <div className={cn("flex gap-2", thumbsRow ? "h-10 [&>div]:size-10" : "flex-wrap")}>
+        {photos.map((photo, index) => (
+          <PhotoThumb
+            key={photo.id}
+            size="sm"
+            src={photoSrc(photo.id, "thumb")}
+            alt={`Attempt ${attempt.number}, photo ${index + 1}`}
+            color={photo.color || undefined}
+            selected={photo.id === shown?.id}
+            onSelect={() => onPick(photo.id)}
+          />
+        ))}
+      </div>
+    ) : thumbsRow ? (
+      <p className="text-small text-ink-faint flex h-10 items-center">{photos.length === 1 ? "One photo" : ""}</p>
+    ) : null;
   return (
     <div className="flex flex-col gap-2.5">
       {/* 3:2 on phones, 4:3 on desktop, but never taller than 28% of the window on desktop: the photos stay whole, and "What changed" is in the first screen. */}
@@ -144,9 +147,8 @@ function AttemptPhotos({
         ) : (
           frame
         )}
-        {thumbsOver && thumbs}
       </div>
-      {!thumbsOver && thumbs}
+      {thumbs}
     </div>
   );
 }
@@ -211,7 +213,7 @@ function DesktopCompare({
               photos={photosOf(item, attempt)}
               picked={picked[attempt.id]}
               onPick={(photoId) => pick(attempt.id, photoId)}
-              thumbsOver
+              thumbsRow={columns.some(([, a]) => photosOf(item, a).length > 1)}
             />
           </div>
         ))}
