@@ -110,7 +110,12 @@ function AttemptPhotos({
   );
   const thumbs =
     photos.length > 1 ? (
-      <div className={cn("flex gap-2", thumbsRow ? "h-10 [&>div]:size-10" : "flex-wrap")}>
+      <div
+        className={cn(
+          "flex gap-2",
+          thumbsRow ? "-m-1 h-12 items-center overflow-x-auto p-1 [&>div]:size-10" : "flex-wrap",
+        )}
+      >
         {photos.map((photo, index) => (
           <PhotoThumb
             key={photo.id}
