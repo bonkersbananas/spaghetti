@@ -588,10 +588,20 @@ fn put_first_lift(
     let d = (first[0] - at[0]).hyp(first[1] - at[1]);
     let (i, j) = if d > 0.0 { (-(first[1] - at[1]) / d * r, (first[0] - at[0]) / d * r) } else { (r, 0.0) };
     let (cx, cy) = (at[0] + i, at[1] + j);
-    if cx.min(s.bed[0] - cx).min(cy).min(s.bed[1] - cy) < r {
-        return;
-    }
+    let fits = cx.min(s.bed[0] - cx).min(cy).min(s.bed[1] - cy) >= r;
     let mut line = Vec::new();
+    if !fits {
+        // The turn would leave the plate from where the nozzle really is: straight up, as `lift` does there. The
+        // speed goes where it was written, or where the spiral wrote it.
+        let had_speed = l.text[from..to].starts_with(b"G17") || l.text[from..to].windows(2).any(|w| w == b" F");
+        line.extend_from_slice(b"G1 Z");
+        num(&mut line, z, 3);
+        if had_speed {
+            line.extend_from_slice(b" F");
+            num(&mut line, f * 60.0, 3);
+        }
+        return splice_lift(l, (from, to), line);
+    }
     line.extend_from_slice(b"G17\nG3 Z");
     num(&mut line, z, 3);
     line.extend_from_slice(b" I");
@@ -600,6 +610,11 @@ fn put_first_lift(
     num(&mut line, j, 3);
     line.extend_from_slice(b" P1  F");
     num(&mut line, f * 60.0, 3);
+    splice_lift(l, (from, to), line);
+}
+
+/// Puts `line` in place of the layer's first lift, at bytes `from..to` of its text.
+fn splice_lift(l: &mut LayerGcode, (from, to): (usize, usize), line: Vec<u8>) {
     let delta = line.len() as isize - (to - from) as isize;
     l.text.splice(from..to, line);
     let shift = |k: usize| if k >= to { (k as isize + delta) as usize } else { k };
@@ -913,7 +928,7 @@ impl<'a> Builder<'a> {
         let (cx, cy) = (self.x + i, self.y + j);
         let fits = cx.min(s.bed[0] - cx).min(cy).min(s.bed[1] - cy) >= r;
         let kind = if fits { Kind::Spiral { i, j } } else { Kind::Lift };
-        if std::mem::take(&mut self.unlifted_start) && fits && toward.is_some() {
+        if std::mem::take(&mut self.unlifted_start) && toward.is_some() {
             self.first_lift = Some(self.moves.len());
         }
         self.line(self.x, self.y, z, 0.0, s.travel_speed, kind);
@@ -2934,6 +2949,7 @@ fn finish_layer(
                 w.feed(t, m.f, false);
             }
             Kind::Lift => {
+                let from = t.len();
                 if m.form & FORM_Z != 0 {
                     t.extend_from_slice(format!("G1 Z{:.3}", m.z).as_bytes());
                 } else {
@@ -2941,6 +2957,9 @@ fn finish_layer(
                     num(t, m.z, 3);
                 }
                 w.feed(t, m.f, false);
+                if first_lift == Some(k) {
+                    out_lift = Some((from, t.len(), m.z, m.f));
+                }
             }
             Kind::Spiral { i, j } => {
                 let from = t.len();
