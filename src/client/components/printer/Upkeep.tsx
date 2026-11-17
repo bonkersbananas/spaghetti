@@ -76,7 +76,7 @@ export function Upkeep() {
                 onClick={() => setOpen({ kind: "edit", id: task.id })}
                 className={cn(
                   "focus-ring hover:bg-ink/4 duration-fast -mx-2 flex min-w-0 flex-1 flex-col justify-center rounded-md px-2 py-1 text-left transition-colors",
-                  task.due ? "min-h-12 gap-1.5" : "min-h-10 gap-1",
+                  task.due ? "min-h-12 gap-1.5" : "min-h-11 gap-1",
                 )}
               >
                 {/* Not due yet: the name steps back and the bar thins out, so the rows that need doing stand alone. */}
