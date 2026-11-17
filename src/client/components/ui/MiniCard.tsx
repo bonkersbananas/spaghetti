@@ -119,7 +119,7 @@ export function MiniCard({
               "relative w-full overflow-hidden rounded-md",
               photo || !note
                 ? gridScale
-                  ? "aspect-square md:aspect-3/2"
+                  ? "aspect-square md:aspect-3/2 md:flex-1"
                   : "aspect-square xl:aspect-[7/5]"
                 : gridScale
                   ? "min-h-[5.625rem] flex-1 md:min-h-40"
@@ -154,7 +154,7 @@ export function MiniCard({
                 <h3
                   className={cn(
                     "text-small line-clamp-2 min-h-[2lh] leading-snug break-words",
-                    gridScale && "md:text-body",
+                    gridScale && "md:text-body md:min-h-0",
                     // A note standing in for a title is set as on Card: plain Figtree, not a title.
                     title ? "text-ink font-semibold" : "text-ink font-sans font-medium",
                   )}

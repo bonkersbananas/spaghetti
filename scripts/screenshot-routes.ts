@@ -1993,6 +1993,7 @@ export const shots: Shot[] = [
     cleanup: restoreDeskTidy,
   },
   { name: "ideas", path: "/ideas" },
+  { name: "ideas-full", path: "/ideas", fullPage: true },
   {
     // A photo saved without a title, a few seconds later: Claude's title in its card (decision 0070).
     name: "ideas-named-by-claude",

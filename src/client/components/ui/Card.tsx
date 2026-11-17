@@ -123,13 +123,7 @@ export function Card({
 
   const content = (
     <>
-      <div
-        className={cn(
-          "relative w-full overflow-hidden rounded-md",
-          // A note card is shorter than a photo's: two words on a tall blank tile read as unfinished.
-          aspects[noteCard && aspect === "portrait" ? "square" : aspect],
-        )}
-      >
+      <div className={cn("relative w-full overflow-hidden rounded-md", aspects[aspect])}>
         {slides ? (
           <div
             ref={scroller}
