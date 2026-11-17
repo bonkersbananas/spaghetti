@@ -273,6 +273,7 @@ mod tests {
     fn archimedean_chords_end_with_a_resolution_of_nothing() {
         let points = curve(
             Curve::ArchimedeanChords,
+            Lay::Sparse,
             [-1_000_000, -1_000_000, 1_000_000, 1_000_000],
             (2_000_000, 2_000_000),
             0.0,
