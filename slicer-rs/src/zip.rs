@@ -75,15 +75,19 @@ pub fn entries(bytes: &[u8]) -> Option<Vec<Entry<'_>>> {
 /// Raw DEFLATE of `data`. Big inputs are cut into chunks compressed on their own (in parallel where there are
 /// threads), each ended on a byte boundary, so they join into one stream; the cost is a little ratio.
 pub fn deflate(data: &[u8], level: u8) -> Vec<u8> {
+    deflate_pieces(data, level).concat()
+}
+
+/// `deflate`'s stream, in the pieces it packed.
+fn deflate_pieces(data: &[u8], level: u8) -> Vec<Vec<u8>> {
     if data.len() <= CHUNK {
-        return deflate_part(data, level, true);
+        return vec![deflate_part(data, level, true)];
     }
     let parts = data.len().div_ceil(CHUNK);
-    let pieces = crate::par::map_range(parts, |i| {
+    crate::par::map_range(parts, |i| {
         let slice = &data[i * CHUNK..((i + 1) * CHUNK).min(data.len())];
         deflate_part(slice, level, i + 1 == parts)
-    });
-    pieces.concat()
+    })
 }
 
 /// The size of the pieces `deflate` packs on their own.
@@ -92,10 +96,10 @@ const CHUNK: usize = 1 << 18;
 /// How many pieces `Deflater` gathers before it packs them (together, on every core where there are threads).
 const BATCH: usize = 16;
 
-/// What `Deflater` packed: the bytes, the size and CRC-32 of what was written (what `Writer::add_deflated` takes), and
-/// its MD5 when asked for.
+/// What `Deflater` packed: the stream in the pieces it packed (kept apart, so that no buffer grows to hold them all),
+/// the size and CRC-32 of what was written, and its MD5 when asked for. `Writer::add_deflated` takes it.
 pub struct Deflated {
-    pub packed: Vec<u8>,
+    pub pieces: Vec<Vec<u8>>,
     pub size: usize,
     pub crc: u32,
     pub md5: Option<[u8; 16]>,
@@ -104,9 +108,14 @@ pub struct Deflated {
 impl Deflated {
     /// `data` deflated at `level`, with its MD5: what a `Deflater::with_md5` given all of it makes.
     pub fn of(data: &[u8], level: u8) -> Self {
-        let (packed, (crc, md5)) =
-            crate::par::join(|| deflate(data, level), || (crc32fast::hash(data), Md5::digest(data).into()));
-        Deflated { packed, size: data.len(), crc, md5: Some(md5) }
+        let (pieces, (crc, md5)) =
+            crate::par::join(|| deflate_pieces(data, level), || (crc32fast::hash(data), Md5::digest(data).into()));
+        Deflated { pieces, size: data.len(), crc, md5: Some(md5) }
+    }
+
+    /// How many bytes the stream takes.
+    pub fn packed_len(&self) -> usize {
+        self.pieces.iter().map(Vec::len).sum()
     }
 }
 
@@ -117,7 +126,7 @@ pub struct Deflater {
     level: u8,
     /// What isn't packed yet: always the last piece, which is the one that ends the stream.
     pending: Vec<u8>,
-    packed: Vec<u8>,
+    packed: Vec<Vec<u8>>,
     crc: crc32fast::Hasher,
     md5: Option<Md5>,
     size: usize,
@@ -164,22 +173,20 @@ impl Deflater {
                 }
             },
         );
-        for piece in pieces {
-            self.packed.extend_from_slice(&piece);
-        }
+        self.packed.extend(pieces);
         self.size += n * CHUNK;
         self.pending.drain(..n * CHUNK);
     }
 
     pub fn finish(mut self) -> Deflated {
         self.pack_whole_pieces();
-        self.packed.extend_from_slice(&deflate_part(&self.pending, self.level, true));
+        self.packed.push(deflate_part(&self.pending, self.level, true));
         self.crc.update(&self.pending);
         let md5 = self.md5.map(|mut md5| {
             md5.update(&self.pending);
             md5.finalize().into()
         });
-        Deflated { packed: self.packed, size: self.size + self.pending.len(), crc: self.crc.finalize(), md5 }
+        Deflated { pieces: self.packed, size: self.size + self.pending.len(), crc: self.crc.finalize(), md5 }
     }
 }
 
@@ -212,6 +219,8 @@ fn deflate_part(mut input: &[u8], level: u8, last: bool) -> Vec<u8> {
         }
     }
     out.truncate(at);
+    // Kept until the archive is written: without the room the guess at its size left (half the input).
+    out.shrink_to_fit();
     out
 }
 
@@ -231,20 +240,21 @@ impl Writer {
     /// Adds an entry, deflated at `level` (0 stores it as it is).
     pub fn add(&mut self, name: &str, data: &[u8], level: u8) {
         if level == 0 {
-            self.add_raw(name, data.len(), crc32fast::hash(data), 0, data);
+            self.add_raw(name, data.len(), crc32fast::hash(data), 0, &[data]);
         } else {
             let packed = deflate(data, level);
-            self.add_raw(name, data.len(), crc32fast::hash(data), 8, &packed);
+            self.add_raw(name, data.len(), crc32fast::hash(data), 8, &[packed]);
         }
     }
 
-    /// Adds an entry already deflated (see `deflate`), given its size and CRC-32.
-    pub fn add_deflated(&mut self, name: &str, size: usize, crc: u32, packed: &[u8]) {
-        self.add_raw(name, size, crc, 8, packed);
+    /// Adds an entry already deflated (see `Deflater`).
+    pub fn add_deflated(&mut self, name: &str, packed: &Deflated) {
+        self.add_raw(name, packed.size, packed.crc, 8, &packed.pieces);
     }
 
-    fn add_raw(&mut self, name: &str, size: usize, crc: u32, method: u16, packed: &[u8]) {
+    fn add_raw(&mut self, name: &str, size: usize, crc: u32, method: u16, pieces: &[impl AsRef<[u8]>]) {
         let offset = self.out.len() as u32;
+        let packed_len: usize = pieces.iter().map(|p| p.as_ref().len()).sum();
         let header = |v: &mut Vec<u8>, central: bool| {
             v.extend_from_slice(&(if central { 0x0201_4b50u32 } else { 0x0403_4b50 }).to_le_bytes());
             if central {
@@ -256,7 +266,7 @@ impl Writer {
             v.extend_from_slice(&0u16.to_le_bytes()); // time
             v.extend_from_slice(&0x0021u16.to_le_bytes()); // 1980-01-01
             v.extend_from_slice(&crc.to_le_bytes());
-            v.extend_from_slice(&(packed.len() as u32).to_le_bytes());
+            v.extend_from_slice(&(packed_len as u32).to_le_bytes());
             v.extend_from_slice(&(size as u32).to_le_bytes());
             v.extend_from_slice(&(name.len() as u16).to_le_bytes());
             v.extend_from_slice(&0u16.to_le_bytes()); // extra
@@ -270,7 +280,9 @@ impl Writer {
             v.extend_from_slice(name.as_bytes());
         };
         header(&mut self.out, false);
-        self.out.extend_from_slice(packed);
+        for piece in pieces {
+            self.out.extend_from_slice(piece.as_ref());
+        }
         header(&mut self.central, true);
         self.count += 1;
     }
@@ -327,10 +339,10 @@ mod tests {
                     d.write(piece);
                 }
                 let d = d.finish();
-                assert_eq!(d.packed, deflate(text, 6), "{len} bytes, {step} at a time");
+                assert_eq!(d.pieces.concat(), deflate(text, 6), "{len} bytes, {step} at a time");
                 assert_eq!((d.size, d.crc), (len, crc32fast::hash(text)));
                 let whole = Deflated::of(text, 6);
-                assert_eq!((whole.packed, whole.size, whole.crc), (d.packed, d.size, d.crc));
+                assert_eq!((whole.pieces.concat(), whole.size, whole.crc), (d.pieces.concat(), d.size, d.crc));
                 assert_eq!(whole.md5, d.md5);
                 assert_eq!(d.md5, Some(Md5::digest(text).into()));
             }

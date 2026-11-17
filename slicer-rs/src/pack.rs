@@ -678,14 +678,19 @@ pub fn gcode_3mf(
     project.push_str("}\n");
     files.push(("Metadata/project_settings.config", project.into_bytes()));
 
-    let mut w = zip::Writer::with_capacity(gcode.packed.len() + 64 * 1024);
+    let model = model_entry.finish();
+    // The archive at its size from the start (the other entries are a few kB): a big mesh's packed model is 20 MB,
+    // which a buffer doubling as it grew held twice over while it moved.
+    let others: usize = files.iter().map(|(name, data)| 2 * name.len() + data.len()).sum();
+    let mut w = zip::Writer::with_capacity(
+        model.packed_len() + gcode.packed_len() + thumbnail.map_or(0, <[u8]>::len) + others + 64 * 1024,
+    );
     for (name, data) in &files[..2] {
         w.add(name, data, 6);
     }
-    let model = model_entry.finish();
-    w.add_deflated("3D/3dmodel.model", model.size, model.crc, &model.packed);
+    w.add_deflated("3D/3dmodel.model", &model);
     drop(model);
-    w.add_deflated("Metadata/plate_1.gcode", gcode.size, gcode.crc, &gcode.packed);
+    w.add_deflated("Metadata/plate_1.gcode", gcode);
     for (name, data) in &files[2..] {
         w.add(name, data, 6);
     }
