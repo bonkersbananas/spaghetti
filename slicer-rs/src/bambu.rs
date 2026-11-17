@@ -286,13 +286,15 @@ impl Frame {
 /// when nothing is left, as for Orca: the printer then picks its own spot.
 ///
 /// With Orca's farthest-point timelapse, the spot nearest (in L1 distance) the layer's point farthest from the camera
-/// (`farthest`, mm) instead, unless the objects' middle is free.
+/// (`farthest`, mm) instead, unless the objects' middle is free. On a plate with a prime tower, `limits` keeps the
+/// spot off the tower's box and within the box the camera's nozzle reaches (`Colours::photo_limits`).
 pub fn timelapse_position(
     objects: &[crate::Object],
     z: f64,
     bed: [f64; 2],
     clearance: f64,
     farthest: Option<[f64; 2]>,
+    limits: Option<([f64; 4], Option<[f64; 4]>)>,
 ) -> Option<[i64; 2]> {
     use crate::geom::{self, Contour, Pt, pt, sc};
     if objects.is_empty() {
@@ -322,7 +324,13 @@ pub fn timelapse_position(
             pt(sc(x0.max(0.0)), sc(y1.max(0.0))),
         ]);
     }
-    let plate = vec![vec![rect(0.0, 0.0, bed[0], bed[1])]];
+    let reach = limits
+        .and_then(|l| l.1)
+        .map_or([0.0, 0.0, bed[0], bed[1]], |a| [a[0].max(0.0), a[1].max(0.0), a[2].min(bed[0]), a[3].min(bed[1])]);
+    if let Some((t, _)) = limits {
+        blocked.push(rect(t[0], t[1], t[2], t[3]));
+    }
+    let plate = vec![vec![rect(reach[0], reach[1], reach[2], reach[3])]];
     let free = geom::difference(&plate, &geom::union_contours(&blocked));
     // Clipper's default miter limit (3), as Orca's opening uses.
     let miter = 2.0 * (1.0f64 / 3.0).asin();
@@ -474,7 +482,7 @@ mod tests {
     #[test]
     fn the_timelapse_photo_is_taken_where_orcas_picker_takes_it() {
         // The benchmark's models where its STLs put them, and the spots native Orca 2.5.0 picked for every layer.
-        let at = |objects: &[crate::Object], z: f64| timelapse_position(objects, z, [256.0, 256.0], 60.0, None);
+        let at = |objects: &[crate::Object], z: f64| timelapse_position(objects, z, [256.0, 256.0], 60.0, None, None);
         let benchy = [object([97.9995, 112.498, 0.0], [158.0005, 143.502, 48.0])];
         assert_eq!(at(&benchy, 0.2), Some([131, 186]));
         assert_eq!(at(&benchy, 48.0), Some([131, 186]));

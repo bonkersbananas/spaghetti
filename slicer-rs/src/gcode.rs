@@ -421,8 +421,7 @@ pub fn layers(group: &[(&LayerPlan, &LayerRegions, f64, Option<f64>)], job: &Job
                     job,
                     (text.clone(), before),
                     plan.header_height,
-                    (fans, over, &by_tool, tool, (None, lift, false)),
-                    Some(cut),
+                    (fans, over, &by_tool, tool, (None, lift, false), Some(cut)),
                 );
                 let mut at = out.cut.unwrap_or_default();
                 at.text = out.text[progress_at..at.at].to_vec();
@@ -438,8 +437,7 @@ pub fn layers(group: &[(&LayerPlan, &LayerRegions, f64, Option<f64>)], job: &Job
                 job,
                 (text, before),
                 plan.header_height,
-                (fans, over, &by_tool, tool, tail),
-                cut,
+                (fans, over, &by_tool, tool, tail, cut),
             );
             // Held until the whole file is written: without the room its estimate left (three quarters more than a
             // tall print's 42 MB of G-code).
@@ -1844,6 +1842,7 @@ fn build_layer<'a>(
                 s.bed,
                 s.extruder_clearance_radius,
                 Some(at),
+                job.colours.filter(|c| c.towered).map(|c| c.photo_limits()),
             );
             layer_photo(plan, job, spot, true, false)
         }
@@ -2186,7 +2185,7 @@ fn farthest_point(plan: &LayerPlan) -> Option<([f64; 2], usize)> {
 /// (or change) before it.
 fn path_filament(plan: &LayerPlan, job: &Job, k: usize) -> usize {
     let Some(c) = job.colours else { return 0 };
-    plan.visits.iter().filter(|v| v.at <= k).last().map_or(c.start(plan.index), |v| v.to)
+    plan.visits.iter().rev().find(|v| v.at <= k).map_or(c.start(plan.index), |v| v.to)
 }
 
 /// The timelapse photo after the layer, at `spot` (none: the printer picks its own), which the printer skips with the
@@ -3054,6 +3053,10 @@ struct LayerOut {
     cut: Option<StartCut>,
 }
 
+/// What `finish_layer` writes a layer's moves with: its fans and overhang fans, each filament's, the filament it
+/// starts with, its `Tail`, and the move its start is cut at (`StartCut`).
+type FinishWith<'t> = ([f64; 2], [Option<f64>; 2], &'t [ToolFans], usize, Tail, Option<usize>);
+
 /// A layer's start, up to where it goes on alike however the layer before ended (`start_cut`): where its text ends
 /// and what its moves took; and for the start `join` may put in, its text from the layer's header on, its first lift
 /// and its first acceleration.
@@ -3130,8 +3133,7 @@ fn finish_layer(
     job: &Job,
     (text, before): (Vec<u8>, Option<(Role, f32)>),
     header_height: f32,
-    (fans, over, by_tool, mut tool, (tail, first_lift, _)): ([f64; 2], [Option<f64>; 2], &[ToolFans], usize, Tail),
-    cut: Option<usize>,
+    (fans, over, by_tool, mut tool, (tail, first_lift, _), cut): FinishWith,
 ) -> LayerOut {
     let s = job.settings;
     // Where the prime tower's G-code leaves the nozzle, the planner starts again.
@@ -4192,7 +4194,13 @@ mod tests {
             spiral: false,
             course: None,
         };
-        assert_eq!(farthest_point(&plan), Some([130.0, 130.0]));
+        assert_eq!(farthest_point(&plan), Some(([130.0, 130.0], 1)));
+        // Inside an arc, the point is no move's end: the arc's end and the points outside it are (Orca's
+        // `collect_from_path`).
+        let mut fitted = outer.clone();
+        fitted.arcs = vec![crate::plan::ArcRun { start: 1, end: 3, arc: crate::arc_fit::Arc::default() }];
+        plan.paths = vec![infill.clone(), fitted];
+        assert_eq!(farthest_point(&plan), Some(([110.0, 120.0], 1)));
         // The stretches on from (120, 100) hang over: of the points left, the one the plain stretch shares with them.
         outer.parts = vec![
             Part { overhang: false, speed: 100.0, fan: false },
@@ -4200,9 +4208,9 @@ mod tests {
             Part { overhang: true, speed: 50.0, fan: false },
         ];
         plan.paths = vec![infill.clone(), outer];
-        assert_eq!(farthest_point(&plan), Some([120.0, 100.0]));
+        assert_eq!(farthest_point(&plan), Some(([120.0, 100.0], 1)));
         plan.paths = vec![infill];
-        assert_eq!(farthest_point(&plan), Some([151.0, 150.0]));
+        assert_eq!(farthest_point(&plan), Some(([151.0, 150.0], 0)));
     }
 
     /// The photo goes in after the first extrusion that ends within half a millimetre of the point, once.
@@ -4259,6 +4267,7 @@ mod tests {
             fresh: false,
             photo: None,
             photo_taken: false,
+            head: true,
             unlifted_start: false,
             first_lift: None,
         }

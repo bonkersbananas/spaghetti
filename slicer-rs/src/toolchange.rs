@@ -784,6 +784,30 @@ impl Colours {
         self.photo_in_layer.get(g).copied().unwrap_or(false)
     }
 
+    /// Where Orca's timelapse picker may not send the camera's nozzle on this plate (`TimelapsePosPicker::init`): the
+    /// prime tower's box on the plate, grown by half the toolhead's clearance radius, and the box the camera's nozzle
+    /// can reach (`extruder_printable_area` of `most_used_extruder`).
+    pub fn photo_limits(&self) -> ([f64; 4], Option<[f64; 4]>) {
+        let s = &self.settings[0];
+        let half = s.extruder_clearance_radius / 2.0;
+        let b = self.bbx.map(f64::from);
+        let (x, y) = (self.origin.x as f64, self.origin.y as f64);
+        let tower = [x + b[0] - half, y + b[1] - half, x + b[2] + half, y + b[3] + half];
+        let area = s.profile.list("extruder_printable_area").get(self.most_used_extruder).and_then(|area| {
+            let pts: Vec<[f64; 2]> = area
+                .split(',')
+                .filter_map(|c| {
+                    let (x, y) = c.split_once('x')?;
+                    Some([x.trim().parse().ok()?, y.trim().parse().ok()?])
+                })
+                .collect();
+            let min = |k: usize| pts.iter().map(|q| q[k]).fold(f64::MAX, f64::min);
+            let max = |k: usize| pts.iter().map(|q| q[k]).fold(f64::MIN, f64::max);
+            (!pts.is_empty()).then(|| [min(0), min(1), max(0), max(1)])
+        });
+        (tower, area)
+    }
+
     /// mm on the plate of a point in the tower's frame.
     fn plate(&self, p: V) -> [f64; 2] {
         [(p.x + self.origin.x) as f64, (p.y + self.origin.y) as f64]

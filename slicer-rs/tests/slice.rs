@@ -3597,11 +3597,12 @@ fn concentric_surfaces_print_as_loops() {
 #[test]
 fn after_a_farthest_point_photo_the_next_layer_starts_as_the_last_one_ended() {
     // Orca's writer forgets where the nozzle is when it takes the timelapse photo, and learns it again at the next
-    // travel. With the farthest-point timelapse, a cube's photo comes mid-layer, where its outer wall ends at its far
-    // corner, and the travels after it tell the writer where the nozzle is, so the wrapping detection's lift at the next
-    // layer's start goes up in a spiral. A round wall's arcs end nowhere near its far point, so its photo comes after
-    // the layer, and the next layer's lift goes straight up. Here a cube stands on a cylinder: each layer's lift
-    // follows the photo of the layer before it, not its own.
+    // travel. With the farthest-point timelapse, the photo comes mid-layer, where an extrusion ends near the point the
+    // G-code ends a move at farthest from the camera (an arc's end, not a point inside it), and the travels after it
+    // tell the writer where the nozzle is, so the wrapping detection's lift at the next layer's start goes up in a
+    // spiral. Here a cube stands on a cylinder; native Orca 2.5.1 (Nov 17) takes all 50 photos mid-layer, the
+    // cylinder's where one of its wall's arcs ends (before Nov 17 ours took the cylinder's after the layer, aiming at a
+    // point inside an arc).
     let tube = String::from_utf8(tube_stl(8.0, 0.0, 5.0, 96)).unwrap();
     let cube = String::from_utf8(boxes_stl(&[([124.0, 124.0, 5.0], [132.0, 132.0, 10.0])])).unwrap();
     let model =
@@ -3621,12 +3622,77 @@ fn after_a_farthest_point_photo_the_next_layer_starts_as_the_last_one_ended() {
         })
         .collect();
     assert_eq!(layers.len(), 50);
-    // The cylinder's walls take their photos after the layer (its top surface's lines may end near the point), the
-    // cube's mid-layer: some layers start otherwise than they themselves end.
-    assert!(pattern[..20].iter().all(|p| !p.0) && pattern[25..].iter().all(|p| p.0), "{pattern:?}");
+    assert!(pattern.iter().all(|p| p.0), "{pattern:?}");
     for k in 1..layers.len() {
         assert_eq!(pattern[k].1, pattern[k - 1].0, "layer {k}");
     }
+}
+
+/// With Orca's farthest-point timelapse (the app's setting), a layer that took its photo mid-layer leaves its last
+/// retraction and wipe to the next layer as on tower plates (spaghetti#421): inline where the camera's nozzle passes the
+/// farthest point, with one filament or several, or before a change away from another nozzle. The next layer then
+/// starts unlifted where the last extrusion ended and lifts in a spiral at its first travel; the last layer retracts
+/// unlifted where it ends. Native Orca 2.5.1 (Nov 17) with the app's setup: a 20 mm cube takes every photo inline, two
+/// cubes in two filaments every other one before the tower, and all their layer boundaries are as here (ours differed
+/// on 99 of 99 of each before).
+#[test]
+fn after_a_photo_mid_layer_the_last_retraction_follows_the_next_layers_header() {
+    let options = Options { arrange: false, thumbnail: false, ..Options::default() };
+    let check = |gcode: &str| {
+        let layers: Vec<&str> = gcode.split("; CHANGE_LAYER\n").skip(1).collect();
+        assert!(layers.len() >= 30);
+        // Where each layer took its photo: inline, or before its visit to the tower, else after it.
+        let mid: Vec<bool> = layers
+            .iter()
+            .map(|l| {
+                let tower = l.find("; CP TOOLCHANGE START").unwrap_or(l.len());
+                l.contains("M971 S11 C10 O0") || l.find("M9711").is_some_and(|p| p < tower)
+            })
+            .collect();
+        assert!(mid.iter().filter(|&&m| m).count() >= layers.len() / 2 - 1, "{mid:?}");
+        for (k, layer) in layers.iter().enumerate().skip(1) {
+            // The lines after the header, up to the layer change G-code.
+            let head = &layer[layer.find("; LAYER_HEIGHT").unwrap()..];
+            let head = &head[head.find('\n').unwrap() + 1..];
+            let head = &head[..head.find(";======== X2D layer_change gcode").unwrap()];
+            assert_eq!(head.contains("; WIPE_START") && head.contains("M625"), mid[k - 1], "layer {k}: {head}");
+            if !mid[k - 1] {
+                continue;
+            }
+            // It starts as the layer before left it: a spiral lift, then the travel at its height.
+            let first = &layer[layer.find("M624").unwrap()..];
+            let mut lines = first.lines().skip(1);
+            assert_eq!(lines.next(), Some("G17"), "layer {k}: {}", &first[..80]);
+            assert!(lines.next().is_some_and(|l| l.starts_with("G3 Z") || l.starts_with("G2 Z")), "layer {k}");
+            assert!(lines.next().is_some_and(|l| l.contains(" Z")), "layer {k}");
+        }
+        // The last layer retracts where it ends, unlifted.
+        let last = layers.last().unwrap();
+        let lines: Vec<&str> = last[..last.rfind("M625").unwrap()].lines().collect();
+        let extrudes = |l: &&str| {
+            (l.starts_with("G1 X") || l.starts_with("G2 X") || l.starts_with("G3 X"))
+                && word(l, 'E').is_some_and(|e| e > 0.0)
+        };
+        let end = lines[lines.iter().rposition(extrudes).unwrap() + 1..].join("\n");
+        assert!(end.contains("G1 E-") && !end.contains("G3 Z") && !end.contains("G2 Z"), "{end}");
+    };
+    let one = setup::read(r#"{"machine": {"farthest_point_timelapse": "1"}}"#).unwrap().settings;
+    let cube = boxes_stl(&[([118., 118., 0.], [138., 138., 6.])]);
+    let out = slice(&[Input { name: "cube.stl", bytes: &cube }], &one, &options).unwrap();
+    check(&String::from_utf8(out.gcode).unwrap());
+    let cube = |at: f32| boxes_stl(&[([at, 118., 0.], [at + 20., 138., 6.])]);
+    let (a, b) = (cube(90.), cube(140.));
+    let two = setup::read(
+        r##"{"machine": {"farthest_point_timelapse": "1"}, "process": {"wipe_tower_x": ["211"], "wipe_tower_y": ["196"]},
+        "filaments": [{}, {}], "colours": ["#F2754E", "#4F7FC7"]}"##,
+    )
+    .unwrap()
+    .settings;
+    let mut plate = spaghetti_slicer::Plate::default();
+    plate.add_with_filament(&Input { name: "a.stl", bytes: &a }, Some(0)).unwrap();
+    plate.add_with_filament(&Input { name: "b.stl", bytes: &b }, Some(1)).unwrap();
+    let out = plate.slice(&two, &options).unwrap();
+    check(&String::from_utf8(out.gcode).unwrap());
 }
 
 /// On a plate in two filaments with a prime tower, a layer that took its timelapse photo before a visit to the tower

@@ -1115,7 +1115,7 @@ fn timelapse_spots(objects: &[Object], zs: &[f64], s: &Settings) -> Vec<Option<[
         let standing: Vec<bool> = objects.iter().map(|o| (o.min[2] as i64) <= at && at <= (o.max[2] as i64)).collect();
         let spot = match &last {
             Some((before, spot)) if *before == standing => *spot,
-            _ => bambu::timelapse_position(objects, z, s.bed, s.extruder_clearance_radius, None),
+            _ => bambu::timelapse_position(objects, z, s.bed, s.extruder_clearance_radius, None, None),
         };
         spots.push(spot);
         last = Some((standing, spot));
