@@ -3442,17 +3442,17 @@ fn arachne_walls_fill_what_classic_walls_do() {
     // (The top and bottom layers print as surfaces, so the wall is most of the tube's plastic, not all of it.)
     assert!(wall > 0.8 * ring && wall < 1.02 * ring, "{wall} of {ring}");
 
-    // Spiral vase mode keeps the classic walls (Orca runs Arachne only outside it).
-    let vase = slice(
-        &[Input { name: "cube.stl", bytes: &stl }],
-        &arachne(&|s| {
-            s.spiral_mode = true;
-            s.wall_loops = 1;
-        }),
-        &Options::default(),
-    )
-    .unwrap();
-    assert!(vase.stats.volume > 0.0);
+    // Spiral vase mode keeps the classic walls (Orca runs Arachne only outside it): the same file whatever the
+    // generator, and no note about walls that were never made.
+    let vase = |generator: &str| {
+        let mut settings = Settings { wall_generator: generator.into(), ..Settings::default() };
+        settings.spiral_mode = true;
+        settings.wall_loops = 1;
+        slice(&[Input { name: "cube.stl", bytes: &stl }], &settings, &Options::default()).unwrap()
+    };
+    let (classic_vase, arachne_vase) = (vase("classic"), vase("arachne"));
+    assert_eq!(classic_vase.gcode, arachne_vase.gcode);
+    assert!(!arachne_vase.fallbacks.iter().any(|f| f.contains("arachne")), "{:?}", arachne_vase.fallbacks);
 }
 
 /// Concentric top, bottom and internal solid surfaces print as Orca's Arachne loops, not zig-zag with a note: a

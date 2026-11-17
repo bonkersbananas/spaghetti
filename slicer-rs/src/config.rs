@@ -1349,11 +1349,12 @@ impl Settings {
                 out.push(format!("{pattern} {what} printed in the nearest order, not {order}"));
             }
         }
-        if self.wall_generator == "arachne" {
+        // (Spiral vase mode keeps the classic walls, so these notes would describe walls never made.)
+        if self.wall_generator == "arachne" && !self.spiral_mode {
             if self.only_one_wall_top {
                 out.push("arachne walls under a top surface printed with all their walls (only_one_wall_top)".into());
             }
-            if self.fuzzy.on() && !self.spiral_mode {
+            if self.fuzzy.on() {
                 out.push("fuzzy skin on arachne walls printed smooth".into());
             }
             if self.wall_sequence == "inner-outer-inner wall" {
