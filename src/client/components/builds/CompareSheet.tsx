@@ -74,7 +74,7 @@ function AttemptPhotos({
   picked,
   onPick,
   fade = false,
-  reserveThumbs = false,
+  thumbsRow = false,
 }: {
   attempt: AttemptView;
   photos: PhotoView[];
@@ -82,8 +82,8 @@ function AttemptPhotos({
   onPick: (photoId: string) => void;
   /** Crossfade when the attempt changes (the phone's switch). */
   fade?: boolean;
-  /** The other attempt has a row of thumbnails: keep its height here, so the notes below start level. */
-  reserveThumbs?: boolean;
+  /** Desktop: the other attempt has several photos. Keeps one row of 40 px thumbnails here too , so both columns are the same height. */
+  thumbsRow?: boolean;
 }) {
   const reduce = useReducedMotion();
   const shown = photos.find((photo) => photo.id === picked) ?? photos[0];
@@ -108,6 +108,29 @@ function AttemptPhotos({
       )}
     </>
   );
+  const thumbs =
+    photos.length > 1 ? (
+      <div
+        className={cn(
+          "flex gap-2",
+          thumbsRow ? "-m-1 h-12 items-center overflow-x-auto p-1 [&>div]:size-10" : "flex-wrap",
+        )}
+      >
+        {photos.map((photo, index) => (
+          <PhotoThumb
+            key={photo.id}
+            size="sm"
+            src={photoSrc(photo.id, "thumb")}
+            alt={`Attempt ${attempt.number}, photo ${index + 1}`}
+            color={photo.color || undefined}
+            selected={photo.id === shown?.id}
+            onSelect={() => onPick(photo.id)}
+          />
+        ))}
+      </div>
+    ) : thumbsRow ? (
+      <div className="h-10" aria-hidden />
+    ) : null;
   return (
     <div className="flex flex-col gap-2.5">
       {/* 3:2 on phones, 4:3 on desktop, but never taller than 28% of the window on desktop: the photos stay whole, and "What changed" is in the first screen. */}
@@ -130,22 +153,7 @@ function AttemptPhotos({
           frame
         )}
       </div>
-      {photos.length <= 1 && reserveThumbs && <div className="size-16" aria-hidden />}
-      {photos.length > 1 && (
-        <div className="flex flex-wrap gap-2">
-          {photos.map((photo, index) => (
-            <PhotoThumb
-              key={photo.id}
-              size="sm"
-              src={photoSrc(photo.id, "thumb")}
-              alt={`Attempt ${attempt.number}, photo ${index + 1}`}
-              color={photo.color || undefined}
-              selected={photo.id === shown?.id}
-              onSelect={() => onPick(photo.id)}
-            />
-          ))}
-        </div>
-      )}
+      {thumbs}
     </div>
   );
 }
@@ -191,15 +199,14 @@ function DesktopCompare({
     const [a, b] = chosen.number < other.number ? [chosen, other] : [other, chosen];
     onPairChange({ older: a.id, newer: b.id });
   };
+  const columns = [
+    ["older", older, newer],
+    ["newer", newer, older],
+  ] as const;
   return (
-    <div className="flex flex-col gap-8">
+    <div className="flex flex-col gap-6">
       <div className="grid grid-cols-2 gap-4 md:gap-6">
-        {(
-          [
-            ["older", older, newer],
-            ["newer", newer, older],
-          ] as const
-        ).map(([column, attempt, other]) => (
+        {columns.map(([column, attempt, other]) => (
           <div key={column} className="flex min-w-0 flex-col gap-3">
             <div className="flex items-center gap-2.5">
               <OutcomeChip outcome={attempt.outcome} />
@@ -211,13 +218,18 @@ function DesktopCompare({
               photos={photosOf(item, attempt)}
               picked={picked[attempt.id]}
               onPick={(photoId) => pick(attempt.id, photoId)}
-              reserveThumbs={photosOf(item, other).length > 1}
+              thumbsRow={columns.some(([, a]) => photosOf(item, a).length > 1)}
             />
-            <AttemptWords attempt={attempt} />
           </div>
         ))}
       </div>
+      {/* The comparison is the point: right under the photos. What was written follows, each note under its own photo. */}
       <CompareTable older={older} newer={newer} />
+      <div className="grid grid-cols-2 items-start gap-4 md:gap-6">
+        {columns.map(([column, attempt]) => (
+          <AttemptWords key={column} attempt={attempt} />
+        ))}
+      </div>
     </div>
   );
 }
@@ -338,15 +350,13 @@ function PhoneCompare({ item, older, newer }: { item: ItemView; older: AttemptVi
           onPick={(photoId) => pick(attempt.id, photoId)}
         />
       </div>
-      <div className="flex flex-col gap-3">
-        <div className="flex items-center gap-2.5">
-          <OutcomeChip outcome={attempt.outcome} />
-          <span className="text-body text-ink font-semibold">Attempt {attempt.number}</span>
-          <span className="text-small text-ink-faint ml-auto">{when(attempt)}</span>
-        </div>
-        <AttemptWords attempt={attempt} />
+      <div className="flex items-center gap-2.5">
+        <OutcomeChip outcome={attempt.outcome} />
+        <span className="text-body text-ink font-semibold">Attempt {attempt.number}</span>
+        <span className="text-small text-ink-faint ml-auto">{when(attempt)}</span>
       </div>
       <CompareTable older={older} newer={newer} />
+      <AttemptWords attempt={attempt} />
     </div>
   );
 }

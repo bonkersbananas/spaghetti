@@ -53,7 +53,7 @@ test("a new notebook gets a welcome, not a blank page", async ({ page }) => {
   await expect(page.getByRole("button", { name: "New idea" }).first()).toBeVisible();
 });
 
-test("shows the print on the bed with its progress, and Finish opens that attempt", async ({ page }) => {
+test("shows the print on the bed with its progress, and How did it go? opens that attempt", async ({ page }) => {
   const { id } = await printing(page, "Bath tugboat", 20 * MINUTE, 120);
   await page.goto("/today");
 
@@ -62,7 +62,7 @@ test("shows the print on the bed with its progress, and Finish opens that attemp
   await expect(bed.getByRole("progressbar", { name: "Print progress" })).toBeVisible();
   await expect(bed.getByText(/min left|Done around/)).toBeVisible();
 
-  await bed.getByRole("button", { name: "Finish" }).click();
+  await bed.getByRole("button", { name: "How did it go?" }).click();
   await expect(page).toHaveURL(new RegExp(`/builds/${id}`));
   await expect(page.getByRole("dialog", { name: "Finish attempt 1" })).toBeVisible();
   // The parameter is spent: closing the sheet doesn't leave a link that reopens it.
@@ -77,7 +77,7 @@ test("asks how it went once the print should be done: the answer opens the sheet
 
   const bed = page.getByRole("region", { name: "On the bed" });
   await expect(bed.getByText("Should be done by now")).toBeVisible();
-  await expect(bed.getByRole("button", { name: "Finish" })).toHaveCount(0);
+  await expect(bed.getByRole("button", { name: "How did it go?" })).toHaveCount(0);
   // Nothing has been decided yet.
   expect(await savedOutcome(page, id, attempt)).toBeNull();
   await bed.getByRole("radio", { name: "Worked" }).click();
@@ -106,7 +106,7 @@ test("a print that is off the bed asks how it went, with the three answers, inst
   const card = bed.getByRole("article").filter({ hasText: "Drawer divider" });
   await expect(card.getByText(/Off the bed at .* · how did it go\?/)).toBeVisible();
   await expect(card.getByRole("progressbar")).toHaveCount(0);
-  await expect(card.getByRole("button", { name: "Finish" })).toHaveCount(0);
+  await expect(card.getByRole("button", { name: "How did it go?" })).toHaveCount(0);
   // The one still printing keeps its bar.
   await expect(bed.getByRole("article").filter({ hasText: "Still going" }).getByRole("progressbar")).toBeVisible();
 

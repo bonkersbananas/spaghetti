@@ -652,7 +652,13 @@ impl Plate {
         if !settings.spiral_mode {
             let by_part: Vec<Vec<&Mesh>> =
                 parts.members.iter().map(|members| members.iter().map(|&m| &meshes[m]).collect()).collect();
-            seam::place(&mut regions, &by_part, &layers.slice_z(), &layers.height, settings);
+            // Each object's middle, mm, which Orca's coordinates are about (a random seam's number comes from them).
+            let middles: Vec<[f32; 2]> = parts
+                .members
+                .iter()
+                .map(|m| [(centres[m[0]].0 / geom::SCALE) as f32, (centres[m[0]].1 / geom::SCALE) as f32])
+                .collect();
+            seam::place(&mut regions, &by_part, (&middles, &layers.slice_z(), &layers.height), settings);
         }
         // Where travels lift in spirals rather than slopes, for filaments that lift as Orca's Auto Lift does.
         let auto_lift = match &settings.palette {
@@ -1250,9 +1256,12 @@ fn object_supports(
             } else {
                 Vec::new()
             };
+            let region_slices: Vec<Vec<geom::Shapes>> =
+                regions[..=top].iter().map(|r| r.region_slices_of(g as u32)).collect();
             let object = support::Object {
                 print_z: &layers.top[..=top],
                 height: &layers.height[..=top],
+                region_slices,
                 slices,
                 tops,
                 origin: centres[o],
