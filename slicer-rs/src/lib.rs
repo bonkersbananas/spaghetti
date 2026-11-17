@@ -879,9 +879,13 @@ impl Plate {
             regions[l].lock().unwrap().clone().expect("a layer's regions, until its last reader is done")
         };
         let empty = std::sync::Arc::new(empty);
+        // Whether a layer leaves its last retraction to the next one follows from its paths: one filament with the
+        // farthest-point timelapse, its photo taken mid-path.
+        let deferral_unknown =
+            settings.farthest_photo && !settings.spiral_mode && !settings.wrapping_detection && colours.is_none();
         // In spiral vase mode each layer starts where the one before ended, so the layers go one after another.
         let group_texts = |k: usize, mut spiral: Option<&mut spiral::State>, known: bool| -> Vec<gcode::LayerGcode> {
-            let plans: Vec<(plan::LayerPlan, std::sync::Arc<region::LayerRegions>, f64)> = groups[k]
+            let plans: Vec<(plan::LayerPlan, std::sync::Arc<region::LayerRegions>, f64, Option<f64>)> = groups[k]
                 .clone()
                 .map(|g| {
                     let slot = &schedule[g];
@@ -958,11 +962,14 @@ impl Plate {
                         }
                         None => from_z,
                     };
-                    (plan, held_here, from_z)
+                    // With the farthest-point timelapse, whether the layer before left this one its last retraction
+                    // follows from where it took its photo: this one is built both ways (`gcode::join`).
+                    let unlifted = (deferral_unknown && g > 0 && from_z > schedule[g - 1].z).then(|| schedule[g - 1].z);
+                    (plan, held_here, from_z, unlifted)
                 })
                 .collect();
-            let group: Vec<(&plan::LayerPlan, &region::LayerRegions, f64)> =
-                plans.iter().map(|(plan, r, z)| (plan, &**r, *z)).collect();
+            let group: Vec<(&plan::LayerPlan, &region::LayerRegions, f64, Option<f64>)> =
+                plans.iter().map(|(plan, r, z, u)| (plan, &**r, *z, *u)).collect();
             let texts = gcode::layers(&group, &job, known);
             if let Some(st) = spiral {
                 st.turned(&texts);
@@ -993,7 +1000,8 @@ impl Plate {
         } else {
             par::map_range(groups.len(), |k| group_texts(k, None, false))
         };
-        let texts: Vec<gcode::LayerGcode> = texts.into_iter().flatten().collect();
+        let mut texts: Vec<gcode::LayerGcode> = texts.into_iter().flatten().collect();
+        gcode::join(&mut texts);
         drop(regions);
         let t5 = now();
         let preheat = colours.as_ref().and_then(preheat::Params::of);
