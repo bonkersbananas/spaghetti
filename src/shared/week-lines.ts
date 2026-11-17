@@ -15,12 +15,19 @@ export interface Who {
 const called = (who: Who, me: string | undefined, start: boolean) =>
   who.id === me ? (start ? "You" : "you") : firstName(who.name ?? "Someone");
 
-/** "You captured 3 ideas", "Sam captured 3 ideas", "You captured 2 ideas and Sam 1", "Sam captured 2 ideas and you 1". */
+/**
+ * "You captured 3 ideas", "Sam captured 3 ideas", "You captured 4 ideas and Sam 3": whoever captured most leads (on a
+ * tie the other person, so the reader's own share comes second), and the second count borrows the noun unless the
+ * first is 1 ("Sam captured 1 idea and you 1 idea").
+ */
 export function ideasLine(by: Array<{ who: Who; count: number }>, me: string | undefined): string {
-  const [first, second] = by;
+  const [first, second] = [...by].sort(
+    (a, b) => b.count - a.count || Number(a.who.id === me) - Number(b.who.id === me),
+  );
   if (!first) return "";
   const lead = `${called(first.who, me, true)} captured ${plural(first.count, "idea")}`;
-  return second ? `${lead} and ${called(second.who, me, false)} ${second.count}` : lead;
+  if (!second) return lead;
+  return `${lead} and ${called(second.who, me, false)} ${first.count === 1 ? plural(second.count, "idea") : second.count}`;
 }
 
 /** "You two exchanged 4 comments", "You left 2 comments", "Sam left 1 comment". */
