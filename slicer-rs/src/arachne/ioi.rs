@@ -27,18 +27,18 @@ impl Wall<'_> {
 }
 
 /// Whether two lines touch (`arachne_lines_touch`): somewhere the gap between their centre lines is no more than
-/// half the two widths there, or `min_threshold` (mm).
-fn touch(a: &Wall, b: &Wall, min_threshold: f64) -> bool {
-    let one_way = |from: &Wall, to: &Wall| {
-        for (k, &p) in from.points.iter().enumerate() {
-            for j in 0..to.points.len().saturating_sub(1) {
-                let (s0, s1) = (to.points[j], to.points[j + 1]);
+/// half the two widths there, or `min_threshold` (mm). Each line is its points and their widths (mm).
+pub fn lines_touch(a: (&[Pt], &[f64]), b: (&[Pt], &[f64]), min_threshold: f64) -> bool {
+    let one_way = |from: (&[Pt], &[f64]), to: (&[Pt], &[f64])| {
+        for (k, &p) in from.0.iter().enumerate() {
+            for j in 0..to.0.len().saturating_sub(1) {
+                let (s0, s1) = (to.0[j], to.0[j + 1]);
                 let (dx, dy) = (f64::from(s1.x) - f64::from(s0.x), f64::from(s1.y) - f64::from(s0.y));
                 let l2 = dx * dx + dy * dy;
                 let (px, py) = (f64::from(p.x) - f64::from(s0.x), f64::from(p.y) - f64::from(s0.y));
                 let t = if l2 > 0.0 { ((px * dx + py * dy) / l2).clamp(0.0, 1.0) } else { 0.0 };
-                let w = to.widths[j] + t * (to.widths[j + 1] - to.widths[j]);
-                let reach = min_threshold.max(0.5 * (from.widths[k] + w)) * SCALE;
+                let w = to.1[j] + t * (to.1[j + 1] - to.1[j]);
+                let reach = min_threshold.max(0.5 * (from.1[k] + w)) * SCALE;
                 let (fx, fy) = (px - t * dx, py - t * dy);
                 if (fx * fx + fy * fy).sqrt() <= reach {
                     return true;
@@ -48,6 +48,10 @@ fn touch(a: &Wall, b: &Wall, min_threshold: f64) -> bool {
         false
     };
     one_way(a, b) || one_way(b, a)
+}
+
+fn touch(a: &Wall, b: &Wall, min_threshold: f64) -> bool {
+    lines_touch((a.points, a.widths), (b.points, b.widths), min_threshold)
 }
 
 /// libstdc++'s `std::unordered_set<int>`: only the order its elements read back in. Elements sit in one list, each
