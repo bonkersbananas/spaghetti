@@ -260,6 +260,18 @@ pub fn regions(
     if s.spiral_mode {
         crate::spiral::surfaces(&mut tops, &mut bottoms, slices, s);
     }
+    // Top surfaces grown by `top_surface_expansion`, as Orca's `detect_surfaces_type` grows them once the cracks in them
+    // are settled: the walls see the grown top surfaces, and the cracks need settling no more.
+    if s.grows_tops() {
+        let grown: Vec<(Shapes, Shapes)> = par::map_range(n, |i| {
+            let (top, bottom) = one_kind(&tops[i], &bottoms[i], i > 0, 1.5 * outer_width(i));
+            (grow_tops(&top, &bottom, &slices[i], (i, layers.height[i]), s), bottom)
+        });
+        for (i, (top, bottom)) in grown.into_iter().enumerate() {
+            tops[i] = top;
+            bottoms[i] = bottom;
+        }
+    }
     let group_of = |o: u32| group.get(o as usize).copied().unwrap_or(o);
     let mixed = crate::parts::mixed(group);
     // The first layer is pulled in against elephant's foot, as Orca compensates it (`elephant.rs`): where a shape is
@@ -770,6 +782,54 @@ fn one_kind(top: &Shapes, bottom: &Shapes, cracks_allowed: bool, margin: f64) ->
         }
     }
     (geom::difference(top, &bottom), bottom)
+}
+
+/// A layer's top surfaces grown by `top_surface_expansion` (Orca's `detect_surfaces_type`, "ORCA: Grow the top
+/// surfaces"): each island of the layer's slice grows its tops inside its infill region (the island less the wall
+/// band), so that the top solid infill also covers the material left by features rising from the middle of a top
+/// surface; an island with no real top infill in it (nothing wider than two top lines) is never grown into; the
+/// direction and margin the settings give hold the growth in or away from the walls; bottoms are never claimed.
+/// `top` is the layer's top surfaces, `bottom` its bottoms, `layer` is (index, height).
+fn grow_tops(top: &Shapes, bottom: &Shapes, slice: &Shapes, layer: (usize, f64), s: &Settings) -> Shapes {
+    if top.is_empty() {
+        return top.clone();
+    }
+    let (i, h) = layer;
+    let first = s.on_plate(i);
+    let (w_outer, w_inner) =
+        if first { (s.first_layer_width, s.first_layer_width) } else { (s.outer_wall_width, s.inner_wall_width) };
+    // Walls are laid out on spacing, not width; only_one_wall_top leaves a single wall over a top surface.
+    let loops = if s.only_one_wall_top { s.wall_loops.min(1) } else { s.wall_loops };
+    let band = if loops == 0 { 0.0 } else { w_outer + Settings::spacing(w_inner, h) * (loops - 1) as f64 };
+    let off = |shapes: &Shapes, delta: f64, limit: f64| geom::offset_c2(shapes, delta, geom::Join::Miter(limit));
+    let min_top = if first { s.first_layer_width } else { s.top_surface_width };
+    let mut grown: Shapes = Vec::new();
+    for island in slice {
+        let one = vec![island.clone()];
+        let bbox = geom::inflate(geom::bbox_of(island), 1.0 / geom::SCALE);
+        let infill = if band > 0.0 { off(&one, -band, 3.0) } else { one };
+        let island_top = geom::intersection(&geom::near(top, bbox), &infill);
+        if geom::offset_c2(&off(&island_top, -min_top, 3.0), min_top, geom::Join::Miter(3.0)).is_empty() {
+            continue;
+        }
+        let mut expanded = off(&island_top, s.top_surface_expansion, 2.0);
+        if s.top_surface_expansion_direction != "inward_and_outward" {
+            let outlines: Shapes = island_top.iter().map(|shape| vec![shape[0].clone()]).collect();
+            let outline = geom::union(&outlines, &Vec::new());
+            expanded = if s.top_surface_expansion_direction == "inward" {
+                geom::intersection(&expanded, &outline)
+            } else {
+                geom::difference(&expanded, &geom::difference(&outline, &island_top))
+            };
+        }
+        let allowed = if s.top_surface_expansion_margin > 0.0 {
+            off(&infill, -s.top_surface_expansion_margin, 3.0)
+        } else {
+            infill
+        };
+        grown.extend(geom::intersection(&expanded, &allowed));
+    }
+    geom::difference(&geom::union(top, &grown), bottom)
 }
 
 /// How far a layer's tops, bottoms and bridges grow into the infill beside them (Orca's numbers): into solid

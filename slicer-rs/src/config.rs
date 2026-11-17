@@ -183,9 +183,12 @@ pub struct Settings {
     pub staggered_inner_seams: bool,
     pub only_one_wall_top: bool,
     /// `top_surface_expansion` (mm) and `top_surface_density` (percent): with both above 0, Orca grows top surfaces
-    /// (not ported) and its `only_one_wall_top` on Arachne walls cuts the inner walls over the top surface instead of
-    /// walling round it.
+    /// (`region::grow_tops`) and its `only_one_wall_top` on Arachne walls cuts the inner walls over the top surface
+    /// instead of walling round it. The growth's margin from the walls (mm) and which way it may go
+    /// (`inward_and_outward`, `inward` or `outward`).
     pub top_surface_expansion: f64,
+    pub top_surface_expansion_margin: f64,
+    pub top_surface_expansion_direction: String,
     pub top_surface_density: f64,
     /// Whether the first inner wall goes a whole line width in from the outer wall (`precise_outer_wall`, which Orca
     /// heeds only with inner walls before the outer one); else half the two walls' spacings.
@@ -1016,6 +1019,8 @@ impl Settings {
             staggered_inner_seams: p.bool("staggered_inner_seams"),
             only_one_wall_top: p.bool("only_one_wall_top"),
             top_surface_expansion: p.float("top_surface_expansion"),
+            top_surface_expansion_margin: p.float("top_surface_expansion_margin"),
+            top_surface_expansion_direction: p.text("top_surface_expansion_direction").to_string(),
             top_surface_density: if p.text("top_surface_density").is_empty() {
                 100.0
             } else {
@@ -1402,9 +1407,10 @@ impl Settings {
                 out.push(format!("{pattern} {what} printed in the nearest order, not {order}"));
             }
         }
-        // (Spiral vase mode keeps the classic walls, so these notes would describe walls never made.)
-        if self.top_surface_expansion > 0.0 && self.top_surface_density > 0.0 && self.top_shell_layers > 0 {
-            out.push("top surfaces not grown by top_surface_expansion".into());
+        // With the classic walls Orca drops the inner walls that run over a grown top surface (`process_classic`'s
+        // "only_one_wall_top reduction"), which these walls don't.
+        if self.grows_tops() && self.only_one_wall_top && self.wall_generator != "arachne" && self.wall_loops > 1 {
+            out.push("inner walls kept over top surfaces grown by top_surface_expansion (classic walls)".into());
         }
         if self.elephant_foot > 0.0 && self.elephant_foot_layers > 1 && self.support.raft_layers <= 0 {
             out.push("elephant's foot compensated on the first layer only".into());
@@ -1452,6 +1458,11 @@ impl Settings {
         // `zero_gap_interface_bottom`).
         let bottom = if sp.zero_gap_bottom { 0.0 } else { gap(sp.bottom_z_distance) };
         (gap(sp.top_z_distance), bottom)
+    }
+
+    /// Whether Orca grows the top surfaces (`top_surface_expansion`): it needs top fill to grow.
+    pub fn grows_tops(&self) -> bool {
+        self.top_surface_expansion > 0.0 && self.top_surface_density > 0.0 && self.top_shell_layers > 0
     }
 
     /// Whether an object's layer prints on the plate, as the print's first layer: its first one, unless a raft is

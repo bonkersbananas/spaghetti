@@ -3678,3 +3678,30 @@ fn a_layers_last_retraction_follows_the_next_layers_header_when_its_photo_came_b
     }
     assert!(deferred >= 10, "{deferred} layers");
 }
+
+/// Top surfaces grown by `top_surface_expansion` (Orca 2.5.1's `detect_surfaces_type`): a slab with a pillar rising from
+/// the middle of its top gets top fill round the pillar's foot as far as the setting says, and no note says otherwise.
+/// Native Orca 2.5.1 (Nov 17), Arachne walls: 304.73 mm³ of top surface without the growth, 307.20 with 0.5 mm, in the
+/// same time to the second.
+#[test]
+fn top_surfaces_grow_by_the_expansion_as_orca_grows_them() {
+    let mut plate = String::from("solid s\n");
+    for (lo, hi) in [([88.0, 108.0, 0.0], [128.0, 148.0, 4.0]), ([103.0, 123.0, 4.0], [113.0, 133.0, 8.0])] {
+        let b = String::from_utf8(boxes_stl(&[(lo, hi)])).unwrap();
+        plate += b.trim_start_matches("solid boxes\n").trim_end().trim_end_matches("endsolid boxes");
+        plate.push('\n');
+    }
+    plate += "endsolid s\n";
+    let options = Options { arrange: false, thumbnail: false, ..Options::default() };
+    let top = |expansion: &str| {
+        let setup =
+            format!(r#"{{"process": {{"wall_generator": "arachne", "top_surface_expansion": "{expansion}"}}}}"#);
+        let settings = setup::read(&setup).unwrap().settings;
+        let out = slice(&[Input { name: "slab.stl", bytes: plate.as_bytes() }], &settings, &options).unwrap();
+        assert!(out.fallbacks.is_empty(), "{:?}", out.fallbacks);
+        out.stats.features[Role::ALL.iter().position(|&r| r == Role::TopSurface).unwrap()].volume
+    };
+    let (plain, grown) = (top("0"), top("0.5"));
+    assert!((plain - 304.73).abs() < 0.3, "{plain} mm³");
+    assert!((grown - 307.20).abs() < 0.3 && grown - plain > 2.0, "{grown} mm³");
+}
