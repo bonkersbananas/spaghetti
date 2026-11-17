@@ -8,6 +8,7 @@
 //! Orca's random numbers come from libstdc++, which native Orca links: a 64-bit Mersenne twister seeded 27644437, its
 //! `generate_canonical`, `uniform_int_distribution` and `std::shuffle`, made here as libstdc++ makes them.
 
+use crate::fmath::{mul_add32, mul_add64};
 use crate::mesh::Mesh;
 use std::sync::atomic::{AtomicU32, Ordering};
 
@@ -125,8 +126,19 @@ fn dot(a: V3, b: V3) -> f32 {
     a[0] * b[0] + a[1] * b[1] + a[2] * b[2]
 }
 
-fn cross(a: V3, b: V3) -> V3 {
-    [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]]
+/// The cross product as native Orca's aarch64 build makes it: each coordinate's second product fused with the first,
+/// rounded and negated, in one multiply-add.
+fn cross_fused(a: V3, b: V3) -> V3 {
+    [
+        mul_add32(a[1], b[2], -(a[2] * b[1])),
+        mul_add32(a[2], b[0], -(a[0] * b[2])),
+        mul_add32(a[0], b[1], -(a[1] * b[0])),
+    ]
+}
+
+/// The dot product as native Orca's build makes it: the z product fused into the sum of the others.
+fn dot_fused(a: V3, b: V3) -> f32 {
+    mul_add32(a[2], b[2], a[0] * b[0] + a[1] * b[1])
 }
 
 fn norm(a: V3) -> f32 {
@@ -148,7 +160,7 @@ fn normalized(a: V3) -> V3 {
 /// (`face_normal_normalized` normalises `face_normal`'s unit vector again).
 fn face_normal(v: &[V3], t: [u32; 3]) -> V3 {
     let (a, b, c) = (v[t[0] as usize], v[t[1] as usize], v[t[2] as usize]);
-    normalized(normalized(cross(sub(b, a), sub(c, b))))
+    normalized(normalized(cross_fused(sub(b, a), sub(c, b))))
 }
 
 /// Each triangle's neighbour across each of its edges (the edge from its corner k to the next), −1 where there is
@@ -230,7 +242,7 @@ fn collapse_short_edges(vertices: &[V3], indices: &[[u32; 3]], target: usize) ->
         let mut weights = vec![0.0f32; vertices.len()];
         for t in indices {
             let (v0, v1, v2) = (vertices[t[0] as usize], vertices[t[1] as usize], vertices[t[2] as usize]);
-            let normal = normalized(cross(sub(v1, v0), sub(v2, v0)));
+            let normal = normalized(cross_fused(sub(v1, v0), sub(v2, v0)));
             let (e0, e1, e2) = (norm(sub(v0, v1)), norm(sub(v1, v2)), norm(sub(v2, v0)));
             for (k, w) in [e0 * e2, e0 * e1, e1 * e2].into_iter().enumerate() {
                 let v = t[k] as usize;
@@ -243,7 +255,7 @@ fn collapse_short_edges(vertices: &[V3], indices: &[[u32; 3]], target: usize) ->
         }
         for (f, t) in indices.iter().enumerate() {
             for &v in t {
-                let d = dot(face_normals[f], normals[v as usize]);
+                let d = dot_fused(face_normals[f], normals[v as usize]);
                 // std::min keeps the first when the second isn't smaller (a NaN never is).
                 if d < min_dot[v as usize] {
                     min_dot[v as usize] = d;
@@ -345,7 +357,7 @@ fn sample(vertices: &[V3], indices: &[[u32; 3]], count: usize) -> Samples {
     let mut area = 0.0f32;
     for (k, t) in indices.iter().enumerate() {
         let (a, b, c) = (vertices[t[0] as usize], vertices[t[1] as usize], vertices[t[2] as usize]);
-        let triangle = f64::from(0.5 * norm(cross(sub(b, a), sub(c, a))));
+        let triangle = f64::from(0.5 * norm(cross_fused(sub(b, a), sub(c, a))));
         area = (f64::from(area) + triangle) as f32;
         let key = f64::from(area);
         match sums.last_mut() {
@@ -370,7 +382,7 @@ fn sample(vertices: &[V3], indices: &[[u32; 3]], count: usize) -> Samples {
             add(scale(a, (1.0 - sq_u) as f32), scale(b, (sq_u * (1.0 - v)) as f32)),
             scale(c, (v * sq_u) as f32),
         ));
-        normals.push(normalized(cross(sub(b, a), sub(c, b))));
+        normals.push(normalized(cross_fused(sub(b, a), sub(c, b))));
     }
     Samples { positions, normals, area }
 }
@@ -724,23 +736,38 @@ impl Bvh {
 }
 
 /// Möller and Trumbore's ray-triangle test (`intersect_triangle1`, both sides), as Orca's AABB tree runs it in
-/// double precision with its default epsilon of 1e-6: the ray's parameter where it meets the triangle.
+/// double precision with its default epsilon of 1e-6: the ray's parameter where it meets the triangle. Most triangles
+/// a ray is tried against it plainly misses, which a rough pass settles; the rest are worked out as Orca does.
+#[inline]
 fn intersect(corners: &[[f64; 3]; 3], orig: [f64; 3], dir: [f64; 3]) -> Option<f64> {
+    if surely_misses(corners, orig, dir) {
+        return None;
+    }
+    intersect_fused(corners, orig, dir)
+}
+
+const EPS: f64 = 0.000_001;
+
+fn cross64(a: [f64; 3], b: [f64; 3]) -> [f64; 3] {
+    [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]]
+}
+
+/// The test as native Orca's build runs it: each dot product's last term fused. The cross products would round the
+/// same either way while every product in them is exact, as for a print's points (single-precision, whose
+/// differences have few bits unless the points differ in size by many powers of two).
+fn intersect_fused(corners: &[[f64; 3]; 3], orig: [f64; 3], dir: [f64; 3]) -> Option<f64> {
     let [p0, e1, e2] = *corners;
-    let cross =
-        |a: [f64; 3], b: [f64; 3]| [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
-    let dot = |a: [f64; 3], b: [f64; 3]| a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
-    let pvec = cross(dir, e2);
+    let dot = |a: [f64; 3], b: [f64; 3]| mul_add64(a[2], b[2], a[0] * b[0] + a[1] * b[1]);
+    let pvec = cross64(dir, e2);
     let det = dot(e1, pvec);
     let tvec = [orig[0] - p0[0], orig[1] - p0[1], orig[2] - p0[2]];
-    const EPS: f64 = 0.000_001;
     let qvec;
     if det > EPS {
         let u = dot(tvec, pvec);
         if u < 0.0 || u > det {
             return None;
         }
-        qvec = cross(tvec, e1);
+        qvec = cross64(tvec, e1);
         let v = dot(dir, qvec);
         if v < 0.0 || u + v > det {
             return None;
@@ -750,7 +777,7 @@ fn intersect(corners: &[[f64; 3]; 3], orig: [f64; 3], dir: [f64; 3]) -> Option<f
         if u > 0.0 || u < det {
             return None;
         }
-        qvec = cross(tvec, e1);
+        qvec = cross64(tvec, e1);
         let v = dot(dir, qvec);
         if v > 0.0 || u + v < det {
             return None;
@@ -759,6 +786,45 @@ fn intersect(corners: &[[f64; 3]; 3], orig: [f64; 3], dir: [f64; 3]) -> Option<f
         return None;
     }
     Some(dot(e2, qvec) * (1.0 / det))
+}
+
+/// Whether the fused test surely finds no hit: its dot products taken plainly, each within a bound of the fused one
+/// (the z product's rounding and each sum's), and a test failing by more than the bounds.
+#[inline]
+fn surely_misses(corners: &[[f64; 3]; 3], orig: [f64; 3], dir: [f64; 3]) -> bool {
+    const ULP: f64 = f64::EPSILON;
+    let [p0, e1, e2] = *corners;
+    // The plain sum, and how far the fused one may lie from it.
+    let dot = |a: [f64; 3], b: [f64; 3]| {
+        let z = a[2] * b[2];
+        let d = a[0] * b[0] + a[1] * b[1] + z;
+        (d, (z.abs() + 2.0 * d.abs()) * ULP)
+    };
+    let pvec = cross64(dir, e2);
+    let (det, sd) = dot(e1, pvec);
+    if (det - EPS).abs() <= sd || (det + EPS).abs() <= sd {
+        return false;
+    }
+    let sign = if det > EPS {
+        1.0
+    } else if det < -EPS {
+        -1.0
+    } else {
+        return true;
+    };
+    // With the triangle facing the other way the tests are the same with the signs turned.
+    let (det, sd) = (sign * det, sd);
+    let tvec = [orig[0] - p0[0], orig[1] - p0[1], orig[2] - p0[2]];
+    let (u, su) = dot(tvec, pvec);
+    let u = sign * u;
+    if u < -su || u - det > su + sd {
+        return true;
+    }
+    let qvec = cross64(tvec, e1);
+    let (v, sv) = dot(dir, qvec);
+    let v = sign * v;
+    let uv = u + v;
+    v < -sv || uv - det > su + sv + 2.0 * uv.abs() * ULP + sd
 }
 
 /// The 25 directions of Orca's rays, round +Z: a 5 × 5 grid on the unit square mapped evenly onto the hemisphere
@@ -800,21 +866,88 @@ pub struct Visibility {
 /// What a sample's visibility holds until it is measured: a NaN that no measurement gives.
 const UNMEASURED: u32 = u32::MAX;
 
+/// An object's points as Orca gathers them to measure how visible its surface is (`compute_global_occlusion`), from
+/// the project the app hands it, which holds each part where it lies on the plate: the points to cut down, how they
+/// are moved once cut down, and where the middle of the object lies on the plate, round which Orca measures.
+///
+/// Orca keeps each part's mesh round the middle of its bounding box, moved there in floats
+/// (`center_geometry_after_creation`). An object of several parts keeps each part where it lies, its matrix moving it
+/// back (`its_transform`, in doubles), and is measured round the middle of all of them (`m_center_offset`, whole
+/// nanometres cut towards zero, from the bounds of the points before they are rounded: `raw_bounding_box`). An object
+/// of one part keeps it round its middle, which the object's place on the plate holds instead: the points are
+/// measured round where they are, and only lifted to their height.
+struct Gathered {
+    vertices: Vec<V3>,
+    then: [f64; 3],
+    offset: [f64; 2],
+}
+
+fn whole_nm(x: f64) -> f64 {
+    (x / 1e-6) as i64 as f64 * 1e-6
+}
+
+fn middle(vertices: &[V3]) -> [f64; 3] {
+    let (mut min, mut max) = ([f64::INFINITY; 3], [f64::NEG_INFINITY; 3]);
+    for v in vertices {
+        for k in 0..3 {
+            min[k] = min[k].min(f64::from(v[k]));
+            max[k] = max[k].max(f64::from(v[k]));
+        }
+    }
+    std::array::from_fn(|k| (min[k] + max[k]) / 2.0)
+}
+
+fn gather(parts: &[&Mesh]) -> Gathered {
+    if let [part] = parts {
+        let centre = middle(&part.vertices);
+        let shift = centre.map(|c| c as f32);
+        let vertices: Vec<V3> = part.vertices.iter().map(|v| std::array::from_fn(|k| v[k] - shift[k])).collect();
+        let own = middle(&vertices);
+        let co = [whole_nm(own[0]), whole_nm(own[1])];
+        return Gathered {
+            vertices,
+            then: [-co[0], -co[1], centre[2]],
+            offset: [centre[0] + co[0], centre[1] + co[1]],
+        };
+    }
+    let (mut min, mut max) = ([f64::INFINITY; 2], [f64::NEG_INFINITY; 2]);
+    let mut vertices = Vec::with_capacity(parts.iter().map(|p| p.vertices.len()).sum());
+    for part in parts {
+        let centre = middle(&part.vertices);
+        let shift = centre.map(|c| c as f32);
+        for v in &part.vertices {
+            let p: [f64; 3] = std::array::from_fn(|k| f64::from(v[k] - shift[k]) + centre[k]);
+            for k in 0..2 {
+                min[k] = min[k].min(p[k]);
+                max[k] = max[k].max(p[k]);
+            }
+            vertices.push(p.map(|x| x as f32));
+        }
+    }
+    let co = [0, 1].map(|k| whole_nm((min[k] + max[k]) / 2.0));
+    Gathered { vertices, then: [-co[0], -co[1], 0.0], offset: co }
+}
+
 impl Visibility {
-    /// The visibility of `mesh`'s surface (its vertices in mm, where the object is sliced). With `back`, as Orca's
+    /// The visibility of an object's surface, from its parts (their vertices in mm, where the object is sliced, in
+    /// the order Orca's project lists them). With `back`, as Orca's
     /// "aligned back" seams have it: a face that looks to the front counts as less visible the more it does. Each
     /// sample is measured when `at` first asks about a point near it, so samples far from every outer wall (on wide
     /// tops and bottoms) never are.
-    pub fn of(mesh: &Mesh, back: bool) -> Visibility {
-        let (mut vertices, indices) = collapse_short_edges(&mesh.vertices, &mesh.triangles, TRIANGLES);
-        // Orca samples the object where it slices it, round the middle of its bounding box (`trafo_centered`, its
-        // `m_center_offset` whole nanometres, cut towards zero), which rounds the points' floats as here.
-        let bounds = mesh.bounds();
-        let offset = [0, 1].map(|k| ((bounds.min[k] + bounds.max[k]) / 2.0 / 1e-6) as i64 as f64 * 1e-6);
-        for v in &mut vertices {
-            v[0] = (f64::from(v[0]) - offset[0]) as f32;
-            v[1] = (f64::from(v[1]) - offset[1]) as f32;
+    pub fn of(parts: &[&Mesh], back: bool) -> Visibility {
+        let gathered = gather(parts);
+        let mut triangles = Vec::with_capacity(parts.iter().map(|p| p.triangles.len()).sum());
+        let mut base = 0u32;
+        for part in parts {
+            triangles.extend(part.triangles.iter().map(|t| t.map(|v| v + base)));
+            base += part.vertices.len() as u32;
         }
+        let (mut vertices, indices) = collapse_short_edges(&gathered.vertices, &triangles, TRIANGLES);
+        // Orca moves what is left by the object's matrix, in doubles (`trafo_sliced`).
+        for v in &mut vertices {
+            *v = std::array::from_fn(|k| (f64::from(v[k]) + gathered.then[k]) as f32);
+        }
+        let offset = gathered.offset;
         let samples = sample(&vertices, &indices, SAMPLES);
         // Where the samples are sparse enough that four lie within the radius nine times in ten.
         let density = SAMPLES as f32 / samples.area;
@@ -858,13 +991,13 @@ impl Visibility {
         let z = normalized(normal);
         let origin = add(center, scale(normal, 0.01)).map(f64::from);
         let tmp_x = if z[0].abs() > 0.99 { [0.0, 1.0, 0.0] } else { [1.0, 0.0, 0.0] };
-        let y = normalized(cross(z, tmp_x));
-        let x = cross(y, z);
+        let y = normalized(cross_fused(z, tmp_x));
+        let x = cross_fused(y, z);
         let step = 1.0f32 / (RAYS * RAYS) as f32;
         for d in &self.directions {
             let world = add(add(scale(x, d[0]), scale(y, d[1])), scale(z, d[2]));
             if let Some(t) = self.bvh.first_hit(origin, world.map(f64::from))
-                && dot(self.face_normals[t as usize], world) <= 0.0
+                && dot_fused(self.face_normals[t as usize], world) <= 0.0
             {
                 v -= step;
             }
@@ -902,9 +1035,9 @@ impl Visibility {
         let mut any = false;
         self.around(p, |k, d| {
             any = true;
-            let mut w = r - dot(d, self.normals[k as usize]).abs();
+            let mut w = r - dot_fused(d, self.normals[k as usize]).abs();
             w += r - norm(d);
-            total += w * self.sample_visibility(k as usize);
+            total = mul_add32(w, self.sample_visibility(k as usize), total);
             weights += w;
         });
         if any { total / weights } else { 1.0 }
@@ -975,6 +1108,69 @@ fn cell(p: V3, size: f32) -> (i32, i32, i32) {
 mod tests {
     use super::*;
 
+    /// The rough pass never turns away a ray the fused test would let through: random rays at random triangles,
+    /// and rays aimed at their corners and edges, where the tests are closest.
+    #[test]
+    fn the_ray_test_s_rough_pass_misses_only_what_orca_s_misses() {
+        let mut x = 0x0123_4567_89ab_cdefu64;
+        let mut next = move || {
+            x ^= x << 13;
+            x ^= x >> 7;
+            x ^= x << 17;
+            (x >> 11) as f64 / (1u64 << 53) as f64
+        };
+        let (mut hits, mut settled) = (0, 0);
+        for k in 0..600_000 {
+            let scale = [0.01, 1.0, 100.0][k % 3];
+            let point = |next: &mut dyn FnMut() -> f64| [0, 1, 2].map(|_| f64::from(((next() - 0.5) * scale) as f32));
+            let (a, b, c, orig) = (point(&mut next), point(&mut next), point(&mut next), point(&mut next));
+            let corners = [a, [b[0] - a[0], b[1] - a[1], b[2] - a[2]], [c[0] - a[0], c[1] - a[1], c[2] - a[2]]];
+            // Towards a random point, a corner, or a point along an edge.
+            let (s, t) = (next(), next());
+            let target = match k % 4 {
+                0 => point(&mut next),
+                1 => b,
+                2 => std::array::from_fn(|i| a[i] + s * (b[i] - a[i])),
+                _ => std::array::from_fn(|i| a[i] + s * (b[i] - a[i]) + t * (1.0 - s) * (c[i] - a[i])),
+            };
+            let dir = normalized(std::array::from_fn(|i| (target[i] - orig[i]) as f32)).map(f64::from);
+            let fused = intersect_fused(&corners, orig, dir);
+            assert_eq!(intersect(&corners, orig, dir).map(f64::to_bits), fused.map(f64::to_bits));
+            hits += usize::from(fused.is_some());
+            settled += usize::from(surely_misses(&corners, orig, dir));
+        }
+        assert!(hits > 100_000 && settled > 200_000, "{hits} {settled}");
+    }
+
+    fn block(min: [f32; 3], max: [f32; 3]) -> Mesh {
+        let vertices =
+            (0..8).map(|k| [0, 1, 2].map(|i| if k >> i & 1 == 1 { max[i] } else { min[i] })).collect::<Vec<[f32; 3]>>();
+        Mesh { name: String::new(), vertices, triangles: vec![[0, 1, 3], [0, 3, 2]] }
+    }
+
+    /// An object of one part is measured round its own middle, the part kept there and only lifted to its height;
+    /// one of several keeps each part where it lies, measured round the middle of them all.
+    #[test]
+    fn one_part_is_gathered_round_its_middle_several_where_they_lie() {
+        let one = block([100.0, 100.0, 0.0], [110.0, 120.0, 10.0]);
+        let g = gather(&[&one]);
+        assert_eq!(g.vertices[0], [-5.0, -10.0, -5.0]);
+        assert_eq!((g.then, g.offset), ([0.0, 0.0, 5.0], [105.0, 110.0]));
+        let other = block([120.0, 100.0, 0.0], [130.0, 110.0, 4.0]);
+        let g = gather(&[&one, &other]);
+        assert_eq!((g.vertices[0], g.vertices[8]), ([100.0, 100.0, 0.0], [120.0, 100.0, 0.0]));
+        assert_eq!((g.then, g.offset), ([-115.0, -110.0, 0.0], [115.0, 110.0]));
+        // Each part moved round its middle in floats and back in doubles, as Orca does: a point a float's step off
+        // what it was.
+        let odd = block([117.5351, 119.0191, 9.6801], [139.0, 137.0, 30.0]);
+        let g = gather(&[&odd, &other]);
+        let (lo, hi) = (odd.vertices[0], odd.vertices[7]);
+        let centre: [f64; 3] = std::array::from_fn(|k| (f64::from(lo[k]) + f64::from(hi[k])) / 2.0);
+        let expected: [f32; 3] = std::array::from_fn(|k| (f64::from(lo[k] - centre[k] as f32) + centre[k]) as f32);
+        assert_eq!(g.vertices[0], expected);
+        assert_ne!(g.vertices[0], lo);
+    }
+
     #[test]
     fn the_generator_is_libstdcxx_s() {
         // std::mt19937_64's 10000th output from its default seed, as the standard gives it.
@@ -1007,7 +1203,7 @@ mod tests {
             [3, 4, 7],
         ];
         let mesh = Mesh { name: String::new(), vertices, triangles };
-        let v = Visibility::of(&mesh, false);
+        let v = Visibility::of(&[&mesh], false);
         assert!((v.at([10.0, 0.0, 10.0]) - 1.0).abs() < 1e-6, "{}", v.at([10.0, 0.0, 10.0]));
         assert_eq!(v.positions.len(), SAMPLES);
         assert!(v.radius > 0.1 && v.radius < 1.0, "{}", v.radius);
@@ -1018,7 +1214,8 @@ mod tests {
 mod torus {
     use super::*;
 
-    /// A torus round the z axis, 10 mm to the middle of its 4 mm tube, in 180 × 100 quads: 36,000 triangles.
+    /// A torus round the z axis, 10 mm to the middle of its 4 mm tube, in 180 × 100 quads: 36,000 triangles, lying
+    /// on the plate at its middle.
     pub fn torus() -> Mesh {
         let (n, m) = (180usize, 100usize);
         let mut vertices = Vec::with_capacity(n * m);
@@ -1027,7 +1224,11 @@ mod torus {
             for j in 0..m {
                 let v = j as f64 / m as f64 * std::f64::consts::TAU;
                 let w = 10.0 + 4.0 * libm::cos(v);
-                vertices.push([(w * libm::cos(u)) as f32, (w * libm::sin(u)) as f32, (4.0 * libm::sin(v)) as f32]);
+                vertices.push([
+                    (128.0 + w * libm::cos(u)) as f32,
+                    (128.0 + w * libm::sin(u)) as f32,
+                    (4.0 + 4.0 * libm::sin(v)) as f32,
+                ]);
             }
         }
         let at = |i: usize, j: usize| ((i % n) * m + j % m) as u32;
@@ -1041,46 +1242,50 @@ mod torus {
         Mesh { name: "torus".into(), vertices, triangles }
     }
 
-    /// The torus's visibility as Orca's own code measures it: the same 30,000 points, each as visible, the
-    /// figures from the harness that `write_torus` feeds (its 36,000 triangles cut down to 15,998, the inner
-    /// side of the ring in its own shadow).
+    /// The torus's visibility as native Orca measures it, read from its seam placer as it sliced the torus as a
+    /// project's one part (`write_torus`): the same 30,000 points, each as visible (its 36,000 triangles cut down to
+    /// 15,998, the inner side of the ring in its own shadow).
     #[test]
     fn a_torus_s_visibility_is_orca_s() {
-        let v = Visibility::of(&torus(), false);
-        assert_eq!(v.radius.to_bits(), 0x3f4d_73dd, "{}", v.radius);
+        let v = Visibility::of(&[&torus()], false);
+        assert_eq!(v.radius.to_bits(), 0x3f4d_a15e, "{}", v.radius);
         assert_eq!(v.positions.len(), SAMPLES);
         let all: Vec<f32> = (0..v.positions.len()).map(|k| v.sample_visibility(k)).collect();
         let visible: f64 = all.iter().map(|&x| f64::from(x)).sum();
-        assert_eq!(visible, 27070.0384484604);
+        assert_eq!(visible, 27075.158454231918);
         let at: f64 = v.positions.iter().map(|p| f64::from(p[0]) + f64::from(p[1]) + f64::from(p[2])).sum();
-        assert_eq!(at, 521.0006640803767);
-        assert_eq!(v.positions[0], [-12.501299, 1.4116337, 3.038413]);
+        assert_eq!(at, 118848.00150028212);
+        assert_eq!(v.positions[0], [5.851124, 1.412277, 3.6231732]);
         assert_eq!(all[1], 0.87999994);
-        assert_eq!(all.iter().filter(|&&x| x < 0.5).count(), 111);
+        assert_eq!(all.iter().filter(|&&x| x < 0.5).count(), 137);
         // Round the outside of the ring the surface sees all of space, round the inside the ring hides some.
-        let (outside, inside) = (v.at([14.0, 0.0, 0.0]), v.at([6.0, 0.0, 0.0]));
+        let (outside, inside) = (v.at([142.0, 128.0, 4.0]), v.at([134.0, 128.0, 4.0]));
         assert!(outside > 0.99 && inside < 0.8, "{outside} {inside}");
     }
 
-    /// Writes the torus for Orca's own code to measure (a harness built from Orca 2.5's SeamPlacer.cpp,
-    /// ShortEdgeCollapse.cpp, TriangleSetSampling.cpp and AABBTreeIndirect.hpp, without fused multiply-adds).
+    /// Writes the torus as the model of a project for native Orca to slice (`3dmodel.model`, in a plate.3mf laid
+    /// out as bench/app-slice.mts lays it out), whose seam placer's samples a hook then reads.
     #[test]
     #[ignore]
     fn write_torus() {
+        use std::fmt::Write as _;
         let mesh = torus();
-        let mut out = Vec::new();
-        out.extend((mesh.vertices.len() as u32).to_le_bytes());
-        out.extend((mesh.triangles.len() as u32).to_le_bytes());
+        let mut out = String::from(
+            "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<model unit=\"millimeter\" xml:lang=\"en-US\" \
+             xmlns=\"http://schemas.microsoft.com/3dmanufacturing/core/2015/02\"><resources><object id=\"1\" \
+             type=\"model\"><mesh><vertices>",
+        );
         for v in &mesh.vertices {
-            for x in v {
-                out.extend(x.to_le_bytes());
-            }
+            let _ = write!(out, "<vertex x=\"{}\" y=\"{}\" z=\"{}\"/>", v[0], v[1], v[2]);
         }
+        out.push_str("</vertices><triangles>");
         for t in &mesh.triangles {
-            for x in t {
-                out.extend(x.to_le_bytes());
-            }
+            let _ = write!(out, "<triangle v1=\"{}\" v2=\"{}\" v3=\"{}\"/>", t[0], t[1], t[2]);
         }
-        std::fs::write("/tmp/torus.bin", out).unwrap();
+        out.push_str(
+            "</triangles></mesh></object><object id=\"2\" type=\"model\"><components><component objectid=\"1\"/>\
+             </components></object></resources><build><item objectid=\"2\"/></build></model>",
+        );
+        std::fs::write("/tmp/torus.model", out).unwrap();
     }
 }
