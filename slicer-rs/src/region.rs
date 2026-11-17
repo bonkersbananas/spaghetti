@@ -1046,8 +1046,9 @@ fn wall_group(
                 break;
             }
             // Orca's precise outer wall: the first inner wall a whole line width from the outer one (no overlap,
-            // so the outer wall keeps to the model's outline).
-            let d = if k == 1 { (w_outer + w_inner) / 2.0 } else { sp_inner };
+            // so the outer wall keeps to the model's outline); without it, half the two walls' spacings.
+            let first = if s.precise_outer_wall { (w_outer + w_inner) / 2.0 } else { (sp_outer + sp_inner) / 2.0 };
+            let d = if k == 1 { first } else { sp_inner };
             let next = geom::simplify_shapes(
                 &geom::offset(&geom::offset(&region, -(d + min_spacing / 2.0)), min_spacing / 2.0),
                 wall_resolution,
@@ -1233,6 +1234,28 @@ mod tests {
         assert!(!geom::contains(&below.inner, geom::pt(sc(0.6), sc(10.0))));
         // The small block's last layer has one wall.
         assert_eq!(regions[n - 1].islands[0].walls.len(), 1);
+    }
+
+    #[test]
+    fn the_first_inner_wall_is_a_line_width_in_with_a_precise_outer_wall_else_a_spacing() {
+        // A 10 mm square: with Orca's precise outer wall the first inner wall is half of each wall's width in from
+        // the outer one; without it, half of each one's spacing, as for any other pair of walls.
+        let layers = Layers::plan(3.0, 0.2, 0.2);
+        let slices: Vec<Shapes> = (0..layers.top.len()).map(|_| vec![square(0.0, 0.0, 10.0, 10.0)]).collect();
+        let owners: Vec<Vec<u32>> = slices.iter().map(|slice| vec![0; slice.len()]).collect();
+        let inner_x = |precise: bool| {
+            let s = Settings { precise_outer_wall: precise, ..Settings::default() };
+            let regions = regions(&slices, &owners, &[], &layers, &[(0.0, 0.0)], &[], &s);
+            let island = &regions[5].islands[0];
+            geom::unsc(geom::bbox(&vec![island.walls[1].clone()]).unwrap()[0])
+        };
+        let s = Settings::default();
+        let (w_outer, w_inner) = (s.outer_wall_width, s.inner_wall_width);
+        let (sp_outer, sp_inner) = (Settings::spacing(w_outer, 0.2), Settings::spacing(w_inner, 0.2));
+        let precise = inner_x(true);
+        assert!((precise - (w_outer / 2.0 + (w_outer + w_inner) / 2.0)).abs() < 1e-3, "{precise}");
+        let plain = inner_x(false);
+        assert!((plain - (w_outer / 2.0 + (sp_outer + sp_inner) / 2.0)).abs() < 1e-3, "{plain}");
     }
 
     #[test]
