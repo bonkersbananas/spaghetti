@@ -6,6 +6,7 @@
 
 import { checkLinkUrl } from "./link-safety.ts";
 import { findLinks } from "./links.ts";
+import { mirrorSource } from "./mirrors.ts";
 
 export type ModelMarkSite =
   | "makerworld"
@@ -24,6 +25,8 @@ export interface ModelMark {
   /** "MakerWorld", "Printables"…; for a file, its extension: ".3mf". */
   name: string;
   url: string;
+  /** Set when the link was a mirror's page (3dgo.app) for this model: the address people pasted. */
+  via?: string;
 }
 
 interface Site {
@@ -65,8 +68,11 @@ const hostIs = (host: string, domain: string) => host === domain || host.endsWit
 
 /** What a link points at: a model page (and the part of its address that names the model), a model file, or neither. */
 function readModelLink(raw: string): { mark: ModelMark; key: string } | null {
-  const url = checkLinkUrl(raw);
-  if (!url) return null;
+  const given = checkLinkUrl(raw);
+  if (!given) return null;
+  // A mirror's page (3dgo.app) is read as the source model's page; `via` keeps the address people pasted.
+  const source = mirrorSource(given);
+  const url = source ? new URL(source) : given;
   const host = url.hostname.toLowerCase();
   const site = SITES.find((candidate) => candidate.domains.some((domain) => hostIs(host, domain)));
   if (site) {
@@ -74,7 +80,10 @@ function readModelLink(raw: string): { mark: ModelMark; key: string } | null {
     if (!id) return null;
     // A model page is its path: what follows it (?from=search, #profileId-…) only says how it was found.
     const page = `${url.origin}${url.pathname}`;
-    return { mark: { kind: "page", site: site.id, name: site.name, url: page }, key: `${site.id}:${id.toLowerCase()}` };
+    return {
+      mark: { kind: "page", site: site.id, name: site.name, url: page, ...(source ? { via: given.href } : {}) },
+      key: `${site.id}:${id.toLowerCase()}`,
+    };
   }
   const ext = FILE.exec(url.pathname)?.[0];
   // A file's query may be what lets it download (a signed link): it stays.
@@ -104,7 +113,8 @@ export const linkKey = (url: string) => readModelLink(url)?.key ?? url;
 /** A model page's link without its tracking bits ("…/models/3531476-flexi-mini-hummingbird"); any other link as it is. */
 export function cleanModelUrl(raw: string): string {
   const mark = modelMarkOf(raw);
-  return mark?.kind === "page" ? mark.url : raw;
+  // A mirror's address stays as pasted; its model is read from it, not swapped into the note.
+  return mark?.kind === "page" && !mark.via ? mark.url : raw;
 }
 
 /**

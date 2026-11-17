@@ -4,6 +4,7 @@
  * all use the same list.
  */
 import { checkLinkUrl } from "./link-safety.ts";
+import { mirrorSource } from "./mirrors.ts";
 
 export type ModelSiteId = "makerworld" | "printables" | "thingiverse";
 
@@ -44,8 +45,10 @@ const hostMatches = (host: string, suffix: string) => host === suffix || host.en
 
 /** Which model site a link is on, or null for anything else (and for links that aren't safe public https links). */
 export function modelSite(raw: string): { site: ModelSite; url: URL } | null {
-  const url = checkLinkUrl(raw);
-  if (!url) return null;
+  const given = checkLinkUrl(raw);
+  if (!given) return null;
+  // A mirror's page for a model (3dgo.app) is read as the source's own page.
+  const url = new URL(mirrorSource(given) ?? given.href);
   const host = url.hostname.toLowerCase();
   const site = MODEL_SITES.find((candidate) => candidate.domains.some((domain) => hostMatches(host, domain)));
   return site ? { site, url } : null;

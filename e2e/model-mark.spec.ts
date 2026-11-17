@@ -108,3 +108,38 @@ test("a build shows its model's link once, as the model's card", async ({ page }
   await expect(cards).toHaveAttribute("href", "https://makerworld.com/models/3531476");
   await expect(page.getByText(/from=search/)).toHaveCount(0);
 });
+
+test("a 3dgo.app link is the MakerWorld model: its card, its draft, and the address stays as pasted @phone", async ({
+  page,
+}) => {
+  const headers = { Origin: origin(page) };
+  const mirror = "https://3dgo.app/models/makerworld/2487194";
+  const id = crypto.randomUUID();
+  await page.request.post("/api/items", { headers, data: { id, note: mirror } });
+
+  await page.goto(`/ideas/${id}`);
+  const card = page.getByRole("link", { name: /Model on MakerWorld/ });
+  await expect(card).toHaveCount(1);
+  await expect(card).toHaveAttribute("href", "https://makerworld.com/models/2487194");
+  // The address is shown once (the card), not again as note text or a second card.
+  await expect(page.getByRole("list", { name: "Links in the note" })).toHaveCount(0);
+  await expect(page.getByRole("link", { name: /3dgo\.app/ })).toHaveCount(0);
+  // An idea saved before the link was recognised can be read now.
+  await page.getByRole("button", { name: "Draft from this page" }).click();
+  await expect(page.getByText("Drafted by Claude from MakerWorld")).toBeVisible({ timeout: 20_000 });
+  // The note keeps what was pasted.
+  const note = await (await page.request.get(`/api/items/${id}`)).json();
+  expect(JSON.stringify(note)).toContain(mirror);
+});
+
+test("a note that is only a link to an unknown site shows that link once, as its card", async ({ page }) => {
+  const headers = { Origin: origin(page) };
+  const id = crypto.randomUUID();
+  await page.request.post("/api/items", {
+    headers,
+    data: { id, title: "Skadis", note: "https://www.ikea.com/se/en/p/skadis-pegboard-20320802/" },
+  });
+  await page.goto(`/ideas/${id}`);
+  await expect(page.getByRole("list", { name: "Links in the note" }).getByRole("link")).toHaveCount(1);
+  await expect(page.getByRole("link", { name: /ikea\.com/ })).toHaveCount(1);
+});

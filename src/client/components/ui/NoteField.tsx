@@ -1,4 +1,4 @@
-import { findLinks } from "@shared/links";
+import { findLinks, isLink } from "@shared/links";
 import { type ModelMark, sameModel, tidyModelLinks } from "@shared/model-mark";
 import { useQuery } from "@tanstack/react-query";
 import { useRef, useState } from "react";
@@ -18,7 +18,8 @@ interface NoteFieldProps {
   readOnly?: boolean;
   /**
    * The model the page shows a card for: a link to it reads as the model's title (or "makerworld.com/…") in the
-   * note, and a note that is only that link reads as empty, since the card says it.
+   * note, and a note that is only that link reads as empty, since the card says it. Passing it (even null) also says
+   * the page shows a card for each link in the note, so a note that is only one other link reads as empty too.
    */
   model?: ModelMark | null;
   className?: string;
@@ -49,13 +50,12 @@ export function NoteField({
   const { data: preview } = useQuery({ ...linkPreviewQuery(page?.url ?? ""), enabled: !!page });
   const isModel = (url: string) => !!page && sameModel(url, page.url);
   const modelText = (url: string) => (isModel(url) ? preview?.title || siteOnly(url) : undefined);
-  // A note that is only the model's link has nothing to say beyond its card.
-  const onlyModel =
-    !!page &&
-    findLinks(value)
-      .reduce((rest, link) => (isModel(link.url) ? rest.replace(link.url, "") : rest), value)
-      .trim() === "" &&
-    !!value.trim();
+  // A note that is only the model's link has nothing to say beyond its card; so does one that is only a single other
+  // link, on a page that draws a card for each link in the note (it passes `model`, null when the idea has none).
+  const rest = findLinks(value)
+    .reduce((left, link) => (isModel(link.url) ? left.replace(link.url, "") : left), value)
+    .trim();
+  const onlyModel = !!value.trim() && ((!!page && rest === "") || (model !== undefined && isLink(rest)));
 
   if (readOnly && (!value.trim() || onlyModel)) return null;
   if (!readOnly && (editing || !value.trim())) {
