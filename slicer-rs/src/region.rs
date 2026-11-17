@@ -282,7 +282,7 @@ pub fn regions(
         // Fuzzy skin on the walls Orca gives it (`fuzzy.rs`), over the layer below; Orca counts a raft's layers.
         if s.fuzzy.on() {
             let raft = if s.support.raft_layers > 0 { s.support.raft_layers as usize } else { 0 };
-            crate::fuzzy::islands(&mut islands, centres, around.lower, slice_z[i], i + raft, s);
+            crate::fuzzy::islands(&mut islands, centres, around.lower, slice_z[i], i + raft, layers.height[i], s);
         }
         islands
     });
@@ -1171,6 +1171,24 @@ fn wall_group(
     out
 }
 
+/// The closed even lines of Arachne's walls as the loops other code reads (`Island::walls`), by inset. Arachne's
+/// contours run clockwise round an outline and counter-clockwise round a hole; the seam placer takes outlines
+/// counter-clockwise.
+pub fn walls_of(lines: &[ArachneLine]) -> Vec<Vec<geom::Contour>> {
+    let mut walls: Vec<Vec<geom::Contour>> = Vec::new();
+    for line in lines {
+        if line.closed && !line.odd && line.points.len() >= 4 {
+            while walls.len() <= line.inset {
+                walls.push(Vec::new());
+            }
+            let mut contour = line.points[..line.points.len() - 1].to_vec();
+            contour.reverse();
+            walls[line.inset].push(contour);
+        }
+    }
+    walls
+}
+
 /// `wall_group` with Arachne's walls (Orca's `PerimeterGenerator::process_arachne`): each island's outline drawn in by
 /// what the outer wall's spacing leaves of its width (with `precise_outer_wall`, all of it), turned into lines of
 /// beads by `WallToolPaths`, and what is left inside them (Arachne's inner contour) kept as infill's area, reaching
@@ -1273,19 +1291,8 @@ fn arachne_group(
             let spacing_for_overlap = if count == 1 { sp_outer } else { sp_inner };
             let mut island =
                 Island { outline: shape.clone(), overlap: share * spacing_for_overlap, ..Island::default() };
-            for line in groups.into_iter().flatten() {
-                if line.closed && !line.odd && line.points.len() >= 4 {
-                    while island.walls.len() <= line.inset {
-                        island.walls.push(Vec::new());
-                    }
-                    // Arachne's contours run clockwise round an outline and counter-clockwise round a hole; the seam
-                    // placer (and everything else reading `walls`) takes outlines counter-clockwise.
-                    let mut contour = line.points[..line.points.len() - 1].to_vec();
-                    contour.reverse();
-                    island.walls[line.inset].push(contour);
-                }
-                island.lines.push(line);
-            }
+            island.lines = groups.into_iter().flatten().collect();
+            island.walls = walls_of(&island.lines);
             // What is left inside: too small to fill when no spacing's half fits; else drawn in and out again so
             // that what a line can't fill is left out.
             let spacing = if count == 1 { ext_spacing2 } else { sp_inner };
