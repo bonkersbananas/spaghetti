@@ -113,6 +113,28 @@ Each change again leaves every file byte for byte as it was, on the 13 models an
 - **The G-code packed as it is written.** The app reads only the `.gcode.3mf`, yet a slice held its layers' G-code, then the whole file assembled from them, then packed that. Now the layers go straight into the deflater, which also works out the MD5 beside each batch, and each is let go once written; the plain G-code is kept only when asked for (`Options::gcode`, the command line's `--gcode`), and Orca's preheating, which rewrites the whole text, still assembles it. Each layer's text also drops the room its size estimate left: 74 MB held for pick your size's 42 MB of G-code (arcs took it from 78 MB). Pick your size's heap in Node: 241 → 175 MB, the other models' as they were, and the time within the sandbox's drift (−2 to +2 % in Node and natively on four threads). Most of what's left is the regions of its 699 layers, held until the toolpaths are done (about 113 MB).
 - **The Voronoi diagram's big integers: tried and left out.** Its exact predicates (12 % of the poop tray now) build integers of up to 29 chunks of 32 bits on these models, past the 8 its small vector holds in place, so most spill to the heap. Holding them in place costs more than the allocations: a fixed array of 64 chunks (Boost's own bound), copied as a whole, made the poop tray 17 % slower in Node, the hummingbird 5 %, and room for 32 in the small vector 8 %. With the earlier rewrites of its loops (no change), what's left is a different representation, not a tuning.
 
+Main with both (#512 and #516) against the same main with them reverted, every runner on every model, model by model, medians of three, in the same sandbox in the same two hours; every runner wrote the same file for every model, before and after. Pick your size's before and after ran an hour apart, so its row comes from an interleaved rerun (Chromium's column from the first run).
+
+| Model | **WebAssembly, Chromium** | Its heap | WebAssembly, Node | Native, 4 threads, and its memory | Native, 1 thread |
+| --- | --- | --- | --- | --- | --- |
+| Steampunk frame (89 MB STL) | **10.98 → 10.64 s (−3 %)** | 134 → 134 MB | 11.50 → 10.74 s (−7 %) | 2.69 → 2.74 s (+2 %), 136 → 136 MB | 7.60 → 7.26 s (−4 %) |
+| Capybara (18 MB STL) | **2.39 → 2.43 s (+2 %)** | 38 → 34 MB | 2.42 → 2.45 s (+1 %) | 0.59 → 0.56 s (−4 %), 42 → 42 MB | 1.99 → 1.58 s (−21 %) |
+| Marshmallow | **3.56 → 3.60 s (+1 %)** | 109 → 109 MB | 3.57 → 3.55 s (0 %) | 1.03 → 1.05 s (+3 %), 111 → 111 MB | 2.18 → 2.21 s (+2 %) |
+| Pick your size, plate 2 (interleaved) | 49.52 → 49.05 s (−1 %), not interleaved | 243 → 173 MB | **49.78 → 47.70 s (−4 %)** | 10.04 → 9.81 s (−2 %), 310 → 243 MB | 39.18 → 37.41 s (−5 %) |
+| Hummingbird, painted | **11.09 → 10.67 s (−4 %)** | 83 → 84 MB | 11.17 → 10.72 s (−4 %) | 2.83 → 2.59 s (−8 %), 86 → 82 MB | 8.33 → 7.71 s (−7 %) |
+| Tomato mascot | **10.76 → 10.21 s (−5 %)** | 91 → 98 MB | 10.65 → 10.39 s (−2 %) | 2.50 → 2.17 s (−13 %), 106 → 104 MB | 7.87 → 7.23 s (−8 %) |
+| Stackable containers, plate 3 | **3.86 → 3.62 s (−6 %)** | 30 → 28 MB | 3.78 → 3.61 s (−4 %) | 0.78 → 0.72 s (−8 %), 43 → 38 MB | 2.72 → 2.59 s (−5 %) |
+| Poop tray | **5.90 → 5.66 s (−4 %)** | 36 → 30 MB | 5.90 → 5.59 s (−5 %) | 1.14 → 1.09 s (−4 %), 54 → 40 MB | 4.25 → 4.13 s (−3 %) |
+| Steampunk glasses | **4.04 → 3.89 s (−4 %)** | 29 → 26 MB | 4.18 → 3.88 s (−7 %) | 0.90 → 0.83 s (−8 %), 47 → 40 MB | 2.90 → 2.80 s (−3 %) |
+| Hot dogs, 4 colours | **5.56 → 5.25 s (−6 %)** | 34 → 29 MB | 5.44 → 5.66 s (+4 %) | 1.16 → 1.08 s (−7 %), 41 → 38 MB | 3.96 → 3.66 s (−8 %) |
+| Spaghetti zipper pull | **3.56 → 3.35 s (−6 %)** | 26 → 25 MB | 3.37 → 3.20 s (−5 %) | 0.77 → 0.87 s (+13 %), 38 → 38 MB | 2.43 → 2.31 s (−5 %) |
+| UOBF text with clips | **0.62 → 0.60 s (−3 %)** | 21 → 20 MB | 0.57 → 0.55 s (−3 %) | 0.12 → 0.12 s (−5 %), 22 → 25 MB | 0.34 → 0.32 s (−6 %) |
+| fctl zipper pulls, 4 copies | **7.79 → 7.59 s (−3 %)** | 57 → 52 MB | 7.91 → 7.49 s (−5 %) | 1.77 → 1.71 s (−3 %), 82 → 76 MB | 5.78 → 5.53 s (−4 %) |
+
+The offsets' change is 3 to 7 % on most models in WebAssembly and 3 to 8 % natively; rows within ±3 % of nothing move by the sandbox's drift more than by the change (the capybara's −21 % on one thread is drift). The heaps that held a lot of G-code shrink: pick your size by 70 MB, natively by 67 MB, the poop tray natively by 14 MB. The module is 4.00 MB, 1.364 MB gzipped (from 3.99 MB and 1.359 MB: the outline check is test-only, the rest is the G-code's sink and its MD5 beside the deflater).
+
+What's left, as profiled on pick your size in WebAssembly: the polygon library is still most of a slice (its splitting of segments where they cross 37 %, the fill sweep 16 %, the walls' offsets and differences in `region::wall_group` 30 % between them), now nearly all inherent to each operation rather than repeated work; arc fitting (`arc_fit::fit_and_simplify`, session 1540's) is 12 % of it; the Voronoi diagram's exact predicates 12 % of the poop tray (above); and memory, the regions of every layer held until the toolpaths are done.
+
 ### With tree supports
 
 With Orca's organic trees everywhere (the X2D's support settings otherwise), the same way:
