@@ -1250,9 +1250,12 @@ fn object_supports(
             } else {
                 Vec::new()
             };
+            let region_slices: Vec<Vec<geom::Shapes>> =
+                regions[..=top].iter().map(|r| r.region_slices_of(g as u32)).collect();
             let object = support::Object {
                 print_z: &layers.top[..=top],
                 height: &layers.height[..=top],
+                region_slices,
                 slices,
                 tops,
                 origin: centres[o],
