@@ -32,6 +32,7 @@ pub mod pack;
 pub mod paint;
 pub mod parts;
 pub mod plan;
+pub mod plane_path;
 pub mod png;
 pub mod preheat;
 pub mod profile;

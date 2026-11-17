@@ -12,6 +12,7 @@
 //! gives the same file on any number of threads and in WebAssembly.
 
 use crate::config::{Fuzzy, FuzzyNoise};
+use crate::fmath::Hyp;
 use crate::geom::{self, Contour, Pt, Shapes};
 use crate::noise::Noise;
 
@@ -237,7 +238,7 @@ impl<'a> Layer<'a> {
         let perimeter: f64 = (0..n)
             .map(|i| {
                 let (a, b) = (poly[i], poly[(i + 1) % n]);
-                ((b.x - a.x) as f64).hypot((b.y - a.y) as f64) / scale
+                ((b.x - a.x) as f64).hyp((b.y - a.y) as f64) / scale
             })
             .sum();
         if perimeter < 1e-6 {
@@ -311,7 +312,7 @@ fn ripple_anchor(poly: &[Pt], mm: &dyn Fn(Pt) -> (f64, f64)) -> f64 {
     for i in 0..n {
         let (a, b) = (mm(poly[i]), mm(poly[(i + 1) % n]));
         let (sx, sy) = (b.0 - a.0, b.1 - a.1);
-        let len = sx.hypot(sy);
+        let len = sx.hyp(sy);
         if len > 1e-9 {
             let t = (((anchor.0 - a.0) * sx + (anchor.1 - a.1) * sy) / (len * len)).clamp(0.0, 1.0);
             let (fx, fy) = (a.0 + sx * t - anchor.0, a.1 + sy * t - anchor.1);

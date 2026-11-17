@@ -144,6 +144,9 @@ pub struct LayerRegions {
     pub seams: Vec<crate::seam::LayerSeams>,
     /// Each group's octree for adaptive or support cubic infill (`adaptive.rs`), the same on every layer.
     pub octrees: std::sync::Arc<Vec<Option<crate::adaptive::Octree>>>,
+    /// Each group's size across the plate (x, y, mm: its bounding box's, Orca's `m_size`), over which the plane-path
+    /// patterns lay their curve (`plane_path.rs`).
+    pub sizes: std::sync::Arc<Vec<(f64, f64)>>,
 }
 
 impl LayerRegions {
@@ -457,14 +460,25 @@ pub fn regions(
     let candidates = bridges::candidates(&islands, &fills, layers, s);
     let mut lightning = lightning_lines(&islands, &fills, &candidates, layers, centres, s);
     let octrees = std::sync::Arc::new(octrees(&islands, &candidates, layers, centres, meshes, s));
+    let sizes: std::sync::Arc<Vec<(f64, f64)>> = std::sync::Arc::new(
+        meshes
+            .iter()
+            .map(|m| {
+                let b = m.bounds();
+                (b.max[0] - b.min[0], b.max[1] - b.min[1])
+            })
+            .collect(),
+    );
     let lines = |layer: usize, island: usize, sparse: &Shapes| {
         let object = islands[layer][island].object as usize;
         let centre = centres.get(object).copied().unwrap_or((0.0, 0.0));
         let g = islands[layer][island].group as usize;
         let trees = lightning.get(g).and_then(|o| o.get(layer)).map_or(&[][..], Vec::as_slice);
         let octree = octrees.get(g).and_then(Option::as_ref);
+        let size = sizes.get(g).copied().unwrap_or((0.0, 0.0));
         let others = plan::others_in(&islands[layer][island].inner, sparse);
-        plan::sparse_lines(sparse, &others, layer, layers.top[layer], layers.height[layer], centre, trees, octree, s)
+        let (z, h) = (layers.top[layer], layers.height[layer]);
+        plan::sparse_lines(sparse, &others, layer, z, h, (centre, size), trees, octree, s)
     };
     let mut fills = bridges::bridge_over_infill(&islands, fills, candidates, layers, &lines, s);
     if s.iron.on() {
@@ -489,6 +503,7 @@ pub fn regions(
                 tops,
                 seams: Vec::new(),
                 octrees: octrees.clone(),
+                sizes: sizes.clone(),
             }
         })
         .collect();
