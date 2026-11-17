@@ -8,7 +8,7 @@ and how much plastic each has. Needs ORCA_NATIVE (the extracted AppImage's squas
 
     ORCA_NATIVE=~/orca-native/squashfs-root python3 -I bench/arachne.py
 """
-import json, math, os, struct, subprocess, sys, tempfile
+import json, math, os, re, struct, subprocess, sys, tempfile
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 CRATE = os.path.dirname(HERE)
@@ -94,16 +94,14 @@ def our_walls(polys, work):
     out = subprocess.run(
         ["cargo", "test", "--lib", "--release", "dump_walls", "--", "--ignored", "--nocapture", "--test-threads=1"],
         cwd=CRATE, env=dict(os.environ, ARACHNE_SHAPE=path), check=True, capture_output=True, text=True).stdout
-    lines, cur = [], None
+    lines, cur = [], None  # each: (extrusion width, [(x, y), ...])
     for l in out.splitlines():
-        if l.rstrip().endswith(tuple(f" {a} {b} {c}" for a in range(0, 4) for b in (0, 1) for c in (0, 1))) and "line " in l and l.count(" ") >= 3 and not l[0].isdigit() and not l[0] == "-":
-            cur = []
+        m = re.search(r"path (\d+\.\d+)$", l)
+        if m:
+            cur = (float(m.group(1)), [])
             lines.append(cur)
-        elif cur is not None and l.count(" ") == 2:
-            try:
-                cur.append(tuple(float(t) for t in l.split()))
-            except ValueError:
-                pass
+        elif cur is not None and re.fullmatch(r"-?\d+\.\d+ -?\d+\.\d+", l):
+            cur[1].append(tuple(float(t) for t in l.split()))
     return lines
 
 
@@ -127,11 +125,11 @@ def main():
             o = orca_walls(polys, work, 4)
             ours = our_walls(polys, work)
         osegs = [(a, b) for a, b, _ in o]
-        usegs = [((l[i][0], l[i][1]), (l[i + 1][0], l[i + 1][1])) for l in ours for i in range(len(l) - 1)]
+        usegs = [(pts[i], pts[i + 1]) for _, pts in ours for i in range(len(pts) - 1)]
         oplastic = sum(math.dist(a, b) * w for a, b, w in o)
-        uplastic = sum(math.dist((l[i][0], l[i][1]), (l[i + 1][0], l[i + 1][1])) * ((l[i][2] + l[i + 1][2]) / 2 + LAYER_HEIGHT * (1 - math.pi / 4)) for l in ours for i in range(len(l) - 1))
+        uplastic = sum(math.dist(pts[i], pts[i + 1]) * w for w, pts in ours for i in range(len(pts) - 1))
         opts = [p for a, b in osegs for p in (a, b)]
-        upts = [(p[0], p[1]) for l in ours for p in l]
+        upts = [q for _, pts in ours for q in pts]
         print(f"{name}: orca {len(osegs)} moves, ours {len(usegs)}; every Orca point within {far(opts, usegs):.3f} mm of ours, "
               f"every point of ours within {far(upts, osegs):.3f} mm of Orca's; line length x width: Orca {oplastic:.3f}, ours {uplastic:.3f}")
 
