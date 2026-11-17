@@ -2375,7 +2375,8 @@ fn toolpaths(
             list.get(i).copied().filter(|&g| arena[g].print_z < z + EPSILON)
         };
         let found = [at(bottoms), at(tops), at(interfaces), at(base_interfaces), at(inter)];
-        layer_paths(arena, (z, height, id), found, origin, p)
+        let below = if k > 0 { z - groups[k - 1].0 } else { f64::INFINITY };
+        layer_paths(arena, (z, height, id), below, found, origin, p)
     })
 }
 
@@ -2406,6 +2407,7 @@ pub(crate) fn pattern_angles(degrees: f64) -> (f32, f32) {
 fn layer_paths(
     arena: &[Gen],
     layer: (f64, f64, usize),
+    below: f64,
     found: [Option<usize>; 5],
     origin: (f64, f64),
     p: &Params,
@@ -2528,6 +2530,14 @@ fn layer_paths(
             return;
         }
         let g = &arena[item.layer];
+        // A top contact's lines are no thicker than the step from the support layer before: Orca 2.5.1 prints a contact
+        // at 0.12 mm in a layer 0.24 mm thick whose layer before is 0.12 mm under it (measured in its G-code and
+        // `--export-slicedata`'s fills).
+        let height = if g.kind == Kind::TopContact && p.raft.is_none() && g.print_z > p.first_layer_height + EPSILON {
+            g.height.min(below)
+        } else {
+            g.height
+        };
         for shape in &geom::union_all(&[&area]) {
             let lines = if p.grid {
                 crate::fill::support_grid(shape, angle, origin, p.spacing, density)
@@ -2537,7 +2547,7 @@ fn layer_paths(
                 base_support::fill(shape, angle, origin, p.spacing, density)
             };
             for line in lines {
-                item.paths.push(crate::support::Item::Path(path(role, line, p.width, g.height)));
+                item.paths.push(crate::support::Item::Path(path(role, line, p.width, height)));
             }
         }
     };
