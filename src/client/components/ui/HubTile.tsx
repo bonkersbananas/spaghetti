@@ -14,7 +14,7 @@ interface HubTileProps {
 }
 
 /**
- * A big way into a place that has no tab of its own (the Workshop's Pantry, Printer and Shopping list): the
+ * A big way into a place that has no tab of its own (the Workshop's Pantry, Printer, Shopping list and Twists): the
  * place's contents drawn as a small picture band, its name in Fraunces and one line on how things stand. A whole
  * surface to tap with a thumb; use it for a handful of destinations, not for lists (rows are for those).
  */
@@ -28,7 +28,7 @@ export function HubTile({ to, title, summary, visual, className }: HubTileProps)
       )}
     >
       <span
-        className="bg-ink/4 flex h-[6.5rem] items-center justify-center overflow-hidden rounded-md px-2 md:h-28 md:px-4"
+        className="bg-ink/4 flex h-24 items-center justify-center overflow-hidden rounded-md px-3 md:h-32 md:px-4"
         aria-hidden
       >
         {visual}
@@ -36,7 +36,7 @@ export function HubTile({ to, title, summary, visual, className }: HubTileProps)
       <span className="flex items-center gap-3 px-2 pt-2.5 pb-2 md:px-3 md:pt-3 md:pb-2.5">
         <span className="flex min-w-0 flex-1 flex-col">
           <span className="text-title text-ink font-display font-semibold">{title}</span>
-          <span className="text-small text-ink-faint min-h-[1.5em] md:truncate">{summary}</span>
+          <span className="text-small text-ink-faint min-h-[1.5em] truncate">{summary}</span>
         </span>
         <NextIcon size={18} className="text-ink-faint shrink-0 max-md:hidden" aria-hidden />
       </span>
