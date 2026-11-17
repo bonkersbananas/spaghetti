@@ -51,7 +51,7 @@ export function UpNextStrip({ queue, menuFor, landed, dragFor }: UpNextStripProp
   const page = (by: 1 | -1) =>
     scroller.current?.scrollBy({ left: by * scroller.current.clientWidth * 0.8, behavior: "smooth" });
   const arrow =
-    "pressable focus-ring bg-veil text-on-veil absolute top-[3.75rem] z-10 hidden size-9 items-center justify-center rounded-full backdrop-blur-md md:flex";
+    "pressable focus-ring bg-veil text-on-veil absolute top-[3.75rem] md:top-20 z-10 hidden size-9 items-center justify-center rounded-full backdrop-blur-md md:flex";
   return (
     <div className="relative">
       <ul
@@ -61,7 +61,7 @@ export function UpNextStrip({ queue, menuFor, landed, dragFor }: UpNextStripProp
         data-strip
         aria-label="Up next"
         // A sideways swipe stays in the strip: it never pulls the page, or goes back in the browser's history.
-        className="no-scrollbar relative -mx-5 -my-2 flex snap-x snap-proximity scroll-px-5 gap-3 overflow-x-auto overscroll-x-contain px-5 py-2 md:mx-0 md:scroll-px-0 md:gap-4 md:px-0"
+        className="no-scrollbar relative -mx-5 -my-2 flex snap-x snap-proximity scroll-px-5 gap-3 overflow-x-auto overscroll-x-contain px-5 py-2 md:mx-0 md:scroll-px-0 md:gap-5 md:px-0"
       >
         <Reflow>
           {queue.map((item, index) => {
@@ -72,6 +72,7 @@ export function UpNextStrip({ queue, menuFor, landed, dragFor }: UpNextStripProp
               <MiniCard
                 key={item.id}
                 id={item.id}
+                gridScale
                 landing={landed?.(item)}
                 drag={dragFor?.(item)}
                 link={{ to: "/ideas/$ideaId", params: { ideaId: item.id } }}

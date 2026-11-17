@@ -46,6 +46,18 @@ node bench/wasm-node.mjs target/wasm32-unknown-unknown/release/spaghetti_slicer.
 
 A setup it can't slice yet (rafts, brim ears…) is refused by name; what it prints otherwise than asked (other infill patterns as straight lines…) it notes, on stderr natively and in the summary's `fallbacks` in WebAssembly. Without supports, it warns of each object that needs them as Orca does ("It seems object rack.stl has floating regions. Please re-orient the object or enable support generation."), on stderr natively and in the summary's `warnings` in WebAssembly, each with Orca's kind (`need_support_on`) and words. `tests/setups/` keeps one setup made this way, which the tests and CI slice.
 
+## Supports against Orca
+
+`supports.py` slices a model in each style of support (organic trees, with two walls, slim, strong and hybrid trees, normal, snug) as the app does, through `sweep.py`'s machinery, and compares ours with native Orca's plastic by feature and its estimate (the proposal's section 3, "Supports on the real models"). A model is named by its file in `--corpus`; the Benchy and the real models come from outside the repository:
+
+```sh
+python3 -I bench/supports.py --corpus <the models' folder> --only 3DBenchy.stl,Glasses_Steampunk_Ontaeder.stl --styles organic,slim
+python3 -I bench/supports.py --table
+python3 -I bench/support_layers.py out/supports/<case>/native.gcode out/supports/<case>/orca-out/plate_1.gcode 10   # plastic by height
+```
+
+`orca-hook/` reads Orca's own numbers while it slices: `hook.c` is an `LD_PRELOAD` tracer for the 2.5.1 aarch64 binary that logs a function's arguments (the trees' merges and tips, the overhangs it samples, `overlaps` calls: see its header), and `run_orca.sh` runs a case with it on one core. To compare, trace the same place in ours (a temporary `eprintln!`) and match the two by position: Orca's coordinates are nanometres about the plate's middle (128 mm), ours 0.1 µm. `orca-slicer --export-slicedata DIR` also writes each support layer's islands and exact paths.
+
 ## Several filaments
 
 A plate in several filaments needs a setup with that many (`"filaments": [{…}, {…}]`, as the app's `sliceSetup` makes for a project in colour) and each model's filament: a Bambu Studio or Orca project names each object's, `--filaments 1,2` gives each file one (1-based, in order), here and in `wasm-node.mjs` (the module's `add_in`). The filaments go on the X2D's nozzles as Orca groups them, or as `--filament-map 1,1` says (1 the left nozzle, 2 the right, as Orca's own `--filament-map`). Without a setup, the command line gives each filament the presets' and a stand-in colour. `bench/colour.py` writes the benchmark's plate, a block with an S cut through it and the S, as two STLs; `run.py` slices it on two nozzles (`colour`) and on one (`colour-one-nozzle`), and native Orca with the same two filaments (`--load-filament-ids`, `--filament-map-mode Manual`) and the tower where the app puts it:
