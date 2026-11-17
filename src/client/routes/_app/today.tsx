@@ -12,6 +12,7 @@ import { PageHeader } from "@/components/shell/PageHeader";
 import { BackBurner } from "@/components/today/BackBurner";
 import { InThePrinter } from "@/components/today/InThePrinter";
 import { Lately } from "@/components/today/Lately";
+import { NeedsYou } from "@/components/today/NeedsYou";
 import { PickUpAgain, pickUpAgain } from "@/components/today/PickUpAgain";
 import { Since } from "@/components/today/Since";
 import { UpNext, upNextIdeas } from "@/components/today/UpNext";
@@ -36,8 +37,6 @@ import { useStickyColumn } from "@/lib/sticky-column";
 import { useDueUpkeep } from "@/lib/upkeep";
 import { useNow } from "@/lib/use-now";
 
-const UpkeepLine = lazy(() => import("@/components/today/UpkeepLine"));
-const CommentsLine = lazy(() => import("@/components/today/CommentsLine"));
 const ScoutSection = lazy(() => import("@/components/scout/ScoutSection"));
 
 export const Route = createFileRoute("/_app/today")({
@@ -146,13 +145,7 @@ function Today() {
     <>
       <PageHeader title="Today" subtitle={subtitle} />
       <Since />
-      <div className="-mt-4 mb-6 empty:hidden">
-        {hasDueUpkeep && (
-          <Suspense fallback={null}>
-            <UpkeepLine />
-          </Suspense>
-        )}
-      </div>
+      <NeedsYou comments={!loading} upkeep={hasDueUpkeep} />
       {brandNew ? (
         <EmptyState
           illustration={<EmptyPot />}
@@ -166,30 +159,24 @@ function Today() {
           Capture an idea or start a build. What's printing and what to pick up next will show here.
         </EmptyState>
       ) : quiet ? (
-        <>
-          {/* Nothing on the bed is exactly when a new message from the other person is worth a line. */}
-          <div className="empty:hidden">
-            <Suspense fallback={null}>
-              <CommentsLine />
-            </Suspense>
-          </div>
-          <EmptyState
-            illustration={<SpoolStrand />}
-            title="All quiet in the kitchen"
-            action={
-              <Link to="/ideas" className="focus-ring rounded-md">
-                <Button variant="secondary" tabIndex={-1}>
-                  See the ideas
-                </Button>
-              </Link>
-            }
-          >
-            Nothing is printing and nothing is waiting. Pick an idea and put it on the bed.
-          </EmptyState>
-        </>
+        <EmptyState
+          illustration={<SpoolStrand />}
+          title="All quiet in the kitchen"
+          action={
+            <Link to="/ideas" className="focus-ring rounded-md">
+              <Button variant="secondary" tabIndex={-1}>
+                See the ideas
+              </Button>
+            </Link>
+          }
+        >
+          Nothing is printing and nothing is waiting. Pick an idea and put it on the bed.
+        </EmptyState>
       ) : (
         // On a phone the blocks run in one column in the order below (bed, up next, pick up, printer, month, back burner).
-        // From lg they sit in two columns; the wrappers vanish (display: contents) until then so `order` can mix them.
+        // From lg they sit in two columns, the prints and the scout's picks on the left, and the printer, Up next, Pick up
+        // again and the month in the sticky column on the right (a tall column of rows beside the cards, instead of a
+        // blank half page); the wrappers vanish (display: contents) until then so `order` can mix them.
         <div className="flex flex-col gap-10 lg:flex-row lg:items-start lg:gap-14">
           <div data-picks className="contents lg:flex lg:min-w-0 lg:flex-3 lg:flex-col lg:gap-10">
             <div className="order-1 empty:hidden">
@@ -218,14 +205,6 @@ function Today() {
                 </AnimatePresence>
               )}
             </div>
-            {/* Its own block right under what is on the bed, never above it: the print is the news, a comment a note. */}
-            <div className="order-1 empty:hidden">
-              {!loading && (
-                <Suspense fallback={null}>
-                  <CommentsLine />
-                </Suspense>
-              )}
-            </div>
             <div className="order-2 empty:hidden">
               {!loading && hasScoutPicks && (
                 <Suspense fallback={null}>
@@ -233,14 +212,14 @@ function Today() {
                 </Suspense>
               )}
             </div>
-            <div className="order-2 empty:hidden">{!loading && <UpNext ideas={ideas.items} />}</div>
-            <div className="order-3 empty:hidden">{!loading && <PickUpAgain builds={builds.items} />}</div>
             <div className="order-6 empty:hidden">
               {!loading && <BackBurner idea={burner} person={burner ? byId.get(burner.createdBy) : undefined} />}
             </div>
           </div>
           <div ref={stickyColumn} className="sticky-column contents lg:flex lg:min-w-0 lg:flex-2 lg:flex-col lg:gap-10">
-            <div className="order-4 empty:hidden">
+            <div className="order-2 empty:hidden lg:order-2">{!loading && <UpNext ideas={ideas.items} />}</div>
+            <div className="order-3 empty:hidden">{!loading && <PickUpAgain builds={builds.items} />}</div>
+            <div className="order-4 empty:hidden lg:order-1">
               {printer.data && spools.data && (
                 <InThePrinter setup={printer.data.setup} slots={printer.data.slots} spools={spools.data} />
               )}
