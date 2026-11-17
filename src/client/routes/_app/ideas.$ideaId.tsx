@@ -496,21 +496,15 @@ function Idea({ item }: { item: ItemView }) {
         {!isDesktop && (
           <ActionBar>
             {/* One primary: starting a build. Moving into an existing one is the quiet word beside it. */}
-            <Button
-              variant="quiet"
-              size="lg"
-              icon={MoveIntoIcon}
-              className="shrink-0"
-              disabled={readOnly}
-              onClick={move}
-            >
+            {/* Medium and with no icon, so "Start building" keeps its full pill (padding even on both sides) at 390. */}
+            <Button variant="quiet" className="shrink-0" disabled={readOnly} onClick={move}>
               Add to a build
             </Button>
             <Button
               variant="primary"
               size="lg"
               icon={BuildsIcon}
-              className="min-w-0 flex-1"
+              className="min-w-0 flex-1 px-4"
               disabled={readOnly}
               onClick={build}
             >
