@@ -1540,10 +1540,8 @@ mod tests {
         use crate::json::Json;
         use std::collections::BTreeMap;
         let precise = |pairs: &[(&str, &str)]| {
-            let process: BTreeMap<String, Json> = pairs
-                .iter()
-                .map(|(k, v)| (k.to_string(), Json::Array(vec![Json::String(v.to_string())])))
-                .collect();
+            let process: BTreeMap<String, Json> =
+                pairs.iter().map(|(k, v)| (k.to_string(), Json::Array(vec![Json::String(v.to_string())]))).collect();
             Settings::from_profile(Arc::new(Profile::over_x2d(BTreeMap::new(), process, BTreeMap::new())), None)
                 .precise_outer_wall
         };
