@@ -1232,7 +1232,11 @@ fn arachne_group(slice: &Shapes, loops: usize, last: bool, layer: usize, height:
                     while island.walls.len() <= line.inset_idx {
                         island.walls.push(Vec::new());
                     }
-                    island.walls[line.inset_idx].push(points[..points.len() - 1].to_vec());
+                    // Arachne's contours run clockwise round an outline and counter-clockwise round a hole; the seam
+                    // placer (and everything else reading `walls`) takes outlines counter-clockwise.
+                    let mut contour = points[..points.len() - 1].to_vec();
+                    contour.reverse();
+                    island.walls[line.inset_idx].push(contour);
                 }
                 island.lines.push(ArachneLine {
                     inset: line.inset_idx,
@@ -1342,6 +1346,25 @@ mod tests {
         let shown = regularise(&lens(10.0), &internal, spacing, None);
         let area = geom::area_mm2(&shown);
         assert!((area - 2.73).abs() < 0.02, "{area}");
+    }
+
+    #[test]
+    fn arachne_walls_go_counter_clockwise_round_an_outline_and_clockwise_round_a_hole() {
+        // The seam placer reads each outer wall's side from its direction (a hole's candidates are concave where
+        // an outline's are convex): Arachne's contours run the other way round, so they are turned.
+        let mut ring = square(0.0, 0.0, 20.0, 20.0);
+        let mut hole = square(5.0, 5.0, 15.0, 15.0).remove(0);
+        hole.reverse();
+        ring.push(hole);
+        let s = Settings { wall_generator: "arachne".into(), ..Settings::default() };
+        let islands = arachne_group(&vec![ring], 2, false, 5, 0.2, &s);
+        let walls = &islands[0].walls;
+        assert_eq!(walls.len(), 2, "two insets");
+        for inset in walls {
+            let outline = inset.iter().max_by_key(|c| geom::area2(c).abs()).unwrap();
+            let hole = inset.iter().min_by_key(|c| geom::area2(c).abs()).unwrap();
+            assert!(geom::area2(outline) > 0 && geom::area2(hole) < 0, "outline and hole turn opposite ways");
+        }
     }
 
     #[test]
