@@ -58,6 +58,8 @@ pub enum Pattern {
     OctagramSpiral,
     /// The edges of a stack of truncated octahedra, sliced at the layer (`Fill3DHoneycomb`, `honeycomb3d.rs`).
     Honeycomb3D,
+    /// Waves tracing the Schwarz diamond surface at the layer's height (`FillTpmsD`).
+    TpmsD,
 }
 
 impl Pattern {
@@ -81,6 +83,7 @@ impl Pattern {
             "hilbertcurve" => Some(Pattern::HilbertCurve),
             "octagramspiral" => Some(Pattern::OctagramSpiral),
             "3dhoneycomb" => Some(Pattern::Honeycomb3D),
+            "tpmsd" => Some(Pattern::TpmsD),
             "adaptivecubic" => Some(Pattern::AdaptiveCubic),
             "supportcubic" => Some(Pattern::SupportCubic),
             _ => None,
@@ -196,7 +199,7 @@ fn fill_part(part: &Shape, p: &Sparse) -> Vec<Vec<Pt>> {
         return Vec::new();
     }
     let lines: Vec<Vec<(f64, f64)>> = match p.pattern {
-        Pattern::Crosshatch | Pattern::Gyroid => return waves(part, p),
+        Pattern::Crosshatch | Pattern::Gyroid | Pattern::TpmsD => return waves(part, p),
         Pattern::Grid
         | Pattern::Cubic
         | Pattern::Triangles
@@ -365,9 +368,9 @@ fn adaptive(part: &Shape, p: &Sparse) -> Vec<Vec<Pt>> {
 
 /// Crosshatch and gyroid: their pattern in the object's frame, cut to the part, short bits dropped, joined.
 fn waves(part: &Shape, p: &Sparse) -> Vec<Vec<Pt>> {
-    // Orca turns the area by minus the angle (a float) about the object's centre; the gyroid by 45° less.
+    // Orca turns the area by minus the angle (a float) about the object's centre; the gyroid and TPMS-D by 45° less.
     let angle = match p.pattern {
-        Pattern::Gyroid => (p.angle.to_radians() as f32 as f64 + (-45f64).to_radians()) as f32 as f64,
+        Pattern::Gyroid | Pattern::TpmsD => (p.angle.to_radians() as f32 as f64 + (-45f64).to_radians()) as f32 as f64,
         _ => p.angle.to_radians() as f32 as f64,
     };
     let frame = Frame::new(p.origin, if angle.abs() < 1e-4 { 0.0 } else { angle });
@@ -380,6 +383,7 @@ fn waves(part: &Shape, p: &Sparse) -> Vec<Vec<Pt>> {
     }
     let pattern = match p.pattern {
         Pattern::Gyroid => gyroid(bb, p.z, p.spacing, p.density),
+        Pattern::TpmsD => tpms_d(bb, p.z, p.spacing, p.density),
         _ => crosshatch(bb, p.z, p.spacing, p.density),
     };
     let lines: Vec<Vec<(f64, f64)>> =
@@ -715,6 +719,82 @@ fn gyroid(bb: [i64; 4], z: f64, spacing: f64, density: f64) -> Vec<Vec<(f64, f64
     let grow = (spacing * 1e6).round() as i64;
     let bb = [bb[0] - grow, bb[1] - grow, bb[2] + grow, bb[3] + grow];
     gyroid_waves(z * 1e6, density_adjusted, spacing, bb, origin)
+}
+
+/// TPMS-D (Orca's `FillTpmsD`, its `make_waves`): where the Schwarz diamond surface sin x sin y sin z − cos x cos y
+/// cos z = 0 cuts the layer, as waves of `v = acos(a/b · cos u)` in coordinates turned by 45°, `a` and `b` from the
+/// height's sine and cosine (swapped where that keeps the root real), refined until each chord is within a tenth of a
+/// millimetre (or half a spacing) of the curve, repeated along the box and laid both ways round every 2π. The box
+/// (nm, in the frame) is aligned down to cells of 2π × the line distance; points are in the frame, nm.
+fn tpms_d(bb: [i64; 4], z: f64, spacing: f64, density: f64) -> Vec<Vec<(f64, f64)>> {
+    use std::f64::consts::TAU;
+    let density_adjusted = (density as f32 as f64 * 2.1).max(0.0);
+    if density_adjusted <= 0.0 {
+        return Vec::new();
+    }
+    let distance = (spacing / 0.000001 / density_adjusted) as i64;
+    let cell = (TAU * distance as f64).round() as i64;
+    if distance <= 0 || cell <= 0 {
+        return Vec::new();
+    }
+    let min = (align(bb[0], cell), align(bb[1], cell));
+    // Orca's sizes in whole distances (integer division) and one more.
+    let width = ((bb[2] - min.0) / distance) as f64 + 1.0;
+    let height = ((bb[3] - min.1) / distance) as f64 + 1.0;
+    let scale = (spacing / 0.000001) / density_adjusted;
+    let tolerance = (spacing / 2.0).min(0.1) / (scale * 0.000001);
+    let zz = (z / 0.000001) / scale;
+    let (mut a, mut b) = (libm::sin(zz) - libm::cos(zz), libm::sin(zz) + libm::cos(zz));
+    let (mut min_u, mut max_u, mut min_v, mut max_v) = (-height, width, 0.0, width + height);
+    let swap = a.abs() > b.abs();
+    if swap {
+        std::mem::swap(&mut a, &mut b);
+        std::mem::swap(&mut min_u, &mut min_v);
+        std::mem::swap(&mut max_u, &mut max_v);
+    }
+    let v = |u: f64| libm::acos(a / b * libm::cos(u));
+    // One period, refined where a chord's middle strays from the curve.
+    let mut wave: Vec<(f64, f64)> = (0..=16)
+        .map(|c| {
+            let u = min_u + 2.0 * std::f64::consts::PI * c as f64 / 16.0;
+            (u, v(u))
+        })
+        .collect();
+    let mut current = 0;
+    while current + 1 < wave.len() {
+        let ((u1, v1), (u2, v2)) = (wave[current], wave[current + 1]);
+        let middle_u = (u1 + u2) / 2.0;
+        let middle_v = v((u1 + u2) / 2.0);
+        if (middle_v - (v1 + v2) / 2.0).abs() > tolerance {
+            wave.insert(current + 1, (middle_u, middle_v));
+        } else {
+            current += 1;
+        }
+    }
+    // Repeated period by period (the first point is the last one's twin) until it passes the box.
+    let mut c = 1;
+    while c < wave.len() && wave[wave.len() - 1].0 < max_u {
+        let (u, v) = wave[c];
+        wave.push((u + TAU, v));
+        c += 1;
+    }
+    let mut out = Vec::new();
+    let mut shift = (min_v / TAU).floor() * TAU;
+    while shift < max_v + TAU {
+        for forward in [false, true] {
+            out.push(
+                wave.iter()
+                    .map(|&(u, v)| {
+                        let v = if forward { v } else { -v } + shift;
+                        let (x, y) = ((u + v) / 2.0, (v - u) / 2.0 * if swap { -1.0 } else { 1.0 });
+                        (((x * scale).round() + min.0 as f64), ((y * scale).round() + min.1 as f64))
+                    })
+                    .collect(),
+            );
+        }
+        shift += TAU;
+    }
+    out
 }
 
 fn gyroid_f(x: f64, z_sin: f64, z_cos: f64, vertical: bool, flip: bool) -> f64 {

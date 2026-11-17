@@ -1233,6 +1233,7 @@ impl Settings {
                 | "hilbertcurve"
                 | "octagramspiral"
                 | "3dhoneycomb"
+                | "tpmsd"
                 | ""
         ) {
             out.push(format!("{} sparse infill printed as rectilinear", self.sparse_infill_pattern));
