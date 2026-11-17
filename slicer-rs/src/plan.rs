@@ -729,9 +729,16 @@ fn island_paths(
             if bridge { s.bridge_flow(role == Role::InternalBridge, h).spacing } else { Settings::spacing(width, h) };
         let style = solid_style(role, s);
         // Orca keeps a monotonic region's lines in the order its fill makes them.
-        let sortable = style == SolidStyle::ZigZag;
+        let sortable = !matches!(style, SolidStyle::Monotonic { .. });
         for (part, angle) in parts {
             for shape in &into_walls(&part) {
+                if let SolidStyle::Curve(curve) = style {
+                    let lines = fill::surface_curve(shape, curve, spacing, (origin, size), s);
+                    let paths =
+                        lines.into_iter().map(|points| path(role, points, false, island, first, h, s)).collect();
+                    groups.push(Group { paths, sortable });
+                    continue;
+                }
                 if role == Role::SolidInfill
                     && s.narrow_solid_loops
                     && let Some((normal, narrow)) = solid::split_narrow(shape, spacing, angle.to_radians())
@@ -944,8 +951,12 @@ fn wall_order(walls: &[Vec<Contour>], start: Pt) -> Vec<(&Contour, usize, bool)>
 /// pattern each on its own), else zig-zag. Bridges are monotonic where the top surface pattern is.
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum SolidStyle {
-    Monotonic { connect: bool },
+    Monotonic {
+        connect: bool,
+    },
     ZigZag,
+    /// One of Orca's plane-path curves, on a top or bottom surface (`fill::surface_curve`).
+    Curve(crate::plane_path::Curve),
 }
 
 fn solid_style(role: Role, s: &Settings) -> SolidStyle {
@@ -958,9 +969,13 @@ fn solid_style(role: Role, s: &Settings) -> SolidStyle {
             _ => "rectilinear",
         },
     };
+    let surface = matches!(role, Role::TopSurface | Role::BottomSurface);
     match pattern {
         "monotonicline" => SolidStyle::Monotonic { connect: false },
         "monotonic" | "" => SolidStyle::Monotonic { connect: true },
+        "hilbertcurve" if surface => SolidStyle::Curve(crate::plane_path::Curve::Hilbert),
+        "archimedeanchords" if surface => SolidStyle::Curve(crate::plane_path::Curve::ArchimedeanChords),
+        "octagramspiral" if surface => SolidStyle::Curve(crate::plane_path::Curve::OctagramSpiral),
         _ => SolidStyle::ZigZag,
     }
 }
