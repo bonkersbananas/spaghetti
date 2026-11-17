@@ -32,6 +32,11 @@ interface MiniCardProps {
   sub?: string;
   /** Fill its cell on a phone (three across a grid) instead of the strip's fixed width. */
   fill?: boolean;
+  /**
+   * From md as wide as a column of the inbox's grid (three across, four from xl, `gap-5`), the picture 3:2 so the row
+   * stays shorter than a full card, and its title in `text-body`: a strip that sits above that grid (Up next on Ideas).
+   */
+  gridScale?: boolean;
   /** Laid over the photo's top-right corner (the card's menu button). A link can't hold a button, so it is a sibling. */
   corner?: ReactNode;
   landing?: boolean;
@@ -53,6 +58,7 @@ export function MiniCard({
   title,
   sub,
   fill,
+  gridScale,
   corner,
   landing,
   id,
@@ -67,7 +73,8 @@ export function MiniCard({
       {...useReflow(landing)}
       ref={ref}
       className={cn(
-        "group/mini relative shrink-0 snap-start list-none md:w-32 xl:w-44",
+        "group/mini relative shrink-0 snap-start list-none",
+        gridScale ? "md:w-[calc((100%-2.5rem)/3)] xl:w-[calc((100%-3.75rem)/4)]" : "md:w-32 xl:w-44",
         fill ? "w-full" : "w-26",
         className,
       )}
@@ -110,7 +117,13 @@ export function MiniCard({
           <div
             className={cn(
               "relative w-full overflow-hidden rounded-md",
-              photo || !note ? "aspect-square xl:aspect-[7/5]" : "min-h-[5.625rem] flex-1",
+              photo || !note
+                ? gridScale
+                  ? "aspect-square md:aspect-3/2 md:flex-1"
+                  : "aspect-square xl:aspect-[7/5]"
+                : gridScale
+                  ? "min-h-[5.625rem] flex-1 md:min-h-40"
+                  : "min-h-[5.625rem] flex-1",
             )}
           >
             {photo ? (
@@ -141,6 +154,7 @@ export function MiniCard({
                 <h3
                   className={cn(
                     "text-small line-clamp-2 min-h-[2lh] leading-snug break-words",
+                    gridScale && "md:text-body md:min-h-0",
                     // A note standing in for a title is set as on Card: plain Figtree, not a title.
                     title ? "text-ink font-semibold" : "text-ink font-sans font-medium",
                   )}

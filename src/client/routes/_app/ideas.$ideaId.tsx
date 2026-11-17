@@ -83,8 +83,8 @@ function IdeaDetail() {
       <DetailBar back={back} />
       {isPending || isBuild ? (
         <div className="flex flex-col gap-6 md:flex-row md:gap-10 lg:gap-14" aria-hidden>
-          <Skeleton className="-mx-5 aspect-4/3 w-[calc(100%+2.5rem)] rounded-none md:mx-0 md:w-auto md:flex-2 md:rounded-xl" />
-          <div className="flex flex-col gap-3 md:flex-3">
+          <Skeleton className="-mx-5 aspect-4/3 w-[calc(100%+2.5rem)] rounded-none md:mx-0 md:w-auto md:flex-2 lg:flex-4 md:rounded-xl" />
+          <div className="flex flex-col gap-3 md:flex-3 lg:flex-5">
             <Skeleton className="h-8 w-3/4" />
             <Skeleton className="h-4 w-full" />
             <Skeleton className="h-4 w-2/3" />
@@ -338,7 +338,7 @@ function Idea({ item }: { item: ItemView }) {
           where it was at the size it was, and the attempts take the side the text had. */}
         <div className={hero ? "flex flex-col gap-6 md:flex-row md:items-start md:gap-10 lg:gap-14" : "max-w-content"}>
           {hasPhotos && (
-            <div ref={stickyColumn} className="sticky-column flex flex-col gap-4 md:min-w-0 md:flex-2">
+            <div ref={stickyColumn} className="sticky-column flex flex-col gap-4 md:min-w-0 md:flex-2 lg:flex-4">
               <PhotoViewer
                 photos={photos}
                 index={selectedIndex}
@@ -355,13 +355,13 @@ function Idea({ item }: { item: ItemView }) {
             </div>
           )}
           {plate && (
-            <div ref={stickyColumn} className="sticky-column flex flex-col gap-4 md:min-w-0 md:flex-2">
+            <div ref={stickyColumn} className="sticky-column flex flex-col gap-4 md:min-w-0 md:flex-2 lg:flex-4">
               <PlateCover file={plate} alt={plateAlt({ title, note })} className="-mx-5 md:mx-0" />
               <AddFirstPhotos itemId={item.id} small />
             </div>
           )}
 
-          <div className="max-w-content flex min-w-0 flex-col gap-3 md:flex-3 md:pt-2">
+          <div className="max-w-content flex min-w-0 flex-col gap-3 md:flex-3 lg:flex-5 md:pt-2">
             {/* While Claude reads the page, the empty photo area and title hold their place with the quiet shimmer. */}
             {!hero && (reading ? <Skeleton className="mb-4 h-28 rounded-xl" /> : <AddFirstPhotos itemId={item.id} />)}
             {reading && !title.trim() ? (
@@ -495,7 +495,15 @@ function Idea({ item }: { item: ItemView }) {
         )}
         {!isDesktop && (
           <ActionBar>
-            <Button size="lg" icon={MoveIntoIcon} className="min-w-0 flex-1" disabled={readOnly} onClick={move}>
+            {/* One primary: starting a build. Moving into an existing one is the quiet word beside it. */}
+            <Button
+              variant="quiet"
+              size="lg"
+              icon={MoveIntoIcon}
+              className="shrink-0"
+              disabled={readOnly}
+              onClick={move}
+            >
               Add to a build
             </Button>
             <Button

@@ -4,7 +4,7 @@ import { attemptPartsLabel } from "@shared/parts";
 import { isOffTheBed } from "@shared/print-progress";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { AnimatePresence, m, useReducedMotion } from "motion/react";
-import { useRef } from "react";
+import { Fragment, useRef } from "react";
 import { AutoHeight } from "@/components/ui/AutoHeight";
 import { Avatar, ViaText } from "@/components/ui/Avatar";
 import { Button, IconButton } from "@/components/ui/Button";
@@ -89,9 +89,10 @@ const layouts = {
 
 /**
  * A print on the bed, big and warm: the build's picture, its name in Fraunces (the one card title that is,
- * because this is the screen's focal point), how far along it is, and a way to finish it. The card leads to
- * the build; Finish goes to the build with the attempt's sheet open. When the print should be done, the button
- * gives way to the question people came to answer: how did it go?
+ * because this is the screen's focal point), how far along it is, and one way to log it. The card leads to
+ * the build; while it prints, "How did it go?" (the build page's own question and words) goes to the build with
+ * the attempt's sheet open. When the print should be done, the button gives way to the outcomes themselves, one
+ * tap next to the printer, which open the sheet with that answer chosen.
  */
 export function PrintingCard({
   item,
@@ -289,7 +290,7 @@ export function PrintingCard({
             />
           ) : (
             <>
-              {/* At the card's foot, so cards side by side have their Finish buttons on one line. */}
+              {/* At the card's foot, so cards side by side have their "How did it go?" buttons on one line. */}
               <div className="flex flex-col gap-1.5 md:mt-auto">
                 <PrintProgress
                   startedAt={attempt.printedAt}
@@ -300,16 +301,16 @@ export function PrintingCard({
                 <div className="flex items-center justify-between gap-3">
                   <p
                     className={cn(
-                      "text-small tabular min-w-0",
+                      "text-small tabular min-w-0 flex-1",
                       progress.state === "due" ? "text-semolina-ink font-semibold" : "text-ink-soft",
                     )}
                   >
                     {/* "Layer 70 of 205 · 30 min left" breaks between its parts, never inside "30 min left". */}
-                    {progress.label.split(" · ").map((part, index, parts) => (
-                      <span key={part} className="whitespace-nowrap">
-                        {part}
-                        {index < parts.length - 1 ? " · " : ""}
-                      </span>
+                    {progress.label.split(" · ").map((part, index) => (
+                      <Fragment key={part}>
+                        {index > 0 && " · "}
+                        <span className="whitespace-nowrap">{part}</span>
+                      </Fragment>
                     ))}
                   </p>
                   <div className="pointer-events-auto flex shrink-0 items-center gap-1.5">
@@ -324,7 +325,7 @@ export function PrintingCard({
                     )}
                     {!due && (
                       <Button variant="secondary" size="sm" onClick={() => finish()} className="shrink-0">
-                        Finish
+                        How did it go?
                       </Button>
                     )}
                   </div>
