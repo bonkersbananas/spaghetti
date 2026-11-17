@@ -180,7 +180,21 @@ impl Frame {
     /// The printer's G-code for a timelapse photo after layer `index`, at `z`, taken at `spot` (mm on the plate, as
     /// `timelapse_position` picks it), or where the printer chooses when there is none (as Orca leaves it when its
     /// picker finds no spot).
+    /// The timelapse photo's G-code. With Orca's farthest-point timelapse (`farthest`) the photo moves no higher than
+    /// the layer, and `inline` takes it where the nozzle is, mid-path (`M971`, `M1004`).
     pub fn timelapse(&self, index: usize, z: f64, max_z: f64, spot: Option<[i64; 2]>) -> String {
+        self.photo(index, z, max_z, spot, false, false)
+    }
+
+    pub fn photo(
+        &self,
+        index: usize,
+        z: f64,
+        max_z: f64,
+        spot: Option<[i64; 2]>,
+        farthest: bool,
+        inline: bool,
+    ) -> String {
         let [x, y] = spot.unwrap_or([0, 0]);
         let mut own = Vars::default();
         own.int("layer_num", index as i64)
@@ -189,8 +203,8 @@ impl Frame {
             .int("timelapse_pos_x", x)
             .int("timelapse_pos_y", y)
             .bool("has_timelapse_safe_pos", spot.is_some())
-            .bool("timelapse_inline_photo", false)
-            .bool("farthest_point_timelapse_enabled", false)
+            .bool("timelapse_inline_photo", inline)
+            .bool("farthest_point_timelapse_enabled", farthest)
             .bool("clear_to_x0", false);
         self.fill("time_lapse_gcode", &own) + "\n"
     }
@@ -269,7 +283,16 @@ impl Frame {
 /// radius) and outside what lies between the camera (the plate's front left corner) and any object, the spot on
 /// the edge of what is left (sampled every 5 mm) nearest the objects' middle and farthest from the camera. None
 /// when nothing is left, as for Orca: the printer then picks its own spot.
-pub fn timelapse_position(objects: &[crate::Object], z: f64, bed: [f64; 2], clearance: f64) -> Option<[i64; 2]> {
+///
+/// With Orca's farthest-point timelapse, the spot nearest (in L1 distance) the layer's point farthest from the camera
+/// (`farthest`, mm) instead, unless the objects' middle is free.
+pub fn timelapse_position(
+    objects: &[crate::Object],
+    z: f64,
+    bed: [f64; 2],
+    clearance: f64,
+    farthest: Option<[f64; 2]>,
+) -> Option<[i64; 2]> {
     use crate::geom::{self, Contour, Pt, pt, sc};
     if objects.is_empty() {
         return None;
@@ -317,7 +340,11 @@ pub fn timelapse_position(objects: &[crate::Object], z: f64, bed: [f64; 2], clea
     } else {
         // A short way from the middle, and away from the camera (in L1 distances, as Orca measures them).
         let l1 = |a: Pt, b: Pt| (a.x as f64 - b.x as f64).abs() + (a.y as f64 - b.y as f64).abs();
-        let penalty = |p: Pt| l1(centre, p) - l1(pt(0, 0), p) / 3.0;
+        let far = farthest.map(|[x, y]| pt(sc(x), sc(y)));
+        let penalty = |p: Pt| match far {
+            Some(f) => l1(f, p),
+            None => l1(centre, p) - l1(pt(0, 0), p) / 3.0,
+        };
         let step = sc(5.0) as f64;
         let mut best: Option<(f64, Pt)> = None;
         for contour in free.iter().flatten() {
@@ -446,7 +473,7 @@ mod tests {
     #[test]
     fn the_timelapse_photo_is_taken_where_orcas_picker_takes_it() {
         // The benchmark's models where its STLs put them, and the spots native Orca 2.5.0 picked for every layer.
-        let at = |objects: &[crate::Object], z: f64| timelapse_position(objects, z, [256.0, 256.0], 60.0);
+        let at = |objects: &[crate::Object], z: f64| timelapse_position(objects, z, [256.0, 256.0], 60.0, None);
         let benchy = [object([97.9995, 112.498, 0.0], [158.0005, 143.502, 48.0])];
         assert_eq!(at(&benchy, 0.2), Some([131, 186]));
         assert_eq!(at(&benchy, 48.0), Some([131, 186]));

@@ -158,6 +158,8 @@ pub struct Job<'a> {
     pub objects: &'a [Object],
     /// Where the printer takes the timelapse photo after each layer (None: it picks its own spot).
     pub photos: &'a [Option<[i64; 2]>],
+    /// The objects Orca's timelapse picker steers round (one for each object, all its parts together).
+    pub photo_objects: &'a [Object],
     /// Where the start G-code leaves the nozzle.
     pub start: [f64; 3],
     /// The plate's filaments, their tool changes and prime tower, when it prints in several (`toolchange.rs`).
@@ -559,6 +561,10 @@ struct Builder<'a> {
     /// Whether the layer has moved the nozzle yet: until it does, Orca's writer takes it at the layer's height (its
     /// `change_layer`), whatever lift the layer before left it at, so a lift at once goes up from there.
     fresh: bool,
+    /// With Orca's farthest-point timelapse, the layer's point farthest from the camera and the photo taken there,
+    /// mid-path, the first time an extrusion ends within half a millimetre of it; and whether it was.
+    photo: Option<([f64; 2], String)>,
+    photo_taken: bool,
 }
 
 impl<'a> Builder<'a> {
@@ -867,6 +873,16 @@ impl<'a> Builder<'a> {
                 arc,
             };
             self.push(m);
+            if let Some((at, _)) = &self.photo
+                && (x - at[0]).hyp(y - at[1]) < 0.5
+                && let Some((_, text)) = self.photo.take()
+            {
+                // Orca's `check_and_insert_timelapse`: the photo where the nozzle is, after which its writer no
+                // longer knows where that is.
+                self.note(Note::Text(text));
+                self.known = false;
+                self.photo_taken = true;
+            }
         }
         self.wipe = Some((path, written / 60.0));
         self.speed = written / 60.0;
@@ -1226,6 +1242,10 @@ fn build_layer<'a>(
     // In spiral vase mode the nozzle comes from where the layer before ended, neither retracted nor lifted: Orca
     // turns off retracting at layer changes there, and moves up to the layer's height at once.
     let course = plan.course.as_ref();
+    // Orca's farthest-point timelapse, here with one filament, the layer's photo taken where the nozzle passes the
+    // point farthest from the camera, else after the layer at a spot near that point.
+    let farthest =
+        if s.farthest_photo && job.colours.is_none() && course.is_none() { farthest_point(plan) } else { None };
     let (x0, y0) = match course {
         Some(c) => (c.from[0], c.from[1]),
         None => layer_start(plan).map(|[x, y]| (x, y)).unwrap_or((job.start[0], job.start[1])),
@@ -1249,11 +1269,14 @@ fn build_layer<'a>(
         prior: 0.0,
         overhang: crate::plan::overhang_flow(first_layer, plan.height, s),
         // Orca's writer knows where the nozzle is when the layer starts unless the layer before took its timelapse
-        // photo last (after its paths: always with one filament), or this is the first layer (after the start G-code).
-        known: i > 0 && job.colours.is_some_and(|c| c.photo_in_layer(i - 1)),
+        // photo last (after its paths: with one filament, unless it took it mid-path, before the travels that came
+        // after), or this is the first layer (after the start G-code).
+        known: i > 0 && (job.colours.is_some_and(|c| c.photo_in_layer(i - 1)) || farthest.is_some()),
         lost: false,
         change_from: (x0, y0),
         fresh: true,
+        photo: farthest.map(|at| (at, layer_photo(plan, job, None, true, true))),
+        photo_taken: false,
     };
     if course.is_some() {
         b.line(x0, y0, plan.z, 0.0, s.travel_speed, Kind::Lift);
@@ -1307,7 +1330,9 @@ fn build_layer<'a>(
     let mut next_visit = 0;
     let mut photo_taken = false;
     let mut open_label: Option<u32> = None;
-    let photo_note = |b: &Builder| -> Note { Note::Text(layer_photo(plan, job, b.z)) };
+    let photo_note = |_: &Builder| -> Note {
+        Note::Text(layer_photo(plan, job, job.photos.get(i).copied().flatten(), false, false))
+    };
     for (k, path) in plan.paths.iter().enumerate() {
         while let Some(colours) = job.colours
             && let Some(visit) = plan.visits.get(next_visit).filter(|v| v.at == k)
@@ -1524,8 +1549,21 @@ fn build_layer<'a>(
     } else if let Some(o) = open_label.take() {
         b.note(Note::LabelEnd(o));
     }
-    if !photo_taken {
-        b.note(Note::Text(layer_photo(plan, job, plan.z)));
+    if !photo_taken && !b.photo_taken {
+        let photo = match farthest {
+            Some(at) => {
+                let spot = crate::bambu::timelapse_position(
+                    job.photo_objects,
+                    plan.z,
+                    s.bed,
+                    s.extruder_clearance_radius,
+                    Some(at),
+                );
+                layer_photo(plan, job, spot, true, false)
+            }
+            None => layer_photo(plan, job, job.photos.get(i).copied().flatten(), false, false),
+        };
+        b.note(Note::Text(photo));
     }
     let Some(course) = course else { return (b.moves, b.notes, None) };
     let mut turned = None;
@@ -1569,11 +1607,42 @@ fn layer_start(plan: &LayerPlan) -> Option<[f64; 2]> {
     plan.paths.first().map(|p| [geom::unsc(p.points[0].x), geom::unsc(p.points[0].y)])
 }
 
-/// The timelapse photo after the layer, which the printer skips with the layer's objects when all of them are skipped.
-fn layer_photo(plan: &LayerPlan, job: &Job, _z: f64) -> String {
+/// The point of the layer farthest from the camera (the plate's corner), as Orca's farthest-point timelapse finds it
+/// (`GCode::compute_farthest_point`): on its outer walls, but not where they hang over (Orca's overhang walls), else
+/// on its sparse, solid and top infill and its supports; the first of equals; none on the plate's corner.
+fn farthest_point(plan: &LayerPlan) -> Option<[f64; 2]> {
+    let mut best = [(0i64, None::<Pt>); 2];
+    for path in &plan.paths {
+        let k = match path.role {
+            Role::OuterWall => 0,
+            Role::SparseInfill | Role::SolidInfill | Role::TopSurface | Role::Support | Role::SupportInterface => 1,
+            _ => continue,
+        };
+        let n = path.points.len();
+        let hangs = |j: usize| path.parts.get(j).is_some_and(|q| q.overhang);
+        for (j, p) in path.points.iter().enumerate() {
+            // A point only overhang stretches meet is the overhang wall's.
+            let (before, after) = (j > 0 && hangs(j - 1), j + 1 < n && hangs(j));
+            if k == 0 && (before || after) && (j == 0 || before) && (j + 1 == n || after) {
+                continue;
+            }
+            let d = i64::from(p.x) * i64::from(p.x) + i64::from(p.y) * i64::from(p.y);
+            if d > best[k].0 {
+                best[k] = (d, Some(*p));
+            }
+        }
+    }
+    let p = best[0].1.or(best[1].1)?;
+    Some([geom::unsc(p.x), geom::unsc(p.y)])
+}
+
+/// The timelapse photo after the layer, at `spot` (none: the printer picks its own), which the printer skips with the
+/// layer's objects when all of them are skipped; with Orca's farthest-point timelapse (`farthest`), and `inline`,
+/// taken mid-path where the nozzle is.
+fn layer_photo(plan: &LayerPlan, job: &Job, spot: Option<[i64; 2]>, farthest: bool, inline: bool) -> String {
     let i = plan.index;
     let labels = job.labels();
-    let mut photo = job.frame.timelapse(i, plan.z, plan.z, job.photos.get(i).copied().flatten());
+    let mut photo = job.frame.photo(i, plan.z, plan.z, spot, farthest, inline);
     let mut printed: Vec<u32> =
         plan.paths.iter().map(|p| job.objects.get(p.object as usize).map_or(0, |o| o.label)).collect();
     printed.sort_unstable();
@@ -3307,6 +3376,69 @@ mod tests {
         assert!(retracts(&hanging, &sparse, 16.0, p(2.0, 2.0), p(18.0, 2.0), &internal, &s));
     }
 
+    fn line(role: Role, points: &[(f64, f64)]) -> Path {
+        Path {
+            role,
+            points: points.iter().map(|&(x, y)| geom::pt(geom::sc(x), geom::sc(y))).collect(),
+            closed: false,
+            width: 0.42,
+            height: 0.2,
+            mm3_per_mm: 0.08,
+            speed: 100.0,
+            accel: 1000.0,
+            island: 0,
+            object: 0,
+            parts: Vec::new(),
+            arcs: Vec::new(),
+        }
+    }
+
+    /// The farthest-point timelapse aims at the outer walls' point farthest from the plate's corner, not where they
+    /// hang over (Orca's overhang walls), and at the infill only on a layer without outer walls.
+    #[test]
+    fn the_photo_aims_at_the_outer_walls_point_farthest_from_the_camera() {
+        let mut outer = line(Role::OuterWall, &[(100.0, 100.0), (120.0, 100.0), (130.0, 130.0), (110.0, 120.0)]);
+        let infill = line(Role::SparseInfill, &[(150.0, 150.0), (151.0, 150.0)]);
+        let mut plan = LayerPlan {
+            index: 3,
+            id: 3,
+            z: 0.8,
+            height: 0.2,
+            header_height: 0.2,
+            paths: vec![infill.clone(), outer.clone()],
+            support_islands: Vec::new(),
+            visits: Vec::new(),
+            spiral: false,
+            course: None,
+        };
+        assert_eq!(farthest_point(&plan), Some([130.0, 130.0]));
+        // The stretches on from (120, 100) hang over: of the points left, the one the plain stretch shares with them.
+        outer.parts = vec![
+            Part { overhang: false, speed: 100.0 },
+            Part { overhang: true, speed: 50.0 },
+            Part { overhang: true, speed: 50.0 },
+        ];
+        plan.paths = vec![infill.clone(), outer];
+        assert_eq!(farthest_point(&plan), Some([120.0, 100.0]));
+        plan.paths = vec![infill];
+        assert_eq!(farthest_point(&plan), Some([151.0, 150.0]));
+    }
+
+    /// The photo goes in after the first extrusion that ends within half a millimetre of the point, once.
+    #[test]
+    fn the_photo_is_taken_where_an_extrusion_first_ends_near_the_point() {
+        let s = Settings::default();
+        let mut b = builder(&s);
+        b.photo = Some(([10.0, 0.3], "PHOTO".into()));
+        let wall = line(Role::InnerWall, &[(0.0, 0.0), (5.0, 0.0), (10.0, 0.0), (10.2, 0.0), (15.0, 0.0)]);
+        b.extrude(&wall);
+        b.extrude(&wall);
+        let photos: Vec<usize> =
+            b.notes.iter().filter(|(_, n)| matches!(n, Note::Text(t) if t == "PHOTO")).map(|(k, _)| *k).collect();
+        assert_eq!(photos, vec![2]);
+        assert!(b.photo_taken && !b.known);
+    }
+
     /// A builder on a 0.2 mm layer at the plate's origin, an overhang wall 0.4 mm wide at 50 mm/s.
     fn builder(s: &Settings) -> Builder<'_> {
         Builder {
@@ -3331,6 +3463,8 @@ mod tests {
             lost: false,
             change_from: (0.0, 0.0),
             fresh: false,
+            photo: None,
+            photo_taken: false,
         }
     }
 

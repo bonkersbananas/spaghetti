@@ -238,6 +238,10 @@ pub struct Settings {
     /// printer has G-code for it (`wrapping_detection_gcode`), which Orca writes there.
     pub wrapping_detection: bool,
     pub wrapping_gcode: bool,
+    /// Orca's farthest-point timelapse (`farthest_point_timelapse`, with a traditional timelapse on a printer that
+    /// isn't an i3): each layer's photo where the nozzle passes the point of the layer farthest from the camera
+    /// (`gcode.rs`), or at a spot near it.
+    pub farthest_photo: bool,
     /// With wrapping detection, the first layers that print a prime tower whatever they print
     /// (`wrapping_detection_layers`).
     pub wrapping_layers: usize,
@@ -1046,6 +1050,9 @@ impl Settings {
                 None
             },
             wrapping_detection: p.bool("enable_wrapping_detection"),
+            farthest_photo: p.bool("farthest_point_timelapse")
+                && matches!(p.text("timelapse_type"), "0" | "")
+                && p.text("printer_structure") != "i3",
             wrapping_gcode: !p.text("wrapping_detection_gcode").is_empty(),
             wrapping_layers: p.int("wrapping_detection_layers").max(0) as usize,
             used_filaments: 0,

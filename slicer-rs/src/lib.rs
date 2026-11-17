@@ -831,6 +831,7 @@ impl Plate {
             frame: &frame,
             objects: &objects,
             photos: &photos,
+            photo_objects: &group_objects,
             start: frame.start_position(),
             colours: colours.as_ref(),
             lift_overhangs: &lift_overhangs,
@@ -1079,7 +1080,7 @@ fn timelapse_spots(objects: &[Object], zs: &[f64], s: &Settings) -> Vec<Option<[
         let standing: Vec<bool> = objects.iter().map(|o| (o.min[2] as i64) <= at && at <= (o.max[2] as i64)).collect();
         let spot = match &last {
             Some((before, spot)) if *before == standing => *spot,
-            _ => bambu::timelapse_position(objects, z, s.bed, s.extruder_clearance_radius),
+            _ => bambu::timelapse_position(objects, z, s.bed, s.extruder_clearance_radius, None),
         };
         spots.push(spot);
         last = Some((standing, spot));
