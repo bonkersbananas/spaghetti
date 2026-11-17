@@ -227,6 +227,8 @@ pub struct Settings {
     /// Ironing over top surfaces (`ironing_*`, Orca's `make_ironing`).
     pub iron: Ironing,
     pub fuzzy_skin: String,
+    /// Fuzzy skin (`fuzzy_skin_*`, Orca's `FuzzySkin.cpp`).
+    pub fuzzy: Fuzzy,
     /// How the nozzle lifts on a retraction (`z_hop_types`, the filament's own first).
     pub z_hop_type: String,
 
@@ -377,6 +379,108 @@ impl Ironing {
 
     pub fn on(&self) -> bool {
         self.surfaces != IronWhere::Nowhere
+    }
+}
+
+/// Which walls get fuzzy skin (`fuzzy_skin`).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum FuzzyWalls {
+    #[default]
+    None,
+    /// The outer wall round each outline (`external`).
+    Contours,
+    /// The outer wall round each hole (`hole`).
+    Holes,
+    /// The outer walls, round outlines and holes (`all`).
+    Outer,
+    /// Every wall (`allwalls`).
+    All,
+}
+
+/// The noise that moves fuzzy skin's points (`fuzzy_skin_noise_type`).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum FuzzyNoise {
+    /// Uniform random noise (`classic`).
+    #[default]
+    Classic,
+    Perlin,
+    Billow,
+    RidgedMulti,
+    Voronoi,
+    /// A sine wave along each loop (`ripple`).
+    Ripple,
+}
+
+/// Fuzzy skin as Orca 2.5.1 reads it (its `FuzzySkinConfig`). Its `fuzzy_skin_mode` only changes Arachne's walls.
+#[derive(Clone, Debug, Default)]
+pub struct Fuzzy {
+    pub walls: FuzzyWalls,
+    /// mm each point moves at most (`fuzzy_skin_thickness`), and about how far apart the points are
+    /// (`fuzzy_skin_point_distance`).
+    pub thickness: f64,
+    pub point_distance: f64,
+    /// Whether the first layer is fuzzy too (`fuzzy_skin_first_layer`).
+    pub first_layer: bool,
+    pub noise: FuzzyNoise,
+    /// mm: the coherent noises' feature size (`fuzzy_skin_scale`), octaves (`fuzzy_skin_octaves`) and persistence
+    /// (`fuzzy_skin_persistence`).
+    pub scale: f64,
+    pub octaves: i32,
+    pub persistence: f64,
+    /// Ripples: waves round each loop (`fuzzy_skin_ripples_per_layer`), the share of a wave they shift by
+    /// (`fuzzy_skin_ripple_offset`, percent) every so many layers (`fuzzy_skin_layers_between_ripple_offset`).
+    pub ripples_per_layer: i64,
+    pub ripple_offset: f64,
+    pub layers_between_ripple_offset: i64,
+}
+
+impl Fuzzy {
+    fn read(p: &Profile) -> Fuzzy {
+        Fuzzy {
+            walls: match p.text("fuzzy_skin") {
+                "external" => FuzzyWalls::Contours,
+                "hole" => FuzzyWalls::Holes,
+                "all" => FuzzyWalls::Outer,
+                "allwalls" => FuzzyWalls::All,
+                _ => FuzzyWalls::None,
+            },
+            thickness: p.float("fuzzy_skin_thickness"),
+            // At least Orca's minimum (0.01 mm): without one, a walk along the loop would never advance.
+            point_distance: p.float("fuzzy_skin_point_distance").max(0.01),
+            first_layer: p.bool("fuzzy_skin_first_layer"),
+            noise: match p.text("fuzzy_skin_noise_type") {
+                "perlin" => FuzzyNoise::Perlin,
+                "billow" => FuzzyNoise::Billow,
+                "ridgedmulti" => FuzzyNoise::RidgedMulti,
+                "voronoi" => FuzzyNoise::Voronoi,
+                "ripple" => FuzzyNoise::Ripple,
+                _ => FuzzyNoise::Classic,
+            },
+            scale: p.float("fuzzy_skin_scale"),
+            octaves: p.int("fuzzy_skin_octaves") as i32,
+            persistence: p.float("fuzzy_skin_persistence"),
+            ripples_per_layer: p.int("fuzzy_skin_ripples_per_layer"),
+            ripple_offset: p.float("fuzzy_skin_ripple_offset"),
+            layers_between_ripple_offset: p.int("fuzzy_skin_layers_between_ripple_offset"),
+        }
+    }
+
+    pub fn on(&self) -> bool {
+        self.walls != FuzzyWalls::None
+    }
+
+    /// Orca's `should_fuzzify`: whether the loop at `depth` (0 the outer wall) round an outline (`contour`) or a hole
+    /// is fuzzy on layer `layer_id` (Orca's id, counting a raft's layers).
+    pub fn fuzzes(&self, layer_id: usize, depth: usize, contour: bool) -> bool {
+        if !self.on() || (!self.first_layer && layer_id == 0) {
+            return false;
+        }
+        let w = self.walls;
+        if contour {
+            (depth == 0 && w != FuzzyWalls::Holes) || w == FuzzyWalls::All
+        } else {
+            matches!(w, FuzzyWalls::Holes | FuzzyWalls::Outer | FuzzyWalls::All) && (depth == 0 || w == FuzzyWalls::All)
+        }
     }
 }
 
@@ -878,6 +982,7 @@ impl Settings {
             ironing_type: text("ironing_type"),
             iron: Ironing::read(p),
             fuzzy_skin: text("fuzzy_skin"),
+            fuzzy: Fuzzy::read(p),
             z_hop_type,
 
             outer_wall_speed: at("outer_wall_speed"),
@@ -1136,9 +1241,6 @@ impl Settings {
         }
         if self.iron.on() && self.iron.concentric {
             out.push("concentric ironing printed as lines".into());
-        }
-        if !matches!(self.fuzzy_skin.as_str(), "disabled_fuzzy" | "none" | "") {
-            out.push("no fuzzy skin".into());
         }
         if matches!(self.seam_position.as_str(), "nearest" | "random") && !self.spiral_mode {
             out.push(format!("{} seams placed as aligned ones", self.seam_position));
