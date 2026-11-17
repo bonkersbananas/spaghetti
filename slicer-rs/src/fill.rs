@@ -51,6 +51,11 @@ pub enum Pattern {
     Rectilinear,
     /// Rectilinear's lines, the same way on every layer (`FillAlignedRectilinear`).
     AlignedRectilinear,
+    /// One curve over the whole object, the same on every layer (`FillPlanePath`, `plane_path.rs`): a spiral of
+    /// chords, a Hilbert curve, or eight-pointed stars.
+    ArchimedeanChords,
+    HilbertCurve,
+    OctagramSpiral,
 }
 
 impl Pattern {
@@ -70,6 +75,9 @@ impl Pattern {
             // "zigzag", not ported).
             "rectilinear" | "zig-zag" => Some(Pattern::Rectilinear),
             "alignedrectilinear" => Some(Pattern::AlignedRectilinear),
+            "archimedeanchords" => Some(Pattern::ArchimedeanChords),
+            "hilbertcurve" => Some(Pattern::HilbertCurve),
+            "octagramspiral" => Some(Pattern::OctagramSpiral),
             "adaptivecubic" => Some(Pattern::AdaptiveCubic),
             "supportcubic" => Some(Pattern::SupportCubic),
             _ => None,
@@ -103,6 +111,10 @@ pub struct Sparse<'a> {
     pub octree: Option<&'a crate::adaptive::Octree>,
     /// Lateral lattice's two angles, degrees from upright.
     pub lattice_angles: [f64; 2],
+    /// The object's size across the plate (x, y, mm), over which the plane-path patterns lay their curve.
+    pub size: (f64, f64),
+    /// mm: how far the Archimedean chords may stray from the spiral (the profile's `resolution`).
+    pub resolution: f64,
 }
 
 /// The infill of `area`, each of its shapes grown by `grow` mm first (Orca's overlap with the walls, less half a
@@ -153,6 +165,8 @@ pub fn support_grid(shape: &Shape, angle: f64, origin: (f64, f64), spacing: f64,
         trees: &[],
         octree: None,
         lattice_angles: [0.0; 2],
+        size: (0.0, 0.0),
+        resolution: 0.0,
     };
     // Orca's box is the shape's own here: its support filler has no overlap with walls.
     let lines = multilines_across(&shape[0], 0, angle as f32, &p);
@@ -189,6 +203,9 @@ fn fill_part(part: &Shape, p: &Sparse) -> Vec<Vec<Pt>> {
         }
         Pattern::AdaptiveCubic | Pattern::SupportCubic => return adaptive(part, p),
         Pattern::Rectilinear | Pattern::AlignedRectilinear => unreachable!("filled by `rectilinear`"),
+        Pattern::ArchimedeanChords => return plane_path(part, crate::plane_path::Curve::ArchimedeanChords, p),
+        Pattern::HilbertCurve => return plane_path(part, crate::plane_path::Curve::Hilbert, p),
+        Pattern::OctagramSpiral => return plane_path(part, crate::plane_path::Curve::OctagramSpiral, p),
     };
     let grid = EdgeGrid::new(part, 2.0 * geom::SCALE, 0.0);
     let pieces: Vec<Piece> = clip(&lines, &grid).into_iter().filter(|c| c.points.len() >= 2).collect();
@@ -244,6 +261,37 @@ fn rectilinear(area: &Shapes, grow: f64, p: &Sparse) -> Vec<Contour> {
         }
     }
     out
+}
+
+/// The plane-path patterns (`plane_path.rs`): the curve in the object's frame, turned by the infill direction and a
+/// quarter (Orca's `_infill_direction`, which never alternates for them), cut to the part, then joined along the edge
+/// (only chained above half density, as Orca does).
+fn plane_path(part: &Shape, curve: crate::plane_path::Curve, p: &Sparse) -> Vec<Vec<Pt>> {
+    let angle = (p.angle.to_radians() as f32 + std::f32::consts::FRAC_PI_2) as f64;
+    let frame = Frame::new(p.origin, angle);
+    // The part's box in the frame, its points rounded to nanometres as Orca turns them.
+    let mut bb = [i64::MAX, i64::MAX, i64::MIN, i64::MIN];
+    for &q in &part[0] {
+        let (x, y) = frame.to(q);
+        let (x, y) = (x.round() as i64, y.round() as i64);
+        bb = [bb[0].min(x), bb[1].min(y), bb[2].max(x), bb[3].max(y)];
+    }
+    // Orca's object size in whole nanometres.
+    let size = ((p.size.0 * 1e6) as i64, (p.size.1 * 1e6) as i64);
+    let points = crate::plane_path::curve(curve, bb, size, angle, (p.spacing, p.density), p.resolution);
+    if points.len() < 2 {
+        return Vec::new();
+    }
+    let line: Vec<(f64, f64)> = points.into_iter().map(|(x, y)| frame.from((x as f64, y as f64))).collect();
+    let grid = EdgeGrid::new(part, 2.0 * geom::SCALE, 0.0);
+    let pieces: Vec<Piece> = clip(&[line], &grid).into_iter().filter(|c| c.points.len() >= 2).collect();
+    if pieces.is_empty() {
+        return Vec::new();
+    }
+    if p.anchor_max < 0.05 || p.density > 0.5 {
+        return pieces.into_iter().map(|c| c.points).collect();
+    }
+    connect(pieces, part, p.spacing * geom::SCALE, p.anchor.min(p.anchor_max) * geom::SCALE, p.anchor_max * geom::SCALE)
 }
 
 /// Adaptive and support cubic (Orca's `FillAdaptive::Filler`): the octree's lines on the layer, cut to the part,
@@ -2067,6 +2115,8 @@ mod tests {
             trees: &[],
             octree: None,
             lattice_angles: [-45.0, 45.0],
+            size: (0.0, 0.0),
+            resolution: 0.0125,
         }
     }
 
