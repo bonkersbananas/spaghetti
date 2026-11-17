@@ -794,41 +794,8 @@ fn island_paths(
         }
     }
 
-    // The infill and gap fill as Orca's `extrude_infill` prints them: chained from where the walls end, each
-    // collection that may be re-sorted chained again from where the nozzle is when it starts.
-    groups.retain(|g| !g.paths.is_empty());
-    let mut at: Option<Pt> = out.last().and_then(|p| p.points.last().copied());
-    let ends: Vec<(Pt, Pt)> =
-        groups.iter().map(|g| (g.paths[0].points[0], *g.paths[g.paths.len() - 1].points.last().unwrap())).collect();
-    let reversible: Vec<bool> = groups.iter().map(|g| g.sortable).collect();
-    let chained = order::chain(&ends, &reversible, at, true);
-    let mut groups: Vec<Option<Group>> = groups.into_iter().map(Some).collect();
-    for (k, flip) in chained {
-        let Some(mut g) = groups[k].take() else { continue };
-        if flip {
-            g.paths.reverse();
-            for p in &mut g.paths {
-                p.reverse();
-            }
-        }
-        if g.sortable && g.paths.len() > 1 {
-            let ends: Vec<(Pt, Pt)> = g.paths.iter().map(|p| (p.points[0], *p.points.last().unwrap())).collect();
-            let order = order::chain(&ends, &vec![true; ends.len()], at, true);
-            let mut taken: Vec<Option<Path>> = g.paths.into_iter().map(Some).collect();
-            g.paths = order
-                .into_iter()
-                .filter_map(|(i, back)| {
-                    let mut p = taken[i].take()?;
-                    if back {
-                        p.reverse();
-                    }
-                    Some(p)
-                })
-                .collect();
-        }
-        at = g.paths.last().and_then(|p| p.points.last().copied());
-        out.extend(g.paths);
-    }
+    let at = out.last().and_then(|p| p.points.last().copied());
+    out.extend(chain_infill(groups, at));
     // Ironing last (`ironing.rs`), as Orca's `extrude_infill` irons an island once everything else is printed: each
     // area's lines in the order they were filled, the areas chained from where the nozzle is.
     if !fills.ironing.is_empty() {
@@ -870,6 +837,40 @@ fn island_paths(
             };
             p.speed = speed.min(s.speed_cap(p.mm3_per_mm));
         }
+    }
+    out
+}
+
+/// The infill and gap fill as Orca's `extrude_infill` prints them, chained from `at`, where the walls end. A
+/// collection that may be re-sorted joins the chain path by path (`Island::Region::append` adds its entities one by
+/// one), so a region's sparse lines chain with the solid infill beside them; one printed in its own order (a
+/// monotonic fill's lines) joins whole, and isn't turned round.
+fn chain_infill(groups: Vec<Group>, at: Option<Pt>) -> Vec<Path> {
+    let mut entries: Vec<Group> = Vec::new();
+    for g in groups {
+        if g.paths.is_empty() {
+            continue;
+        }
+        if g.sortable {
+            entries.extend(g.paths.into_iter().map(|p| Group { paths: vec![p], sortable: true }));
+        } else {
+            entries.push(g);
+        }
+    }
+    let ends: Vec<(Pt, Pt)> =
+        entries.iter().map(|g| (g.paths[0].points[0], *g.paths[g.paths.len() - 1].points.last().unwrap())).collect();
+    let reversible: Vec<bool> = entries.iter().map(|g| g.sortable).collect();
+    let mut entries: Vec<Option<Group>> = entries.into_iter().map(Some).collect();
+    let mut out = Vec::new();
+    for (k, flip) in order::chain(&ends, &reversible, at, true) {
+        let Some(mut g) = entries[k].take() else { continue };
+        if flip {
+            g.paths.reverse();
+            for p in &mut g.paths {
+                p.reverse();
+            }
+        }
+        out.extend(g.paths);
     }
     out
 }
@@ -1800,5 +1801,40 @@ mod tests {
         let chord = geom::dist(start, path.points[path.points.len() - 1]) / geom::SCALE;
         assert!((chord - 0.5).abs() < 0.01, "{chord}");
         assert!((whole - printed(&path) - 0.5).abs() < 0.01, "{} of {whole} mm", printed(&path));
+    }
+
+    /// A region's sparse lines chain one by one with the monotonic solid infill beside them, as Orca's islands take
+    /// them: from the walls' end the near sparse line, the solid block (whole, the way it was filled), then the
+    /// sparse line beyond it.
+    #[test]
+    fn sparse_lines_chain_one_by_one_round_a_monotonic_block() {
+        let s = Settings::default();
+        let mm = |p: (f64, f64)| geom::pt(geom::sc(p.0), geom::sc(p.1));
+        let line = |role: Role, a: (f64, f64), b: (f64, f64)| path(role, vec![mm(a), mm(b)], false, 0, false, 0.2, &s);
+        let sparse = Group {
+            paths: vec![
+                line(Role::SparseInfill, (0.0, 0.0), (0.0, 10.0)),
+                line(Role::SparseInfill, (30.0, 10.0), (30.0, 0.0)),
+            ],
+            sortable: true,
+        };
+        let solid = Group {
+            paths: vec![
+                line(Role::SolidInfill, (20.0, 10.0), (10.0, 10.0)),
+                line(Role::SolidInfill, (10.0, 11.0), (20.0, 11.0)),
+            ],
+            sortable: false,
+        };
+        let out = chain_infill(vec![sparse, solid], Some(mm((0.0, -1.0))));
+        let starts: Vec<(Role, Pt)> = out.iter().map(|p| (p.role, p.points[0])).collect();
+        assert_eq!(
+            starts,
+            vec![
+                (Role::SparseInfill, mm((0.0, 0.0))),
+                (Role::SolidInfill, mm((20.0, 10.0))),
+                (Role::SolidInfill, mm((10.0, 11.0))),
+                (Role::SparseInfill, mm((30.0, 10.0))),
+            ]
+        );
     }
 }
