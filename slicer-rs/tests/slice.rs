@@ -3679,6 +3679,80 @@ fn a_layers_last_retraction_follows_the_next_layers_header_when_its_photo_came_b
     assert!(deferred >= 10, "{deferred} layers");
 }
 
+/// Orca's cooling reads a layer's time from all of its G-code on a plate in several filaments, the prime tower's and
+/// the tool change's too (from the layer's first extrusion), and sets each filament's fans as it takes over. Two bridge
+/// models (two pillars, a slab over them, a post on it) in two filaments that cool by layer time as the app's PETG
+/// does, with the tower: native Orca 2.5.1 (Nov 17) runs the fan at 102 to 227 of 255 from the fourth layer, never at
+/// the maximum (229) but over the bridges and overhangs, slows no extrusion (its slowest 1782 mm/min on every layer), and over the slab's
+/// bridges turns the overhang fan on and off 21 times. Before, ours read only the objects' moves: under 12 s, so it
+/// ran the fan at the maximum and slowed every layer, with no overhang fan.
+#[test]
+fn a_layers_time_counts_the_prime_tower_for_its_fans_and_slowing_down_as_orcas_does() {
+    let bridge = |y: f32| {
+        boxes_stl(&[
+            ([90., y, 0.], [96., y + 6., 10.]),
+            ([120., y, 0.], [126., y + 6., 10.]),
+            ([90., y, 10.], [126., y + 6., 12.]),
+            ([105., y, 12.], [111., y + 6., 23.]),
+        ])
+    };
+    let (a, b) = (bridge(100.), bridge(130.));
+    let petg = r#"{"slow_down_layer_time": ["12"], "fan_cooling_layer_time": ["30"], "fan_min_speed": ["40"],
+        "fan_max_speed": ["90"], "overhang_fan_speed": ["90"], "overhang_fan_threshold": ["10%"],
+        "close_fan_the_first_x_layers": ["3"]}"#;
+    let two = setup::read(&format!(
+        r##"{{"machine": {{"farthest_point_timelapse": "0"}},
+        "process": {{"wipe_tower_x": ["211"], "wipe_tower_y": ["196"]}}, "filaments": [{petg}, {petg}],
+        "colours": ["#F2754E", "#4F7FC7"]}}"##
+    ))
+    .unwrap()
+    .settings;
+    let mut plate = spaghetti_slicer::Plate::default();
+    plate.add_with_filament(&Input { name: "a.stl", bytes: &a }, Some(0)).unwrap();
+    plate.add_with_filament(&Input { name: "b.stl", bytes: &b }, Some(1)).unwrap();
+    let options = Options { arrange: false, thumbnail: false, ..Options::default() };
+    let out = plate.slice(&two, &options).unwrap();
+    let gcode = String::from_utf8(out.gcode).unwrap();
+    let layers: Vec<&str> = gcode.split("; CHANGE_LAYER\n").skip(1).collect();
+    assert_eq!(layers.len(), 115);
+    for (k, layer) in layers.iter().enumerate().skip(3) {
+        let mut fans = Vec::new();
+        let (mut feed, mut slowest) = (0.0, f64::INFINITY);
+        for line in layer.lines() {
+            if let Some(v) = line.strip_prefix("M106 S") {
+                fans.push(v.split_whitespace().next().unwrap().parse::<u32>().unwrap());
+            }
+            if line.starts_with("G1 ") || line.starts_with("G2 ") || line.starts_with("G3 ") {
+                if let Some(f) = word(line, 'F') {
+                    feed = f;
+                }
+                if word(line, 'E').is_some_and(|e| e > 0.0) && (word(line, 'X').is_some() || word(line, 'Y').is_some())
+                {
+                    slowest = f64::min(slowest, feed);
+                }
+            }
+        }
+        assert!(slowest >= 1782.0, "layer {k} slowed to {slowest} mm/min");
+        if k == 50 {
+            // The slab's bridges.
+            assert_eq!(fans.iter().filter(|&&f| f == 229).count(), 10, "layer {k}: {fans:?}");
+            assert_eq!(fans.len(), 22, "layer {k}: {fans:?}");
+        } else if k + 1 < layers.len() {
+            // Below the maximum (229) on every layer but over the bridges and overhangs (the post's first and last).
+            let over = [55, 110].contains(&k);
+            assert!(fans.iter().all(|&f| (100..=227).contains(&f) || over && f == 229), "layer {k}: {fans:?}");
+        }
+        // After the tool change, the fan the layer runs at again (`;_FORCE_RESUME_FAN_SPEED`), unless an overhang fan
+        // runs then (as on the post's first and last layers in Orca's too).
+        if [55, 110].contains(&k) || k + 1 == layers.len() {
+            continue;
+        }
+        let change = &layer[layer.find("; CP TOOLCHANGE START").unwrap()..];
+        let aux = &change[change.find("\nM106 P2 S").unwrap() + 1..];
+        assert!(aux.lines().nth(1).is_some_and(|l| l.starts_with("M106 S")), "layer {k}: {}", &aux[..40]);
+    }
+}
+
 /// Top surfaces grown by `top_surface_expansion` (Orca 2.5.1's `detect_surfaces_type`): a slab with a pillar rising from
 /// the middle of its top gets top fill round the pillar's foot as far as the setting says, and no note says otherwise.
 /// Native Orca 2.5.1 (Nov 17), Arachne walls: 304.73 mm³ of top surface without the growth, 307.20 with 0.5 mm, in the
