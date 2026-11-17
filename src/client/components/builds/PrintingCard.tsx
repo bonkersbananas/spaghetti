@@ -13,6 +13,7 @@ import { CoverPicture } from "@/components/ui/CoverPicture";
 import { BuildsIcon, CameraIcon } from "@/components/ui/icons";
 import { MetaList } from "@/components/ui/MetaList";
 import { PrintProgress } from "@/components/ui/PrintProgress";
+import { Swatch } from "@/components/ui/Swatch";
 import { useCapture } from "@/lib/capture";
 import { cn } from "@/lib/cn";
 import { itemName } from "@/lib/item-name";
@@ -25,7 +26,6 @@ import { useIsDesktop } from "@/lib/use-media-query";
 import { OffTheBed } from "./OffTheBed";
 import { OutcomeChip, OutcomePicker } from "./Outcome";
 import { PhotoReadNote } from "./PhotoReadNote";
-import { SettingsLine } from "./SettingsLine";
 
 interface PrintingCardProps {
   item: ItemView;
@@ -51,6 +51,20 @@ interface PrintingCardProps {
    * the Journal's Now say them in their own comment line under the prints, so their cards don't repeat it.
    */
   unread?: number;
+}
+
+/** The spools on one line: the first with its swatch, and "+N" for the others (their names are on the build). */
+function FilamentGlance({ filaments }: { filaments: NonNullable<AttemptView["settings"]["filaments"]> }) {
+  const [first, ...rest] = filaments;
+  if (!first) return null;
+  const name = (filament: typeof first) => [filament.colorName, filament.type].filter(Boolean).join(" ") || "Filament";
+  return (
+    <span className="tabular flex min-w-0 items-center gap-1.5 font-medium" title={filaments.map(name).join(", ")}>
+      {first.colorHex && <Swatch color={first.colorHex} />}
+      <span className="min-w-0 truncate">{name(first)}</span>
+      {rest.length > 0 && <span className="text-ink-faint shrink-0 font-normal">+{rest.length}</span>}
+    </span>
+  );
 }
 
 /** What `desktop` changes from `lg`, over the md row. */
@@ -253,18 +267,14 @@ export function PrintingCard({
               </span>
             )}
           </div>
-          <MetaList className="text-small text-ink-faint">
-            <span className="whitespace-nowrap">Attempt {attempt.number}</span>
-            {partsLabel && <span>{partsLabel}</span>}
-            {filaments.length > 0 && (
-              <SettingsLine
-                filaments={filaments}
-                parts={[]}
-                name={(filament) => [filament.colorName, filament.type].filter(Boolean).join(" ") || "Filament"}
-                className="inline-flex flex-wrap"
-              />
-            )}
-          </MetaList>
+          <div className="text-small text-ink-faint flex min-w-0 flex-col gap-0.5">
+            <MetaList>
+              <span className="whitespace-nowrap">Attempt {attempt.number}</span>
+              {partsLabel && <span>{partsLabel}</span>}
+            </MetaList>
+            {/* One line for the spools, however many: the first named, "+1" for the rest, so every card has the same rhythm. */}
+            {filaments.length > 0 && <FilamentGlance filaments={filaments} />}
+          </div>
         </div>
         <div
           className={cn(
@@ -306,10 +316,15 @@ export function PrintingCard({
                     )}
                   >
                     {/* "Layer 70 of 205 · 30 min left" breaks between its parts, never inside "30 min left". */}
-                    {progress.label.split(" · ").map((part, index) => (
+                    {progress.label.split(" · ").map((part, index, parts) => (
                       <Fragment key={part}>
-                        {index > 0 && " · "}
-                        <span className="whitespace-nowrap">{part}</span>
+                        {index > 0 && <span className={cn(compact && "max-md:hidden")}> · </span>}
+                        {/* A compact card on a phone has room for one part (the time left, which the bar doesn't say): its line never wraps, so the cards are alike. */}
+                        <span
+                          className={cn("whitespace-nowrap", compact && index < parts.length - 1 && "max-md:hidden")}
+                        >
+                          {part}
+                        </span>
                       </Fragment>
                     ))}
                   </p>
