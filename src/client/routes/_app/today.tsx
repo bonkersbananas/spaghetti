@@ -248,7 +248,7 @@ function Today() {
                 <InThePrinter setup={printer.data.setup} slots={printer.data.slots} spools={spools.data} />
               )}
             </div>
-            <div className="order-5 empty:hidden">
+            <div className="order-5 empty:hidden lg:pt-4">
               <Lately
                 label={`${monthLabel(month.start)} so far`}
                 summary={summary.data ? summaryText : summary.isPending ? null : ""}

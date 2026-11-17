@@ -28,7 +28,7 @@ export default function CommentsLine({ bare = false, counted = false }: { bare?:
   const { thread } = line;
   const search = { thread: 1, comment: thread.latestId } as never;
   const row = (
-    <QuietRowContent icon={CommentIcon} iconClassName="text-tomato-ink">
+    <QuietRowContent icon={CommentIcon} iconClassName={counted ? undefined : "text-tomato-ink"}>
       <span className="md:block md:truncate">
         <span className="text-ink font-semibold">{line.lead}</span>
         {line.quote && <span>: {line.quote}</span>}
