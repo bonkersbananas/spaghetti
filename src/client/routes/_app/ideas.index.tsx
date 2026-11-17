@@ -132,9 +132,8 @@ function Ideas() {
   );
   const filters = modelCount > 0 && (
     // biome-ignore lint/a11y/useSemanticElements: a group of toggle buttons, not a form fieldset.
-    <div role="group" aria-label="Filter ideas" className="-ml-2.5 flex flex-wrap items-baseline">
+    <div role="group" aria-label="Filter ideas" className="flex flex-wrap items-center gap-2 max-md:pt-1">
       <ToggleChip
-        appearance="quiet"
         selected={filter === "model"}
         count={modelCount}
         onClick={() => setModelFilter(filter === "model" ? null : "model")}
@@ -142,7 +141,6 @@ function Ideas() {
         Has a model
       </ToggleChip>
       <ToggleChip
-        appearance="quiet"
         selected={filter === "design"}
         count={inbox.length - modelCount}
         onClick={() => setModelFilter(filter === "design" ? null : "design")}

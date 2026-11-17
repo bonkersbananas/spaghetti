@@ -123,7 +123,13 @@ export function Card({
 
   const content = (
     <>
-      <div className={cn("relative w-full overflow-hidden rounded-md", aspects[aspect])}>
+      <div
+        className={cn(
+          "relative w-full overflow-hidden rounded-md",
+          // A note card is shorter than a photo's: two words on a tall blank tile read as unfinished.
+          aspects[noteCard && aspect === "portrait" ? "square" : aspect],
+        )}
+      >
         {slides ? (
           <div
             ref={scroller}
@@ -166,7 +172,7 @@ export function Card({
           />
         ) : (
           // Nothing to show yet, not even a note: a blank index card, never an empty image icon.
-          <NoteFace note={note ?? ""} />
+          <NoteFace note={note ?? ""} maxSize="lg" />
         )}
         {badge && <div className="absolute top-2 right-2">{badge}</div>}
         {slides && (
