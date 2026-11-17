@@ -3140,6 +3140,49 @@ fn ironing_smooths_the_surfaces_it_is_asked_to_as_orcas_does() {
     assert!((volume - 213.1).abs() < 213.1 * 0.01, "{volume} mm³ of ironing");
 }
 
+#[test]
+fn fuzzy_skin_roughens_the_walls_it_is_asked_to_as_orcas_does() {
+    // The stepped boxes with fuzzy outer walls round their outlines, 0.3 mm thick, points 0.8 mm apart. Native
+    // OrcaSlicer 2.5.1 with the app's X2D presets (mm³ and s of outer wall; its classic noise differs from run to run): classic 587.9 and 194, Perlin 577.5 and
+    // 177, ripples 575.4 and 163; smooth, 566.3 mm³ (Nov 16).
+    let steps = boxes_stl(&[
+        ([108., 108., 0.], [148., 148., 5.]),
+        ([116., 116., 0.], [140., 140., 10.]),
+        ([123., 123., 0.], [133., 133., 15.]),
+        ([137., 137., 0.], [146., 146., 8.]),
+    ]);
+    let options = Options { arrange: false, thumbnail: false, ..Options::default() };
+    // The app's presets' fuzzy skin (engine release 4), coarser than the crate's own X2D profile's.
+    let fuzzy = |process: &str| {
+        let json = format!(
+            r#"{{"process": {{"fuzzy_skin_thickness": "0.3", "fuzzy_skin_point_distance": "0.8", {process}}}}}"#
+        );
+        let out = slice(&[Input { name: "steps.stl", bytes: &steps }], &setup::read(&json).unwrap().settings, &options)
+            .unwrap();
+        assert!(out.fallbacks.is_empty(), "{:?}", out.fallbacks);
+        let feature = |role: Role| out.stats.features[Role::ALL.iter().position(|&r| r == role).unwrap()];
+        let gcode = String::from_utf8(out.gcode.clone()).unwrap();
+        (feature(Role::OuterWall), feature(Role::InnerWall), gcode, out.file)
+    };
+    let (smooth, smooth_inner, smooth_gcode, _) = fuzzy(r#""fuzzy_skin": "none""#);
+    for (noise, volume, time) in [("classic", 587.9, 194.0), ("perlin", 577.5, 177.0), ("ripple", 575.4, 163.0)] {
+        let (outer, inner, gcode, file) =
+            fuzzy(&format!(r#""fuzzy_skin": "external", "fuzzy_skin_noise_type": "{noise}""#));
+        assert!((outer.volume - volume).abs() < volume * 0.01, "{noise}: {} mm³ of outer wall", outer.volume);
+        assert!((outer.time - time).abs() < time * 0.02, "{noise}: {} s of outer wall", outer.time);
+        assert!((inner.volume - smooth_inner.volume).abs() < 0.01, "{noise}: the inner walls stay as they were");
+        // The first layer stays smooth, and the same model gives the same file again.
+        let first = |g: &str| feature_lengths(g, "Outer wall").0[0];
+        assert_eq!(first(&gcode), first(&smooth_gcode), "{noise}");
+        assert_eq!(file, fuzzy(&format!(r#""fuzzy_skin": "external", "fuzzy_skin_noise_type": "{noise}""#)).3);
+    }
+    assert!((smooth.volume - 566.3).abs() < 566.3 * 0.01, "{} mm³ of smooth outer wall", smooth.volume);
+    // Every wall, the first layer's too.
+    let (outer, inner, gcode, _) = fuzzy(r#""fuzzy_skin": "allwalls", "fuzzy_skin_first_layer": "1""#);
+    assert!(outer.volume > 580.0 && inner.volume > smooth_inner.volume * 1.02, "{} {}", outer.volume, inner.volume);
+    assert!(feature_lengths(&gcode, "Outer wall").0[0].1 > feature_lengths(&smooth_gcode, "Outer wall").0[0].1 * 1.02);
+}
+
 /// Each feature's extrusions as lines (`G1`) and as arcs (`G2`/`G3`).
 fn lines_and_arcs(gcode: &str) -> std::collections::BTreeMap<String, (usize, usize)> {
     let mut out: std::collections::BTreeMap<String, (usize, usize)> = Default::default();

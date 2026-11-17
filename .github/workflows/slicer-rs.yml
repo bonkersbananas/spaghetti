@@ -123,3 +123,13 @@ jobs:
           grep -q '; FEATURE: Ironing$' /tmp/iron.gcode
           node bench/wasm-node.mjs target/wasm32-unknown-unknown/release/spaghetti_slicer.wasm /tmp/iron-wasm.gcode.3mf --setup /tmp/iron.json tests/models/bridge.stl
           cmp /tmp/iron.gcode.3mf /tmp/iron-wasm.gcode.3mf
+      - name: The same, with fuzzy skin on every wall (classic noise, then Perlin)
+        run: |
+          echo '{"process": {"fuzzy_skin": "allwalls"}}' > /tmp/fuzzy.json
+          ./target/release/spaghetti-slicer --setup /tmp/fuzzy.json tests/models/bridge.stl -o /tmp/fuzzy.gcode.3mf
+          node bench/wasm-node.mjs target/wasm32-unknown-unknown/release/spaghetti_slicer.wasm /tmp/fuzzy-wasm.gcode.3mf --setup /tmp/fuzzy.json tests/models/bridge.stl
+          cmp /tmp/fuzzy.gcode.3mf /tmp/fuzzy-wasm.gcode.3mf
+          echo '{"process": {"fuzzy_skin": "allwalls", "fuzzy_skin_noise_type": "perlin"}}' > /tmp/perlin.json
+          ./target/release/spaghetti-slicer --setup /tmp/perlin.json tests/models/bridge.stl -o /tmp/perlin.gcode.3mf
+          node bench/wasm-node.mjs target/wasm32-unknown-unknown/release/spaghetti_slicer.wasm /tmp/perlin-wasm.gcode.3mf --setup /tmp/perlin.json tests/models/bridge.stl
+          cmp /tmp/perlin.gcode.3mf /tmp/perlin-wasm.gcode.3mf
