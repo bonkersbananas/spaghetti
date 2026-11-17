@@ -988,15 +988,27 @@ impl Settings {
             min_width_top_surface: Share::parse(p.text("min_width_top_surface")),
             arachne: ArachneSettings {
                 min_feature_size: p.float("min_feature_size"),
-                min_length_factor: if p.text("min_length_factor").is_empty() { 0.5 } else { p.float("min_length_factor") },
+                min_length_factor: if p.text("min_length_factor").is_empty() {
+                    0.5
+                } else {
+                    p.float("min_length_factor")
+                },
                 min_bead_width: p.float("min_bead_width"),
                 initial_layer_min_bead_width: p.float("initial_layer_min_bead_width"),
                 wall_transition_filter_deviation: p.float("wall_transition_filter_deviation"),
                 wall_transition_length: p.float("wall_transition_length"),
                 wall_transition_angle: p.float("wall_transition_angle"),
                 wall_distribution_count: p.int("wall_distribution_count") as i32,
-                wall_maximum_resolution: if p.text("wall_maximum_resolution").is_empty() { 0.5 } else { p.float("wall_maximum_resolution") },
-                wall_maximum_deviation: if p.text("wall_maximum_deviation").is_empty() { 0.025 } else { p.float("wall_maximum_deviation") },
+                wall_maximum_resolution: if p.text("wall_maximum_resolution").is_empty() {
+                    0.5
+                } else {
+                    p.float("wall_maximum_resolution")
+                },
+                wall_maximum_deviation: if p.text("wall_maximum_deviation").is_empty() {
+                    0.025
+                } else {
+                    p.float("wall_maximum_deviation")
+                },
             },
             outer_wall_first: p.text("wall_sequence") == "outer wall/inner wall",
             wall_sequence: p.text("wall_sequence").to_string(),
@@ -1335,6 +1347,9 @@ impl Settings {
         if self.wall_generator == "arachne" {
             if self.only_one_wall_top {
                 out.push("arachne walls under a top surface printed with all their walls (only_one_wall_top)".into());
+            }
+            if self.fuzzy.on() && !self.spiral_mode {
+                out.push("fuzzy skin on arachne walls printed smooth".into());
             }
             if self.wall_sequence == "inner-outer-inner wall" {
                 out.push("inner-outer-inner arachne walls printed inner to outer".into());

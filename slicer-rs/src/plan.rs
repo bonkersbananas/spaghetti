@@ -1416,7 +1416,8 @@ fn arachne_walls(
     // `all_extrusions`: the insets from the innermost out (or the outermost in), each in its own order.
     let max_inset = lines.iter().map(|l| l.inset).max().unwrap_or(0);
     let mut all: Vec<usize> = Vec::new();
-    let insets: Vec<usize> = if s.outer_wall_first { (0..=max_inset).collect() } else { (0..=max_inset).rev().collect() };
+    let insets: Vec<usize> =
+        if s.outer_wall_first { (0..=max_inset).collect() } else { (0..=max_inset).rev().collect() };
     for inset in insets {
         all.extend((0..lines.len()).filter(|&i| lines[i].inset == inset));
     }
@@ -1514,13 +1515,19 @@ fn arachne_walls(
                 points = seam;
             }
         }
-        let pts: Vec<crate::arachne::graph::P> = points.iter().map(|q| crate::arachne::graph::P { x: i64::from(q.x) * 100, y: i64::from(q.y) * 100 }).collect();
+        let pts: Vec<crate::arachne::graph::P> = points
+            .iter()
+            .map(|q| crate::arachne::graph::P { x: i64::from(q.x) * 100, y: i64::from(q.y) * 100 })
+            .collect();
         let per_segment = width::per_segment_widths(&widths.iter().map(|w| w * 1e6).collect::<Vec<_>>());
         let pieces = width::thick_polyline_to_multi_path(&pts, &per_segment, h, 0.05 * 1e6, 100.0);
         let count = pieces.len();
         for (k, piece) in pieces.into_iter().enumerate() {
-            let points: Vec<Pt> =
-                piece.points.iter().map(|q| geom::pt((q.x as f64 / 100.0).round() as i32, (q.y as f64 / 100.0).round() as i32)).collect();
+            let points: Vec<Pt> = piece
+                .points
+                .iter()
+                .map(|q| geom::pt((q.x as f64 / 100.0).round() as i32, (q.y as f64 / 100.0).round() as i32))
+                .collect();
             let mut p = path(role, points, false, island, first, h, s);
             p.width = piece.width;
             p.mm3_per_mm = Settings::mm3_per_mm(piece.width, h);
@@ -1548,7 +1555,8 @@ fn width_at(points: &[Pt], widths: &[f64], p: Pt) -> f64 {
         let (a, b) = (points[k], points[k + 1]);
         let (dx, dy) = ((b.x - a.x) as f64, (b.y - a.y) as f64);
         let l2 = dx * dx + dy * dy;
-        let t = if l2 == 0.0 { 0.0 } else { (((p.x - a.x) as f64 * dx + (p.y - a.y) as f64 * dy) / l2).clamp(0.0, 1.0) };
+        let t =
+            if l2 == 0.0 { 0.0 } else { (((p.x - a.x) as f64 * dx + (p.y - a.y) as f64 * dy) / l2).clamp(0.0, 1.0) };
         let d = ((a.x as f64 + t * dx - p.x as f64).powi(2) + (a.y as f64 + t * dy - p.y as f64).powi(2)).sqrt();
         if d < best.0 {
             best = (d, widths[k] + (widths[k + 1] - widths[k]) * t);

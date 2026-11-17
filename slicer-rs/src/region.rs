@@ -1007,7 +1007,7 @@ fn wall_group(
     around: &Around,
     s: &Settings,
 ) -> Vec<Island> {
-    if s.wall_generator == "arachne" && loops > 0 {
+    if s.wall_generator == "arachne" && loops > 0 && !s.spiral_mode {
         return arachne_group(slice, loops, last, layer, height, s);
     }
     let first = s.on_plate(layer);
@@ -1215,8 +1215,10 @@ fn arachne_group(slice: &Shapes, loops: usize, last: bool, layer: usize, height:
         .map(|shape| {
             let one = vec![shape.clone()];
             let outline = off(&geom::simplify_shapes(&one, wall_resolution), -draw_in);
-            let result = WallToolPaths::generate(&outline, nm(sp_outer), nm(sp_inner), loops, wall_0_inset, height, &params);
-            let mut island = Island { outline: shape.clone(), overlap: share * spacing_for_overlap, ..Island::default() };
+            let result =
+                WallToolPaths::generate(&outline, nm(sp_outer), nm(sp_inner), loops, wall_0_inset, height, &params);
+            let mut island =
+                Island { outline: shape.clone(), overlap: share * spacing_for_overlap, ..Island::default() };
             for line in result.toolpaths.iter().flatten() {
                 if line.junctions.len() < 2 {
                     continue;
