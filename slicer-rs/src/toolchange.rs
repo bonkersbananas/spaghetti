@@ -761,6 +761,15 @@ impl Colours {
         self.extruder_of.get(f) == Some(&self.most_used_extruder)
     }
 
+    /// Whether G-code layer `g` leaves its last retraction and wipe to the layer after it, as Orca writes them when the
+    /// layer took its photo before a visit to the tower (`photo_in_layer`): they follow the next layer's
+    /// `; CHANGE_LAYER`, and that layer starts where this one left the nozzle, not lifted, and lifts at its first
+    /// travel (spaghetti#421). Not on the last layer, nor with wrapping detection (which lifts before the layer's
+    /// first visit instead).
+    pub fn defers_tail(&self, g: usize) -> bool {
+        self.towered && !self.wrapping && g + 1 < self.starts.len() && self.photo_in_layer(g)
+    }
+
     /// Whether G-code layer `g` takes its timelapse photo before one of its visits to the tower or changes, rather
     /// than after it (`photo_in_layer`).
     pub fn photo_in_layer(&self, g: usize) -> bool {

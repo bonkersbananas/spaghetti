@@ -943,7 +943,14 @@ impl Plate {
                         ),
                     };
                     (plan.index, plan.id, plan.header_height) = (g, slot.id, slot.header_height);
-                    let from_z = if g == 0 { job.start[2] } else { schedule[g - 1].z + settings.z_hop };
+                    // A layer that left its last retraction to this one (Orca's, with a photo before a visit to the tower) left
+                    // the nozzle unlifted.
+                    let lifted = colours.as_ref().is_none_or(|c| g == 0 || !c.defers_tail(g - 1));
+                    let from_z = if g == 0 {
+                        job.start[2]
+                    } else {
+                        schedule[g - 1].z + if lifted { settings.z_hop } else { 0.0 }
+                    };
                     let from_z = match spiral.as_deref_mut() {
                         Some(st) => {
                             plan.spiral &= plan.visits.is_empty();
