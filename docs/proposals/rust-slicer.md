@@ -74,6 +74,37 @@ On Nov 16 the 13 models people had sliced in Spaghetti (every live model file in
 - **Where the time goes, by V8's sampling profiler** (one run each, in Node): packing is 31 % of the frame, 32 % of the capybara and 52 % of the marshmallow, nearly all of it deflating the mesh's XML at level 6 in one thread. Everywhere else the polygon library (i_overlay) leads: 35 to 74 % of a slice, its mitred offsets (`geom::offset_mitred`, the walls' and surfaces' shrinking) 17 to 46 % and finding where segments cross 13 to 38 %. Pick your size, a 140 mm part over 699 layers, spends 71 % of its 38 s on regions. The seams take 5 to 18 % (on the big meshes about half of that cutting the mesh down to the 16,000 triangles Orca casts its rays at), painted colours 27 % of the hummingbird, the toolpaths 9 to 45 %.
 - **On a phone** a slice runs on one core, as here, so it takes what one native thread takes times WebAssembly's cost, 1.3 to 1.7 here. Nothing here ran on a phone: a recent iPhone's core is probably at least as fast as this sandbox's ARM core, so these Chromium times are a fair guess for one, and an older phone's a few times longer.
 
+#### Before and after, Nov 16 and 17
+
+Three changes, each leaving the G-code and the picture byte for byte as they were: the mesh's XML deflated as it is written rather than held whole, at level 4 as the G-code rather than 6 (2 % larger), and its numbers written without the formatter (above). Main just before them against main with them, every runner on every model, interleaved model by model, medians of three, in the same sandbox in the same hour; every runner wrote the same file for every model, before and after. Neither side has Orca's arcs, which reached main meanwhile (they change the G-code, not this).
+
+| Model | **WebAssembly, Chromium** | Its heap | WebAssembly, Node | Native, 4 threads, and its memory | Native, 1 thread |
+| --- | --- | --- | --- | --- | --- |
+| Steampunk frame (89 MB STL) | **12.24 → 9.40 s (−23 %)** | 883 → 134 MB | 12.07 → 9.28 s (−23 %) | 2.94 → 2.33 s (−21 %), 381 → 136 MB | 8.14 → 6.33 s (−22 %) |
+| Capybara (18 MB STL) | **2.90 → 2.27 s (−22 %)** | 144 → 38 MB | 2.95 → 2.26 s (−23 %) | 0.68 → 0.54 s (−21 %), 95 → 42 MB | 2.00 → 1.55 s (−22 %) |
+| Marshmallow | **5.53 → 3.46 s (−37 %)** | 554 → 109 MB | 5.51 → 3.43 s (−38 %) | 1.45 → 0.97 s (−33 %), 281 → 111 MB | 3.53 → 2.11 s (−40 %) |
+| Pick your size, plate 2 | 39.25 → 37.93 s (−3 %) | 311 → 311 MB | 39.12 → 37.99 s (−3 %) | 7.83 → 7.82 s (0 %), 418 → 419 MB | 29.10 → 28.71 s (−1 %) |
+| Hummingbird, painted | 11.16 → 10.39 s (−7 %) | 240 → 84 MB | 11.07 → 10.34 s (−7 %) | 2.70 → 2.55 s (−6 %), 162 → 88 MB | 7.95 → 7.43 s (−7 %) |
+| Tomato mascot | 10.22 → 9.94 s (−3 %) | 143 → 75 MB | 10.12 → 9.87 s (−2 %) | 2.24 → 2.13 s (−5 %), 133 → 100 MB | 7.36 → 7.17 s (−3 %) |
+| Stackable containers, plate 3 | 3.59 → 3.53 s (−2 %) | 33 → 33 MB | 3.56 → 3.50 s (−2 %) | 0.74 → 0.72 s (−2 %), 45 → 45 MB | 2.58 → 2.51 s (−3 %) |
+| Poop tray | 4.36 → 4.36 s (0 %) | 36 → 36 MB | 4.33 → 4.34 s (0 %) | 0.90 → 0.90 s (0 %), 50 → 55 MB | 3.09 → 3.08 s (0 %) |
+| Steampunk glasses | 3.89 → 3.86 s (−1 %) | 31 → 31 MB | 3.87 → 3.83 s (−1 %) | 0.82 → 0.81 s (−1 %), 46 → 46 MB | 2.79 → 2.78 s (0 %) |
+| Hot dogs, 4 colours | 3.32 → 3.20 s (−4 %) | 43 → 32 MB | 3.30 → 3.16 s (−4 %) | 0.75 → 0.72 s (−4 %), 46 → 40 MB | 2.34 → 2.28 s (−3 %) |
+| Spaghetti zipper pull | 2.78 → 2.75 s (−1 %) | 26 → 26 MB | 2.76 → 2.70 s (−2 %) | 0.65 → 0.64 s (−2 %), 34 → 33 MB | 1.94 → 1.92 s (−1 %) |
+| UOBF text with clips | 0.57 → 0.55 s (−3 %) | 21 → 21 MB | 0.56 → 0.55 s (−1 %) | 0.12 → 0.12 s (−2 %), 23 → 22 MB | 0.32 → 0.33 s (+2 %) |
+| fctl zipper pulls, 4 copies | 7.40 → 7.34 s (−1 %) | 46 → 46 MB | 7.35 → 7.25 s (−1 %) | 1.67 → 1.59 s (−4 %), 57 → 61 MB | 5.41 → 5.35 s (−1 %) |
+
+The big meshes slice a fifth to two fifths faster everywhere, and the frame now fits a phone: its heap ends at 134 MB instead of 883 (the tab with the app's own copies at about 450 MB). The rest move 0 to 7 %, by what their mesh's XML cost. The module is 3.83 MB, 1.297 MB gzipped (from 3.81 MB and 1.282 MB: 15 kB more gzipped, the floats' digits).
+
+What's left, by V8's profiler on the final module (shares of a slice in WebAssembly):
+
+- **The polygon library (i_overlay): 35 to 74 % of every model but the marshmallow (14 %).** Its mitred offsets, the walls' and surfaces' (`geom::offset_mitred`, each contour resolved on its own and then all together), take 23 to 48 %, and finding where segments cross 17 to 38 % of it. Pick your size, a 140 mm part over 699 layers, spends 65 % of its 38 s on regions. Tried and left out, each slicing to the same files: the fill sweep's tree from 256 or 1,000 segments rather than 8,000 (slower), the list solver scanning packed boxes rather than the segments (slower natively). What would help is fewer, larger operations or a cheaper offset of a single contour; large.
+- **Packing: 19 to 38 % of the big meshes** (the frame 19 %, the marshmallow 38 %, the capybara 19 %), now nearly all deflating, the mesh's XML and the G-code. Small to medium (a faster deflate that writes the same bytes).
+- **Seams: 5 to 21 %.** On the big meshes about half of it is cutting the mesh down to 16,000 triangles in Orca's shuffled order (the marshmallow 12 %, the frame 7 %), on the small ones Orca's rays (the capybara 14 %, the glasses and the text 11 %). A ray tree built with 32 bins or two triangles a leaf came out within the noise. Medium.
+- **The Voronoi diagram's exact predicates: the poop tray 26 %, the glasses 16 %, the hummingbird 10 %.** Its big integers (`ExtendedInt`) are 4 to 13 % on their own, nearly all in making and dropping their small vectors: their loops rewritten, the time didn't move in WebAssembly. Medium (vendoring boostvoronoi with integers of a fixed size).
+- **Painted colours: 23 % of the hummingbird; toolpaths 11 to 41 % (the poop tray 41 %).**
+- **Memory:** pick your size's 311 MB is now the largest heap: the regions of its 699 layers held at once (33 to 141 MB) and its 78 MB of G-code text (to 236 MB, and to 311 while packing). Medium (G-code packed as it is written, as the mesh's now is).
+
 ### With tree supports
 
 With Orca's organic trees everywhere (the X2D's support settings otherwise), the same way:
