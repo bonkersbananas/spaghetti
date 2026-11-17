@@ -9,6 +9,7 @@ pub mod bambu;
 pub mod base_support;
 pub mod bridges;
 pub mod brim;
+pub mod concentric;
 pub mod config;
 pub mod elephant;
 pub mod filaments;

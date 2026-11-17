@@ -810,12 +810,26 @@ fn island_paths(
             link_max: 3.0 * s.iron.spacing,
             origin,
         };
+        // Concentric ironing is Orca's classic concentric fill (`FillConcentric` without Arachne: ironing is a full
+        // density fill of the top surface drawn in by half a spacing), its loops one spacing apart (ironing's fill is not adjusted to the surface's width).
+        let lines_of = |shape: &geom::Shape| -> Option<Vec<Vec<Pt>>> {
+            if s.iron.concentric {
+                let drawn_in = geom::offset_c2(&vec![shape.clone()], -s.iron.spacing / 2.0, geom::Join::Miter(3.0));
+                let lines: Vec<Vec<Pt>> = drawn_in
+                    .iter()
+                    .flat_map(|region| crate::concentric::fill(region, s.iron.spacing, 1.0, false, 0.0))
+                    .collect();
+                (!lines.is_empty()).then_some(lines)
+            } else {
+                monotonic::fill(shape, &params).map(|filled| filled.lines)
+            }
+        };
         let areas: Vec<Vec<Path>> = fills
             .ironing
             .iter()
-            .filter_map(|shape| monotonic::fill(shape, &params))
-            .map(|filled| {
-                filled.lines.into_iter().map(|points| path(Role::Ironing, points, false, island, first, h, s)).collect()
+            .filter_map(lines_of)
+            .map(|lines| {
+                lines.into_iter().map(|points| path(Role::Ironing, points, false, island, first, h, s)).collect()
             })
             .filter(|paths: &Vec<Path>| !paths.is_empty())
             .collect();
@@ -1143,6 +1157,7 @@ fn sparse_runs(
         size,
         resolution: s.resolution,
         layer_height: h,
+        loop_clip: s.seam_gap,
     };
     // Lightning's trees grow in the area grown all round (`region::lightning_lines`), which its lines keep to: with
     // the area Orca's generator takes, ours came out further from Orca's (+11.5 % against −0.3 % on a Benchy).

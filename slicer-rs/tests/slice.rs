@@ -3516,6 +3516,30 @@ fn arachne_walls_have_one_wall_beside_a_top_surface() {
     assert!(within(all_inner, 1065.8, 0.005), "every wall printed: {all_inner} mm³");
 }
 
+/// Concentric sparse infill and concentric ironing are Orca's classic concentric fill (`FillConcentric` without
+/// Arachne: that takes only full-density solid surfaces): a 30 mm block 10 mm high with a 10 mm one 6 mm high on it,
+/// against native Orca 2.5.1, takes the sparse infill's plastic within 0.1 % (1,258.2 mm³) and its time within 1 %
+/// (146.5 s), and the ironing's plastic within 0.1 % (16.69 mm³) and time exactly (189.8 s); no note says they print
+/// otherwise.
+#[test]
+fn concentric_infill_and_ironing_print_as_loops() {
+    let stl = boxes_stl(&[([100.0, 100.0, 0.0], [130.0, 130.0, 10.0]), ([110.0, 110.0, 10.0], [120.0, 120.0, 16.0])]);
+    let run = |process: &str, role: Role| {
+        let json = format!(r#"{{"process": {{{process}}}}}"#);
+        let settings = setup::read(&json).unwrap().settings;
+        let out = slice(&[Input { name: "step.stl", bytes: &stl }], &settings, &Options::default()).unwrap();
+        assert!(out.fallbacks.is_empty(), "{:?}", out.fallbacks);
+        out.stats.features[Role::ALL.iter().position(|&r| r == role).unwrap()]
+    };
+    let within = |got: f64, want: f64, share: f64| (got - want).abs() < want * share;
+    let sparse = run(r#""sparse_infill_pattern": "concentric""#, Role::SparseInfill);
+    assert!(within(sparse.volume, 1258.2, 0.001), "{} mm³", sparse.volume);
+    assert!(within(sparse.time, 146.5, 0.01), "{} s", sparse.time);
+    let ironing = run(r#""ironing_type": "top", "ironing_pattern": "concentric""#, Role::Ironing);
+    assert!(within(ironing.volume, 16.69, 0.001), "{} mm³", ironing.volume);
+    assert!(within(ironing.time, 189.8, 0.002), "{} s", ironing.time);
+}
+
 /// Concentric top, bottom and internal solid surfaces print as Orca's Arachne loops, not zig-zag with a note: a
 /// cube's plastic stays within 2 % of the lines' (a Benchy is within 0.1 % of native Orca 2.5.1's).
 #[test]

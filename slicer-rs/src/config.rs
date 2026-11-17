@@ -1317,6 +1317,7 @@ impl Settings {
                 | "3dhoneycomb"
                 | "tpmsd"
                 | "line"
+                | "concentric"
                 | ""
         ) {
             out.push(format!("{} sparse infill printed as rectilinear", self.sparse_infill_pattern));
@@ -1377,9 +1378,6 @@ impl Settings {
         }
         if self.elephant_foot > 0.0 && self.elephant_foot_layers > 1 && self.support.raft_layers <= 0 {
             out.push("elephant's foot compensated on the first layer only".into());
-        }
-        if self.iron.on() && self.iron.concentric {
-            out.push("concentric ironing printed as lines".into());
         }
         if matches!(self.seam_position.as_str(), "nearest" | "random") && !self.spiral_mode {
             out.push(format!("{} seams placed as aligned ones", self.seam_position));
