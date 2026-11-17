@@ -23,7 +23,8 @@ import { usePrintProgress } from "@/lib/print-progress";
 import { useReadOnly } from "@/lib/read-only";
 import { useIsDesktop } from "@/lib/use-media-query";
 import { OffTheBed } from "./OffTheBed";
-import { OutcomeChip } from "./Outcome";
+import { OutcomeChip, OutcomePicker } from "./Outcome";
+import { PhotoReadNote } from "./PhotoReadNote";
 import { SettingsLine } from "./SettingsLine";
 
 interface PrintingCardProps {
@@ -89,8 +90,9 @@ const layouts = {
 /**
  * A print on the bed, big and warm: the build's picture, its name in Fraunces (the one card title that is,
  * because this is the screen's focal point), how far along it is, and one way to log it. The card leads to
- * the build; "How did it go?", as on the build page, before the print is due and after, goes to the build with the
- * attempt's sheet open.
+ * the build; while it prints, "How did it go?" (the build page's own question and words) goes to the build with
+ * the attempt's sheet open. When the print should be done, the button gives way to the outcomes themselves, one
+ * tap next to the printer, which open the sheet with that answer chosen.
  */
 export function PrintingCard({
   item,
@@ -117,6 +119,7 @@ export function PrintingCard({
   const readOnly = useReadOnly(item.pending);
   const offBed = isOffTheBed(attempt);
   const progress = usePrintProgress(attempt.id, attempt.printedAt, attempt.settings.estimatedMinutes);
+  const due = progress.state === "due";
   const showUnread = unread > 0;
   // The build's cover, with the plate on the bed first when there is no photo.
   const cover = coverOf(item, { file: attempt.file });
@@ -295,10 +298,10 @@ export function PrintingCard({
                   attemptId={attempt.id}
                   showLabel={false}
                 />
-                <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
+                <div className="flex items-center justify-between gap-3">
                   <p
                     className={cn(
-                      "text-small tabular",
+                      "text-small tabular min-w-0 flex-1",
                       progress.state === "due" ? "text-semolina-ink font-semibold" : "text-ink-soft",
                     )}
                   >
@@ -310,7 +313,7 @@ export function PrintingCard({
                       </span>
                     ))}
                   </p>
-                  <div className="pointer-events-auto ml-auto flex shrink-0 items-center gap-1.5">
+                  <div className="pointer-events-auto flex shrink-0 items-center gap-1.5">
                     {!readOnly && (
                       <IconButton
                         icon={CameraIcon}
@@ -320,10 +323,11 @@ export function PrintingCard({
                         onClick={() => (isDesktop ? snapPrint(aim) : camera.current?.click())}
                       />
                     )}
-                    {/* The build page's one question, in the same words, before and after the print is due. */}
-                    <Button variant="secondary" size="sm" onClick={() => finish()} className="shrink-0">
-                      How did it go?
-                    </Button>
+                    {!due && (
+                      <Button variant="secondary" size="sm" onClick={() => finish()} className="shrink-0">
+                        How did it go?
+                      </Button>
+                    )}
                   </div>
                   <input
                     ref={camera}
@@ -340,6 +344,18 @@ export function PrintingCard({
                   />
                 </div>
               </div>
+              {due && (
+                <div className="pointer-events-auto flex flex-col gap-2 md:mt-auto">
+                  <p className="text-body text-ink font-semibold">How did it go?</p>
+                  <OutcomePicker
+                    value={null}
+                    onChange={(outcome) => finish(outcome)}
+                    size="md"
+                    suggested={attempt.photoRead?.outcome ?? null}
+                  />
+                  {attempt.photoRead?.status === "read" && <PhotoReadNote read={attempt.photoRead} withTags={false} />}
+                </div>
+              )}
             </>
           )}
         </div>
