@@ -892,8 +892,15 @@ async function fitStockNozzles(page: Page) {
   await page.request.put("/api/printer", { headers, data: { nozzles: STOCK_NOZZLES, slicing: null } });
 }
 
+/** The Printer page's Setup fold (nozzles, plates, slicing, drying), opened. */
+async function openSetup(page: Page) {
+  const fold = page.getByRole("button", { name: /^Nozzles, plates, slicing and drying/ });
+  if ((await fold.getAttribute("aria-expanded")) !== "true") await fold.click();
+}
+
 /** The slicing defaults, unfolded, their tiles in place. Returns the section. */
 async function openSlicingDefaults(page: Page) {
+  await openSetup(page);
   const section = slicingDefaults(page);
   await section.getByRole("button", { name: /^How new models are sliced/ }).click();
   await section.getByRole("group", { name: "Quality" }).waitFor();
@@ -5747,12 +5754,9 @@ export const shots: Shot[] = [
     name: "printer",
     path: "/printer",
     fullPage: true,
-    // Upkeep and the slicing defaults load once the page is idle: wait for them, or the shot shows their skeletons.
+    // Upkeep loads once the page is idle: wait for it, or the shot shows its skeleton. Setup stays folded.
     prepare: async (page) => {
       await page.getByRole("list", { name: "Upkeep tasks" }).waitFor();
-      await slicingDefaults(page)
-        .getByRole("button", { name: /^How new models are sliced/ })
-        .waitFor();
     },
   },
   {
@@ -5762,6 +5766,7 @@ export const shots: Shot[] = [
     path: "/printer",
     selector: "section[aria-labelledby=printer-slicing]",
     prepare: async (page) => {
+      await openSetup(page);
       await slicingDefaults(page)
         .getByRole("button", { name: /^How new models are sliced/ })
         .waitFor();
@@ -5815,6 +5820,7 @@ export const shots: Shot[] = [
       await fitSmallNozzle(page);
       await page.reload();
       await page.getByRole("list", { name: "Upkeep tasks" }).waitFor();
+      await openSetup(page);
       await slicingDefaults(page)
         .getByRole("button", { name: /^How new models are sliced/ })
         .waitFor();
