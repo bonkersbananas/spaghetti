@@ -83,7 +83,7 @@ function IdeaDetail() {
       <DetailBar back={back} />
       {isPending || isBuild ? (
         <div className="flex flex-col gap-6 md:flex-row md:gap-10 lg:gap-14" aria-hidden>
-          <Skeleton className="-mx-5 aspect-4/3 w-[calc(100%+2.5rem)] rounded-none md:mx-0 md:w-auto md:flex-2 lg:flex-4 md:rounded-xl" />
+          <Skeleton className="-mx-5 aspect-4/3 w-[calc(100%+2.5rem)] rounded-none md:mx-0 md:w-auto md:flex-2 md:rounded-xl lg:flex-4" />
           <div className="flex flex-col gap-3 md:flex-3 lg:flex-5">
             <Skeleton className="h-8 w-3/4" />
             <Skeleton className="h-4 w-full" />
@@ -361,7 +361,7 @@ function Idea({ item }: { item: ItemView }) {
             </div>
           )}
 
-          <div className="max-w-content flex min-w-0 flex-col gap-3 md:flex-3 lg:flex-5 md:pt-2">
+          <div className="max-w-content flex min-w-0 flex-col gap-3 md:flex-3 md:pt-2 lg:flex-5">
             {/* While Claude reads the page, the empty photo area and title hold their place with the quiet shimmer. */}
             {!hero && (reading ? <Skeleton className="mb-4 h-28 rounded-xl" /> : <AddFirstPhotos itemId={item.id} />)}
             {reading && !title.trim() ? (
@@ -414,7 +414,6 @@ function Idea({ item }: { item: ItemView }) {
               model={linkedModel}
               placeholder="Add a note: a link, a measurement, a half-thought…"
             />
-            <DraftNote item={item} title={title} note={note} readOnly={readOnly} />
             <NoteLinks note={note} model={linkedModel} modelShownElsewhere />
             {/* One model block under the note: the model's card, the files kept with the idea, and the quiet actions
               ("Make a twist", or "Twist" once one exists, sits beside "Add a file"). */}
@@ -426,6 +425,7 @@ function Idea({ item }: { item: ItemView }) {
                 className="max-w-content my-1"
               />
             )}
+            <DraftNote item={item} title={title} note={note} readOnly={readOnly} />
             {files.length > 0 && (
               <Suspense fallback={null}>
                 <ItemFiles itemId={item.id} files={files} readOnly={readOnly || item.pending} />

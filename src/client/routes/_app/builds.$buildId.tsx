@@ -129,7 +129,7 @@ function BuildDetail() {
       <DetailBar back={back} />
       {isPending || isIdea ? (
         <div className="flex flex-col gap-6 md:flex-row md:gap-10" aria-hidden>
-          <Skeleton className="-mx-5 aspect-4/3 w-[calc(100%+2.5rem)] rounded-none md:mx-0 md:w-auto md:flex-2 lg:flex-4 md:rounded-xl" />
+          <Skeleton className="-mx-5 aspect-4/3 w-[calc(100%+2.5rem)] rounded-none md:mx-0 md:w-auto md:flex-2 md:rounded-xl lg:flex-4" />
           <div className="flex flex-col gap-3 md:flex-3 lg:flex-5">
             <Skeleton className="h-8 w-3/4" />
             <Skeleton className="h-28 w-full rounded-lg" />
@@ -666,7 +666,7 @@ function Build({ item }: { item: ItemView }) {
 
           {/* The story: every attempt, newest first. */}
           {/* The story column: what happened, then the conversation about it, a section apart at every width. */}
-          <div className="flex min-w-0 flex-col gap-12 md:flex-3 lg:flex-5 md:gap-16">
+          <div className="flex min-w-0 flex-col gap-12 md:flex-3 md:gap-16 lg:flex-5">
             <Section
               id="story"
               title="Attempts"

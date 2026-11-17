@@ -29,7 +29,7 @@ export function SpoolCard({ spool, draggable = true }: { spool: Spool; draggable
             color={spool.colorHex}
             colors={spool.colors}
             size="lg"
-            className="duration-base size-20 md:size-11 transition-transform group-hover:rotate-12"
+            className="duration-base size-20 transition-transform group-hover:rotate-12 md:size-11"
           />
         </div>
         <div className="flex min-w-0 flex-1 flex-col gap-0.5 px-1 pb-1 md:p-0">

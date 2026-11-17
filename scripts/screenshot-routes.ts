@@ -2839,6 +2839,26 @@ export const shots: Shot[] = [
     cleanup: removeLinkIdeas,
   },
   {
+    // The same 3dgo idea after Claude read the MakerWorld page: the model's picture on the card, its title, the mirror named.
+    name: "idea-3dgo-drafted",
+    path: "/ideas",
+    width: 390,
+    prepare: async (page) => {
+      await ideaWithMirrorLink(page, "https://3dgo.app/models/makerworld/2");
+      await page.getByRole("button", { name: "Draft from this page" }).click();
+      await page.getByText("Drafted by Claude from MakerWorld").waitFor();
+      await page.getByText("Drafted from MakerWorld", { exact: true }).waitFor({ state: "hidden", timeout: 20_000 });
+      await page.waitForTimeout(800);
+    },
+    beforeShot: async (page) => {
+      await page
+        .getByRole("link", { name: /Model on MakerWorld/ })
+        .evaluate((card) => card.scrollIntoView({ block: "center" }));
+      await page.waitForTimeout(300);
+    },
+    cleanup: removeLinkIdeas,
+  },
+  {
     // A note that is only a link to a site the app doesn't know: shown once, as its card.
     name: "idea-plain-link",
     path: "/ideas",

@@ -107,7 +107,7 @@ export function NoteField({
         />
       )}
       {onlyModel ? (
-        <p className="text-lead text-ink-faint md:text-body pointer-events-none relative">{placeholder}</p>
+        <p className="text-lead text-ink-faint md:text-body pointer-events-none relative">{"Add a note…"}</p>
       ) : (
         <p className="text-lead text-ink md:text-body pointer-events-none relative break-words whitespace-pre-wrap">
           {linkify(
