@@ -3628,3 +3628,53 @@ fn after_a_farthest_point_photo_the_next_layer_starts_as_the_last_one_ended() {
         assert_eq!(pattern[k].1, pattern[k - 1].0, "layer {k}");
     }
 }
+
+/// On a plate in two filaments with a prime tower, a layer that took its timelapse photo before a visit to the tower
+/// leaves its last retraction and wipe to the next layer, as Orca writes them (spaghetti#421): they follow the next
+/// layer's `; CHANGE_LAYER` lines, before the layer change G-code, with no lift, and the layer's first travel then lifts
+/// in a spiral to the new layer's height plus the z-hop and comes down at its end.
+#[test]
+fn a_layers_last_retraction_follows_the_next_layers_header_when_its_photo_came_before_the_tower() {
+    let cube = |at: f32| boxes_stl(&[([at, 118., 0.], [at + 20., 138., 6.])]);
+    let (a, b) = (cube(90.), cube(140.));
+    let two = setup::read(
+        r##"{"process": {"wipe_tower_x": ["211"], "wipe_tower_y": ["196"]}, "filaments": [{}, {}],
+        "colours": ["#F2754E", "#4F7FC7"]}"##,
+    )
+    .unwrap()
+    .settings;
+    let mut plate = spaghetti_slicer::Plate::default();
+    plate.add_with_filament(&Input { name: "a.stl", bytes: &a }, Some(0)).unwrap();
+    plate.add_with_filament(&Input { name: "b.stl", bytes: &b }, Some(1)).unwrap();
+    let options = Options { arrange: false, thumbnail: false, ..Options::default() };
+    let out = plate.slice(&two, &options).unwrap();
+    let gcode = String::from_utf8(out.gcode).unwrap();
+    let layers: Vec<&str> = gcode.split("; CHANGE_LAYER\n").skip(1).collect();
+    assert_eq!(layers.len(), 30);
+    let mut deferred = 0;
+    for (k, layer) in layers.iter().enumerate() {
+        let photo = layer.find("M9711").unwrap();
+        let tower = layer.find("; CP TOOLCHANGE START").unwrap();
+        let before_tower = photo < tower;
+        let Some(next) = layers.get(k + 1) else { continue };
+        // The lines after the next layer's `; Z_HEIGHT` and `; LAYER_HEIGHT`, up to its layer change G-code.
+        let head = &next[next.find("; LAYER_HEIGHT").unwrap()..];
+        let head = &head[head.find('\n').unwrap() + 1..];
+        let head = &head[..head.find(";======== X2D layer_change gcode").unwrap()];
+        if before_tower {
+            deferred += 1;
+            assert!(head.starts_with("G1 E-"), "layer {k}: {head}");
+            assert!(head.contains("; WIPE_START") && head.contains("M625"), "layer {k}: {head}");
+            // The layer itself ends on its last extrusion, no lift after it.
+            let last = layer.rfind(" E").unwrap();
+            let rest = &layer[last..];
+            assert!(!rest.contains("G3 Z") && !rest.contains("G1 E-"), "layer {k}: {rest}");
+            // The next layer's first travel lifts in a spiral before it.
+            let first = &next[next.find("M624").unwrap()..];
+            assert!(first.lines().nth(1) == Some("G17"), "layer {}: {}", k + 1, &first[..80]);
+        } else {
+            assert!(!head.contains("G1 E-"), "layer {k}: {head}");
+        }
+    }
+    assert!(deferred >= 10, "{deferred} layers");
+}
