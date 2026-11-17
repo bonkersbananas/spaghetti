@@ -39,6 +39,8 @@ pub struct Path {
     pub object: u32,
     /// How each segment prints, where they don't all print alike: one per segment (empty when they do).
     pub parts: Vec<Part>,
+    /// Whether the overhang fan runs over all of it, where `parts` is empty.
+    pub fan: bool,
     /// The stretches of its points that print as arcs (`G2`/`G3`), in order: Orca's arc fitting (`fit`).
     pub arcs: Vec<ArcRun>,
 }
@@ -57,6 +59,8 @@ pub struct ArcRun {
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Part {
     pub overhang: bool,
+    /// Whether the overhang fan runs over it (`enable_overhang_bridge_fan`, where it hangs enough).
+    pub fan: bool,
     /// mm/s, before any slowing down for a short layer.
     pub speed: f32,
 }
@@ -185,7 +189,7 @@ pub fn plan_layer_of(
     let mut below: Vec<Option<Below>> = Vec::new();
     if let Some(lower) = lower
         && i > 0
-        && (s.detect_overhang_wall || s.overhang_speed)
+        && (s.detect_overhang_wall || s.overhang_speed || s.overhang_fan)
     {
         let groups = r.islands.iter().map(|island| island.group as usize + 1).max().unwrap_or(0);
         below = (0..groups as u32)
@@ -363,6 +367,7 @@ fn support_paths(layer: &support::Layer, object: u32, part: support::Part, at: P
             island: u32::MAX,
             object,
             parts: Vec::new(),
+            fan: false,
             arcs: p.arcs.clone(),
         }
     };
@@ -443,6 +448,7 @@ fn brim_paths(brims: &[Contour], object: u32, mut at: Pt, h: f64, s: &Settings) 
             island: u32::MAX,
             object,
             parts: Vec::new(),
+            fan: false,
             arcs: Vec::new(),
         });
     }
@@ -621,6 +627,7 @@ fn island_paths(
 ) -> Vec<Path> {
     let first = s.on_plate(layer);
     let (walls, gaps) = (&island.walls, &island.gaps);
+    let lines = &island.lines;
     let narrow = island.narrow;
     let island_inner = &island.inner;
     let overlap = island.overlap;
@@ -631,7 +638,10 @@ fn island_paths(
     // from the object's centre.
     let centre_pt = geom::pt(centre.0.round() as i32, centre.1.round() as i32);
     let overhang = overhang_flow(first, h, s);
-    for (contour, depth, outline) in wall_order(walls, centre_pt) {
+    if !lines.is_empty() {
+        out.extend(arachne_walls(lines, below, overhang, seams, island, first, h, s));
+    }
+    for (contour, depth, outline) in wall_order(walls, centre_pt).into_iter().filter(|_| lines.is_empty()) {
         let role = if depth == 0 { Role::OuterWall } else { Role::InnerWall };
         // From where the seam placer starts it (`seam.rs`), else from the back; in spiral vase mode, which places no
         // seams, from the point nearest the nozzle, as Orca's loops start there.
@@ -732,6 +742,20 @@ fn island_paths(
         let sortable = !matches!(style, SolidStyle::Monotonic { .. });
         for (part, angle) in parts {
             for shape in &into_walls(&part) {
+                let concentric = |shape: &geom::Shape| -> Group {
+                    let mut paths = Vec::new();
+                    for p in
+                        solid::concentric_loops(&vec![shape.clone()], spacing, s.nozzle_diameter, h, geom::pt(0, 0))
+                    {
+                        let (points, widths) = simplify_thick(&p.points, &p.widths, s.resolution);
+                        paths.extend(thick_paths(role, &points, &widths, island, first, h, s));
+                    }
+                    Group { paths, sortable: false }
+                };
+                if style == SolidStyle::Concentric && !(role == Role::SolidInfill && s.narrow_solid_loops) {
+                    groups.push(concentric(shape));
+                    continue;
+                }
                 if let SolidStyle::Curve(curve) = style {
                     let lines = fill::surface_curve(shape, curve, spacing, (origin, size), s);
                     let paths =
@@ -744,6 +768,10 @@ fn island_paths(
                     && let Some((normal, narrow)) = solid::split_narrow(shape, spacing, angle.to_radians())
                 {
                     for n in &normal {
+                        if style == SolidStyle::Concentric {
+                            groups.push(concentric(n));
+                            continue;
+                        }
                         let paths = solid_lines(n, role, style, angle, spacing, origin, island, first, h, s);
                         groups.push(Group { paths, sortable });
                     }
@@ -759,6 +787,10 @@ fn island_paths(
                     groups.push(Group { paths, sortable: false });
                     continue;
                 }
+                if style == SolidStyle::Concentric {
+                    groups.push(concentric(shape));
+                    continue;
+                }
                 let mut paths = solid_lines(shape, role, style, angle, spacing, origin, island, first, h, s);
                 if bridge && let Some(below) = below {
                     paths = paths.into_iter().map(|p| below.bridge(p, s)).collect();
@@ -768,41 +800,8 @@ fn island_paths(
         }
     }
 
-    // The infill and gap fill as Orca's `extrude_infill` prints them: chained from where the walls end, each
-    // collection that may be re-sorted chained again from where the nozzle is when it starts.
-    groups.retain(|g| !g.paths.is_empty());
-    let mut at: Option<Pt> = out.last().and_then(|p| p.points.last().copied());
-    let ends: Vec<(Pt, Pt)> =
-        groups.iter().map(|g| (g.paths[0].points[0], *g.paths[g.paths.len() - 1].points.last().unwrap())).collect();
-    let reversible: Vec<bool> = groups.iter().map(|g| g.sortable).collect();
-    let chained = order::chain(&ends, &reversible, at, true);
-    let mut groups: Vec<Option<Group>> = groups.into_iter().map(Some).collect();
-    for (k, flip) in chained {
-        let Some(mut g) = groups[k].take() else { continue };
-        if flip {
-            g.paths.reverse();
-            for p in &mut g.paths {
-                p.reverse();
-            }
-        }
-        if g.sortable && g.paths.len() > 1 {
-            let ends: Vec<(Pt, Pt)> = g.paths.iter().map(|p| (p.points[0], *p.points.last().unwrap())).collect();
-            let order = order::chain(&ends, &vec![true; ends.len()], at, true);
-            let mut taken: Vec<Option<Path>> = g.paths.into_iter().map(Some).collect();
-            g.paths = order
-                .into_iter()
-                .filter_map(|(i, back)| {
-                    let mut p = taken[i].take()?;
-                    if back {
-                        p.reverse();
-                    }
-                    Some(p)
-                })
-                .collect();
-        }
-        at = g.paths.last().and_then(|p| p.points.last().copied());
-        out.extend(g.paths);
-    }
+    let at = out.last().and_then(|p| p.points.last().copied());
+    out.extend(chain_infill(groups, at));
     // Ironing last (`ironing.rs`), as Orca's `extrude_infill` irons an island once everything else is printed: each
     // area's lines in the order they were filled, the areas chained from where the nozzle is.
     if !fills.ironing.is_empty() {
@@ -817,12 +816,26 @@ fn island_paths(
             link_max: 3.0 * s.iron.spacing,
             origin,
         };
+        // Concentric ironing is Orca's classic concentric fill (`FillConcentric` without Arachne: ironing is a full
+        // density fill of the top surface drawn in by half a spacing), its loops one spacing apart (ironing's fill is not adjusted to the surface's width).
+        let lines_of = |shape: &geom::Shape| -> Option<Vec<Vec<Pt>>> {
+            if s.iron.concentric {
+                let drawn_in = geom::offset_c2(&vec![shape.clone()], -s.iron.spacing / 2.0, geom::Join::Miter(3.0));
+                let lines: Vec<Vec<Pt>> = drawn_in
+                    .iter()
+                    .flat_map(|region| crate::concentric::fill(region, s.iron.spacing, 1.0, false, 0.0))
+                    .collect();
+                (!lines.is_empty()).then_some(lines)
+            } else {
+                monotonic::fill(shape, &params).map(|filled| filled.lines)
+            }
+        };
         let areas: Vec<Vec<Path>> = fills
             .ironing
             .iter()
-            .filter_map(|shape| monotonic::fill(shape, &params))
-            .map(|filled| {
-                filled.lines.into_iter().map(|points| path(Role::Ironing, points, false, island, first, h, s)).collect()
+            .filter_map(lines_of)
+            .map(|lines| {
+                lines.into_iter().map(|points| path(Role::Ironing, points, false, island, first, h, s)).collect()
             })
             .filter(|paths: &Vec<Path>| !paths.is_empty())
             .collect();
@@ -844,6 +857,40 @@ fn island_paths(
             };
             p.speed = speed.min(s.speed_cap(p.mm3_per_mm));
         }
+    }
+    out
+}
+
+/// The infill and gap fill as Orca's `extrude_infill` prints them, chained from `at`, where the walls end. A
+/// collection that may be re-sorted joins the chain path by path (`Island::Region::append` adds its entities one by
+/// one), so a region's sparse lines chain with the solid infill beside them; one printed in its own order (a
+/// monotonic fill's lines) joins whole, and isn't turned round.
+fn chain_infill(groups: Vec<Group>, at: Option<Pt>) -> Vec<Path> {
+    let mut entries: Vec<Group> = Vec::new();
+    for g in groups {
+        if g.paths.is_empty() {
+            continue;
+        }
+        if g.sortable {
+            entries.extend(g.paths.into_iter().map(|p| Group { paths: vec![p], sortable: true }));
+        } else {
+            entries.push(g);
+        }
+    }
+    let ends: Vec<(Pt, Pt)> =
+        entries.iter().map(|g| (g.paths[0].points[0], *g.paths[g.paths.len() - 1].points.last().unwrap())).collect();
+    let reversible: Vec<bool> = entries.iter().map(|g| g.sortable).collect();
+    let mut entries: Vec<Option<Group>> = entries.into_iter().map(Some).collect();
+    let mut out = Vec::new();
+    for (k, flip) in order::chain(&ends, &reversible, at, true) {
+        let Some(mut g) = entries[k].take() else { continue };
+        if flip {
+            g.paths.reverse();
+            for p in &mut g.paths {
+                p.reverse();
+            }
+        }
+        out.extend(g.paths);
     }
     out
 }
@@ -957,6 +1004,8 @@ enum SolidStyle {
     ZigZag,
     /// One of Orca's plane-path curves, on a top or bottom surface (`fill::surface_curve`).
     Curve(crate::plane_path::Curve),
+    /// Concentric loops: Orca's Arachne fill (`solid::concentric_loops`).
+    Concentric,
 }
 
 fn solid_style(role: Role, s: &Settings) -> SolidStyle {
@@ -971,6 +1020,7 @@ fn solid_style(role: Role, s: &Settings) -> SolidStyle {
     };
     let surface = matches!(role, Role::TopSurface | Role::BottomSurface);
     match pattern {
+        "concentric" if role != Role::Bridge && role != Role::InternalBridge => SolidStyle::Concentric,
         "monotonicline" => SolidStyle::Monotonic { connect: false },
         "monotonic" | "" => SolidStyle::Monotonic { connect: true },
         "hilbertcurve" if surface => SolidStyle::Curve(crate::plane_path::Curve::Hilbert),
@@ -1113,6 +1163,7 @@ fn sparse_runs(
         size,
         resolution: s.resolution,
         layer_height: h,
+        loop_clip: s.seam_gap,
     };
     // Lightning's trees grow in the area grown all round (`region::lightning_lines`), which its lines keep to: with
     // the area Orca's generator takes, ours came out further from Orca's (+11.5 % against −0.3 % on a Benchy).
@@ -1180,6 +1231,7 @@ fn thick_paths(role: Role, points: &[Pt], widths: &[f64], island: u32, first: bo
             island,
             object: 0,
             parts: Vec::new(),
+            fan: false,
             arcs,
         });
     };
@@ -1388,8 +1440,198 @@ fn path(role: Role, points: Vec<Pt>, closed: bool, island: u32, first: bool, h: 
         island,
         object: 0,
         parts: Vec::new(),
+        fan: false,
         arcs,
     }
+}
+
+/// Arachne's lines as paths, in the order Orca's `process_arachne` prints them: the lines nearest where the nozzle is
+/// first (open lines before closed ones among those free to go), each only after the lines it must follow (those
+/// within 1.9 line widths of it whose inset differs by one: inner lines first, or outer first with
+/// `wall_sequence`). A closed line starts where the seam placer puts it, as the classic walls do, and every line is
+/// cut into pieces of one width (`thick_polyline_to_multi_path`), each slowed where it hangs.
+#[allow(clippy::too_many_arguments)]
+fn arachne_walls(
+    lines: &[region::ArachneLine],
+    below: Option<&Below>,
+    overhang: (f64, f64, f64, f64),
+    seams: Option<&crate::seam::LayerSeams>,
+    island: u32,
+    first: bool,
+    h: f64,
+    s: &Settings,
+) -> Vec<Path> {
+    use crate::arachne::width;
+    // Inner-outer-inner starts from the outer-first order (on every layer but the first, where it is off).
+    let sandwich = s.wall_sequence == "inner-outer-inner wall" && !first;
+    let outer_first = s.outer_wall_first || sandwich;
+    // `all_extrusions`: the insets from the innermost out (or the outermost in), each in its own order.
+    let max_inset = lines.iter().map(|l| l.inset).max().unwrap_or(0);
+    let mut all: Vec<usize> = Vec::new();
+    let insets: Vec<usize> = if outer_first { (0..=max_inset).collect() } else { (0..=max_inset).rev().collect() };
+    for inset in insets {
+        all.extend((0..lines.len()).filter(|&i| lines[i].inset == inset));
+    }
+    // `getRegionOrder`: which line must come before which.
+    let max_w = lines.iter().flat_map(|l| l.widths.iter().copied()).fold(0.0f64, f64::max);
+    let mut blocked = vec![0usize; lines.len()];
+    let mut blocking: Vec<Vec<usize>> = vec![Vec::new(); lines.len()];
+    if max_w > 0.0 {
+        let radius = max_w * 1.9;
+        let cell = (radius * geom::SCALE).max(1.0);
+        let key = |p: Pt| ((p.x as f64 / cell).floor() as i64, (p.y as f64 / cell).floor() as i64);
+        let mut grid: std::collections::HashMap<(i64, i64), Vec<(usize, usize)>> = std::collections::HashMap::new();
+        for (li, l) in lines.iter().enumerate() {
+            for (k, &p) in l.points.iter().enumerate() {
+                grid.entry(key(p)).or_default().push((li, k));
+            }
+        }
+        let mut pairs: std::collections::BTreeSet<(usize, usize)> = std::collections::BTreeSet::new();
+        for (hi, here) in lines.iter().enumerate() {
+            for (k, &p) in here.points.iter().enumerate() {
+                let (cx, cy) = key(p);
+                for gx in cx - 1..=cx + 1 {
+                    for gy in cy - 1..=cy + 1 {
+                        let Some(v) = grid.get(&(gx, gy)) else { continue };
+                        for &(ni, nk) in v {
+                            let nearby = &lines[ni];
+                            if ni == hi || nearby.inset == here.inset {
+                                continue;
+                            }
+                            if nearby.inset > here.inset + 1 || here.inset > nearby.inset + 1 {
+                                continue;
+                            }
+                            let reach = (here.widths[k] + nearby.widths[nk]) / 2.0 * 1.9 * geom::SCALE;
+                            let d = geom::dist(p, nearby.points[nk]);
+                            if d > reach {
+                                continue;
+                            }
+                            if (nearby.inset < here.inset) == outer_first {
+                                pairs.insert((ni, hi));
+                            } else {
+                                pairs.insert((hi, ni));
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        for (before, after) in pairs {
+            blocked[after] += 1;
+            blocking[before].push(after);
+        }
+    }
+    let mut processed = vec![false; lines.len()];
+    let mut ordered: Vec<usize> = Vec::with_capacity(lines.len());
+    let mut current = all.first().map(|&i| lines[i].points[0]).unwrap_or(geom::pt(0, 0));
+    while ordered.len() < all.len() {
+        let mut available: Vec<usize> = all.iter().copied().filter(|&i| !processed[i] && blocked[i] == 0).collect();
+        available.sort_by_key(|&i| lines[i].closed);
+        let (mut best, mut best_d, mut best_closed) = (all[0], f64::MAX, false);
+        for &c in &available {
+            let l = &lines[c];
+            let d = geom::dist(current, l.points[0]);
+            if d < best_d && (l.closed || best_d != f64::MAX || !best_closed) {
+                best = c;
+                best_d = d;
+                best_closed = l.closed;
+            }
+        }
+        if best_d == f64::MAX {
+            // Every line is blocked (a cycle): take the first not yet printed.
+            if let Some(&c) = all.iter().find(|&&i| !processed[i]) {
+                best = c;
+            }
+        }
+        processed[best] = true;
+        ordered.push(best);
+        for &u in &blocking[best] {
+            blocked[u] = blocked[u].saturating_sub(1);
+        }
+        let l = &lines[best];
+        current = if l.closed { l.points[0] } else { *l.points.last().unwrap() };
+    }
+    if sandwich {
+        use crate::arachne::ioi::{Wall, sandwich};
+        let walls: Vec<Wall> = lines
+            .iter()
+            .map(|l| Wall {
+                inset: l.inset,
+                closed: l.closed,
+                // Arachne's contours run clockwise, its holes counter-clockwise.
+                contour: l.closed && geom::area2(&l.points) < 0,
+                points: &l.points,
+                widths: &l.widths,
+            })
+            .collect();
+        let nm = |mm: f64| (mm * 1e6) as i64 as f64 / 1e6;
+        let (ext, int) = (Settings::spacing(s.outer_wall_width, h), Settings::spacing(s.inner_wall_width, h));
+        let external = if s.precise_outer_wall { nm(ext) + nm(int) / 2.0 } else { nm(ext) / 2.0 + nm(int) / 2.0 };
+        ordered = sandwich(&walls, ordered, external, nm(int));
+    }
+    let mut out = Vec::new();
+    for li in ordered {
+        let l = &lines[li];
+        let role = if l.inset == 0 { Role::OuterWall } else { Role::InnerWall };
+        let (mut points, mut widths) = (l.points.clone(), l.widths.clone());
+        if l.closed && points.len() > 3 {
+            // A loop starts where the seam placer puts it, counter-clockwise round an outline and clockwise round a
+            // hole (Arachne's contours run the other way round).
+            let contour: Vec<Pt> = points[..points.len() - 1].to_vec();
+            let outline = geom::area2(&contour) < 0;
+            if let Some(seam) = seams.and_then(|seams| seams.wall_loop(&contour, outline, l.inset == 0, s)) {
+                widths = seam.iter().map(|&p| width_at(&points, &widths, p)).collect();
+                points = seam;
+            }
+        }
+        let pts: Vec<crate::arachne::graph::P> = points
+            .iter()
+            .map(|q| crate::arachne::graph::P { x: i64::from(q.x) * 100, y: i64::from(q.y) * 100 })
+            .collect();
+        let per_segment = width::per_segment_widths(&widths.iter().map(|w| w * 1e6).collect::<Vec<_>>());
+        let pieces = width::thick_polyline_to_multi_path(&pts, &per_segment, h, 0.05 * 1e6, 100.0);
+        let count = pieces.len();
+        for (k, piece) in pieces.into_iter().enumerate() {
+            let points: Vec<Pt> = piece
+                .points
+                .iter()
+                .map(|q| geom::pt((q.x as f64 / 100.0).round() as i32, (q.y as f64 / 100.0).round() as i32))
+                .collect();
+            let mut p = path(role, points, false, island, first, h, s);
+            p.width = piece.width;
+            p.mm3_per_mm = Settings::mm3_per_mm(piece.width, h);
+            p.speed = p.speed.min(s.speed_cap(p.mm3_per_mm));
+            let mut p = match below {
+                Some(below) => below.wall(p, overhang, s),
+                None => p,
+            };
+            // A loop stops the seam gap short of where it started, as Orca's walls do.
+            if l.closed && k + 1 == count && !clip_end(&mut p.points, &mut p.parts, &mut p.arcs, s.seam_gap) {
+                continue;
+            }
+            if p.points.len() >= 2 {
+                out.push(p);
+            }
+        }
+    }
+    out
+}
+
+/// A line's width (mm) at the point of it nearest `p`, interpolated along its segment.
+fn width_at(points: &[Pt], widths: &[f64], p: Pt) -> f64 {
+    let mut best = (f64::MAX, widths[0]);
+    for k in 0..points.len() - 1 {
+        let (a, b) = (points[k], points[k + 1]);
+        let (dx, dy) = ((b.x - a.x) as f64, (b.y - a.y) as f64);
+        let l2 = dx * dx + dy * dy;
+        let t =
+            if l2 == 0.0 { 0.0 } else { (((p.x - a.x) as f64 * dx + (p.y - a.y) as f64 * dy) / l2).clamp(0.0, 1.0) };
+        let d = ((a.x as f64 + t * dx - p.x as f64).powi(2) + (a.y as f64 + t * dy - p.y as f64).powi(2)).sqrt();
+        if d < best.0 {
+            best = (d, widths[k] + (widths[k + 1] - widths[k]) * t);
+        }
+    }
+    best.1
 }
 
 /// A wall loop as printed: counter-clockwise, from the rearmost point (largest y, then smallest x), closed.
@@ -1488,8 +1730,8 @@ mod tests {
         // A 10 mm square from its corner round to it again, its last side a slow overhang stretch.
         let mut points = seam_loop(&square(0.0, 0.0, 10.0, 10.0, false), true);
         let start = points[0];
-        let slow = Part { overhang: true, speed: 10.0 };
-        let mut parts = vec![Part { overhang: false, speed: 200.0 }; 3];
+        let slow = Part { overhang: true, speed: 10.0, fan: false };
+        let mut parts = vec![Part { overhang: false, speed: 200.0, fan: false }; 3];
         parts.push(slow);
         assert!(clip_end(&mut points, &mut parts, &mut Vec::new(), 0.04));
         assert_eq!((points.len(), parts.len()), (5, 4));
@@ -1497,7 +1739,7 @@ mod tests {
         assert_eq!(parts[3], slow);
         // A gap past the last corner takes the last side and its part with it.
         let mut points = seam_loop(&square(0.0, 0.0, 10.0, 10.0, false), true);
-        let mut parts = vec![Part { overhang: false, speed: 200.0 }; 4];
+        let mut parts = vec![Part { overhang: false, speed: 200.0, fan: false }; 4];
         assert!(clip_end(&mut points, &mut parts, &mut Vec::new(), 10.5));
         assert_eq!((points.len(), parts.len()), (4, 3));
         // One no longer than the gap is gone.
@@ -1582,5 +1824,40 @@ mod tests {
         let chord = geom::dist(start, path.points[path.points.len() - 1]) / geom::SCALE;
         assert!((chord - 0.5).abs() < 0.01, "{chord}");
         assert!((whole - printed(&path) - 0.5).abs() < 0.01, "{} of {whole} mm", printed(&path));
+    }
+
+    /// A region's sparse lines chain one by one with the monotonic solid infill beside them, as Orca's islands take
+    /// them: from the walls' end the near sparse line, the solid block (whole, the way it was filled), then the
+    /// sparse line beyond it.
+    #[test]
+    fn sparse_lines_chain_one_by_one_round_a_monotonic_block() {
+        let s = Settings::default();
+        let mm = |p: (f64, f64)| geom::pt(geom::sc(p.0), geom::sc(p.1));
+        let line = |role: Role, a: (f64, f64), b: (f64, f64)| path(role, vec![mm(a), mm(b)], false, 0, false, 0.2, &s);
+        let sparse = Group {
+            paths: vec![
+                line(Role::SparseInfill, (0.0, 0.0), (0.0, 10.0)),
+                line(Role::SparseInfill, (30.0, 10.0), (30.0, 0.0)),
+            ],
+            sortable: true,
+        };
+        let solid = Group {
+            paths: vec![
+                line(Role::SolidInfill, (20.0, 10.0), (10.0, 10.0)),
+                line(Role::SolidInfill, (10.0, 11.0), (20.0, 11.0)),
+            ],
+            sortable: false,
+        };
+        let out = chain_infill(vec![sparse, solid], Some(mm((0.0, -1.0))));
+        let starts: Vec<(Role, Pt)> = out.iter().map(|p| (p.role, p.points[0])).collect();
+        assert_eq!(
+            starts,
+            vec![
+                (Role::SparseInfill, mm((0.0, 0.0))),
+                (Role::SolidInfill, mm((20.0, 10.0))),
+                (Role::SolidInfill, mm((10.0, 11.0))),
+                (Role::SparseInfill, mm((30.0, 10.0))),
+            ]
+        );
     }
 }

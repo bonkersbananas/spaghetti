@@ -105,6 +105,22 @@ pub struct Island {
     /// Small and too narrow for its outer wall: that wall prints as a thinner line (`narrow_wall_width`), as Bambu's
     /// narrow loops in Orca's classic walls, and nothing prints inside it.
     pub narrow: bool,
+    /// Arachne's walls (`wall_generator = arachne`): lines of varying width, in the order Orca's wall generator
+    /// numbers them (`inset`, the outer wall's 0). When there are any, they print instead of `walls`, which then
+    /// holds just the closed even lines' points by depth, for what looks at an island's loops.
+    pub lines: Vec<ArachneLine>,
+}
+
+/// One line of Arachne's walls: a loop or an open line (the odd middle beads of a thin part), its points and each
+/// one's width (mm, as spacings).
+#[derive(Clone, Debug)]
+pub struct ArachneLine {
+    pub inset: usize,
+    pub odd: bool,
+    pub closed: bool,
+    /// A closed line repeats its first point at the end.
+    pub points: Vec<geom::Pt>,
+    pub widths: Vec<f64>,
 }
 
 /// The infill areas of one island, by kind.
@@ -160,6 +176,34 @@ impl LayerRegions {
             || self.fills.get(k).is_some_and(|f| {
                 [&f.top, &f.bottom, &f.bridge, &f.internal_bridge, &f.solid, &f.sparse].iter().any(|s| !s.is_empty())
             })
+    }
+
+    /// The slices of each region of an object on this layer (one per filament its parts print in, in the order of the
+    /// regions' first appearance), which Orca's support detection works on region by region; empty for an object of
+    /// one region.
+    pub fn region_slices_of(&self, group: u32) -> Vec<Shapes> {
+        let it: Vec<(Shapes, u32)> = if self.unpulled.is_empty() {
+            self.islands.iter().filter(|i| i.group == group).map(|i| (vec![i.outline.clone()], i.object)).collect()
+        } else {
+            self.unpulled
+                .iter()
+                .filter(|(_, _, g)| *g == group)
+                .map(|(shape, o, _)| (vec![shape.clone()], *o))
+                .collect()
+        };
+        let mut objects: Vec<u32> = Vec::new();
+        for (_, o) in &it {
+            if !objects.contains(o) {
+                objects.push(*o);
+            }
+        }
+        if objects.len() < 2 {
+            return Vec::new();
+        }
+        objects
+            .iter()
+            .map(|o| it.iter().filter(|(_, x)| x == o).flat_map(|(sh, _)| sh.iter().cloned()).collect())
+            .collect()
     }
 
     /// An object's slice on this layer, by its group (all of its regions together), as the layer above sees it
@@ -266,7 +310,7 @@ pub fn regions(
         // Fuzzy skin on the walls Orca gives it (`fuzzy.rs`), over the layer below; Orca counts a raft's layers.
         if s.fuzzy.on() {
             let raft = if s.support.raft_layers > 0 { s.support.raft_layers as usize } else { 0 };
-            crate::fuzzy::islands(&mut islands, centres, around.lower, slice_z[i], i + raft, s);
+            crate::fuzzy::islands(&mut islands, centres, around.lower, slice_z[i], i + raft, layers.height[i], s);
         }
         islands
     });
@@ -991,6 +1035,9 @@ fn wall_group(
     around: &Around,
     s: &Settings,
 ) -> Vec<Island> {
+    if s.wall_generator == "arachne" && loops > 0 && !s.spiral_mode {
+        return arachne_group(slice, loops, last, layer, height, around, s);
+    }
     let first = s.on_plate(layer);
     let (w_outer, w_inner) =
         if first { (s.first_layer_width, s.first_layer_width) } else { (s.outer_wall_width, s.inner_wall_width) };
@@ -1152,6 +1199,148 @@ fn wall_group(
     out
 }
 
+/// The closed even lines of Arachne's walls as the loops other code reads (`Island::walls`), by inset. Arachne's
+/// contours run clockwise round an outline and counter-clockwise round a hole; the seam placer takes outlines
+/// counter-clockwise.
+pub fn walls_of(lines: &[ArachneLine]) -> Vec<Vec<geom::Contour>> {
+    let mut walls: Vec<Vec<geom::Contour>> = Vec::new();
+    for line in lines {
+        if line.closed && !line.odd && line.points.len() >= 4 {
+            while walls.len() <= line.inset {
+                walls.push(Vec::new());
+            }
+            let mut contour = line.points[..line.points.len() - 1].to_vec();
+            contour.reverse();
+            walls[line.inset].push(contour);
+        }
+    }
+    walls
+}
+
+/// `wall_group` with Arachne's walls (Orca's `PerimeterGenerator::process_arachne`): each island's outline drawn in by
+/// what the outer wall's spacing leaves of its width (with `precise_outer_wall`, all of it), turned into lines of
+/// beads by `WallToolPaths`, and what is left inside them (Arachne's inner contour) kept as infill's area, reaching
+/// into the walls by the infill overlap of the innermost one's spacing. Arachne has no gap fill: the beads widen
+/// and split to fill what a wall can't. With `only_one_wall_top`, an island under a top surface gets its outer wall
+/// alone beside it (`arachne::top`).
+fn arachne_group(
+    slice: &Shapes,
+    loops: usize,
+    last: bool,
+    layer: usize,
+    height: f64,
+    around: &Around,
+    s: &Settings,
+) -> Vec<Island> {
+    use crate::arachne::toolpaths::{WallParams, WallToolPaths};
+    use crate::arachne::top;
+    let first = s.on_plate(layer);
+    let (w_outer, w_inner) =
+        if first { (s.first_layer_width, s.first_layer_width) } else { (s.outer_wall_width, s.inner_wall_width) };
+    let w_solid = if first { s.first_layer_width } else { s.solid_infill_width };
+    let sp_outer = Settings::spacing(w_outer, height);
+    let sp_inner = Settings::spacing(w_inner, height);
+    let nm = |mm: f64| (mm * 1_000_000.0) as i64;
+    let a = &s.arachne;
+    let nozzle = s.nozzle_diameter;
+    let params = WallParams {
+        min_feature_size: a.min_feature_size * 0.01 * nozzle,
+        min_length_factor: a.min_length_factor as f32,
+        min_bead_width: (if layer == 0 { a.initial_layer_min_bead_width } else { a.min_bead_width }) * 0.01 * nozzle,
+        wall_transition_filter_deviation: a.wall_transition_filter_deviation * 0.01 * nozzle,
+        wall_transition_length: a.wall_transition_length * 0.01 * nozzle,
+        wall_transition_angle: a.wall_transition_angle,
+        wall_distribution_count: a.wall_distribution_count,
+        is_top_or_bottom_layer: first || last,
+        wall_maximum_resolution: nm(a.wall_maximum_resolution),
+        wall_maximum_deviation: nm(a.wall_maximum_deviation),
+    };
+    let precise = s.precise_outer_wall;
+    let (w0, s0) = (f64::from(w_outer as f32), sp_outer);
+    let draw_in = if precise { w0 - s0 } else { w0 / 2.0 - s0 / 2.0 };
+    let wall_0_inset_mm = if precise { -(w0 / 2.0 - s0 / 2.0) } else { 0.0 };
+    let wall_resolution = if s.arc_fitting == ArcFitting::Enabled { 0.2 * s.resolution } else { PATH_RESOLUTION };
+    let off = |shapes: &Shapes, delta: f64| geom::offset_c2(shapes, delta, geom::Join::Miter(3.0));
+    let min_infill_spacing = Settings::spacing(w_solid, height) * (1.0 - INSET_OVERLAP_TOLERANCE);
+    let share = if first || last { s.top_bottom_infill_wall_overlap } else { s.infill_wall_overlap };
+    let ext_spacing2 = 0.5 * (sp_outer + sp_inner);
+    // `WallToolPaths` on an outline, its lines by inset.
+    let generate = |outline: &Shapes, spacing_0: f64, spacing: f64, count: usize, inset_0: f64| {
+        let result = WallToolPaths::generate(outline, nm(spacing_0), nm(spacing), count, nm(inset_0), height, &params);
+        let mut groups: top::Groups = Vec::new();
+        for (inset, group) in result.toolpaths.iter().enumerate() {
+            groups.push(Vec::new());
+            for line in group {
+                if line.junctions.len() < 2 {
+                    continue;
+                }
+                groups[inset].push(ArachneLine {
+                    inset: line.inset_idx,
+                    odd: line.is_odd,
+                    closed: line.is_closed,
+                    widths: line.junctions.iter().map(|j| j.w as f64 / 1e6).collect(),
+                    points: line
+                        .junctions
+                        .iter()
+                        .map(|j| geom::pt((j.p.x as f64 / 100.0).round() as i32, (j.p.y as f64 / 100.0).round() as i32))
+                        .collect(),
+                });
+            }
+        }
+        (groups, result.inner_contour)
+    };
+    let one_wall_top = !last && s.only_one_wall_top && s.top_shell_layers > 0 && loops > 1 && around.upper.is_some();
+    // The clipping of inner walls over the top surface (`top_surface_expansion`) isn't ported: such a layer keeps all
+    // its walls.
+    let one_wall_top = one_wall_top && !(s.top_surface_expansion > 0.0 && s.top_surface_density > 0.0);
+    let top_params = top::Params {
+        ext_spacing: sp_outer,
+        spacing: sp_inner,
+        width: w_inner,
+        wall_0_inset: wall_0_inset_mm,
+        precise,
+        min_width_top: s.min_width_top_surface.of(w_inner),
+        wall_loops: loops,
+    };
+    slice
+        .iter()
+        .map(|shape| {
+            let one = vec![shape.clone()];
+            let outline = off(&geom::simplify_shapes(&one, wall_resolution), -draw_in);
+            let (groups, inside, fill) = if one_wall_top {
+                let w = top::walls(&outline, &top_params, around, &generate);
+                (w.groups, w.inner, w.top)
+            } else {
+                let (groups, inside) = generate(&outline, sp_outer, sp_inner, loops, wall_0_inset_mm);
+                (groups, inside, Vec::new())
+            };
+            // Orca's `loop_number + 1`: the groups it has (the single wall of a layer's top is one).
+            let count = groups.len();
+            let spacing_for_overlap = if count == 1 { sp_outer } else { sp_inner };
+            let mut island =
+                Island { outline: shape.clone(), overlap: share * spacing_for_overlap, ..Island::default() };
+            island.lines = groups.into_iter().flatten().collect();
+            island.walls = walls_of(&island.lines);
+            // What is left inside: too small to fill when no spacing's half fits; else drawn in and out again so
+            // that what a line can't fill is left out.
+            let spacing = if count == 1 { ext_spacing2 } else { sp_inner };
+            if !inside.is_empty() && !off(&inside, -spacing / 2.0).is_empty() {
+                let simple = geom::simplify_shapes(&inside, PATH_RESOLUTION);
+                island.inner = off(&off(&simple, -min_infill_spacing / 2.0), min_infill_spacing / 2.0);
+            }
+            if !fill.is_empty() {
+                // The top surface's fill reaches the wall by the top share of the spacing, the rest by the infill's
+                // (which the planner adds to all of `inner`).
+                let base = spacing_for_overlap;
+                let grow = (s.top_bottom_infill_wall_overlap - share) * base;
+                let fill = if grow.abs() > 1e-6 { off(&fill, grow) } else { fill };
+                island.inner = geom::simplify_shapes(&geom::union(&island.inner, &fill), PATH_RESOLUTION);
+            }
+            island
+        })
+        .collect()
+}
+
 /// `wall_group` for a slice some of whose islands are `narrow`: those get their thinner outer wall alone, the others
 /// their walls as usual. A spiral vase's layer keeps the largest loop of the wide ones, or else of the narrow ones.
 #[allow(clippy::too_many_arguments)]
@@ -1239,6 +1428,26 @@ mod tests {
         let shown = regularise(&lens(10.0), &internal, spacing, None);
         let area = geom::area_mm2(&shown);
         assert!((area - 2.73).abs() < 0.02, "{area}");
+    }
+
+    #[test]
+    fn arachne_walls_go_counter_clockwise_round_an_outline_and_clockwise_round_a_hole() {
+        // The seam placer reads each outer wall's side from its direction (a hole's candidates are concave where
+        // an outline's are convex): Arachne's contours run the other way round, so they are turned.
+        let mut ring = square(0.0, 0.0, 20.0, 20.0);
+        let mut hole = square(5.0, 5.0, 15.0, 15.0).remove(0);
+        hole.reverse();
+        ring.push(hole);
+        let s = Settings { wall_generator: "arachne".into(), ..Settings::default() };
+        let around = Around { upper: None, lower: None, top: &Vec::new(), last: &[false], largest: false };
+        let islands = arachne_group(&vec![ring], 2, false, 5, 0.2, &around, &s);
+        let walls = &islands[0].walls;
+        assert_eq!(walls.len(), 2, "two insets");
+        for inset in walls {
+            let outline = inset.iter().max_by_key(|c| geom::area2(c).abs()).unwrap();
+            let hole = inset.iter().min_by_key(|c| geom::area2(c).abs()).unwrap();
+            assert!(geom::area2(outline) > 0 && geom::area2(hole) < 0, "outline and hole turn opposite ways");
+        }
     }
 
     #[test]

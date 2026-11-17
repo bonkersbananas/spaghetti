@@ -344,7 +344,7 @@ pub struct ThickPath {
 /// narrowest bead 85 % of the nozzle, its transitions a nozzle long), every line a path whose closed loops start
 /// nearest the plate's origin, each ending a tenth of the nozzle short of where it started, then nearest first from
 /// `at`.
-pub fn narrow_loops(region: &Shapes, w: f64, nozzle: f64, h: f64, at: Pt) -> Vec<ThickPath> {
+fn arachne_fill(region: &Shapes, w: f64, nozzle: f64, h: f64, at: Pt, transition_length: f64) -> Vec<ThickPath> {
     use crate::arachne::toolpaths::{WallParams, WallToolPaths};
     let scaled = |mm: f64| (mm * 1_000_000.0) as i64;
     let min_spacing = scaled(w);
@@ -356,7 +356,7 @@ pub fn narrow_loops(region: &Shapes, w: f64, nozzle: f64, h: f64, at: Pt) -> Vec
         min_length_factor: 0.5,
         min_bead_width: 0.85 * nozzle,
         wall_transition_filter_deviation: 0.25 * nozzle,
-        wall_transition_length: 0.4,
+        wall_transition_length: transition_length,
         wall_transition_angle: 10.0,
         wall_distribution_count: 1,
         is_top_or_bottom_layer: false,
@@ -412,6 +412,23 @@ pub fn narrow_loops(region: &Shapes, w: f64, nozzle: f64, h: f64, at: Pt) -> Vec
         ordered.push(p);
     }
     ordered
+}
+
+pub fn narrow_loops(region: &Shapes, w: f64, nozzle: f64, h: f64, at: Pt) -> Vec<ThickPath> {
+    arachne_fill(region, w, nozzle, h, at, 0.4)
+}
+
+/// A region filled with concentric loops as Orca's `FillConcentric` does under Arachne (a solid, top or bottom
+/// surface, `concentric` pattern): drawn in by half a spacing and grown by the same inside `WallToolPaths` (no
+/// overlap beyond what the region has), the beads `w` mm apart, the transitions a nozzle long.
+pub fn concentric_loops(region: &Shapes, w: f64, nozzle: f64, h: f64, at: Pt) -> Vec<ThickPath> {
+    let drawn_in = geom::offset_c2(region, -w / 2.0, geom::Join::Miter(3.0));
+    let mut out = Vec::new();
+    for shape in &drawn_in {
+        let grown = geom::offset_c2(&vec![shape.clone()], w / 2.0, geom::Join::Miter(3.0));
+        out.extend(arachne_fill(&grown, w, nozzle, h, at, nozzle));
+    }
+    out
 }
 
 /// Shortens a path by `d` units at its end.
