@@ -2,6 +2,7 @@
 
 pub mod beading;
 pub mod graph;
+pub mod ioi;
 pub mod toolpaths;
 pub mod trapezoidation;
 pub mod voronoi;

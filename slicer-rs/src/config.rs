@@ -1357,9 +1357,6 @@ impl Settings {
             if self.fuzzy.on() {
                 out.push("fuzzy skin on arachne walls printed smooth".into());
             }
-            if self.wall_sequence == "inner-outer-inner wall" {
-                out.push("inner-outer-inner arachne walls printed inner to outer".into());
-            }
         }
         if self.elephant_foot > 0.0 && self.elephant_foot_layers > 1 && self.support.raft_layers <= 0 {
             out.push("elephant's foot compensated on the first layer only".into());
