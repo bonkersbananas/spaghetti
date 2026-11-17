@@ -180,12 +180,13 @@ impl Frame {
     /// The printer's G-code for a timelapse photo after layer `index`, at `z`, taken at `spot` (mm on the plate, as
     /// `timelapse_position` picks it), or where the printer chooses when there is none (as Orca leaves it when its
     /// picker finds no spot).
-    /// The timelapse photo's G-code. With Orca's farthest-point timelapse (`farthest`) the photo moves no higher than
-    /// the layer, and `inline` takes it where the nozzle is, mid-path (`M971`, `M1004`).
     pub fn timelapse(&self, index: usize, z: f64, max_z: f64, spot: Option<[i64; 2]>) -> String {
         self.photo(index, z, max_z, spot, false, false)
     }
 
+    /// The timelapse photo's G-code as `timelapse` writes it, with Orca's farthest-point timelapse on or off
+    /// (`farthest`: on, a photo at a spot moves no higher than the layer), and `inline` taking it where the nozzle
+    /// is, mid-path (`M971`, `M1004`), rather than at `spot`.
     pub fn photo(
         &self,
         index: usize,

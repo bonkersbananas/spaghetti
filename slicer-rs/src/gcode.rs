@@ -193,6 +193,8 @@ pub struct LayerGcode {
     /// The acceleration the layer ends at (NaN when it sets none).
     last_accel: f64,
     z: f64,
+    /// Whether Orca's writer knows where the nozzle is when the layer ends (not when its timelapse photo came last).
+    pub ends_known: bool,
     /// Where the layer's first travel goes, and where the layer ends.
     first: Option<[f64; 2]>,
     end: Option<[f64; 3]>,
@@ -253,13 +255,15 @@ fn set_fan(t: &mut Vec<u8>, percent: f64) {
 /// with its regions and the height the nozzle travels at onto it (the layer before's top, lifted; for the first,
 /// where the start G-code leaves the nozzle). They are cooled as one, as Orca's cooling buffer holds the support's
 /// own layers until an object layer comes: the last is an object layer (or the print's last), any before it the
-/// support's alone.
-pub fn layers(group: &[(&LayerPlan, &LayerRegions, f64)], job: &Job) -> Vec<LayerGcode> {
+/// support's alone. `known` is whether Orca's writer knows where the nozzle is as the group starts (`LayerGcode`'s
+/// `ends_known` of the layer before).
+pub fn layers(group: &[(&LayerPlan, &LayerRegions, f64)], job: &Job, mut known: bool) -> Vec<LayerGcode> {
     let s = job.settings;
     let mut built: Vec<_> = group
         .iter()
         .map(|&(plan, regions, from_z)| {
-            let (moves, notes, turn) = build_layer(plan, regions, job, from_z);
+            let (moves, notes, turn, ends_known) = build_layer(plan, regions, job, from_z, known);
+            known = ends_known;
             // In spiral vase mode the nozzle travels onto the layer from where the one before ended, in its moves.
             let (start, first) = match &plan.course {
                 Some(c) => (c.from, None),
@@ -268,7 +272,7 @@ pub fn layers(group: &[(&LayerPlan, &LayerRegions, f64)], job: &Job) -> Vec<Laye
                     (first.map(|[x, y]| [x, y, from_z]).unwrap_or([job.start[0], job.start[1], from_z]), first)
                 }
             };
-            (moves, notes, start, first, turn)
+            (moves, notes, start, first, turn, ends_known)
         })
         .collect();
     let cooling_time = match job.colours.filter(|c| !c.towered) {
@@ -304,7 +308,7 @@ pub fn layers(group: &[(&LayerPlan, &LayerRegions, f64)], job: &Job) -> Vec<Laye
     group
         .iter()
         .zip(built)
-        .map(|(&(plan, _, _), (moves, notes, start, first, turn))| {
+        .map(|(&(plan, _, _), (moves, notes, start, first, turn, ends_known))| {
             // The layer's markers (its fans go before them, in `assemble`), then its moves.
             let mut text = Vec::with_capacity(moves.len() * 28 + 4096);
             text.extend_from_slice(
@@ -329,6 +333,7 @@ pub fn layers(group: &[(&LayerPlan, &LayerRegions, f64)], job: &Job) -> Vec<Laye
                 first_accel: out.first_accel,
                 last_accel: out.last_accel,
                 z: plan.z,
+                ends_known,
                 first,
                 end: moves.last().map(|m| [m.x, m.y, m.z]),
                 time: out.time,
@@ -1220,21 +1225,26 @@ impl<'a> Internal<'a> {
     }
 }
 
-/// The layer's moves and what is said between them, in Orca's order: the printer's layer change G-code, each object's
-/// labels around its moves, retractions that wipe and spiral lifts on travels, and after the last path a retraction,
-/// a lift and the timelapse photo.
 /// What a spiral vase's rising layer gave besides its moves (`spiral.rs`).
 struct Turned {
     again: bool,
     points: Vec<[f64; 2]>,
 }
 
+/// A layer's moves, its notes by move, what a spiral vase's rising layer gave, and whether the writer knows where the
+/// nozzle is at its end (Orca's writer forgets after a timelapse photo).
+type Built = (Vec<Move>, Vec<(usize, Note)>, Option<Turned>, bool);
+
+/// The layer's moves and what is said between them, in Orca's order: the printer's layer change G-code, each object's
+/// labels around its moves, retractions that wipe and spiral lifts on travels, and after the last path a retraction,
+/// a lift and the timelapse photo.
 fn build_layer<'a>(
     plan: &'a LayerPlan,
     regions: &'a LayerRegions,
     job: &'a Job<'a>,
     from_z: f64,
-) -> (Vec<Move>, Vec<(usize, Note)>, Option<Turned>) {
+    before_known: bool,
+) -> Built {
     let i = plan.index;
     let s = job.colours.map_or(job.settings, |c| &c.settings[c.start(i)]);
     let first_layer = i == 0;
@@ -1269,9 +1279,14 @@ fn build_layer<'a>(
         prior: 0.0,
         overhang: crate::plan::overhang_flow(first_layer, plan.height, s),
         // Orca's writer knows where the nozzle is when the layer starts unless the layer before took its timelapse
-        // photo last (after its paths: with one filament, unless it took it mid-path, before the travels that came
-        // after), or this is the first layer (after the start G-code).
-        known: i > 0 && (job.colours.is_some_and(|c| c.photo_in_layer(i - 1)) || farthest.is_some()),
+        // photo last (after its paths; with one filament, as the layer before ended: with the farthest-point
+        // timelapse it may have taken it mid-path, before the travels that came after), or this is the first layer
+        // (after the start G-code).
+        known: i > 0
+            && match job.colours {
+                Some(c) => c.photo_in_layer(i - 1),
+                None => before_known,
+            },
         lost: false,
         change_from: (x0, y0),
         fresh: true,
@@ -1564,8 +1579,10 @@ fn build_layer<'a>(
             None => layer_photo(plan, job, job.photos.get(i).copied().flatten(), false, false),
         };
         b.note(Note::Text(photo));
+        b.known = false;
     }
-    let Some(course) = course else { return (b.moves, b.notes, None) };
+    let known = b.known;
+    let Some(course) = course else { return (b.moves, b.notes, None, known) };
     let mut turned = None;
     if plan.spiral {
         let r = crate::spiral::rise(&b.moves, course, s);
@@ -1594,7 +1611,7 @@ fn build_layer<'a>(
         b.retract();
         b.lift_straight();
     }
-    (b.moves, b.notes, turned)
+    (b.moves, b.notes, turned, known)
 }
 
 /// Where a layer's first travel goes: its first visit to the prime tower when that comes first, else its first path.
