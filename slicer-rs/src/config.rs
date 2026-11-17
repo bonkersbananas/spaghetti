@@ -187,6 +187,12 @@ pub struct Settings {
     pub precise_outer_wall: bool,
     /// How wide a top must be before it gets one wall (`min_width_top_surface`, a share of the inner wall's width).
     pub min_width_top_surface: Share,
+    /// What Arachne reads (`min_bead_width`… as Orca's `make_paths_params`): numbers as the profile has them (shares
+    /// of the nozzle in percent, lengths in mm).
+    pub arachne: ArachneSettings,
+    /// Walls in `wall_sequence`'s order: inner walls first (the default), or the outer wall first.
+    pub outer_wall_first: bool,
+    pub wall_sequence: String,
     /// mm: how wide bridge lines are (`bridge_line_width`, a share of the nozzle); 0 for solid infill's width.
     pub bridge_width: f64,
     /// Whether bridges over air and over sparse infill print as round threads, a bridge line wide and as high
@@ -497,6 +503,22 @@ impl Fuzzy {
             matches!(w, FuzzyWalls::Holes | FuzzyWalls::Outer | FuzzyWalls::All) && (depth == 0 || w == FuzzyWalls::All)
         }
     }
+}
+
+/// Arachne's settings (Orca's `make_paths_params`), as the profile gives them: shares of the nozzle in percent,
+/// lengths in mm.
+#[derive(Clone, Debug, Default)]
+pub struct ArachneSettings {
+    pub min_feature_size: f64,
+    pub min_length_factor: f64,
+    pub min_bead_width: f64,
+    pub initial_layer_min_bead_width: f64,
+    pub wall_transition_filter_deviation: f64,
+    pub wall_transition_length: f64,
+    pub wall_transition_angle: f64,
+    pub wall_distribution_count: i32,
+    pub wall_maximum_resolution: f64,
+    pub wall_maximum_deviation: f64,
 }
 
 /// How a spiral vase's wall rises (`spiral.rs`), by Orca's keys.
@@ -964,6 +986,20 @@ impl Settings {
             precise_outer_wall: !matches!(p.text("precise_outer_wall"), "0" | "false")
                 && matches!(p.text("wall_sequence"), "" | "inner wall/outer wall"),
             min_width_top_surface: Share::parse(p.text("min_width_top_surface")),
+            arachne: ArachneSettings {
+                min_feature_size: p.float("min_feature_size"),
+                min_length_factor: if p.text("min_length_factor").is_empty() { 0.5 } else { p.float("min_length_factor") },
+                min_bead_width: p.float("min_bead_width"),
+                initial_layer_min_bead_width: p.float("initial_layer_min_bead_width"),
+                wall_transition_filter_deviation: p.float("wall_transition_filter_deviation"),
+                wall_transition_length: p.float("wall_transition_length"),
+                wall_transition_angle: p.float("wall_transition_angle"),
+                wall_distribution_count: p.int("wall_distribution_count") as i32,
+                wall_maximum_resolution: if p.text("wall_maximum_resolution").is_empty() { 0.5 } else { p.float("wall_maximum_resolution") },
+                wall_maximum_deviation: if p.text("wall_maximum_deviation").is_empty() { 0.025 } else { p.float("wall_maximum_deviation") },
+            },
+            outer_wall_first: p.text("wall_sequence") == "outer wall/inner wall",
+            wall_sequence: p.text("wall_sequence").to_string(),
             bridge_width: p.float_of("bridge_line_width", nozzle_diameter).max(0.0),
             thick_bridges: p.bool("thick_bridges"),
             thick_internal_bridges: p.bool("thick_internal_bridges"),
@@ -1297,7 +1333,12 @@ impl Settings {
             }
         }
         if self.wall_generator == "arachne" {
-            out.push("arachne walls printed as classic walls".into());
+            if self.only_one_wall_top {
+                out.push("arachne walls under a top surface printed with all their walls (only_one_wall_top)".into());
+            }
+            if self.wall_sequence == "inner-outer-inner wall" {
+                out.push("inner-outer-inner arachne walls printed inner to outer".into());
+            }
         }
         if self.elephant_foot > 0.0 && self.elephant_foot_layers > 1 && self.support.raft_layers <= 0 {
             out.push("elephant's foot compensated on the first layer only".into());

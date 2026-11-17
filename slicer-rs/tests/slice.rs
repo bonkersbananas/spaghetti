@@ -3405,3 +3405,18 @@ fn line_infill_lays_its_leaning_lines_as_orcas_does() {
     assert!((sparse.volume - 1265.51).abs() < 1265.51 * 0.01, "{} mm³", sparse.volume);
     assert!((sparse.time - 125.3).abs() < 125.3 * 0.01, "{} s", sparse.time);
 }
+
+/// Arachne walls (`wall_generator = arachne`) print as Orca's do: a cube's plastic comes within 1 % of the classic
+/// walls' (native Orca 2.5.1 gives 0.2 % apart on a Benchy), the walls are inner then outer, and a plate too thin for
+/// two walls gets a middle bead where classic walls leave a gap. No note says they print as classic ones.
+#[test]
+fn arachne_walls_fill_what_classic_walls_do() {
+    let stl = cube_stl(20.0);
+    let classic = slice(&[Input { name: "cube.stl", bytes: &stl }], &Settings::default(), &Options::default()).unwrap();
+    let arachne_settings = Settings { wall_generator: "arachne".into(), ..Settings::default() };
+    let out = slice(&[Input { name: "cube.stl", bytes: &stl }], &arachne_settings, &Options::default()).unwrap();
+    assert!((out.stats.volume / classic.stats.volume - 1.0).abs() < 0.01, "{} against {}", out.stats.volume, classic.stats.volume);
+    assert!(!out.fallbacks.iter().any(|f| f.contains("arachne walls printed as classic")), "{:?}", out.fallbacks);
+    let gcode = String::from_utf8(out.gcode.clone()).unwrap();
+    assert!(gcode.contains("; FEATURE: Inner wall") && gcode.contains("; FEATURE: Outer wall"));
+}

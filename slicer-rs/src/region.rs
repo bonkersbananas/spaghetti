@@ -105,6 +105,22 @@ pub struct Island {
     /// Small and too narrow for its outer wall: that wall prints as a thinner line (`narrow_wall_width`), as Bambu's
     /// narrow loops in Orca's classic walls, and nothing prints inside it.
     pub narrow: bool,
+    /// Arachne's walls (`wall_generator = arachne`): lines of varying width, in the order Orca's wall generator
+    /// numbers them (`inset`, the outer wall's 0). When there are any, they print instead of `walls`, which then
+    /// holds just the closed even lines' points by depth, for what looks at an island's loops.
+    pub lines: Vec<ArachneLine>,
+}
+
+/// One line of Arachne's walls: a loop or an open line (the odd middle beads of a thin part), its points and each
+/// one's width (mm, as spacings).
+#[derive(Clone, Debug)]
+pub struct ArachneLine {
+    pub inset: usize,
+    pub odd: bool,
+    pub closed: bool,
+    /// A closed line repeats its first point at the end.
+    pub points: Vec<geom::Pt>,
+    pub widths: Vec<f64>,
 }
 
 /// The infill areas of one island, by kind.
@@ -991,6 +1007,9 @@ fn wall_group(
     around: &Around,
     s: &Settings,
 ) -> Vec<Island> {
+    if s.wall_generator == "arachne" && loops > 0 {
+        return arachne_group(slice, loops, last, layer, height, s);
+    }
     let first = s.on_plate(layer);
     let (w_outer, w_inner) =
         if first { (s.first_layer_width, s.first_layer_width) } else { (s.outer_wall_width, s.inner_wall_width) };
@@ -1150,6 +1169,88 @@ fn wall_group(
         }
     }
     out
+}
+
+/// `wall_group` with Arachne's walls (Orca's `PerimeterGenerator::process_arachne`): each island's outline drawn in by
+/// what the outer wall's spacing leaves of its width (with `precise_outer_wall`, all of it), turned into lines of
+/// beads by `WallToolPaths`, and what is left inside them (Arachne's inner contour) kept as infill's area, reaching
+/// into the walls by the infill overlap of the innermost one's spacing. Arachne has no gap fill: the beads widen
+/// and split to fill what a wall can't. Not done: the one wall a top surface gets (`only_one_wall_top`), which the
+/// settings list as a note.
+fn arachne_group(slice: &Shapes, loops: usize, last: bool, layer: usize, height: f64, s: &Settings) -> Vec<Island> {
+    use crate::arachne::toolpaths::{WallParams, WallToolPaths};
+    let first = s.on_plate(layer);
+    let (w_outer, w_inner) =
+        if first { (s.first_layer_width, s.first_layer_width) } else { (s.outer_wall_width, s.inner_wall_width) };
+    let w_solid = if first { s.first_layer_width } else { s.solid_infill_width };
+    let sp_outer = Settings::spacing(w_outer, height);
+    let sp_inner = Settings::spacing(w_inner, height);
+    let nm = |mm: f64| (mm * 1_000_000.0) as i64;
+    let a = &s.arachne;
+    let nozzle = s.nozzle_diameter;
+    let params = WallParams {
+        min_feature_size: a.min_feature_size * 0.01 * nozzle,
+        min_length_factor: a.min_length_factor as f32,
+        min_bead_width: (if layer == 0 { a.initial_layer_min_bead_width } else { a.min_bead_width }) * 0.01 * nozzle,
+        wall_transition_filter_deviation: a.wall_transition_filter_deviation * 0.01 * nozzle,
+        wall_transition_length: a.wall_transition_length * 0.01 * nozzle,
+        wall_transition_angle: a.wall_transition_angle,
+        wall_distribution_count: a.wall_distribution_count,
+        is_top_or_bottom_layer: first || last,
+        wall_maximum_resolution: nm(a.wall_maximum_resolution),
+        wall_maximum_deviation: nm(a.wall_maximum_deviation),
+    };
+    let precise = s.precise_outer_wall;
+    let (w0, s0) = (f64::from(w_outer as f32), sp_outer);
+    let draw_in = if precise { w0 - s0 } else { w0 / 2.0 - s0 / 2.0 };
+    let wall_0_inset = if precise { -nm(w0 / 2.0 - s0 / 2.0) } else { 0 };
+    let wall_resolution = if s.arc_fitting == ArcFitting::Enabled { 0.2 * s.resolution } else { PATH_RESOLUTION };
+    let off = |shapes: &Shapes, delta: f64| geom::offset_c2(shapes, delta, geom::Join::Miter(3.0));
+    let min_infill_spacing = Settings::spacing(w_solid, height) * (1.0 - INSET_OVERLAP_TOLERANCE);
+    let spacing_for_overlap = if loops == 1 { sp_outer } else { sp_inner };
+    let share = if first || last { s.top_bottom_infill_wall_overlap } else { s.infill_wall_overlap };
+    let ext_spacing2 = 0.5 * (sp_outer + sp_inner);
+    slice
+        .iter()
+        .map(|shape| {
+            let one = vec![shape.clone()];
+            let outline = off(&geom::simplify_shapes(&one, wall_resolution), -draw_in);
+            let result = WallToolPaths::generate(&outline, nm(sp_outer), nm(sp_inner), loops, wall_0_inset, height, &params);
+            let mut island = Island { outline: shape.clone(), overlap: share * spacing_for_overlap, ..Island::default() };
+            for line in result.toolpaths.iter().flatten() {
+                if line.junctions.len() < 2 {
+                    continue;
+                }
+                let points: Vec<geom::Pt> = line
+                    .junctions
+                    .iter()
+                    .map(|j| geom::pt((j.p.x as f64 / 100.0).round() as i32, (j.p.y as f64 / 100.0).round() as i32))
+                    .collect();
+                if line.is_closed && !line.is_odd && line.junctions.len() >= 4 {
+                    while island.walls.len() <= line.inset_idx {
+                        island.walls.push(Vec::new());
+                    }
+                    island.walls[line.inset_idx].push(points[..points.len() - 1].to_vec());
+                }
+                island.lines.push(ArachneLine {
+                    inset: line.inset_idx,
+                    odd: line.is_odd,
+                    closed: line.is_closed,
+                    widths: line.junctions.iter().map(|j| j.w as f64 / 1e6).collect(),
+                    points,
+                });
+            }
+            // What is left inside: too small to fill when no spacing's half fits; else drawn in and out again so
+            // that what a line can't fill is left out.
+            let spacing = if loops == 1 { ext_spacing2 } else { sp_inner };
+            let inside = result.inner_contour;
+            if !inside.is_empty() && !off(&inside, -spacing / 2.0).is_empty() {
+                let simple = geom::simplify_shapes(&inside, PATH_RESOLUTION);
+                island.inner = off(&off(&simple, -min_infill_spacing / 2.0), min_infill_spacing / 2.0);
+            }
+            island
+        })
+        .collect()
 }
 
 /// `wall_group` for a slice some of whose islands are `narrow`: those get their thinner outer wall alone, the others
