@@ -53,7 +53,7 @@ test("a new notebook gets a welcome, not a blank page", async ({ page }) => {
   await expect(page.getByRole("button", { name: "New idea" }).first()).toBeVisible();
 });
 
-test("shows the print on the bed with its progress, and "How did it go?" opens that attempt", async ({ page }) => {
+test("shows the print on the bed with its progress, and How did it go? opens that attempt", async ({ page }) => {
   const { id } = await printing(page, "Bath tugboat", 20 * MINUTE, 120);
   await page.goto("/today");
 

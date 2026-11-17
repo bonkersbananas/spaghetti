@@ -295,10 +295,10 @@ export function PrintingCard({
                   attemptId={attempt.id}
                   showLabel={false}
                 />
-                <div className="flex items-center justify-between gap-3">
+                <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
                   <p
                     className={cn(
-                      "text-small tabular min-w-0",
+                      "text-small tabular",
                       progress.state === "due" ? "text-semolina-ink font-semibold" : "text-ink-soft",
                     )}
                   >
@@ -310,7 +310,7 @@ export function PrintingCard({
                       </span>
                     ))}
                   </p>
-                  <div className="pointer-events-auto flex shrink-0 items-center gap-1.5">
+                  <div className="pointer-events-auto ml-auto flex shrink-0 items-center gap-1.5">
                     {!readOnly && (
                       <IconButton
                         icon={CameraIcon}
