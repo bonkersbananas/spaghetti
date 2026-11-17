@@ -3302,3 +3302,43 @@ fn the_plane_path_patterns_lay_their_curves_as_orcas_do() {
         assert!((sparse.time - time).abs() < time * 0.01, "{pattern}: {} s", sparse.time);
     }
 }
+
+#[test]
+fn three_d_honeycomb_slices_its_cells_as_orcas_does() {
+    // The stepped boxes at 15 %: native OrcaSlicer 2.5.1 with the X2D's presets prints 1,249.88 mm³ of 3D honeycomb
+    // sparse infill in 216.1 s (Nov 17).
+    let steps = boxes_stl(&[
+        ([108., 108., 0.], [148., 148., 5.]),
+        ([116., 116., 0.], [140., 140., 10.]),
+        ([123., 123., 0.], [133., 133., 15.]),
+        ([137., 137., 0.], [146., 146., 8.]),
+    ]);
+    let options = Options { arrange: false, thumbnail: false, ..Options::default() };
+    let json = r#"{"process": {"sparse_infill_pattern": "3dhoneycomb"}}"#;
+    let out =
+        slice(&[Input { name: "steps.stl", bytes: &steps }], &setup::read(json).unwrap().settings, &options).unwrap();
+    assert!(out.fallbacks.is_empty(), "{:?}", out.fallbacks);
+    let sparse = out.stats.features[Role::ALL.iter().position(|&r| r == Role::SparseInfill).unwrap()];
+    assert!((sparse.volume - 1249.88).abs() < 1249.88 * 0.01, "{} mm³", sparse.volume);
+    assert!((sparse.time - 216.1).abs() < 216.1 * 0.01, "{} s", sparse.time);
+}
+
+#[test]
+fn tpms_d_traces_the_diamond_surface_as_orcas_does() {
+    // The stepped boxes at 15 %: native OrcaSlicer 2.5.1 with the X2D's presets prints 1,362.04 mm³ of TPMS-D sparse
+    // infill in 218.0 s (Nov 17).
+    let steps = boxes_stl(&[
+        ([108., 108., 0.], [148., 148., 5.]),
+        ([116., 116., 0.], [140., 140., 10.]),
+        ([123., 123., 0.], [133., 133., 15.]),
+        ([137., 137., 0.], [146., 146., 8.]),
+    ]);
+    let options = Options { arrange: false, thumbnail: false, ..Options::default() };
+    let json = r#"{"process": {"sparse_infill_pattern": "tpmsd"}}"#;
+    let out =
+        slice(&[Input { name: "steps.stl", bytes: &steps }], &setup::read(json).unwrap().settings, &options).unwrap();
+    assert!(out.fallbacks.is_empty(), "{:?}", out.fallbacks);
+    let sparse = out.stats.features[Role::ALL.iter().position(|&r| r == Role::SparseInfill).unwrap()];
+    assert!((sparse.volume - 1362.04).abs() < 1362.04 * 0.01, "{} mm³", sparse.volume);
+    assert!((sparse.time - 218.0).abs() < 218.0 * 0.01, "{} s", sparse.time);
+}
