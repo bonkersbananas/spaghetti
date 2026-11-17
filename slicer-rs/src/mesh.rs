@@ -3,8 +3,7 @@
 //! (`shared/slicing/arrange.ts`: shelves from the back, centred, 6 mm apart).
 
 use crate::Error;
-use std::collections::HashMap;
-use std::hash::{BuildHasherDefault, Hasher};
+use std::hash::Hasher;
 
 /// One object: shared vertices and triangles indexing them (corners counter-clockwise seen from outside).
 #[derive(Clone, Debug, Default)]
@@ -53,22 +52,12 @@ impl Mesh {
 
     /// `weld`, and where its triangles went (`Moves`).
     fn weld_moved(name: &str, count: usize, corner: impl Fn(usize, usize) -> [f32; 3]) -> (Mesh, Moves) {
-        let mut index: HashMap<[u32; 3], u32, BuildHasherDefault<FastHasher>> =
-            HashMap::with_capacity_and_hasher(count / 2 + 16, Default::default());
-        let mut vertices = Vec::with_capacity(count / 2 + 16);
+        let mut welder = Welder::with_capacity(count / 2 + 16);
         let mut triangles = Vec::with_capacity(count);
         for t in 0..count {
-            let mut ids = [0u32; 3];
-            for (k, id) in ids.iter_mut().enumerate() {
-                let p = corner(t, k);
-                let key = [(p[0] + 0.0).to_bits(), (p[1] + 0.0).to_bits(), (p[2] + 0.0).to_bits()];
-                *id = *index.entry(key).or_insert_with(|| {
-                    vertices.push(p);
-                    (vertices.len() - 1) as u32
-                });
-            }
-            triangles.push(ids);
+            triangles.push([0, 1, 2].map(|k| welder.id(corner(t, k))));
         }
+        let vertices = welder.vertices;
         // A triangle with two equal corners has no area and no edges worth following.
         let collapsed = |t: &[u32; 3]| t[0] == t[1] || t[1] == t[2] || t[0] == t[2];
         let mut moves = Moves(None);
@@ -92,20 +81,9 @@ impl Mesh {
 
     /// `welded`, and where its triangles went (`Moves`): the ones kept keep their order.
     pub fn welded_moved(self) -> (Mesh, Moves) {
-        let mut index: HashMap<[u32; 3], u32, BuildHasherDefault<FastHasher>> =
-            HashMap::with_capacity_and_hasher(self.vertices.len() + 16, Default::default());
-        let mut vertices = Vec::with_capacity(self.vertices.len());
-        let remap: Vec<u32> = self
-            .vertices
-            .iter()
-            .map(|p| {
-                let key = [(p[0] + 0.0).to_bits(), (p[1] + 0.0).to_bits(), (p[2] + 0.0).to_bits()];
-                *index.entry(key).or_insert_with(|| {
-                    vertices.push(*p);
-                    (vertices.len() - 1) as u32
-                })
-            })
-            .collect();
+        let mut welder = Welder::with_capacity(self.vertices.len() + 16);
+        let remap: Vec<u32> = self.vertices.iter().map(|&p| welder.id(p)).collect();
+        let vertices = welder.vertices;
         let collapsed = |t: &[u32; 3]| t[0] == t[1] || t[1] == t[2] || t[0] == t[2];
         let welded: Vec<[u32; 3]> = self.triangles.iter().map(|t| t.map(|i| remap[i as usize])).collect();
         let moves = Moves(
@@ -433,7 +411,68 @@ pub fn on_plate(m: &Mesh, bed: [f64; 2]) -> OnPlate {
     }
 }
 
-/// FxHash-style hashing for the welding map: fast, and plenty for exact float bits.
+/// The vertices of a mesh being welded, and where each distinct corner is among them: an open-addressed table of
+/// their indices, each corner known by its coordinates' bits (-0 as 0). A map keyed by the corners held three times as
+/// much while a big STL was read (35 MB for the 1.8 million triangles of an 89 MB file, beside the file itself).
+struct Welder {
+    vertices: Vec<[f32; 3]>,
+    /// Indices into `vertices`, `EMPTY` where none; a power of two long, at most half full.
+    slots: Vec<u32>,
+}
+
+impl Welder {
+    const EMPTY: u32 = u32::MAX;
+
+    fn with_capacity(vertices: usize) -> Self {
+        Welder { vertices: Vec::with_capacity(vertices), slots: vec![Self::EMPTY; (2 * vertices).next_power_of_two()] }
+    }
+
+    fn key(p: [f32; 3]) -> [u32; 3] {
+        p.map(|c| (c + 0.0).to_bits())
+    }
+
+    /// Where the table starts looking for a corner: the top bits of its hash, the best mixed.
+    fn start(&self, key: [u32; 3]) -> usize {
+        let mut h = FastHasher::default();
+        key.iter().for_each(|&k| h.write_u32(k));
+        (h.finish() >> (64 - self.slots.len().trailing_zeros())) as usize
+    }
+
+    /// The corner's vertex, added when it's the first at that spot.
+    fn id(&mut self, p: [f32; 3]) -> u32 {
+        let key = Self::key(p);
+        let mask = self.slots.len() - 1;
+        let mut i = self.start(key);
+        loop {
+            match self.slots[i] {
+                Self::EMPTY => break,
+                v if Self::key(self.vertices[v as usize]) == key => return v,
+                _ => i = (i + 1) & mask,
+            }
+        }
+        let id = self.vertices.len() as u32;
+        self.vertices.push(p);
+        self.slots[i] = id;
+        if 2 * self.vertices.len() > self.slots.len() {
+            self.grow();
+        }
+        id
+    }
+
+    fn grow(&mut self) {
+        self.slots = vec![Self::EMPTY; 2 * self.slots.len()];
+        let mask = self.slots.len() - 1;
+        for (id, &p) in self.vertices.iter().enumerate() {
+            let mut i = self.start(Self::key(p));
+            while self.slots[i] != Self::EMPTY {
+                i = (i + 1) & mask;
+            }
+            self.slots[i] = id as u32;
+        }
+    }
+}
+
+/// FxHash-style hashing for the welding table: fast, and plenty for exact float bits.
 #[derive(Default)]
 pub struct FastHasher(u64);
 
@@ -462,6 +501,39 @@ impl Hasher for FastHasher {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_welder_numbers_corners_as_a_map_of_them_would() {
+        // Each corner gets the vertex of the first corner at its spot (-0 the same spot as 0), in the order they come,
+        // past the table's first size as it grows.
+        let mut state = 3u64;
+        let mut next = move || {
+            state = state.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+            (state >> 33) as u32
+        };
+        let corners: Vec<[f32; 3]> = (0..20_000)
+            .map(|_| [0, 1, 2].map(|_| [-0.0, 0.0, 0.5, -1.25, 3.0][(next() % 5) as usize] * (1 + next() % 9) as f32))
+            .collect();
+        let mut welder = Welder::with_capacity(4);
+        let ids: Vec<u32> = corners.iter().map(|&p| welder.id(p)).collect();
+        let mut map: std::collections::HashMap<[u32; 3], u32> = std::collections::HashMap::new();
+        let mut vertices = Vec::new();
+        let expected: Vec<u32> = corners
+            .iter()
+            .map(|&p| {
+                *map.entry(p.map(|c| (c + 0.0).to_bits())).or_insert_with(|| {
+                    vertices.push(p);
+                    vertices.len() as u32 - 1
+                })
+            })
+            .collect();
+        assert_eq!(ids, expected);
+        assert_eq!(
+            welder.vertices.iter().map(|v| v.map(f32::to_bits)).collect::<Vec<_>>(),
+            vertices.iter().map(|v| v.map(f32::to_bits)).collect::<Vec<_>>()
+        );
+        assert!(vertices.len() > 100, "{} vertices", vertices.len());
+    }
 
     #[test]
     fn a_dropped_triangle_s_place_goes_to_the_last_and_the_moves_say_so() {
