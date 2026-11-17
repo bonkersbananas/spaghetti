@@ -224,6 +224,8 @@ pub struct Settings {
     pub used_filaments: usize,
     pub prime_tower: bool,
     pub ironing_type: String,
+    /// Ironing over top surfaces (`ironing_*`, Orca's `make_ironing`).
+    pub iron: Ironing,
     pub fuzzy_skin: String,
     /// How the nozzle lifts on a retraction (`z_hop_types`, the filament's own first).
     pub z_hop_type: String,
@@ -314,6 +316,68 @@ pub struct Settings {
     /// The auxiliary fan from the first fan layer on (the printer's layer change G-code sets it lower for the first
     /// layers itself).
     pub aux_fan_speed: f64,
+}
+
+/// Which surfaces are ironed (`ironing_type`).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum IronWhere {
+    #[default]
+    Nowhere,
+    /// Every top surface (`top`).
+    Tops,
+    /// The object's last layer's top surfaces only (`topmost`).
+    Topmost,
+    /// Every solid surface (`solid`): tops, bottoms on the plate and solid infill.
+    Solid,
+}
+
+/// Ironing as Orca's `make_ironing` reads it: the process's values, each unless the filament gives its own
+/// (`filament_ironing_*`, "nil" where it doesn't).
+#[derive(Clone, Debug, Default)]
+pub struct Ironing {
+    pub surfaces: IronWhere,
+    /// Concentric loops (`ironing_pattern` concentric) rather than lines.
+    pub concentric: bool,
+    /// mm between the lines (`ironing_spacing`, at least Orca's `IRONING_SPACING_MIN`, 0.05 mm).
+    pub spacing: f64,
+    /// Share of a layer's flow (`ironing_flow`).
+    pub flow: f64,
+    /// mm/s (`ironing_speed`).
+    pub speed: f64,
+    /// mm the ironed area keeps off the slice's edge (`ironing_inset`; 0: half the nozzle).
+    pub inset: f64,
+    /// Degrees added to the top surface's direction (`ironing_angle`), or the direction itself with `fixed`
+    /// (`ironing_angle_fixed`).
+    pub angle: f64,
+    pub fixed: bool,
+}
+
+impl Ironing {
+    fn read(p: &Profile) -> Ironing {
+        let own = |filament_key: &str, key: &str| match p.list(filament_key).first() {
+            Some(v) if *v != "nil" && !v.is_empty() => v.trim_end_matches('%').parse().unwrap_or(0.0),
+            _ => p.float(key),
+        };
+        Ironing {
+            surfaces: match p.text("ironing_type") {
+                "top" => IronWhere::Tops,
+                "topmost" => IronWhere::Topmost,
+                "solid" => IronWhere::Solid,
+                _ => IronWhere::Nowhere,
+            },
+            concentric: p.text("ironing_pattern") == "concentric",
+            spacing: own("filament_ironing_spacing", "ironing_spacing").max(0.05),
+            flow: own("filament_ironing_flow", "ironing_flow") / 100.0,
+            speed: own("filament_ironing_speed", "ironing_speed"),
+            inset: own("filament_ironing_inset", "ironing_inset"),
+            angle: p.float("ironing_angle"),
+            fixed: p.bool("ironing_angle_fixed"),
+        }
+    }
+
+    pub fn on(&self) -> bool {
+        self.surfaces != IronWhere::Nowhere
+    }
 }
 
 /// How a spiral vase's wall rises (`spiral.rs`), by Orca's keys.
@@ -812,6 +876,7 @@ impl Settings {
             used_filaments: 0,
             prime_tower: false,
             ironing_type: text("ironing_type"),
+            iron: Ironing::read(p),
             fuzzy_skin: text("fuzzy_skin"),
             z_hop_type,
 
@@ -1069,8 +1134,8 @@ impl Settings {
         if self.elephant_foot > 0.0 && self.elephant_foot_layers > 1 && self.support.raft_layers <= 0 {
             out.push("elephant's foot compensated on the first layer only".into());
         }
-        if !matches!(self.ironing_type.as_str(), "no ironing" | "") {
-            out.push("no ironing".into());
+        if self.iron.on() && self.iron.concentric {
+            out.push("concentric ironing printed as lines".into());
         }
         if !matches!(self.fuzzy_skin.as_str(), "disabled_fuzzy" | "none" | "") {
             out.push("no fuzzy skin".into());

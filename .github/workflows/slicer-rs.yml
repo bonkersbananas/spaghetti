@@ -116,3 +116,10 @@ jobs:
           grep -qE '^G1 X[0-9.]+ Y[0-9.]+ Z[0-9.]+ F60000$' /tmp/lift.gcode
           node bench/wasm-node.mjs target/wasm32-unknown-unknown/release/spaghetti_slicer.wasm /tmp/lift-wasm.gcode.3mf --setup /tmp/lift.json tests/models/bridge.stl
           cmp /tmp/lift.gcode.3mf /tmp/lift-wasm.gcode.3mf
+      - name: The same, with its top surfaces ironed
+        run: |
+          echo '{"process": {"ironing_type": "top"}}' > /tmp/iron.json
+          ./target/release/spaghetti-slicer --setup /tmp/iron.json tests/models/bridge.stl -o /tmp/iron.gcode.3mf --gcode /tmp/iron.gcode
+          grep -q '; FEATURE: Ironing$' /tmp/iron.gcode
+          node bench/wasm-node.mjs target/wasm32-unknown-unknown/release/spaghetti_slicer.wasm /tmp/iron-wasm.gcode.3mf --setup /tmp/iron.json tests/models/bridge.stl
+          cmp /tmp/iron.gcode.3mf /tmp/iron-wasm.gcode.3mf
