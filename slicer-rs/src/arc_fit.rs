@@ -153,35 +153,50 @@ impl Circle {
 
     /// `is_over_deviation`: whether a point, or a segment's point nearest the centre, is off the circle by more than
     /// `tolerance`.
-    fn over_deviation(&self, points: &[P], tolerance: f64) -> bool {
+    fn over_deviation(&self, points: &[P], tolerance: f64, probe: &mut usize) -> bool {
+        if self.off_at(points, tolerance, *probe) {
+            return true;
+        }
         for index in 0..points.len() - 1 {
-            if index != 0 && (self.distance(points[index]) - self.radius).abs() > tolerance {
-                return true;
-            }
-            if let Some(q) = closest_perpendicular(points[index], points[index + 1], self.center)
-                && (self.distance(q) - self.radius).abs() > tolerance
-            {
+            if self.off_at(points, tolerance, index) {
+                *probe = index;
                 return true;
             }
         }
         false
     }
 
+    /// Whether point `index` (but the first) or the foot on the segment after it is off by more than `tolerance`.
+    /// `probe`, in `over_deviation` and `deviation_sum_squared`, is where the last circle tried was off: looked at
+    /// first, as the next circle through the run is likely off there too (a point off anywhere is the same answer).
+    fn off_at(&self, points: &[P], tolerance: f64, index: usize) -> bool {
+        let off = |p: P| (self.distance(p) - self.radius).abs() > tolerance;
+        index < points.len() - 1
+            && ((index != 0 && off(points[index]))
+                || closest_perpendicular(points[index], points[index + 1], self.center).is_some_and(off))
+    }
+
     /// `get_deviation_sum_squared`: the points' squared deviations summed, unless one is off by more than `tolerance`.
-    fn deviation_sum_squared(&self, points: &[P], tolerance: f64) -> Option<f64> {
+    fn deviation_sum_squared(&self, points: &[P], tolerance: f64, probe: &mut usize) -> Option<f64> {
+        let n = points.len();
+        if self.off_at(points, tolerance, *probe) {
+            return None;
+        }
         let mut total = 0.0;
-        for &p in &points[1..points.len() - 1] {
+        for (index, &p) in points.iter().enumerate().take(n - 1).skip(1) {
             let deviation = (self.distance(p) - self.radius).abs();
             total += deviation * deviation;
             if deviation > tolerance {
+                *probe = index;
                 return None;
             }
         }
-        for index in 0..points.len() - 1 {
+        for index in 0..n - 1 {
             if let Some(q) = closest_perpendicular(points[index], points[index + 1], self.center) {
                 let deviation = (self.distance(q) - self.radius).abs();
                 total += deviation * deviation;
                 if deviation > tolerance {
+                    *probe = index;
                     return None;
                 }
             }
@@ -208,11 +223,12 @@ fn closest_perpendicular(p1: P, p2: P, c: P) -> Option<P> {
 
 /// `Circle::try_create_circle` through a run of points: through its ends and its middle, else the one through its
 /// ends and another of its points that deviates least.
-fn circle_through(points: &[P], tolerance: f64) -> Option<Circle> {
+fn circle_through(points: &[P], tolerance: f64, probe: &mut usize) -> Option<Circle> {
     let count = points.len();
     let middle = count / 2;
     if count == 3 {
-        return circle3(points[0], points[middle], points[count - 1]).filter(|c| !c.over_deviation(points, tolerance));
+        return circle3(points[0], points[middle], points[count - 1])
+            .filter(|c| !c.over_deviation(points, tolerance, probe));
     }
     let (a, b) = if count.is_multiple_of(2) {
         (points[middle], points[middle - 1])
@@ -221,7 +237,7 @@ fn circle_through(points: &[P], tolerance: f64) -> Option<Circle> {
     };
     let mid = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
     if let Some(c) = circle3(points[0], mid, points[count - 1])
-        && !c.over_deviation(points, tolerance)
+        && !c.over_deviation(points, tolerance, probe)
     {
         return Some(c);
     }
@@ -231,7 +247,7 @@ fn circle_through(points: &[P], tolerance: f64) -> Option<Circle> {
             continue;
         }
         let Some(c) = circle3(points[0], p, points[count - 1]) else { continue };
-        if let Some(deviation) = c.deviation_sum_squared(points, tolerance)
+        if let Some(deviation) = c.deviation_sum_squared(points, tolerance, probe)
             && best.is_none_or(|(least, _)| deviation < least)
         {
             best = Some((deviation, c));
@@ -335,8 +351,8 @@ fn within_slice(arc: &Arc, points: &[P]) -> bool {
 }
 
 /// `ArcSegment::try_create_arc` on a run of points.
-fn try_arc(points: &[P], approximate_length: f64, tolerance: f64) -> Option<Arc> {
-    let c = circle_through(points, tolerance)?;
+fn try_arc(points: &[P], approximate_length: f64, tolerance: f64, probe: &mut usize) -> Option<Arc> {
+    let c = circle_through(points, tolerance, probe)?;
     let mid = (points.len() - 2) / 2 + 1;
     let arc = arc_on(c, points[0], points[mid], points[points.len() - 1], approximate_length)?;
     within_slice(&arc, points).then_some(arc)
@@ -363,6 +379,8 @@ fn fit(points: &[P], tolerance: f64) -> Vec<Run> {
     };
     // The run's length as Orca's `Polyline::length` sums it, kept as the run grows (the same sum, in the same order).
     let mut length = 0.0;
+    // Where the last circle tried was off (`Circle::deviation_sum_squared`), as an index into `current`.
+    let mut probe = usize::MAX;
     for (i, &p) in points.iter().enumerate() {
         back = i;
         current.push(p);
@@ -372,7 +390,7 @@ fn fit(points: &[P], tolerance: f64) -> Vec<Run> {
         if back - front < 2 {
             continue;
         }
-        if let Some(arc) = try_arc(&current, length, tolerance) {
+        if let Some(arc) = try_arc(&current, length, tolerance, &mut probe) {
             last_arc = arc;
             if back == points.len() - 1 {
                 result.push(Run { start: front, end: back, arc: Some(last_arc) });
@@ -538,6 +556,7 @@ mod tests {
     #[test]
     fn a_repeated_point_fits_no_circle_through_it() {
         let c = Circle { center: [0, 0], radius: 1_000_000.0 };
-        assert!(c.over_deviation(&[[1_000_000, 0], [1_000_000, 0], [0, 1_000_000]], 100_000.0));
+        let mut probe = usize::MAX;
+        assert!(c.over_deviation(&[[1_000_000, 0], [1_000_000, 0], [0, 1_000_000]], 100_000.0, &mut probe));
     }
 }

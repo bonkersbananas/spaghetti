@@ -3405,3 +3405,52 @@ fn line_infill_lays_its_leaning_lines_as_orcas_does() {
     assert!((sparse.volume - 1265.51).abs() < 1265.51 * 0.01, "{} mm³", sparse.volume);
     assert!((sparse.time - 125.3).abs() < 125.3 * 0.01, "{} s", sparse.time);
 }
+
+/// Arachne walls (`wall_generator = arachne`) print as Orca's do: a cube's plastic comes within 1 % of the classic
+/// walls' (native Orca 2.5.1 gives 0.2 % apart on a Benchy), each layer's inner wall before its outer one, a tube
+/// whose wall is thinner than two beads one wide outer wall and no inner one, and no note says they print as classic
+/// ones; in spiral vase mode the classic walls stay.
+#[test]
+fn arachne_walls_fill_what_classic_walls_do() {
+    let arachne = |extra: &dyn Fn(&mut Settings)| {
+        let mut settings = Settings { wall_generator: "arachne".into(), ..Settings::default() };
+        extra(&mut settings);
+        settings
+    };
+    let stl = cube_stl(20.0);
+    let classic = slice(&[Input { name: "cube.stl", bytes: &stl }], &Settings::default(), &Options::default()).unwrap();
+    let out = slice(&[Input { name: "cube.stl", bytes: &stl }], &arachne(&|_| {}), &Options::default()).unwrap();
+    assert!(
+        (out.stats.volume / classic.stats.volume - 1.0).abs() < 0.01,
+        "{} against {}",
+        out.stats.volume,
+        classic.stats.volume
+    );
+    assert!(!out.fallbacks.iter().any(|f| f.contains("arachne walls printed as classic")), "{:?}", out.fallbacks);
+    let gcode = String::from_utf8(out.gcode.clone()).unwrap();
+    let layer = gcode.split("; CHANGE_LAYER").nth(5).unwrap();
+    let (inner, outer) = (layer.find("; FEATURE: Inner wall").unwrap(), layer.find("; FEATURE: Outer wall").unwrap());
+    assert!(inner < outer, "inner walls print first");
+
+    // A tube whose wall is 0.7 mm: one bead, an outer wall alone, as wide as the wall.
+    let thin = tube_stl(15.0, 14.3, 10.0, 200);
+    let out = slice(&[Input { name: "tube.stl", bytes: &thin }], &arachne(&|_| {}), &Options::default()).unwrap();
+    let gcode = String::from_utf8(out.gcode.clone()).unwrap();
+    assert!(gcode.contains("; FEATURE: Outer wall") && !gcode.contains("; FEATURE: Inner wall"));
+    let wall = out.stats.features[Role::ALL.iter().position(|&r| r == Role::OuterWall).unwrap()].volume;
+    let ring = std::f64::consts::PI * (15.0f64.powi(2) - 14.3f64.powi(2)) * 10.0;
+    // (The top and bottom layers print as surfaces, so the wall is most of the tube's plastic, not all of it.)
+    assert!(wall > 0.8 * ring && wall < 1.02 * ring, "{wall} of {ring}");
+
+    // Spiral vase mode keeps the classic walls (Orca runs Arachne only outside it): the same file whatever the
+    // generator, and no note about walls that were never made.
+    let vase = |generator: &str| {
+        let mut settings = Settings { wall_generator: generator.into(), ..Settings::default() };
+        settings.spiral_mode = true;
+        settings.wall_loops = 1;
+        slice(&[Input { name: "cube.stl", bytes: &stl }], &settings, &Options::default()).unwrap()
+    };
+    let (classic_vase, arachne_vase) = (vase("classic"), vase("arachne"));
+    assert_eq!(classic_vase.gcode, arachne_vase.gcode);
+    assert!(!arachne_vase.fallbacks.iter().any(|f| f.contains("arachne")), "{:?}", arachne_vase.fallbacks);
+}
