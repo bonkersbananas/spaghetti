@@ -1,6 +1,7 @@
 //! Just enough ZIP for 3MF: reading entries (stored or deflated), and writing an archive whose big entry (the
 //! G-code) is deflated in independent chunks on every core, joined into one valid stream (as pigz does).
 
+use md5::{Digest, Md5};
 use miniz_oxide::deflate::core::{
     CompressorOxide, TDEFLFlush, TDEFLStatus, compress, create_comp_flags_from_zip_params,
 };
@@ -91,14 +92,34 @@ const CHUNK: usize = 1 << 18;
 /// How many pieces `Deflater` gathers before it packs them (together, on every core where there are threads).
 const BATCH: usize = 16;
 
+/// What `Deflater` packed: the bytes, the size and CRC-32 of what was written (what `Writer::add_deflated` takes), and
+/// its MD5 when asked for.
+pub struct Deflated {
+    pub packed: Vec<u8>,
+    pub size: usize,
+    pub crc: u32,
+    pub md5: Option<[u8; 16]>,
+}
+
+impl Deflated {
+    /// `data` deflated at `level`, with its MD5: what a `Deflater::with_md5` given all of it makes.
+    pub fn of(data: &[u8], level: u8) -> Self {
+        let (packed, (crc, md5)) =
+            crate::par::join(|| deflate(data, level), || (crc32fast::hash(data), Md5::digest(data).into()));
+        Deflated { packed, size: data.len(), crc, md5: Some(md5) }
+    }
+}
+
 /// `deflate` for text written a little at a time (`std::fmt::Write`): the same bytes as `deflate` of all of it, packed
-/// piece by piece as the pieces fill, so that the whole text is never held (a big mesh's model is over 100 MB of it).
+/// piece by piece as the pieces fill, so that the whole text is never held (a big mesh's model is over 100 MB of it,
+/// a tall print's G-code 80 MB).
 pub struct Deflater {
     level: u8,
     /// What isn't packed yet: always the last piece, which is the one that ends the stream.
     pending: Vec<u8>,
     packed: Vec<u8>,
     crc: crc32fast::Hasher,
+    md5: Option<Md5>,
     size: usize,
 }
 
@@ -109,8 +130,14 @@ impl Deflater {
             pending: Vec::with_capacity((BATCH + 1) * CHUNK),
             packed: Vec::new(),
             crc: crc32fast::Hasher::new(),
+            md5: None,
             size: 0,
         }
+    }
+
+    /// A `Deflater` that also works out the MD5 of what it's given.
+    pub fn with_md5(level: u8) -> Self {
+        Deflater { md5: Some(Md5::new()), ..Deflater::new(level) }
     }
 
     pub fn write(&mut self, bytes: &[u8]) {
@@ -126,23 +153,33 @@ impl Deflater {
         if n == 0 {
             return;
         }
-        let (level, pending) = (self.level, &self.pending);
-        let pieces = crate::par::map_range(n, |i| deflate_part(&pending[i * CHUNK..(i + 1) * CHUNK], level, false));
+        let (level, pending, crc, md5) = (self.level, &self.pending, &mut self.crc, &mut self.md5);
+        let whole = &pending[..n * CHUNK];
+        let (pieces, ()) = crate::par::join(
+            || crate::par::map_range(n, |i| deflate_part(&pending[i * CHUNK..(i + 1) * CHUNK], level, false)),
+            || {
+                crc.update(whole);
+                if let Some(md5) = md5 {
+                    md5.update(whole);
+                }
+            },
+        );
         for piece in pieces {
             self.packed.extend_from_slice(&piece);
         }
-        self.crc.update(&self.pending[..n * CHUNK]);
         self.size += n * CHUNK;
         self.pending.drain(..n * CHUNK);
     }
 
-    /// The packed bytes, the size of what was written and its CRC-32: what `Writer::add_deflated` takes.
-    pub fn finish(mut self) -> (Vec<u8>, usize, u32) {
+    pub fn finish(mut self) -> Deflated {
         self.pack_whole_pieces();
         self.packed.extend_from_slice(&deflate_part(&self.pending, self.level, true));
         self.crc.update(&self.pending);
-        self.size += self.pending.len();
-        (self.packed, self.size, self.crc.finalize())
+        let md5 = self.md5.map(|mut md5| {
+            md5.update(&self.pending);
+            md5.finalize().into()
+        });
+        Deflated { packed: self.packed, size: self.size + self.pending.len(), crc: self.crc.finalize(), md5 }
     }
 }
 
@@ -285,13 +322,17 @@ mod tests {
                 if step == 1 && len > CHUNK + 1 {
                     continue;
                 }
-                let mut d = Deflater::new(6);
+                let mut d = Deflater::with_md5(6);
                 for piece in text.chunks(step.min(len.max(1))) {
                     d.write(piece);
                 }
-                let (packed, size, crc) = d.finish();
-                assert_eq!(packed, deflate(text, 6), "{len} bytes, {step} at a time");
-                assert_eq!((size, crc), (len, crc32fast::hash(text)));
+                let d = d.finish();
+                assert_eq!(d.packed, deflate(text, 6), "{len} bytes, {step} at a time");
+                assert_eq!((d.size, d.crc), (len, crc32fast::hash(text)));
+                let whole = Deflated::of(text, 6);
+                assert_eq!((whole.packed, whole.size, whole.crc), (d.packed, d.size, d.crc));
+                assert_eq!(whole.md5, d.md5);
+                assert_eq!(d.md5, Some(Md5::digest(text).into()));
             }
         }
     }

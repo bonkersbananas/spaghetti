@@ -147,11 +147,14 @@ pub struct Options {
     /// Percent of the models' own size, scaled about their origin before they are laid out (as the app scales);
     /// scaled models are always arranged.
     pub scale: f64,
+    /// Keeps the plain G-code in `Output::gcode`. Without it the G-code is packed as it's written, and never held
+    /// whole (a tall print's is 80 MB).
+    pub gcode: bool,
 }
 
 impl Default for Options {
     fn default() -> Self {
-        Options { arrange: true, thumbnail: true, scale: 100.0 }
+        Options { arrange: true, thumbnail: true, scale: 100.0, gcode: true }
     }
 }
 
@@ -165,7 +168,7 @@ pub struct Timings {
     pub supports: f64,
     /// Each layer's paths in order, its moves, their timing and its G-code text.
     pub toolpaths: f64,
-    /// The layers' G-code into one file, with the header and the progress marks.
+    /// The layers' G-code into one file, with the header and the progress marks, deflated.
     pub gcode: f64,
     pub thumbnail: f64,
     pub pack: f64,
@@ -175,7 +178,9 @@ pub struct Timings {
 pub struct Output {
     /// The `.gcode.3mf`.
     pub file: Vec<u8>,
+    /// The plain G-code, when `Options::gcode` asks for it.
     pub gcode: Vec<u8>,
+    pub gcode_bytes: usize,
     pub stats: Stats,
     pub timings: Timings,
     pub triangles: usize,
@@ -927,13 +932,24 @@ impl Plate {
         let texts: Vec<gcode::LayerGcode> = texts.into_iter().flatten().collect();
         drop(regions);
         let t5 = now();
-        let mut g = gcode::assemble(texts, &job);
-        // Orca's pre-cooling and pre-heating of the nozzle that waits, added after the estimate as Orca adds it.
-        if let Some(p) = colours.as_ref().and_then(preheat::Params::of)
-            && let Some(text) = preheat::add_lines(&g.text, &p, settings)
-        {
-            g.text = text;
-        }
+        let preheat = colours.as_ref().and_then(preheat::Params::of);
+        let (text, packed, stats) = if options.gcode || preheat.is_some() {
+            let mut g = gcode::assemble(texts, &job);
+            // Orca's pre-cooling and pre-heating of the nozzle that waits, added after the estimate as Orca adds it.
+            if let Some(p) = preheat
+                && let Some(text) = preheat::add_lines(&g.text, &p, settings)
+            {
+                g.text = text;
+            }
+            let packed = zip::Deflated::of(&g.text, pack::GCODE_LEVEL);
+            (if options.gcode { g.text } else { Vec::new() }, packed, g.stats)
+        } else {
+            // Each layer's text packed as it's written and let go.
+            let stats = gcode::totals(&texts, &job);
+            let mut packer = zip::Deflater::with_md5(pack::GCODE_LEVEL);
+            gcode::write(texts, &stats, &job, &mut packer);
+            (Vec::new(), packer.finish(), stats)
+        };
         let t6 = now();
         let thumbnail = options.thumbnail.then(|| {
             let size = 512;
@@ -953,9 +969,9 @@ impl Plate {
         let t7 = now();
         let title = title.as_deref().unwrap_or("Model");
         let file = pack::gcode_3mf(
-            &g.text,
+            &packed,
             thumbnail.as_deref(),
-            &g.stats,
+            &stats,
             &group_objects,
             settings,
             title,
@@ -965,8 +981,9 @@ impl Plate {
         let t8 = now();
         Ok(Output {
             file,
-            gcode: g.text,
-            stats: g.stats,
+            gcode: text,
+            gcode_bytes: packed.size,
+            stats,
             timings: Timings {
                 read: read_ms + t1 - t0,
                 slice: t2 - t1,
