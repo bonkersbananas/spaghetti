@@ -3455,6 +3455,38 @@ fn arachne_walls_fill_what_classic_walls_do() {
     assert!(!arachne_vase.fallbacks.iter().any(|f| f.contains("arachne")), "{:?}", arachne_vase.fallbacks);
 }
 
+/// `wall_sequence = inner-outer-inner wall` on Arachne walls (Orca's sandwich in `process_arachne`): with three walls
+/// a layer prints the innermost, then the outer, then the one between, as native Orca 2.5.1 does on a cube (and on a
+/// Benchy 224 of 240 layers print their walls in Orca's order of types, the others differ in their islands' order);
+/// the first layer keeps inner to outer, and no note says the order is not kept.
+#[test]
+fn arachne_walls_in_inner_outer_inner_order() {
+    let stl = cube_stl(20.0);
+    let order = |sequence: &str, layer: usize| {
+        let settings = Settings {
+            wall_generator: "arachne".into(),
+            wall_loops: 3,
+            wall_sequence: sequence.into(),
+            outer_wall_first: sequence == "outer wall/inner wall",
+            ..Settings::default()
+        };
+        let out = slice(&[Input { name: "cube.stl", bytes: &stl }], &settings, &Options::default()).unwrap();
+        assert!(!out.fallbacks.iter().any(|f| f.contains("inner-outer-inner")), "{:?}", out.fallbacks);
+        let gcode = String::from_utf8(out.gcode).unwrap();
+        let layer = gcode.split("; CHANGE_LAYER").nth(layer + 1).unwrap();
+        layer
+            .lines()
+            .filter_map(|l| l.strip_prefix("; FEATURE: "))
+            .filter(|f| f.ends_with("wall"))
+            .map(|f| f.chars().next().unwrap())
+            .collect::<String>()
+    };
+    assert_eq!(order("inner-outer-inner wall", 5), "IOI");
+    // (A marker is written where the feature changes: the two inner walls of the usual order share one.)
+    assert_eq!(order("inner wall/outer wall", 5), "IO");
+    assert_eq!(order("inner-outer-inner wall", 0), "IO", "off on the first layer");
+}
+
 /// Concentric top, bottom and internal solid surfaces print as Orca's Arachne loops, not zig-zag with a note: a
 /// cube's plastic stays within 2 % of the lines' (a Benchy is within 0.1 % of native Orca 2.5.1's).
 #[test]
