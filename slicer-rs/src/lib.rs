@@ -16,6 +16,7 @@ pub mod gcode;
 pub mod geom;
 pub mod grid;
 pub mod infill;
+pub mod ironing;
 pub mod json;
 pub mod lift;
 pub mod lightning;
