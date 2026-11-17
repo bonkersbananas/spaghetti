@@ -66,8 +66,8 @@ impl Pattern {
             "lateral-lattice" => Some(Pattern::LateralLattice),
             "honeycomb" => Some(Pattern::Honeycomb),
             "lightning" => Some(Pattern::Lightning),
-            // Orca's zig-zag lays rectilinear's lines and joins them otherwise (always to the next line, every other
-            // line from the top), which ours doesn't yet: the same plastic and time on a Benchy.
+            // "zig-zag" is Bambu Studio's name for rectilinear, which Orca reads as that (Orca's own zig-zag is
+            // "zigzag", not ported).
             "rectilinear" | "zig-zag" => Some(Pattern::Rectilinear),
             "alignedrectilinear" => Some(Pattern::AlignedRectilinear),
             "adaptivecubic" => Some(Pattern::AdaptiveCubic),
