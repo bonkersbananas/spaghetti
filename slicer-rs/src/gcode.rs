@@ -317,8 +317,12 @@ pub fn layers(group: &[(&LayerPlan, &LayerRegions, f64)], job: &Job) -> Vec<Laye
             let tool = job.colours.map_or(0, |c| c.start(plan.index));
             let before = plan.course.as_ref().and_then(|c| c.before);
             let out = finish_layer(&moves, &notes, start, job, (text, before), plan.header_height, (fans, tool));
+            // Held until the whole file is written: without the room its estimate left (three quarters more than a
+            // tall print's 42 MB of G-code).
+            let mut text = out.text;
+            text.shrink_to_fit();
             LayerGcode {
-                text: out.text,
+                text,
                 progress_at,
                 first_accel: out.first_accel,
                 last_accel: out.last_accel,
@@ -355,6 +359,32 @@ fn travel_time(d: f64, first_layer: bool, s: &Settings) -> f64 {
 /// The whole file from its layers: header, the printer's start, the layers with the printer's progress, its end and
 /// the totals.
 pub fn assemble(layers: Vec<LayerGcode>, job: &Job) -> Gcode {
+    let stats = totals(&layers, job);
+    let body: usize = layers.iter().map(|l| l.text.len()).sum();
+    let mut text = Vec::with_capacity(body + 64 * 1024 + layers.len() * 64);
+    write(layers, &stats, job, &mut text);
+    Gcode { text, stats }
+}
+
+/// Where `write` puts the file: a whole text, or a `zip::Deflater` packing it as it comes.
+pub trait Sink {
+    fn put(&mut self, bytes: &[u8]);
+}
+
+impl Sink for Vec<u8> {
+    fn put(&mut self, bytes: &[u8]) {
+        self.extend_from_slice(bytes);
+    }
+}
+
+impl Sink for crate::zip::Deflater {
+    fn put(&mut self, bytes: &[u8]) {
+        self.write(bytes);
+    }
+}
+
+/// The file's totals from its layers: what its header says, and each layer's time for the progress marks.
+pub fn totals(layers: &[LayerGcode], job: &Job) -> Stats {
     let s = job.settings;
     let n = layers.len();
     // A spiral vase's last layer run round again counts as a layer of its own, as Orca's estimate counts it.
@@ -430,19 +460,22 @@ pub fn assemble(layers: Vec<LayerGcode>, job: &Job) -> Gcode {
         stats.weight = stats.volume * s.filament_density / 1000.0;
         stats.cost = stats.weight / 1000.0 * s.filament_cost;
     }
-    let start = job.frame.start();
-    let prepare = time_custom(&start, s);
-    stats.prepare_time = prepare;
+    stats.prepare_time = time_custom(&job.frame.start(), s);
     stats.total_time = stats.prepare_time + stats.model_time;
+    stats
+}
 
-    let body: usize = layers.iter().map(|l| l.text.len()).sum();
-    let mut text = Vec::with_capacity(body + 64 * 1024 + n * 64);
-    header(&mut text, &stats, job);
+/// The whole file from its layers and their `totals`, into `out`; each layer's text is let go once written.
+pub fn write(layers: Vec<LayerGcode>, stats: &Stats, job: &Job, out: &mut impl Sink) {
+    let s = job.settings;
+    // The lines between the layers' texts, gathered here and put as they end.
+    let mut text = Vec::with_capacity(64 * 1024);
+    header(&mut text, stats, job);
     text.extend_from_slice(b"; EXECUTABLE_BLOCK_START\n");
     m73(&mut text, 0.0, stats.total_time);
     text.extend_from_slice(job.frame.envelope().as_bytes());
     text.extend_from_slice(b"M106 S0\nM106 P2 S0\n");
-    text.extend_from_slice(start.as_bytes());
+    text.extend_from_slice(job.frame.start().as_bytes());
     let mut elapsed = stats.prepare_time;
     let mut accel = f64::NAN;
     let (mut last_index, mut last_z) = (0, 0.0);
@@ -462,8 +495,10 @@ pub fn assemble(layers: Vec<LayerGcode>, job: &Job) -> Gcode {
         };
         text.extend_from_slice(&l.text[..l.progress_at]);
         m73(&mut text, elapsed, stats.total_time);
-        text.extend_from_slice(&l.text[l.progress_at..cut_from]);
-        text.extend_from_slice(&l.text[cut_to..]);
+        out.put(&text);
+        text.clear();
+        out.put(&l.text[l.progress_at..cut_from]);
+        out.put(&l.text[cut_to..]);
         if l.last_accel.is_finite() {
             accel = l.last_accel;
         }
@@ -486,7 +521,7 @@ pub fn assemble(layers: Vec<LayerGcode>, job: &Job) -> Gcode {
         text.extend_from_slice(format!("{what}{}\n", values.join(",")).as_bytes());
     }
     text.push(b'\n');
-    Gcode { text, stats }
+    out.put(&text);
 }
 
 // ---- One layer's moves.

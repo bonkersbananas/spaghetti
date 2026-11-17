@@ -7,7 +7,6 @@ use crate::Object;
 use crate::config::{Settings, Value};
 use crate::gcode::{Stats, VERSION};
 use crate::zip;
-use md5::{Digest, Md5};
 
 /// The Bambu Studio file version Orca 2.5 writes into its sliced files for the printers' sake.
 const BBL_CLIENT_VERSION: &str = "02.08.01.55";
@@ -364,10 +363,14 @@ fn halfway(v: f64, n: u64, q: i32) -> bool {
     }
 }
 
-/// The `.gcode.3mf`. `title` names the archive inside (the original file's name).
+/// How hard the G-code is deflated (`zip::Deflater::with_md5` or `zip::Deflated::of`): level 4 is within 5% of level
+/// 6's size at a third of its time (Benchy's 2.8 MB of G-code: 762 against 725 kB).
+pub const GCODE_LEVEL: u8 = 4;
+
+/// The `.gcode.3mf`, with the G-code already packed. `title` names the archive inside (the original file's name).
 #[allow(clippy::too_many_arguments)]
 pub fn gcode_3mf(
-    gcode: &[u8],
+    gcode: &zip::Deflated,
     thumbnail: Option<&[u8]>,
     stats: &Stats,
     objects: &[Object],
@@ -376,8 +379,7 @@ pub fn gcode_3mf(
     colours: Option<&crate::toolchange::Colours>,
     model: &Model,
 ) -> Vec<u8> {
-    // Level 4: within 5% of level 6's size at a third of its time (Benchy's 2.8 MB of G-code: 762 against 725 kB).
-    let (packed, md5) = crate::par::join(|| zip::deflate(gcode, 4), || hex(&Md5::digest(gcode)));
+    let md5 = hex(&gcode.md5.expect("the G-code's MD5 (zip::Deflater::with_md5)"));
     let mut settings = match colours {
         Some(c) => c.project_settings(s),
         None => s.project_settings(),
@@ -676,14 +678,14 @@ pub fn gcode_3mf(
     project.push_str("}\n");
     files.push(("Metadata/project_settings.config", project.into_bytes()));
 
-    let mut w = zip::Writer::with_capacity(packed.len() + 64 * 1024);
+    let mut w = zip::Writer::with_capacity(gcode.packed.len() + 64 * 1024);
     for (name, data) in &files[..2] {
         w.add(name, data, 6);
     }
-    let (packed_model, model_size, model_crc) = model_entry.finish();
-    w.add_deflated("3D/3dmodel.model", model_size, model_crc, &packed_model);
-    drop(packed_model);
-    w.add_deflated("Metadata/plate_1.gcode", gcode.len(), crc32fast::hash(gcode), &packed);
+    let model = model_entry.finish();
+    w.add_deflated("3D/3dmodel.model", model.size, model.crc, &model.packed);
+    drop(model);
+    w.add_deflated("Metadata/plate_1.gcode", gcode.size, gcode.crc, &gcode.packed);
     for (name, data) in &files[2..] {
         w.add(name, data, 6);
     }
@@ -778,6 +780,7 @@ mod tests {
 
     #[test]
     fn the_gcodes_md5_is_written_in_capitals_as_bambu_studio_writes_it() {
+        use md5::{Digest, Md5};
         assert_eq!(hex(&Md5::digest(b"")), "D41D8CD98F00B204E9800998ECF8427E");
     }
 }

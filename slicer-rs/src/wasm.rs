@@ -174,7 +174,7 @@ pub unsafe extern "C" fn paint_supports(data: *const u8, len: usize) -> u32 {
 pub extern "C" fn slice(flags: u32) -> u32 {
     let plate = PLATE.with(|p| std::mem::take(&mut *p.borrow_mut()));
     let Setup { settings, scale } = SETUP.with(|s| s.borrow().clone());
-    let options = Options { arrange: flags & 1 == 0, thumbnail: flags & 2 == 0, scale };
+    let options = Options { arrange: flags & 1 == 0, thumbnail: flags & 2 == 0, scale, gcode: false };
     match plate.slice(&settings, &options) {
         Ok(out) => {
             let t = &out.timings;
@@ -190,7 +190,7 @@ pub extern "C" fn slice(flags: u32) -> u32 {
                 t.thumbnail,
                 t.pack,
                 t.total,
-                out.gcode.len(),
+                out.gcode_bytes,
                 out.fallbacks.iter().map(|f| crate::pack::json(f)).collect::<Vec<_>>().join(","),
                 out.warnings
                     .iter()
