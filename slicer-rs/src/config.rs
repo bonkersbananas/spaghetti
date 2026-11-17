@@ -290,6 +290,14 @@ pub struct Settings {
     /// The overhang fan: how much of a line's width may rest on the layer below for the fan to come on (from
     /// `overhang_fan_threshold`), or below zero where it never does (`enable_overhang_bridge_fan` off).
     pub overhang_fan_overlap: f64,
+    /// `enable_overhang_bridge_fan`: the fan runs faster over overhangs and bridges (`overhang_fan_speed`, as a
+    /// fraction), and with `overhang_fan_threshold` at "0%" over every outer wall (`overhang_fan_all_outer`).
+    pub overhang_fan: bool,
+    pub overhang_fan_all_outer: bool,
+    pub overhang_fan_speed: f64,
+    /// The fan over internal bridges (`internal_bridge_fan_speed` as a fraction), or below zero where it is the
+    /// overhang fan's.
+    pub internal_bridge_fan_speed: f64,
 
     // Accelerations, mm/s².
     pub default_accel: f64,
@@ -1172,6 +1180,16 @@ impl Settings {
             overhang_speeds: ["overhang_1_4_speed", "overhang_2_4_speed", "overhang_3_4_speed", "overhang_4_4_speed"]
                 .map(|key| Share::parse(p.list(key).first().copied().unwrap_or("0"))),
             slow_for_curls: p.bool("slowdown_for_curled_perimeters"),
+            overhang_fan: p.bool("enable_overhang_bridge_fan"),
+            overhang_fan_all_outer: overhang_fan_overlap(p.text("overhang_fan_threshold")) < 0.0
+                && matches!(p.text("overhang_fan_threshold").trim(), "0%" | "0"),
+            overhang_fan_speed: at("overhang_fan_speed") / 100.0,
+            // Orca's default, -1, where a profile leaves it out: the overhang fan's speed.
+            internal_bridge_fan_speed: p
+                .list("internal_bridge_fan_speed")
+                .first()
+                .map_or(-1.0, |v| v.trim().parse().unwrap_or(-1.0))
+                / 100.0,
             overhang_fan_overlap: if p.bool("enable_overhang_bridge_fan") {
                 overhang_fan_overlap(p.text("overhang_fan_threshold"))
             } else {

@@ -39,6 +39,8 @@ pub struct Path {
     pub object: u32,
     /// How each segment prints, where they don't all print alike: one per segment (empty when they do).
     pub parts: Vec<Part>,
+    /// Whether the overhang fan runs over all of it, where `parts` is empty.
+    pub fan: bool,
     /// The stretches of its points that print as arcs (`G2`/`G3`), in order: Orca's arc fitting (`fit`).
     pub arcs: Vec<ArcRun>,
 }
@@ -57,6 +59,8 @@ pub struct ArcRun {
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Part {
     pub overhang: bool,
+    /// Whether the overhang fan runs over it (`enable_overhang_bridge_fan`, where it hangs enough).
+    pub fan: bool,
     /// mm/s, before any slowing down for a short layer.
     pub speed: f32,
 }
@@ -185,7 +189,7 @@ pub fn plan_layer_of(
     let mut below: Vec<Option<Below>> = Vec::new();
     if let Some(lower) = lower
         && i > 0
-        && (s.detect_overhang_wall || s.overhang_speed)
+        && (s.detect_overhang_wall || s.overhang_speed || s.overhang_fan)
     {
         let groups = r.islands.iter().map(|island| island.group as usize + 1).max().unwrap_or(0);
         below = (0..groups as u32)
@@ -363,6 +367,7 @@ fn support_paths(layer: &support::Layer, object: u32, part: support::Part, at: P
             island: u32::MAX,
             object,
             parts: Vec::new(),
+            fan: false,
             arcs: p.arcs.clone(),
         }
     };
@@ -443,6 +448,7 @@ fn brim_paths(brims: &[Contour], object: u32, mut at: Pt, h: f64, s: &Settings) 
             island: u32::MAX,
             object,
             parts: Vec::new(),
+            fan: false,
             arcs: Vec::new(),
         });
     }
@@ -1225,6 +1231,7 @@ fn thick_paths(role: Role, points: &[Pt], widths: &[f64], island: u32, first: bo
             island,
             object: 0,
             parts: Vec::new(),
+            fan: false,
             arcs,
         });
     };
@@ -1433,6 +1440,7 @@ fn path(role: Role, points: Vec<Pt>, closed: bool, island: u32, first: bool, h: 
         island,
         object: 0,
         parts: Vec::new(),
+        fan: false,
         arcs,
     }
 }
@@ -1722,8 +1730,8 @@ mod tests {
         // A 10 mm square from its corner round to it again, its last side a slow overhang stretch.
         let mut points = seam_loop(&square(0.0, 0.0, 10.0, 10.0, false), true);
         let start = points[0];
-        let slow = Part { overhang: true, speed: 10.0 };
-        let mut parts = vec![Part { overhang: false, speed: 200.0 }; 3];
+        let slow = Part { overhang: true, speed: 10.0, fan: false };
+        let mut parts = vec![Part { overhang: false, speed: 200.0, fan: false }; 3];
         parts.push(slow);
         assert!(clip_end(&mut points, &mut parts, &mut Vec::new(), 0.04));
         assert_eq!((points.len(), parts.len()), (5, 4));
@@ -1731,7 +1739,7 @@ mod tests {
         assert_eq!(parts[3], slow);
         // A gap past the last corner takes the last side and its part with it.
         let mut points = seam_loop(&square(0.0, 0.0, 10.0, 10.0, false), true);
-        let mut parts = vec![Part { overhang: false, speed: 200.0 }; 4];
+        let mut parts = vec![Part { overhang: false, speed: 200.0, fan: false }; 4];
         assert!(clip_end(&mut points, &mut parts, &mut Vec::new(), 10.5));
         assert_eq!((points.len(), parts.len()), (4, 3));
         // One no longer than the gap is gone.
