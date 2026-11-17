@@ -147,6 +147,8 @@ pub struct Settings {
     pub sparse_smooth_factor: f64,
     /// Whether 3D honeycomb caps its cells where they close (`infill_complete_top`), which ours doesn't.
     pub honeycomb_complete_top: bool,
+    /// How Orca grades gyroid and TPMS infill through the object (`adaptive_infill_mode`), which ours doesn't.
+    pub adaptive_infill_mode: String,
     /// mm the first layer is pulled in against elephant's foot, where it is wide enough (`elephant.rs`).
     pub elephant_foot: f64,
     /// How many layers Orca pulls in, by less on each (`elefant_foot_compensation_layers`): this pulls in the first.
@@ -938,6 +940,7 @@ impl Settings {
             infill_anchor_max,
             sparse_smooth_factor: p.float("sparse_infill_smooth_factor"),
             honeycomb_complete_top: p.bool("infill_complete_top"),
+            adaptive_infill_mode: p.text("adaptive_infill_mode").to_string(),
             elephant_foot: p.float("elefant_foot_compensation"),
             elephant_foot_layers: p.int("elefant_foot_compensation_layers").max(1) as usize,
             resolution: p.float("resolution"),
@@ -1258,6 +1261,12 @@ impl Settings {
         }
         if self.honeycomb_complete_top && self.sparse_infill_pattern == "3dhoneycomb" {
             out.push("3D honeycomb's cells left open at the top".into());
+        }
+        // Orca grades only these (`is_adaptive_infill_pattern`).
+        if !matches!(self.adaptive_infill_mode.as_str(), "disabled" | "")
+            && matches!(self.sparse_infill_pattern.as_str(), "gyroid" | "tpmsd" | "tpmsfk")
+        {
+            out.push(format!("{} sparse infill printed even, not graded", self.sparse_infill_pattern));
         }
         for (what, pattern) in [
             ("top surfaces", &self.top_surface_pattern),
