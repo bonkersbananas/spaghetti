@@ -934,7 +934,7 @@ What projects ask for that ours printed otherwise, counted on Nov 16 in 211 proj
 | Fuzzy skin | 2 (outer walls) | 0 |
 | Nearest or random seams | 2 | 0 |
 
-None of the sample's projects is for the X2D, and from another printer's project the app takes only the keys that say how to print (`INTENT_KEYS` in `configs.ts`: the sparse pattern among them, not ironing, fuzzy skin, the walls' generator or the surfaces' patterns), so today only an X2D project brings ours ironing or fuzzy skin.
+None of the sample's projects is for the X2D, and from another printer's project the app takes only the keys that say how to print (`INTENT_KEYS` in `configs.ts`: the sparse pattern and, since the pull request that added them, ironing and fuzzy skin among them (all but `ironing_speed`), not the walls' generator or the surfaces' patterns), so another printer's project brings ours ironing and fuzzy skin too.
 
 **Ironing is Orca's** (`src/ironing.rs`, from Orca 2.5.1's `Layer::make_ironing`, since Nov 16): every top surface, the object's last layer's alone or every solid surface, as `ironing_type` asks; cut back from the slice's edge by `ironing_inset`; filled with Orca's monotonic lines at `ironing_spacing` on the object's grid, in the top's direction turned by `ironing_angle`, joined along the edge up to three spacings; a thread a tenth of the layer's flow (`ironing_flow`) printed last on each island at `ironing_speed`, with the filament's own values where it has them. Against native Orca 2.5.1 with the X2D's presets:
 
