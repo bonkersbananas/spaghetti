@@ -224,6 +224,7 @@ pub fn regions(
         let objects = pulled.iter().map(|shape| owner_within(shape, slice, owners)).collect();
         (pulled, objects)
     };
+    let slice_z = layers.slice_z();
     let islands: Vec<Vec<Island>> = par::map_range(n, |i| {
         let (slice, objects) = if s.on_plate(i) && s.elephant_foot > 0.0 {
             if mixed {
@@ -255,6 +256,11 @@ pub fn regions(
             island.object = object;
             island.group = group_of(object);
             island.outline = shape;
+        }
+        // Fuzzy skin on the walls Orca gives it (`fuzzy.rs`), over the layer below; Orca counts a raft's layers.
+        if s.fuzzy.on() {
+            let raft = if s.support.raft_layers > 0 { s.support.raft_layers as usize } else { 0 };
+            crate::fuzzy::islands(&mut islands, centres, around.lower, slice_z[i], i + raft, s);
         }
         islands
     });

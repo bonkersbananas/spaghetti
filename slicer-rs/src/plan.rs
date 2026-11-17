@@ -171,7 +171,8 @@ pub fn plan_layer_of(
                     return None;
                 }
                 let under = lower.slice_of(g);
-                (under != here).then(|| Below::new(&under, s))
+                // A fuzzy wall stands out beyond even a layer below just like this one.
+                (under != here || s.fuzzy.on()).then(|| Below::new(&under, s))
             })
             .collect();
     }
