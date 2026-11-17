@@ -41,11 +41,15 @@ export function NoteLinks({
   if (urls.length === 0) return null;
   return (
     <ul className="mt-1 flex flex-col gap-2" aria-label={label}>
-      {urls.map((url) => (
-        <li key={url}>
-          <LinkCard url={url} model={page && sameModel(url, page.url) ? page : undefined} />
-        </li>
-      ))}
+      {urls.map((url) => {
+        // A mirror's address (3dgo.app) for the model opens the source model's page, which the card can read.
+        const isModel = page && sameModel(url, page.url);
+        return (
+          <li key={url}>
+            <LinkCard url={isModel ? page.url : url} model={isModel ? page : undefined} />
+          </li>
+        );
+      })}
     </ul>
   );
 }

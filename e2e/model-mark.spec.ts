@@ -123,7 +123,9 @@ test("a 3dgo.app link is the MakerWorld model: its card, its draft, and the addr
   await expect(card).toHaveAttribute("href", "https://makerworld.com/models/2487194");
   // The address is shown once (the card), not again as note text or a second card.
   await expect(page.getByRole("list", { name: "Links in the note" })).toHaveCount(0);
-  await expect(page.getByRole("link", { name: /3dgo\.app/ })).toHaveCount(0);
+  // The card itself says where the link came from, and is the only link that does.
+  await expect(page.getByRole("link", { name: /3dgo\.app/ })).toHaveCount(1);
+  await expect(card).toContainText("via 3dgo.app");
   // An idea saved before the link was recognised can be read now.
   await page.getByRole("button", { name: "Draft from this page" }).click();
   await expect(page.getByText("Drafted by Claude from MakerWorld")).toBeVisible({ timeout: 20_000 });
