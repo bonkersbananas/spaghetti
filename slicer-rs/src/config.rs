@@ -182,8 +182,9 @@ pub struct Settings {
     /// Whether inner walls start a little further along than the outer wall (`staggered_inner_seams`).
     pub staggered_inner_seams: bool,
     pub only_one_wall_top: bool,
-    /// `top_surface_expansion` (mm) and `top_surface_density` (percent): with both above 0, Orca's `only_one_wall_top`
-    /// on Arachne walls cuts the inner walls over the top surface instead of walling round it.
+    /// `top_surface_expansion` (mm) and `top_surface_density` (percent): with both above 0, Orca grows top surfaces
+    /// (not ported) and its `only_one_wall_top` on Arachne walls cuts the inner walls over the top surface instead of
+    /// walling round it.
     pub top_surface_expansion: f64,
     pub top_surface_density: f64,
     /// Whether the first inner wall goes a whole line width in from the outer wall (`precise_outer_wall`, which Orca
@@ -290,6 +291,14 @@ pub struct Settings {
     /// The overhang fan: how much of a line's width may rest on the layer below for the fan to come on (from
     /// `overhang_fan_threshold`), or below zero where it never does (`enable_overhang_bridge_fan` off).
     pub overhang_fan_overlap: f64,
+    /// `enable_overhang_bridge_fan`: the fan runs faster over overhangs and bridges (`overhang_fan_speed`, as a
+    /// fraction), and with `overhang_fan_threshold` at "0%" over every outer wall (`overhang_fan_all_outer`).
+    pub overhang_fan: bool,
+    pub overhang_fan_all_outer: bool,
+    pub overhang_fan_speed: f64,
+    /// The fan over internal bridges (`internal_bridge_fan_speed` as a fraction), or below zero where it is the
+    /// overhang fan's.
+    pub internal_bridge_fan_speed: f64,
 
     // Accelerations, mm/s².
     pub default_accel: f64,
@@ -461,6 +470,17 @@ pub struct Fuzzy {
     pub ripples_per_layer: i64,
     pub ripple_offset: f64,
     pub layers_between_ripple_offset: i64,
+    /// What moves on Arachne's walls (`fuzzy_skin_mode`): the points sideways, the line's width, or both.
+    pub mode: FuzzyMode,
+}
+
+/// `fuzzy_skin_mode`.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum FuzzyMode {
+    #[default]
+    Displacement,
+    Extrusion,
+    Combined,
 }
 
 impl Fuzzy {
@@ -491,6 +511,11 @@ impl Fuzzy {
             ripples_per_layer: p.int("fuzzy_skin_ripples_per_layer"),
             ripple_offset: p.float("fuzzy_skin_ripple_offset"),
             layers_between_ripple_offset: p.int("fuzzy_skin_layers_between_ripple_offset"),
+            mode: match p.text("fuzzy_skin_mode") {
+                "extrusion" => FuzzyMode::Extrusion,
+                "combined" => FuzzyMode::Combined,
+                _ => FuzzyMode::Displacement,
+            },
         }
     }
 
@@ -1156,6 +1181,16 @@ impl Settings {
             overhang_speeds: ["overhang_1_4_speed", "overhang_2_4_speed", "overhang_3_4_speed", "overhang_4_4_speed"]
                 .map(|key| Share::parse(p.list(key).first().copied().unwrap_or("0"))),
             slow_for_curls: p.bool("slowdown_for_curled_perimeters"),
+            overhang_fan: p.bool("enable_overhang_bridge_fan"),
+            overhang_fan_all_outer: overhang_fan_overlap(p.text("overhang_fan_threshold")) < 0.0
+                && matches!(p.text("overhang_fan_threshold").trim(), "0%" | "0"),
+            overhang_fan_speed: at("overhang_fan_speed") / 100.0,
+            // Orca's default, -1, where a profile leaves it out: the overhang fan's speed.
+            internal_bridge_fan_speed: p
+                .list("internal_bridge_fan_speed")
+                .first()
+                .map_or(-1.0, |v| v.trim().parse().unwrap_or(-1.0))
+                / 100.0,
             overhang_fan_overlap: if p.bool("enable_overhang_bridge_fan") {
                 overhang_fan_overlap(p.text("overhang_fan_threshold"))
             } else {
@@ -1368,18 +1403,13 @@ impl Settings {
             }
         }
         // (Spiral vase mode keeps the classic walls, so these notes would describe walls never made.)
-        if self.wall_generator == "arachne" && !self.spiral_mode {
-            if self.only_one_wall_top && self.top_surface_expansion > 0.0 && self.top_surface_density > 0.0 {
-                out.push("arachne walls over a top surface printed with all their walls (only_one_wall_top with top_surface_expansion)".into());
-            }
-            if self.fuzzy.on() {
-                out.push("fuzzy skin on arachne walls printed smooth".into());
-            }
+        if self.top_surface_expansion > 0.0 && self.top_surface_density > 0.0 && self.top_shell_layers > 0 {
+            out.push("top surfaces not grown by top_surface_expansion".into());
         }
         if self.elephant_foot > 0.0 && self.elephant_foot_layers > 1 && self.support.raft_layers <= 0 {
             out.push("elephant's foot compensated on the first layer only".into());
         }
-        if matches!(self.seam_position.as_str(), "nearest" | "random") && !self.spiral_mode {
+        if self.seam_position == "nearest" && !self.spiral_mode {
             out.push(format!("{} seams placed as aligned ones", self.seam_position));
         }
         // In spiral vase mode every lift goes straight up, as Orca's do there.

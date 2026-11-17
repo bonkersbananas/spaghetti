@@ -1135,7 +1135,7 @@ const photoReadBuilds: string[] = [];
  * A build whose print is off the bed, with a camera photo on it, so Claude reads it (the stand-in answers from a word in
  * the title, scripts/lib/fake-claude.ts); opens the build's page. The photo goes in the bridge's way.
  */
-async function printWithPhoto(page: Page, title: string) {
+async function printWithPhoto(page: Page, title: string, { ended = true }: { ended?: boolean } = {}) {
   const origin = new URL(page.url()).origin;
   const headers = { Origin: origin };
   const itemId = crypto.randomUUID();
@@ -1144,16 +1144,22 @@ async function printWithPhoto(page: Page, title: string) {
   await page.request.post("/api/items", { headers, data: { id: itemId, title, stage: "building" } });
   await page.request.post(`/api/items/${itemId}/attempts`, {
     headers,
-    data: { id: attemptId, printedAt: Date.now() - 95 * 60_000, settings: { estimatedMinutes: 90 } },
+    data: {
+      id: attemptId,
+      // The shots' clock is the seed's: a print that is due started well before it.
+      printedAt: ended ? Date.now() - 95 * 60_000 : SEED_NOW - 4 * 60 * 60_000,
+      settings: { estimatedMinutes: 90 },
+    },
   });
-  await page.request.patch(`/api/attempts/${attemptId}`, { headers, data: { endedAt: Date.now() - 12 * 60_000 } });
+  if (ended)
+    await page.request.patch(`/api/attempts/${attemptId}`, { headers, data: { endedAt: Date.now() - 12 * 60_000 } });
   const file = { name: "frame.jpg", mimeType: "image/jpeg", buffer: readFileSync("e2e/fixtures/tugboat.jpg") };
   await page.request.put(`/api/items/${itemId}/photos/${crypto.randomUUID()}`, {
     headers,
     multipart: { width: "1280", height: "960", color: "#8d7a66", attemptId, large: file, thumb: file },
   });
   await page.goto(`/builds/${itemId}`);
-  await page.getByRole("button", { name: "Attempt 1: off the bed. Open" }).waitFor();
+  if (ended) await page.getByRole("button", { name: "Attempt 1: off the bed. Open" }).waitFor();
   return { itemId, attemptId };
 }
 
@@ -1876,6 +1882,22 @@ export const shots: Shot[] = [
         .first()
         .waitFor({ timeout: 20_000 });
     },
+  },
+  {
+    // A print that is due (the printer hasn't said it stopped) whose camera photo Claude has read: its answer
+    // dashed on the picker, with what it saw under it. Run last on Today: it adds a build, removed again.
+    name: "today-due-read",
+    path: "/today",
+    fullPage: true,
+    prepare: async (page) => {
+      await printWithPhoto(page, "Spice jar lid", { ended: false });
+      await page.goto("/today");
+      await page
+        .getByRole("radio", { name: /suggested/ })
+        .first()
+        .waitFor({ timeout: 30_000 });
+    },
+    cleanup: (page) => removePhotoReadBuilds(page),
   },
   {
     // Back after a few days: "Since Thursday", what Sam did meanwhile, at the top of Today (desktop).

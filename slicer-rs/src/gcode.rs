@@ -131,6 +131,10 @@ pub(crate) struct ArcMove {
 pub(crate) const FORM_Z: u8 = 1;
 /// A move whose filament Orca's spiral vase set: written to five decimals (`E0.00003`).
 pub(crate) const FORM_E: u8 = 2;
+/// An extrusion the overhang fan runs over (`enable_overhang_bridge_fan`).
+pub(crate) const FORM_FAN: u8 = 4;
+/// The first move Orca writes of a path: its fan marker comes after the speed, not before.
+pub(crate) const FORM_FIRST: u8 = 8;
 
 /// What the G-code says between two moves.
 #[derive(Clone, Debug)]
@@ -206,6 +210,13 @@ pub struct LayerGcode {
     features: [Feature; Role::ALL.len()],
     /// The part and auxiliary fans for the layer, in percent (`layer_fans`).
     fans: [f64; 2],
+    /// The fan over overhangs and over internal bridges where it runs faster than the layer's (`layer_overhang_fans`):
+    /// the layer's text then holds Orca's own `;_OVERHANG_FAN_START` and `…_END` markers, which `write` turns into
+    /// the fan's `M106` lines as Orca's cooling buffer does.
+    over: [Option<f64>; 2],
+    /// Whether the layer starts what Orca's cooling buffer takes as one (the support's own layers come with the
+    /// object layer after them).
+    group_start: bool,
     /// With several filaments: mm of each, and mm³ of each on the prime tower.
     by_filament: Vec<[f64; 2]>,
     /// A spiral vase's last layer that ran round again flat: Orca's estimate counts that as a layer of its own.
@@ -239,6 +250,23 @@ fn layer_fans(i: usize, layer_time: f64, s: &Settings) -> [f64; 2] {
         fan = ((fan as f32 * factor + 0.5) as i32).clamp(0, 255) as f64;
     }
     [fan, (s.aux_fan_speed * 100.0).round()]
+}
+
+/// The part fan over overhangs and bridges (Orca's cooling: `overhang_fan_speed`, ramped up with the first layers as
+/// the layer's own fan is) and over internal bridges (`internal_bridge_fan_speed`, the overhang fan's where it is
+/// negative), for layer `i` whose part fan is `fan`, in percent; None where it runs no faster than `fan`.
+fn layer_overhang_fans(i: usize, fan: f64, s: &Settings) -> [Option<f64>; 2] {
+    if !s.overhang_fan || i < s.fan_off_layers {
+        return [None, None];
+    }
+    let mut over = (s.overhang_fan_speed * 100.0).round();
+    if i + 1 < s.full_fan_speed_layer {
+        let factor = (i + 1 - s.fan_off_layers) as f32 / (s.full_fan_speed_layer - s.fan_off_layers) as f32;
+        over = ((over as f32 * factor + 0.5) as i32).clamp(0, 255) as f64;
+    }
+    let faster = (over > fan).then_some(over);
+    let own = (s.internal_bridge_fan_speed * 100.0).round();
+    [faster, if own >= 0.0 { Some(own) } else { faster }]
 }
 
 /// `M106 S…`: the part fan at `percent`, as Orca's writer turns it into the fan's 0–255.
@@ -304,11 +332,15 @@ pub fn layers(group: &[(&LayerPlan, &LayerRegions, f64)], job: &Job, mut known: 
             time
         }
     };
-    let fans = layer_fans(group.last().map_or(0, |g| g.0.id), cooling_time, s);
+    let id = group.last().map_or(0, |g| g.0.id);
+    let fans = layer_fans(id, cooling_time, s);
+    // Several filaments each have their own (`FORCE_RESUME_FAN_SPEED`): not modelled there yet.
+    let over = if job.colours.is_some() { [None, None] } else { layer_overhang_fans(id, fans[0], s) };
     group
         .iter()
         .zip(built)
-        .map(|(&(plan, _, _), (moves, notes, start, first, turn, ends_known))| {
+        .enumerate()
+        .map(|(n, (&(plan, _, _), (moves, notes, start, first, turn, ends_known)))| {
             // The layer's markers (its fans go before them, in `assemble`), then its moves.
             let mut text = Vec::with_capacity(moves.len() * 28 + 4096);
             text.extend_from_slice(
@@ -322,7 +354,7 @@ pub fn layers(group: &[(&LayerPlan, &LayerRegions, f64)], job: &Job, mut known: 
             let progress_at = text.len();
             let tool = job.colours.map_or(0, |c| c.start(plan.index));
             let before = plan.course.as_ref().and_then(|c| c.before);
-            let out = finish_layer(&moves, &notes, start, job, (text, before), plan.header_height, (fans, tool));
+            let out = finish_layer(&moves, &notes, start, job, (text, before), plan.header_height, (fans, over, tool));
             // Held until the whole file is written: without the room its estimate left (three quarters more than a
             // tall print's 42 MB of G-code).
             let mut text = out.text;
@@ -343,6 +375,8 @@ pub fn layers(group: &[(&LayerPlan, &LayerRegions, f64)], job: &Job, mut known: 
                 filament_mm: out.filament_mm,
                 features: out.features,
                 fans,
+                over,
+                group_start: n == 0,
                 by_filament: out.by_filament,
                 again: turn.as_ref().is_some_and(|t| t.again),
                 turn: turn.map(|t| t.points).unwrap_or_default(),
@@ -472,6 +506,67 @@ pub fn totals(layers: &[LayerGcode], job: &Job) -> Stats {
     stats
 }
 
+/// The part fan as Orca's cooling buffer follows it through the overhang markers a layer's text holds.
+struct FanNow {
+    /// The part fan's speed now (`m_current_fan_speed`), percent.
+    current: f64,
+    /// Whether the overhang fan and the internal bridge fan are asked for (`fan_speed_change_requests`).
+    asked: [bool; 2],
+}
+
+impl FanNow {
+    /// Puts a stretch of a layer's text, its fan markers turned into the `M106` lines Orca's cooling buffer writes
+    /// in their place: at a start the overhang's speed, at an end the speed of what is still asked for, else the
+    /// layer's, each only where the fan isn't at it already.
+    fn put(&mut self, out: &mut impl Sink, text: &[u8], (over, base): ([Option<f64>; 2], f64)) {
+        let mut done = 0;
+        let mut at = 0;
+        while let Some(found) = find_marker(&text[at..]) {
+            let from = at + found;
+            let end = text[from..].iter().position(|&b| b == b'\n').map_or(text.len(), |n| from + n + 1);
+            let line = &text[from..end];
+            let kind = usize::from(line.starts_with(b";_INTERNAL_BRIDGE"));
+            let start = line.windows(6).any(|w| w == b"_START");
+            if over[kind].is_some() {
+                self.asked[kind] = start;
+            }
+            let speed = if self.asked[0] {
+                over[0]
+            } else if self.asked[1] {
+                over[1]
+            } else {
+                None
+            }
+            .unwrap_or(base);
+            out.put(&text[done..from]);
+            done = end;
+            at = end;
+            if speed != self.current {
+                let mut line = Vec::new();
+                set_fan(&mut line, speed);
+                out.put(&line);
+                self.current = speed;
+            }
+        }
+        out.put(&text[done..]);
+    }
+}
+
+/// Where a layer's text has its next overhang marker line (`;_OVERHANG_FAN_…` or `;_INTERNAL_BRIDGE_FAN_…`).
+fn find_marker(text: &[u8]) -> Option<usize> {
+    let mut at = 0;
+    while let Some(found) = text[at..].windows(2).position(|w| w == b";_") {
+        let from = at + found;
+        if (from == 0 || text[from - 1] == b'\n')
+            && (text[from..].starts_with(b";_OVERHANG_FAN_") || text[from..].starts_with(b";_INTERNAL_BRIDGE_FAN_"))
+        {
+            return Some(from);
+        }
+        at = from + 2;
+    }
+    None
+}
+
 /// The whole file from its layers and their `totals`, into `out`; each layer's text is let go once written.
 pub fn write(layers: Vec<LayerGcode>, stats: &Stats, job: &Job, out: &mut impl Sink) {
     let s = job.settings;
@@ -488,9 +583,18 @@ pub fn write(layers: Vec<LayerGcode>, stats: &Stats, job: &Job, out: &mut impl S
     let (mut last_index, mut last_z) = (0, 0.0);
     // The fans as Orca's cooling last set them (unknown before the first layer, so it sets both there).
     let mut fans = [f64::NAN; 2];
+    // What the fan runs at now, which an overhang's fan changes from the layer's (`current`), and which of the
+    // overhang fans were asked for since the cooling buffer's last layer began.
+    let mut fan = FanNow { current: f64::NAN, asked: [false; 2] };
     for (i, l) in layers.into_iter().enumerate() {
-        if l.fans[0] != fans[0] {
+        if l.group_start {
+            fan.asked = [false; 2];
+        }
+        if l.fans[0] != fans[0] || (l.group_start && fan.current != l.fans[0]) {
             set_fan(&mut text, l.fans[0]);
+        }
+        if l.group_start {
+            fan.current = l.fans[0];
         }
         if l.fans[1] != fans[1] && s.aux_fan {
             text.extend_from_slice(format!("M106 P2 S{}\n", (255.0 * l.fans[1] / 100.0) as i64).as_bytes());
@@ -504,8 +608,13 @@ pub fn write(layers: Vec<LayerGcode>, stats: &Stats, job: &Job, out: &mut impl S
         m73(&mut text, elapsed, stats.total_time);
         out.put(&text);
         text.clear();
-        out.put(&l.text[l.progress_at..cut_from]);
-        out.put(&l.text[cut_to..]);
+        if l.over == [None, None] {
+            out.put(&l.text[l.progress_at..cut_from]);
+            out.put(&l.text[cut_to..]);
+        } else {
+            fan.put(out, &l.text[l.progress_at..cut_from], (l.over, l.fans[0]));
+            fan.put(out, &l.text[cut_to..], (l.over, l.fans[0]));
+        }
         if l.last_accel.is_finite() {
             accel = l.last_accel;
         }
@@ -811,6 +920,7 @@ impl<'a> Builder<'a> {
         let mut written = path.speed * 60.0;
         let mut arcs = path.arcs.iter().peekable();
         let mut k = 0;
+        let mut first = FORM_FIRST;
         while k + 1 < path.points.len() {
             let q = path.points[k + 1];
             let part = path.parts.get(k);
@@ -864,6 +974,12 @@ impl<'a> Builder<'a> {
                 None => written = own * 60.0,
             }
             self.accel = accel;
+            // The overhang fan runs over bridges and overhang walls, over every outer wall at "0%", and where a line
+            // hangs enough (Orca's `overhang_fan_active`).
+            let fan = self.s.overhang_fan
+                && (matches!(role, Role::Bridge | Role::OverhangWall)
+                    || (self.s.overhang_fan_all_outer && role == Role::OuterWall)
+                    || part.map_or(path.fan, |p| p.fan));
             let m = Move {
                 x,
                 y,
@@ -874,9 +990,10 @@ impl<'a> Builder<'a> {
                 kind: Kind::Extrude(role),
                 width: width as f32,
                 height: height as f32,
-                form: 0,
+                form: first | if fan { FORM_FAN } else { 0 },
                 arc,
             };
+            first = 0;
             self.push(m);
             if let Some((at, _)) = &self.photo
                 && (x - at[0]).hyp(y - at[1]) < 0.5
@@ -2497,7 +2614,7 @@ fn finish_layer(
     job: &Job,
     (text, before): (Vec<u8>, Option<(Role, f32)>),
     header_height: f32,
-    (fans, mut tool): ([f64; 2], usize),
+    (fans, over, mut tool): ([f64; 2], [Option<f64>; 2], usize),
 ) -> LayerOut {
     let s = job.settings;
     // Where the prime tower's G-code leaves the nozzle, the planner starts again.
@@ -2535,6 +2652,10 @@ fn finish_layer(
     let mut wiping = false;
     let mut at = start;
     let mut next_note = 0;
+    // The fan markers last written (the overhang fan, the internal bridge fan), and whether none has been yet: a
+    // layer's first extrusion that wants none says so, as Orca does when the layer before ended with one on.
+    let mut marked = [false; 2];
+    let mut no_marks_yet = true;
     let t = &mut out.text;
     // Each move with what is said before it, then what is said after the last one.
     for (k, m) in moves.iter().map(Some).chain([None]).enumerate() {
@@ -2630,7 +2751,18 @@ fn finish_layer(
                     t.push(b'\n');
                     w.height = m.height;
                 }
+                let want =
+                    [over[0].is_some() && m.form & FORM_FAN != 0, over[1].is_some() && role == Role::InternalBridge];
+                let mark = (over[0].is_some() || over[1].is_some()) && (want != marked || no_marks_yet);
+                // Orca writes a path's speed and then its fan, and a piece's fan and then its speed.
+                if mark && m.form & FORM_FIRST == 0 {
+                    fan_markers(t, over, (&mut marked, want), no_marks_yet);
+                }
                 w.feed(t, m.f, true);
+                if mark && m.form & FORM_FIRST != 0 {
+                    fan_markers(t, over, (&mut marked, want), no_marks_yet);
+                }
+                no_marks_yet = false;
                 // A spiral vase's rising line, as Orca's spiral writes it: the height first, to three decimals.
                 if m.form & FORM_Z != 0 {
                     t.extend_from_slice(format!("G1 Z{:.3} X", m.z).as_bytes());
@@ -2715,6 +2847,22 @@ fn finish_layer(
     out.first_accel = w.first_accel;
     out.last_accel = w.accel;
     out
+}
+
+/// Orca's markers for the fans that change over a path (`append_role_based_fan_marker`): a start where one is wanted
+/// and wasn't, an end where one is and isn't wanted (or, the layer's first, isn't: the layer before may have left
+/// one on).
+fn fan_markers(t: &mut Vec<u8>, over: [Option<f64>; 2], (marked, want): (&mut [bool; 2], [bool; 2]), first: bool) {
+    const NAMES: [&str; 2] = ["_OVERHANG", "_INTERNAL_BRIDGE"];
+    for k in 0..2 {
+        if over[k].is_none() {
+            continue;
+        }
+        if want[k] != marked[k] || (first && !want[k]) {
+            t.extend_from_slice(format!(";{}_FAN_{}\n", NAMES[k], if want[k] { "START" } else { "END" }).as_bytes());
+            marked[k] = want[k];
+        }
+    }
 }
 
 fn write_note(t: &mut Vec<u8>, note: &Note, job: &Job, w: &mut Writer) {
@@ -3339,6 +3487,47 @@ mod tests {
     }
 
     #[test]
+    fn the_overhang_fan_runs_where_orcas_cooling_runs_it() {
+        // Generic PETG on the X2D: no fan for three layers, 40 % to 90 % by the layer's time, 90 % over overhangs.
+        let mut s = Settings::default();
+        (s.fan_off_layers, s.fan_min_speed, s.fan_max_speed) = (3, 0.4, 0.9);
+        (s.overhang_fan, s.overhang_fan_speed, s.internal_bridge_fan_speed) = (true, 0.9, -0.01);
+        assert_eq!(layer_overhang_fans(2, 0.0, &s), [None, None]);
+        // Faster than the layer's fan: asked for, over internal bridges too while their own speed is below zero.
+        assert_eq!(layer_overhang_fans(3, 40.0, &s), [Some(90.0), Some(90.0)]);
+        // No faster, nothing to ask.
+        assert_eq!(layer_overhang_fans(3, 90.0, &s), [None, None]);
+        // Their own speed asked for even where it is slower.
+        s.internal_bridge_fan_speed = 0.3;
+        assert_eq!(layer_overhang_fans(3, 90.0, &s), [None, Some(30.0)]);
+        s.internal_bridge_fan_speed = -0.01;
+        // The ramp over the first layers scales it as it does the layer's fan.
+        s.full_fan_speed_layer = 6;
+        assert_eq!(layer_overhang_fans(3, 20.0, &s)[0], Some(30.0));
+        s.overhang_fan = false;
+        assert_eq!(layer_overhang_fans(5, 40.0, &s), [None, None]);
+    }
+
+    #[test]
+    fn overhang_fan_markers_become_the_cooling_buffers_fan_lines() {
+        let text =
+            b"G1 X1 E1\n;_OVERHANG_FAN_START\nG1 X2 E1\n;_OVERHANG_FAN_START\nG1 X3 E1\n;_OVERHANG_FAN_END\nG1 X4 E1\n\
+                     ;_INTERNAL_BRIDGE_FAN_START\nG1 X5 E1\n;_OVERHANG_FAN_START\n;_INTERNAL_BRIDGE_FAN_END\nG1 X6 E1\n\
+                     ;_OVERHANG_FAN_END\nG1 X7 E1\n";
+        let mut fan = FanNow { current: 45.0, asked: [false; 2] };
+        let mut out = Vec::new();
+        fan.put(&mut out, text, ([Some(90.0), Some(70.0)], 45.0));
+        // The overhang's 90 % once (a second start asks for what is on), the layer's 45 % at the end, the internal
+        // bridge's 70 % while only it is asked for, back to 90 % when the overhang is asked for too (which wins).
+        assert_eq!(
+            String::from_utf8(out).unwrap(),
+            "G1 X1 E1\nM106 S229\nG1 X2 E1\nG1 X3 E1\nM106 S114\nG1 X4 E1\nM106 S178\nG1 X5 E1\nM106 S229\n\
+             G1 X6 E1\nM106 S114\nG1 X7 E1\n"
+        );
+        assert_eq!(fan.current, 45.0);
+    }
+
+    #[test]
     fn travels_retract_where_orcas_do() {
         // An island 20 mm square with a 4 mm hole in its middle, and a top surface in a corner of it.
         let mm = geom::SCALE as i32;
@@ -3370,6 +3559,7 @@ mod tests {
             island,
             object: 0,
             parts: Vec::new(),
+            fan: false,
             arcs: Vec::new(),
         };
         let (sparse, solid, gap) = (path(Role::SparseInfill, 0), path(Role::SolidInfill, 0), path(Role::GapFill, 0));
@@ -3389,7 +3579,8 @@ mod tests {
         // Off a wall that ends over an overhang, as off an outer wall.
         let mut hanging = path(Role::InnerWall, 0);
         hanging.points = vec![p(2.0, 2.0), p(3.0, 2.0), p(4.0, 2.0)];
-        hanging.parts = vec![Part { overhang: false, speed: 100.0 }, Part { overhang: true, speed: 50.0 }];
+        hanging.parts =
+            vec![Part { overhang: false, speed: 100.0, fan: false }, Part { overhang: true, speed: 50.0, fan: false }];
         assert!(retracts(&hanging, &sparse, 16.0, p(2.0, 2.0), p(18.0, 2.0), &internal, &s));
     }
 
@@ -3406,6 +3597,7 @@ mod tests {
             island: 0,
             object: 0,
             parts: Vec::new(),
+            fan: false,
             arcs: Vec::new(),
         }
     }
@@ -3431,9 +3623,9 @@ mod tests {
         assert_eq!(farthest_point(&plan), Some([130.0, 130.0]));
         // The stretches on from (120, 100) hang over: of the points left, the one the plain stretch shares with them.
         outer.parts = vec![
-            Part { overhang: false, speed: 100.0 },
-            Part { overhang: true, speed: 50.0 },
-            Part { overhang: true, speed: 50.0 },
+            Part { overhang: false, speed: 100.0, fan: false },
+            Part { overhang: true, speed: 50.0, fan: false },
+            Part { overhang: true, speed: 50.0, fan: false },
         ];
         plan.paths = vec![infill.clone(), outer];
         assert_eq!(farthest_point(&plan), Some([120.0, 100.0]));
@@ -3511,6 +3703,7 @@ mod tests {
             island: 0,
             object: 0,
             parts: Vec::new(),
+            fan: false,
             arcs,
         };
         b.extrude(&wall);
@@ -3558,7 +3751,8 @@ mod tests {
             accel: 5000.0,
             island: 0,
             object: 0,
-            parts: speeds.iter().enumerate().map(|(k, &speed)| Part { overhang: k >= 5, speed }).collect(),
+            fan: false,
+            parts: speeds.iter().enumerate().map(|(k, &speed)| Part { overhang: k >= 5, speed, fan: false }).collect(),
             arcs: Vec::new(),
         };
         b.extrude(&wall);

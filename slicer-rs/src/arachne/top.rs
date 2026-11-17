@@ -3,7 +3,8 @@
 //! alone beside it, the inner walls going round the rest of the region, numbered from both edges; the top surface's
 //! fill reaches up to the outer wall. An island with no top surface gets its walls as if the feature were off.
 //!
-//! Not here: the clipping of inner walls over the top with `top_surface_expansion` (`clip_inner_walls_over_top`).
+//! With `top_surface_expansion` the inner walls are made round the whole region and cut where they run over the top
+//! surface (`clip_inner_walls_over_top`), the top fill taking their place.
 
 use crate::arachne::ioi::lines_touch;
 use crate::geom::{self, Join, Pt, SCALE, Shapes};
@@ -24,6 +25,9 @@ pub struct Params {
     /// `min_width_top_surface` in mm.
     pub min_width_top: f64,
     pub wall_loops: usize,
+    /// `top_fill_replaces_inner_walls`: the top fill grows over the inner walls (`top_surface_expansion` and
+    /// `top_surface_density` above zero).
+    pub clip_over_top: bool,
 }
 
 /// What the walls leave: lines by inset, what is inside them (infill's area, not yet drawn in) and the top surface
@@ -170,6 +174,113 @@ fn footprint(walls: &[ArachneLine]) -> Shapes {
     geom::union_all(&refs)
 }
 
+/// `clip_inner_walls_over_top`: cuts out of the inner walls the parts running over the top surface, so geometry that
+/// continues upward keeps its walls. A wall with next to nothing over the top (less than two widths) stays whole, its
+/// footprint added to `kept` for the top fill to go round. `width` is the inner wall's line width (mm).
+fn clip_over_top(groups: &mut Groups, top: &Shapes, width: f64, kept: &mut Vec<Shapes>) {
+    let Some(b) = geom::bbox(top) else { return };
+    let b = geom::inflate(b, 1e-4);
+    let inside = |p: Pt| p.x >= b[0] && p.x <= b[2] && p.y >= b[1] && p.y <= b[3] && geom::contains(top, p);
+    // Pulled back by half a wall width: the clip severs the centre line, but the bead's end reaches half a width past.
+    let area = off(top, width / 2.0);
+    let same = |p: Pt, q: Pt| (p.x - q.x).abs() <= 1 && (p.y - q.y).abs() <= 1;
+    for group in groups.iter_mut() {
+        let mut keep: Vec<ArachneLine> = Vec::with_capacity(group.len());
+        for line in std::mem::take(group) {
+            if line.points.is_empty() {
+                continue;
+            }
+            let over = line.points.iter().filter(|&&p| inside(p)).count();
+            if over == 0 {
+                keep.push(line);
+                continue;
+            }
+            if over == line.points.len() {
+                continue;
+            }
+            let mut pieces: Vec<Vec<(Pt, f64)>> = geom::difference_open(std::slice::from_ref(&line.points), &area)
+                .into_iter()
+                .map(|piece| piece.into_iter().map(|p| (p, width_at(&line, p))).collect())
+                .collect();
+            // Clipper cuts a closed loop at its start and may turn pieces round: pieces sharing an end are joined.
+            for i in 0..pieces.len() {
+                let mut j = i + 1;
+                while j < pieces.len() {
+                    let a_first = pieces[i][0].0;
+                    let (b_first, b_last) = (pieces[j][0].0, pieces[j][pieces[j].len() - 1].0);
+                    if same(a_first, b_first) || same(a_first, b_last) {
+                        pieces[i].reverse();
+                    }
+                    if same(pieces[i][pieces[i].len() - 1].0, b_last) {
+                        pieces[j].reverse();
+                    }
+                    if same(pieces[i][pieces[i].len() - 1].0, pieces[j][0].0) {
+                        let tail: Vec<(Pt, f64)> = pieces[j][1..].to_vec();
+                        pieces[i].extend(tail);
+                        pieces.remove(j);
+                        j = i + 1;
+                    } else {
+                        j += 1;
+                    }
+                }
+            }
+            let length = |points: &[Pt]| geom::length_mm(points, false);
+            let kept_length: f64 = pieces.iter().map(|p| length(&p.iter().map(|q| q.0).collect::<Vec<_>>())).sum();
+            if length(&line.points) - kept_length < 2.0 * width {
+                let w = line.widths.iter().copied().fold(0.0, f64::max);
+                kept.push(geom::offset_open(&line.points, w / 2.0));
+                keep.push(line);
+                continue;
+            }
+            for piece in pieces {
+                let points: Vec<Pt> = piece.iter().map(|q| q.0).collect();
+                // Tiny leftovers would print as zits.
+                if points.len() >= 2 && length(&points) >= width {
+                    keep.push(ArachneLine {
+                        inset: line.inset,
+                        odd: line.odd,
+                        closed: false,
+                        widths: piece.iter().map(|q| q.1).collect(),
+                        points,
+                    });
+                }
+            }
+        }
+        *group = keep;
+    }
+}
+
+/// The width a clipped line has at `p`: that of the vertex it is, else interpolated along the segment it lies on as
+/// Orca's `clip_extrusion` does (the ratio of the distances, the width truncated to a nanometre).
+fn width_at(line: &ArachneLine, p: Pt) -> f64 {
+    if let Some(k) = line.points.iter().position(|&q| q == p) {
+        return line.widths[k];
+    }
+    let mut best = (f64::MAX, 0usize);
+    for k in 1..line.points.len() {
+        let (a, b) = (line.points[k - 1], line.points[k]);
+        let (dx, dy) = (f64::from(b.x - a.x), f64::from(b.y - a.y));
+        let len2 = dx * dx + dy * dy;
+        let t = if len2 == 0.0 {
+            0.0
+        } else {
+            ((f64::from(p.x - a.x) * dx + f64::from(p.y - a.y) * dy) / len2).clamp(0.0, 1.0)
+        };
+        let d2 =
+            (f64::from(a.x) + t * dx - f64::from(p.x)).powi(2) + (f64::from(a.y) + t * dy - f64::from(p.y)).powi(2);
+        if d2 < best.0 {
+            best = (d2, k);
+        }
+    }
+    let k = best.1.max(1);
+    let (a, b) = (line.points[k - 1], line.points[k]);
+    let len = (f64::from(b.x - a.x)).hypot(f64::from(b.y - a.y));
+    let dist = (f64::from(p.x - a.x)).hypot(f64::from(p.y - a.y));
+    let t = if len == 0.0 { 0.0 } else { dist / len };
+    let (w0, w1) = (line.widths[k - 1], line.widths[k]);
+    w0 + ((w1 - w0) * t * 1e6).trunc() / 1e6
+}
+
 /// The walls of an island with `only_one_wall_top`: `last` is its outline drawn in as the walls start from it,
 /// `generate` makes `WallToolPaths` for an outline.
 pub fn walls(last: &Shapes, p: &Params, around: &Around, generate: &Generate) -> Walls {
@@ -234,18 +345,80 @@ pub fn walls(last: &Shapes, p: &Params, around: &Around, generate: &Generate) ->
         let (full_groups, full_inner) = full_walls(&mut full);
         return Walls { groups: full_groups, inner: full_inner, top: Vec::new() };
     }
-    // Onion the region round the top surface (`top_fill_replaces_inner_walls` is off: no clipping).
-    let region = off(&geom::difference(&infill, &top), p.wall_0_inset);
+    // Onion the region inside the outer wall, and where the top fill replaces inner walls cut them off over the top
+    // surface; else onion what is round it.
+    let mut top = top;
+    let region = if p.clip_over_top {
+        off(&infill, p.wall_0_inset)
+    } else {
+        off(&geom::difference(&infill, &top), p.wall_0_inset)
+    };
     let (mut inner_groups, inner_contour) = generate(&region, p.spacing, p.spacing, p.wall_loops - 1, 0.0);
+    if p.clip_over_top {
+        let mut kept = Vec::new();
+        clip_over_top(&mut inner_groups, &top, p.width, &mut kept);
+        // The top fill goes round the walls kept despite grazing the top.
+        if !kept.is_empty() {
+            let refs: Vec<&Shapes> = kept.iter().collect();
+            top = geom::difference(&top, &geom::union_all(&refs));
+        }
+    }
     if !groups.is_empty() {
         for l in inner_groups.iter_mut().flatten() {
             l.inset += 1;
         }
     }
-    if groups.len() == 1 {
+    if !p.clip_over_top && groups.len() == 1 {
         let outer_touch = if p.precise { p.ext_spacing + p.spacing / 2.0 } else { (p.ext_spacing + p.spacing) / 2.0 };
         renumber(&groups[0], &mut inner_groups, outer_touch, p.spacing);
     }
     groups.extend(inner_groups);
     Walls { groups, inner: geom::union(&top, &inner_contour), top }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn p(x: f64, y: f64) -> Pt {
+        geom::pt(geom::sc(x), geom::sc(y))
+    }
+
+    fn line(points: &[(f64, f64)], closed: bool) -> ArachneLine {
+        ArachneLine {
+            inset: 2,
+            odd: false,
+            closed,
+            points: points.iter().map(|&(x, y)| p(x, y)).collect(),
+            widths: vec![0.45; points.len()],
+        }
+    }
+
+    #[test]
+    fn inner_walls_are_cut_where_they_run_over_the_top_surface() {
+        // A top surface on the right half of a 20 mm square.
+        let top: Shapes = vec![vec![vec![p(10.0, 0.0), p(20.0, 0.0), p(20.0, 20.0), p(10.0, 20.0)]]];
+        let square = [(1.0, 1.0), (19.0, 1.0), (19.0, 19.0), (1.0, 19.0), (1.0, 1.0)];
+        let beside = [(1.0, 5.0), (8.0, 5.0)];
+        let over = [(12.0, 5.0), (18.0, 5.0)];
+        // A wall that touches the top with less than two widths of it: kept whole.
+        let grazing = [(1.0, 9.0), (10.3, 9.0)];
+        let mut groups: Groups =
+            vec![vec![line(&square, true), line(&beside, false), line(&over, false), line(&grazing, false)]];
+        let mut kept = Vec::new();
+        clip_over_top(&mut groups, &top, 0.45, &mut kept);
+        let lines = &groups[0];
+        // The loop is cut open (the top's edge pulled back by half a width: ends at 10 - 0.225), its left half stays
+        // as one piece running from the bottom's cut round to the top's; the line beside it is whole; the line over
+        // the top is gone; the grazing one stays and says where.
+        assert_eq!(lines.len(), 3, "{}", lines.len());
+        let piece = &lines[0];
+        assert!(!piece.closed);
+        let xs: Vec<f64> = piece.points.iter().map(|q| geom::unsc(q.x)).collect();
+        assert!(xs.iter().all(|&x| x < 10.0 - 0.2), "{xs:?}");
+        assert!(piece.widths.iter().all(|&w| (w - 0.45).abs() < 1e-9));
+        assert_eq!(lines[1].points.len(), 2);
+        assert_eq!(lines[2].points.last().copied(), Some(p(10.3, 9.0)));
+        assert_eq!(kept.len(), 1);
+    }
 }

@@ -1,10 +1,13 @@
 import type { Person } from "@shared/api";
 import { gramsText } from "@shared/ledger";
 import type { Week, WeekStage } from "@shared/week";
+import { commentsLine, ideasLine } from "@shared/week-lines";
+import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { Fragment, type ReactNode } from "react";
 import { BuildsIcon, CommentIcon, IdeasIcon, PrintingIcon, SpoolIcon } from "@/components/ui/icons";
 import { Section } from "@/components/ui/Section";
+import { sessionQuery } from "@/lib/queries";
 
 const sentenceLink = "text-ink decoration-ink/30 hover:decoration-ink underline underline-offset-4";
 const plural = (count: number, one: string, many = `${one}s`) => `${count} ${count === 1 ? one : many}`;
@@ -58,7 +61,6 @@ const short = (text: string) => {
   const cut = clean.slice(0, 28);
   return `${cut.slice(0, Math.max(cut.lastIndexOf(" "), 12)).trimEnd()}…`;
 };
-const firstName = (full: string) => full.split(" ")[0] ?? full;
 
 const name = (title: string | null, fallback = "Untitled") => title?.trim() || fallback;
 
@@ -89,7 +91,11 @@ export function WeekLines({ week, people }: WeekLinesProps) {
 
   const ideasBy = new Map<string, number>();
   for (const idea of week.ideas) ideasBy.set(idea.by, (ideasBy.get(idea.by) ?? 0) + 1);
-  const who = [...ideasBy].map(([id, count]) => ({ name: firstName(people.get(id)?.name ?? "Someone"), count }));
+  // The signed-in person reads "You": the line is about whoever is reading.
+  const { data: session } = useQuery(sessionQuery);
+  const me = session?.id;
+  const whoIs = (id: string) => ({ id, name: people.get(id)?.name });
+  const who = [...ideasBy].map(([id, count]) => ({ who: whoIs(id), count }));
 
   const talkers = Object.keys(week.comments.byPerson);
   const topThread = week.comments.threads[0];
@@ -133,16 +139,7 @@ export function WeekLines({ week, people }: WeekLinesProps) {
         )}
         {week.ideas.length > 0 && (
           <Line icon={IdeasIcon}>
-            {who.length === 1 ? (
-              <>
-                {who[0]?.name} captured {plural(week.ideas.length, "idea")}
-              </>
-            ) : (
-              <>
-                {who[0]?.name} captured {plural(who[0]?.count ?? 0, "idea")} and {who[1]?.name} {who[1]?.count}
-              </>
-            )}
-            :{" "}
+            {ideasLine(who, me)}:{" "}
             <Listed
               total={week.ideas.length}
               items={week.ideas.slice(0, 2).map((idea) => (
@@ -156,9 +153,7 @@ export function WeekLines({ week, people }: WeekLinesProps) {
         )}
         {week.comments.total > 0 && (
           <Line icon={CommentIcon}>
-            {talkers.length > 1
-              ? `You two exchanged ${plural(week.comments.total, "comment")}`
-              : `${people.get(talkers[0] ?? "")?.name ?? "Someone"} left ${plural(week.comments.total, "comment")}`}
+            {commentsLine(week.comments.total, talkers.map(whoIs), me)}
             {topThread && (
               <>
                 {" "}
