@@ -1,5 +1,5 @@
 mod bounds;
-mod build;
+pub(crate) mod build;
 mod builder;
 mod builder_join;
 pub mod offset;
