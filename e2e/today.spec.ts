@@ -53,7 +53,7 @@ test("a new notebook gets a welcome, not a blank page", async ({ page }) => {
   await expect(page.getByRole("button", { name: "New idea" }).first()).toBeVisible();
 });
 
-test("shows the print on the bed with its progress, and Finish opens that attempt", async ({ page }) => {
+test("shows the print on the bed with its progress, and "How did it go?" opens that attempt", async ({ page }) => {
   const { id } = await printing(page, "Bath tugboat", 20 * MINUTE, 120);
   await page.goto("/today");
 
@@ -62,14 +62,14 @@ test("shows the print on the bed with its progress, and Finish opens that attemp
   await expect(bed.getByRole("progressbar", { name: "Print progress" })).toBeVisible();
   await expect(bed.getByText(/min left|Done around/)).toBeVisible();
 
-  await bed.getByRole("button", { name: "Finish" }).click();
+  await bed.getByRole("button", { name: "How did it go?" }).click();
   await expect(page).toHaveURL(new RegExp(`/builds/${id}`));
   await expect(page.getByRole("dialog", { name: "Finish attempt 1" })).toBeVisible();
   // The parameter is spent: closing the sheet doesn't leave a link that reopens it.
   await expect(page).not.toHaveURL(/finish=/);
 });
 
-test("asks how it went once the print should be done: the answer opens the sheet with it chosen and saved", async ({
+test("asks the same question once the print should be done, and the sheet opens with nothing decided", async ({
   page,
 }) => {
   const { id, attempt } = await printing(page, "Old print", 3 * 60 * MINUTE, 60);
@@ -77,16 +77,13 @@ test("asks how it went once the print should be done: the answer opens the sheet
 
   const bed = page.getByRole("region", { name: "On the bed" });
   await expect(bed.getByText("Should be done by now")).toBeVisible();
-  await expect(bed.getByRole("button", { name: "Finish" })).toHaveCount(0);
-  // Nothing has been decided yet.
+  // One action, as before the print is due: no second row of answers.
+  await expect(bed.getByRole("button", { name: "How did it go?" })).toHaveCount(1);
+  await expect(bed.getByRole("radio")).toHaveCount(0);
   expect(await savedOutcome(page, id, attempt)).toBeNull();
-  await bed.getByRole("radio", { name: "Worked" }).click();
-  // The sheet is where the photo, the tags and a word get added: it opens, with the outcome chosen.
-  const sheet = page.getByRole("dialog", { name: "Finish attempt 1" });
-  await expect(sheet).toBeVisible();
-  await expect(sheet.getByRole("radio", { name: "Worked" })).toBeChecked();
-  // ...and its autosave keeps it.
-  await expect.poll(() => savedOutcome(page, id, attempt)).toBe("success");
+  await bed.getByRole("button", { name: "How did it go?" }).click();
+  await expect(page).toHaveURL(new RegExp(`/builds/${id}`));
+  await expect(page.getByRole("dialog", { name: "Finish attempt 1" })).toBeVisible();
 });
 
 test("a print that is off the bed asks how it went, with the three answers, instead of a progress bar", async ({
@@ -106,7 +103,7 @@ test("a print that is off the bed asks how it went, with the three answers, inst
   const card = bed.getByRole("article").filter({ hasText: "Drawer divider" });
   await expect(card.getByText(/Off the bed at .* · how did it go\?/)).toBeVisible();
   await expect(card.getByRole("progressbar")).toHaveCount(0);
-  await expect(card.getByRole("button", { name: "Finish" })).toHaveCount(0);
+  await expect(card.getByRole("button", { name: "How did it go?" })).toHaveCount(0);
   // The one still printing keeps its bar.
   await expect(bed.getByRole("article").filter({ hasText: "Still going" }).getByRole("progressbar")).toBeVisible();
 

@@ -23,8 +23,7 @@ import { usePrintProgress } from "@/lib/print-progress";
 import { useReadOnly } from "@/lib/read-only";
 import { useIsDesktop } from "@/lib/use-media-query";
 import { OffTheBed } from "./OffTheBed";
-import { OutcomeChip, OutcomePicker } from "./Outcome";
-import { PhotoReadNote } from "./PhotoReadNote";
+import { OutcomeChip } from "./Outcome";
 import { SettingsLine } from "./SettingsLine";
 
 interface PrintingCardProps {
@@ -118,7 +117,6 @@ export function PrintingCard({
   const readOnly = useReadOnly(item.pending);
   const offBed = isOffTheBed(attempt);
   const progress = usePrintProgress(attempt.id, attempt.printedAt, attempt.settings.estimatedMinutes);
-  const due = progress.state === "due";
   const showUnread = unread > 0;
   // The build's cover, with the plate on the bed first when there is no photo.
   const cover = coverOf(item, { file: attempt.file });
@@ -322,11 +320,10 @@ export function PrintingCard({
                         onClick={() => (isDesktop ? snapPrint(aim) : camera.current?.click())}
                       />
                     )}
-                    {!due && (
-                      <Button variant="secondary" size="sm" onClick={() => finish()} className="shrink-0">
-                        Finish
-                      </Button>
-                    )}
+                    {/* The build page's one question, in the same words, before and after the print is due. */}
+                    <Button variant="secondary" size="sm" onClick={() => finish()} className="shrink-0">
+                      How did it go?
+                    </Button>
                   </div>
                   <input
                     ref={camera}
@@ -343,18 +340,6 @@ export function PrintingCard({
                   />
                 </div>
               </div>
-              {due && (
-                <div className="pointer-events-auto flex flex-col gap-2 md:mt-auto">
-                  <p className="text-body text-ink font-semibold">How did it go?</p>
-                  <OutcomePicker
-                    value={null}
-                    onChange={(outcome) => finish(outcome)}
-                    size="md"
-                    suggested={attempt.photoRead?.outcome ?? null}
-                  />
-                  {attempt.photoRead?.status === "read" && <PhotoReadNote read={attempt.photoRead} withTags={false} />}
-                </div>
-              )}
             </>
           )}
         </div>
