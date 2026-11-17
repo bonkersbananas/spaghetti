@@ -40,7 +40,11 @@ function Row({ item }: { item: ItemView }) {
       </span>
       <span className="flex min-w-0 flex-1 flex-col">
         <span
-          className={cn("text-body truncate", name.titled ? "text-ink font-semibold" : "text-ink-soft font-medium")}
+          className={cn(
+            "text-body",
+            name.titled ? "truncate" : "line-clamp-2 leading-snug",
+            name.titled ? "text-ink font-semibold" : "text-ink-soft font-medium",
+          )}
         >
           {name.text}
         </span>

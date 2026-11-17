@@ -10,10 +10,10 @@ import { unreadQuery } from "@/lib/unread-comments";
 
 /**
  * One quiet line when the other person wrote something you haven't read: "Marie on Tugboat: Started it tonight…",
- * under a label that counts them when there are several, leading to the thread with that comment lit. Nothing when all is read.
+ * under a label that counts them when there are several (or, `counted`, with the count after the line), leading to the thread with that comment lit. Nothing when all is read.
  * It sits under what is on the bed, a block of its own under a quiet label: a note on the fridge, not a notification.
  */
-export default function CommentsLine({ bare = false }: { bare?: boolean }) {
+export default function CommentsLine({ bare = false, counted = false }: { bare?: boolean; counted?: boolean }) {
   const { data } = useQuery(unreadQuery);
   const { data: people } = useQuery(peopleQuery);
   const line = data
@@ -28,10 +28,12 @@ export default function CommentsLine({ bare = false }: { bare?: boolean }) {
   const { thread } = line;
   const search = { thread: 1, comment: thread.latestId } as never;
   const row = (
-    <QuietRowContent icon={CommentIcon} iconClassName="text-tomato-ink">
+    <QuietRowContent icon={CommentIcon} iconClassName={counted ? undefined : "text-tomato-ink"}>
       <span className="md:block md:truncate">
         <span className="text-ink font-semibold">{line.lead}</span>
         {line.quote && <span>: {line.quote}</span>}
+        {/* In the "needs you" strip there is no label to carry the count. */}
+        {counted && line.total > 1 && <span className="text-ink-faint"> · {line.total} new</span>}
       </span>
     </QuietRowContent>
   );
