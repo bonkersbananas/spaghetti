@@ -139,6 +139,10 @@ pub struct Settings {
     pub lateral_lattice_angles: [f64; 2],
     /// How much Orca rounds the corners of some sparse patterns (`sparse_infill_smooth_factor`, %), which ours doesn't.
     pub sparse_smooth_factor: f64,
+    /// Whether 3D honeycomb caps its cells where they close (`infill_complete_top`), which ours doesn't.
+    pub honeycomb_complete_top: bool,
+    /// How Orca grades gyroid and TPMS infill through the object (`adaptive_infill_mode`), which ours doesn't.
+    pub adaptive_infill_mode: String,
     /// mm the first layer is pulled in against elephant's foot, where it is wide enough (`elephant.rs`).
     pub elephant_foot: f64,
     /// How many layers Orca pulls in, by less on each (`elefant_foot_compensation_layers`): this pulls in the first.
@@ -927,6 +931,8 @@ impl Settings {
                 .map(|(key, default)| if p.text(key).is_empty() { default } else { p.float(key) }),
             infill_anchor_max,
             sparse_smooth_factor: p.float("sparse_infill_smooth_factor"),
+            honeycomb_complete_top: p.bool("infill_complete_top"),
+            adaptive_infill_mode: p.text("adaptive_infill_mode").to_string(),
             elephant_foot: p.float("elefant_foot_compensation"),
             elephant_foot_layers: p.int("elefant_foot_compensation_layers").max(1) as usize,
             resolution: p.float("resolution"),
@@ -1229,6 +1235,8 @@ impl Settings {
                 | "archimedeanchords"
                 | "hilbertcurve"
                 | "octagramspiral"
+                | "3dhoneycomb"
+                | "tpmsd"
                 | ""
         ) {
             out.push(format!("{} sparse infill printed as rectilinear", self.sparse_infill_pattern));
@@ -1241,6 +1249,15 @@ impl Settings {
             )
         {
             out.push(format!("{} sparse infill's corners printed unrounded", self.sparse_infill_pattern));
+        }
+        if self.honeycomb_complete_top && self.sparse_infill_pattern == "3dhoneycomb" {
+            out.push("3D honeycomb's cells left open at the top".into());
+        }
+        // Orca grades gyroid and the TPMS patterns (`is_adaptive_infill_pattern`); TPMS-FK, not ported, has its note.
+        if !matches!(self.adaptive_infill_mode.as_str(), "disabled" | "")
+            && matches!(self.sparse_infill_pattern.as_str(), "gyroid" | "tpmsd")
+        {
+            out.push(format!("{} sparse infill printed even, not graded", self.sparse_infill_pattern));
         }
         for (what, pattern) in [
             ("top surfaces", &self.top_surface_pattern),
