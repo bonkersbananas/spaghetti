@@ -142,6 +142,8 @@ pub struct LayerRegions {
     pub tops: Shapes,
     /// Where each object's wall loops start on this layer (`seam.rs`), by group; empty until placed.
     pub seams: Vec<crate::seam::LayerSeams>,
+    /// Each group's octree for adaptive or support cubic infill (`adaptive.rs`), the same on every layer.
+    pub octrees: std::sync::Arc<Vec<Option<crate::adaptive::Octree>>>,
 }
 
 impl LayerRegions {
@@ -180,6 +182,7 @@ pub fn regions(
     group: &[u32],
     layers: &Layers,
     centres: &[(f64, f64)],
+    meshes: &[&crate::mesh::Mesh],
     s: &Settings,
 ) -> Vec<LayerRegions> {
     let n = slices.len();
@@ -453,12 +456,14 @@ pub fn regions(
     // print. Lightning's trees grow first, round where those bridges will be.
     let candidates = bridges::candidates(&islands, &fills, layers, s);
     let mut lightning = lightning_lines(&islands, &fills, &candidates, layers, centres, s);
+    let octrees = std::sync::Arc::new(octrees(&islands, &candidates, layers, centres, meshes, s));
     let lines = |layer: usize, island: usize, sparse: &Shapes| {
         let object = islands[layer][island].object as usize;
         let centre = centres.get(object).copied().unwrap_or((0.0, 0.0));
         let g = islands[layer][island].group as usize;
         let trees = lightning.get(g).and_then(|o| o.get(layer)).map_or(&[][..], Vec::as_slice);
-        plan::sparse_lines(sparse, layer, layers.top[layer], layers.height[layer], centre, trees, s)
+        let octree = octrees.get(g).and_then(Option::as_ref);
+        plan::sparse_lines(sparse, layer, layers.top[layer], layers.height[layer], centre, trees, octree, s)
     };
     let mut fills = bridges::bridge_over_infill(&islands, fills, candidates, layers, &lines, s);
     if s.iron.on() {
@@ -474,7 +479,16 @@ pub fn regions(
             let lightning =
                 lightning.iter_mut().map(|o| o.get_mut(l).map(std::mem::take).unwrap_or_default()).collect();
             let tops = kept_tops.get_mut(l).map(std::mem::take).unwrap_or_default();
-            LayerRegions { islands, fills, surfaces, unpulled: Vec::new(), lightning, tops, seams: Vec::new() }
+            LayerRegions {
+                islands,
+                fills,
+                surfaces,
+                unpulled: Vec::new(),
+                lightning,
+                tops,
+                seams: Vec::new(),
+                octrees: octrees.clone(),
+            }
         })
         .collect();
     if let Some(first) = out.first_mut()
@@ -488,6 +502,55 @@ pub fn regions(
             .collect();
     }
     out
+}
+
+/// Each group's octree for adaptive or support cubic infill (`adaptive.rs`), as Orca's
+/// `prepare_adaptive_infill_data` builds it: from the object's mesh in its own frame (from the middle of its bounding
+/// box) and the solid infill worth bridging over sparse infill (`candidates`), each at its layer's bottom.
+fn octrees(
+    islands: &[Vec<Island>],
+    candidates: &bridges::Candidates,
+    layers: &Layers,
+    centres: &[(f64, f64)],
+    meshes: &[&crate::mesh::Mesh],
+    s: &Settings,
+) -> Vec<Option<crate::adaptive::Octree>> {
+    let support = match fill::Pattern::of(&s.sparse_infill_pattern) {
+        Some(fill::Pattern::AdaptiveCubic) => false,
+        Some(fill::Pattern::SupportCubic) => true,
+        _ => return Vec::new(),
+    };
+    if s.sparse_density <= 0.0 {
+        return Vec::new();
+    }
+    let groups = islands.iter().flatten().map(|i| i.group as usize + 1).max().unwrap_or(0);
+    let mut anchor = vec![(0.0, 0.0); groups];
+    for island in islands.iter().flatten() {
+        anchor[island.group as usize] = centres.get(island.object as usize).copied().unwrap_or((0.0, 0.0));
+    }
+    let spacing = crate::adaptive::line_spacing(s.sparse_infill_width, s.sparse_density);
+    par::map_range(groups, |g| {
+        let mesh = meshes.get(g)?;
+        let (cx, cy) = (anchor[g].0 / geom::SCALE, anchor[g].1 / geom::SCALE);
+        let triangles: Vec<[[f32; 3]; 3]> = mesh
+            .triangles
+            .iter()
+            .map(|t| {
+                t.map(|i| {
+                    let v = mesh.vertices[i as usize];
+                    [(v[0] as f64 - cx) as f32, (v[1] as f64 - cy) as f32, v[2]]
+                })
+            })
+            .collect();
+        let mut overhangs = Vec::new();
+        for (l, layer) in islands.iter().enumerate() {
+            let bottom = layers.top[l] - layers.height[l];
+            for c in candidates.on(l).filter(|c| layer.get(c.island).is_some_and(|i| i.group as usize == g)) {
+                overhangs.extend(crate::adaptive::cover(&c.area, bottom, anchor[g]));
+            }
+        }
+        Some(crate::adaptive::Octree::build(&triangles, &overhangs, spacing, support))
+    })
 }
 
 /// Which groups (`regions`' `group`) have more than one region: Orca's objects of several printing regions.
@@ -1138,7 +1201,7 @@ mod tests {
             })
             .collect();
         let owners: Vec<Vec<u32>> = slices.iter().map(|slice| vec![0; slice.len()]).collect();
-        let regions = regions(&slices, &owners, &[], &layers, &[(sc(10.0) as f64, sc(10.0) as f64)], &s);
+        let regions = regions(&slices, &owners, &[], &layers, &[(sc(10.0) as f64, sc(10.0) as f64)], &[], &s);
         let length = |loops: &[Contour]| loops.iter().map(|c| geom::length_mm(c, true)).sum::<f64>();
         let step = layers.top.iter().position(|&z| z > 2.0 + 1e-6).unwrap() - 1;
 
@@ -1166,7 +1229,7 @@ mod tests {
         let ribs = vec![square(0.0, 0.0, 0.6, 5.0), square(4.0, 0.0, 4.6, 15.0), square(8.0, 0.0, 8.35, 4.0)];
         let slices: Vec<Shapes> = (0..layers.top.len()).map(|_| ribs.clone()).collect();
         let owners: Vec<Vec<u32>> = slices.iter().map(|slice| vec![0; slice.len()]).collect();
-        let regions = regions(&slices, &owners, &[], &layers, &[(0.0, 0.0)], &s);
+        let regions = regions(&slices, &owners, &[], &layers, &[(0.0, 0.0)], &[], &s);
         let thinner = narrow_wall_width(s.outer_wall_width, 0.2);
         assert!((thinner - 0.3785).abs() < 1e-3, "{thinner}");
         let islands = &regions[5].islands;

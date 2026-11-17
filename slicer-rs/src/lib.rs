@@ -2,6 +2,7 @@
 //! decision 0046. Built for speed: layers are sliced, walled and filled in parallel (one thread in WebAssembly), on
 //! exact integer geometry. See `docs/proposals/rust-slicer.md` for what it does, how fast, and what it lacks.
 
+pub mod adaptive;
 pub mod arc_fit;
 pub mod bambu;
 pub mod base_support;
@@ -627,22 +628,19 @@ impl Plate {
             .map(|o| ((o.min[0] + o.max[0]) / 2.0 * geom::SCALE, (o.min[1] + o.max[1]) / 2.0 * geom::SCALE))
             .collect();
         let sizes: Vec<(f64, f64)> = objects.iter().map(|o| (o.max[0] - o.min[0], o.max[1] - o.min[1])).collect();
-        let mut regions = region::regions(&slices, &owners, &parts.group, &layers, &centres, settings);
+        // Each object's mesh: all of its parts' (Orca sees an object's seams on its whole model, and builds its
+        // adaptive infill's octree from it).
+        let whole: Vec<Option<Mesh>> = parts
+            .members
+            .iter()
+            .map(|members| (members.len() > 1).then(|| Mesh::merged(members.iter().map(|&m| &meshes[m]))))
+            .collect();
+        let by_group: Vec<&Mesh> =
+            parts.members.iter().zip(&whole).map(|(members, w)| w.as_ref().unwrap_or(&meshes[members[0]])).collect();
+        let mut regions = region::regions(&slices, &owners, &parts.group, &layers, &centres, &by_group, settings);
         // Where each wall loop starts, from the objects' outer walls and their surfaces (`seam.rs`). In spiral vase mode
         // Orca starts every loop where the nozzle is instead (`GCode::extrude_loop`), so there are none to place.
         if !settings.spiral_mode {
-            // Each object's mesh: all of its parts' (Orca sees an object's seams on its whole model).
-            let whole: Vec<Option<Mesh>> = parts
-                .members
-                .iter()
-                .map(|members| (members.len() > 1).then(|| Mesh::merged(members.iter().map(|&m| &meshes[m]))))
-                .collect();
-            let by_group: Vec<&Mesh> = parts
-                .members
-                .iter()
-                .zip(&whole)
-                .map(|(members, w)| w.as_ref().unwrap_or(&meshes[members[0]]))
-                .collect();
             seam::place(&mut regions, &by_group, &layers.slice_z(), &layers.height, settings);
         }
         // Where travels lift in spirals rather than slopes, for filaments that lift as Orca's Auto Lift does.
