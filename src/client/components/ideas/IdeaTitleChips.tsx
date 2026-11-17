@@ -58,7 +58,7 @@ export function IdeaTitleChips({ item, forWhom, setForWhom, readOnly }: IdeaTitl
         <ToggleChip
           selected={wished}
           appearance="quiet"
-          tone="tomato"
+          tone="semolina"
           icon={WishIcon}
           disabled={locked || !user}
           onClick={() => user && toggleWishlist(queryClient, user.id, item)}
