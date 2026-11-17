@@ -649,7 +649,9 @@ impl Plate {
         // Where each wall loop starts, from the objects' outer walls and their surfaces (`seam.rs`). In spiral vase mode
         // Orca starts every loop where the nozzle is instead (`GCode::extrude_loop`), so there are none to place.
         if !settings.spiral_mode {
-            seam::place(&mut regions, &by_group, &layers.slice_z(), &layers.height, settings);
+            let by_part: Vec<Vec<&Mesh>> =
+                parts.members.iter().map(|members| members.iter().map(|&m| &meshes[m]).collect()).collect();
+            seam::place(&mut regions, &by_part, &layers.slice_z(), &layers.height, settings);
         }
         // Where travels lift in spirals rather than slopes, for filaments that lift as Orca's Auto Lift does.
         let auto_lift = match &settings.palette {

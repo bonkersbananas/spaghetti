@@ -449,8 +449,8 @@ fn segment_distance2(s: &[f64; 4], x: f64, y: f64) -> f64 {
 
 /// Places the seams of every object on every layer, into each layer's `seams` (indexed by the islands' group: all of
 /// an object's regions together, as Orca places an object's seams). `meshes` are the objects as sliced, one for each
-/// group (an object made of parts, all of them), `slice_z` and `heights` each layer's slicing plane and height.
-pub fn place(regions: &mut [LayerRegions], meshes: &[&Mesh], slice_z: &[f64], heights: &[f64], s: &Settings) {
+/// group, each its parts in order, `slice_z` and `heights` each layer's slicing plane and height.
+pub fn place(regions: &mut [LayerRegions], meshes: &[Vec<&Mesh>], slice_z: &[f64], heights: &[f64], s: &Settings) {
     let mode = Mode::of(&s.seam_position);
     let regions_ref: &[LayerRegions] = regions;
     // Each object's on its own: Orca places each object's seams apart from the others'.
@@ -459,7 +459,7 @@ pub fn place(regions: &mut [LayerRegions], meshes: &[&Mesh], slice_z: &[f64], he
         if !regions_ref.iter().any(|r| r.islands.iter().any(|i| i.group == object)) {
             return Vec::new();
         }
-        object_seams(regions_ref, object, meshes[o], mode, slice_z, heights, s)
+        object_seams(regions_ref, object, &meshes[o], mode, slice_z, heights, s)
     });
     for layer in regions.iter_mut() {
         layer.seams = vec![LayerSeams::default(); meshes.len()];
@@ -475,7 +475,7 @@ pub fn place(regions: &mut [LayerRegions], meshes: &[&Mesh], slice_z: &[f64], he
 fn object_seams(
     regions: &[LayerRegions],
     object: u32,
-    mesh: &Mesh,
+    parts: &[&Mesh],
     mode: Mode,
     slice_z: &[f64],
     heights: &[f64],
@@ -518,7 +518,7 @@ fn object_seams(
     });
     // How visible each candidate is, from the samples round it.
     if mode != Mode::Rear {
-        let v = Visibility::of(mesh, mode == Mode::AlignedBack);
+        let v = Visibility::of(parts, mode == Mode::AlignedBack);
         let seen: Vec<Vec<f32>> =
             crate::par::map_range(layers.len(), |l| layers[l].points.iter().map(|p| v.at(p.position)).collect());
         for (layer, seen) in layers.iter_mut().zip(seen) {
