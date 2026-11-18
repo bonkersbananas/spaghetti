@@ -80,7 +80,11 @@ export function MiniCard({
       ref={ref}
       className={cn(
         "group/mini relative shrink-0 snap-start list-none",
-        gridScale ? "md:w-[calc((100%-2.5rem)/3)] xl:w-[calc((100%-3.75rem)/4)]" : "md:w-32 xl:w-44",
+        gridScale
+          ? "md:w-[calc((100%-2.5rem)/3)] xl:w-[calc((100%-3.75rem)/4)]"
+          : roomy
+            ? "md:w-44"
+            : "md:w-32 xl:w-44",
         fill ? "w-full" : roomy ? "w-38" : "w-26",
         className,
       )}
@@ -172,11 +176,7 @@ export function MiniCard({
               ) : (
                 <p className="text-small text-ink-faint min-h-[2lh] leading-snug">{meta}</p>
               )}
-              {sub && heading && (
-                <p className={cn("text-small text-ink-faint leading-snug", roomy ? "truncate" : "line-clamp-2")}>
-                  {sub}
-                </p>
-              )}
+              {sub && heading && <p className="text-small text-ink-faint line-clamp-2 leading-snug">{sub}</p>}
             </div>
           )}
         </Link>
