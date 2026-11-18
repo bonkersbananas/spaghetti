@@ -28,7 +28,7 @@ export function HubTile({ to, title, summary, visual, className }: HubTileProps)
       )}
     >
       <span
-        className="bg-ink/4 flex h-24 items-center justify-center overflow-hidden rounded-md px-3 md:h-32 md:px-4"
+        className="bg-ink/4 flex h-16 items-center justify-center overflow-hidden rounded-md px-3 md:h-32 md:px-4"
         aria-hidden
       >
         {visual}

@@ -492,6 +492,12 @@ function receiveHook(request: IncomingMessage, response: ServerResponse, receive
 /** The cheapest price of the products the screenshots' shopping list links, in kronor (others keep the fixture's). */
 const PRODUCT_PRICES: Record<string, number> = { 13366548: 149, 12086734: 249, 14402211: 259 };
 
+/** Each seeded product gets its own picture (the shopping tile shows several side by side); others by their number. */
+const productImage = (product: string) => {
+  const seeded = Object.keys(PRODUCT_PRICES).indexOf(product);
+  return seeded >= 0 ? (seeded % 3) + 1 : (Number(product) % 3) + 1;
+};
+
 export async function startFakeClaude(
   port: number,
   { scoutAlways = false }: { scoutAlways?: boolean } = {},
@@ -523,7 +529,7 @@ export async function startFakeClaude(
         productPage
           .replaceAll(
             "https://cdn.pji.nu/product/standard/800/15633708.jpg",
-            `${base}/images/${(Number(product[1]) % 3) + 1}.jpg`,
+            `${base}/images/${productImage(product[1] ?? "")}.jpg`,
           )
           .replace("Bambu Lab P2S Combo", `Bambu Lab PLA Basic ${product[1]}`)
           .replace(
