@@ -1501,6 +1501,8 @@ async function mockToday(
     late?: boolean;
     offBed?: boolean;
     onePrint?: boolean;
+    /** The prints on the bed have no picture at all (no photo, no plate render). */
+    noPictures?: boolean;
   },
 ) {
   const DAY = 24 * 60 * 60 * 1000;
@@ -1527,6 +1529,14 @@ async function mockToday(
       for (const item of json.items)
         for (const attempt of item.attempts ?? [])
           if (attempt.outcome === null) attempt.printedAt -= 4 * 60 * 60 * 1000;
+    }
+    if (show.noPictures) {
+      for (const item of json.items as Array<Record<string, unknown> & { attempts?: Array<Record<string, unknown>> }>) {
+        if (!item.attempts?.some((attempt) => attempt.outcome === null)) continue;
+        item.photos = [];
+        item.files = [];
+        for (const attempt of item.attempts) attempt.file = null;
+      }
     }
     // Only the first print stays on the bed: the others are taken off the list.
     if (show.onePrint) {
@@ -1848,6 +1858,18 @@ export const shots: Shot[] = [
     width: 390,
     prepare: async (page) => {
       await mockToday(page, { builds: "all", journal: "all", spools: "all", ideas: "all", onePrint: true });
+      await page.locator("section[aria-label='On the bed']").waitFor();
+      await page.waitForTimeout(1500);
+    },
+    cleanup: unmockToday,
+  },
+  // The prints on the bed have no picture: the compact tile, never a large empty frame.
+  {
+    name: "journal-now-nophoto",
+    path: "/journal",
+    width: 390,
+    prepare: async (page) => {
+      await mockToday(page, { builds: "all", journal: "all", spools: "all", ideas: "all", noPictures: true });
       await page.locator("section[aria-label='On the bed']").waitFor();
       await page.waitForTimeout(1500);
     },
