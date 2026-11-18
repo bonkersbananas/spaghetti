@@ -202,9 +202,26 @@ export function CaptureSheet() {
       open={open}
       onOpenChange={setOpen}
       title={title}
-      // With the segment under it ("New idea" · "This print"), the segment says it: the title stays for screen
-      // readers only, and the warm line leads the sheet.
-      titleHidden={auto.kind !== "idea"}
+      // With the segment ("New idea" · "This print") the sheet's head, it says what the sheet is: the title stays for
+      // screen readers only, and the warm line sits right under it.
+      lead={
+        auto.kind !== "idea" ? (
+          <SegmentedControl
+            label="Where it goes"
+            labelHidden
+            options={[
+              { value: "idea", label: "New idea" },
+              {
+                value: "here",
+                label: auto.kind === "attempt" ? "This print" : auto.isBuild ? "This build" : "This idea",
+              },
+            ]}
+            value={asIdea ? "idea" : "here"}
+            onChange={(value) => setAsIdea(value === "idea")}
+            className="w-full md:max-w-sm"
+          />
+        ) : undefined
+      }
       description={description}
       footer={
         <>
@@ -228,22 +245,6 @@ export function CaptureSheet() {
       <div className="flex flex-col gap-4" data-capture>
         {camera.input}
         {library.input}
-        {auto.kind !== "idea" && (
-          <SegmentedControl
-            label="Where it goes"
-            labelHidden
-            options={[
-              { value: "idea", label: "New idea" },
-              {
-                value: "here",
-                label: auto.kind === "attempt" ? "This print" : auto.isBuild ? "This build" : "This idea",
-              },
-            ]}
-            value={asIdea ? "idea" : "here"}
-            onChange={(value) => setAsIdea(value === "idea")}
-            className="w-full"
-          />
-        )}
         {!asIdea && auto.kind === "attempt" && prints.length > 1 && (
           // Several prints: which one is this photo of? Named by the build; the first is where the sheet started.
           <ChipRow label="Which print">

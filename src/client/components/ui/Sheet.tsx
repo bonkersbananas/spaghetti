@@ -11,8 +11,12 @@ export interface SheetProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   title: string;
-  /** The title is for screen readers only: something right under it already says it (the capture sheet's segment). */
-  titleHidden?: boolean;
+  /**
+   * Stands in for the visible title, in the header row (opposite the close button on desktop): something that already
+   * says what the sheet is (the capture sheet's segment, "New idea" · "This print"). The title stays for screen readers,
+   * and the description sits under it.
+   */
+  lead?: ReactNode;
   description?: ReactNode;
   /** Sticky actions at the bottom (phone) or footer (desktop). */
   footer?: ReactNode;
@@ -81,7 +85,7 @@ function PhoneSheet({
   open,
   onOpenChange,
   title,
-  titleHidden,
+  lead,
   description,
   footer,
   headerActions,
@@ -117,24 +121,32 @@ function PhoneSheet({
           )}
         >
           <div className="rounded-pill bg-ink/15 mx-auto mt-2.5 mb-1 h-1.5 w-10 shrink-0" aria-hidden />
-          <div className={cn("flex shrink-0 items-start justify-between gap-3 px-5 pt-2 pb-1", headerEdge(scrolled))}>
-            {back && <IconButton icon={BackIcon} label={back.label} onClick={back.onClick} className="-ml-2.5" />}
-            <div className="min-w-0 flex-1">
-              <Drawer.Title
-                className={cn(
-                  "font-display text-title text-ink line-clamp-2 font-semibold break-words",
-                  titleHidden && "sr-only",
-                )}
-              >
-                {title}
-              </Drawer.Title>
-              {description ? (
-                <Drawer.Description className="text-small text-ink-faint mt-0.5">{description}</Drawer.Description>
-              ) : (
-                <Drawer.Description className="sr-only">{title}</Drawer.Description>
-              )}
+          <div className={cn("shrink-0", headerEdge(scrolled))}>
+            <div className={cn("flex items-start justify-between gap-3 px-5 pt-2 pb-1", !!lead && "items-center")}>
+              {back && <IconButton icon={BackIcon} label={back.label} onClick={back.onClick} className="-ml-2.5" />}
+              <div className="min-w-0 flex-1">
+                <Drawer.Title
+                  className={cn(
+                    "font-display text-title text-ink line-clamp-2 font-semibold break-words",
+                    !!lead && "sr-only",
+                  )}
+                >
+                  {title}
+                </Drawer.Title>
+                {lead}
+                {!lead && description ? (
+                  <Drawer.Description className="text-small text-ink-faint mt-0.5">{description}</Drawer.Description>
+                ) : !lead ? (
+                  <Drawer.Description className="sr-only">{title}</Drawer.Description>
+                ) : null}
+              </div>
+              {headerActions && <div className="-mr-2 flex shrink-0 items-center gap-1">{headerActions}</div>}
             </div>
-            {headerActions && <div className="-mr-2 flex shrink-0 items-center gap-1">{headerActions}</div>}
+            {lead && (
+              <Drawer.Description className="text-small text-ink-faint px-5 pt-1 pb-2">
+                {description ?? title}
+              </Drawer.Description>
+            )}
           </div>
           {fill ? (
             <div className="min-h-0 flex-1 overflow-hidden pt-2">{children}</div>
@@ -162,7 +174,7 @@ function DesktopSheet({
   open,
   onOpenChange,
   title,
-  titleHidden,
+  lead,
   description,
   footer,
   headerActions,
@@ -230,37 +242,45 @@ function DesktopSheet({
                 ),
           )}
         >
-          <div className={cn("flex shrink-0 items-start justify-between gap-4 px-6 pt-5 pb-1", headerEdge(scrolled))}>
-            {back && (
-              <IconButton
-                icon={BackIcon}
-                label={back.label}
-                onClick={back.onClick}
-                size="sm"
-                className="-mt-0.5 -ml-2"
-              />
-            )}
-            <div className="flex-1">
-              <Dialog.Title
-                className={cn(
-                  "font-display text-title text-ink line-clamp-2 font-semibold break-words",
-                  titleHidden && "sr-only",
-                )}
-              >
-                {title}
-              </Dialog.Title>
-              {description ? (
-                <Dialog.Description className="text-small text-ink-faint mt-0.5">{description}</Dialog.Description>
-              ) : (
-                <Dialog.Description className="sr-only">{title}</Dialog.Description>
+          <div className={cn("shrink-0", headerEdge(scrolled))}>
+            <div className={cn("flex items-start justify-between gap-4 px-6 pt-5 pb-1", !!lead && "items-center")}>
+              {back && (
+                <IconButton
+                  icon={BackIcon}
+                  label={back.label}
+                  onClick={back.onClick}
+                  size="sm"
+                  className="-mt-0.5 -ml-2"
+                />
               )}
+              <div className="flex-1">
+                <Dialog.Title
+                  className={cn(
+                    "font-display text-title text-ink line-clamp-2 font-semibold break-words",
+                    !!lead && "sr-only",
+                  )}
+                >
+                  {title}
+                </Dialog.Title>
+                {lead}
+                {!lead && description ? (
+                  <Dialog.Description className="text-small text-ink-faint mt-0.5">{description}</Dialog.Description>
+                ) : !lead ? (
+                  <Dialog.Description className="sr-only">{title}</Dialog.Description>
+                ) : null}
+              </div>
+              <div className="-mt-0.5 -mr-2 flex shrink-0 items-center gap-0.5">
+                {headerActions}
+                <Dialog.Close asChild>
+                  <IconButton icon={CloseIcon} label="Close" title="Close (Esc)" size="sm" />
+                </Dialog.Close>
+              </div>
             </div>
-            <div className="-mt-0.5 -mr-2 flex shrink-0 items-center gap-0.5">
-              {headerActions}
-              <Dialog.Close asChild>
-                <IconButton icon={CloseIcon} label="Close" title="Close (Esc)" size="sm" />
-              </Dialog.Close>
-            </div>
+            {lead && (
+              <Dialog.Description className="text-small text-ink-faint px-6 pt-1 pb-2">
+                {description ?? title}
+              </Dialog.Description>
+            )}
           </div>
           <div
             ref={body}
