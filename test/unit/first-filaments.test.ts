@@ -3,7 +3,7 @@
  * each reads, what colours it has and how it is drawn, how a colour match treats it, and which preset slices it.
  */
 import { describe, expect, it } from "vitest";
-import { PRODUCTS, productOf, spoolFieldsOf } from "../../src/shared/products.ts";
+import { PRODUCTS, pickedProduct, productName, productOf, spoolFieldsOf } from "../../src/shared/products.ts";
 import { matchColour } from "../../src/shared/slicing/colours.ts";
 import { sliceSetup } from "../../src/shared/slicing/configs.ts";
 import { filamentOfSpool } from "../../src/shared/slicing/pantry.ts";
@@ -272,6 +272,15 @@ describe("the ordered products, as the new-spool sheet offers them", () => {
     for (const { spool: s } of ordered) expect(productOf(s), spoolLabel(s)).toBeDefined();
     expect(productOf({ brand: "Bambu", material: "PLA", finish: "matte" })?.id).toBe("bambu-matte");
     expect(productOf({ brand: "Sunlu", material: "PLA+", finish: "silk" })?.id).toBe("sunlu-silk-tri");
+  });
+
+  it("carries a colour where the product is sold in one, and picks it by the colour", () => {
+    const jade = PRODUCTS.find((p) => p.id === "bambu-basic-jade-white")!;
+    expect(productName(jade)).toBe("Bambu Lab PLA Basic · Jade white");
+    expect(spoolFieldsOf(jade)).toMatchObject({ colorName: "Jade white", colorHex: "#f4f1ea", material: "PLA" });
+    const basic = { brand: "Bambu Lab", material: "PLA", finish: "basic" };
+    expect(pickedProduct({ ...basic, colorHex: "#f4f1ea" })?.id).toBe("bambu-basic-jade-white");
+    expect(pickedProduct({ ...basic, colorHex: "#c12e1f" })?.id).toBe("bambu-basic");
   });
 
   it("gives every product's colours: two and three for the co-extruded silks", () => {

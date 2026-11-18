@@ -1,13 +1,13 @@
 import type { Spool } from "@shared/api";
 import { DEFAULT_NET_GRAMS } from "@shared/ledger";
-import { PRODUCTS, productName, productOf, spoolFieldsOf } from "@shared/products";
+import { PRODUCTS, pickedProduct, productName, spoolFieldsOf } from "@shared/products";
 import {
   BRANDS,
   colorsName,
+  colourNameOf,
   FINISHES,
   finishLabel,
   linesFor,
-  nearestColorName,
   SPOOL_MATERIALS,
   spoolColors,
 } from "@shared/spools";
@@ -40,6 +40,8 @@ interface AddSpoolSheetProps {
   description?: string;
   /** Where the sheet is part of a flow (a spool going into a slot): after a label photo stay where you are instead of opening the spool's page. */
   stayPut?: boolean;
+  /** The slot it goes into: the button then says "Add to A1". */
+  slot?: string | null;
 }
 
 const blank = (initial?: SpoolDraft): SpoolDraft => ({
@@ -58,7 +60,15 @@ const blank = (initial?: SpoolDraft): SpoolDraft => ({
  * A new spool in seconds, standing at the shelf: snap the label, pick a
  * material and a color, done. Brand and finish are a tap more.
  */
-export function AddSpoolSheet({ open, onOpenChange, initial, onAdded, description, stayPut }: AddSpoolSheetProps) {
+export function AddSpoolSheet({
+  open,
+  onOpenChange,
+  initial,
+  onAdded,
+  description,
+  stayPut,
+  slot,
+}: AddSpoolSheetProps) {
   const queryClient = useQueryClient();
   const { data: user } = useSuspenseQuery(sessionQuery);
   const isDesktop = useIsDesktop();
@@ -106,19 +116,24 @@ export function AddSpoolSheet({ open, onOpenChange, initial, onAdded, descriptio
   // A colour name typed by hand stays; a guessed one follows the colours ("Black/Purple" for two).
   const setColours = (next: { colorHex: string | null; colors: string[] | null }) => {
     const colors = spoolColors(next);
-    const guess = colors.length > 1 ? colorsName(colors) : colors[0] ? nearestColorName(colors[0]) : undefined;
+    const guess = colors.length > 1 ? colorsName(colors) : colors[0] ? colourNameOf(colors[0]) : undefined;
     change({ ...next, ...(namedByHand ? {} : { colorName: guess ?? null }) });
   };
   // A known product fills in what its label says; the colours stay as picked, spread over as many as it has.
   const pickProduct = (id: string) => {
     const product = PRODUCTS.find((entry) => entry.id === id);
     if (!product) return;
-    if (productOf(draft)?.id === id) {
+    if (pickedProduct(draft)?.id === id) {
       change({ brand: null, line: null, finish: null, nozzleTempMin: null, nozzleTempMax: null });
       return;
     }
     setOtherMaterial(!(SPOOL_MATERIALS as readonly string[]).includes(product.material));
     change(spoolFieldsOf(product));
+    // A product sold in one colour brings it: the colour picked is the colour saved.
+    if (product.colour) {
+      setNamedByHand(false);
+      return;
+    }
     const count = product.colours ?? 1;
     if (count !== Math.max(1, spoolColors(draft).length) && (count > 1 || draft.colors)) {
       setColours(withColourCount({ colorHex: draft.colorHex ?? null, colors: draft.colors ?? null }, count));
@@ -169,7 +184,7 @@ export function AddSpoolSheet({ open, onOpenChange, initial, onAdded, descriptio
           onClick={() => save()}
           className="max-md:flex-1"
         >
-          Add to pantry
+          {slot ? `Add to ${slot === "Ext" ? "external" : slot}` : "Add to pantry"}
         </Button>
       }
     >
@@ -218,7 +233,7 @@ export function AddSpoolSheet({ open, onOpenChange, initial, onAdded, descriptio
             {PRODUCTS.map((product) => (
               <ToggleChip
                 key={product.id}
-                selected={productOf(draft)?.id === product.id}
+                selected={pickedProduct(draft)?.id === product.id}
                 onClick={() => pickProduct(product.id)}
               >
                 {productName(product)}

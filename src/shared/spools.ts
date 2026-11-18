@@ -194,6 +194,15 @@ export function brandLabel(brand: string | null | undefined): string {
   return BRAND_SPELLINGS[text.toLowerCase()] ?? text;
 }
 
+/** The maker a line of words names ("Bambu Lab PLA Basic" → "Bambu Lab"), as it spells itself. */
+export function brandIn(text: string): string | undefined {
+  const lower = text.toLowerCase();
+  const hit = Object.entries(BRAND_SPELLINGS)
+    .filter(([key]) => new RegExp(`(?<![a-z0-9])${key}(?![a-z0-9])`).test(lower))
+    .sort((a, b) => b[0].length - a[0].length)[0];
+  return hit?.[1];
+}
+
 /** Product lines makers print before the material ("Polymaker PolyTerra PLA"), offered once a brand is typed. */
 export const PRODUCT_LINES: ReadonlyArray<{ brand: string; line: string }> = [
   { brand: "Polymaker", line: "PolyTerra" },
@@ -266,6 +275,14 @@ export const unitSlots = (letter: string) => [1, 2, 3, 4].map((n) => `${letter}$
 /** Slots that exist with this many AMS units, then the external spool. */
 export function slotIds(units: number): string[] {
   return [...amsUnitLetters(units).flatMap(unitSlots), EXTERNAL_SLOT];
+}
+
+/** The next empty AMS slot after this one, in the unit's order (A1…A4, then B1…); null past the last empty one. */
+export function nextEmptySlot(slot: string, slots: Record<string, string>, amsUnits: number): string | null {
+  const order = slotIds(amsUnits).filter((id) => id !== EXTERNAL_SLOT);
+  const at = order.indexOf(slot);
+  if (at < 0) return null;
+  return order.slice(at + 1).find((id) => !slots[id]) ?? null;
 }
 
 export const isAmsSlot = (slot: string | undefined) => !!slot && /^[A-D][1-4]$/.test(slot);
@@ -410,6 +427,24 @@ const COLOR_NAMES: Array<[string, string]> = [
   ["Beige", "#d8c3a0"],
   ["Gold", "#c9a43b"],
 ];
+
+/**
+ * What a colour is called: the name of a quick colour when it is exactly that one ("#f4f1ea" → "Jade white", which
+ * is not just "White"), else the plainest name ("#00ae42" → "Green").
+ */
+export function colourNameOf(hex: string): string | undefined {
+  const wanted = hex.trim().toLowerCase();
+  return QUICK_COLORS.find((color) => color.hex === wanted)?.name ?? nearestColorName(hex);
+}
+
+/** The colour a name says, if it is one we know ("Jade white", "black"). */
+export function colourByName(name: string): { name: string; hex: string } | undefined {
+  const wanted = name.trim().toLowerCase();
+  const quick = QUICK_COLORS.find((color) => color.name.toLowerCase() === wanted);
+  if (quick) return quick;
+  const plain = COLOR_NAMES.find(([known]) => known.toLowerCase() === wanted);
+  return plain ? { name: plain[0], hex: plain[1] } : undefined;
+}
 
 /** A plain name for a color, for a spool added from a slicer file: "#00ae42" → "Green". */
 export function nearestColorName(hex: string): string | undefined {

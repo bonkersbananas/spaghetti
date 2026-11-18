@@ -6345,6 +6345,44 @@ export const shots: Shot[] = [
     },
   },
   {
+    // A spool of filament just bought: the row offers the pantry, a nozzle bought beside it offers nothing.
+    name: "shopping-bought-filament",
+    path: "/shopping",
+    prepare: async (page) => {
+      const headers = { Origin: new URL(page.url()).origin };
+      for (const name of ["PLA Basic, Jade White", "0.2 mm hardened nozzle"]) {
+        const id = crypto.randomUUID();
+        await page.request.post("/api/shopping-items", { headers, data: { id, name } });
+        await page.request.patch(`/api/shopping-items/${id}`, { headers, data: { bought: true } });
+      }
+      await page.reload();
+      await page.getByText("0.2 mm hardened nozzle").scrollIntoViewIfNeeded();
+      await page.waitForTimeout(600);
+    },
+  },
+  {
+    // Adding a spool from an empty AMS slot: the button names the slot, the product chips carry a colour.
+    name: "spool-add-to-slot",
+    path: "/pantry",
+    prepare: async (page) => {
+      // The seed's AMS is full: empty a slot, as on the day a new printer's AMS is being filled.
+      const headers = { Origin: new URL(page.url()).origin };
+      await page.request.put("/api/printer/slots/A1", { headers, data: { spoolId: null } });
+      await page.reload();
+      await page.getByRole("button", { name: /^A1 Empty/ }).click();
+      await page
+        .getByRole("dialog", { name: /^Slot / })
+        .getByRole("button", { name: "New spool" })
+        .click();
+      const sheet = page.getByRole("dialog", { name: "New spool" });
+      await sheet.getByRole("button", { name: /Jade white$/ }).click();
+      await page.waitForTimeout(400);
+    },
+    cleanup: async (page) => {
+      await page.keyboard.press("Escape");
+    },
+  },
+  {
     // A thing on the list, open: its name, the shop and its Prisjakt page.
     name: "shopping-sheet",
     path: "/shopping",

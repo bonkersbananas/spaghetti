@@ -18,7 +18,7 @@ import { SaveStatus } from "@/components/ui/SaveStatus";
 import { Section } from "@/components/ui/Section";
 import { SegmentedControl } from "@/components/ui/SegmentedControl";
 import { Skeleton } from "@/components/ui/Skeleton";
-import { loadSlot, savePrinterSetup } from "@/lib/pantry";
+import { loadSlot, offerNextSlot, savePrinterSetup } from "@/lib/pantry";
 import { printerQuery } from "@/lib/pantry-queries";
 import { useReadOnly } from "@/lib/read-only";
 import { unsent } from "@/lib/unsent";
@@ -356,8 +356,11 @@ function Setup({ initial }: { initial: PrinterSetup }) {
                 : undefined
             }
             stayPut
+            slot={adding}
             onAdded={(spool, saved) => {
-              if (adding) void loadSlot(queryClient, adding, spool.id, saved);
+              if (!adding) return;
+              void loadSlot(queryClient, adding, spool.id, saved);
+              offerNextSlot(queryClient, adding, setAdding);
             }}
           />
         </Suspense>
