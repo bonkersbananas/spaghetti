@@ -7,6 +7,8 @@ import { coverPhoto } from "@/components/ui/Card";
 import { MiniCard } from "@/components/ui/MiniCard";
 import { Reflow } from "@/components/ui/Reflow";
 import { Section } from "@/components/ui/Section";
+import { printingAttempts } from "@/lib/builds";
+import { useBuilds } from "@/lib/items";
 import { journalQuery } from "@/lib/journal";
 import { coverOf } from "@/lib/previews";
 import { peopleQuery, sessionQuery } from "@/lib/queries";
@@ -42,43 +44,49 @@ export default function SinceBlock() {
     () => pages && { entries: pages.flatMap((p) => p.entries), items: pages.flatMap((p) => p.items) },
     [pages],
   );
+  // What is on the bed is already shown above or beside this (Now, In the printer): left out of the cards, so
+  // the strip fills with the others instead.
+  const builds = useBuilds();
+  const onBed = useMemo(() => new Set(printingAttempts(builds.items).map(({ item }) => item.id)), [builds.items]);
   const other = people?.find((person) => person.id !== me?.id);
   const summary = useMemo(() => {
     if (from === null || !me || !page) return null;
     const items = new Map(page.items.map((item) => [item.id, item]));
-    return catchUp(page.entries, items, { me: me.id, from, name: displayName(other, "They") });
-  }, [from, me, page, other]);
+    return catchUp(page.entries, items, { me: me.id, from, name: displayName(other, "They"), skip: onBed });
+  }, [from, me, page, other, onBed]);
   if (from === null || !summary) return null;
   const more = summary.total - summary.lines.length;
   const cut = !enough && hasNextPage;
   return (
     <Section id="since" title={sinceLabel(from, Date.now())} size="overline" className="mb-8">
       <p className="font-display text-lead text-ink md:text-title mb-3">{summary.sentence}</p>
-      <ul className="relative grid grid-cols-3 gap-3 md:flex">
-        <Reflow>
-          {summary.lines.map((line) => {
-            const item = line.item;
-            // The cover its page and cards show: the best photo, else the newest plate picture, else the note card.
-            const cover = coverOf(item);
-            return (
-              <MiniCard
-                key={line.itemId}
-                fill
-                link={
-                  line.stage === "idea"
-                    ? { to: "/ideas/$ideaId", params: { ideaId: line.itemId } }
-                    : { to: "/builds/$buildId", params: { buildId: line.itemId } }
-                }
-                photo={coverPhoto(cover, "")}
-                note={cover.kind === "note" ? cover.text : item.note || undefined}
-                // A thing with neither a photo nor a note has its name on the index card, once.
-                title={cover.kind === "note" && cover.fromTitle ? undefined : line.title}
-                sub={line.what}
-              />
-            );
-          })}
-        </Reflow>
-      </ul>
+      {summary.lines.length > 0 && (
+        <ul className="relative grid grid-cols-3 gap-3 md:flex">
+          <Reflow>
+            {summary.lines.map((line) => {
+              const item = line.item;
+              // The cover its page and cards show: the best photo, else the newest plate picture, else the note card.
+              const cover = coverOf(item);
+              return (
+                <MiniCard
+                  key={line.itemId}
+                  fill
+                  link={
+                    line.stage === "idea"
+                      ? { to: "/ideas/$ideaId", params: { ideaId: line.itemId } }
+                      : { to: "/builds/$buildId", params: { buildId: line.itemId } }
+                  }
+                  photo={coverPhoto(cover, "")}
+                  note={cover.kind === "note" ? cover.text : item.note || undefined}
+                  // A thing with neither a photo nor a note has its name on the index card, once.
+                  title={cover.kind === "note" && cover.fromTitle ? undefined : line.title}
+                  sub={line.what}
+                />
+              );
+            })}
+          </Reflow>
+        </ul>
+      )}
       {(more > 0 || cut) && (
         <p className="text-small text-ink-faint mt-2">
           {cut ? "and more in the journal" : `and ${more} more in the journal`}

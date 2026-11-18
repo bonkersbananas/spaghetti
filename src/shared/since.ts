@@ -51,7 +51,13 @@ const count = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? on
 export function catchUp(
   entries: readonly JournalEntry[],
   items: ReadonlyMap<string, Item>,
-  { me, from, name, lines = 3 }: { me: string; from: number; name: string; lines?: number },
+  {
+    me,
+    from,
+    name,
+    lines = 3,
+    skip,
+  }: { me: string; from: number; name: string; lines?: number; skip?: ReadonlySet<string> },
 ): { sentence: string; lines: SinceLine[]; total: number } | null {
   const doneBy = (entry: JournalEntry) =>
     entry.kind === "attempt"
@@ -101,7 +107,7 @@ export function catchUp(
   for (const id of order) {
     const item = items.get(id);
     const news = newsOf.get(id);
-    if (!item || !news) continue;
+    if (!item || !news || skip?.has(id)) continue;
     // The newest news; a print started again after an earlier answer says so ("spaghetti, printing again").
     const [latest = "captured", ...earlier] = news;
     const before = earlier.find((what) => what !== "printing" && what !== "captured");
