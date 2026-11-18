@@ -1775,7 +1775,9 @@ fn build_layer<'a>(
         lost: false,
         change_from: (x0, y0),
         fresh: true,
-        photo: farthest.map(|at| (at, layer_photo(plan, job, None, true, true))),
+        // Taken inline only while the camera's nozzle prints.
+        photo: farthest
+            .map(|at| (at, layer_photo(plan, job, None, true, true, job.colours.map(|c| c.most_used_extruder)))),
         head: job.colours.is_none_or(|c| c.photo_head(c.start(i))),
         photo_taken: false,
         unlifted_start: after_deferred,
@@ -1834,7 +1836,7 @@ fn build_layer<'a>(
     let mut photo_taken = false;
     let mut open_label: Option<u32> = None;
     // The photo at the printer's spot, or with the farthest-point timelapse at a spot near the farthest point.
-    let photo_at_spot = || match far {
+    let photo_at_spot = |extruder: Option<usize>| match far {
         Some((at, _)) => {
             let spot = crate::bambu::timelapse_position(
                 job.photo_objects,
@@ -1844,9 +1846,9 @@ fn build_layer<'a>(
                 Some(at),
                 job.colours.filter(|c| c.towered).map(|c| c.photo_limits()),
             );
-            layer_photo(plan, job, spot, true, false)
+            layer_photo(plan, job, spot, true, false, extruder)
         }
-        None => layer_photo(plan, job, job.photos.get(i).copied().flatten(), false, false),
+        None => layer_photo(plan, job, job.photos.get(i).copied().flatten(), false, false, extruder),
     };
     for (k, path) in plan.paths.iter().enumerate() {
         // Only the layer's start is wanted: its first path is enough to time it.
@@ -1870,7 +1872,7 @@ fn build_layer<'a>(
                 if let Some(o) = open_label.take() {
                     b.note(Note::LabelEnd(o));
                 }
-                b.note(Note::Text(photo_at_spot()));
+                b.note(Note::Text(photo_at_spot(colours.extruder_of.get(visit.from).copied())));
                 b.known = false;
                 photo_taken = true;
             }
@@ -2101,7 +2103,9 @@ fn build_layer<'a>(
         }
     }
     if !photo_taken && !b.photo_taken {
-        b.note(Note::Text(photo_at_spot()));
+        // After the layer, with the layer's last filament.
+        let last = job.colours.and_then(|c| c.extruder_of.get(path_filament(plan, job, plan.paths.len())).copied());
+        b.note(Note::Text(photo_at_spot(last)));
         b.known = false;
     }
     let known = b.known;
@@ -2190,11 +2194,19 @@ fn path_filament(plan: &LayerPlan, job: &Job, k: usize) -> usize {
 
 /// The timelapse photo after the layer, at `spot` (none: the printer picks its own), which the printer skips with the
 /// layer's objects when all of them are skipped; with Orca's farthest-point timelapse (`farthest`), and `inline`,
-/// taken mid-path where the nozzle is.
-fn layer_photo(plan: &LayerPlan, job: &Job, spot: Option<[i64; 2]>, farthest: bool, inline: bool) -> String {
+/// taken mid-path where the nozzle is; `extruder` (on a plate in several filaments) the extruder printing then.
+fn layer_photo(
+    plan: &LayerPlan,
+    job: &Job,
+    spot: Option<[i64; 2]>,
+    farthest: bool,
+    inline: bool,
+    extruder: Option<usize>,
+) -> String {
     let i = plan.index;
     let labels = job.labels();
-    let mut photo = job.frame.photo(i, plan.z, plan.z, spot, farthest, inline);
+    let curr = job.colours.zip(extruder).map(|(c, e)| c.physical_extruder(e));
+    let mut photo = job.frame.photo(i, plan.z, plan.z, spot, farthest, inline, curr);
     let mut printed: Vec<u32> =
         plan.paths.iter().map(|p| job.objects.get(p.object as usize).map_or(0, |o| o.label)).collect();
     printed.sort_unstable();

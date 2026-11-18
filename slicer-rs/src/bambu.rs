@@ -181,12 +181,15 @@ impl Frame {
     /// `timelapse_position` picks it), or where the printer chooses when there is none (as Orca leaves it when its
     /// picker finds no spot).
     pub fn timelapse(&self, index: usize, z: f64, max_z: f64, spot: Option<[i64; 2]>) -> String {
-        self.photo(index, z, max_z, spot, false, false)
+        self.photo(index, z, max_z, spot, false, false, None)
     }
 
     /// The timelapse photo's G-code as `timelapse` writes it, with Orca's farthest-point timelapse on or off
     /// (`farthest`: on, a photo at a spot moves no higher than the layer), and `inline` taking it where the nozzle
-    /// is, mid-path (`M971`, `M1004`), rather than at `spot`.
+    /// is, mid-path (`M971`, `M1004`), rather than at `spot`. `curr` is the physical extruder printing when the photo
+    /// is taken (Orca's `curr_physical_extruder_id`, set for each photo from its writer's filament), where a plate in
+    /// several filaments knows it; else the plate's.
+    #[allow(clippy::too_many_arguments)]
     pub fn photo(
         &self,
         index: usize,
@@ -195,6 +198,7 @@ impl Frame {
         spot: Option<[i64; 2]>,
         farthest: bool,
         inline: bool,
+        curr: Option<i64>,
     ) -> String {
         let [x, y] = spot.unwrap_or([0, 0]);
         let mut own = Vars::default();
@@ -207,6 +211,9 @@ impl Frame {
             .bool("timelapse_inline_photo", inline)
             .bool("farthest_point_timelapse_enabled", farthest)
             .bool("clear_to_x0", false);
+        if let Some(curr) = curr {
+            own.int("curr_physical_extruder_id", curr);
+        }
         self.fill("time_lapse_gcode", &own) + "\n"
     }
 

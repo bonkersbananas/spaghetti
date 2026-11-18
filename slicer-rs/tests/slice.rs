@@ -3902,3 +3902,40 @@ fn nearest_seams_start_each_layer_at_the_corner_nearest_the_nozzle_as_orcas_do()
     }
     assert!(checked > 90, "{checked} layers");
 }
+
+/// Orca fills each timelapse photo's G-code with the nozzle printing at that moment (`curr_physical_extruder_id`, from
+/// its writer's filament), which the X2D's photo G-code compares with the camera's nozzle: where they differ and there
+/// is no spot, it lifts 0.4 mm before the photo and after it 3 mm and 20 mm away in Y. An inline photo is taken while
+/// the camera's nozzle prints, so it never moves away; ours filled every photo with the plate's first filament's
+/// nozzle, and on plates whose first filament is on the other nozzle (the real zipper pulls: 24 photos each) printed on
+/// at Z 3 after the photo, 20 mm off. Native Orca 2.5.1 with the app's setup (Nov 18) moves on none of the zipper
+/// pulls' inline photos, and ours' control lines now differ from its in 4 and 22 places (244 and 270 before).
+#[test]
+fn an_inline_photo_on_a_tower_plate_stays_where_the_camera_nozzle_prints() {
+    // Filament 1, printed first, on the auxiliary nozzle (Orca's grouping), on fewer layers than the main nozzle's two,
+    // which the camera follows and which print the farthest point.
+    let cube = |at: f32, top: f32| boxes_stl(&[([at, 118., 0.], [at + 20., 138., top])]);
+    let (a, b, c) = (cube(70., 3.), cube(110., 6.), cube(150., 6.));
+    let three = setup::read(
+        r##"{"machine": {"farthest_point_timelapse": "1"}, "process": {"wipe_tower_x": ["211"], "wipe_tower_y": ["196"],
+        "enable_wrapping_detection": "0"}, "filaments": [{}, {}, {}], "colours": ["#F2754E", "#4F7FC7", "#1D1D1F"]}"##,
+    )
+    .unwrap()
+    .settings;
+    let mut plate = spaghetti_slicer::Plate::default();
+    plate.add_with_filament(&Input { name: "a.stl", bytes: &a }, Some(0)).unwrap();
+    plate.add_with_filament(&Input { name: "b.stl", bytes: &b }, Some(1)).unwrap();
+    plate.add_with_filament(&Input { name: "c.stl", bytes: &c }, Some(2)).unwrap();
+    let options = Options { arrange: false, thumbnail: false, ..Options::default() };
+    let gcode = String::from_utf8(plate.slice(&three, &options).unwrap().gcode).unwrap();
+    let photos: Vec<&str> = gcode
+        .split("; SKIPTYPE: timelapse\n")
+        .skip(1)
+        .map(|p| &p[..p.find("; SKIPPABLE_END").unwrap()])
+        .filter(|p| p.contains("M971 S11"))
+        .collect();
+    assert!(photos.len() >= 10, "{} inline photos", photos.len());
+    for p in photos {
+        assert!(!p.contains("G0 Y-20") && !p.contains("G1 Z"), "{p}");
+    }
+}
