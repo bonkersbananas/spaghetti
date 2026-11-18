@@ -1,6 +1,5 @@
 import type { AttemptFile, Person } from "@shared/api";
 import { findLinks, shortUrl } from "@shared/links";
-import { modelSite } from "@shared/model-links";
 import { cleanModelUrl, modelOf } from "@shared/model-mark";
 import { relativeTime } from "@shared/time";
 import { m } from "motion/react";
@@ -75,9 +74,6 @@ interface IdeaCardProps {
   ref?: Ref<HTMLLIElement>;
 }
 
-/** A note that is nothing but one MakerWorld, Printables or Thingiverse model address. */
-const isBareModelLink = (note: string) => /^https?:\/\/\S+$/.test(note.trim()) && !!modelSite(note.trim());
-
 export function IdeaCard({ item, person, via, landing, menu, headingLevel = 2, ref }: IdeaCardProps) {
   // Its cover by the one rule (lib/previews.ts coverOf): the first photo, else the newest plate picture, else the note.
   const cover = coverOf(item);
@@ -94,7 +90,11 @@ export function IdeaCard({ item, person, via, landing, menu, headingLevel = 2, r
       : undefined;
   // An idea whose note is only its model link and that has a name (the page's, or from the link): the card face
   // says that name, as it does for a title-only idea, instead of the link's words with the title repeated below.
-  const namedLink = cover.kind === "note" && !!item.title?.trim() && isBareModelLink(item.note);
+  const namedLink =
+    cover.kind === "note" &&
+    !!item.title?.trim() &&
+    model?.kind === "page" &&
+    /^https?:\/\/\S+$/.test(item.note.trim());
   return (
     <m.li {...useReflow(landing)} ref={ref} className="group/idea relative list-none">
       <div className="h-full rounded-lg">

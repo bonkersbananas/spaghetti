@@ -28,11 +28,12 @@ test("ideas with a model are marked, found with one tap, and show a model card o
   const list = page.getByRole("list", { name: "Ideas" });
   await expect(list.getByText("Ready to print, model on MakerWorld")).toHaveCount(1);
   await page.getByRole("button", { name: /^Has a model/ }).click();
-  await expect(list.getByRole("heading", { name: "Bins" })).toBeVisible();
+  // A note that is only its model link shows the idea's name on the card face, once.
+  await expect(list.getByText("Bins")).toBeVisible();
   await expect(list.getByRole("heading", { name: "Wobbly idea" })).toHaveCount(0);
   await page.getByRole("button", { name: /^Needs designing/ }).click();
   await expect(list.getByRole("heading", { name: "Wobbly idea" })).toBeVisible();
-  await expect(list.getByRole("heading", { name: "Bins" })).toHaveCount(0);
+  await expect(list.getByText("Bins")).toHaveCount(0);
 
   await page.goto(`/ideas/${withModel}`);
   const card = page.getByRole("link", { name: /Model on MakerWorld/ });
