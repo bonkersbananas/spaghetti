@@ -152,179 +152,195 @@ function Setup({ initial }: { initial: PrinterSetup }) {
   const units = setup.amsUnits;
 
   return (
-    <div className="flex max-w-3xl flex-col gap-12 md:gap-16">
-      <div className="bg-cream shadow-soft flex flex-col gap-5 rounded-xl p-5 md:p-6">
-        <div className="flex items-start justify-between gap-3">
-          <div className="flex flex-col">
-            <span className="font-display text-headline text-ink font-semibold">{X2D.name}</span>
-            <span className="text-small text-ink-faint">
-              Combo · {units === 0 ? "no AMS" : `${units} AMS 2 Pro`} · two nozzles
-            </span>
+    <div className="flex max-w-3xl flex-col gap-12 md:gap-16 xl:grid xl:max-w-6xl xl:grid-cols-2 xl:items-start xl:gap-x-14">
+      {/* From 1280 the page is two columns: the machine and what it holds on the left, its upkeep on the right. */}
+      <div className="flex flex-col gap-12 md:gap-16">
+        <div className="bg-cream shadow-soft flex flex-col gap-5 rounded-xl p-5 md:p-6">
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex flex-col">
+              <span className="font-display text-headline text-ink font-semibold">{X2D.name}</span>
+              <span className="text-small text-ink-faint">
+                Combo · {units === 0 ? "no AMS" : `${units} AMS 2 Pro`} · two nozzles
+              </span>
+            </div>
+            <SaveStatus state={saveState} />
           </div>
-          <SaveStatus state={saveState} />
+          {/* The machine's fixed numbers: one wrapped line of facts, not a block of icons. */}
+          <MetaList className="text-small text-ink-soft tabular">
+            <span>
+              {X2D.buildVolume.x} × {X2D.buildVolume.y} × {X2D.buildVolume.z} mm
+            </span>
+            <span>
+              about {X2D.dualBuildVolume.x} × {X2D.dualBuildVolume.y} × {X2D.dualBuildVolume.z} mm with both nozzles
+            </span>
+            <span>
+              {X2D.maxNozzleTemperature} °C nozzle, {X2D.maxBedTemperature} °C bed
+            </span>
+            <span>{X2D.maxChamberTemperature} °C chamber</span>
+          </MetaList>
+          <BridgeCard />
         </div>
-        {/* The machine's fixed numbers: one wrapped line of facts, not a block of icons. */}
-        <MetaList className="text-small text-ink-soft tabular">
-          <span>
-            {X2D.buildVolume.x} × {X2D.buildVolume.y} × {X2D.buildVolume.z} mm
-          </span>
-          <span>
-            about {X2D.dualBuildVolume.x} × {X2D.dualBuildVolume.y} × {X2D.dualBuildVolume.z} mm with both nozzles
-          </span>
-          <span>
-            {X2D.maxNozzleTemperature} °C nozzle, {X2D.maxBedTemperature} °C bed
-          </span>
-          <span>{X2D.maxChamberTemperature} °C chamber</span>
-        </MetaList>
-        <BridgeCard />
+
+        <fieldset disabled={readOnly} className="contents">
+          <PrinterSection
+            title="AMS"
+            aside={
+              <Link
+                to="/pantry"
+                className="focus-ring touch-target text-small text-ink-soft hover:text-ink relative inline-flex items-center gap-1.5 rounded-sm font-semibold"
+              >
+                <PantryIcon size={16} aria-hidden />
+                Pantry
+              </Link>
+            }
+          >
+            <AmsLoadout readOnly={readOnly} onAddSpool={setAdding} />
+            <div className="flex items-center gap-3">
+              <span className="text-small text-ink-soft flex-1">
+                {units === 1 ? "One AMS unit" : units === 0 ? "No AMS units" : `${units} AMS units`}, up to{" "}
+                {X2D.maxAmsUnits}.
+              </span>
+              <IconButton
+                icon={MinusIcon}
+                variant="secondary"
+                size="sm"
+                label="One AMS unit fewer"
+                disabled={units <= 0}
+                onClick={() => change((current) => ({ amsUnits: Math.max(0, current.amsUnits - 1) }))}
+              />
+              <IconButton
+                icon={PlusIcon}
+                variant="secondary"
+                size="sm"
+                label="One AMS unit more"
+                disabled={units >= X2D.maxAmsUnits}
+                onClick={() => change((current) => ({ amsUnits: Math.min(X2D.maxAmsUnits, current.amsUnits + 1) }))}
+              />
+            </div>
+          </PrinterSection>
+        </fieldset>
       </div>
 
-      <fieldset disabled={readOnly} className="contents">
-        <PrinterSection
-          title="AMS"
-          aside={
-            <Link
-              to="/pantry"
-              className="focus-ring touch-target text-small text-ink-soft hover:text-ink relative inline-flex items-center gap-1.5 rounded-sm font-semibold"
-            >
-              <PantryIcon size={16} aria-hidden />
-              Pantry
-            </Link>
-          }
-        >
-          <AmsLoadout readOnly={readOnly} onAddSpool={setAdding} />
-          <div className="flex items-center gap-3">
-            <span className="text-small text-ink-soft flex-1">
-              {units === 1 ? "One AMS unit" : units === 0 ? "No AMS units" : `${units} AMS units`}, up to{" "}
-              {X2D.maxAmsUnits}.
-            </span>
-            <IconButton
-              icon={MinusIcon}
-              variant="secondary"
-              size="sm"
-              label="One AMS unit fewer"
-              disabled={units <= 0}
-              onClick={() => change((current) => ({ amsUnits: Math.max(0, current.amsUnits - 1) }))}
-            />
-            <IconButton
-              icon={PlusIcon}
-              variant="secondary"
-              size="sm"
-              label="One AMS unit more"
-              disabled={units >= X2D.maxAmsUnits}
-              onClick={() => change((current) => ({ amsUnits: Math.min(X2D.maxAmsUnits, current.amsUnits + 1) }))}
-            />
-          </div>
-        </PrinterSection>
-      </fieldset>
-      {/* What is low, right under the bays that hold it, with the way onto the shopping list. */}
-      <Suspense fallback={null}>
-        <LowUnderBays />
-      </Suspense>
-
-      {idle ? (
-        <Suspense fallback={<UpkeepSkeleton />}>
-          <Upkeep />
-        </Suspense>
-      ) : (
-        <UpkeepSkeleton />
-      )}
-
-      <PrinterSection title="Setup">
-        {/* What people change once and seldom again: folded, so the page leads with the printer and what it needs. */}
-        <Disclosure
-          open={setupOpen}
-          onOpenChange={setSetupOpen}
-          title="Nozzles, plates, slicing and drying"
-          summary={setupWords(setup)}
-        >
-          {setupOpen && (
-            <fieldset disabled={readOnly} className="flex flex-col gap-10 px-4 pt-2 pb-5">
-              <PrinterSection title="Nozzles">
-                <div className="grid gap-3 md:grid-cols-2">
-                  {(["main", "auxiliary"] as const).map((nozzle) => {
-                    const fitted = setup.nozzles[nozzle];
-                    return (
-                      <section
-                        key={nozzle}
-                        className="bg-cream shadow-soft flex flex-col gap-4 rounded-lg p-4"
-                        aria-label={NOZZLE_NAMES[nozzle].title}
-                      >
-                        <div className="flex flex-col">
-                          <span className="text-body text-ink font-semibold">{NOZZLE_NAMES[nozzle].title}</span>
-                          <span className="text-small text-ink-faint">{NOZZLE_NAMES[nozzle].detail}</span>
-                        </div>
-                        {/* Four sizes side by side: never a lone 0.8 mm wrapped onto its own line. */}
-                        <SegmentedControl
-                          label={`${NOZZLE_NAMES[nozzle].title} size`}
-                          labelHidden
-                          options={NOZZLE_DIAMETERS.map((diameter) => ({
-                            value: String(diameter),
-                            label: `${diameter} mm`,
-                          }))}
-                          value={String(fitted.diameter)}
-                          onChange={(diameter) => setNozzle(nozzle, { diameter: Number(diameter) })}
-                          className="w-full"
-                        />
-                        <ToggleChip
-                          tone="basil"
-                          icon={HardenedIcon}
-                          selected={fitted.hardened}
-                          onClick={() => setNozzle(nozzle, { hardened: !fitted.hardened })}
-                          className="self-start"
-                        >
-                          {fitted.hardened ? "Hardened steel" : "Not hardened"}
-                        </ToggleChip>
-                      </section>
-                    );
-                  })}
-                </div>
-              </PrinterSection>
-
-              <PrinterSection title="Plates you own" description="Tap the ones you have.">
-                {/* biome-ignore lint/a11y/useSemanticElements: a row of chips, not a form field set. */}
-                <div className="flex flex-wrap gap-2" role="group" aria-label="Plates you own">
-                  {[
-                    ...BED_TYPES,
-                    ...setup.plates.filter((plate) => !(BED_TYPES as readonly string[]).includes(plate)),
-                  ].map((plate) => (
-                    <ToggleChip key={plate} selected={setup.plates.includes(plate)} onClick={() => togglePlate(plate)}>
-                      {plateName(plate)}
-                    </ToggleChip>
-                  ))}
-                </div>
-              </PrinterSection>
-
-              {idle ? (
-                <Suspense fallback={<SlicingDefaultsSkeleton />}>
-                  <SlicingDefaults />
-                </Suspense>
-              ) : (
-                <SlicingDefaultsSkeleton />
-              )}
-
-              <PrinterSection title="Staying dry">
-                <Disclosure
-                  open={dryingOpen}
-                  onOpenChange={setDryingOpen}
-                  title="Days each material stays dry"
-                  summary="Past that, Spaghetti says to dry it before printing. Starting values are a guide, not Bambu's word."
-                >
-                  {dryingOpen && (
-                    <Suspense fallback={null}>
-                      <DryingTable
-                        days={{ ...DRYING_DAYS, ...value.dryingDays }}
-                        onChange={(dryingDays) => change({ dryingDays })}
-                      />
-                    </Suspense>
-                  )}
-                </Disclosure>
-              </PrinterSection>
-            </fieldset>
+      {/* From 1280 the right column is what needs you: Upkeep, then what is low (the left holds the machine and its
+          bays), so the columns end near each other. Below 1280 it is one column: what is low sits under the bays. */}
+      <div className="flex flex-col gap-12 max-xl:contents md:gap-16">
+        <div className="empty:hidden xl:order-2">
+          <Suspense fallback={null}>
+            <LowUnderBays />
+          </Suspense>
+        </div>
+        <div className="xl:order-1">
+          {idle ? (
+            <Suspense fallback={<UpkeepSkeleton />}>
+              <Upkeep />
+            </Suspense>
+          ) : (
+            <UpkeepSkeleton />
           )}
-        </Disclosure>
-      </PrinterSection>
-      <p className="text-small text-ink-faint flex items-start gap-2">
+        </div>
+      </div>
+
+      <div className="xl:col-span-2">
+        <PrinterSection title="Setup">
+          {/* What people change once and seldom again: folded, so the page leads with the printer and what it needs. */}
+          <Disclosure
+            open={setupOpen}
+            onOpenChange={setSetupOpen}
+            title="Nozzles, plates, slicing and drying"
+            summary={setupWords(setup)}
+          >
+            {setupOpen && (
+              <fieldset disabled={readOnly} className="flex flex-col gap-10 px-4 pt-2 pb-5">
+                <PrinterSection title="Nozzles">
+                  <div className="grid gap-3 md:grid-cols-2">
+                    {(["main", "auxiliary"] as const).map((nozzle) => {
+                      const fitted = setup.nozzles[nozzle];
+                      return (
+                        <section
+                          key={nozzle}
+                          className="bg-cream shadow-soft flex flex-col gap-4 rounded-lg p-4"
+                          aria-label={NOZZLE_NAMES[nozzle].title}
+                        >
+                          <div className="flex flex-col">
+                            <span className="text-body text-ink font-semibold">{NOZZLE_NAMES[nozzle].title}</span>
+                            <span className="text-small text-ink-faint">{NOZZLE_NAMES[nozzle].detail}</span>
+                          </div>
+                          {/* Four sizes side by side: never a lone 0.8 mm wrapped onto its own line. */}
+                          <SegmentedControl
+                            label={`${NOZZLE_NAMES[nozzle].title} size`}
+                            labelHidden
+                            options={NOZZLE_DIAMETERS.map((diameter) => ({
+                              value: String(diameter),
+                              label: `${diameter} mm`,
+                            }))}
+                            value={String(fitted.diameter)}
+                            onChange={(diameter) => setNozzle(nozzle, { diameter: Number(diameter) })}
+                            className="w-full"
+                          />
+                          <ToggleChip
+                            tone="basil"
+                            icon={HardenedIcon}
+                            selected={fitted.hardened}
+                            onClick={() => setNozzle(nozzle, { hardened: !fitted.hardened })}
+                            className="self-start"
+                          >
+                            {fitted.hardened ? "Hardened steel" : "Not hardened"}
+                          </ToggleChip>
+                        </section>
+                      );
+                    })}
+                  </div>
+                </PrinterSection>
+
+                <PrinterSection title="Plates you own" description="Tap the ones you have.">
+                  {/* biome-ignore lint/a11y/useSemanticElements: a row of chips, not a form field set. */}
+                  <div className="flex flex-wrap gap-2" role="group" aria-label="Plates you own">
+                    {[
+                      ...BED_TYPES,
+                      ...setup.plates.filter((plate) => !(BED_TYPES as readonly string[]).includes(plate)),
+                    ].map((plate) => (
+                      <ToggleChip
+                        key={plate}
+                        selected={setup.plates.includes(plate)}
+                        onClick={() => togglePlate(plate)}
+                      >
+                        {plateName(plate)}
+                      </ToggleChip>
+                    ))}
+                  </div>
+                </PrinterSection>
+
+                {idle ? (
+                  <Suspense fallback={<SlicingDefaultsSkeleton />}>
+                    <SlicingDefaults />
+                  </Suspense>
+                ) : (
+                  <SlicingDefaultsSkeleton />
+                )}
+
+                <PrinterSection title="Staying dry">
+                  <Disclosure
+                    open={dryingOpen}
+                    onOpenChange={setDryingOpen}
+                    title="Days each material stays dry"
+                    summary="Past that, Spaghetti says to dry it before printing. Starting values are a guide, not Bambu's word."
+                  >
+                    {dryingOpen && (
+                      <Suspense fallback={null}>
+                        <DryingTable
+                          days={{ ...DRYING_DAYS, ...value.dryingDays }}
+                          onChange={(dryingDays) => change({ dryingDays })}
+                        />
+                      </Suspense>
+                    )}
+                  </Disclosure>
+                </PrinterSection>
+              </fieldset>
+            )}
+          </Disclosure>
+        </PrinterSection>
+      </div>
+      <p className="text-small text-ink-faint flex items-start gap-2 xl:col-span-2">
         <InfoIcon size={16} className="mt-0.5 shrink-0" aria-hidden />
         These are the checks behind the gentle hints while logging an attempt: temperatures past the X2D's limits, TPU
         on the auxiliary nozzle or through the AMS, and abrasive filament on a nozzle that isn't hardened.

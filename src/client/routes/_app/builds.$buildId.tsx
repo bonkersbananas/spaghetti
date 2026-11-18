@@ -16,7 +16,7 @@ import { BuildSummary } from "@/components/builds/BuildSummary";
 import { BuildTitleLine } from "@/components/builds/BuildTitleLine";
 import { type ComparePair, CompareSheet } from "@/components/builds/CompareSheet";
 import { OpenOnlyFile, onlyOpenable } from "@/components/builds/OpenInStudio";
-import { PartsSection } from "@/components/builds/parts/PartsSection";
+import { AddPartsButton, PartsSection } from "@/components/builds/parts/PartsSection";
 import { SettingsLine } from "@/components/builds/SettingsLine";
 import { filamentLabel, summarizeSettings } from "@/components/builds/settings";
 import { CommentThread, ItemReactions } from "@/components/comments/CommentThread";
@@ -200,6 +200,7 @@ function Build({ item }: { item: ItemView }) {
   // Without a photo, the cover rule's next step: the newest plate picture (coverOf in lib/previews.ts).
   const cover = coverOf(item);
   const plate = cover.kind === "plate" ? cover.file : undefined;
+  const [editingParts, setEditingParts] = useState(false);
   const [photoId, setPhotoId] = useState(gallery[0]?.id);
   const photoIndex = Math.max(
     0,
@@ -617,11 +618,12 @@ function Build({ item }: { item: ItemView }) {
                 readOnly={readOnly}
                 placeholder="Notes for the whole build: the plan, a link, what to try next…"
                 model={model}
+                modelCardBelow
                 className="mt-1"
               />
               <NoteLinks note={note} model={model} />
               {/* The quiet action under the model, as on an idea: keep it as a twist, or open the one it prints. */}
-              {(model || existingTwistId || onlyOpenable(item.files)) && (
+              {(model || existingTwistId || onlyOpenable(item.files) || !item.parts.length) && (
                 <div className="-mx-3 -mt-1 flex flex-wrap items-center gap-x-1">
                   {(model || existingTwistId) && (
                     <Button
@@ -634,6 +636,9 @@ function Build({ item }: { item: ItemView }) {
                     </Button>
                   )}
                   <OpenOnlyFile files={item.files} />
+                  {!item.parts.length && !editingParts && (
+                    <AddPartsButton disabled={readOnly || item.pending} onClick={() => setEditingParts(true)} />
+                  )}
                 </div>
               )}
             </div>
@@ -649,6 +654,8 @@ function Build({ item }: { item: ItemView }) {
             {!!item.files?.length && <ItemFiles itemId={item.id} files={item.files} readOnly={readOnly} />}
 
             <PartsSection
+              editing={editingParts}
+              onEditing={setEditingParts}
               item={item}
               active={active}
               readOnly={readOnly}

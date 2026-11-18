@@ -9,6 +9,7 @@ import { RemainingMeter } from "@/components/ui/RemainingMeter";
 import { Section } from "@/components/ui/Section";
 import { SpoolDisc } from "@/components/ui/SpoolDisc";
 import { toast } from "@/components/ui/Toast";
+import { cn } from "@/lib/cn";
 import { type LowSpool, shoppingList } from "@/lib/running-low";
 import { useIsDesktop } from "@/lib/use-media-query";
 
@@ -75,7 +76,11 @@ export function RunningLow({
       }
     >
       <ul
-        className="bg-cream shadow-soft overflow-hidden rounded-lg xl:has-[li+li]:grid xl:has-[li+li]:grid-cols-2"
+        className={cn(
+          "bg-cream shadow-soft overflow-hidden rounded-lg",
+          // Two across only on the Pantry's full width; the Printer's half-width column keeps one.
+          copy && "xl:has-[li+li]:grid xl:has-[li+li]:grid-cols-2",
+        )}
         aria-label="Spools running low"
       >
         {low.map(({ spool, needs }) => {
@@ -83,7 +88,11 @@ export function RunningLow({
           return (
             <li
               key={spool.id}
-              className="after:bg-hairline relative list-none after:absolute after:inset-x-4 after:bottom-0 after:h-px last:after:hidden xl:nth-last-2:odd:after:hidden"
+              className={cn(
+                "after:bg-hairline relative list-none after:absolute after:inset-x-4 after:bottom-0 after:h-px last:after:hidden",
+                // In the two-across grid the left item of the bottom row has no line under it.
+                copy && "xl:nth-last-2:odd:after:hidden",
+              )}
             >
               <Link
                 to="/pantry/$spoolId"

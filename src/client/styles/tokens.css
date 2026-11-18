@@ -616,6 +616,19 @@
   filter: var(--sg-render-shadow-tile);
 }
 
+/*
+ * A loose strand of spaghetti drawn as a mask (a loop or two and a trailing end), filled with the color the element
+ * has: the doodle on the foot of a short note's index card (NoteFace `doodle`). CSS only, so no script loads for it.
+ */
+@utility note-strand {
+  -webkit-mask:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 44' fill='none' stroke='black' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3 34C14 36 20 24 28 14 34 6 44 8 42 18 40 28 28 32 28 22 28 10 46 4 58 10 70 16 66 32 56 30 48 28 54 14 68 18 80 22 84 34 98 30'/%3E%3C/svg%3E")
+    0 0 / 100% 100%;
+  mask:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 44' fill='none' stroke='black' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3 34C14 36 20 24 28 14 34 6 44 8 42 18 40 28 28 32 28 22 28 10 46 4 58 10 70 16 66 32 56 30 48 28 54 14 68 18 80 22 84 34 98 30'/%3E%3C/svg%3E")
+    0 0 / 100% 100%;
+}
+
 /* Text that may run past its box (a long note on a card) fades out at the bottom instead of being cut mid-line. */
 @utility fade-bottom {
   mask-image: linear-gradient(to bottom, black calc(100% - 2.5rem), transparent);

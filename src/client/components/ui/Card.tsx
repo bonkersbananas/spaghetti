@@ -166,7 +166,12 @@ export function Card({
           />
         ) : (
           // Nothing to show yet, not even a note: a blank index card, never an empty image icon.
-          <NoteFace note={note ?? ""} maxSize="lg" />
+          <NoteFace
+            note={note ?? ""}
+            maxSize="lg"
+            clearBottom={!!mark}
+            doodle={(aspect === "portrait" || aspect === "tall") && !chips}
+          />
         )}
         {badge && <div className="absolute top-2 right-2">{badge}</div>}
         {slides && (

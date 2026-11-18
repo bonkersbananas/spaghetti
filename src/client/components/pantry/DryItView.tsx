@@ -20,7 +20,7 @@ export default function DryItView({
 }: {
   spool: Pick<Spool, "material" | "driedAt" | "createdAt" | "remaining">;
   className?: string;
-  /** In a narrow column (an AMS bay on a phone) it says "Dry first" in one line; from `lg` the whole sentence. */
+  /** In a narrow column (an AMS bay on a phone) it says "Dry first" in one line; from a wide unit (`@3xl`) the whole sentence. */
   compact?: boolean;
 }) {
   if (!useNeedsDrying(spool)) return null;
@@ -35,8 +35,8 @@ export default function DryItView({
       <DriedIcon size={compact ? 12 : 14} aria-hidden />
       {compact ? (
         <>
-          <span className="whitespace-nowrap lg:hidden">Dry first</span>
-          <span className="hidden lg:inline">{DRY_IT}</span>
+          <span className="whitespace-nowrap @3xl:hidden">Dry first</span>
+          <span className="hidden @3xl:inline">{DRY_IT}</span>
         </>
       ) : (
         DRY_IT
