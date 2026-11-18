@@ -716,8 +716,13 @@ function Build({ item }: { item: ItemView }) {
                 // A print on the bed is asked about on its own card, so the section offers nothing beside it.
                 isDesktop &&
                 !printing && (
-                  <Button variant="primary" icon={PlusIcon} shortcut={shortcutCaps("buildLog")} onClick={primary}>
-                    Log attempt
+                  <Button
+                    variant={finishNext ? "secondary" : "primary"}
+                    icon={PlusIcon}
+                    shortcut={shortcutCaps("buildLog")}
+                    onClick={primary}
+                  >
+                    {finishNext ? "Log another try" : "Log attempt"}
                   </Button>
                 )
               }
@@ -844,19 +849,20 @@ function Build({ item }: { item: ItemView }) {
         {!isDesktop && (active || printing) && !(printing && isOffTheBed(printing)) && (
           <ActionBar>
             {finishNext ? (
+              // As the idea's bar: the second action a quiet word on the left, the one primary on the thumb's side.
               <>
+                <Button variant="quiet" className="shrink-0" onClick={primary}>
+                  Log another try
+                </Button>
                 <Button
                   variant="primary"
                   size="lg"
                   icon={FinishIcon}
                   disabled={readOnly}
-                  className="flex-1"
+                  className="min-w-0 flex-1 px-4"
                   onClick={() => finishBuild(queryClient, item)}
                 >
                   Finish build
-                </Button>
-                <Button variant="secondary" size="lg" onClick={primary}>
-                  Log another try
                 </Button>
               </>
             ) : (

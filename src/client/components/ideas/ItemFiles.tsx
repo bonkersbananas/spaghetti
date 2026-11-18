@@ -2,12 +2,13 @@ import type { AttemptFile } from "@shared/api";
 import { qualityOf } from "@shared/slicing/settings.ts";
 import { useQueryClient } from "@tanstack/react-query";
 import { type ReactNode, useState } from "react";
-import { SavedFileCard } from "@/components/builds/SlicerFile";
+import { PlateThumb, SavedFileCard } from "@/components/builds/SlicerFile";
 import { formatMinutes } from "@/components/builds/settings";
-import { NextIcon, SlicerFileIcon } from "@/components/ui/icons";
+import { NextIcon } from "@/components/ui/icons";
 import { MetaList } from "@/components/ui/MetaList";
 import { Overline } from "@/components/ui/Overline";
 import { removeItemFile } from "@/lib/item-files";
+import { fileThumbSrc } from "@/lib/previews";
 
 /**
  * The files kept with an idea (and its build): slicer files and models (sliced in the browser, ModelFile.tsx), each
@@ -55,13 +56,13 @@ export default function ItemFiles({
   );
 }
 
-/** The one line a file folds to: "fusilli-hook · 36 min · 10.6 g · Standard". Tapping it opens the full card. */
+/** The one line a file folds to: "fusilli-hook · est. 36 min · 10.6 g · Standard". Tapping it opens the full card. */
 function foldedPieces(file: AttemptFile): string[] {
   const slicing = file.slice?.settings;
   const quality = slicing ? qualityOf(slicing.layerHeight, slicing.slicing?.nozzle)?.label : undefined;
   return [
     file.name.replace(/(\.gcode)?\.(3mf|stl|obj|step)$/i, ""),
-    file.prefill.estimatedMinutes !== undefined ? formatMinutes(file.prefill.estimatedMinutes) : "",
+    file.prefill.estimatedMinutes !== undefined ? `est. ${formatMinutes(file.prefill.estimatedMinutes)}` : "",
     file.prefill.weightGrams !== undefined
       ? `${file.prefill.weightGrams.toLocaleString("en", { maximumFractionDigits: 1 })} g`
       : "",
@@ -79,9 +80,9 @@ function FileLine({ file, folded, children }: { file: AttemptFile; folded?: bool
       type="button"
       onClick={() => setOpen(true)}
       aria-label={`Show file ${file.name}`}
-      className="pressable focus-ring bg-ink/4 hover:bg-ink/6 text-small text-ink-soft flex min-h-11 w-full min-w-0 items-center gap-2.5 rounded-md py-1.5 pr-2.5 pl-3 text-left"
+      className="pressable focus-ring bg-cream shadow-soft hover:shadow-raised text-small text-ink-soft flex min-h-14 w-full min-w-0 items-center gap-3 rounded-lg p-2 pr-3 text-left"
     >
-      <SlicerFileIcon size={18} className="text-ink-faint shrink-0" aria-hidden />
+      <PlateThumb src={file.hasThumb ? fileThumbSrc(file) : undefined} alt="" className="size-10" />
       <MetaList className="min-w-0 flex-1">
         {foldedPieces(file).map((piece) => (
           <span key={piece} className="whitespace-nowrap">

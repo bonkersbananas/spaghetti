@@ -7357,6 +7357,47 @@ shots.push(
       },
     },
     {
+      // The end of the page on a phone: Finish build is in the bar only, not twice.
+      name: "build-finish-next-end",
+      path: `/builds/${SEED_IDS.desiccantHook}`,
+      width: 390,
+      why: "the page's end with the phone's bar",
+      beforeShot: async (page) => {
+        await page.evaluate(() => window.scrollTo({ top: document.documentElement.scrollHeight, behavior: "instant" }));
+        await page.waitForTimeout(300);
+      },
+    },
+    {
+      // A file sliced by Spaghetti, on a build with an attempt: its line names the quality too.
+      name: "build-file-folded-sliced",
+      path: "/ideas",
+      width: 390,
+      why: "the folded line is a phone's",
+      prepare: async (page) => {
+        await ideaWithModel(page, FUSILLI_IDEA, FUSILLI, /Sliced by Spaghetti/);
+        await sliceSaved(page);
+        const id = modelItems.at(-1);
+        const headers = { Origin: new URL(page.url()).origin };
+        await page.request.patch(`/api/items/${id}`, { headers, data: { stage: "building" } });
+        await page.request.post(`/api/items/${id}/attempts`, {
+          headers,
+          data: {
+            id: crypto.randomUUID(),
+            outcome: "success",
+            printedAt: Date.now(),
+            note: "Clean first try.",
+            failureTags: [],
+            successNotes: [],
+            settings: {},
+          },
+        });
+        await page.goto(`/builds/${id}`);
+        await page.getByRole("heading", { name: "Attempts" }).waitFor();
+        await page.getByRole("region", { name: /^Files/ }).waitFor();
+      },
+      cleanup: removeModelItems,
+    },
+    {
       // Right after adding a file on the idea: the new card is scrolled into view, not left below the fold.
       name: "idea-file-added-in-view",
       path: `/ideas/${SEED_IDS.bigTugboat}`,
