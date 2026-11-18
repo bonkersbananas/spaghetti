@@ -28,6 +28,9 @@ import { SEED_PASSWORD, SEED_USERS } from "../scripts/lib/local-app.ts";
  * 2026-11-15: /today and /journal +2: the "Since Thursday" gate on both (the block itself loads only when there is a catch-up, but its
  * lazy import adds its dependency list to the gate's chunk, about 1.5 kB gzip).
  * 2026-11-18: /pantry +1: the phone's compact spool tile (SpoolChip) and its remembered Tiles / Compact choice, both drawn on the Pantry at once (about 0.9 kB gzip).
+ * 2026-11-19: /pantry and /printer +1: both draw what the next-slot offer and the new-spool sheet open from (the slot wiring on each page, about
+ * 0.2 kB gzip); the lookups, product picks and the offer itself are in chunks that load on the first tap, and what else grew on these screens since
+ * 2026-11-18 came with the Start a build change to lib/items (+0.3 kB, on every screen that reads the items).
  * 2026-11-16: /today +1: note faces that are only a link show the link's words (linkWords, 0.3 kB) and mini cards set notes on
  * their own scale (NoteFace), both drawn on Today's cards, and Today's Up next carries the one-line batched toast (lib/up-next).
  * 2026-11-16: /ideas +1: the one cover rule every card picks its picture with (shared/cover.ts, coverOf in lib/previews.ts),
@@ -45,8 +48,8 @@ const CEILING_KB = {
   "/builds": 267,
   "/journal": 281,
   "/search": 275,
-  "/pantry": 260,
-  "/printer": 259,
+  "/pantry": 261,
+  "/printer": 260,
 } as const;
 
 /** Changes smaller than this don't make a screen heavier: a renamed chunk moves a few bytes in every screen. */

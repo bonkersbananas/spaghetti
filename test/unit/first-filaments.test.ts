@@ -3,14 +3,8 @@
  * each reads, what colours it has and how it is drawn, how a colour match treats it, and which preset slices it.
  */
 import { describe, expect, it } from "vitest";
-import {
-  isProduct,
-  PRODUCTS,
-  pickedProduct,
-  productName,
-  productOf,
-  spoolFieldsOf,
-} from "../../src/shared/products.ts";
+import { isProduct, pickedProduct, productName, spoolFieldsOf } from "../../src/shared/product-picks.ts";
+import { PRODUCTS, productOf } from "../../src/shared/products.ts";
 import { matchColour } from "../../src/shared/slicing/colours.ts";
 import { sliceSetup } from "../../src/shared/slicing/configs.ts";
 import { filamentOfSpool } from "../../src/shared/slicing/pantry.ts";

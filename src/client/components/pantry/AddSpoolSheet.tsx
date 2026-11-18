@@ -1,16 +1,9 @@
 import type { Spool } from "@shared/api";
 import { DEFAULT_NET_GRAMS } from "@shared/ledger";
-import { isProduct, PRODUCTS, pickedProduct, productName, spoolFieldsOf } from "@shared/products";
-import {
-  BRANDS,
-  colorsName,
-  colourNameOf,
-  FINISHES,
-  finishLabel,
-  linesFor,
-  SPOOL_MATERIALS,
-  spoolColors,
-} from "@shared/spools";
+import { isProduct, pickedProduct, productName, spoolFieldsOf } from "@shared/product-picks";
+import { PRODUCTS } from "@shared/products";
+import { colourNameOf } from "@shared/spool-lookup";
+import { BRANDS, colorsName, FINISHES, finishLabel, linesFor, SPOOL_MATERIALS, spoolColors } from "@shared/spools";
 import { useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { useEffect, useId, useState } from "react";
