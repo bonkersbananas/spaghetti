@@ -9,6 +9,7 @@ import type { PhotoView } from "@/lib/items";
 import { scrollBehavior } from "@/lib/motion";
 import type { PhotoZoom } from "@/lib/photo-zoom";
 import { photoSrc } from "@/lib/previews";
+import { useIsDesktop } from "@/lib/use-media-query";
 import { useWhenIdle } from "@/lib/when-idle";
 
 interface PhotoViewerProps {
@@ -18,8 +19,9 @@ interface PhotoViewerProps {
   alt: string;
   className?: string;
   /**
-   * On a phone, no taller than 40 % of the screen (a portrait photo is letterboxed on the paper ground, and the page
-   * keeps its text in the first screen): for a build with attempts, whose answers are under the photo.
+   * On a phone, no taller than 40 % of the screen and cropped to fill it (no bands either side of a portrait photo,
+   * and the page keeps its text in the first screen; a pinch still zooms): for a build with attempts, whose answers
+   * are under the photo.
    */
   capOnPhone?: boolean;
 }
@@ -92,6 +94,7 @@ function ViewerFigure({
  * decision 0054), away from where a hand reaches for "back".
  */
 export function PhotoViewer({ photos, index, onIndexChange, alt, className, capOnPhone }: PhotoViewerProps) {
+  const isDesktop = useIsDesktop();
   const scroller = useRef<HTMLDivElement>(null);
   const settle = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
@@ -182,7 +185,7 @@ export function PhotoViewer({ photos, index, onIndexChange, alt, className, capO
                 src={photoSrc(photo.id, "large")}
                 alt={many ? `${alt} (${i + 1} of ${photos.length})` : alt}
                 color={photo.color || undefined}
-                fit="contain"
+                fit={capOnPhone && !isDesktop ? "cover" : "contain"}
                 eager={Math.abs(i - index) <= 1}
                 className="bg-paper-deep size-full"
               />

@@ -631,7 +631,8 @@ function Build({ item }: { item: ItemView }) {
                   </Button>
                 )}
               </BuildTitleLine>
-              {!isDesktop && answer}
+              {/* What worked leads on a phone; when nothing has, the build's own note stays first (below). */}
+              {!isDesktop && worked && answer}
               <NoteField
                 value={note}
                 onChange={setNote}
@@ -661,6 +662,7 @@ function Build({ item }: { item: ItemView }) {
                   )}
                 </div>
               )}
+              {!isDesktop && !worked && answer}
             </div>
 
             <BuildSummary
@@ -865,11 +867,11 @@ function Build({ item }: { item: ItemView }) {
  */
 function NothingWorked({ tries, closest, onOpen }: { tries: number; closest?: AttemptView; onOpen?: () => void }) {
   return (
-    <section aria-label="What worked" className="bg-ink/4 flex flex-col gap-1 rounded-lg p-4">
-      <Overline>What worked</Overline>
+    <section aria-label="What worked" className="bg-semolina-soft flex flex-col gap-1 rounded-lg p-4">
+      <Overline tone="semolina">What worked</Overline>
       <p className="text-body text-ink font-semibold">Nothing has worked for this yet.</p>
-      <p className="text-small text-ink-soft">
-        {tries === 1 ? "One try so far." : `${tries} tries so far.`}
+      <p className="text-small text-ink">
+        Not al dente yet. {tries === 1 ? "One try so far." : `${tries} tries so far.`}
         {closest && onOpen && (
           <>
             {" "}
@@ -927,7 +929,7 @@ function WhatWorked({
           className="text-small text-ink-soft"
           filamentClassName="text-ink"
         />
-        {attempt.note && <span className="text-body text-ink">{attempt.note}</span>}
+        {attempt.note && <span className="text-body text-ink line-clamp-3 md:line-clamp-none">{attempt.note}</span>}
         {attempt.successNotes.length > 0 && (
           <span className="flex flex-wrap gap-1.5">
             {attempt.successNotes.map((slug) => (
