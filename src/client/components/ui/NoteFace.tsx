@@ -61,22 +61,15 @@ function useWholeLines() {
       const lines = Math.max(1, Math.floor((el.clientHeight + 1) / lh));
       note.style.webkitLineClamp = String(lines);
       note.style.maxHeight = `${lines}lh`;
-      // Lay it out again now: a clamp set late in a resize otherwise kept its cut but lost its ellipsis.
-      void note.offsetHeight;
     };
     // The box's height, and the face's width (the type is in container units: a wider face is a larger line height
     // in the same box), and again once the fonts have arrived.
     const observer = new ResizeObserver(measure);
     observer.observe(el);
-    if (el.firstElementChild) observer.observe(el.firstElementChild);
     if (el.parentElement?.parentElement) observer.observe(el.parentElement.parentElement);
     measure();
-    let gone = false;
-    void document.fonts?.ready.then(() => !gone && measure());
-    return () => {
-      gone = true;
-      observer.disconnect();
-    };
+    void document.fonts?.ready.then(measure);
+    return () => observer.disconnect();
   }, []);
   return ref;
 }
