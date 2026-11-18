@@ -1,8 +1,11 @@
 import { linkWords } from "@shared/links";
 import { type NoteSize, noteSize } from "@shared/notes";
 import { keepUnits } from "@shared/typography";
-import { Fragment, type ReactNode, useCallback } from "react";
+import { Fragment, lazy, type ReactNode, Suspense, useCallback } from "react";
 import { cn } from "@/lib/cn";
+
+// Its own chunk: only the grids that draw a doodle load it (the Journal, which also sets notes, never does).
+const Strand = lazy(() => import("./Strand"));
 
 const sizes: Record<NoteSize, string> = {
   xl: "text-note-xl",
@@ -78,24 +81,6 @@ function useWholeLines() {
   return ref;
 }
 
-/** A loose strand of spaghetti on the foot of a short note's index card: a loop or two and a trailing end. */
-function Strand() {
-  // Laid over the face's foot, so it never takes a line from the note (only a short note gets one: see `doodle`).
-  return (
-    <svg
-      aria-hidden
-      viewBox="0 0 100 44"
-      fill="none"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      strokeWidth="1.6"
-      className="stroke-tomato/25 pointer-events-none absolute bottom-[8cqi] left-[8cqi] h-auto w-[34cqi]"
-    >
-      <path d="M3 34C14 36 20 24 28 14 34 6 44 8 42 18 40 28 28 32 28 22 28 10 46 4 58 10 70 16 66 32 56 30 48 28 54 14 68 18 80 22 84 34 98 30" />
-    </svg>
-  );
-}
-
 /**
  * A note in place of a photo: set in Fraunces under one faint rule, like an
  * index card in a kitchen notebook. The type scales with the card's width
@@ -140,7 +125,11 @@ export function NoteFace({ note, size, className, compact, clearBottom, maxSize,
           </div>
         )}
         {/* Only a note short enough to leave the foot empty: a title-only idea or a few words: most of the card is empty. */}
-        {doodle && !link && !compact && note.trim().length <= 32 && !/\n\s*\n/.test(note) && <Strand />}
+        {doodle && !link && !compact && note.trim().length <= 32 && !/\n\s*\n/.test(note) && (
+          <Suspense fallback={null}>
+            <Strand />
+          </Suspense>
+        )}
         {link && <p className="text-caption text-ink-faint mt-1.5 truncate">{link.site}</p>}
       </div>
     </div>
