@@ -566,9 +566,110 @@ export function useItemFields(item: Pick<ItemView, "id" | "title" | "note" | "fo
   return { title, setTitle, note, setNote, forWhom, setForWhom, saveState };
 }
 
-/** Builds made from the New build tile in this visit: if one is left untouched it removes itself (see discardIfUntouched). */
+/**
+ * Builds made from scratch in this visit: if one is left untouched it removes itself (see discardIfUntouched). They are
+ * kept in localStorage too, so one left by closing the tab is swept away at the next visit (sweepUntouched).
+ */
 const fresh = new Set<string>();
-export const markFresh = (id: string) => void fresh.add(id);
+const FRESH_KEY = "spaghetti.fresh-builds";
+interface FreshEntry {
+  id: string;
+  tab: string;
+}
+/** This tab's name (sessionStorage outlives a reload, not the tab), and its heartbeat, so another tab can tell it is open. */
+const tabId = (() => {
+  try {
+    const known = sessionStorage.getItem("spaghetti.tab");
+    if (known) return known;
+    const id = crypto.randomUUID();
+    sessionStorage.setItem("spaghetti.tab", id);
+    return id;
+  } catch {
+    return "tab";
+  }
+})();
+const aliveKey = (tab: string) => `spaghetti.tab-alive.${tab}`;
+let beating = false;
+function beat() {
+  const write = () => {
+    try {
+      localStorage.setItem(aliveKey(tabId), String(Date.now()));
+    } catch {}
+  };
+  write();
+  if (beating) return;
+  beating = true;
+  setInterval(write, 10_000);
+  // A closed tab says so at once, so its blank builds are swept at the next visit.
+  window.addEventListener("pagehide", () => {
+    try {
+      localStorage.removeItem(aliveKey(tabId));
+    } catch {}
+  });
+  window.addEventListener("pageshow", write);
+}
+// A hidden tab's timers slow to about one a minute: three minutes of silence is a closed tab.
+const isAlive = (tab: string) => {
+  try {
+    return Date.now() - Number(localStorage.getItem(aliveKey(tab)) ?? 0) < 180_000;
+  } catch {
+    return false;
+  }
+};
+const storedFresh = (): FreshEntry[] => {
+  try {
+    const entries: unknown = JSON.parse(localStorage.getItem(FRESH_KEY) ?? "[]");
+    return Array.isArray(entries)
+      ? entries.filter((e): e is FreshEntry => typeof e?.id === "string" && typeof e?.tab === "string")
+      : [];
+  } catch {
+    return [];
+  }
+};
+const storeFresh = (entries: FreshEntry[]) => {
+  try {
+    if (entries.length) localStorage.setItem(FRESH_KEY, JSON.stringify(entries.slice(-20)));
+    else localStorage.removeItem(FRESH_KEY);
+  } catch {}
+};
+export const markFresh = (id: string) => {
+  fresh.add(id);
+  beat();
+  storeFresh([...storedFresh().filter((known) => known.id !== id), { id, tab: tabId }]);
+};
+/** A build that is no longer a blank one in the making (a file is on its way to it): it is kept as it is. */
+export const forgetFresh = (id: string) => {
+  fresh.delete(id);
+  const entries = storedFresh();
+  if (entries.some((known) => known.id === id)) storeFresh(entries.filter((known) => known.id !== id));
+};
+
+const isEmptyBuild = (item: ItemView) =>
+  item.stage === "building" &&
+  !item.title?.trim() &&
+  !item.note.trim() &&
+  item.photos.length === 0 &&
+  (item.files ?? []).length === 0 &&
+  item.attempts.length === 0;
+
+/**
+ * Builds made from scratch in an earlier visit and left empty (the tab was closed on them) are removed, silently, the
+ * way discardIfUntouched does for one left in the same visit. Call it with the loaded builds.
+ */
+export function sweepUntouched(queryClient: QueryClient, builds: ItemView[]) {
+  const known = storedFresh();
+  if (!known.length) return;
+  const byId = new Map(builds.map((build) => [build.id, build]));
+  for (const { id, tab } of known) {
+    if (fresh.has(id)) continue;
+    // Still open in another tab: that tab decides.
+    if (tab !== tabId && isAlive(tab)) continue;
+    const build = byId.get(id);
+    if (build?.pending) continue;
+    if (build && isEmptyBuild(build)) deleteItem(queryClient, build, { silent: true });
+    else forgetFresh(id);
+  }
+}
 
 /**
  * A new build left with nothing in it (no title, note, photo, file or attempt) vanishes without a toast, the way a blank
@@ -577,13 +678,7 @@ export const markFresh = (id: string) => void fresh.add(id);
  */
 export function discardIfUntouched(queryClient: QueryClient, item: ItemView) {
   if (!fresh.has(item.id)) return;
-  const empty =
-    item.stage === "building" &&
-    !item.title?.trim() &&
-    !item.note.trim() &&
-    item.photos.length === 0 &&
-    item.attempts.length === 0;
-  if (!empty) return;
+  if (!isEmptyBuild(item)) return;
   deleteItem(queryClient, item, { silent: true });
 }
 
@@ -593,7 +688,7 @@ export function discardIfUntouched(queryClient: QueryClient, item: ItemView) {
  */
 export function deleteItem(queryClient: QueryClient, item: ItemView, { silent = false } = {}) {
   if (!canEdit(item.pending)) return;
-  fresh.delete(item.id);
+  forgetFresh(item.id);
   const noun = item.stage === "idea" ? "idea" : "build";
   const cached = queryClient.getQueryData<Item | null>(itemKeys.detail(item.id));
   const pendingEntry = outbox.remove(item.id);

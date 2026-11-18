@@ -2638,6 +2638,82 @@ export const shots: Shot[] = [
   },
   { name: "builds", path: "/builds", fullPage: true },
   {
+    // "New build" asks what you're printing: Up next first, then ideas with a model, then the rest.
+    name: "builds-start-picker",
+    path: "/builds",
+    beforeShot: settle,
+    prepare: async (page) => {
+      await page
+        .getByRole("button", { name: /^New build/ })
+        .first()
+        .click();
+      await page.getByRole("dialog", { name: "What are you printing?" }).waitFor();
+      await page.waitForTimeout(500);
+    },
+    cleanup: async (page) => {
+      await page.keyboard.press("Escape");
+      await page.waitForTimeout(300);
+    },
+  },
+  {
+    // The picker with nothing found: a search that matches no idea (a phone has no search field, so it shows the ideas).
+    name: "builds-start-nothing-found",
+    path: "/builds",
+    beforeShot: settle,
+    prepare: async (page) => {
+      await page
+        .getByRole("button", { name: /^New build/ })
+        .first()
+        .click();
+      const dialog = page.getByRole("dialog");
+      await dialog.getByRole("heading", { name: "What are you printing?" }).waitFor();
+      const search = dialog.getByRole("textbox", { name: "Search ideas" });
+      if (await search.count()) await search.fill("hexagon");
+      await page.waitForTimeout(500);
+    },
+    cleanup: async (page) => {
+      await page.keyboard.press("Escape");
+      await page.waitForTimeout(300);
+    },
+  },
+  {
+    // No ideas yet: the sheet says so and goes straight to the link and the file.
+    name: "builds-start-no-ideas",
+    path: "/builds",
+    beforeShot: settle,
+    prepare: async (page) => {
+      await page.route(/\/api\/items\?stage=/, async (route) => {
+        const response = await route.fetch();
+        await route.fulfill({ response, json: { items: [] } });
+      });
+      await page.reload({ waitUntil: "networkidle" });
+      await page.getByRole("button", { name: "Pick an idea to print" }).click();
+      await page.getByRole("dialog").getByRole("textbox", { name: "Model link" }).waitFor();
+      await page.waitForTimeout(500);
+    },
+    cleanup: unmockToday,
+  },
+  {
+    // The picker's second step: a model link, or a file.
+    name: "builds-start-link",
+    path: "/builds",
+    beforeShot: settle,
+    prepare: async (page) => {
+      await page
+        .getByRole("button", { name: /^New build/ })
+        .first()
+        .click();
+      const dialog = page.getByRole("dialog");
+      await dialog.getByRole("button", { name: "Link or file" }).click();
+      await dialog.getByRole("textbox", { name: "Model link" }).fill("https://makerworld.com/en/models/1234567-benchy");
+      await page.waitForTimeout(500);
+    },
+    cleanup: async (page) => {
+      await page.keyboard.press("Escape");
+      await page.waitForTimeout(300);
+    },
+  },
+  {
     // Nothing on the plate: no On the bed section, In progress leads.
     name: "builds-nothing-printing",
     path: "/builds",
