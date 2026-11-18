@@ -1,4 +1,5 @@
 import { relativeTime } from "@shared/time";
+import { useQuery } from "@tanstack/react-query";
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { NextIcon, PreviousIcon } from "@/components/ui/icons";
 import { MiniCard, type MiniDrag } from "@/components/ui/MiniCard";
@@ -6,7 +7,7 @@ import { Reflow } from "@/components/ui/Reflow";
 import { cn } from "@/lib/cn";
 import type { ItemView } from "@/lib/items";
 import { fileThumbSrc, photoSrc } from "@/lib/previews";
-import { useUnreadIds } from "@/lib/unread-comments";
+import { unreadQuery } from "@/lib/unread-comments";
 import { photoAlt, plateAlt, plateCover, shortenLinks, type UpNextMenu } from "./IdeaCard";
 
 const CardMenu = lazy(() => import("./CardMenu").then((m) => ({ default: m.CardMenu })));
@@ -27,7 +28,7 @@ interface UpNextStripProps {
  * or focus). Past the edge, the next card peeks out; on desktop two arrows scroll it for a mouse without a sideways wheel.
  */
 export function UpNextStrip({ queue, menuFor, landed, dragFor }: UpNextStripProps) {
-  const unread = useUnreadIds();
+  const unread = useQuery(unreadQuery).data?.threads;
   const scroller = useRef<HTMLUListElement>(null);
   const [edges, setEdges] = useState({ start: false, end: false });
   const measure = useCallback(() => {
@@ -75,7 +76,7 @@ export function UpNextStrip({ queue, menuFor, landed, dragFor }: UpNextStripProp
                 key={item.id}
                 id={item.id}
                 gridScale
-                unread={unread?.has(item.id)}
+                unread={unread?.some((thread) => thread.itemId === item.id)}
                 landing={landed?.(item)}
                 drag={dragFor?.(item)}
                 link={{ to: "/ideas/$ideaId", params: { ideaId: item.id } }}
