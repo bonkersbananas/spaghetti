@@ -72,7 +72,9 @@ test("grows an idea into a build, logs a failure and a success, and finishes it"
   else await page.keyboard.press("a");
   let sheet = page.getByRole("dialog", { name: "Attempt 1" });
   await expect(sheet).toBeVisible();
-  await expect(sheet.getByRole("button", { name: "Log attempt" })).toBeDisabled();
+  // No outcome yet: the one primary button starts the print; picking an outcome turns it into "Log attempt".
+  await expect(sheet.getByRole("button", { name: "Start print" })).toBeEnabled();
+  await expect(sheet.getByRole("button", { name: "Log attempt" })).toHaveCount(0);
   await sheet.getByRole("radio", { name: "Spaghetti" }).click();
   await sheet.getByRole("button", { name: "Bed adhesion" }).click();
   await sheet.getByTestId("photo-input").setInputFiles("e2e/fixtures/tugboat.jpg");
@@ -102,12 +104,14 @@ test("grows an idea into a build, logs a failure and a success, and finishes it"
   else await page.keyboard.press("a");
   sheet = page.getByRole("dialog", { name: "Attempt 2" });
   await expect(sheet).toBeVisible();
-  await expect(sheet.getByRole("button", { name: /^Settings(?! worth)/ })).toContainText("As attempt 1");
+  await expect(sheet.getByRole("button", { name: /^Settings(?! worth)/ })).toContainText("Same as attempt 1");
   await sheet.getByRole("radio", { name: "Worked" }).click();
   await sheet.getByRole("button", { name: "Great first layer" }).click();
-  await sheet.getByRole("button", { name: /^Settings(?! worth)/ }).click();
+  // What carried over is a chip: tap the bed, change it in place, the settings stay folded.
+  await sheet.getByRole("button", { name: "Change Bed 55 °C" }).click();
   await expect(sheet.getByLabel("Bed", { exact: true })).toHaveValue("55");
   await sheet.getByLabel("Bed", { exact: true }).fill("60");
+  await sheet.getByRole("button", { name: /^Settings(?! worth)/ }).click();
   await sheet.getByRole("button", { name: "No brim" }).click();
   await sheet.getByRole("button", { name: "Log attempt" }).click();
   await expect(sheet).toBeHidden();

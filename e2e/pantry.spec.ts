@@ -123,6 +123,9 @@ test("reads a dropped slicer file onto an attempt and keeps it", async ({ page, 
   await expect(sheet.getByText(SLICER_FILE_NAME)).toBeVisible();
   await expect(sheet.getByText("plate 1 of 2")).toBeVisible();
 
+  // A file only fills the settings in: the row stays folded on its summary until it is opened.
+  await expect(sheet.getByLabel("Process profile")).toHaveCount(0);
+  await sheet.getByRole("button", { name: /^Settings(?! worth)/ }).click();
   // Prefilled and marked as from the file, with the green PLA matched to the pantry's spool.
   await expect(sheet.getByLabel("Process profile")).toHaveValue("0.20mm Standard @BBL X2D");
   await expect(sheet.getByLabel("Nozzle", { exact: true })).toHaveValue("220");

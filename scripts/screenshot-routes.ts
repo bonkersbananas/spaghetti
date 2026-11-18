@@ -4782,6 +4782,22 @@ export const shots: Shot[] = [
     },
   },
   {
+    // The usual second attempt changes one thing: tap the chip, its field opens in place under the row.
+    name: "attempt-new-chip",
+    path: `/builds/${SEED_BUILD_IDS.cableChain}`,
+    prepare: async (page) => {
+      await page.getByRole("button", { name: "Log attempt" }).first().click();
+      const sheet = page.getByRole("dialog");
+      await sheet.getByRole("button", { name: /^Change Bed/ }).click();
+      await page.waitForTimeout(600);
+      await sheet.getByLabel("Bed", { exact: true }).evaluate((element) => element.scrollIntoView({ block: "end" }));
+      await page.waitForTimeout(300);
+    },
+    cleanup: async (page) => {
+      await page.keyboard.press("Escape");
+    },
+  },
+  {
     // "What worked last time" in the attempt sheet: PETG that warped, offered the PETG that didn't.
     name: "what-worked",
     path: `/builds/${SEED_BUILD_IDS.cableChain}`,
@@ -6415,9 +6431,8 @@ export const shots: Shot[] = [
         buffer: Buffer.from(slicerFile()),
       });
       await sheet.getByRole("button", { name: /Cable clips/ }).click();
-      await sheet.getByLabel("Layer height").waitFor();
-      // The settings open with an animation that changes the sheet's height: scroll once it has finished, or
-      // where the sheet ends up depends on how far along it was (the shot came out differently from run to run).
+      // The settings stay folded on their summary (a chip row for what carried over): nothing animates open.
+      await sheet.getByRole("button", { name: /^Settings/ }).waitFor();
       await page.waitForTimeout(900);
       await sheet
         .getByText(SLICER_FILE_NAME)

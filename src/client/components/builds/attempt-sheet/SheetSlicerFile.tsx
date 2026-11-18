@@ -63,7 +63,6 @@ export function useSlicerFile({
   const { data: user } = useSuspenseQuery(sessionQuery);
   const { data: spools = [] } = useQuery(spoolsQuery);
   const [state, setState] = useState<SlicerState | null>(null);
-  const [settingsKey, setSettingsKey] = useState(0);
   const latest = useRef(settings);
   latest.current = settings;
 
@@ -81,7 +80,6 @@ export function useSlicerFile({
     // A stand-in filament (no colour: nobody chose it) isn't a spool to add to the pantry.
     const unknown = model ? linked.unknown.filter((index) => !!prefill.filaments?.[index]?.colorHex) : linked.unknown;
     setState({ draft, plate, prefill, unknown });
-    setSettingsKey((key) => key + 1);
     if (ready) onReady?.(draft, plate, prefill);
     onObjects?.((plateOf(draft, plate)?.objects ?? []).map((object) => object.name));
   };
@@ -193,7 +191,6 @@ export function useSlicerFile({
     },
     addUnknown,
     unknownFilaments,
-    settingsKey,
   };
 }
 
