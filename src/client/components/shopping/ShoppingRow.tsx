@@ -13,6 +13,7 @@ import { LinkChip } from "@/components/ui/LinkChip";
 import { PriceLine } from "@/components/ui/Prices";
 import { Thumb } from "@/components/ui/Thumb";
 import { cn } from "@/lib/cn";
+import { spoolsQuery } from "@/lib/pantry-queries";
 import { linkPreviewQuery } from "@/lib/queries";
 import { canEdit } from "@/lib/read-only";
 import { keepInPantry, useInPantry } from "@/lib/shopping-pantry";
@@ -65,7 +66,10 @@ export function ShoppingRow({ item, boughtBy, onTick, onOpen, readOnly, handle, 
   const bought = item.boughtAt !== null;
   // A bought spool of filament offers the pantry: the sheet opens with what its name says.
   const filament = useMemo(() => (bought ? filamentFromName(name) : null), [bought, name]);
-  const inPantry = useInPantry(item.id);
+  const keptSpool = useInPantry(item.id);
+  // A spool taken out of the pantry since: the row offers it again.
+  const { data: spools } = useQuery({ ...spoolsQuery, enabled: !!keptSpool });
+  const inPantry = keptSpool && (!spools || spools.some((spool) => spool.id === keptSpool)) ? keptSpool : undefined;
   const [adding, setAdding] = useState(false);
   // A tick shows at once and the row stays a beat, so the check is seen landing before it moves to Bought.
   const [ticking, setTicking] = useState(false);

@@ -1,6 +1,6 @@
 import type { Spool } from "@shared/api";
 import { DEFAULT_NET_GRAMS } from "@shared/ledger";
-import { PRODUCTS, pickedProduct, productName, spoolFieldsOf } from "@shared/products";
+import { isProduct, PRODUCTS, pickedProduct, productName, spoolFieldsOf } from "@shared/products";
 import {
   BRANDS,
   colorsName,
@@ -80,6 +80,9 @@ export function AddSpoolSheet({
   const [namedByHand, setNamedByHand] = useState(false);
   const [photo, setPhoto] = useState<File | null>(null);
   const photoUrl = useObjectUrl(photo);
+  // The product chip last tapped: while the spool still is that product, its chip is the lit one (the plain "PLA
+  // Basic" stays lit with Jade white picked, though "PLA Basic · Jade white" is the same spool).
+  const [tapped, setTapped] = useState<string | null>(null);
   const [otherMaterial, setOtherMaterial] = useState(false);
   // What the person has set themselves: a label read may fill the rest, and the starting material and weight.
   const [touched, setTouched] = useState<ReadonlySet<string>>(new Set());
@@ -87,6 +90,7 @@ export function AddSpoolSheet({
   // biome-ignore lint/correctness/useExhaustiveDependencies: only when it opens.
   useEffect(() => {
     if (!open) return;
+    setTapped(null);
     setDraft(blank(initial));
     setNamedByHand(!!initial?.colorName);
     setTouched(
@@ -119,14 +123,18 @@ export function AddSpoolSheet({
     const guess = colors.length > 1 ? colorsName(colors) : colors[0] ? colourNameOf(colors[0]) : undefined;
     change({ ...next, ...(namedByHand ? {} : { colorName: guess ?? null }) });
   };
+  const tappedProduct = PRODUCTS.find((entry) => entry.id === tapped);
+  const litProduct = tappedProduct && isProduct(draft, tappedProduct) ? tappedProduct : pickedProduct(draft);
   // A known product fills in what its label says; the colours stay as picked, spread over as many as it has.
   const pickProduct = (id: string) => {
     const product = PRODUCTS.find((entry) => entry.id === id);
     if (!product) return;
-    if (pickedProduct(draft)?.id === id) {
+    if (litProduct?.id === id) {
+      setTapped(null);
       change({ brand: null, line: null, finish: null, nozzleTempMin: null, nozzleTempMax: null });
       return;
     }
+    setTapped(id);
     setOtherMaterial(!(SPOOL_MATERIALS as readonly string[]).includes(product.material));
     change(spoolFieldsOf(product));
     // A product sold in one colour brings it: the colour picked is the colour saved.
@@ -233,7 +241,7 @@ export function AddSpoolSheet({
             {PRODUCTS.map((product) => (
               <ToggleChip
                 key={product.id}
-                selected={pickedProduct(draft)?.id === product.id}
+                selected={litProduct?.id === product.id}
                 onClick={() => pickProduct(product.id)}
               >
                 {productName(product)}
