@@ -24,8 +24,6 @@ interface AttemptSheetProps {
   onStep?: (attemptId: string) => void;
 }
 
-const _lowerFirst = (text: string) => text.charAt(0).toLowerCase() + text.slice(1);
-
 const lowerFirst = (text: string) => text.charAt(0).toLowerCase() + text.slice(1);
 
 /**
