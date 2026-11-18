@@ -24,6 +24,8 @@ const SHARP_ANGLE: f32 = 55.0 * PI / 180.0;
 const OVERHANG_ANGLE: f32 = 45.0 * PI / 180.0;
 /// Orca's `angle_importance_aligned`: how much a corner counts against visibility.
 const ANGLE_IMPORTANCE: f32 = 0.6;
+/// Orca's `angle_importance_nearest`, higher "to combat the visibility info noise".
+const ANGLE_IMPORTANCE_NEAREST: f32 = 1.0;
 /// Orca's `seam_align_score_tolerance`: how much worse a seam may be and still join a string.
 const SCORE_TOLERANCE: f32 = 0.3;
 /// Orca's `seam_align_tolerable_dist_factor`: how far (in outer wall widths) a string looks on the next layer.
@@ -48,15 +50,19 @@ pub enum Mode {
     /// Anywhere on each loop, by a pseudo-random number worked out from the loop's first candidate (no visibility,
     /// no strings).
     Random,
+    /// Hidden where the model hides them, near where the nozzle is when the loop starts (no strings): picked as the
+    /// paths are planned, one after another.
+    Nearest,
 }
 
 impl Mode {
-    /// The mode of a `seam_position`: nearest seams (not ported) are placed as aligned ones.
+    /// The mode of a `seam_position`.
     pub fn of(seam_position: &str) -> Mode {
         match seam_position {
             "aligned_back" => Mode::AlignedBack,
             "back" => Mode::Rear,
             "random" => Mode::Random,
+            "nearest" => Mode::Nearest,
             _ => Mode::Aligned,
         }
     }
@@ -232,6 +238,24 @@ struct Comparator {
 impl Comparator {
     fn penalty(&self, a: &Candidate) -> f32 {
         a.overhang + a.visibility + ANGLE_IMPORTANCE * angle_penalty(a.angle)
+    }
+
+    /// `is_first_better` for nearest seams: corners count for more (`angle_importance_nearest`), and so does how far
+    /// a point is from `to`, where the nozzle is (mm).
+    fn nearer_better(a: &Candidate, b: &Candidate, to: [f32; 2]) -> bool {
+        if a.overhang > 0.0 || b.overhang > 0.0 {
+            return a.overhang < b.overhang;
+        }
+        if let Some(first) = hidden_first(a, b) {
+            return first;
+        }
+        let away = |c: &Candidate| {
+            let d = [c.position[0] - to[0], c.position[1] - to[1]];
+            1.0 - gauss((d[0] * d[0] + d[1] * d[1]).sqrt(), 0.0, 1.0, 0.005)
+        };
+        let penalty =
+            |c: &Candidate| c.overhang + c.visibility + ANGLE_IMPORTANCE_NEAREST * angle_penalty(c.angle) + away(c);
+        penalty(a) < penalty(b)
     }
 
     /// Whether `a` is a better seam than `b` (`is_first_better`).
@@ -464,7 +488,11 @@ pub fn place(
     (middles, slice_z, heights): (&[[f32; 2]], &[f64], &[f64]),
     s: &Settings,
 ) {
-    let mode = Mode::of(&s.seam_position);
+    // Nearest seams where they're picked from the nozzle's place (`Settings::nearest_seams`), else aligned ones.
+    let mode = match Mode::of(&s.seam_position) {
+        Mode::Nearest if !s.nearest_seams() => Mode::Aligned,
+        mode => mode,
+    };
     let regions_ref: &[LayerRegions] = regions;
     // Each object's on its own: Orca places each object's seams apart from the others'.
     let objects: Vec<Vec<LayerSeams>> = crate::par::map_range(meshes.len(), |o| {
@@ -540,6 +568,11 @@ fn object_seams(
         }
     }
     for seams in &mut layers {
+        // Nearest seams are picked as the paths are planned, from where the nozzle is (`LayerSeams::wall_loop`).
+        if mode == Mode::Nearest {
+            seams.cells = Cells::new(&seams.points, 2.0);
+            continue;
+        }
         if mode == Mode::Random {
             for k in 0..seams.perimeters.len() {
                 pick_random(seams, k, comparator, middle);
@@ -559,7 +592,7 @@ fn object_seams(
         }
         seams.cells = Cells::new(&seams.points, 2.0);
     }
-    if mode != Mode::Random {
+    if !matches!(mode, Mode::Random | Mode::Nearest) {
         align(&mut layers, comparator, mode, nozzle);
     }
     layers
@@ -1362,8 +1395,16 @@ fn align(layers: &mut [LayerSeams], comparator: Comparator, mode: Mode, nozzle: 
 impl LayerSeams {
     /// A wall loop (`contour`, round an outline or a hole, `outer` for the outer wall) as printed: from its seam,
     /// counter-clockwise round an outline and clockwise round a hole, its first point again at its end. None where
-    /// the layer has no seams for it.
-    pub fn wall_loop(&self, contour: &Contour, outline: bool, outer: bool, s: &Settings) -> Option<Vec<Pt>> {
+    /// the layer has no seams for it. Nearest seams are picked from where the nozzle is (`from`), as Orca's
+    /// `place_seam` picks them (`pick_nearest_seam_point_index`).
+    pub fn wall_loop(
+        &self,
+        contour: &Contour,
+        outline: bool,
+        outer: bool,
+        from: Option<Pt>,
+        s: &Settings,
+    ) -> Option<Vec<Pt>> {
         if self.perimeters.is_empty() || contour.len() < 2 {
             return None;
         }
@@ -1385,7 +1426,19 @@ impl LayerSeams {
             found = Some(perimeter);
         }
         let perimeter = &self.perimeters[found?];
-        let seam_index = perimeter.seam;
+        let seam_index = match from {
+            Some(from) if !perimeter.finalized && s.nearest_seams() => {
+                let to = [geom::unsc(from.x) as f32, geom::unsc(from.y) as f32];
+                let mut best = perimeter.start;
+                for k in perimeter.start..perimeter.end {
+                    if Comparator::nearer_better(&self.points[k], &self.points[best], to) {
+                        best = k;
+                    }
+                }
+                best
+            }
+            _ => perimeter.seam,
+        };
         let position = if perimeter.finalized { perimeter.at } else { self.points[seam_index].position };
         let seam = geom::pt(geom::sc(f64::from(position[0])), geom::sc(f64::from(position[1])));
         let mut start = seam;

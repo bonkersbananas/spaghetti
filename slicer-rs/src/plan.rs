@@ -139,10 +139,66 @@ pub fn plan_layer(
     centres: &[(f64, f64)],
     brims: &[Vec<Contour>],
     supports: &[Option<&support::Layer>],
-    start: Option<Pt>,
+    (start, filled): (Option<Pt>, Option<Vec<Option<Filled>>>),
     s: &Settings,
 ) -> LayerPlan {
-    plan_layer_of(None, r, lower, i, (z, h), centres, brims, supports, start, s)
+    plan_layer_of(None, r, lower, i, (z, h), centres, brims, supports, start, filled, s)
+}
+
+/// Each island's `Filled` on a layer (`plan_layer` with nearest seams takes them made ahead, layers in parallel).
+pub fn layer_fills(
+    r: &LayerRegions,
+    lower: Option<&LayerRegions>,
+    i: usize,
+    (z, h): (f64, f64),
+    centres: &[(f64, f64)],
+    s: &Settings,
+) -> Vec<Option<Filled>> {
+    let below = belows(r, lower, i, s);
+    (0..r.islands.len())
+        .map(|k| {
+            let island = &r.islands[k];
+            let centre = centres.get(island.object as usize).copied().unwrap_or((0.0, 0.0));
+            let under = below.get(island.group as usize).and_then(Option::as_ref);
+            let trees = r.lightning.get(island.group as usize).map_or(&[][..], Vec::as_slice);
+            let octree = r.octrees.get(island.group as usize).and_then(Option::as_ref);
+            let size = r.sizes.get(island.group as usize).copied().unwrap_or((0.0, 0.0));
+            let mut filled =
+                island_fills(k as u32, island, &r.fills[k], under, i, (z, h), (centre, size), (trees, octree), s);
+            // (It prints its fills if it has any; else whether it prints walls takes making them.)
+            let fills = filled.groups.iter().any(|g| !g.paths.is_empty()) || !filled.ironing.is_empty();
+            filled.prints = fills || {
+                let seams = r.seams.get(island.group as usize);
+                let (index, f) = (k as u32, filled.clone());
+                !island_walls_then(f, index, island, under, i, h, centre, seams, (None, false), s).is_empty()
+            };
+            Some(filled)
+        })
+        .collect()
+}
+
+/// Each object's layer below (all of its regions: by group), where it differs from this one (where it doesn't,
+/// nothing hangs).
+fn belows(r: &LayerRegions, lower: Option<&LayerRegions>, i: usize, s: &Settings) -> Vec<Option<Below>> {
+    let mut below: Vec<Option<Below>> = Vec::new();
+    if let Some(lower) = lower
+        && i > 0
+        && (s.detect_overhang_wall || s.overhang_speed || s.overhang_fan)
+    {
+        let groups = r.islands.iter().map(|island| island.group as usize + 1).max().unwrap_or(0);
+        below = (0..groups as u32)
+            .map(|g| {
+                let here: Shapes = r.islands.iter().filter(|i| i.group == g).map(|i| i.outline.clone()).collect();
+                if here.is_empty() {
+                    return None;
+                }
+                let under = lower.slice_of(g);
+                // A fuzzy wall stands out beyond even a layer below just like this one.
+                (under != here || s.fuzzy.on()).then(|| Below::new(&under, s))
+            })
+            .collect();
+    }
+    below
 }
 
 /// What one filament prints of a layer, with several filaments (`toolchange.rs`).
@@ -174,6 +230,7 @@ pub fn plan_layer_of(
     brims: &[Vec<Contour>],
     supports: &[Option<&support::Layer>],
     start: Option<Pt>,
+    filled: Option<Vec<Option<Filled>>>,
     s: &Settings,
 ) -> LayerPlan {
     let takes = |o: u32| only.is_none_or(|only| only.islands.get(o as usize).copied().unwrap_or(false));
@@ -184,27 +241,13 @@ pub fn plan_layer_of(
         Some(only) => only.supports.get(o).copied().flatten(),
     };
     let brim_here = |g: usize| only.is_none_or(|only| only.brims.get(g).copied().unwrap_or(false));
-    // Each object's layer below (all of its regions: by group), where it differs from this one (where it doesn't,
-    // nothing hangs).
-    let mut below: Vec<Option<Below>> = Vec::new();
-    if let Some(lower) = lower
-        && i > 0
-        && (s.detect_overhang_wall || s.overhang_speed || s.overhang_fan)
-    {
-        let groups = r.islands.iter().map(|island| island.group as usize + 1).max().unwrap_or(0);
-        below = (0..groups as u32)
-            .map(|g| {
-                let here: Shapes = r.islands.iter().filter(|i| i.group == g).map(|i| i.outline.clone()).collect();
-                if here.is_empty() {
-                    return None;
-                }
-                let under = lower.slice_of(g);
-                // A fuzzy wall stands out beyond even a layer below just like this one.
-                (under != here || s.fuzzy.on()).then(|| Below::new(&under, s))
-            })
-            .collect();
-    }
-    let island_at = |k: usize, at: Option<Pt>, rising: bool| -> Vec<Path> {
+    let below = belows(r, lower, i, s);
+    // Each island's fills where they're made ahead (nearest seams), taken by its last planning.
+    let filled: Vec<std::cell::RefCell<Option<Filled>>> = match filled {
+        Some(f) => f.into_iter().map(std::cell::RefCell::new).collect(),
+        None => Vec::new(),
+    };
+    let island_at = |k: usize, at: Option<Pt>, rising: bool, last: bool| -> Vec<Path> {
         let island = &r.islands[k];
         if !takes(island.object) {
             return Vec::new();
@@ -216,15 +259,30 @@ pub fn plan_layer_of(
         let size = r.sizes.get(island.group as usize).copied().unwrap_or((0.0, 0.0));
         let seams = r.seams.get(island.group as usize);
         let frame = (centre, size);
-        island_paths(k as u32, island, &r.fills[k], under, i, (z, h), frame, (trees, octree), seams, (at, rising), s)
+        let made = filled.get(k).and_then(|f| if last { f.borrow_mut().take() } else { f.borrow().clone() });
+        let fills = &r.fills[k];
+        island_paths(k as u32, island, fills, under, i, (z, h), frame, (trees, octree), seams, (at, rising), made, s)
     };
-    let mut per_island: Vec<Vec<Path>> = (0..r.islands.len()).map(|k| island_at(k, None, false)).collect();
+    // (With the fills made ahead, whether an island prints anything is known, and it is planned once, from where
+    // the nozzle is.)
+    let ahead: Vec<Option<bool>> = filled.iter().map(|f| f.borrow().as_ref().map(|f| f.prints)).collect();
+    let mut per_island: Vec<Vec<Path>> = (0..r.islands.len())
+        .map(|k| match ahead.get(k).copied().flatten() {
+            Some(_) if start.is_some() => Vec::new(),
+            _ => island_at(k, None, false, start.is_none()),
+        })
+        .collect();
+    let prints = |k: usize, paths: &[Path]| match ahead.get(k).copied().flatten() {
+        Some(prints) if start.is_some() => prints && takes(r.islands[k].object),
+        _ => !paths.is_empty(),
+    };
     // In spiral vase mode, a layer that is one island's wall loop and nothing else rises as it goes round, as Orca's
     // spiral takes a layer of one loop, above the bottom layers and the skirt, with no support (`process_layer`).
-    let rising = start.is_some()
+    let rising = s.spiral_mode
+        && start.is_some()
         && i >= s.bottom_shell_layers.max(s.skirt_height).max(1)
         && supports.iter().all(|l| l.is_none_or(|l| l.items.is_empty()))
-        && per_island.iter().filter(|p| !p.is_empty()).count() == 1
+        && (0..per_island.len()).filter(|&k| prints(k, &per_island[k])).count() == 1
         && per_island.iter().flatten().all(|p| matches!(p.role, Role::OuterWall | Role::InnerWall));
     // Each object on the plate's support that this filament prints, by the region holding it (its first).
     let groups = supports.len().max(r.islands.iter().map(|i| i.group as usize + 1).max().unwrap_or(0));
@@ -236,7 +294,7 @@ pub fn plan_layer_of(
     }
     // The tour's stops: the islands that print anything, then each object with support and nothing else here.
     let mut nodes: Vec<(Option<usize>, u32)> =
-        (0..per_island.len()).filter(|&k| !per_island[k].is_empty()).map(|k| (Some(k), r.islands[k].object)).collect();
+        (0..per_island.len()).filter(|&k| prints(k, &per_island[k])).map(|k| (Some(k), r.islands[k].object)).collect();
     for &(o, _) in holder.iter().flatten() {
         if !nodes.iter().any(|&(_, object)| group_of(object) == group_of(o as u32)) {
             nodes.push((None, o as u32));
@@ -290,7 +348,7 @@ pub fn plan_layer_of(
     }
     let mut visited = vec![false; groups];
     // Spiral vase mode: the first layer's brims print first, so its loops start where they end.
-    let spiral_brims = start.is_some() && i == 0;
+    let spiral_brims = s.spiral_mode && start.is_some() && i == 0;
     for t in tour {
         let (k, object) = nodes[t];
         let g = group_of(object);
@@ -309,7 +367,7 @@ pub fn plan_layer_of(
                     paths.extend(brim_paths(&brims[g], object, at, h, s));
                 }
                 let at = paths.last().map_or(start, |p: &Path| p.points[p.points.len() - 1]);
-                per_island[k] = island_at(k, Some(at), rising);
+                per_island[k] = island_at(k, Some(at), rising, true);
             }
             for p in &mut per_island[k] {
                 p.object = object;
@@ -603,16 +661,25 @@ fn foot(p: Pt, a: Pt, b: Pt) -> Pt {
 /// An infill extrusion collection, as Orca makes them: a fill region's lines, or one gap fill path. Fixed ones
 /// (monotonic fills, the narrow loops) print as they come; the others may print backwards, and their paths are
 /// chained again from where the nozzle is when they start.
+#[derive(Clone)]
 struct Group {
     paths: Vec<Path>,
     sortable: bool,
 }
 
-/// An island's paths in the order they print. In spiral vase mode `at` is where the nozzle is as the island starts:
-/// each loop starts at the point on it nearest where the nozzle is then; on a layer that `rises` (one wall loop and
-/// nothing else) it goes all the way round, without the seam gap, as Orca turns loop clipping off there.
+/// What an island prints besides its walls, which doesn't depend on where its walls start: its gap fill and infill,
+/// by collection (`Group`), and its ironing, by area. `island_paths` with nearest seams takes it made ahead.
+#[derive(Clone)]
+pub struct Filled {
+    groups: Vec<Group>,
+    ironing: Vec<Vec<Path>>,
+    /// Made ahead: whether the island prints anything at all, walls and all.
+    prints: bool,
+}
+
+/// An island's `Filled`.
 #[allow(clippy::too_many_arguments)]
-fn island_paths(
+fn island_fills(
     index: u32,
     island: &Island,
     fills: &Fills,
@@ -621,55 +688,13 @@ fn island_paths(
     (z, h): (f64, f64),
     (centre, size): ((f64, f64), (f64, f64)),
     (trees, octree): (&[Vec<Pt>], Option<&crate::adaptive::Octree>),
-    seams: Option<&crate::seam::LayerSeams>,
-    (mut at, rises): (Option<Pt>, bool),
     s: &Settings,
-) -> Vec<Path> {
+) -> Filled {
     let first = s.on_plate(layer);
-    let (walls, gaps) = (&island.walls, &island.gaps);
-    let lines = &island.lines;
-    let narrow = island.narrow;
+    let gaps = &island.gaps;
     let island_inner = &island.inner;
     let overlap = island.overlap;
-    let mut out: Vec<Path> = Vec::new();
     let island = index;
-
-    // Walls in Orca's order: around each hole and then the outline, the deepest loop first, each level's loops chained
-    // from the object's centre.
-    let centre_pt = geom::pt(centre.0.round() as i32, centre.1.round() as i32);
-    let overhang = overhang_flow(first, h, s);
-    if !lines.is_empty() {
-        out.extend(arachne_walls(lines, below, overhang, seams, island, first, h, s));
-    }
-    for (contour, depth, outline) in wall_order(walls, centre_pt).into_iter().filter(|_| lines.is_empty()) {
-        let role = if depth == 0 { Role::OuterWall } else { Role::InnerWall };
-        // From where the seam placer starts it (`seam.rs`), else from the back; in spiral vase mode, which places no
-        // seams, from the point nearest the nozzle, as Orca's loops start there.
-        let points = seams
-            .and_then(|seams| seams.wall_loop(contour, outline, depth == 0, s))
-            .unwrap_or_else(|| seam_loop(contour, outline));
-        let mut wall = path(role, points, true, island, first, h, s);
-        if narrow {
-            // A narrow island's one wall, as Bambu's narrow loops print it: a thinner line.
-            wall.width = region::narrow_wall_width(wall.width, h);
-            wall.mm3_per_mm = Settings::mm3_per_mm(wall.width, h);
-        }
-        if let Some(p) = at {
-            split_loop(&mut wall.points, p);
-        }
-        let mut wall = match below {
-            Some(below) => below.wall(wall, overhang, s),
-            None => wall,
-        };
-        // It stops the seam gap short of where it started, as Orca's walls do.
-        if rises || clip_end(&mut wall.points, &mut wall.parts, &mut wall.arcs, s.seam_gap) {
-            if at.is_some() {
-                at = wall.points.last().copied();
-            }
-            out.push(wall);
-        }
-    }
-
     // Gap fill along the middle of the gaps between walls, as wide as each gap is there: each path on its own.
     let mut groups: Vec<Group> = Vec::new();
     let (gap_min, gap_max) = region::gap_widths(layer, h, s);
@@ -800,8 +825,7 @@ fn island_paths(
         }
     }
 
-    let at = out.last().and_then(|p| p.points.last().copied());
-    out.extend(chain_infill(groups, at));
+    let mut ironing: Vec<Vec<Path>> = Vec::new();
     // Ironing last (`ironing.rs`), as Orca's `extrude_infill` irons an island once everything else is printed: each
     // area's lines in the order they were filled, the areas chained from where the nozzle is.
     if !fills.ironing.is_empty() {
@@ -830,7 +854,7 @@ fn island_paths(
                 monotonic::fill(shape, &params).map(|filled| filled.lines)
             }
         };
-        let areas: Vec<Vec<Path>> = fills
+        ironing = fills
             .ironing
             .iter()
             .filter_map(lines_of)
@@ -839,6 +863,100 @@ fn island_paths(
             })
             .filter(|paths: &Vec<Path>| !paths.is_empty())
             .collect();
+    }
+    Filled { groups, ironing, prints: true }
+}
+
+/// An island's paths in the order they print. In spiral vase mode `at` is where the nozzle is as the island starts:
+/// each loop starts at the point on it nearest where the nozzle is then; on a layer that `rises` (one wall loop and
+/// nothing else) it goes all the way round, without the seam gap, as Orca turns loop clipping off there. With nearest
+/// seams `at` is where the nozzle is too, and each wall's seam is picked from there; its `Filled` may come made ahead.
+#[allow(clippy::too_many_arguments)]
+fn island_paths(
+    index: u32,
+    island: &Island,
+    fills: &Fills,
+    below: Option<&Below>,
+    layer: usize,
+    (z, h): (f64, f64),
+    (centre, size): ((f64, f64), (f64, f64)),
+    (trees, octree): (&[Vec<Pt>], Option<&crate::adaptive::Octree>),
+    seams: Option<&crate::seam::LayerSeams>,
+    (at, rises): (Option<Pt>, bool),
+    filled: Option<Filled>,
+    s: &Settings,
+) -> Vec<Path> {
+    let filled = filled.unwrap_or_else(|| {
+        island_fills(index, island, fills, below, layer, (z, h), (centre, size), (trees, octree), s)
+    });
+    island_walls_then(filled, index, island, below, layer, h, centre, seams, (at, rises), s)
+}
+
+/// `island_paths` once its `Filled` is made: the walls, from their seams, then the gap fill and infill chained from
+/// where they end, and the ironing.
+#[allow(clippy::too_many_arguments)]
+fn island_walls_then(
+    filled: Filled,
+    index: u32,
+    island: &Island,
+    below: Option<&Below>,
+    layer: usize,
+    h: f64,
+    centre: (f64, f64),
+    seams: Option<&crate::seam::LayerSeams>,
+    (mut at, rises): (Option<Pt>, bool),
+    s: &Settings,
+) -> Vec<Path> {
+    let first = s.on_plate(layer);
+    let walls = &island.walls;
+    let lines = &island.lines;
+    let narrow = island.narrow;
+    let mut out: Vec<Path> = Vec::new();
+    let island = index;
+
+    // Walls in Orca's order: around each hole and then the outline, the deepest loop first, each level's loops chained
+    // from the object's centre.
+    let centre_pt = geom::pt(centre.0.round() as i32, centre.1.round() as i32);
+    let overhang = overhang_flow(first, h, s);
+    if !lines.is_empty() {
+        out.extend(arachne_walls(lines, below, overhang, (seams, at), island, first, h, s));
+    }
+    for (contour, depth, outline) in wall_order(walls, centre_pt).into_iter().filter(|_| lines.is_empty()) {
+        let role = if depth == 0 { Role::OuterWall } else { Role::InnerWall };
+        // From where the seam placer starts it (`seam.rs`), else from the back; in spiral vase mode, which places no
+        // seams, from the point nearest the nozzle, as Orca's loops start there.
+        // (Nearest seams from where the nozzle is.)
+        let placed = seams.and_then(|seams| seams.wall_loop(contour, outline, depth == 0, at, s));
+        let seamed = placed.is_some();
+        let points = placed.unwrap_or_else(|| seam_loop(contour, outline));
+        let mut wall = path(role, points, true, island, first, h, s);
+        if narrow {
+            // A narrow island's one wall, as Bambu's narrow loops print it: a thinner line.
+            wall.width = region::narrow_wall_width(wall.width, h);
+            wall.mm3_per_mm = Settings::mm3_per_mm(wall.width, h);
+        }
+        if let Some(p) = at.filter(|_| !seamed) {
+            split_loop(&mut wall.points, p);
+        }
+        let mut wall = match below {
+            Some(below) => below.wall(wall, overhang, s),
+            None => wall,
+        };
+        // It stops the seam gap short of where it started, as Orca's walls do.
+        if rises || clip_end(&mut wall.points, &mut wall.parts, &mut wall.arcs, s.seam_gap) {
+            if at.is_some() {
+                at = wall.points.last().copied();
+            }
+            out.push(wall);
+        }
+    }
+
+    let Filled { groups, ironing: areas, .. } = filled;
+    let at = out.last().and_then(|p| p.points.last().copied());
+    out.extend(chain_infill(groups, at));
+    // Ironing last (`ironing.rs`), as Orca's `extrude_infill` irons an island once everything else is printed: each
+    // area's lines in the order they were filled, the areas chained from where the nozzle is.
+    if !areas.is_empty() {
         let at = out.last().and_then(|p| p.points.last().copied());
         let ends: Vec<(Pt, Pt)> =
             areas.iter().map(|a| (a[0].points[0], *a[a.len() - 1].points.last().unwrap())).collect();
@@ -1455,7 +1573,7 @@ fn arachne_walls(
     lines: &[region::ArachneLine],
     below: Option<&Below>,
     overhang: (f64, f64, f64, f64),
-    seams: Option<&crate::seam::LayerSeams>,
+    (seams, mut at): (Option<&crate::seam::LayerSeams>, Option<Pt>),
     island: u32,
     first: bool,
     h: f64,
@@ -1579,7 +1697,7 @@ fn arachne_walls(
             // hole (Arachne's contours run the other way round).
             let contour: Vec<Pt> = points[..points.len() - 1].to_vec();
             let outline = geom::area2(&contour) < 0;
-            if let Some(seam) = seams.and_then(|seams| seams.wall_loop(&contour, outline, l.inset == 0, s)) {
+            if let Some(seam) = seams.and_then(|seams| seams.wall_loop(&contour, outline, l.inset == 0, at, s)) {
                 widths = seam.iter().map(|&p| width_at(&points, &widths, p)).collect();
                 points = seam;
             }
@@ -1612,6 +1730,9 @@ fn arachne_walls(
             if p.points.len() >= 2 {
                 out.push(p);
             }
+        }
+        if at.is_some() {
+            at = out.last().and_then(|p| p.points.last().copied()).or(at);
         }
     }
     out

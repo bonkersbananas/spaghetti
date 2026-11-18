@@ -886,7 +886,34 @@ impl Plate {
             && !settings.wrapping_detection
             && colours.as_ref().is_none_or(|c| c.farthest_photo);
         // In spiral vase mode each layer starts where the one before ended, so the layers go one after another.
-        let group_texts = |k: usize, mut spiral: Option<&mut spiral::State>, known: bool| -> Vec<gcode::LayerGcode> {
+        // Nearest seams are picked from where the nozzle is as each loop starts, so each layer is planned from where
+        // the one before ended (`near`, the nozzle's place); what doesn't depend on that, the islands' fills, is made
+        // ahead for every layer at once (`ahead`).
+        let nearest = settings.nearest_seams() && colours.is_none();
+        let ahead: Vec<std::sync::Mutex<Option<Vec<Option<plan::Filled>>>>> = if nearest {
+            par::map_range(schedule.len(), |g| {
+                let slot = &schedule[g];
+                let Some(l) = slot.layer else { return std::sync::Mutex::new(None) };
+                let here = held(l);
+                let lower = l.checked_sub(1).map(held);
+                let h = layers.height[l];
+                std::sync::Mutex::new(Some(plan::layer_fills(
+                    &here,
+                    lower.as_deref(),
+                    l,
+                    (slot.z, h),
+                    &centres,
+                    settings,
+                )))
+            })
+        } else {
+            Vec::new()
+        };
+        let group_texts = |k: usize,
+                           mut spiral: Option<&mut spiral::State>,
+                           known: bool,
+                           near: Option<&std::cell::Cell<geom::Pt>>|
+         -> Vec<gcode::LayerGcode> {
             let plans: Vec<(plan::LayerPlan, std::sync::Arc<region::LayerRegions>, f64, Option<f64>)> = groups[k]
                 .clone()
                 .map(|g| {
@@ -928,7 +955,8 @@ impl Plate {
                                         &centres,
                                         &brim_loops,
                                         &here,
-                                        spiral.as_ref().map(|st| st.at),
+                                        spiral.as_ref().map(|st| st.at).or(near.map(std::cell::Cell::get)),
+                                        None,
                                         s,
                                     );
                                     (f, plan)
@@ -944,10 +972,18 @@ impl Plate {
                             &centres,
                             &brim_loops,
                             &here,
-                            spiral.as_ref().map(|st| st.at),
+                            (
+                                spiral.as_ref().map(|st| st.at).or(near.map(std::cell::Cell::get)),
+                                ahead.get(g).and_then(|f| f.lock().unwrap().take()),
+                            ),
                             settings,
                         ),
                     };
+                    if let Some(near) = near
+                        && let Some(end) = plan.paths.last().and_then(|p| p.points.last())
+                    {
+                        near.set(*end);
+                    }
                     (plan.index, plan.id, plan.header_height) = (g, slot.id, slot.header_height);
                     // A layer that left its last retraction to this one (Orca's, with a photo before a visit to the tower) left
                     // the nozzle unlifted.
@@ -989,18 +1025,24 @@ impl Plate {
         // wrapping detection lifts in a spiral where Orca's writer knows where the nozzle is, which with the
         // farthest-point timelapse depends on where the layer before took its photo. Elsewhere it changes nothing.
         let in_turn = settings.farthest_photo && settings.wrapping_detection && colours.is_none();
-        let texts: Vec<Vec<gcode::LayerGcode>> = if settings.spiral_mode || in_turn {
+        let texts: Vec<Vec<gcode::LayerGcode>> = if settings.spiral_mode || in_turn || nearest {
             let mut st = spiral::State::new(job.start);
             let mut known = false;
+            let near = std::cell::Cell::new(geom::pt(0, 0));
             (0..groups.len())
                 .map(|k| {
-                    let texts = group_texts(k, settings.spiral_mode.then_some(&mut st), known);
-                    known = texts.last().map_or(known, |t| t.ends_known);
+                    let texts =
+                        group_texts(k, settings.spiral_mode.then_some(&mut st), known, nearest.then_some(&near));
+                    // (Only where the layers go in turn for it: nearest seams alone leave it as the layers in
+                    // parallel do.)
+                    if settings.spiral_mode || in_turn {
+                        known = texts.last().map_or(known, |t| t.ends_known);
+                    }
                     texts
                 })
                 .collect()
         } else {
-            par::map_range(groups.len(), |k| group_texts(k, None, false))
+            par::map_range(groups.len(), |k| group_texts(k, None, false, None))
         };
         let mut texts: Vec<gcode::LayerGcode> = texts.into_iter().flatten().collect();
         gcode::join(&mut texts);

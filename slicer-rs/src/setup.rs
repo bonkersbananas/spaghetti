@@ -149,7 +149,8 @@ mod tests {
         // What it doesn't print as asked, it says.
         assert_eq!(s.sparse_infill_pattern, "gyroid");
         assert_eq!(s.iron.surfaces, crate::config::IronWhere::Tops);
-        assert!(s.fallbacks().iter().any(|f| f == "nearest seams placed as aligned ones"), "{:?}", s.fallbacks());
+        assert_eq!(s.seam_position, "nearest");
+        assert!(!s.fallbacks().iter().any(|f| f.contains("seams")), "nearest seams are Orca's in one filament");
         assert!(!s.fallbacks().iter().any(|f| f.contains("ironing")), "concentric ironing is Orca's now");
         // Everything else is still the X2D's.
         assert_eq!(s.outer_wall_speed, 200.0);
