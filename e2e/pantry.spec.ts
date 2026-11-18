@@ -206,6 +206,11 @@ test("picks a spool from the pantry for an attempt's filament", { tag: "@phone" 
     .getByRole("button", { name: /Silk gold/ })
     .click();
   await expect(sheet.getByText("Eryone PLA Silk · external spool")).toBeVisible();
+  // One ✕ per filament row: with a single filament there is none, and "type it in" waits in Change.
+  await expect(sheet.getByRole("button", { name: /Type filament 1 in instead/ })).toHaveCount(0);
+  await sheet.getByRole("button", { name: "Pick another spool for filament 1" }).click();
+  await expect(sheet.getByRole("button", { name: "Type it in instead" })).toBeVisible();
+  await sheet.getByRole("button", { name: /^Keep / }).click();
   await sheet.getByRole("button", { name: "Log attempt" }).click();
   await expect(sheet).toBeHidden();
 

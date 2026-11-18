@@ -95,7 +95,15 @@ export function AttemptFields(props: FieldsProps) {
   const withChips = !!base && !!props.changeChips && !props.readOnly;
   const settingsSummary: ReactNode = base ? (
     changes.length ? (
-      `Changed from ${base.label}: ${changes.map((c) => c.text).join(", ")}`
+      // With chips below, a long list (a whole file's worth) is cut to two and a count.
+      `Changed from ${base.label}: ${
+        withChips && changes.length > 2
+          ? `${changes
+              .slice(0, 2)
+              .map((c) => c.text)
+              .join(", ")} and ${changes.length - 2} more`
+          : changes.map((c) => c.text).join(", ")
+      }`
     ) : withChips ? (
       `Same as ${base.label}`
     ) : (

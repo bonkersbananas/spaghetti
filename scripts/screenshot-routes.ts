@@ -4773,8 +4773,11 @@ export const shots: Shot[] = [
       const row = page.getByRole("dialog").getByRole("button", { name: /^Settings/ });
       await row.waitFor();
       await page.waitForTimeout(600);
-      // The bottom of the sheet: the one settings row above the buttons.
-      await row.evaluate((element) => element.scrollIntoView({ block: "end" }));
+      // The bottom of the sheet: the one settings row, its chips, above the button.
+      await page
+        .getByRole("dialog")
+        .getByRole("group", { name: "What carried over" })
+        .evaluate((element) => element.scrollIntoView({ block: "center" }));
       await page.waitForTimeout(300);
     },
     cleanup: async (page) => {
@@ -4790,7 +4793,7 @@ export const shots: Shot[] = [
       const sheet = page.getByRole("dialog");
       await sheet.getByRole("button", { name: /^Change Bed/ }).click();
       await page.waitForTimeout(600);
-      await sheet.getByLabel("Bed", { exact: true }).evaluate((element) => element.scrollIntoView({ block: "end" }));
+      await sheet.getByLabel("Bed", { exact: true }).evaluate((element) => element.scrollIntoView({ block: "center" }));
       await page.waitForTimeout(300);
     },
     cleanup: async (page) => {

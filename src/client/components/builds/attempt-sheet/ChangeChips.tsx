@@ -29,8 +29,8 @@ export function ChangeChips({
   const filament = first && [first.brand, first.type].filter(Boolean).join(" ");
   const spool = first?.spoolId ? spools.find((s) => s.id === first.spoolId) : undefined;
   const chips: Array<{ key: Key; label: string }> = [];
-  if (filament || spool)
-    chips.push({ key: "filament", label: spool ? (spoolName(spool).title ?? filament ?? "") : (filament ?? "") });
+  const filamentLabel = filament || (spool ? spoolName(spool).title : "");
+  if (filamentLabel) chips.push({ key: "filament", label: filamentLabel });
   if (settings.bedType) chips.push({ key: "bedType", label: plateName(settings.bedType) });
   if (settings.layerHeight !== undefined)
     chips.push({ key: "layerHeight", label: `${settings.layerHeight.toFixed(2)} mm` });
