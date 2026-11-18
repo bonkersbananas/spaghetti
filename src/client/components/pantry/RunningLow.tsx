@@ -88,7 +88,11 @@ export function RunningLow({
           return (
             <li
               key={spool.id}
-              className="after:bg-hairline relative list-none after:absolute after:inset-x-4 after:bottom-0 after:h-px last:after:hidden xl:nth-last-2:odd:after:hidden"
+              className={cn(
+                "after:bg-hairline relative list-none after:absolute after:inset-x-4 after:bottom-0 after:h-px last:after:hidden",
+                // In the two-across grid the left item of the bottom row has no line under it.
+                copy && "xl:nth-last-2:odd:after:hidden",
+              )}
             >
               <Link
                 to="/pantry/$spoolId"
