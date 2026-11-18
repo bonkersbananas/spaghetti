@@ -72,7 +72,7 @@ test("a Printables link that can't be read names the idea from the link, with no
   await page.getByRole("list", { name: "Ideas" }).getByRole("link").first().click();
   await expect(page.getByText("Named from the link.")).toBeVisible({ timeout: 20_000 });
   await expect(page.getByText("Printables keeps its pages closed to Claude.")).toBeVisible();
-  await expect(page.getByRole("textbox", { name: "Title" })).toHaveValue("Carrying handle for IKEA antilop");
+  await expect(page.getByRole("textbox", { name: "Title" })).toHaveValue("Carrying handle for IKEA Antilop");
   await expect(page.getByRole("button", { name: "Try again" })).toBeHidden();
 });
 

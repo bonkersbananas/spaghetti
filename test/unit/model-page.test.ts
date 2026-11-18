@@ -162,7 +162,7 @@ describe("printablesTitleFromLink", () => {
   const base = "https://www.printables.com/model/1577248-";
   it("spaces the slug's words, capitalises the first and keeps brand words as people write them", () => {
     expect(printablesTitleFromLink(`${base}carrying-handle-for-ikea-antilop-high-chair`)).toBe(
-      "Carrying handle for IKEA antilop high chair",
+      "Carrying handle for IKEA Antilop high chair",
     );
     expect(printablesTitleFromLink(`${base}usb-c-led-holder`)).toBe("USB c LED holder");
   });
@@ -173,6 +173,10 @@ describe("printablesTitleFromLink", () => {
     expect(printablesTitleFromLink("https://printables.com/model/12-spool-holder/files#preview.eSga8")).toBe(
       "Spool holder",
     );
+  });
+  it("capitalises the word after IKEA, as its product names are written", () => {
+    expect(printablesTitleFromLink(`${base}ikea-skadis-hook`)).toBe("IKEA Skadis hook");
+    expect(printablesTitleFromLink(`${base}hook-for-ikea-skadis`)).toBe("Hook for IKEA Skadis");
   });
   it("doesn't take a word for an object property", () => {
     expect(printablesTitleFromLink(`${base}constructor-kit`)).toBe("Constructor kit");

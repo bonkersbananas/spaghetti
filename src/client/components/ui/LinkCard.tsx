@@ -1,5 +1,6 @@
 import { shortUrl } from "@shared/links";
 import { type ModelMark, modelLetter, modelPlace } from "@shared/model-mark";
+import { printablesTitleFromLink } from "@shared/model-name";
 import { softSlashes } from "@shared/spools";
 import { useQuery } from "@tanstack/react-query";
 import { useRef } from "react";
@@ -51,7 +52,8 @@ export function LinkCard({
   const { data, isPending } = useQuery({ ...linkPreviewQuery(url), enabled: model?.kind !== "file" });
   // Only a title that arrives while the card is on screen fades in; one that was already known is just there.
   const waited = useRef(isPending);
-  const title = data?.title || (model?.kind === "file" ? fileName(url) : null);
+  // A Printables page the server can't read has no title of its own: the link says it (decision 0071).
+  const title = data?.title || (model?.kind === "file" ? fileName(url) : printablesTitleFromLink(url));
   const site = data?.site || hostOf(url);
   return (
     <a

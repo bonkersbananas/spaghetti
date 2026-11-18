@@ -524,7 +524,7 @@ describe("drafting an idea from a model page", () => {
       const { draft } = await (await draftIt(id)).json<DraftResponse>();
       expect(draft).toMatchObject({ status: "failed", failure: "closed", applied: ["title"] });
       expect(web.bodies).toHaveLength(0);
-      expect((await getItem(id)).title).toBe("Carrying handle for IKEA antilop high chair legs");
+      expect((await getItem(id)).title).toBe("Carrying handle for IKEA Antilop high chair legs");
       expect(await runs()).toMatchObject([
         { outcome: "closed", detail: { source: "worker_api", apiUnread: "http_429", unread: "http_403" } },
       ]);
@@ -563,7 +563,7 @@ describe("drafting an idea from a model page", () => {
         ).bind(id),
       ]);
       expect(await nameClosedPrintables(getDb(env.DB))).toBe(1);
-      expect((await getItem(id)).title).toBe("Carrying handle for IKEA antilop high chair legs");
+      expect((await getItem(id)).title).toBe("Carrying handle for IKEA Antilop high chair legs");
       expect(await nameClosedPrintables(getDb(env.DB))).toBe(0);
     });
   });

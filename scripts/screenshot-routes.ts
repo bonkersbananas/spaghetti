@@ -4965,7 +4965,7 @@ export const shots: Shot[] = [
         data: {},
       });
       await page.reload();
-      await page.getByText("Carrying handle for IKEA antilop high chair legs").first().waitFor();
+      await page.getByText("Carrying handle for IKEA Antilop high chair legs").first().waitFor();
       await page.waitForTimeout(300);
     },
   },

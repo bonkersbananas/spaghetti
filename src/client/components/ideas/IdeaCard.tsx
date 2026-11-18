@@ -1,5 +1,6 @@
 import type { AttemptFile, Person } from "@shared/api";
 import { findLinks, shortUrl } from "@shared/links";
+import { modelSite } from "@shared/model-links";
 import { cleanModelUrl, modelOf } from "@shared/model-mark";
 import { relativeTime } from "@shared/time";
 import { m } from "motion/react";
@@ -74,6 +75,9 @@ interface IdeaCardProps {
   ref?: Ref<HTMLLIElement>;
 }
 
+/** A note that is nothing but one MakerWorld, Printables or Thingiverse model address. */
+const isBareModelLink = (note: string) => /^https?:\/\/\S+$/.test(note.trim()) && !!modelSite(note.trim());
+
 export function IdeaCard({ item, person, via, landing, menu, headingLevel = 2, ref }: IdeaCardProps) {
   // Its cover by the one rule (lib/previews.ts coverOf): the first photo, else the newest plate picture, else the note.
   const cover = coverOf(item);
@@ -88,6 +92,9 @@ export function IdeaCard({ item, person, via, landing, menu, headingLevel = 2, r
     showing && showing !== item.photos[0]?.id && item.photos.some((photo) => photo.id === showing)
       ? showing
       : undefined;
+  // An idea whose note is only its model link and that has a name (the page's, or from the link): the card face
+  // says that name, as it does for a title-only idea, instead of the link's words with the title repeated below.
+  const namedLink = cover.kind === "note" && !!item.title?.trim() && isBareModelLink(item.note);
   return (
     <m.li {...useReflow(landing)} ref={ref} className="group/idea relative list-none">
       <div className="h-full rounded-lg">
@@ -101,7 +108,9 @@ export function IdeaCard({ item, person, via, landing, menu, headingLevel = 2, r
           headingLevel={headingLevel}
           reserveEnd={!!menu && !item.pending}
           photo={coverPhoto(cover, cover.kind === "plate" ? plateAlt(item) : photoAlt(item))}
-          title={item.title || (item.draft?.status === "reading" ? "Reading the page…" : item.title)}
+          title={
+            namedLink ? undefined : item.title || (item.draft?.status === "reading" ? "Reading the page…" : item.title)
+          }
           naming={
             // The server says while Claude names it (decision 0072); the sparkle and the timeout load only then.
             item.titleJob?.status === "naming" && (
@@ -111,7 +120,7 @@ export function IdeaCard({ item, person, via, landing, menu, headingLevel = 2, r
             )
           }
           // Links read better short on a card: printables.com/model/123.
-          note={item.note ? shortenLinks(item.note) : undefined}
+          note={namedLink ? (item.title ?? undefined) : item.note ? shortenLinks(item.note) : undefined}
           unread={unread}
           photos={
             item.photos.length > 1
