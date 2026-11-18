@@ -5,6 +5,7 @@ import { useRef, useState } from "react";
 import { cn } from "@/lib/cn";
 import { linkify } from "@/lib/linkify";
 import { linkPreviewQuery } from "@/lib/queries";
+import { useKeepEditing } from "@/lib/read-only";
 import { TextArea } from "./Field";
 
 interface NoteFieldProps {
@@ -45,11 +46,14 @@ export function NoteField({
   placeholder = "Add a note…",
   label = "Note",
   maxLength,
-  readOnly,
+  readOnly: readOnlyProp,
   model,
   modelCardBelow,
   className,
 }: NoteFieldProps) {
+  // Offline, a note that is being typed in stays editable (and waits to be saved); one that isn't is read-only.
+  const keep = useKeepEditing(!!readOnlyProp);
+  const readOnly = keep.readOnly;
   const [editing, setEditing] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const page = model?.kind === "page" ? model : null;
@@ -83,9 +87,13 @@ export function NoteField({
         value={value}
         onChange={(event) => onChange(event.target.value)}
         // An empty note shows its field, and typing the first letter must not swap it for the read view under the finger.
-        onFocus={() => setEditing(true)}
+        onFocus={() => {
+          setEditing(true);
+          keep.onFocus();
+        }}
         onBlur={() => {
           setEditing(false);
+          keep.onBlur();
           // A model page's link keeps only what names the model (?from=search and #profileId-… go) once typing is done.
           const tidy = tidyModelLinks(value);
           if (tidy !== value) onChange(tidy);

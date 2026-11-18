@@ -82,7 +82,7 @@ import { useBackTo } from "@/lib/origin";
 import { useScreenActions } from "@/lib/palette";
 import { coverOf } from "@/lib/previews";
 import { peopleQuery, sessionQuery } from "@/lib/queries";
-import { canEdit, useReadOnly } from "@/lib/read-only";
+import { canEdit, useKeepEditing, useReadOnly } from "@/lib/read-only";
 import { itemName, useRememberItem } from "@/lib/recent";
 import { canBeRecipe, type RecipeSourceAttempt, useRecipes } from "@/lib/recipes";
 import { useSlicerDropTarget } from "@/lib/slicer-drop";
@@ -192,6 +192,7 @@ function Build({ item }: { item: ItemView }) {
   }
 
   const { title, setTitle, note, setNote, forWhom, setForWhom, saveState } = useItemFields(item);
+  const titleKeep = useKeepEditing(readOnly);
 
   // Photos: the best one leads, then the build's own (from the idea, or added here).
   const hero = heroPhoto(item);
@@ -582,7 +583,9 @@ function Build({ item }: { item: ItemView }) {
                 maxLength={200}
                 // A new build from scratch: name it first (or don't).
                 autoFocus={isNew && isDesktop && !item.title}
-                readOnly={readOnly}
+                readOnly={titleKeep.readOnly}
+                onFocus={titleKeep.onFocus}
+                onBlur={titleKeep.onBlur}
                 value={title}
                 onChange={(event) => setTitle(event.target.value.replace(/\n/g, " "))}
                 onKeyDown={(event) => {

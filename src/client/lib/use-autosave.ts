@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { SaveState } from "@/components/ui/SaveStatus";
 import { ApiError } from "./api";
+import { isOnline, subscribeConnection } from "./connection";
 import { keepUnsent, unsent } from "./unsent";
 
 const RETRY_MS = [2000, 5000, 10_000, 30_000];
@@ -55,6 +56,12 @@ export function useAutosave<T>(
     let again = false;
     const run = (async () => {
       const sending = latest.current;
+      // No connection: it is kept on this device (see `remember`) and sent when the connection returns.
+      if (!isOnline()) {
+        if (mounted.current) setState("waiting");
+        timer.current = setTimeout(() => void flush.current(), RETRY_MS[RETRY_MS.length - 1]);
+        return;
+      }
       if (mounted.current) setState("saving");
       try {
         await saveRef.current(sending);
@@ -69,7 +76,7 @@ export function useAutosave<T>(
       } catch (error) {
         // A request the server answered with a refusal won't succeed by repeating it, and nobody is left to see it.
         if (!mounted.current && error instanceof ApiError && error.status < 500 && error.status !== 429) return;
-        if (mounted.current) setState("error");
+        if (mounted.current) setState(isOnline() ? "error" : "waiting");
         const wait = RETRY_MS[Math.min(attempt.current, RETRY_MS.length - 1)];
         attempt.current += 1;
         // Also after the screen is gone: what was typed there is only in this closure, so it keeps trying.
@@ -95,7 +102,15 @@ export function useAutosave<T>(
     mounted.current = true;
     const onHide = () => void flush.current();
     window.addEventListener("pagehide", onHide);
+    // Words that waited for the connection go the moment it is back.
+    const stop = subscribeConnection(() => {
+      if (isOnline()) {
+        attempt.current = 0;
+        void flush.current();
+      }
+    });
     return () => {
+      stop();
       mounted.current = false;
       window.removeEventListener("pagehide", onHide);
       void flush.current();

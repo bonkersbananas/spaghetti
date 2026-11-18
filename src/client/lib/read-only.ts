@@ -1,3 +1,4 @@
+import { useRef, useState } from "react";
 import { toast } from "@/components/ui/Toast";
 import { isOnline, useOnline } from "./connection";
 
@@ -20,3 +21,22 @@ export function canEdit(pending = false): boolean {
 }
 
 export const READ_ONLY_REASON = "Saved things can only be changed when you're back online.";
+
+/**
+ * A field that is being edited when the connection drops stays editable: the words keep coming and wait on this
+ * device (lib/use-autosave.ts, lib/unsent.ts) to be saved when the connection returns. Only a field that has the
+ * focus at that moment is kept (one the person had left, or never touched, is read-only as usual), and it goes back
+ * to following `readOnly` when it loses the focus. Spread `onFocus` and `onBlur` on the field (or call them from its
+ * own handlers) and use the `readOnly` it returns.
+ */
+export function useKeepEditing(readOnly: boolean) {
+  const [focused, setFocused] = useState(false);
+  const kept = useRef(false);
+  if (!readOnly) kept.current = focused;
+  else if (!focused) kept.current = false;
+  return {
+    readOnly: readOnly && !kept.current,
+    onFocus: () => setFocused(true),
+    onBlur: () => setFocused(false),
+  };
+}

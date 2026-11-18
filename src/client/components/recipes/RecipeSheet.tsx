@@ -10,7 +10,7 @@ import { ArrowRightIcon, TrashIcon } from "@/components/ui/icons";
 import { Photo } from "@/components/ui/Photo";
 import { Sheet } from "@/components/ui/Sheet";
 import { photoSrc } from "@/lib/previews";
-import { useReadOnly } from "@/lib/read-only";
+import { useKeepEditing, useReadOnly } from "@/lib/read-only";
 import { deleteRecipe, recipesQuery, updateRecipe } from "@/lib/recipes";
 import { useLiveFields } from "@/lib/use-autosave";
 import { useIsDesktop } from "@/lib/use-media-query";
@@ -47,6 +47,8 @@ function RecipeBody({ recipe, onClose }: { recipe: Recipe; onClose: () => void }
   const queryClient = useQueryClient();
   const isDesktop = useIsDesktop();
   const readOnly = useReadOnly();
+  const nameKeep = useKeepEditing(readOnly);
+  const noteKeep = useKeepEditing(readOnly);
   const { value, change, saveState } = useLiveFields(
     { name: recipe.name, note: recipe.note },
     async (changes) => {
@@ -67,12 +69,15 @@ function RecipeBody({ recipe, onClose }: { recipe: Recipe; onClose: () => void }
           className="aspect-4/3 max-h-64 w-full rounded-lg"
         />
       )}
-      <fieldset disabled={readOnly} className="contents">
+      <div className="contents">
         <TextField
           label="Name"
           value={value.name}
           maxLength={RECIPE_NAME_MAX}
           saveState={saveState}
+          readOnly={nameKeep.readOnly}
+          onFocus={nameKeep.onFocus}
+          onBlur={nameKeep.onBlur}
           enterKeyHint="done"
           onChange={(event) => change({ name: event.target.value })}
         />
@@ -81,10 +86,13 @@ function RecipeBody({ recipe, onClose }: { recipe: Recipe; onClose: () => void }
           minRows={2}
           maxLength={RECIPE_NOTE_MAX}
           placeholder="Dry it first, slow the outer wall…"
+          readOnly={noteKeep.readOnly}
+          onFocus={noteKeep.onFocus}
+          onBlur={noteKeep.onBlur}
           value={value.note}
           onChange={(event) => change({ note: event.target.value })}
         />
-      </fieldset>
+      </div>
       <section aria-label="Settings" className="bg-ink/4 flex flex-col gap-2 rounded-lg p-4">
         <SettingsLine
           filaments={recipe.settings.filaments ?? []}
