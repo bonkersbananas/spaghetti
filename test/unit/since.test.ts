@@ -44,6 +44,12 @@ describe("catchUp", () => {
     expect(result?.lines).toHaveLength(3);
   });
 
+  it("leaves out what is skipped and fills the cards with the others", () => {
+    const result = catchUp(entries, items, { me: "me", from: at(10), name: "Sam", lines: 2, skip: new Set(["d"]) });
+    expect(result?.lines.map((line) => line.itemId)).toEqual(["c", "a"]);
+    expect(result?.total).toBe(2);
+  });
+
   it("credits an attempt to whoever gave it its outcome, not whoever logged it", () => {
     const attempt = (id: string, createdBy: string, finishedBy: string | null) =>
       ({ id, outcome: "success", createdBy, finishedBy }) as never;
