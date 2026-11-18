@@ -95,20 +95,20 @@ export function AttemptFields(props: FieldsProps) {
   const withChips = !!base && !!props.changeChips && !props.readOnly;
   const settingsSummary: ReactNode = base ? (
     changes.length ? (
-      // With chips below, a long list (a whole file's worth) is cut to two and a count.
+      // With chips below, a long list (a whole file's worth) is cut to three and a count.
       `Changed from ${base.label}: ${
-        withChips && changes.length > 2
+        withChips && changes.length > 4
           ? `${changes
-              .slice(0, 2)
+              .slice(0, 3)
               .map((c) => c.text)
-              .join(", ")} and ${changes.length - 2} more`
+              .join(", ")} and ${changes.length - 3} more`
           : changes.map((c) => c.text).join(", ")
       }`
     ) : withChips ? (
       `Same as ${base.label}`
     ) : (
       // One line, cut with an ellipsis rather than wrapped: "0.20 mm" never sits alone on a second line.
-      <span className="block truncate">{[`As ${base.label}`, ...pieces.slice(0, 2)].join(" · ")}</span>
+      <span className="block truncate">{[`As ${base.label}`, ...pieces.slice(0, 3)].join(" · ")}</span>
     )
   ) : pieces.length ? (
     <MetaList>
