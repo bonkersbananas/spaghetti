@@ -7,14 +7,30 @@ import { useIsDesktop } from "@/lib/use-media-query";
 /**
  * An idea or build with no photos yet: one tap to give it its first ones. `small` under a plate picture that stands
  * in as the cover (row-sized wells, icon beside the words), so the picture leads.
+ *
+ * Without a picture the two places differ by device. On a keyboard the big well sits above the title, in the column
+ * that has the room. On a phone it would take the first screen from the title, so there it is `row`: one slim line of
+ * two pills (camera, library) that the page puts under the title and its chips, and the big well draws nothing.
  */
-export function AddFirstPhotos({ itemId, small, className }: { itemId: string; small?: boolean; className?: string }) {
+export function AddFirstPhotos({
+  itemId,
+  small,
+  row,
+  className,
+}: {
+  itemId: string;
+  small?: boolean;
+  /** The phone's slim line under the title: nothing on a keyboard, where the big well above the title is. */
+  row?: boolean;
+  className?: string;
+}) {
   const isDesktop = useIsDesktop();
   const camera = useFilePicker({ camera: true, onFiles: (files) => addPhotosToItem(itemId, files) });
   const library = useFilePicker({ multiple: true, onFiles: (files) => addPhotosToItem(itemId, files) });
-  const size = small ? "row" : "lg";
+  if (!small && (row ? isDesktop : !isDesktop)) return null;
+  const size = small ? "row" : row ? "compact" : "lg";
   return (
-    <div className={cn("grid grid-cols-2 gap-3 md:grid-cols-1", !small && "mb-4", className)}>
+    <div className={cn("grid grid-cols-2 gap-3 md:grid-cols-1", !small && !row && "mb-4", className)}>
       {camera.input}
       {library.input}
       {!isDesktop && <AddPhotoTile size={size} icon={CameraIcon} label="Take photo" onClick={camera.open} />}

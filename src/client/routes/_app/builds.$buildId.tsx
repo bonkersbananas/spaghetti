@@ -612,6 +612,8 @@ function Build({ item }: { item: ItemView }) {
                   </Button>
                 )}
               </BuildTitleLine>
+              {/* No photo and no plate picture: on a phone one slim line here, not two tiles above the title. */}
+              {gallery.length === 0 && !plate && <AddFirstPhotos itemId={item.id} row />}
               <NoteField
                 value={note}
                 onChange={setNote}

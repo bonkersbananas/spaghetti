@@ -10,9 +10,10 @@ interface AddPhotoTileProps extends Omit<ComponentPropsWithRef<"button">, "child
   label: string;
   /**
    * "lg" is the big empty-state tile; "md" and "sm" end a row of photos (sm shows only the icon);
-   * "row" is a full-width strip with the icon beside the label; "card" fills a 4:5 grid cell.
+   * "row" is a full-width strip with the icon beside the label; "card" fills a 4:5 grid cell; "compact" is a slim
+   * 44 px pill, icon beside the label, for two side by side in a line of their own (an idea with no photos on a phone).
    */
-  size?: "lg" | "md" | "sm" | "row" | "card";
+  size?: "lg" | "md" | "sm" | "row" | "card" | "compact";
 }
 
 /** A well to tap (or drop on) to add photos. */
@@ -30,6 +31,7 @@ export const AddPhotoTile = forwardRef<HTMLButtonElement, AddPhotoTileProps>(fun
         size === "md" && "text-caption size-24 gap-1 rounded-md font-semibold",
         size === "sm" && "size-16 rounded-md",
         size === "row" && "h-16 w-full flex-row gap-2",
+        size === "compact" && "h-11 w-full flex-row gap-2 rounded-md",
         size === "card" && "aspect-4/5 w-full gap-2",
         className,
       )}
@@ -37,11 +39,14 @@ export const AddPhotoTile = forwardRef<HTMLButtonElement, AddPhotoTileProps>(fun
       title={size === "sm" ? label : undefined}
       {...props}
     >
-      <IconComponent size={size === "lg" || size === "card" ? 28 : size === "row" ? 20 : 22} aria-hidden />
+      <IconComponent
+        size={size === "lg" || size === "card" ? 28 : size === "row" || size === "compact" ? 20 : 22}
+        aria-hidden
+      />
       {size !== "sm" && (
         <span
           className={cn(
-            size === "lg" || size === "row" || size === "card"
+            size === "lg" || size === "row" || size === "card" || size === "compact"
               ? "text-small font-semibold"
               : "px-1 text-center leading-tight",
           )}

@@ -326,6 +326,7 @@ Desktop only. Phones have no palette and no shortcut list; their layouts are unt
 - **Started ideas stay.** "Start building" doesn't take an idea out of Ideas: a build that began as an idea (captured, then started) sits in a quiet "Started" section after the unstarted ideas and "The rest" (rows with a small photo, the stage in words, newest start first, six at most then "See all in Builds"); a tap opens the build. Unstarted ideas always come first. The toast after Start building says so.
 - **Recently deleted** (`/deleted`, its page title just "Deleted"): ideas, builds and attempts deleted in the last 30 days, each row with a Restore button and the days left ("goes for good in 12 days"). Reached from the account menu and a quiet link at the foot of Ideas and Builds. Calm and plain, no empty-state fuss; an empty idea or build deleted untouched isn't listed.
 - **Delight**, in small doses: the first idea ever gets a "First one in the pot" toast, once per device; new cards land with a quick spring.
+- **No photo yet, on a phone** is one slim line, not two tiles: "Take photo" and "From library" as two 44 px pills (`AddPhotoTile size="compact"`, `AddFirstPhotos row`) right under the title and its chips, so the title leads the first screen and a photo is still one tap away. On a keyboard the big well above the title stays (the column has the room). Under a plate picture the row-sized wells are as before.
 
 ## Talking it over (comments)
 

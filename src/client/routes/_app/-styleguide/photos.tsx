@@ -61,6 +61,11 @@ export function PhotoSection() {
             <AddPhotoTile icon={Icons.CameraIcon} label="Take photo" />
             <AddPhotoTile icon={Icons.ImageIcon} label="From library" />
           </div>
+          <Label>Compact: no photos yet, on a phone, under the title</Label>
+          <div className="grid grid-cols-2 gap-3">
+            <AddPhotoTile size="compact" icon={Icons.CameraIcon} label="Take photo" />
+            <AddPhotoTile size="compact" icon={Icons.ImageIcon} label="From library" />
+          </div>
         </Panel>
       </div>
     </Section>

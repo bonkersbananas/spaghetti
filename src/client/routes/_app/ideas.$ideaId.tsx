@@ -386,7 +386,12 @@ const Idea = memo(function Idea({ item }: { item: ItemView }) {
 
           <div className="max-w-content flex min-w-0 flex-col gap-3 md:flex-3 md:pt-2 lg:flex-5">
             {/* While Claude reads the page, the empty photo area and title hold their place with the quiet shimmer. */}
-            {!hero && (reading ? <Skeleton className="mb-4 h-28 rounded-xl" /> : <AddFirstPhotos itemId={item.id} />)}
+            {!hero &&
+              (reading ? (
+                <Skeleton className="mb-4 h-28 rounded-xl max-md:hidden" />
+              ) : (
+                <AddFirstPhotos itemId={item.id} />
+              ))}
             {reading && !title.trim() ? (
               <Skeleton className="my-1.5 h-8 w-3/4" />
             ) : (
@@ -417,6 +422,8 @@ const Idea = memo(function Idea({ item }: { item: ItemView }) {
               <ClaudeLine className={cn("-mt-2 md:-mt-1.5", untitled && "sg-arrive")}>Named by Claude</ClaudeLine>
             )}
             <IdeaTitleChips item={item} forWhom={forWhom} setForWhom={setForWhom} readOnly={readOnly} />
+            {/* No photo and no plate picture: on a phone one slim line, here under the title instead of two tiles above it. */}
+            {!hero && !reading && <AddFirstPhotos itemId={item.id} row />}
             <input
               ref={filePicker}
               type="file"
