@@ -35,17 +35,17 @@ import { SEED_PASSWORD, SEED_USERS } from "../scripts/lib/local-app.ts";
  * build cards no longer load IdeaCard: that took 3.1 kB off Today and 5.3 kB off Builds.
  * 2026-11-17: /ideas +2: mirror links (3dgo.app) read as their source model (shared/mirrors.ts, in modelSite and the model mark
  * every card and the idea's note use), a note that is only a link shows it once as its card, and a shared title loses its site's name.
- * 2026-11-18: /ideas, /journal and /pantry +1: the quiet unread dot on the Journal tab and Today's sidebar item (UnreadDot and the
- * unread-comments query, about 0.7 kB gzip), drawn by the shell on every screen; main's /journal was already 0.6 over its ceiling.
+ * 2026-11-18: /ideas, /journal and /pantry +2: the quiet unread dot on the Journal tab and Today's sidebar item (UnreadDot and the
+ * unread-comments query, about 1.1 kB gzip), drawn by the shell on every screen; main's /journal was already 0.6 over its ceiling.
  */
 const CEILING_KB = {
   "/sign-in": 185,
   "/today": 295,
-  "/ideas": 263,
+  "/ideas": 264,
   "/builds": 267,
-  "/journal": 280,
+  "/journal": 281,
   "/search": 275,
-  "/pantry": 259,
+  "/pantry": 260,
   "/printer": 259,
 } as const;
 
