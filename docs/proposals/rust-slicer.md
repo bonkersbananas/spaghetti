@@ -1143,6 +1143,24 @@ What it costs, interleaved in the same sandbox in one hour (medians): natively o
 
 The app reads the arcs as it reads Orca's: its G-code reader (`src/shared/gcode/parse.ts`) draws `G2` and `G3` as curves round their centres in the 3D view (tested with lines as ours writes them), the layer times come from the progress lines as before, and Bambu Studio's G-code processor reads `G2`/`G3` as Orca's does (it writes them itself with arc fitting on). For the printer: the first watched print, the 20 mm cube, has no curves and so no arcs; its file is the same as before but for nine sparse infill moves a few micrometres off (the finer wall outlines), with the same plastic and estimate, and its control lines line for line (`bench/preflight.py`: the same bounds, flow, speeds, Z and temperatures, and the same differences from Orca's, the timelapse photo's form only). The X2D's own tool-change G-code moves in arcs (`G2 Z… I0.86 J0.86 P1`) and the app's default slicer, Orca's engine with the same presets, already sends it extrusion arcs; an extrusion arc on the X2D itself is still to be watched on a print with curves.
 
+### Differences not to chase as port bugs (Nov 15-18)
+
+Gaps traced to the end and left, so the next comparison doesn't start over:
+
+- The 12-Benchy plate's first-layer object order (Orca prints benchy-11 before 8).
+- The Benchy stern's overhang slivers at 9 mm (borderline outlines; 346 against 335 layers with classic trees).
+- Paint-segmentation corner ties decided by an outline's last micron, and fill joins that tie on evenly spaced grids (Orca's unstable sort in nm against our 0.1 µm).
+- Lightning trees differ ±25 % per model: judge the whole print's filament, which is within 1 %.
+- Random seams can't match in position (Orca's seed is a `sinf` of a float dot product of the first candidate in object coordinates, ours are on a 0.1 µm grid): judge them by distribution and totals.
+- The glasses' missing gap fill (−4.4 %): the Voronoi junction is equidistant from three outline corners, our 0.1 µm grid (Orca's 1 nm) tips it the other way, and the branch falls under 2 × the maximum width by about 0.02 mm. Not fixable without nm coordinates.
+- Seam visibility can't be sampled more coarsely without moving seams off Orca's (9 rays instead of 25: 78 % to 49 % within 0.5 mm).
+
+### Orca 2.5 quirks a port reproduces
+
+In Orca's support code (`SupportMaterial.cpp`, `TreeSupport3D.cpp`): Clipper2's wrapper raises every `jtMiter` limit to at least 2; trees read `min_feature_size` 25% as 25 mm (added to the safe movement distance); organic growth merges influence areas on every layer (`max_merge_every_x_layers` comes out 0); `increase_single_area`'s 0.025 mm simplify is thrown away; `create_nodes_from_area` processes elements already marked deleted; tree tips sample `FillSupportBase` grids aligned to each expolygon's own bbox centre while rotation stays about the object origin. Normal supports: `support_remove_small_overhang` leaves an empty polygon that keeps an empty top-contact layer in the z schedule, and with `independent_support_layer_height` the support between contacts gets `ceil((gap - 1e-4)/0.28)` equal layers.
+
+In its G-code: a loop that isn't a wall (brim, skirt) splits nearest `last_pos`, which at the first extrusion is (0,0); the tool-change route round the tower starts from x 0; the cooling pass strips an F equal to the current feedrate from every `G0`-`G3` line, custom G-code included; the estimator runs the change template's `;VG1 E4 F523` as virtual moves (about 1.4 s each, missing from per-layer stats: compare totals); flush volumes are f32 two ways (tower and grouping); on the X2D retraction state is per nozzle; and Orca 2.5.1's AppImage lost libnoise's final `& 0x7fffffff` in `IntValueNoise3D`, so its `ValueNoise` (fuzzy skin) ranges −1..3, which `noise.rs` reproduces.
+
 ## 4. The printer's G-code, against Orca's
 
 A bad start can drive the nozzle into the bed, so everything around the toolpaths is held to native OrcaSlicer's file for the same models in the same place. [`bench/headtail.py`](../../slicer-rs/bench/headtail.py) diffs the head of the two files (from the top to the first printed line: header, settings, the machine limits, the printer's start G-code, the first layer change and the travel down to the first path) and their tail (from the last printed line to the end: the last retraction and lift, the last timelapse photo, the end G-code and the totals), line by line. For the four benchmark models, besides the header's six lines that name the slicer, its estimate and the labels, of Orca's 452 to 529 head lines 7 to 10 differ, and of its 149 to 153 tail lines 6 to 16. Every difference is one of these:
