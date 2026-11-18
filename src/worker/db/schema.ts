@@ -1276,6 +1276,8 @@ export const shoppingItems = sqliteTable("shopping_items", {
     .references(() => users.id),
   /** The agent that added it, if one did. */
   createdVia: text("created_via"),
+  /** The spool this bought thing became in the pantry ("Add to pantry" on its row), so the row says so for both people. */
+  spoolId: text("spool_id").references(() => spools.id, { onDelete: "set null" }),
   createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
   updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull(),
   deletedAt: integer("deleted_at", { mode: "timestamp_ms" }),

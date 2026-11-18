@@ -39,6 +39,7 @@ const serverOwn = (saved: ShoppingItem) => ({
   pricesTriedAt: saved.pricesTriedAt,
   suggestion: saved.suggestion,
   suggestState: saved.suggestState,
+  spoolId: saved.spoolId,
 });
 
 /**
@@ -82,6 +83,7 @@ export async function addToShopping(queryClient: QueryClient, text: string, user
     position: topPosition(before),
     boughtAt: null,
     boughtBy: null,
+    spoolId: null,
     createdBy: userId,
     createdVia: null,
     createdAt: now,
@@ -336,3 +338,25 @@ export async function dismissSuggestion(queryClient: QueryClient, id: string) {
 }
 
 export const usePriceSuggestionsEnabled = () => useQuery(featuresQuery).data?.priceSuggestions === true;
+
+/** A bought thing became this spool ("Add to pantry"): the row says so, for both people. */
+export async function keepInPantry(
+  queryClient: QueryClient,
+  item: ShoppingItem,
+  spoolId: string,
+  saved?: Promise<boolean>,
+) {
+  patchOne(queryClient, item.id, (current) => ({ ...current, spoolId }));
+  try {
+    // The spool is on the server first, or the link would be refused.
+    if (saved && !(await saved)) throw new Error("The spool wasn't saved.");
+    const { shoppingItem } = await api<ShoppingItemResponse>(`/shopping-items/${item.id}`, {
+      method: "PATCH",
+      json: { spoolId },
+    });
+    keepServer(queryClient, shoppingItem);
+  } catch {
+    // The spool is in the pantry either way: only the mark on the row didn't take.
+    patchOne(queryClient, item.id, (current) => ({ ...current, spoolId: item.spoolId }));
+  }
+}

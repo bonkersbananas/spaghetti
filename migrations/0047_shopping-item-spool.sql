@@ -1,0 +1,1 @@
+ALTER TABLE `shopping_items` ADD `spool_id` text REFERENCES spools(id) ON DELETE set null;

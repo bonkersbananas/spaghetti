@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, isNotNull, isNull, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNotNull, isNull, sql } from "drizzle-orm";
 import type { BatchItem } from "drizzle-orm/batch";
 import { Hono } from "hono";
 import { z } from "zod";
@@ -12,7 +12,7 @@ import {
 } from "../../shared/shopping.ts";
 import { recordChange } from "../changes.ts";
 import type { Db } from "../db/index.ts";
-import { type ShoppingItemRow, shoppingItems } from "../db/schema.ts";
+import { type ShoppingItemRow, shoppingItems, spools } from "../db/schema.ts";
 import type { AppEnv } from "../env.ts";
 import { apiError } from "../http.ts";
 import { lookupShopping, shoppingPictureKey } from "../shopping/lookup.ts";
@@ -37,6 +37,8 @@ const updateShoppingItem = z.object({
   priceLink: linkChange.optional(),
   /** Ticked off (now, by whoever asks) or back on the list. */
   bought: z.boolean().optional(),
+  /** The spool it became in the pantry, or null to forget it. */
+  spoolId: z.union([z.uuid(), z.null()]).optional(),
 });
 const shoppingOrder = z.object({ ids: z.array(z.uuid()).max(SHOPPING_ITEMS_MAX) });
 
@@ -50,7 +52,7 @@ const suggestStateOf = (row: ShoppingItemRow): ShoppingItem["suggestState"] => {
   return row.suggestion ? "found" : "none";
 };
 
-function toApi(row: ShoppingItemRow): ShoppingItem {
+function toApi(row: ShoppingItemRow, liveSpools: ReadonlySet<string>): ShoppingItem {
   const picture =
     row.pictureSource && row.pictureAt
       ? { url: `/api/shopping-items/${row.id}/picture?v=${row.pictureAt.getTime()}`, source: row.pictureSource }
@@ -68,11 +70,24 @@ function toApi(row: ShoppingItemRow): ShoppingItem {
     position: row.position,
     boughtAt: row.boughtAt?.getTime() ?? null,
     boughtBy: row.boughtBy,
+    // A spool put in the bin no longer counts: the row offers the pantry again (its undo brings the link back).
+    spoolId: row.spoolId && liveSpools.has(row.spoolId) ? row.spoolId : null,
     createdBy: row.createdBy,
     createdVia: row.createdVia,
     createdAt: row.createdAt.getTime(),
     updatedAt: row.updatedAt.getTime(),
   };
+}
+
+/** Which of these rows' spools are still in the pantry. */
+async function liveSpoolsOf(db: Db, rows: ShoppingItemRow[]): Promise<Set<string>> {
+  const ids = [...new Set(rows.flatMap((row) => (row.spoolId ? [row.spoolId] : [])))];
+  if (!ids.length) return new Set();
+  const live = await db
+    .select({ id: spools.id })
+    .from(spools)
+    .where(and(inArray(spools.id, ids), isNull(spools.deletedAt)));
+  return new Set(live.map((spool) => spool.id));
 }
 
 /** The whole list: what's still to buy in its order, then what was bought, the latest first. */
@@ -82,7 +97,8 @@ async function liveList(db: Db): Promise<ShoppingItem[]> {
     .from(shoppingItems)
     .where(isNull(shoppingItems.deletedAt))
     .orderBy(asc(shoppingItems.position), desc(shoppingItems.createdAt));
-  const { toBuy, bought } = splitShopping(rows.map(toApi));
+  const live = await liveSpoolsOf(db, rows);
+  const { toBuy, bought } = splitShopping(rows.map((row) => toApi(row, live)));
   return [...toBuy, ...bought];
 }
 
@@ -92,7 +108,7 @@ async function loadOne(db: Db, id: string): Promise<ShoppingItem | null> {
     .from(shoppingItems)
     .where(and(eq(shoppingItems.id, id), isNull(shoppingItems.deletedAt)))
     .get();
-  return row ? toApi(row) : null;
+  return row ? toApi(row, await liveSpoolsOf(db, [row])) : null;
 }
 
 /** /api/shopping-items: things to buy for the printer, shared by both people. */
@@ -109,7 +125,7 @@ export const shoppingItemsRoutes = new Hono<AppEnv>()
     const existing = await db.select().from(shoppingItems).where(eq(shoppingItems.id, body.id)).get();
     if (existing) {
       if (existing.deletedAt) return apiError(c, 409, "deleted", "That was taken off the list.");
-      return c.json<ShoppingItemResponse>({ shoppingItem: toApi(existing) }, 201);
+      return c.json<ShoppingItemResponse>({ shoppingItem: toApi(existing, await liveSpoolsOf(db, [existing])) }, 201);
     }
     const [{ count } = { count: 0 }] = await db
       .select({ count: sql<number>`count(*)` })
@@ -188,6 +204,14 @@ export const shoppingItemsRoutes = new Hono<AppEnv>()
     const { bought, ...fields } = parsed.data;
     const itemId = c.req.param("id");
     const db = c.var.db;
+    if (fields.spoolId) {
+      const spool = await db
+        .select({ id: spools.id })
+        .from(spools)
+        .where(and(eq(spools.id, fields.spoolId), isNull(spools.deletedAt)))
+        .get();
+      if (!spool) return apiError(c, 400, "invalid", "That spool isn't in the pantry.");
+    }
     const now = new Date();
     const [[row]] = await db.batch([
       db

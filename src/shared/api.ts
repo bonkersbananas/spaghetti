@@ -991,6 +991,8 @@ export interface ShoppingItem {
   /** When it was ticked off, epoch ms; null while it's still to buy. */
   boughtAt: number | null;
   boughtBy: string | null;
+  /** The pantry spool it became ("Add to pantry"); null when none, or once that spool is deleted. */
+  spoolId: string | null;
   createdBy: string;
   /** The agent that added it, if one did. */
   createdVia: string | null;
