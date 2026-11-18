@@ -358,6 +358,16 @@ test("a filament bought on the shopping list goes to the pantry in one tap, with
   // Once added, the row says so and doesn't offer it again.
   await expect(filament.getByRole("button", { name: "Add to pantry" })).toHaveCount(0);
   await expect(filament.getByRole("link", { name: "In the pantry" })).toBeVisible();
+  // The mark is the list's own (the other person sees it too): it survives a reload and a cleared device.
+  await page.evaluate(() => localStorage.clear());
+  await page.reload();
+  await expect(
+    page
+      .getByRole("list", { name: "Bought" })
+      .getByRole("listitem")
+      .filter({ hasText: "Jade White" })
+      .getByRole("link", { name: "In the pantry" }),
+  ).toBeVisible();
   await expect
     .poll(async () =>
       (await (await page.request.get("/api/spools")).json()).spools.map(

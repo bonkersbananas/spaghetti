@@ -85,7 +85,8 @@ export function refresh(queryClient: QueryClient, changes: Change[]) {
       case "spool":
       case "slot":
       case "printer":
-        roots.add("spools").add("printer").add("upkeep");
+        // A bought thing's "In the pantry" follows its spool: gone with it, back with its undo.
+        roots.add("spools").add("printer").add("upkeep").add("shopping");
         break;
       case "comment":
         roots.add("comments").add("week");

@@ -350,11 +350,6 @@ function Setup({ initial }: { initial: PrinterSetup }) {
           <AddSpoolSheet
             open={adding !== null}
             onOpenChange={(open) => !open && setAdding(null)}
-            description={
-              adding
-                ? `It goes straight into ${adding === "Ext" ? "the external holder" : `slot ${adding}`}.`
-                : undefined
-            }
             stayPut
             slot={adding}
             onAdded={(spool, saved) => {

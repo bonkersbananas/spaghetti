@@ -273,11 +273,6 @@ function Pantry() {
           <AddSpoolSheet
             open={adding.open}
             onOpenChange={(open) => setAdding((current) => ({ ...current, open }))}
-            description={
-              adding.slot
-                ? `It goes straight into ${adding.slot === "Ext" ? "the external holder" : `slot ${adding.slot}`}.`
-                : undefined
-            }
             stayPut={!!adding.slot}
             slot={adding.slot}
             onAdded={(spool, saved) => {

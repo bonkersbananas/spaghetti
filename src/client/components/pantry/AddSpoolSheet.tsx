@@ -21,6 +21,7 @@ import { CameraIcon, CheckIcon, ImageIcon, PlusIcon, SparkleIcon } from "@/compo
 import { AddPhotoTile, PhotoThumb, useFilePicker } from "@/components/ui/PhotoTiles";
 import { Sheet } from "@/components/ui/Sheet";
 import { SpoolColourField, withColourCount } from "@/components/ui/SpoolColourField";
+import { SpoolDisc } from "@/components/ui/SpoolDisc";
 import { cn } from "@/lib/cn";
 import { useLabelReadsEnabled } from "@/lib/label-read";
 import { addSpool, type SpoolDraft } from "@/lib/pantry";
@@ -243,7 +244,9 @@ export function AddSpoolSheet({
                 key={product.id}
                 selected={litProduct?.id === product.id}
                 onClick={() => pickProduct(product.id)}
+                lead={!!product.colour}
               >
+                {product.colour && <SpoolDisc color={product.colour.hex} size="sm" />}
                 {productName(product)}
               </ToggleChip>
             ))}

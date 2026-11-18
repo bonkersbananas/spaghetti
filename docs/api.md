@@ -85,7 +85,7 @@ A recipe is the named settings of an attempt that worked (decision [0017](decisi
 
 ## The shopping list
 
-Things to buy for the printer, shared by both people. A thing is `{ id, name, link, priceLink, picture, prices, pricesTriedAt, position, boughtAt, boughtBy, createdBy, createdVia, createdAt, updatedAt }`: `link` is the shop's page, `priceLink` its Prisjakt page, `name` may be empty when there is a link (the app shows the page's title), `boughtAt` is null while it is still to buy.
+Things to buy for the printer, shared by both people. A thing is `{ id, name, link, priceLink, picture, prices, pricesTriedAt, position, boughtAt, boughtBy, spoolId, createdBy, createdVia, createdAt, updatedAt }`: `link` is the shop's page, `priceLink` its Prisjakt page, `name` may be empty when there is a link (the app shows the page's title), `boughtAt` is null while it is still to buy.
 
 - `GET /shopping-items` (`read`): `{ shoppingItems }`, what's still to buy in its order (`position`, smallest first), then what was bought, the latest first.
 - `POST /shopping-items` `{ id, name?, link?, priceLink? }` (`printer`): needs a name or a link; links must be http(s). It goes on top of the list. Idempotent on `id`; `409 deleted` for an id taken off the list, `422 too_many` past 300 things.

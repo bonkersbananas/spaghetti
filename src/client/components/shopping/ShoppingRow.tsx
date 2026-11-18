@@ -2,10 +2,11 @@ import type { Person, ShoppingItem } from "@shared/api";
 import { priceSearchUrl, shoppingName, tidyPageTitle } from "@shared/shopping";
 import { filamentFromName } from "@shared/shopping-filament";
 import { inlineTime } from "@shared/time";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { lazy, type ReactNode, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { Avatar } from "@/components/ui/Avatar";
+import { Button } from "@/components/ui/Button";
 import { ChecklistRow, TickBox } from "@/components/ui/Checklist";
 import { Chip } from "@/components/ui/Chip";
 import { PantryIcon, PriceIcon } from "@/components/ui/icons";
@@ -16,7 +17,7 @@ import { cn } from "@/lib/cn";
 import { spoolsQuery } from "@/lib/pantry-queries";
 import { linkPreviewQuery } from "@/lib/queries";
 import { canEdit } from "@/lib/read-only";
-import { keepInPantry, useInPantry } from "@/lib/shopping-pantry";
+import { keepInPantry } from "@/lib/shopping";
 
 // Its code loads with the first tap on "Add to pantry", not with the list.
 const AddSpoolSheet = lazy(() =>
@@ -66,10 +67,11 @@ export function ShoppingRow({ item, boughtBy, onTick, onOpen, readOnly, handle, 
   const bought = item.boughtAt !== null;
   // A bought spool of filament offers the pantry: the sheet opens with what its name says.
   const filament = useMemo(() => (bought ? filamentFromName(name) : null), [bought, name]);
-  const keptSpool = useInPantry(item.id);
-  // A spool taken out of the pantry since: the row offers it again.
-  const { data: spools } = useQuery({ ...spoolsQuery, enabled: !!keptSpool });
-  const inPantry = keptSpool && (!spools || spools.some((spool) => spool.id === keptSpool)) ? keptSpool : undefined;
+  const queryClient = useQueryClient();
+  // The spool it became, for both people (the server drops it once the spool is gone; here it goes at once).
+  const { data: spools } = useQuery({ ...spoolsQuery, enabled: !!item.spoolId });
+  const inPantry =
+    item.spoolId && (!spools || spools.some((spool) => spool.id === item.spoolId)) ? item.spoolId : undefined;
   const [adding, setAdding] = useState(false);
   // A tick shows at once and the row stays a beat, so the check is seen landing before it moves to Bought.
   const [ticking, setTicking] = useState(false);
@@ -167,14 +169,15 @@ export function ShoppingRow({ item, boughtBy, onTick, onOpen, readOnly, handle, 
                 </Link>
               ) : (
                 !readOnly && (
-                  <button
-                    type="button"
+                  <Button
+                    variant="quiet"
+                    size="sm"
+                    icon={PantryIcon}
                     onClick={() => canEdit() && setAdding(true)}
-                    className="pressable focus-ring touch-target text-ink-soft hover:text-ink relative inline-flex items-center gap-1 rounded-xs font-semibold"
+                    className="touch-target relative -ml-2.5"
                   >
-                    <PantryIcon size={14} aria-hidden />
                     Add to pantry
-                  </button>
+                  </Button>
                 )
               ))}
           </span>
@@ -209,7 +212,7 @@ export function ShoppingRow({ item, boughtBy, onTick, onOpen, readOnly, handle, 
             }}
             description={`From the list: ${name}.`}
             stayPut
-            onAdded={(spool) => keepInPantry(item.id, spool.id)}
+            onAdded={(spool, saved) => void keepInPantry(queryClient, item, spool.id, saved)}
           />
         </Suspense>
       )}

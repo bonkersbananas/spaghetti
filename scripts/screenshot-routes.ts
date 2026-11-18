@@ -1710,6 +1710,42 @@ async function restoreDeskTidy(page: Page) {
   });
 }
 
+const BEFORE_MAIN = !!process.env.SG_BEFORE;
+
+/** Three filaments and a nozzle bought a minute ago, and the list scrolled to Bought. */
+async function boughtThings(page: Page) {
+  const headers = { Origin: new URL(page.url()).origin };
+  for (const name of ["PLA Basic, Jade White", "PETG HF, Black", "PLA Matte, Charcoal", "0.2 mm hardened nozzle"]) {
+    const id = crypto.randomUUID();
+    await page.request.post("/api/shopping-items", { headers, data: { id, name } });
+    await page.request.patch(`/api/shopping-items/${id}`, { headers, data: { bought: true } });
+  }
+  await page.reload();
+  await page.getByText("0.2 mm hardened nozzle").waitFor();
+  await page.getByRole("heading", { name: "Bought" }).evaluate((heading) => heading.scrollIntoView({ block: "start" }));
+  await page.waitForTimeout(600);
+}
+
+/** The AMS with only these slots empty (as on the first day), a spool added to one of them from its sheet. */
+async function addToSlot(page: Page, empty: string[], slot: string, options: { offer?: boolean } = {}) {
+  const headers = { Origin: new URL(page.url()).origin };
+  // The seed's AMS is full: only these slots are emptied.
+  for (const key of empty) await page.request.put(`/api/printer/slots/${key}`, { headers, data: { spoolId: null } });
+  await page.reload();
+  await page.getByRole("button", { name: new RegExp(`^${slot} Empty`) }).click();
+  await page
+    .getByRole("dialog", { name: /^Slot / })
+    .getByRole("button", { name: "New spool" })
+    .click();
+  const sheet = page.getByRole("dialog", { name: "New spool" });
+  if (BEFORE_MAIN) await sheet.getByRole("radio", { name: "Jade white" }).click();
+  else await sheet.getByRole("button", { name: /Jade white$/ }).click();
+  await sheet.getByRole("button", { name: /^Add to / }).click();
+  await sheet.waitFor({ state: "hidden" });
+  if (options.offer !== false && !BEFORE_MAIN) await page.getByRole("button", { name: /^Next slot, / }).waitFor();
+  await page.waitForTimeout(600);
+}
+
 export const shots: Shot[] = [
   { name: "sign-in", path: "/sign-in", signedOut: true },
   { name: "link-code", path: "/link", signedOut: true, beforeShot: settle },
@@ -6452,41 +6488,75 @@ export const shots: Shot[] = [
     },
   },
   {
-    // A spool of filament just bought: the row offers the pantry, a nozzle bought beside it offers nothing.
+    // Filament bought, three at once and a nozzle: the filament rows offer the pantry, the nozzle nothing.
     name: "shopping-bought-filament",
     path: "/shopping",
     prepare: async (page) => {
-      const headers = { Origin: new URL(page.url()).origin };
-      for (const name of ["PLA Basic, Jade White", "0.2 mm hardened nozzle"]) {
-        const id = crypto.randomUUID();
-        await page.request.post("/api/shopping-items", { headers, data: { id, name } });
-        await page.request.patch(`/api/shopping-items/${id}`, { headers, data: { bought: true } });
-      }
-      await page.reload();
-      await page.getByText("0.2 mm hardened nozzle").scrollIntoViewIfNeeded();
-      await page.waitForTimeout(600);
+      await boughtThings(page);
     },
   },
   {
-    // Adding a spool from an empty AMS slot: the button names the slot, the product chips carry a colour.
-    name: "spool-add-to-slot",
-    path: "/pantry",
+    // The first of them added: its row says "In the pantry" (for both people), the others still offer it.
+    name: "shopping-in-pantry",
+    path: "/shopping",
     prepare: async (page) => {
-      // The seed's AMS is full: empty a slot, as on the day a new printer's AMS is being filled.
-      const headers = { Origin: new URL(page.url()).origin };
-      await page.request.put("/api/printer/slots/A1", { headers, data: { spoolId: null } });
-      await page.reload();
-      await page.getByRole("button", { name: /^A1 Empty/ }).click();
-      await page
-        .getByRole("dialog", { name: /^Slot / })
-        .getByRole("button", { name: "New spool" })
-        .click();
+      await boughtThings(page);
+      const row = page.getByRole("listitem").filter({ hasText: "Jade White" });
+      await row.getByRole("button", { name: "Add to pantry" }).click();
       const sheet = page.getByRole("dialog", { name: "New spool" });
-      await sheet.getByRole("button", { name: /Jade white$/ }).click();
-      await page.waitForTimeout(400);
+      await sheet.getByRole("button", { name: "Add to pantry" }).click();
+      await sheet.waitFor({ state: "hidden" });
+      await row.getByRole("link", { name: "In the pantry" }).waitFor();
+      await page.waitForTimeout(500);
+    },
+  },
+  {
+    // The sheet "Add to pantry" opens: material, finish and colour already filled from the name.
+    name: "shopping-add-sheet",
+    path: "/shopping",
+    prepare: async (page) => {
+      await boughtThings(page);
+      await page
+        .getByRole("listitem")
+        .filter({ hasText: "Jade White" })
+        .getByRole("button", { name: "Add to pantry" })
+        .click();
+      await page.getByRole("dialog", { name: "New spool" }).waitFor();
+      await page.getByRole("textbox", { name: "Color name" }).scrollIntoViewIfNeeded();
+      await page.waitForTimeout(500);
     },
     cleanup: async (page) => {
       await page.keyboard.press("Escape");
+    },
+  },
+  {
+    // A spool just added to A1 with A2 empty: one tap on to the next slot.
+    name: "spool-next-slot",
+    path: "/pantry",
+    prepare: async (page) => {
+      await addToSlot(page, ["A1", "A2", "A3"], "A1");
+    },
+    cleanup: async (page) => {
+      await page.keyboard.press("Escape");
+    },
+  },
+  {
+    // The same with A2 already full: the offer skips to A3.
+    name: "spool-next-slot-skips",
+    path: "/pantry",
+    prepare: async (page) => {
+      await addToSlot(page, ["A1", "A3"], "A1");
+    },
+    cleanup: async (page) => {
+      await page.keyboard.press("Escape");
+    },
+  },
+  {
+    // The last empty slot filled: no offer, just the AMS loaded.
+    name: "spool-next-slot-last",
+    path: "/pantry",
+    prepare: async (page) => {
+      await addToSlot(page, ["A4"], "A4", { offer: false });
     },
   },
   {
