@@ -103,14 +103,12 @@ function LinkedSpool({
   index,
   fromFile,
   onChange,
-  onUnlink,
 }: {
   spool: Spool;
   filament: AttemptFilament;
   index: number;
   fromFile: boolean;
   onChange: () => void;
-  onUnlink: () => void;
 }) {
   const name = spoolName(spool);
   return (
@@ -130,13 +128,20 @@ function LinkedSpool({
       <Button variant="quiet" size="sm" onClick={onChange} aria-label={`Pick another spool for filament ${index + 1}`}>
         Change
       </Button>
-      <IconButton icon={CloseIcon} label={`Type filament ${index + 1} in instead`} size="sm" onClick={onUnlink} />
     </div>
   );
 }
 
 /** Spools to pick from for a filament, the loaded ones first. */
-function SpoolChoices({ spools, index, onPick }: { spools: Spool[]; index: number; onPick: (spool: Spool) => void }) {
+export function SpoolChoices({
+  spools,
+  index,
+  onPick,
+}: {
+  spools: Spool[];
+  index: number;
+  onPick: (spool: Spool) => void;
+}) {
   const sorted = [...spools]
     .filter((spool) => spool.remaining !== "empty")
     .sort(
@@ -166,7 +171,7 @@ function SpoolChoices({ spools, index, onPick }: { spools: Spool[]; index: numbe
   );
 }
 
-function ChipRow<T extends string | number>({
+export function ChipRow<T extends string | number>({
   label,
   options,
   value,
@@ -259,12 +264,6 @@ export function SettingsEditor({ value, onChange, outcome, fromFile, className }
                     index={index}
                     fromFile={isFromFile}
                     onChange={() => toggleChoosing(index, true)}
-                    onUnlink={() =>
-                      set(
-                        "filaments",
-                        filaments.map((f, i) => (i === index ? { ...f, spoolId: undefined } : f)),
-                      )
-                    }
                   />
                   {filaments.length > 1 && (
                     <IconButton
@@ -352,14 +351,24 @@ export function SettingsEditor({ value, onChange, outcome, fromFile, className }
                     )}
                   </div>
                   {choosing.has(index) && (
-                    <Button
-                      variant="quiet"
-                      size="sm"
-                      onClick={() => toggleChoosing(index, false)}
-                      className="-ml-2 self-start"
-                    >
-                      Keep {spool ? spoolName(spool).title : "it"}
-                    </Button>
+                    <div className="flex flex-wrap gap-x-1">
+                      <Button variant="quiet" size="sm" onClick={() => toggleChoosing(index, false)} className="-ml-2">
+                        Keep {spool ? spoolName(spool).title : "it"}
+                      </Button>
+                      {spool && (
+                        // The row's one way to leave the pantry: the fields above are the filament, typed in.
+                        <Button
+                          variant="quiet"
+                          size="sm"
+                          onClick={() => {
+                            setFilament(index, { spoolId: undefined });
+                            toggleChoosing(index, false);
+                          }}
+                        >
+                          Type it in instead
+                        </Button>
+                      )}
+                    </div>
                   )}
                 </>
               )}
@@ -532,14 +541,14 @@ export function SettingsEditor({ value, onChange, outcome, fromFile, className }
             size="sm"
             label="Estimated"
             mark={mark("estimatedMinutes")}
-            placeholder="2h 10"
+            placeholder="e.g. 2 h 10 min"
             value={value.estimatedMinutes}
             onChange={(next) => set("estimatedMinutes", next)}
           />
           <DurationField
             size="sm"
             label="Actual"
-            placeholder="2h 25"
+            placeholder="e.g. 2 h 25 min"
             value={value.actualMinutes}
             onChange={(next) => set("actualMinutes", next)}
           />

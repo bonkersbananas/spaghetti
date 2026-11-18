@@ -18,6 +18,8 @@ interface DisclosureProps {
    * a panel would be a box inside a box.
    */
   appearance?: "well" | "plain";
+  /** Under the row while it is closed, outside the button: chips to change one thing without opening it. */
+  peek?: ReactNode;
   children: ReactNode;
   className?: string;
 }
@@ -33,6 +35,7 @@ export function Disclosure({
   summary,
   icon: IconComponent,
   appearance = "well",
+  peek,
   children,
   className,
 }: DisclosureProps) {
@@ -78,6 +81,7 @@ export function Disclosure({
           aria-hidden
         />
       </button>
+      {peek && !open && <div className={cn("pb-4", plain ? "pl-8" : "px-4")}>{peek}</div>}
       <AnimatePresence initial={false}>
         {open && (
           <m.div

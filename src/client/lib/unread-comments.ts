@@ -32,3 +32,9 @@ export function useUnreadThreadSearch(itemId: string): { thread?: 1; comment?: s
   });
   return data ? { thread: 1, comment: data } : {};
 }
+
+/** Whether anything unread waits for this person: the quiet dot on the Journal tab and Today's sidebar item. */
+export function useAnyUnread(): boolean {
+  const { data } = useQuery({ ...unreadQuery, select: (response) => response.threads.length > 0 });
+  return data ?? false;
+}

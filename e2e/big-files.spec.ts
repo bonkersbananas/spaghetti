@@ -135,7 +135,7 @@ test("a big model logged with an attempt goes through the outbox in parts and is
     const sheet = page.getByRole("dialog", { name: "Attempt 1" });
     await page.getByTestId("slicer-file-input").setInputFiles(file);
     await expect(sheet.getByText("gear.stl")).toBeVisible();
-    await sheet.getByRole("button", { name: "Still printing" }).click();
+    await sheet.getByRole("button", { name: "Start print" }).click();
     await expect
       .poll(
         async () => {

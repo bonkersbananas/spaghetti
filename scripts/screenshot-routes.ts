@@ -4032,6 +4032,29 @@ export const shots: Shot[] = [
     cleanup: removeCoverBuilds,
   },
   {
+    // A new comment on a text-only Up next card (the oven knob): the same quiet dot on its note face.
+    name: "ideas-up-next-unread-note",
+    path: "/ideas",
+    prepare: async (page) => {
+      await page.route("**/api/comments/unread", async (route) => {
+        const answer = await route.fetch();
+        const body = (await answer.json()) as { threads: Array<Record<string, unknown>> };
+        const thread = {
+          ...body.threads[0],
+          itemId: "5eed0000-0000-4000-8000-000000000003",
+          count: 1,
+          title: null,
+          stage: "idea",
+        };
+        await route.fulfill({ response: answer, json: { threads: [thread, ...body.threads] } });
+      });
+      await page.goto("/ideas", { waitUntil: "networkidle" });
+      await page.locator("[aria-label='Up next'] li").nth(1).waitFor();
+      await page.waitForTimeout(800);
+    },
+    cleanup: (page) => page.unroute("**/api/comments/unread"),
+  },
+  {
     // A render's card with a new comment: the unread badge takes the corner, "From the model" gives way.
     name: "builds-render-unread",
     path: "/builds",
@@ -4776,8 +4799,92 @@ export const shots: Shot[] = [
       const row = page.getByRole("dialog").getByRole("button", { name: /^Settings/ });
       await row.waitFor();
       await page.waitForTimeout(600);
-      // The bottom of the sheet: the one settings row above the buttons.
-      await row.evaluate((element) => element.scrollIntoView({ block: "end" }));
+      // The bottom of the sheet: the one settings row, its chips, above the button.
+      await page
+        .getByRole("dialog")
+        .getByRole("group", { name: "What carried over" })
+        .or(row)
+        .first()
+        .evaluate((element) => element.scrollIntoView({ block: "center" }));
+      await page.waitForTimeout(300);
+    },
+    cleanup: async (page) => {
+      await page.keyboard.press("Escape");
+    },
+  },
+  {
+    // The usual second attempt changes one thing: tap the chip, its field opens in place under the row.
+    name: "attempt-new-chip",
+    path: `/builds/${SEED_BUILD_IDS.cableChain}`,
+    prepare: async (page) => {
+      await page.getByRole("button", { name: "Log attempt" }).first().click();
+      const sheet = page.getByRole("dialog");
+      await sheet.getByRole("button", { name: /^Change Bed/ }).click();
+      await page.waitForTimeout(600);
+      await sheet.getByLabel("Bed", { exact: true }).evaluate((element) => element.scrollIntoView({ block: "center" }));
+      await page.waitForTimeout(300);
+    },
+    cleanup: async (page) => {
+      await page.keyboard.press("Escape");
+    },
+  },
+  {
+    // After an outcome is picked the footer's one button says "Log attempt", and the line above it is no longer "Starting now".
+    name: "attempt-new-outcome",
+    path: `/builds/${SEED_BUILD_IDS.cableChain}`,
+    prepare: async (page) => {
+      await page.getByRole("button", { name: "Log attempt" }).first().click();
+      const sheet = page.getByRole("dialog");
+      await sheet.getByRole("radio", { name: "Worked" }).click();
+      await page.waitForTimeout(900);
+      await sheet
+        .getByRole("button", { name: /^Settings(?! worth)/ })
+        .evaluate((element) => element.scrollIntoView({ block: "end" }));
+      await page.waitForTimeout(300);
+    },
+    cleanup: async (page) => {
+      await page.keyboard.press("Escape");
+    },
+  },
+  {
+    // Settings open on a filament from the pantry: one ✕ (remove) and its Change; "Type it in instead" is behind Change.
+    name: "attempt-settings-filament",
+    path: `/builds/${SEED_IDS.desiccantHook}`,
+    prepare: async (page) => {
+      await page.getByRole("button", { name: "Log attempt" }).first().click();
+      const sheet = page.getByRole("dialog");
+      await sheet.waitFor();
+      await page.getByTestId("slicer-file-input").setInputFiles({
+        name: SLICER_FILE_NAME,
+        mimeType: "application/octet-stream",
+        buffer: Buffer.from(slicerFile()),
+      });
+      await sheet.getByRole("button", { name: /Cable clips/ }).click();
+      await sheet.getByRole("button", { name: /^Settings/ }).click();
+      await sheet.getByRole("button", { name: /Pick another spool for filament 1/ }).waitFor();
+      await page.waitForTimeout(900);
+      await sheet.getByRole("button", { name: /Pick another spool for filament 1/ }).click();
+      await page.waitForTimeout(600);
+      await sheet
+        .getByRole("button", { name: /Type it in instead/ })
+        .evaluate((element) => element.scrollIntoView({ block: "center", behavior: "instant" }));
+      await page.waitForTimeout(400);
+    },
+    cleanup: async (page) => {
+      await page.keyboard.press("Escape");
+      await page.reload();
+    },
+  },
+  {
+    // The time fields' placeholders read as hints, in the app's format.
+    name: "attempt-time-hints",
+    path: `/builds/${SEED_BUILD_IDS.cableChain}`,
+    prepare: async (page) => {
+      await page.getByRole("button", { name: "Log attempt" }).first().click();
+      const sheet = page.getByRole("dialog");
+      await sheet.getByRole("button", { name: /^Settings/ }).click();
+      await page.waitForTimeout(900);
+      await sheet.getByLabel("Actual").evaluate((element) => element.scrollIntoView({ block: "center" }));
       await page.waitForTimeout(300);
     },
     cleanup: async (page) => {
@@ -6450,9 +6557,8 @@ export const shots: Shot[] = [
         buffer: Buffer.from(slicerFile()),
       });
       await sheet.getByRole("button", { name: /Cable clips/ }).click();
-      await sheet.getByLabel("Layer height").waitFor();
-      // The settings open with an animation that changes the sheet's height: scroll once it has finished, or
-      // where the sheet ends up depends on how far along it was (the shot came out differently from run to run).
+      // The settings stay folded on their summary (a chip row for what carried over): nothing animates open.
+      await sheet.getByRole("button", { name: /^Settings/ }).waitFor();
       await page.waitForTimeout(900);
       await sheet
         .getByText(SLICER_FILE_NAME)

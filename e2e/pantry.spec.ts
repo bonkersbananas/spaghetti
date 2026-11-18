@@ -123,6 +123,9 @@ test("reads a dropped slicer file onto an attempt and keeps it", async ({ page, 
   await expect(sheet.getByText(SLICER_FILE_NAME)).toBeVisible();
   await expect(sheet.getByText("plate 1 of 2")).toBeVisible();
 
+  // A file only fills the settings in: the row stays folded on its summary until it is opened.
+  await expect(sheet.getByLabel("Process profile")).toHaveCount(0);
+  await sheet.getByRole("button", { name: /^Settings(?! worth)/ }).click();
   // Prefilled and marked as from the file, with the green PLA matched to the pantry's spool.
   await expect(sheet.getByLabel("Process profile")).toHaveValue("0.20mm Standard @BBL X2D");
   await expect(sheet.getByLabel("Nozzle", { exact: true })).toHaveValue("220");
@@ -203,6 +206,11 @@ test("picks a spool from the pantry for an attempt's filament", { tag: "@phone" 
     .getByRole("button", { name: /Silk gold/ })
     .click();
   await expect(sheet.getByText("Eryone PLA Silk · external spool")).toBeVisible();
+  // One ✕ per filament row: with a single filament there is none, and "type it in" waits in Change.
+  await expect(sheet.getByRole("button", { name: /Type filament 1 in instead/ })).toHaveCount(0);
+  await sheet.getByRole("button", { name: "Pick another spool for filament 1" }).click();
+  await expect(sheet.getByRole("button", { name: "Type it in instead" })).toBeVisible();
+  await sheet.getByRole("button", { name: /^Keep / }).click();
   await sheet.getByRole("button", { name: "Log attempt" }).click();
   await expect(sheet).toBeHidden();
 
