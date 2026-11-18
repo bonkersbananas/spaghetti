@@ -304,43 +304,43 @@ In the 3D view the two Benchys look alike from outside (the picture is of the fi
 
 ### Real models
 
-The models people actually sliced in the app: the 13 of production's models still there on Nov 16 (`item_files` of kind model; the 11 deleted ones can't be fetched), each sliced as the app slices it, with the settings it was last sliced with and the printer's setup (its main nozzle 0.2 mm, which the models that don't pick a nozzle follow). `bench/app-slice.mts` runs the app's own slice worker in Node, so the model is read, turned, scaled, arranged and given its fins by the app's code, `sliceSetup` makes the setup from the project's settings and the chosen ones, and ours slices in WebAssembly through the app's `ours.ts`; it writes down what the worker handed the module, which the command line (`--job`) and `wasm-node.mjs` replay, and the same plate, each object or part where the app put it with its filament and paint, as a project for native OrcaSlicer 2.5.1 with the setup's presets (`--arrange 0`). `bench/sweep.py` runs it all and prints these tables; `bench/real-models.json` lists the models (names, sizes, sha256 and settings: the models themselves are people's downloads and stay out of the repository). Measured again on Nov 17 with main as of PR 533: the fixes below (PRs 491 to 494, 507, 508, 510, 524, 526 and 533), Orca's arc fitting (PR 496) and what other sessions merged by then (Arachne's port among them), the times the median of three runs on the sandbox's 4 cores; the native times include reading the files and writing the `.gcode.3mf`, the WebAssembly times are the module's slice in Node, its memory the module's at the end.
+The models people actually sliced in the app: the 13 of production's models still there on Nov 16 (`item_files` of kind model; the 11 deleted ones can't be fetched), each sliced as the app slices it, with the settings it was last sliced with and the printer's setup (its main nozzle 0.2 mm, which the models that don't pick a nozzle follow). `bench/app-slice.mts` runs the app's own slice worker in Node, so the model is read, turned, scaled, arranged and given its fins by the app's code, `sliceSetup` makes the setup from the project's settings and the chosen ones, and ours slices in WebAssembly through the app's `ours.ts`; it writes down what the worker handed the module, which the command line (`--job`) and `wasm-node.mjs` replay, and the same plate, each object or part where the app put it with its filament and paint, as a project for native OrcaSlicer 2.5.1 with the setup's presets (`--arrange 0`). `bench/sweep.py` runs it all and prints these tables; `bench/real-models.json` lists the models (names, sizes, sha256 and settings: the models themselves are people's downloads and stay out of the repository). Measured again on Nov 18 with main as of PR 567 and PR 569's fix: the fixes below (PRs 491 to 494, 507, 508, 510, 524, 526, 533 and 569), Orca's arc fitting (PR 496) and what other sessions merged by then (Arachne's port, supports by region, the overhang fan, random and nearest seams, walls over grown tops, the tower plates' photo and cooling time among them), the times the median of three runs on the sandbox's 4 cores; the native times include reading the files and writing the `.gcode.3mf`, the WebAssembly times are the module's slice in Node, its memory the module's at the end. The models' files were Nov 16's to the byte on Nov 18 and so were their settings, but the capybara's, which someone has since sliced at 0.20 mm without supports and with an auto brim: the sweep keeps `real-models.json`'s, so the rows compare.
 
-Every model slices with ours, and the app's slice, the native command line's and the WebAssembly module's are the same file byte for byte on all 13. None is refused and none gets a note; ours warns of floating regions on the same four models as Orca, in Orca's words. Against Orca's: before the fixes below (main as of PR 486), after their second round (main as of PR 510), and now (main as of PR 533):
+Every model slices with ours, and the app's slice, the native command line's and the WebAssembly module's are the same file byte for byte on all 13. None is refused and none gets a note; ours warns of floating regions on the same four models as Orca, in Orca's words. Against Orca's: before the fixes below (main as of PR 486), after their second round (main as of PR 510), on Nov 17 (main as of PR 533, release 37) and now (Nov 18). Filament, retractions and every feature's plastic are Nov 17's on all 13; only ours' estimates moved, by at most 0.5 %, nearly all of it travel: the photo's deferred retraction and spiral lift (PR 565) take ours' travel towards Orca's own (its statistics: the poop tray 1,103 → 1,135 s, Orca 1,180; the frame 893 → 915 s, Orca 1,041), while Orca's estimate stays under the sum of its parts (item 1 below). The control lines `bench/preflight.py` finds different from Orca's (every line that isn't a move, in order) went down on 12 of 13 since release 37 (the UOBF text's stayed at 4); on six models what is left is the bed mesh's area (`G29`, from a first-layer box within 0.4 mm of Orca's), on two nothing. The zipper pulls' had gone up with the tower plates' inline photo, until PR 569 (below):
 
-| Model | Filament against Orca's: before → PR 510 → now | Estimate against Orca's: before → PR 510 → now | Retractions against Orca's: PR 510 → now | Layers more than Orca's: before → now |
-| --- | --- | --- | --- | --- |
-| fctl zipper pull, four copies | +0.8 % → +0.6 % → +0.4 % | +4.9 % → +2.5 % → +2.2 % | +0.2 % → −1.8 % | 0 → 0 |
-| UOBF text with clips | +0.1 % → +0.1 % → +0.0 % | +0.7 % → +0.6 % → +0.8 % | +0.3 % → +1.0 % | 0 → 0 |
-| Spaghetti zipper pull | +0.1 % → +0.0 % → −0.0 % | +2.8 % → +0.8 % → +0.4 % | −9.0 % → −12.0 % | 0 → 0 |
-| Hot dog hero, four colours | −4.5 % → −0.0 % → −0.0 % | −1.0 % → −0.6 % → −0.5 % | −4.1 % → −3.7 % | 1 → 0 |
-| Steampunk glasses | −0.4 % → −1.2 % → −1.2 % | −2.5 % → −0.7 % → −0.7 % | −2.3 % → −2.3 % | 1 → 0 |
-| Poop tray | −1.3 % → +0.1 % → +0.1 % | −1.1 % → +1.4 % → +1.2 % | +10.6 % → +8.5 % | 1 → 0 |
-| Stackable containers, plate 3 | +0.0 % → −0.1 % → −0.1 % | +3.2 % → +2.6 % → −0.2 % | +24.5 % → +0.1 % | 0 → 0 |
-| Tomato mascot | +1.9 % → +0.3 % → −0.1 % | +6.6 % → +2.8 % → +0.2 % | −0.2 % → −0.3 % | 1 → 0 |
-| Hummingbird | −0.0 % → −0.2 % → −0.3 % | +0.8 % → +0.3 % → +0.1 % | −0.2 % → +0.2 % | 0 → 0 |
-| Pick your size, plate 2 | +0.1 % → +0.0 % → −0.0 % | −0.5 % → +0.7 % → +0.3 % | +2.3 % → +0.9 % | 1 → 0 |
-| Marshmallow | +0.1 % → +0.0 % → +0.1 % | −0.6 % → −0.5 % → −0.5 % | −2.5 % → −0.7 % | 0 → 0 |
-| Capybara | +1.2 % → +0.5 % → +0.2 % | +0.1 % → −0.9 % → −0.7 % | −4.0 % → +0.3 % | 0 → 0 |
-| Steampunk frame | +0.2 % → −0.0 % → −0.1 % | −0.1 % → +0.5 % → +0.6 % | +5.6 % → +8.2 % | 1 → 0 |
+| Model | Filament against Orca's: before → PR 510 → Nov 17 → Nov 18 | Estimate against Orca's: before → PR 510 → Nov 17 → Nov 18 | Retractions against Orca's: Nov 17 → Nov 18 | Control lines unlike Orca's: release 37 → Nov 18 | Layers more than Orca's: before → now |
+| --- | --- | --- | --- | --- | --- |
+| fctl zipper pull, four copies | +0.8 % → +0.6 % → +0.4 % → +0.4 % | +4.9 % → +2.5 % → +2.2 % → +2.2 % | −1.8 % → −1.8 % | 124 → 4 | 0 → 0 |
+| UOBF text with clips | +0.1 % → +0.1 % → +0.0 % → +0.0 % | +0.7 % → +0.6 % → +0.8 % → +0.8 % | +1.0 % → +1.0 % | 4 → 4 | 0 → 0 |
+| Spaghetti zipper pull | +0.1 % → +0.0 % → −0.0 % → −0.0 % | +2.8 % → +0.8 % → +0.4 % → +0.4 % | −12.0 % → −12.0 % | 150 → 22 | 0 → 0 |
+| Hot dog hero, four colours | −4.5 % → −0.0 % → −0.0 % → −0.0 % | −1.0 % → −0.6 % → −0.5 % → −0.4 % | −3.7 % → −3.7 % | 1,704 → 247 | 1 → 0 |
+| Steampunk glasses | −0.4 % → −1.2 % → −1.2 % → −1.2 % | −2.5 % → −0.7 % → −0.7 % → −0.6 % | −2.3 % → −2.3 % | 28 → 4 | 1 → 0 |
+| Poop tray | −1.3 % → +0.1 % → +0.1 % → +0.1 % | −1.1 % → +1.4 % → +1.2 % → +1.6 % | +8.5 % → +8.5 % | 7 → 4 | 1 → 0 |
+| Stackable containers, plate 3 | +0.0 % → −0.1 % → −0.1 % → −0.1 % | +3.2 % → +2.6 % → −0.2 % → −0.1 % | +0.1 % → +0.1 % | 51 → 0 | 0 → 0 |
+| Tomato mascot | +1.9 % → +0.3 % → −0.1 % → −0.1 % | +6.6 % → +2.8 % → +0.2 % → −0.3 % | −0.3 % → −0.3 % | 728 → 32 | 1 → 0 |
+| Hummingbird | −0.0 % → −0.2 % → −0.3 % → −0.3 % | +0.8 % → +0.3 % → +0.1 % → +0.1 % | +0.2 % → +0.2 % | 1,547 → 1,034 | 0 → 0 |
+| Pick your size, plate 2 | +0.1 % → +0.0 % → −0.0 % → −0.0 % | −0.5 % → +0.7 % → +0.3 % → +0.3 % | +0.9 % → +0.9 % | 1,818 → 0 | 1 → 0 |
+| Marshmallow | +0.1 % → +0.0 % → +0.1 % → +0.1 % | −0.6 % → −0.5 % → −0.5 % → −0.5 % | −0.7 % → −0.7 % | 151 → 4 | 0 → 0 |
+| Capybara | +1.2 % → +0.5 % → +0.2 % → +0.2 % | +0.1 % → −0.9 % → −0.7 % → −0.8 % | +0.3 % → +0.3 % | 61 → 4 | 0 → 0 |
+| Steampunk frame | +0.2 % → −0.0 % → −0.1 % → −0.1 % | −0.1 % → +0.5 % → +0.6 % → +0.9 % | +8.2 % → +8.2 % | 718 → 4 | 1 → 0 |
 
 As they stand:
 
 | Model | Ours | Layers, ours / Orca | Filament, ours / Orca | Estimate, ours / Orca | Retractions, ours / Orca | Native, ours / Orca | WebAssembly |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| fctl zipper pull, four copies | slices | 24 / 24 | 9.35 / 9.31 g (+0.4 %) | 251.2 / 245.8 min (+2.2 %) | 3,151 / 3,210 | 1.4 / 4.3 s, 72 / 306 MB | 6.3 s, 45 MB |
-| UOBF text with clips | slices | 68 / 68 | 4.21 / 4.20 g (+0.0 %) | 19.8 / 19.7 min (+0.8 %) | 776 / 768 | 0.1 / 0.4 s, 23 / 141 MB | 0.5 s, 20 MB |
-| Spaghetti zipper pull | slices | 24 / 24 | 4.61 / 4.61 g (−0.0 %) | 109.5 / 109.0 min (+0.4 %) | 1,235 / 1,404 | 0.6 / 1.5 s, 38 / 192 MB | 2.4 s, 27 MB |
-| Hot dog hero, four colours | slices | 249 / 249 | 35.94 / 35.95 g (−0.0 %) | 222.9 / 224.2 min (−0.5 %) | 2,042 / 2,120 | 0.7 / 1.7 s, 40 / 213 MB | 3.0 s, 29 MB |
-| Steampunk glasses | slices | 106 / 106 | 7.52 / 7.61 g (−1.2 %) | 61.9 / 62.3 min (−0.7 %) | 6,378 / 6,529 | 0.7 / 1.5 s, 48 / 280 MB | 3.3 s, 28 MB |
-| Poop tray | slices | 732 / 732 | 146.70 / 146.59 g (+0.1 %) | 150.4 / 148.5 min (+1.2 %) | 2,198 / 2,026 | 0.9 / 1.9 s, 45 / 276 MB | 4.3 s, 30 MB |
-| Stackable containers, plate 3 | slices | 288 / 288 | 122.67 / 122.74 g (−0.1 %) | 139.6 / 139.9 min (−0.2 %) | 1,088 / 1,087 | 0.6 / 1.8 s, 42 / 232 MB | 3.1 s, 28 MB |
-| Tomato mascot | slices | 200 / 200 | 12.81 / 12.82 g (−0.1 %) | 93.0 / 92.8 min (+0.2 %) | 2,069 / 2,076 | 1.9 / 2.5 s, 99 / 324 MB | 8.5 s, 95 MB |
-| Hummingbird | slices | 84 / 84 | 27.23 / 27.31 g (−0.3 %) | 174.6 / 174.4 min (+0.1 %) | 2,135 / 2,130 | 2.4 / 3.5 s, 80 / 376 MB | 9.3 s, 84 MB |
-| Pick your size, plate 2 | slices | 698 / 698 | 422.37 / 422.42 g (−0.0 %) | 691.5 / 689.4 min (+0.3 %) | 16,005 / 15,868 | 7.1 / 11.1 s, 252 / 1426 MB | 32.6 s, 146 MB |
-| Marshmallow | slices | 137 / 137 | 0.73 / 0.73 g (+0.1 %) | 17.5 / 17.5 min (−0.5 %) | 284 / 286 | 1.0 / 3.9 s, 113 / 478 MB | 3.4 s, 108 MB |
-| Capybara | slices | 89 / 89 | 1.41 / 1.41 g (+0.2 %) | 14.5 / 14.6 min (−0.7 %) | 299 / 298 | 0.6 / 1.4 s, 45 / 223 MB | 2.2 s, 34 MB |
-| Steampunk frame | slices | 534 / 534 | 29.85 / 29.87 g (−0.1 %) | 68.7 / 68.3 min (+0.6 %) | 2,278 / 2,105 | 2.2 / 5.5 s, 153 / 578 MB | 8.3 s, 146 MB |
+| fctl zipper pull, four copies | slices | 24 / 24 | 9.35 / 9.31 g (+0.4 %) | 251.1 / 245.8 min (+2.2 %) | 3,151 / 3,210 | 1.2 / 3.8 s, 74 / 308 MB | 5.3 s, 43 MB |
+| UOBF text with clips | slices | 68 / 68 | 4.21 / 4.20 g (+0.0 %) | 19.8 / 19.7 min (+0.8 %) | 776 / 768 | 0.1 / 0.4 s, 23 / 142 MB | 0.4 s, 20 MB |
+| Spaghetti zipper pull | slices | 24 / 24 | 4.61 / 4.61 g (−0.0 %) | 109.4 / 109.0 min (+0.4 %) | 1,235 / 1,404 | 0.5 / 1.3 s, 36 / 192 MB | 2.0 s, 25 MB |
+| Hot dog hero, four colours | slices | 249 / 249 | 35.94 / 35.95 g (−0.0 %) | 223.2 / 224.2 min (−0.4 %) | 2,042 / 2,120 | 0.6 / 1.5 s, 40 / 213 MB | 2.6 s, 33 MB |
+| Steampunk glasses | slices | 106 / 106 | 7.52 / 7.61 g (−1.2 %) | 61.9 / 62.3 min (−0.6 %) | 6,378 / 6,529 | 0.7 / 1.3 s, 46 / 280 MB | 3.0 s, 25 MB |
+| Poop tray | slices | 732 / 732 | 146.70 / 146.59 g (+0.1 %) | 151.0 / 148.5 min (+1.6 %) | 2,198 / 2,026 | 0.8 / 1.6 s, 46 / 276 MB | 3.9 s, 30 MB |
+| Stackable containers, plate 3 | slices | 288 / 288 | 122.67 / 122.74 g (−0.1 %) | 139.8 / 139.9 min (−0.1 %) | 1,088 / 1,087 | 0.6 / 1.6 s, 43 / 235 MB | 2.8 s, 28 MB |
+| Tomato mascot | slices | 200 / 200 | 12.81 / 12.82 g (−0.1 %) | 92.5 / 92.8 min (−0.3 %) | 2,069 / 2,076 | 1.7 / 2.2 s, 98 / 327 MB | 7.7 s, 95 MB |
+| Hummingbird | slices | 84 / 84 | 27.23 / 27.31 g (−0.3 %) | 174.6 / 174.4 min (+0.1 %) | 2,135 / 2,130 | 2.2 / 3.1 s, 82 / 371 MB | 8.5 s, 84 MB |
+| Pick your size, plate 2 | slices | 698 / 698 | 422.37 / 422.42 g (−0.0 %) | 691.8 / 689.4 min (+0.3 %) | 16,005 / 15,868 | 6.4 / 10.0 s, 249 / 1420 MB | 30.1 s, 146 MB |
+| Marshmallow | slices | 137 / 137 | 0.73 / 0.73 g (+0.1 %) | 17.5 / 17.5 min (−0.5 %) | 284 / 286 | 0.9 / 3.3 s, 112 / 479 MB | 2.9 s, 108 MB |
+| Capybara | slices | 89 / 89 | 1.41 / 1.41 g (+0.2 %) | 14.5 / 14.6 min (−0.8 %) | 299 / 298 | 0.5 / 1.2 s, 44 / 215 MB | 2.0 s, 34 MB |
+| Steampunk frame | slices | 534 / 534 | 29.85 / 29.87 g (−0.1 %) | 69.0 / 68.3 min (+0.9 %) | 2,278 / 2,105 | 1.9 / 4.7 s, 153 / 579 MB | 7.4 s, 146 MB |
 
 What the real models showed, and what is fixed since:
 
@@ -356,10 +356,11 @@ What the real models showed, and what is fixed since:
 - **Fixed: sparse infill's order** (PR 526). Orca adds a sortable fill's paths to its island one by one and chains them, path by path, with the island's other paths; ours chained each fill as one block, and the containers' honeycomb crossed the box between blocks. Their retractions went from 24.5 % over Orca's to 0.1 %, their estimate from 2.6 % over to 0.2 % under. The same order took the poop tray's retractions from 10.6 % over Orca's to 8.5 %, and moved the frame's from 5.6 % over to 8.2 % and the Spaghetti zipper pull's from 9.0 % under to 12.0 % (both still to trace).
 - **Fixed: the timelapse photo at the farthest point** (PR 533). The app's presets turn on Orca 2.5.1's `farthest_point_timelapse`: Orca takes each layer's photo inline (`M971`, `M1004`), right after the first extrusion that ends within 0.5 mm of the layer's point farthest from the camera, else after the layer at the camera spot nearest that point; ours moved to the printer's spot (`M9711`) on every layer of every plate. Plates in one filament take it as Orca's now: the control lines `bench/preflight.py` finds different from Orca's went from 2,200 to 7 on the poop tray, 864 to 51 on the containers and 208 to 4 on the UOBF text. Most of what is left is where Orca's arc fitting ends a move near the point and ours doesn't, and ours takes the photo after the layer (19 of the capybara's 89 layers). Plates in several filaments take it as Orca's since Nov 17 (below).
 - **Fixed: the farthest-point photo on plates in several filaments, and the retraction a mid-layer photo leaves to the next layer** (Nov 17, spaghetti#421). Orca places the photo by which nozzle prints the layer's farthest point, and wherever it takes it before the layer's end, leaves the layer's last retraction, wipe and label end to the next layer, after its header; ours does both now, on plates in one filament too (section 5). With the app's setup, layer boundaries that differ in kind from Orca's went from 99 of 99 to 1 on a cube, 239 of 239 to 3 on a Benchy (PLA and PETG), and to none on the tower plates (two cubes 99 of 99, the block and S 24 of 49, two columns 99 of 99, three cubes 34 of 69, two bridge models 114 of 114); two Benchys in two filaments 239 to 1, with Orca's estimate to the second.
+- **Fixed: which nozzle prints at a photo** (Nov 18, PR 569). Orca fills each photo's G-code with the nozzle printing at that moment (`curr_physical_extruder_id`); ours filled every photo with the plate's first filament's. Once the tower plates took their farthest-point photo inline (PR 565), the zipper pulls, whose first filament is on the auxiliary nozzle, met the X2D's branch for a photo on the other nozzle without a spot at 24 photos each: a lift to 3 mm over the layer and 20 mm in Y, from where ours printed on. Their control lines unlike Orca's went from 244 to 4 and 270 to 22 (the first tool change's preheat, there in release 37 too); the other 11 models are byte for byte as before.
 
 What is left, in order of how much it matters for a print:
 
-1. **The poop tray's, the frame's and the Spaghetti zipper pull's travels.** The poop tray retracts 8.5 % more often than Orca (2,198 against 2,026): where its narrow bands of solid infill start their loops (Orca starts them as its Arachne does, spaghetti#1616) and how its first layer's bottom surface joins at corners. Its 1.2 % over Orca's estimate (+1.9 min) is not that, though: the table's travel row is what is left of each estimate after the start and the extruding, and Orca's estimate comes out 3 min under the sum of its own parts (its statistics give its travels 19.7 min, ours' 18.4), which leaves its row at 16.6 min; ours' estimate is the sum of its parts. The frame retracts 8.2 % more often than Orca and the Spaghetti zipper pull 12.0 % less, neither traced yet; both moved with the infill's order (PR 526).
+1. **The poop tray's, the frame's and the Spaghetti zipper pull's travels.** The poop tray retracts 8.5 % more often than Orca (2,198 against 2,026): where its narrow bands of solid infill start their loops (Orca starts them as its Arachne does, spaghetti#1616) and how its first layer's bottom surface joins at corners. Its 1.6 % over Orca's estimate (+2.5 min) is not that, though: the table's travel row is what is left of each estimate after the start and the extruding, and Orca's estimate comes out 3 min under the sum of its own parts (its statistics give its travels 19.7 min, ours' 18.9, 18.4 on Nov 17), which leaves its row at 16.6 min; ours' estimate is the sum of its parts. The frame retracts 8.2 % more often than Orca and the Spaghetti zipper pull 12.0 % less, neither traced yet; both moved with the infill's order (PR 526).
 2. **Narrow bands of internal solid infill.** The fctl zipper pull's and the tomato's internal solid infill are each 1.6 % over Orca's (2.4 % and 3.8 % at PR 510), in the narrow bands Orca fills with Arachne at the line's width; that is Arachne's port's (spaghetti#1616). The fctl zipper pull is still 2.2 % over Orca's estimate, nearly all of it travel (8.1 % more time moving, for 1.8 % fewer retractions).
 3. **Gap fill** (section 5): short of Orca's on most models (the hot dog 37 %, the hummingbird 32 %, the tomato 15 %, the glasses 4.4 %, at most 69 mm³), on the glasses mostly short lines Orca lays where a gap ends in a narrow tip, which ours leaves out. Both run Orca's medial axis, but there its Voronoi junction is equidistant from three corners of the outline, and ours' 0.1 µm grid (Orca's is 1 nm) tips it so the branch keeps its junction end, isn't extended and falls under the length Orca keeps by about 0.02 mm. Not fixable without Orca's nanometre coordinates; it is the glasses' 1.2 % less plastic than Orca's.
 
@@ -380,9 +381,9 @@ Each model, by feature (mm³ of plastic, counted on moves that change X or Y), w
 | Internal Bridge, mm³ | 456 | 457 | −0.1 % |
 | Prime tower, mm³ | 1,158 | 1,158 | +0.0 % |
 | Filament, g | 9.35 | 9.31 | +0.4 % |
-| Estimate, min | 251.2 | 245.8 | +2.2 % |
+| Estimate, min | 251.1 | 245.8 | +2.2 % |
 | Extruding, min | 185.8 | 184.9 | +0.5 % |
-| Travel, retractions, lifts, min | 60.2 | 55.7 | +8.1 % |
+| Travel, retractions, lifts, min | 60.2 | 55.7 | +8.0 % |
 | Retractions | 3,151 | 3,210 | −1.8 % |
 | Tool changes | 24 | 24 | +0.0 % |
 | Flush, mm³ | 1,200 | 1,200 | +0.0 % |
@@ -405,8 +406,8 @@ Each model, by feature (mm³ of plastic, counted on moves that change X or Y), w
 | Brim, mm³ | 26 | 26 | −0.0 % |
 | Filament, g | 4.21 | 4.20 | +0.0 % |
 | Estimate, min | 19.8 | 19.7 | +0.8 % |
-| Extruding, min | 10.2 | 10.2 | +0.0 % |
-| Travel, retractions, lifts, min | 4.5 | 4.3 | +3.7 % |
+| Extruding, min | 10.2 | 10.2 | −0.2 % |
+| Travel, retractions, lifts, min | 4.5 | 4.3 | +4.2 % |
 | Retractions | 776 | 768 | +1.0 % |
 
 **Spaghetti zipper pull.** A project of three parts in three filaments, on the 0.2 mm nozzle at 0.10 mm.
@@ -424,9 +425,9 @@ Each model, by feature (mm³ of plastic, counted on moves that change X or Y), w
 | Internal Bridge, mm³ | 114 | 114 | −0.1 % |
 | Prime tower, mm³ | 1,203 | 1,203 | +0.0 % |
 | Filament, g | 4.61 | 4.61 | −0.0 % |
-| Estimate, min | 109.5 | 109.0 | +0.4 % |
+| Estimate, min | 109.4 | 109.0 | +0.4 % |
 | Extruding, min | 65.5 | 65.6 | −0.2 % |
-| Travel, retractions, lifts, min | 38.9 | 38.3 | +1.6 % |
+| Travel, retractions, lifts, min | 38.8 | 38.3 | +1.5 % |
 | Retractions | 1,235 | 1,404 | −12.0 % |
 | Tool changes | 25 | 25 | +0.0 % |
 | Flush, mm³ | 1,200 | 1,200 | +0.0 % |
@@ -447,9 +448,9 @@ Each model, by feature (mm³ of plastic, counted on moves that change X or Y), w
 | Internal Bridge, mm³ | 65 | 65 | +0.0 % |
 | Prime tower, mm³ | 14,348 | 14,348 | +0.0 % |
 | Filament, g | 35.94 | 35.95 | −0.0 % |
-| Estimate, min | 222.9 | 224.2 | −0.5 % |
-| Extruding, min | 68.3 | 69.0 | −1.0 % |
-| Travel, retractions, lifts, min | 149.5 | 150.0 | −0.3 % |
+| Estimate, min | 223.2 | 224.2 | −0.4 % |
+| Extruding, min | 68.8 | 69.0 | −0.3 % |
+| Travel, retractions, lifts, min | 149.3 | 150.0 | −0.5 % |
 | Retractions | 2,042 | 2,120 | −3.7 % |
 | Tool changes | 221 | 221 | +0.0 % |
 | Flush, mm³ | 13,002 | 13,002 | −0.0 % |
@@ -465,9 +466,9 @@ Each model, by feature (mm³ of plastic, counted on moves that change X or Y), w
 | Gap infill, mm³ | 1,512 | 1,581 | −4.4 % |
 | Top surface, mm³ | 6 | 5 | +15.6 % |
 | Filament, g | 7.52 | 7.61 | −1.2 % |
-| Estimate, min | 61.9 | 62.3 | −0.7 % |
+| Estimate, min | 61.9 | 62.3 | −0.6 % |
 | Extruding, min | 24.9 | 25.2 | −1.2 % |
-| Travel, retractions, lifts, min | 31.9 | 32.0 | −0.4 % |
+| Travel, retractions, lifts, min | 31.9 | 32.0 | −0.3 % |
 | Retractions | 6,378 | 6,529 | −2.3 % |
 
 **Poop tray.** A project at 0.28 mm, grid infill. Orca's command line refuses the project's raft_first_layer_expansion: it is given 2, its default, which changes nothing here.
@@ -483,9 +484,9 @@ Each model, by feature (mm³ of plastic, counted on moves that change X or Y), w
 | Top surface, mm³ | 2,187 | 2,187 | +0.0 % |
 | Bottom surface, mm³ | 1,793 | 1,794 | −0.0 % |
 | Filament, g | 146.70 | 146.59 | +0.1 % |
-| Estimate, min | 150.4 | 148.5 | +1.2 % |
+| Estimate, min | 151.0 | 148.5 | +1.6 % |
 | Extruding, min | 126.9 | 126.8 | +0.1 % |
-| Travel, retractions, lifts, min | 18.4 | 16.6 | +10.6 % |
+| Travel, retractions, lifts, min | 18.9 | 16.6 | +13.8 % |
 | Retractions | 2,198 | 2,026 | +8.5 % |
 
 **Stackable containers, plate 3.** A project of three plates, its third, 10 % honeycomb.
@@ -504,9 +505,9 @@ Each model, by feature (mm³ of plastic, counted on moves that change X or Y), w
 | Bridge, mm³ | 5 | 5 | −1.9 % |
 | Internal Bridge, mm³ | 23 | 23 | +0.1 % |
 | Filament, g | 122.67 | 122.74 | −0.1 % |
-| Estimate, min | 139.6 | 139.9 | −0.2 % |
+| Estimate, min | 139.8 | 139.9 | −0.1 % |
 | Extruding, min | 123.5 | 123.8 | −0.2 % |
-| Travel, retractions, lifts, min | 11.0 | 11.0 | +0.0 % |
+| Travel, retractions, lifts, min | 11.1 | 11.0 | +1.3 % |
 | Retractions | 1,088 | 1,087 | +0.1 % |
 
 **Tomato mascot.** A project of three parts in two filaments, with Fins and auto brim.
@@ -527,9 +528,9 @@ Each model, by feature (mm³ of plastic, counted on moves that change X or Y), w
 | Brim, mm³ | 37 | 37 | +0.1 % |
 | Prime tower, mm³ | 3,183 | 3,183 | +0.0 % |
 | Filament, g | 12.81 | 12.82 | −0.1 % |
-| Estimate, min | 93.0 | 92.8 | +0.2 % |
+| Estimate, min | 92.5 | 92.8 | −0.3 % |
 | Extruding, min | 60.4 | 60.9 | −0.8 % |
-| Travel, retractions, lifts, min | 27.5 | 26.8 | +2.7 % |
+| Travel, retractions, lifts, min | 27.0 | 26.8 | +1.1 % |
 | Retractions | 2,069 | 2,076 | −0.3 % |
 | Tool changes | 26 | 26 | +0.0 % |
 | Flush, mm³ | 0 | 0 | – |
@@ -574,9 +575,9 @@ Each model, by feature (mm³ of plastic, counted on moves that change X or Y), w
 | Bridge, mm³ | 23 | 24 | −4.5 % |
 | Internal Bridge, mm³ | 1,439 | 1,433 | +0.4 % |
 | Filament, g | 422.37 | 422.42 | −0.0 % |
-| Estimate, min | 691.5 | 689.4 | +0.3 % |
+| Estimate, min | 691.8 | 689.4 | +0.3 % |
 | Extruding, min | 587.1 | 587.7 | −0.1 % |
-| Travel, retractions, lifts, min | 99.2 | 96.6 | +2.7 % |
+| Travel, retractions, lifts, min | 99.6 | 96.6 | +3.0 % |
 | Retractions | 16,005 | 15,868 | +0.9 % |
 
 **Marshmallow.** A 17 MB project, on the 0.2 mm nozzle at 0.10 mm, grid infill.
@@ -597,8 +598,8 @@ Each model, by feature (mm³ of plastic, counted on moves that change X or Y), w
 | Ironing, mm³ | 1 | 1 | −0.1 % |
 | Filament, g | 0.73 | 0.73 | +0.1 % |
 | Estimate, min | 17.5 | 17.5 | −0.5 % |
-| Extruding, min | 10.6 | 10.6 | −0.4 % |
-| Travel, retractions, lifts, min | 1.7 | 1.8 | −1.6 % |
+| Extruding, min | 10.6 | 10.6 | −0.0 % |
+| Travel, retractions, lifts, min | 1.7 | 1.8 | −4.1 % |
 | Retractions | 284 | 286 | −0.7 % |
 
 **Capybara.** An 18 MB STL, turned, at 0.12 mm with tree supports where needed.
@@ -617,9 +618,9 @@ Each model, by feature (mm³ of plastic, counted on moves that change X or Y), w
 | Internal Bridge, mm³ | 24 | 11 | +122.0 % |
 | Support, mm³ | 12 | 13 | −3.1 % |
 | Filament, g | 1.41 | 1.41 | +0.2 % |
-| Estimate, min | 14.5 | 14.6 | −0.7 % |
-| Extruding, min | 7.5 | 7.6 | −0.9 % |
-| Travel, retractions, lifts, min | 1.9 | 1.9 | −1.3 % |
+| Estimate, min | 14.5 | 14.6 | −0.8 % |
+| Extruding, min | 7.5 | 7.6 | −0.8 % |
+| Travel, retractions, lifts, min | 1.9 | 1.9 | −2.6 % |
 | Retractions | 299 | 298 | +0.3 % |
 
 **Steampunk frame.** An 89 MB STL, turned, at 0.28 mm.
@@ -636,9 +637,9 @@ Each model, by feature (mm³ of plastic, counted on moves that change X or Y), w
 | Bottom surface, mm³ | 32 | 32 | +0.3 % |
 | Internal Bridge, mm³ | 44 | 42 | +3.0 % |
 | Filament, g | 29.85 | 29.87 | −0.1 % |
-| Estimate, min | 68.7 | 68.3 | +0.6 % |
-| Extruding, min | 48.7 | 48.7 | +0.1 % |
-| Travel, retractions, lifts, min | 14.9 | 14.5 | +2.6 % |
+| Estimate, min | 69.0 | 68.3 | +0.9 % |
+| Extruding, min | 48.6 | 48.7 | −0.3 % |
+| Travel, retractions, lifts, min | 15.3 | 14.5 | +5.2 % |
 | Retractions | 2,278 | 2,105 | +8.2 % |
 
 ### Seams
