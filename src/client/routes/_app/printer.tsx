@@ -224,12 +224,12 @@ function Setup({ initial }: { initial: PrinterSetup }) {
       {/* From 1280 the right column is what needs you: Upkeep, then what is low (the left holds the machine and its
           bays), so the columns end near each other. Below 1280 it is one column: what is low sits under the bays. */}
       <div className="flex flex-col gap-12 max-xl:contents md:gap-16">
-        <div className="empty:hidden max-xl:order-0 xl:order-2">
+        <div className="empty:hidden xl:order-2">
           <Suspense fallback={null}>
             <LowUnderBays />
           </Suspense>
         </div>
-        <div className="max-xl:order-1 xl:order-1">
+        <div className="xl:order-1">
           {idle ? (
             <Suspense fallback={<UpkeepSkeleton />}>
               <Upkeep />
