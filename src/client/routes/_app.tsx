@@ -18,6 +18,7 @@ import { outbox } from "@/lib/outbox";
 import { PaletteProvider, usePalette } from "@/lib/palette";
 import { usePasskeyOffer } from "@/lib/passkey-offer";
 import { followUnresizedPhotos } from "@/lib/photo-resize";
+import { preloaded } from "@/lib/preloaded";
 import { openedDirectly } from "@/lib/previous-path";
 import { resyncPush, useServiceWorkerMessages } from "@/lib/push";
 import { rememberedUser, sessionQuery } from "@/lib/queries";
@@ -27,13 +28,13 @@ import { forgetEndedSession, isSigningOut } from "@/lib/use-sign-out";
 import { useWhenIdle } from "@/lib/when-idle";
 
 // Desktop-only overlays, loaded once the app is idle rather than with the first screen.
-const loadPalette = () => import("@/components/shell/CommandPalette");
-const loadShortcuts = () => import("@/components/shell/ShortcutOverlay");
+// Held as loaded modules and rendered directly, not through React.lazy: its 300 ms Suspense reveal throttle made the
+// first ⌘K slow even with the code in (lib/preloaded.ts).
+const palette = preloaded(() => import("@/components/shell/CommandPalette"));
+const shortcuts = preloaded(() => import("@/components/shell/ShortcutOverlay"));
+const paletteShell = preloaded(() => import("@/components/ui/Palette"));
 // The "Captured" sheet only exists after something was shared in: its code comes then, not with every first load.
 const ShareSheet = lazy(() => import("@/components/shell/ShareSheet").then((m) => ({ default: m.ShareSheet })));
-const PaletteShell = lazy(() => import("@/components/ui/Palette").then((m) => ({ default: m.PaletteShell })));
-const CommandPalette = lazy(() => loadPalette().then((m) => ({ default: m.CommandPalette })));
-const ShortcutOverlay = lazy(() => loadShortcuts().then((m) => ({ default: m.ShortcutOverlay })));
 
 /** The signed-in app: sidebar on desktop, tab bar on phones. */
 export const Route = createFileRoute("/_app")({
@@ -191,15 +192,18 @@ function Shell() {
  */
 function DesktopOverlays() {
   const { paletteOpen, helpOpen, setPaletteOpen } = usePalette();
-  const [palette, setPalette] = useState(false);
-  const [shortcuts, setShortcuts] = useState(false);
-  if (paletteOpen && !palette) setPalette(true);
-  if (helpOpen && !shortcuts) setShortcuts(true);
+  const [asked, setAsked] = useState(false);
+  const [helpAsked, setHelpAsked] = useState(false);
+  if (paletteOpen && !asked) setAsked(true);
+  if (helpOpen && !helpAsked) setHelpAsked(true);
+  const loadedPalette = palette.use();
+  const loadedShortcuts = shortcuts.use();
+  const loadedShell = paletteShell.use();
   useEffect(() => {
     const warm = () => {
-      void loadPalette();
-      void loadShortcuts();
-      void import("@/components/ui/Palette");
+      void palette.start();
+      void shortcuts.start();
+      void paletteShell.start();
     };
     // The first key press or touch after a page load starts the fetch at once, rather than waiting for an idle moment
     // that a busy first second may not give (the Ctrl of ⌘K gets a head start on its K).
@@ -218,24 +222,18 @@ function DesktopOverlays() {
       for (const type of events) window.removeEventListener(type, onFirst, true);
     };
   }, []);
+  if (asked && !loadedPalette) void palette.start();
   return (
-    <Suspense fallback={null}>
-      {palette && (
-        // The frame and search box draw as soon as ⌘K is pressed; the commands fill in when their code arrives.
-        <Suspense
-          fallback={
-            // Only while it is asked for: Escape, a click outside or a second ⌘K close the frame (paletteOpen goes false).
-            paletteOpen ? (
-              <Suspense fallback={null}>
-                <PaletteShell onOpenChange={setPaletteOpen} />
-              </Suspense>
-            ) : null
-          }
-        >
-          <CommandPalette />
-        </Suspense>
-      )}
-      {shortcuts && <ShortcutOverlay />}
-    </Suspense>
+    <>
+      {asked &&
+        (loadedPalette ? (
+          <loadedPalette.CommandPalette />
+        ) : (
+          // The frame and search box draw as soon as ⌘K is pressed; the commands fill in when their code arrives.
+          // Only while it is asked for: Escape, a click outside or a second ⌘K close the frame (paletteOpen goes false).
+          paletteOpen && loadedShell && <loadedShell.PaletteShell onOpenChange={setPaletteOpen} />
+        ))}
+      {helpAsked && loadedShortcuts && <loadedShortcuts.ShortcutOverlay />}
+    </>
   );
 }
