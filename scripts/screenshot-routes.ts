@@ -6653,6 +6653,28 @@ export const shots: Shot[] = [
     },
   },
   {
+    // The finish sheet on a phone scrolled to its top: the file, the settings row (one line), the when line.
+    name: "attempt-finish-top",
+    path: "/builds",
+    width: 390,
+    why: "the bottom-up order is a phone's",
+    prepare: async (page) => {
+      const sheet = await finishSheet(page);
+      await sheet.getByRole("radio", { name: "Spaghetti" }).click();
+      await page.waitForTimeout(900);
+      await sheet.evaluate((element) => {
+        for (const child of element.querySelectorAll<HTMLElement>("*")) {
+          if (getComputedStyle(child).overflowY === "auto") child.scrollTo({ top: 0 });
+        }
+      });
+      await page.waitForTimeout(400);
+    },
+    cleanup: async (page) => {
+      await page.keyboard.press("Escape");
+      await removeModelItems(page);
+    },
+  },
+  {
     // The when line changed: "Started 95 min ago · change" opens the date field.
     name: "attempt-finish-when",
     path: "/builds",

@@ -1,7 +1,6 @@
 import { fieldsFor, type SheetFields, type SheetValue, toChanges, toFields, toValue } from "@shared/attempt-fields";
 import type { Outcome } from "@shared/attempts";
 import { partsOnPlate } from "@shared/parts";
-import { offTheBedLabel } from "@shared/print-progress";
 import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef } from "react";
 import { createPortal } from "react-dom";
@@ -35,6 +34,7 @@ export function EditAttempt({
   initialOutcome,
   incomingFile,
   footerHost,
+  menuHost,
 }: {
   item: ItemView;
   attempt: AttemptView;
@@ -45,6 +45,8 @@ export function EditAttempt({
   incomingFile?: { file: File; key: number } | null;
   /** Where the footer (Delete, the save state, Done) is drawn: the sheet's own footer. */
   footerHost: HTMLElement | null;
+  /** Where its "…" menu is drawn: the sheet's header, top right, as the app's other menus. */
+  menuHost: HTMLElement | null;
 }) {
   const queryClient = useQueryClient();
   const isDesktop = useIsDesktop();
@@ -147,24 +149,11 @@ export function EditAttempt({
 
   const footer = (
     <>
-      {/* Rare, and a slip next to Done is costly: delete lives behind "…", on the far side of the footer. */}
-      <MoreMenu label="More for this attempt" title="Attempt" description={`Attempt ${attempt.number}`} inSheet>
-        <ActionMenuItem
-          icon={TrashIcon}
-          tone="danger"
-          disabled={!!readOnly}
-          onSelect={() => {
-            deleteAttempt(queryClient, item.id, attempt);
-            onOpenChange(false);
-          }}
-        >
-          Delete attempt
-        </ActionMenuItem>
-      </MoreMenu>
-      <SaveStatus state={saveState} className="ml-auto" />
+      <SaveStatus state={saveState} className="md:ml-auto" />
       <Button
         variant={printing && !value.outcome ? "secondary" : "primary"}
         size={isDesktop ? "md" : "lg"}
+        className="max-md:flex-1"
         onClick={() => {
           if (readOnly === "finish" && value.outcome) {
             finishQueued.current = true;
@@ -182,6 +171,26 @@ export function EditAttempt({
     <>
       {/* The footer belongs to the sheet's frame, which stays put when stepping to another attempt: it is drawn there. */}
       {footerHost && createPortal(footer, footerHost)}
+      {menuHost &&
+        createPortal(
+          <>
+            {/* Rare, and a slip next to Done is costly: delete lives behind "…" in the header, away from Done. */}
+            <MoreMenu label="More for this attempt" title="Attempt" description={`Attempt ${attempt.number}`} inSheet>
+              <ActionMenuItem
+                icon={TrashIcon}
+                tone="danger"
+                disabled={!!readOnly}
+                onSelect={() => {
+                  deleteAttempt(queryClient, item.id, attempt);
+                  onOpenChange(false);
+                }}
+              >
+                Delete attempt
+              </ActionMenuItem>
+            </MoreMenu>
+          </>,
+          menuHost,
+        )}
       {camera.input}
       {library.input}
       {slicer.picker.input}

@@ -8,12 +8,11 @@ import { applyFileSettings, printablePlates } from "@shared/threemf/prefill.ts";
 import { useQuery, useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
 import { lazy, type ReactNode, Suspense, useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/Button";
-import { ToggleChip } from "@/components/ui/Chip";
-import { SlicerFileIcon } from "@/components/ui/icons";
 import { useFilePicker } from "@/components/ui/PhotoTiles";
 import { toast } from "@/components/ui/Toast";
 import { addSpool } from "@/lib/pantry";
 import { spoolsQuery } from "@/lib/pantry-queries";
+import { fileThumbSrc } from "@/lib/previews";
 import { sessionQuery } from "@/lib/queries";
 import { SLICER_ACCEPT, useSlicerDropTarget } from "@/lib/slicer-drop";
 import {
@@ -26,7 +25,7 @@ import {
 } from "@/lib/slicer-files";
 import type { SliceOutcome } from "@/lib/slicing/slice-model";
 import { useIsDesktop } from "@/lib/use-media-query";
-import { AddSlicerFile, FileCard, PlateChooser, UnknownFilaments, usePlateThumbUrl } from "../SlicerFile";
+import { AddSlicerFile, FileCard, PlateChooser, PlateThumb, UnknownFilaments, usePlateThumbUrl } from "../SlicerFile";
 import { formatMinutes } from "../settings";
 
 /** A slicer file being read into the sheet: which plate, what it said, which filaments aren't in the pantry. */
@@ -242,7 +241,6 @@ function SlicerDraftFile({
       meta={[
         plateCount > 1 && plate ? `plate ${plate.index} of ${plateCount}` : "",
         estimate !== undefined ? `est. ${formatMinutes(estimate)}` : "",
-        formatBytes(state.draft.file.size),
       ].filter(Boolean)}
       note={
         state.draft.file.size > MAX_SLICER_FILE_BYTES
@@ -295,8 +293,8 @@ export function SlicerFileSection({
   }
   return (
     <div className="flex flex-col gap-2">
-      <AddSlicerFile onClick={onPick} desktop={isDesktop} />
       {ideaFiles.length > 0 && onUseIdeaFile && <IdeaFileOffer files={ideaFiles} onUse={onUseIdeaFile} />}
+      <AddSlicerFile onClick={onPick} desktop={isDesktop} />
     </div>
   );
 }
@@ -308,27 +306,43 @@ export const keptSlices = (files: readonly AttemptFile[]) =>
 /** The name of what a kept file attaches: a model gives its sliced .gcode.3mf, not the .stl it was made from. */
 export const attachedName = (file: AttemptFile) => (file.kind === "model" ? slicedName(file.name) : file.name);
 
-/** "Sliced for this idea": the files kept with the idea, to print this attempt from (the file's bytes come from the server). */
+/**
+ * The idea's kept slices, as compact rows (plate picture, name, estimate), newest first, the newest marked "latest":
+ * one tap attaches one. Shown above the well, which is the quieter choice.
+ */
 function IdeaFileOffer({ files, onUse }: { files: AttemptFile[]; onUse: (file: AttemptFile) => void }) {
-  const slices = keptSlices(files);
-  const latest = slices.reduce<AttemptFile | undefined>((a, b) => (a && a.createdAt >= b.createdAt ? a : b), undefined);
-  if (!latest) return null;
+  const slices = keptSlices(files).sort((a, b) => b.createdAt - a.createdAt);
+  if (!slices.length) return null;
   return (
-    <div className="flex flex-col gap-1.5 px-0.5">
-      {slices.length > 1 && (
-        <Button variant="secondary" size="md" onClick={() => onUse(latest)} className="self-start">
-          Use the latest slice
-        </Button>
-      )}
-      <span className="text-small text-ink-faint">{slices.length > 1 ? "Or pick one:" : "Sliced for this idea:"}</span>
-      <div className="flex flex-wrap gap-2">
-        {slices.map((file) => (
-          <ToggleChip key={file.id} icon={SlicerFileIcon} onClick={() => onUse(file)}>
-            <span className="max-w-48 truncate">{attachedName(file)}</span>
-          </ToggleChip>
-        ))}
-      </div>
-    </div>
+    <ul aria-label="Slices kept with the idea" className="flex flex-col gap-2">
+      {slices.map((file, index) => {
+        const estimate = file.prefill.estimatedMinutes;
+        return (
+          <li key={file.id}>
+            <button
+              type="button"
+              onClick={() => onUse(file)}
+              aria-label={`Use ${attachedName(file)}`}
+              className="pressable focus-ring bg-ink/3 hover:bg-ink/5 flex w-full items-center gap-3 rounded-lg p-2.5 text-left"
+            >
+              <PlateThumb
+                src={file.hasThumb ? fileThumbSrc(file) : undefined}
+                alt="The plate, as sliced"
+                className="size-12"
+              />
+              <span className="flex min-w-0 flex-1 flex-col">
+                <span className="text-small text-ink truncate font-semibold">{attachedName(file)}</span>
+                <span className="text-caption text-ink-faint">
+                  {[estimate !== undefined ? `est. ${formatMinutes(estimate)}` : "", index === 0 ? "latest" : ""]
+                    .filter(Boolean)
+                    .join(" · ")}
+                </span>
+              </span>
+            </button>
+          </li>
+        );
+      })}
+    </ul>
   );
 }
 

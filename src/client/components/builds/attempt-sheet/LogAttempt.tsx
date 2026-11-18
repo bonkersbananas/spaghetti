@@ -203,9 +203,8 @@ export function LogAttempt({
         {library.input}
         {slicer.picker.input}
         <AttemptFields
-          outcomeLabel="How did it go?"
+          outcomeLabel="Already printed? How did it go?"
           changeChips
-          atFoot={!(!previous && !only && keptSlices(item.files ?? []).length > 1)}
           fromFile={slicer.state?.prefill ?? undefined}
           file={
             <SlicerFileSection

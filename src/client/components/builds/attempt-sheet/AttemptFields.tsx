@@ -7,7 +7,6 @@ import { Caution, FromFileMark } from "@/components/ui/Caution";
 import { Disclosure } from "@/components/ui/Disclosure";
 import { TextArea } from "@/components/ui/Field";
 import { SettingsIcon } from "@/components/ui/icons";
-import { MetaList } from "@/components/ui/MetaList";
 import type { AttemptView } from "@/lib/items";
 import { usePrinterSetup } from "@/lib/pantry-queries";
 import { useIsDesktop } from "@/lib/use-media-query";
@@ -64,8 +63,6 @@ export interface FieldsProps {
   suggestion?: ReactNode;
   /** The closed settings row says what `suggestion` offers, in one line ("Worked on Hook: Textured PEI, 250 °C"). */
   suggestionOffer?: string;
-  /** A phone's sheet opens scrolled to its foot; false where something at the top asks first (a choice of slicer file). */
-  atFoot?: boolean;
   /** A new attempt: what carried over shows as chips to change one thing in place. */
   changeChips?: boolean;
   /** The slicer file: its card, a plate to pick, or the well to add one. */
@@ -122,11 +119,8 @@ export function AttemptFields(props: FieldsProps) {
       <span className="block truncate">{[`As ${base.label}`, ...pieces.slice(0, 3)].join(" · ")}</span>
     )
   ) : pieces.length ? (
-    <MetaList>
-      {pieces.map((piece) => (
-        <span key={piece}>{piece}</span>
-      ))}
-    </MetaList>
+    // One line, cut with an ellipsis (design.md): the closed row never grows with what the file said.
+    <span className="block truncate">{pieces.join(" · ")}</span>
   ) : (
     "Filament, plate, temperatures, times. All optional."
   );
@@ -180,13 +174,17 @@ export function AttemptFields(props: FieldsProps) {
         {/* One line of meaning, but it wraps and grows so the whole note stays in view while typing. */}
         <TextArea
           aria-label="Note"
+          className="scroll-mb-3"
           minRows={1}
           // The tags under it ask "What went wrong?" / "What worked?": the note doesn't repeat the question.
           placeholder={outcome ? "One line is plenty." : "A line about this attempt"}
           maxLength={500}
           enterKeyHint="done"
-          onFocus={() => {
-            toEnd([150, 400]);
+          onFocus={(event) => {
+            // The keyboard is coming up: keep the whole field right above the footer, not pushed under the header.
+            const field = event.currentTarget;
+            if (isDesktop) return;
+            for (const ms of [0, 150, 400]) window.setTimeout(() => field.scrollIntoView({ block: "end" }), ms);
           }}
           value={props.note}
           onChange={(event) => props.onNote(event.target.value.replace(/\n/g, " "))}
@@ -296,21 +294,35 @@ export function AttemptFields(props: FieldsProps) {
   // goes back there when what sits below the outcome grows (its hint) or the keyboard comes up for the note.
   const root = useRef<HTMLDivElement>(null);
   const touched = useRef(false);
-  const toEnd = (delays: number[]) => {
-    if (isDesktop) return () => {};
-    let body: HTMLElement | null = root.current?.parentElement ?? null;
+  // Scrolls the sheet's body to its end and keeps it there while its height settles (the sheet's own opening, the
+  // settings, a hint arriving): a watcher on the content's size for a moment, not one scroll on mount.
+  const toEnd = (force: boolean) => {
+    if (isDesktop || !root.current) return () => {};
+    let body: HTMLElement | null = root.current.parentElement;
     while (body && getComputedStyle(body).overflowY !== "auto") body = body.parentElement;
     const scroller = body;
     if (!scroller) return () => {};
-    const go = () => scroller.scrollTo({ top: scroller.scrollHeight });
-    if (!touched.current) go();
-    const timers = delays.map((ms) => window.setTimeout(go, ms));
+    const go = () => {
+      if (force || !touched.current) scroller.scrollTo({ top: scroller.scrollHeight });
+    };
+    go();
+    const watcher = new ResizeObserver(go);
+    watcher.observe(root.current);
+    watcher.observe(scroller);
+    const stop = window.setTimeout(() => watcher.disconnect(), 900);
     return () => {
-      for (const timer of timers) window.clearTimeout(timer);
+      window.clearTimeout(stop);
+      watcher.disconnect();
     };
   };
+  const opened = useRef(false);
   // biome-ignore lint/correctness/useExhaustiveDependencies: on opening, and when the outcome changes.
-  useEffect(() => (props.atFoot === false && outcome === null ? undefined : toEnd([60, 200, 450])), [outcome]);
+  useEffect(() => {
+    const first = !opened.current;
+    opened.current = true;
+    return toEnd(!first);
+  }, [outcome]);
+
   const blocks = isDesktop
     ? [
         outcomeBlock,
@@ -330,10 +342,10 @@ export function AttemptFields(props: FieldsProps) {
         notEnoughBlock,
         whenBlock,
         coachBlock,
-        tagsBlock,
         noteBlock,
         plateBlock,
         photosBlock,
+        tagsBlock,
         outcomeBlock,
       ];
 
@@ -344,7 +356,7 @@ export function AttemptFields(props: FieldsProps) {
       onPointerDownCapture={(event) => {
         if ((event.target as HTMLElement).closest("[role=radiogroup]") === null) touched.current = true;
       }}
-      className="flex flex-col gap-5"
+      className="flex flex-col gap-5 max-md:pb-2"
       data-capture
       onKeyDown={(event) => {
         // 1, 2, 3 answer "How did it go?" when focus isn't in a field (a note's digits are the note's).
