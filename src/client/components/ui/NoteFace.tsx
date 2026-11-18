@@ -1,7 +1,7 @@
 import { linkWords } from "@shared/links";
 import { type NoteSize, noteSize } from "@shared/notes";
 import { keepUnits } from "@shared/typography";
-import { Fragment, type ReactNode } from "react";
+import { Fragment, type ReactNode, useCallback } from "react";
 import { cn } from "@/lib/cn";
 
 const sizes: Record<NoteSize, string> = {
@@ -37,18 +37,43 @@ interface NoteFaceProps {
   maxSize?: NoteSize;
   /** Keeps the bottom corner free for a badge laid over the card (the rank on a picked tile). */
   clearBottom?: boolean;
+  /** A tall face: a short note leaves its foot empty, so a loose strand of spaghetti is doodled there. */
+  doodle?: boolean;
+}
+
+/**
+ * The clamp that ends a note on a whole line with an ellipsis, never through the middle of one: the box's height in
+ * lines, set in the resize observer's own callback (it runs before the frame is painted, so a resize never shows a
+ * frame with the old count). The face's width is watched too: the type is in container units, so a wider face has
+ * taller lines in the same box.
+ */
+function useWholeLines() {
+  return useCallback((el: HTMLElement | null) => {
+    if (!el) return;
+    const observer = new ResizeObserver(() => {
+      const note = el.firstElementChild as HTMLElement;
+      const lines = Math.floor((el.clientHeight + 1) / Number.parseFloat(getComputedStyle(note).lineHeight));
+      if (lines > 0) note.style.webkitLineClamp = String(lines);
+    });
+    // The note too: a note edited into another size step changes its line height, not the box.
+    observer.observe(el);
+    observer.observe(el.firstElementChild ?? el);
+    observer.observe(el.parentElement?.parentElement ?? el);
+    return () => observer.disconnect();
+  }, []);
 }
 
 /**
  * A note in place of a photo: set in Fraunces under one faint rule, like an
  * index card in a kitchen notebook. The type scales with the card's width
  * (container units), so a note wraps the same in a phone's two columns as
- * in the desktop's four; a note too long for its card fades out at the
- * bottom rather than being cut mid-line. A note that is only a link shows
+ * in the desktop's four; a note too long for its card ends on a whole
+ * line with an ellipsis rather than being cut mid-line. A note that is only a link shows
  * what it links to in words ("Skadis pegboard white") over its site, not the
  * address. Fills its parent.
  */
-export function NoteFace({ note, size, className, compact, clearBottom, maxSize }: NoteFaceProps) {
+export function NoteFace({ note, size, className, compact, clearBottom, maxSize, doodle }: NoteFaceProps) {
+  const measured = useWholeLines();
   const link = BARE_LINK.test(note.trim()) ? linkWords(note) : undefined;
   const text = link?.words ?? note;
   const order: NoteSize[] = ["xl", "lg", "md", "sm"];
@@ -56,25 +81,38 @@ export function NoteFace({ note, size, className, compact, clearBottom, maxSize 
   const face = size ?? (maxSize && order.indexOf(sized) < order.indexOf(maxSize) ? maxSize : sized);
   return (
     <div className={cn("paper-grain bg-note @container relative flex size-full flex-col", className)}>
-      <div className={cn("p-note-inset flex min-h-0 flex-1 flex-col", clearBottom && "pb-9")}>
+      <div className={cn("p-note-inset flex min-h-0 flex-1 flex-col", clearBottom && "pb-12")}>
         <span aria-hidden className="bg-tomato/25 mb-note-rule h-px w-full shrink-0" />
-        <p
-          className={cn(
-            "font-display text-ink font-normal break-words whitespace-pre-line",
-            compact === true
-              ? "text-caption line-clamp-3 leading-snug"
-              : cn(
-                  compact === "fill" ? miniSizes[face] : sizes[face],
-                  // A link's few words are clamped whole; a note fills the face and fades out.
-                  link
-                    ? "line-clamp-3"
-                    : cn("min-h-0 flex-1 overflow-hidden", compact === "fill" ? "fade-lines" : "fade-bottom"),
-                ),
-          )}
-        >
-          {/* A number keeps its unit on the line ("42 mm"); an address may break after its slashes. */}
-          {link ? keepUnits(text) : breakAfterSlashes(keepUnits(note))}
-        </p>
+        {link || compact === true ? (
+          <p
+            className={cn(
+              "font-display text-ink font-normal break-words whitespace-pre-line",
+              compact === true ? "text-caption line-clamp-3 leading-snug" : cn(sizes[face], "line-clamp-3"),
+            )}
+          >
+            {link ? keepUnits(text) : breakAfterSlashes(keepUnits(note))}
+          </p>
+        ) : (
+          // The box is measured; the note inside it is exactly as many lines tall as fit, so no line shows partly.
+          <div ref={measured} className="min-h-0 flex-1 overflow-hidden">
+            <p
+              className={cn(
+                "font-display text-ink line-clamp-3 font-normal break-words whitespace-pre-line",
+                compact === "fill" ? miniSizes[face] : sizes[face],
+              )}
+            >
+              {/* A number keeps its unit on the line ("42 mm"); an address may break after its slashes. */}
+              {breakAfterSlashes(keepUnits(note))}
+            </p>
+          </div>
+        )}
+        {/* Only a note short enough to leave the foot empty: a title-only idea or a few words: most of the card is empty. */}
+        {doodle && !link && !compact && note.trim().length <= 32 && !/\n\s*\n/.test(note) && (
+          <span
+            aria-hidden
+            className="note-strand bg-tomato/25 pointer-events-none absolute bottom-[8cqi] left-[8cqi] aspect-[100/44] w-[34cqi]"
+          />
+        )}
         {link && <p className="text-caption text-ink-faint mt-1.5 truncate">{link.site}</p>}
       </div>
     </div>
