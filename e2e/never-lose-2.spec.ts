@@ -108,6 +108,11 @@ test("closing the capture sheet mid-note keeps the note for the next opening, ev
     const again = await open();
     await expect(again.getByRole("textbox", { name: "Note" })).toHaveValue("Half a thought", { timeout: 1500 });
   }).toPass();
+  // On a laptop the sheet opens with the caret after the restored words, so typing carries on from there.
+  if (!isMobile) {
+    await page.keyboard.type(" kettle");
+    await expect(page.getByRole("textbox", { name: "Note" })).toHaveValue("Half a thought kettle");
+  }
 });
 
 test("saved things are read-only with no connection, and editable again once it is back", async ({ page, context }) => {

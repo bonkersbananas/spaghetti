@@ -1,6 +1,6 @@
 import type { Outcome } from "@shared/attempts";
 import { useLocation, useNavigate } from "@tanstack/react-router";
-import { lazy, Suspense, useEffect, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { OutcomePicker } from "@/components/builds/Outcome";
 import { Button } from "@/components/ui/Button";
 import { ToggleChip } from "@/components/ui/Chip";
@@ -118,6 +118,15 @@ export function CaptureSheet() {
       setPickedPrint(null);
     } else if (aim) setAsIdea(false);
   }, [open, aim]);
+  // A restored draft opens with the caret after its last word (autofocus alone leaves it at the start), until the
+  // person places it themselves.
+  const caretAtEnd = useRef(true);
+  useEffect(() => {
+    if (!open) caretAtEnd.current = true;
+  }, [open]);
+  const placeCaret = useCallback((note: HTMLTextAreaElement | null) => {
+    if (note && caretAtEnd.current) note.setSelectionRange(note.value.length, note.value.length);
+  }, []);
   const target: Target = asIdea ? { kind: "idea" } : auto;
   // The answer picked for this print, kept in the capture's draft (closing the sheet doesn't lose it).
   const mine = target.kind === "attempt" && printDraft?.attemptId === target.attemptId ? printDraft : null;
@@ -304,9 +313,15 @@ export function CaptureSheet() {
           minRows={isDesktop ? 4 : 3}
           value={draft}
           onChange={(event) => setDraft(event.target.value)}
+          ref={placeCaret}
           autoFocus={isDesktop}
+          onFocus={(event) => placeCaret(event.currentTarget)}
+          onPointerDown={() => {
+            caretAtEnd.current = false;
+          }}
           enterKeyHint={isDesktop ? undefined : "enter"}
           onKeyDown={(event) => {
+            caretAtEnd.current = false;
             if (event.key !== "Enter" || event.nativeEvent.isComposing) return;
             // Desktop: Enter saves, Shift+Enter is a new line. Anywhere: Cmd/Ctrl+Enter saves.
             if ((isDesktop && !event.shiftKey) || event.metaKey || event.ctrlKey) {

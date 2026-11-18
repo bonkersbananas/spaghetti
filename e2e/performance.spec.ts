@@ -412,3 +412,66 @@ test("the first ⌘K right after a page load opens the palette at once", async (
   expect(opened, "first ⌘K").toBeLessThan(MAX_FIRST_PALETTE_MS);
   await context.close();
 });
+
+/**
+ * The first open of the capture sheet and of ⌘K, once the app has warmed their code (a second after the first screen),
+ * must cost what every later open does. Each run is a fresh page load, so every open is the first one. React.lazy
+ * made them show ~350 ms late (its Suspense reveal throttle, even with the chunk in): about 40-80 ms measured since,
+ * at 4× CPU, so the budget is well under that throttle.
+ */
+const MAX_FIRST_OPEN_MS = 200;
+
+test("the first capture sheet and the first ⌘K, once warmed, open as fast as later ones", async ({
+  browser,
+  baseURL,
+}) => {
+  test.setTimeout(180_000);
+  const user = SEED_USERS[0];
+  const opens: Record<string, number[]> = { "capture sheet, phone": [], "capture sheet, C": [], "⌘K": [] };
+  for (const [name, desktop] of [
+    ["capture sheet, phone", false],
+    ["capture sheet, C", true],
+    ["⌘K", true],
+  ] as const) {
+    const context = await browser.newContext({
+      baseURL,
+      ...(desktop ? { viewport: { width: 1440, height: 900 } } : PHONE),
+      serviceWorkers: "block",
+    });
+    const signedIn = await context.request.post("/api/session", {
+      data: { username: user.username, password: SEED_PASSWORD },
+      headers: { Origin: new URL(baseURL ?? "").origin },
+    });
+    expect(signedIn.ok()).toBe(true);
+    await installProbe(context);
+    for (let run = 0; run < 4; run++) {
+      const page = await context.newPage();
+      await throttle(page, { network: false });
+      await page.goto(desktop ? "/today" : "/journal");
+      await expect(page.locator("h1").first()).toBeVisible();
+      // Past the warm-up timer (1 s) and the chunk's fetch.
+      await page.waitForTimeout(2500);
+      const tap = desktop
+        ? await tapLatency(
+            page,
+            () => page.keyboard.press(name === "⌘K" ? "Control+k" : "c"),
+            onScreen(name === "⌘K" ? "[role=dialog] [role=combobox]" : "[role=dialog] textarea"),
+          )
+        : await tapLatency(
+            page,
+            () => page.getByRole("navigation", { name: "Sections" }).getByRole("button", { name: "New idea" }).tap(),
+            onScreen("[role=dialog] textarea"),
+          );
+      opens[name]?.push(tap.shown);
+      await page.close();
+    }
+    await context.close();
+  }
+  const over: string[] = [];
+  for (const [name, times] of Object.entries(opens)) {
+    const shown = median(times);
+    console.log(`First open, ${name}, 4× CPU: ${shown.toFixed(0)} ms`);
+    if (shown < 0 || shown > MAX_FIRST_OPEN_MS) over.push(`${name}: ${shown} ms, budget ${MAX_FIRST_OPEN_MS}`);
+  }
+  expect(over, "slower than the budget").toEqual([]);
+});
