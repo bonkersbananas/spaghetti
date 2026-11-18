@@ -572,28 +572,73 @@ export function useItemFields(item: Pick<ItemView, "id" | "title" | "note" | "fo
  */
 const fresh = new Set<string>();
 const FRESH_KEY = "spaghetti.fresh-builds";
-const storedFresh = (): string[] => {
+interface FreshEntry {
+  id: string;
+  tab: string;
+}
+/** This tab's name (sessionStorage outlives a reload, not the tab), and its heartbeat, so another tab can tell it is open. */
+const tabId = (() => {
   try {
-    const ids: unknown = JSON.parse(localStorage.getItem(FRESH_KEY) ?? "[]");
-    return Array.isArray(ids) ? ids.filter((id): id is string => typeof id === "string") : [];
+    let id = sessionStorage.getItem("spaghetti.tab");
+    if (!id) sessionStorage.setItem("spaghetti.tab", (id = crypto.randomUUID()));
+    return id;
+  } catch {
+    return "tab";
+  }
+})();
+const aliveKey = (tab: string) => `spaghetti.tab-alive.${tab}`;
+let beating = false;
+function beat() {
+  const write = () => {
+    try {
+      localStorage.setItem(aliveKey(tabId), String(Date.now()));
+    } catch {}
+  };
+  write();
+  if (beating) return;
+  beating = true;
+  setInterval(write, 10_000);
+  // A closed tab says so at once, so its blank builds are swept at the next visit.
+  window.addEventListener("pagehide", () => {
+    try {
+      localStorage.removeItem(aliveKey(tabId));
+    } catch {}
+  });
+  window.addEventListener("pageshow", write);
+}
+const isAlive = (tab: string) => {
+  try {
+    return Date.now() - Number(localStorage.getItem(aliveKey(tab)) ?? 0) < 30_000;
+  } catch {
+    return false;
+  }
+};
+const storedFresh = (): FreshEntry[] => {
+  try {
+    const entries: unknown = JSON.parse(localStorage.getItem(FRESH_KEY) ?? "[]");
+    return Array.isArray(entries)
+      ? entries.filter((e): e is FreshEntry => typeof e?.id === "string" && typeof e?.tab === "string")
+      : [];
   } catch {
     return [];
   }
 };
-const storeFresh = (ids: string[]) => {
+const storeFresh = (entries: FreshEntry[]) => {
   try {
-    if (ids.length) localStorage.setItem(FRESH_KEY, JSON.stringify(ids.slice(-20)));
+    if (entries.length) localStorage.setItem(FRESH_KEY, JSON.stringify(entries.slice(-20)));
     else localStorage.removeItem(FRESH_KEY);
   } catch {}
 };
 export const markFresh = (id: string) => {
   fresh.add(id);
-  storeFresh([...storedFresh().filter((known) => known !== id), id]);
+  beat();
+  storeFresh([...storedFresh().filter((known) => known.id !== id), { id, tab: tabId }]);
 };
-const forgetFresh = (id: string) => {
+/** A build that is no longer a blank one in the making (a file is on its way to it): it is kept as it is. */
+export const forgetFresh = (id: string) => {
   fresh.delete(id);
-  const ids = storedFresh();
-  if (ids.includes(id)) storeFresh(ids.filter((known) => known !== id));
+  const entries = storedFresh();
+  if (entries.some((known) => known.id === id)) storeFresh(entries.filter((known) => known.id !== id));
 };
 
 const isEmptyBuild = (item: ItemView) =>
@@ -612,8 +657,10 @@ export function sweepUntouched(queryClient: QueryClient, builds: ItemView[]) {
   const known = storedFresh();
   if (!known.length) return;
   const byId = new Map(builds.map((build) => [build.id, build]));
-  for (const id of known) {
+  for (const { id, tab } of known) {
     if (fresh.has(id)) continue;
+    // Still open in another tab: that tab decides.
+    if (tab !== tabId && isAlive(tab)) continue;
     const build = byId.get(id);
     if (build?.pending) continue;
     if (build && isEmptyBuild(build)) deleteItem(queryClient, build, { silent: true });
