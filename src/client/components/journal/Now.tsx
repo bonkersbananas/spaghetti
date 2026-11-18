@@ -1,3 +1,4 @@
+import { isOffTheBed } from "@shared/print-progress";
 import { type QueryClient, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AnimatePresence, m, useReducedMotion } from "motion/react";
 import { use, useMemo } from "react";
@@ -6,6 +7,7 @@ import { Since } from "@/components/today/Since";
 import { Section } from "@/components/ui/Section";
 import { useVia } from "@/lib/agents";
 import { printingAttempts } from "@/lib/builds";
+import { cn } from "@/lib/cn";
 import { useBuilds } from "@/lib/items";
 import { duration, ease } from "@/lib/motion";
 import { printerQuery } from "@/lib/pantry-queries";
@@ -31,7 +33,17 @@ export default function Now() {
   const live = useQuery(printerQuery).data?.bridge?.progress;
   const hasDueUpkeep = useDueUpkeep().length > 0;
   const hasScoutPicks = waitingPicks(useScout()).length > 0;
-  const onBed = useMemo(() => printingAttempts(builds.items, now, live), [builds.items, now, live]);
+  // The ones asking "how did it go?" lead: someone standing at the printer needs those first. (Stable: the rest keep their order.)
+  const onBed = useMemo(
+    () =>
+      printingAttempts(builds.items, now, live).sort(
+        (a, b) => Number(isOffTheBed(b.attempt)) - Number(isOffTheBed(a.attempt)),
+      ),
+    [builds.items, now, live],
+  );
+  // One or two prints stack, each worth its height; from three they sit in a sideways row so the journal still starts
+  // about one card down.
+  const row = onBed.length > 2;
 
   return (
     <>
@@ -48,11 +60,20 @@ export default function Now() {
                 exit={{ opacity: 0, transition: { duration: reduce ? 0 : duration.base, ease: ease.inOut } }}
               >
                 {/* All alike: a wide picture with the Printing badge, then the name and the time left; the journal starts below them. */}
-                <section aria-label="On the bed" className="flex flex-col gap-3">
+                <section
+                  aria-label="On the bed"
+                  className={cn(
+                    "flex gap-3",
+                    row
+                      ? "no-scrollbar -mx-5 -my-2 snap-x snap-mandatory scroll-px-5 items-start overflow-x-auto overscroll-x-contain px-5 py-2"
+                      : "flex-col",
+                  )}
+                >
                   <AnimatePresence initial={false}>
                     {onBed.map(({ item, attempt }) => (
                       <m.div
                         key={attempt.id}
+                        className={cn(row && "w-[85%] shrink-0 snap-start")}
                         exit={{
                           opacity: 0,
                           height: 0,
@@ -62,7 +83,7 @@ export default function Now() {
                       >
                         <PrintingCard
                           compact
-                          lead={onBed.length > 1 ? "short" : "wide"}
+                          lead={onBed.length === 2 ? "short" : "wide"}
                           item={item}
                           attempt={attempt}
                           person={people?.find((person) => person.id === attempt.createdBy)}

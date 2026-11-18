@@ -122,10 +122,14 @@ export function PrintingCard({
   person,
   via,
   compact = false,
-  lead,
+  lead: leadAsked,
   desktop = "row",
   unread = 0,
 }: PrintingCardProps) {
+  // The build's cover, with the plate on the bed first when there is no photo.
+  const cover = coverOf(item, { file: attempt.file });
+  // A wide lead needs a picture: a print with none keeps the compact tile instead of a large empty frame.
+  const lead = cover.kind === "note" ? undefined : leadAsked;
   const layout = layouts[lead === "wide" ? "lead" : lead === "short" ? "leadShort" : compact ? "compact" : "big"];
   // A small square on a phone (compact without `lead`): too small for words or the state chip.
   const square = compact && !lead;
@@ -146,8 +150,6 @@ export function PrintingCard({
   const progress = usePrintProgress(attempt.id, attempt.printedAt, attempt.settings.estimatedMinutes);
   const due = progress.state === "due";
   const showUnread = unread > 0;
-  // The build's cover, with the plate on the bed first when there is no photo.
-  const cover = coverOf(item, { file: attempt.file });
   // Its name is right beside the picture, in Fraunces: a build with only a name shows the glyph, not its name twice.
   // So does a compact card's small square on a phone, too small for words (from md it is the full row).
   const glyph = cover.kind === "note" ? <BuildsIcon size={square ? 28 : 36} /> : undefined;
@@ -216,7 +218,7 @@ export function PrintingCard({
                 cover={cover}
                 // A compact card's square on a phone is too small to carry it; from md it is the full row's picture. An
                 // unread badge takes the corner, as on the grid's cards.
-                label={showUnread ? false : square ? "md" : true}
+                label={showUnread ? false : square || lead ? "md" : true}
                 glyph={nameOnly ? glyph : undefined}
                 inset={square ? "p-1 md:p-3" : "p-3"}
                 className="size-full"
@@ -242,7 +244,19 @@ export function PrintingCard({
             <OutcomeChip
               outcome={null}
               onPhoto
-              className={cn("shadow-soft pointer-events-none absolute bottom-2 left-2 z-20", square && "max-md:hidden")}
+              className={cn(
+                "shadow-soft pointer-events-none absolute bottom-2 left-2 z-20",
+                // Under "Now" the bar already says it is printing: the badge shows only on a state that differs.
+                (square || lead) && "max-md:hidden",
+              )}
+            />
+          )}
+          {offBed && lead && (
+            <OutcomeChip
+              outcome={null}
+              offTheBed
+              onPhoto
+              className="shadow-soft pointer-events-none absolute bottom-2 left-2 z-20 md:hidden"
             />
           )}
         </div>
