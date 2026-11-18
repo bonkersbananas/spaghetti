@@ -31,6 +31,8 @@ const RecipeResult = lazy(() => import("@/components/search/RecipeResult").then(
 
 /** What only some answers need (a spool, a mended typo, "Start again" on one that worked) loads when one appears. */
 const Extra = lazy(() => import("@/components/search/Extra"));
+/** The builds touched lately, under the suggestions: its code and photos come after the screen has drawn. */
+const Lately = lazy(() => import("@/components/search/Lately"));
 // The empty notebook's drawing (a long path): only a brand-new notebook shows it, so it isn't in Search's first load.
 const NoodleSearch = lazy(() =>
   import("@/components/illustrations/NoodleSearch").then((m) => ({ default: m.NoodleSearch })),
@@ -522,6 +524,9 @@ function Suggestions({
           ))}
         </SuggestionGroup>
       )}
+      <Suspense fallback={null}>
+        <Lately />
+      </Suspense>
     </div>
   );
 }
