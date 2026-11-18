@@ -60,7 +60,7 @@ export function PartLine({ progress, photo }: { progress: PartProgress; photo?: 
 }
 
 /**
- * A build's parts, under its notes where the summary is. Nothing but a quiet "Add parts" for a simple build (and
+ * A build's parts, under its notes where the summary is. Nothing for a simple build (its "Add parts" is `AddPartsButton`, in the action row beside Twist; and
  * "Parts from the file" when its slicer file names objects); a calm list with progress once there are parts, and an
  * offer to finish the build when every one is printed.
  */
