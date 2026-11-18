@@ -1,10 +1,12 @@
 import { Link } from "@tanstack/react-router";
 import { useRef, useState } from "react";
 import { CameraIcon, PlusIcon } from "@/components/ui/icons";
+import { UnreadDot } from "@/components/ui/UnreadDot";
 import { useCapture } from "@/lib/capture";
+import { useAnyUnread } from "@/lib/unread-comments";
 import { type Section, tabs } from "./sections";
 
-function Tab({ to, label, icon: Icon }: Pick<Section, "to" | "label" | "icon">) {
+function Tab({ to, label, icon: Icon, dot }: Pick<Section, "to" | "label" | "icon"> & { dot?: boolean }) {
   return (
     <Link
       to={to}
@@ -15,7 +17,11 @@ function Tab({ to, label, icon: Icon }: Pick<Section, "to" | "label" | "icon">) 
         <>
           {/* The held highlight: a soft round behind the icon. */}
           <span className="pointer-fine:group-active:bg-pressed group-data-[pressed]:bg-pressed rounded-pill flex h-7 w-12 items-center justify-center">
-            <Icon size={24} weight={isActive ? "fill" : "regular"} aria-hidden />
+            <span className="relative">
+              <Icon size={24} weight={isActive ? "fill" : "regular"} aria-hidden />
+              {/* Quiet, and gone once you are on the screen that shows what waits. */}
+              {dot && !isActive && <UnreadDot label="Something new" className="absolute -top-0.5 -right-1" />}
+            </span>
           </span>
           <span className="text-caption font-semibold">{label}</span>
         </>
@@ -118,6 +124,7 @@ function CaptureButton() {
 
 export function TabBar() {
   const [ideas, builds, journal, workshop] = tabs;
+  const unread = useAnyUnread();
   return (
     <nav
       aria-label="Sections"
@@ -130,7 +137,7 @@ export function TabBar() {
         <div className="flex flex-1 items-center justify-center">
           <CaptureButton />
         </div>
-        <Tab {...journal} />
+        <Tab {...journal} dot={unread} />
         <Tab {...workshop} />
       </div>
     </nav>

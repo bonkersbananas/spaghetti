@@ -108,6 +108,11 @@ test("closing the capture sheet mid-note keeps the note for the next opening, ev
     const again = await open();
     await expect(again.getByRole("textbox", { name: "Note" })).toHaveValue("Half a thought", { timeout: 1500 });
   }).toPass();
+  // On a laptop the sheet opens with the caret after the restored words, so typing carries on from there.
+  if (!isMobile) {
+    await page.keyboard.type(" kettle");
+    await expect(page.getByRole("textbox", { name: "Note" })).toHaveValue("Half a thought kettle");
+  }
 });
 
 test("saved things are read-only with no connection, and editable again once it is back", async ({ page, context }) => {
@@ -201,4 +206,19 @@ test("a tick's late answer doesn't undo a rename made meanwhile", async ({ page 
   await expect(page.getByRole("list", { name: "Bought" }).getByText(`${thing} stick`)).toBeVisible({ timeout: 1500 });
   await expect(page.getByRole("list", { name: "Bought" }).getByText(thing, { exact: true })).toHaveCount(0);
   await page.request.delete(`/api/shopping-items/${id}`, { headers });
+});
+
+test("on a phone the capture sheet opens with the note focused once it has settled @phone", async ({
+  page,
+  isMobile,
+}) => {
+  test.skip(!isMobile, "a laptop autofocuses it at once (C)");
+  await page.getByRole("button", { name: "New idea" }).click();
+  const note = page.getByRole("dialog", { name: "New idea" }).getByRole("textbox", { name: "Note" });
+  await expect(note).toBeFocused({ timeout: 3000 });
+  // Typing goes straight in, and Camera and Library are still on screen beside it.
+  await page.keyboard.type("A kettle handle");
+  await expect(note).toHaveValue("A kettle handle");
+  await expect(page.getByRole("button", { name: "Take photo" })).toBeInViewport();
+  await expect(page.getByRole("button", { name: "From library" })).toBeInViewport();
 });

@@ -46,7 +46,7 @@ import { spoolsQuery } from "@/lib/pantry-queries";
 import { photoSrc } from "@/lib/previews";
 import { keepOrigin } from "@/lib/previous-path";
 import { peopleQuery, sessionQuery } from "@/lib/queries";
-import { canEdit, useReadOnly } from "@/lib/read-only";
+import { canEdit, useKeepEditing, useReadOnly } from "@/lib/read-only";
 import { itemName, useRememberItem } from "@/lib/recent";
 import { recipesQuery } from "@/lib/recipes-query";
 import { SLICER_ACCEPT, useSlicerDropTarget } from "@/lib/slicer-drop";
@@ -146,6 +146,7 @@ const Idea = memo(function Idea({ item }: { item: ItemView }) {
   const via = useVia()(item.createdVia);
 
   const { title, setTitle, note, setNote, forWhom, setForWhom, saveState } = useItemFields(item);
+  const titleKeep = useKeepEditing(readOnly);
 
   // A draft that lands while this idea is open says so once, with a way to take it back (here or from the other phone).
   const draftStatus = useRef(item.draft?.status);
@@ -276,8 +277,8 @@ const Idea = memo(function Idea({ item }: { item: ItemView }) {
       : undefined;
   };
   useHotkeys({
-    ideaUpNext:
-      canEdit(item.pending) && !item.pending ? () => setUpNext(queryClient, item, item.upNext === null) : undefined,
+    // Asked when the key is pressed, not when the page draws: drawing offline toasted "Waiting for the connection".
+    ideaUpNext: item.pending ? undefined : () => canEdit() && setUpNext(queryClient, item, item.upNext === null),
     ideaNext: neighbour(1),
     ideaPrevious: neighbour(-1),
     ideaBack: backTo.go,
@@ -386,7 +387,12 @@ const Idea = memo(function Idea({ item }: { item: ItemView }) {
 
           <div className="max-w-content flex min-w-0 flex-col gap-3 md:flex-3 md:pt-2 lg:flex-5">
             {/* While Claude reads the page, the empty photo area and title hold their place with the quiet shimmer. */}
-            {!hero && (reading ? <Skeleton className="mb-4 h-28 rounded-xl" /> : <AddFirstPhotos itemId={item.id} />)}
+            {!hero &&
+              (reading ? (
+                <Skeleton className="mb-4 h-28 rounded-xl max-md:hidden" />
+              ) : (
+                <AddFirstPhotos itemId={item.id} />
+              ))}
             {reading && !title.trim() ? (
               <Skeleton className="my-1.5 h-8 w-3/4" />
             ) : (
@@ -396,7 +402,9 @@ const Idea = memo(function Idea({ item }: { item: ItemView }) {
                 placeholder={naming ? "Naming…" : "Untitled idea"}
                 minRows={1}
                 maxLength={200}
-                readOnly={readOnly}
+                readOnly={titleKeep.readOnly}
+                onFocus={titleKeep.onFocus}
+                onBlur={titleKeep.onBlur}
                 value={title}
                 className={named && untitled ? "sg-arrive" : undefined}
                 onChange={(event) => setTitle(event.target.value.replace(/\n/g, " "))}
@@ -417,6 +425,8 @@ const Idea = memo(function Idea({ item }: { item: ItemView }) {
               <ClaudeLine className={cn("-mt-2 md:-mt-1.5", untitled && "sg-arrive")}>Named by Claude</ClaudeLine>
             )}
             <IdeaTitleChips item={item} forWhom={forWhom} setForWhom={setForWhom} readOnly={readOnly} />
+            {/* No photo and no plate picture: on a phone one slim line, here under the title instead of two tiles above it. */}
+            {!hero && !reading && <AddFirstPhotos itemId={item.id} row />}
             <input
               ref={filePicker}
               type="file"

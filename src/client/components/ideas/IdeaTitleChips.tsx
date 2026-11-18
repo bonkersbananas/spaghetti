@@ -8,6 +8,7 @@ import { UpNextIcon, WishIcon } from "@/components/ui/icons";
 import { useForLine, useOtherPerson } from "@/lib/for-whom";
 import type { ItemView } from "@/lib/items";
 import { sessionQuery } from "@/lib/queries";
+import { useKeepEditing } from "@/lib/read-only";
 import { setUpNext } from "@/lib/up-next";
 import { toggleWishlist, useWishlistIds } from "@/lib/wishlist";
 
@@ -30,7 +31,10 @@ export function IdeaTitleChips({ item, forWhom, setForWhom, readOnly }: IdeaTitl
   const other = useOtherPerson();
   const forLine = useForLine();
   const [asking, setAsking] = useState(false);
+  // Offline, the line being typed in stays editable (it waits to be saved); the others are read-only.
+  const keep = useKeepEditing(readOnly);
   const locked = readOnly || item.pending;
+  const fieldLocked = keep.readOnly || item.pending;
 
   return (
     <>
@@ -38,7 +42,9 @@ export function IdeaTitleChips({ item, forWhom, setForWhom, readOnly }: IdeaTitl
         aria-label="For"
         value={forWhom}
         onChange={(event) => setForWhom(event.target.value)}
-        readOnly={locked}
+        readOnly={fieldLocked}
+        onFocus={keep.onFocus}
+        onBlur={keep.onBlur}
         asking={asking}
         you={forLine(forWhom) === "for you"}
         onOpen={() => setAsking(true)}

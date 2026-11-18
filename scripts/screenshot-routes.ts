@@ -4032,6 +4032,29 @@ export const shots: Shot[] = [
     cleanup: removeCoverBuilds,
   },
   {
+    // A new comment on a text-only Up next card (the oven knob): the same quiet dot on its note face.
+    name: "ideas-up-next-unread-note",
+    path: "/ideas",
+    prepare: async (page) => {
+      await page.route("**/api/comments/unread", async (route) => {
+        const answer = await route.fetch();
+        const body = (await answer.json()) as { threads: Array<Record<string, unknown>> };
+        const thread = {
+          ...body.threads[0],
+          itemId: "5eed0000-0000-4000-8000-000000000003",
+          count: 1,
+          title: null,
+          stage: "idea",
+        };
+        await route.fulfill({ response: answer, json: { threads: [thread, ...body.threads] } });
+      });
+      await page.goto("/ideas", { waitUntil: "networkidle" });
+      await page.locator("[aria-label='Up next'] li").nth(1).waitFor();
+      await page.waitForTimeout(800);
+    },
+    cleanup: (page) => page.unroute("**/api/comments/unread"),
+  },
+  {
     // A render's card with a new comment: the unread badge takes the corner, "From the model" gives way.
     name: "builds-render-unread",
     path: "/builds",

@@ -95,6 +95,8 @@ export const pairs: Pair[] = [
   { label: "Printer check on cards", fg: "semolina-ink", bg: "cream", min: 4.5 },
   { label: "Printer check on sheets", fg: "semolina-ink", bg: "lifted", min: 4.5 },
   { label: "Active tab label", fg: "tomato-ink", bg: "cream", min: 4.5 },
+  { label: "The unread dot on the tab bar", fg: "tomato", bg: "cream", min: 3 },
+  { label: "The unread dot on the sidebar", fg: "tomato", bg: "paper-deep", min: 3 },
   { label: "Tomato chip", fg: "tomato-ink", bg: "tomato-soft", min: 4.5 },
   { label: "Basil chip", fg: "basil-ink", bg: "basil-soft", min: 4.5 },
   { label: "Semolina chip", fg: "semolina-ink", bg: "semolina-soft", min: 4.5 },
