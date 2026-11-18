@@ -92,8 +92,8 @@ export function PartsSection({
   const leftUnsent = item.parts.some((part) => unsent(`part:${part.id}`) !== undefined);
   const cannotEdit = readOnly || item.pending;
   useEffect(() => {
-    if (leftUnsent && !cannotEdit) setEditing(true);
-  }, [leftUnsent, cannotEdit]);
+    if (leftUnsent && !cannotEdit) onEditing(true);
+  }, [leftUnsent, cannotEdit, onEditing]);
   const progress = useMemo(() => partProgress(item.parts, item.attempts), [item.parts, item.attempts]);
   const fromFile = useMemo(
     () =>
