@@ -1,7 +1,7 @@
 import { linkWords } from "@shared/links";
 import { type NoteSize, noteSize } from "@shared/notes";
 import { keepUnits } from "@shared/typography";
-import { Fragment, type ReactNode, useCallback, useState } from "react";
+import { Fragment, type ReactNode, useCallback } from "react";
 import { cn } from "@/lib/cn";
 
 const sizes: Record<NoteSize, string> = {
@@ -46,35 +46,50 @@ interface NoteFaceProps {
  * middle of one. Measured when the box's size is known (before paint) and again whenever it changes.
  */
 function useWholeLines() {
-  const [lines, setLines] = useState<number>();
   const ref = useCallback((el: HTMLElement | null) => {
     if (!el) return;
     const measure = () => {
-      const lh = Number.parseFloat(getComputedStyle(el.firstElementChild ?? el).lineHeight);
-      if (lh > 0 && el.clientHeight > 0) setLines(Math.max(1, Math.floor((el.clientHeight + 1) / lh)));
+      const note = el.firstElementChild as HTMLElement | null;
+      if (!note) return;
+      const lh = Number.parseFloat(getComputedStyle(note).lineHeight);
+      if (!(lh > 0 && el.clientHeight > 0)) return;
+      // Set on the element itself, in the observer's callback: it runs before the frame is painted, so a resize
+      // never shows a frame with the old count (a state update could land a frame late).
+      const lines = Math.max(1, Math.floor((el.clientHeight + 1) / lh));
+      note.style.webkitLineClamp = String(lines);
+      note.style.maxHeight = `${lines}lh`;
     };
+    // The box's height, and the face's width (the type is in container units: a wider face is a larger line height
+    // in the same box), and again once the fonts have arrived.
     const observer = new ResizeObserver(measure);
     observer.observe(el);
+    if (el.firstElementChild) observer.observe(el.firstElementChild);
+    if (el.parentElement?.parentElement) observer.observe(el.parentElement.parentElement);
     measure();
-    return () => observer.disconnect();
+    let gone = false;
+    void document.fonts?.ready.then(() => !gone && measure());
+    return () => {
+      gone = true;
+      observer.disconnect();
+    };
   }, []);
-  return [lines, ref] as const;
+  return ref;
 }
 
-/** A loose strand of spaghetti on the foot of a short note's index card. */
+/** A loose strand of spaghetti on the foot of a short note's index card: a loop or two and a trailing end. */
 function Strand() {
   // Laid over the face's foot, so it never takes a line from the note (only a short note gets one: see `doodle`).
   return (
     <svg
       aria-hidden
-      viewBox="0 0 72 24"
+      viewBox="0 0 100 44"
       fill="none"
       strokeLinecap="round"
       strokeLinejoin="round"
-      strokeWidth="2"
-      className="stroke-tomato/35 pointer-events-none absolute bottom-[8cqi] left-[8cqi] h-auto w-[26cqi]"
+      strokeWidth="1.6"
+      className="stroke-tomato/25 pointer-events-none absolute bottom-[8cqi] left-[8cqi] h-auto w-[34cqi]"
     >
-      <path d="M3 16c6-12 12-12 14-3s7 9 11 0 9-11 13-2 8 8 12 0 6-4 11-1" />
+      <path d="M3 34C14 36 20 24 28 14 34 6 44 8 42 18 40 28 28 32 28 22 28 10 46 4 58 10 70 16 66 32 56 30 48 28 54 14 68 18 80 22 84 34 98 30" />
     </svg>
   );
 }
@@ -89,7 +104,7 @@ function Strand() {
  * address. Fills its parent.
  */
 export function NoteFace({ note, size, className, compact, clearBottom, maxSize, doodle }: NoteFaceProps) {
-  const [lines, measured] = useWholeLines();
+  const measured = useWholeLines();
   const link = BARE_LINK.test(note.trim()) ? linkWords(note) : undefined;
   const text = link?.words ?? note;
   const order: NoteSize[] = ["xl", "lg", "md", "sm"];
@@ -97,7 +112,7 @@ export function NoteFace({ note, size, className, compact, clearBottom, maxSize,
   const face = size ?? (maxSize && order.indexOf(sized) < order.indexOf(maxSize) ? maxSize : sized);
   return (
     <div className={cn("paper-grain bg-note @container relative flex size-full flex-col", className)}>
-      <div className={cn("p-note-inset flex min-h-0 flex-1 flex-col", clearBottom && "pb-9")}>
+      <div className={cn("p-note-inset flex min-h-0 flex-1 flex-col", clearBottom && "pb-12")}>
         <span aria-hidden className="bg-tomato/25 mb-note-rule h-px w-full shrink-0" />
         {link || compact === true ? (
           <p
@@ -112,10 +127,6 @@ export function NoteFace({ note, size, className, compact, clearBottom, maxSize,
           // The box is measured; the note inside it is exactly as many lines tall as fit, so no line shows partly.
           <div ref={measured} className="min-h-0 flex-1 overflow-hidden">
             <p
-              style={{
-                WebkitLineClamp: lines ?? 3,
-                maxHeight: lines ? `${lines}lh` : undefined,
-              }}
               className={cn(
                 "font-display text-ink line-clamp-3 font-normal break-words whitespace-pre-line",
                 compact === "fill" ? miniSizes[face] : sizes[face],
@@ -126,8 +137,8 @@ export function NoteFace({ note, size, className, compact, clearBottom, maxSize,
             </p>
           </div>
         )}
-        {/* Only a note short enough to leave the foot empty: about five lines of the large steps at most. */}
-        {doodle && !link && !compact && note.trim().length <= 48 && !/\n\s*\n/.test(note) && <Strand />}
+        {/* Only a note short enough to leave the foot empty: a title-only idea or a few words: most of the card is empty. */}
+        {doodle && !link && !compact && note.trim().length <= 32 && !/\n\s*\n/.test(note) && <Strand />}
         {link && <p className="text-caption text-ink-faint mt-1.5 truncate">{link.site}</p>}
       </div>
     </div>
