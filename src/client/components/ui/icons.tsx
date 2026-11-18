@@ -88,6 +88,7 @@ export {
   Plus as PlusIcon,
   Printer as PrinterIcon,
   PushPin as MakeCoverIcon,
+  PuzzlePiece as PartsIcon,
   QrCode as QrIcon,
   Robot as AgentIcon,
   Ruler as RulerIcon,

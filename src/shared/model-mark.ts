@@ -165,3 +165,29 @@ export const modelPlace = (mark: ModelMark) =>
 /** The letter that stands for where the model lives: M for MakerWorld, STL for a .stl file. */
 export const modelLetter = (mark: ModelMark) =>
   mark.kind === "page" ? mark.name.charAt(0) : mark.name.slice(1).toUpperCase();
+
+/**
+ * A note as its read view shows it where the model's card sits under it: the lines that are only a link to the model
+ * are left out, but only while that link is among the first `cards` distinct links (the ones that get a card), so the
+ * link never vanishes with no card for it. A note with nothing to leave out is returned as it is.
+ */
+export function withoutModelLines(note: string, modelUrl: string, cards = 3): string {
+  const lines = note.split("\n");
+  const seen = new Set<string>();
+  const drop = new Set<number>();
+  lines.forEach((line, index) => {
+    for (const { url } of findLinks(line)) {
+      const key = linkKey(cleanModelUrl(url));
+      const isNew = !seen.has(key);
+      seen.add(key);
+      if (isNew && seen.size > cards) return;
+      if (sameModel(url, modelUrl) && line.trim() === url) drop.add(index);
+    }
+  });
+  if (!drop.size) return note;
+  return lines
+    .filter((_, index) => !drop.has(index))
+    .join("\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
