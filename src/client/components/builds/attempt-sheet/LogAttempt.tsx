@@ -16,7 +16,7 @@ import { photoSrc } from "@/lib/previews";
 import { sessionQuery } from "@/lib/queries";
 import { queueSlicerFile } from "@/lib/slicer-files";
 import { useIsDesktop } from "@/lib/use-media-query";
-import { WhatWorkedSuggestion } from "../WhatWorkedSuggestion";
+import { useWhatWorked, WhatWorkedSuggestion } from "../WhatWorkedSuggestion";
 import { AttemptFields } from "./AttemptFields";
 import { useOutcomeCounts } from "./PlateParts";
 import { DraftFile, fetchKeptFile, SlicerFileSection, useSlicerFile } from "./SheetSlicerFile";
@@ -79,6 +79,8 @@ export function LogAttempt({
     },
     incomingFile,
   });
+
+  const worked = useWhatWorked(item.id, draft.settings);
 
   // A fresh sheet starts from the latest attempt (one may have been logged since), but a
   // half-filled one is kept when it closes: nothing typed is lost.
@@ -235,6 +237,7 @@ export function LogAttempt({
               </Suspense>
             )
           }
+          suggestionOffered={!slicer.state && worked.offers}
           suggestion={
             <>
               {/* A slicer file says what this attempt is: no other settings to offer. */}

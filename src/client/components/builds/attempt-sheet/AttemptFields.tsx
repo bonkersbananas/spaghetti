@@ -56,8 +56,13 @@ export interface FieldsProps {
   readOnly?: "all" | "finish";
   /** Claude's ideas for the next try, right under the outcome: for a new attempt. */
   coach?: ReactNode;
-  /** Shown above the settings: "what worked last time", for a new attempt. */
+  /**
+   * "What worked last time" and "Start from a recipe", for a new attempt: they sit inside the settings row, above the
+   * editor, so the row is one line until someone wants them.
+   */
   suggestion?: ReactNode;
+  /** The closed settings row says so when `suggestion` has something to offer ("Worked before"). */
+  suggestionOffered?: boolean;
   /** The slicer file: its card, a plate to pick, or the well to add one. */
   file?: ReactNode;
   /** What the slicer file said, to mark the values that came from it. */
@@ -94,7 +99,7 @@ export function AttemptFields(props: FieldsProps) {
       `Changed from ${base.label}: ${changes.map((c) => c.text).join(", ")}`
     ) : (
       <MetaList>
-        {[`Same as ${base.label}`, ...pieces.slice(0, 4)].map((piece) => (
+        {[`Same as ${base.label}`, ...pieces.slice(0, 2)].map((piece) => (
           <span key={piece}>{piece}</span>
         ))}
       </MetaList>
@@ -108,13 +113,21 @@ export function AttemptFields(props: FieldsProps) {
   ) : (
     "Filament, plate, temperatures, times. All optional."
   );
-  const summaryWithFile = props.fromFile ? (
-    <span className="inline-flex min-w-0 items-start gap-1.5">
-      <FromFileMark className="mt-0.5" />
-      <span className="min-w-0">{settingsSummary}</span>
+  const withOffer = props.suggestionOffered ? (
+    <span className="flex min-w-0 flex-col gap-0.5">
+      {settingsSummary}
+      <span className="text-basil-ink font-semibold">A setup that worked is in here</span>
     </span>
   ) : (
     settingsSummary
+  );
+  const summaryWithFile = props.fromFile ? (
+    <span className="inline-flex min-w-0 items-start gap-1.5">
+      <FromFileMark className="mt-0.5" />
+      <span className="min-w-0">{withOffer}</span>
+    </span>
+  ) : (
+    withOffer
   );
 
   return (
@@ -211,7 +224,6 @@ export function AttemptFields(props: FieldsProps) {
       </fieldset>
       {/* Nothing has come off the spool until the print is done: a heads-up only while it hasn't been. */}
       {!outcome && <NotEnoughNote settings={settings} />}
-      {props.suggestion}
       <div className="flex flex-col gap-2">
         <fieldset disabled={!!props.readOnly} className="contents">
           <Disclosure
@@ -221,6 +233,7 @@ export function AttemptFields(props: FieldsProps) {
             icon={SettingsIcon}
             summary={summaryWithFile}
           >
+            {props.suggestion && <div className="mb-3 flex flex-col gap-3">{props.suggestion}</div>}
             <SettingsEditor value={settings} onChange={props.onSettings} outcome={outcome} fromFile={props.fromFile} />
           </Disclosure>
         </fieldset>
