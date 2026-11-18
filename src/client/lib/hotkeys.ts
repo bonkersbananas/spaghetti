@@ -17,7 +17,14 @@ let lostTypingAt = -Infinity;
 const JUST_LOST_MS = 1000;
 if (typeof window !== "undefined") {
   window.addEventListener("focusout", (event) => {
-    if (isTyping(event.target) && !(event as FocusEvent).relatedTarget) lostTypingAt = performance.now();
+    const field = event.target;
+    if (!isTyping(field) || (event as FocusEvent).relatedTarget) return;
+    // Only a field that was taken away (removed, or made read-only) counts: leaving one on purpose (Enter, Escape,
+    // a click on empty space) must not swallow the shortcut pressed next.
+    setTimeout(() => {
+      const el = field as HTMLInputElement;
+      if (!el.isConnected || el.readOnly || el.disabled) lostTypingAt = performance.now();
+    }, 0);
   });
 }
 /** A key that arrives just after the field being typed in vanished, with nowhere to go. */
