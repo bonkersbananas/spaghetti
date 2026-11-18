@@ -60,6 +60,11 @@ export interface ModelObject {
    */
   supports?: ModelPaint;
   /**
+   * A project's seams painted on it (each painted triangle's `paint_seam`: state 1 enforces the seam there, 2 blocks
+   * it), when it has any; codes that aren't ones, or paint nothing or a state past 2, are left out.
+   */
+  seams?: ModelPaint;
+  /**
    * The colours the model gives it, as runs of its triangles in order (one run covering all of them when it is one
    * colour; triangles in none have no colour of their own). From the 3MF core's `basematerials` an object (or the
    * component it comes through) points at, or, in a Bambu or Orca project, from the colour of the filament it prints
@@ -179,6 +184,8 @@ interface Mesh {
   paint?: Map<number, string>;
   /** Triangles' painted supports' codes (`paint_supports`), by their index in the mesh. */
   supports?: Map<number, string>;
+  /** Triangles' painted seams' codes (`paint_seam`), by their index in the mesh. */
+  seams?: Map<number, string>;
 }
 
 interface ObjectDef {
@@ -250,6 +257,7 @@ function readMesh(body: string): Mesh {
   };
   const paint = new Map<number, string>();
   const supports = new Map<number, string>();
+  const seams = new Map<number, string>();
   /** The code a triangle's `name` attribute holds, if it has one. */
   const code = (tag: string, name: string) => {
     const at = tag.indexOf(` ${name}="`);
@@ -264,6 +272,8 @@ function readMesh(body: string): Mesh {
     if (colour) paint.set(triangles.length / 3, colour);
     const support = code(tag, "paint_supports");
     if (support) supports.set(triangles.length / 3, support);
+    const seam = code(tag, "paint_seam");
+    if (seam) seams.set(triangles.length / 3, seam);
     triangles.push(number(tag, "v1"), number(tag, "v2"), number(tag, "v3"));
   });
   return {
@@ -271,6 +281,7 @@ function readMesh(body: string): Mesh {
     triangles: Float64Array.from(triangles),
     ...(paint.size ? { paint } : {}),
     ...(supports.size ? { supports } : {}),
+    ...(seams.size ? { seams } : {}),
   };
 }
 
@@ -410,6 +421,7 @@ export function readModel3mf(input: Uint8Array, options: ReadOptions = {}): Mode
     const runs: { part: string | null; from: number; to: number; colour?: ModelColour }[] = [];
     const painted: Painted = { triangles: [], codes: [] };
     const supported: Painted = { triangles: [], codes: [] };
+    const seamed: Painted = { triangles: [], codes: [] };
     const visit = (
       object: ObjectDef,
       transform: Matrix,
@@ -422,7 +434,7 @@ export function readModel3mf(input: Uint8Array, options: ReadOptions = {}): Mode
       const colour = object.colour ?? inherited;
       if (object.mesh) {
         const from = triangles.length / 9;
-        appendMesh(object.mesh, transform, scale.value, triangles, painted, supported);
+        appendMesh(object.mesh, transform, scale.value, triangles, painted, supported, seamed);
         if (triangles.length / 9 > from)
           runs.push({ part, from, to: triangles.length / 9, ...(colour ? { colour } : {}) });
       }
@@ -439,6 +451,7 @@ export function readModel3mf(input: Uint8Array, options: ReadOptions = {}): Mode
     const parts = partsOf(runs, info);
     const paint = paintOf(painted);
     const supports = paintOf(supported, SUPPORT_STATES);
+    const seams = paintOf(seamed, SUPPORT_STATES);
     const plate = plateList.find((candidate) => candidate.index === plateIndex);
     const positions = Float32Array.from(triangles);
     if (plate) {
@@ -464,6 +477,7 @@ export function readModel3mf(input: Uint8Array, options: ReadOptions = {}): Mode
       ...(parts ? { parts } : {}),
       ...(paint ? { paint } : {}),
       ...(supports ? { supports } : {}),
+      ...(seams ? { seams } : {}),
       ...(colours ? { colours } : {}),
     });
   }
@@ -551,7 +565,7 @@ interface Painted {
   codes: string[];
 }
 
-/** The states painted supports have: 1 enforces support, 2 blocks it. */
+/** The states painted supports and seams have: 1 enforces, 2 blocks. */
 const SUPPORT_STATES = 2;
 
 /** The paint of an object, its codes checked (none: undefined): states past `highest` aren't its kind's. */
@@ -572,7 +586,15 @@ function paintOf(painted: Painted, highest?: number): ModelPaint | undefined {
   return { triangles: Uint32Array.from(triangles), codes, ends: Uint32Array.from(ends) };
 }
 
-function appendMesh(mesh: Mesh, m: Matrix, scale: number, out: number[], painted?: Painted, supported?: Painted) {
+function appendMesh(
+  mesh: Mesh,
+  m: Matrix,
+  scale: number,
+  out: number[],
+  painted?: Painted,
+  supported?: Painted,
+  seamed?: Painted,
+) {
   const v = mesh.vertices;
   const t = mesh.triangles;
   const count = v.length / 3;
@@ -591,6 +613,11 @@ function appendMesh(mesh: Mesh, m: Matrix, scale: number, out: number[], painted
     if (support !== undefined && supported) {
       supported.triangles.push(out.length / 9);
       supported.codes.push(support);
+    }
+    const seam = mesh.seams?.get(i / 3);
+    if (seam !== undefined && seamed) {
+      seamed.triangles.push(out.length / 9);
+      seamed.codes.push(seam);
     }
     for (const index of [a, b, c]) {
       const x = (v[index * 3] as number) * scale;

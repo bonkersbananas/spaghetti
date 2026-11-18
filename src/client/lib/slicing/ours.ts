@@ -38,6 +38,8 @@ interface Exports {
    * it yet: one without it can't print painted supports, which OrcaSlicer's engine then slices.
    */
   paint_supports?(data: number, len: number): number;
+  /** As `paint`, with a project's painted seams (state 1 enforces the seam, 2 blocks it): from release 41. */
+  paint_seam?(data: number, len: number): number;
   slice(flags: number): number;
   output_ptr(): number;
   output_len(): number;
@@ -77,6 +79,8 @@ export interface OurObject {
   paint?: ModelPaint;
   /** Its painted supports, while supports are on (an object made of parts has each part's). */
   supports?: ModelPaint;
+  /** Its painted seams (an object made of parts has each part's). */
+  seams?: ModelPaint;
   parts?: OurPart[];
 }
 
@@ -86,6 +90,7 @@ export interface OurPart {
   filament: number;
   paint?: ModelPaint;
   supports?: ModelPaint;
+  seams?: ModelPaint;
 }
 
 /**
@@ -129,8 +134,11 @@ export async function sliceOurs(
     if (!supportIt && objects.some((object) => object.supports || object.parts?.some((part) => part.supports))) {
       return { ok: false, fallback: { why: "unsupported", what: "supports painted on" } };
     }
-    // Paints the STL added just before (its colours, then its supports); paint it won't take is a slice that failed.
-    const painted = (paint: ModelPaint | undefined, supports?: ModelPaint) => {
+    // Painted seams: a module without `paint_seam` places them as it places any, as Orca does with none painted.
+    const seamIt = module.paint_seam;
+    // Paints the STL added just before (its colours, then its supports, then its seams); paint it won't take is a
+    // slice that failed.
+    const painted = (paint: ModelPaint | undefined, supports?: ModelPaint, seams?: ModelPaint) => {
       if (paint && paintIt) {
         const bytes = paintBytes(paint);
         if (withBytes(bytes, (ptr) => paintIt(ptr, bytes.length))) return PAINT_REFUSED;
@@ -138,6 +146,10 @@ export async function sliceOurs(
       if (supports && supportIt) {
         const bytes = paintBytes(supports);
         if (withBytes(bytes, (ptr) => supportIt(ptr, bytes.length))) return PAINT_REFUSED;
+      }
+      if (seams && seamIt) {
+        const bytes = paintBytes(seams);
+        if (withBytes(bytes, (ptr) => seamIt(ptr, bytes.length))) return PAINT_REFUSED;
       }
       return 0;
     };
@@ -158,7 +170,7 @@ export async function sliceOurs(
               addPart(namePtr, name.length, stlPtr, stl.length, part.filament, index === 0 ? 1 : 0),
             ),
           );
-          if (!code) code = painted(part.paint, part.supports);
+          if (!code) code = painted(part.paint, part.supports, part.seams);
         }
         continue;
       }
@@ -173,7 +185,7 @@ export async function sliceOurs(
             : module.add(namePtr, name.length, stlPtr, stl.length),
         ),
       );
-      if (!code) code = painted(object.paint, object.supports);
+      if (!code) code = painted(object.paint, object.supports, object.seams);
     }
     if (code) return { ok: false, fallback: fallbackOf(code, said()) ?? { why: "failed" } };
     beforeSlice();
