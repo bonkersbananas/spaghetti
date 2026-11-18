@@ -4261,6 +4261,31 @@ export const shots: Shot[] = [
       await page.keyboard.press("Escape");
     },
   },
+  {
+    // The log-attempt sheet scrolled a little: the header is solid with a hairline under it.
+    name: "attempt-scrolled",
+    path: `/builds/${SEED_IDS.desiccantHook}`,
+    prepare: async (page) => {
+      await page.getByRole("button", { name: "Log attempt" }).first().click();
+      const sheet = page.getByRole("dialog");
+      await sheet.getByRole("radio", { name: "Spaghetti" }).click();
+      await sheet.getByRole("button", { name: "Bed adhesion" }).click();
+      await sheet.getByRole("textbox", { name: "Note" }).fill("Corner lifted at layer 30, then it was all noodles.");
+      await sheet.getByRole("textbox", { name: "Note" }).blur();
+      await sheet.getByRole("textbox", { name: "Note" }).evaluate((note) => {
+        for (let el = note.parentElement; el; el = el.parentElement) {
+          if (el.scrollHeight > el.clientHeight && getComputedStyle(el).overflowY === "auto") {
+            el.scrollTop = 60;
+            return;
+          }
+        }
+      });
+      await page.waitForTimeout(400);
+    },
+    cleanup: async (page) => {
+      await page.keyboard.press("Escape");
+    },
+  },
   // The print on the bed: its entry in the story, with the progress bar and how long is left.
   {
     name: "build-progress",
