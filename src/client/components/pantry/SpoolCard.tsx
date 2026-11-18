@@ -94,7 +94,9 @@ export function SpoolChip({ spool }: { spool: Spool }) {
             </Chip>
           )}
         </div>
-        <span className="text-small text-ink line-clamp-2 w-full leading-tight font-semibold [overflow-wrap:anywhere]">{name.title}</span>
+        <span className="text-small text-ink line-clamp-2 w-full leading-tight font-semibold [overflow-wrap:anywhere]">
+          {name.title}
+        </span>
         {spool.labelRead?.status === "reading" ? (
           <ReadingLine className="text-caption" />
         ) : (

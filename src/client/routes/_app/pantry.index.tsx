@@ -146,7 +146,8 @@ function Pantry() {
   );
 
   // The one quiet choice on a phone with many spools: tiles or compact.
-  const densityControl = !isDesktop && many && (
+  // Shown with many spools, and wherever Compact was chosen (so it can always be undone).
+  const densityControl = !isDesktop && (many || compact) && (
     <SegmentedControl<PantryDensity>
       label="Spool size"
       labelHidden
