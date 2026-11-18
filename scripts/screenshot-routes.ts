@@ -2851,6 +2851,38 @@ export const shots: Shot[] = [
     cleanup: removeModelItems,
   },
   {
+    // The model's page says PETG and the slice is PLA: one quiet line on the card.
+    name: "idea-model-material",
+    path: "/ideas",
+    prepare: async (page) => {
+      await ideaWithModel(page, FUSILLI_IDEA, FUSILLI, /Sliced by Spaghetti/);
+      await page.route(/\/api\/items\/[\w-]+$/, async (route) => {
+        const response = await route.fetch();
+        const json = await response.json();
+        json.item.draft = {
+          status: "drafted",
+          site: "makerworld",
+          url: GOOD_LINK,
+          failure: null,
+          applied: [],
+          title: null,
+          note: null,
+          findings: { designer: null, license: null, material: "PETG", plate: null, settings: null },
+          draftedAt: Date.now(),
+        };
+        await route.fulfill({ response, json });
+      });
+      await page.reload();
+      await page.getByText(/The page says PETG/).waitFor();
+      await page.waitForTimeout(300);
+    },
+    beforeShot: modelInView,
+    cleanup: async (page) => {
+      await page.unrouteAll({ behavior: "ignoreErrors" });
+      await removeModelItems(page);
+    },
+  },
+  {
     // The same idea's model card on a phone, further down the page.
     name: "idea-model-card",
     path: "/ideas",
