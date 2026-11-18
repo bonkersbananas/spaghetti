@@ -176,8 +176,15 @@ export function CaptureSheet() {
     }
   }
 
+  // With the segment under it, "New idea" is said once, by the segment: the title is then the sheet's own name.
   const title =
-    target.kind === "idea" ? "New idea" : target.kind === "attempt" ? "Add to the print" : `Add to ${target.name}`;
+    target.kind === "idea"
+      ? auto.kind === "idea"
+        ? "New idea"
+        : "Capture"
+      : target.kind === "attempt"
+        ? "Add to the print"
+        : `Add to ${target.name}`;
   const description =
     target.kind === "idea"
       ? "Titles can wait. Just get it down."
@@ -202,6 +209,9 @@ export function CaptureSheet() {
       open={open}
       onOpenChange={setOpen}
       title={title}
+      // With the segment under it ("New idea" · "This print"), the segment says it: the title stays for screen
+      // readers only, and the warm line leads the sheet.
+      titleHidden={auto.kind !== "idea"}
       description={description}
       footer={
         <>

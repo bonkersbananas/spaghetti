@@ -1,5 +1,5 @@
 import * as Dialog from "@radix-ui/react-dialog";
-import { type ReactNode, useRef } from "react";
+import { type ReactNode, useRef, useState } from "react";
 import { Drawer } from "vaul";
 import { cn } from "@/lib/cn";
 import { useReturnFocus } from "@/lib/return-focus";
@@ -11,6 +11,8 @@ export interface SheetProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   title: string;
+  /** The title is for screen readers only: something right under it already says it (the capture sheet's segment). */
+  titleHidden?: boolean;
   description?: ReactNode;
   /** Sticky actions at the bottom (phone) or footer (desktop). */
   footer?: ReactNode;
@@ -48,6 +50,22 @@ const FOCUSABLE =
   "input:not([type=hidden]):not([disabled]), textarea:not([disabled]), select:not([disabled]), button:not([disabled]), [href], [tabindex]:not([tabindex='-1'])";
 
 /**
+ * Whether a sheet's body has scrolled under its header: the header then shows a hairline, where it is otherwise as
+ * plain as the sheet. Only flips at the edge, so scrolling doesn't re-render.
+ */
+function useScrolled() {
+  const [scrolled, setScrolled] = useState(false);
+  return {
+    scrolled,
+    onScroll: (event: { currentTarget: HTMLElement }) => setScrolled(event.currentTarget.scrollTop > 1),
+  };
+}
+
+/** The header's own edge: invisible at rest, a hairline while the body is scrolled under it. */
+const headerEdge = (scrolled: boolean) =>
+  cn("border-b transition-colors duration-150", scrolled ? "border-hairline" : "border-transparent");
+
+/**
  * The one overlay. Bottom sheet on phones (drag down to dismiss, thumb-reach
  * actions), dialog or side panel on desktop. Never an "are you sure?" box:
  * deletes use an undo toast instead.
@@ -61,6 +79,7 @@ function PhoneSheet({
   open,
   onOpenChange,
   title,
+  titleHidden,
   description,
   footer,
   headerActions,
@@ -70,6 +89,7 @@ function PhoneSheet({
   children,
 }: SheetProps) {
   const returnFocus = useReturnFocus(open);
+  const { scrolled, onScroll } = useScrolled();
   return (
     <Drawer.Root open={open} onOpenChange={onOpenChange} repositionInputs={false}>
       <Drawer.Portal>
@@ -95,10 +115,15 @@ function PhoneSheet({
           )}
         >
           <div className="rounded-pill bg-ink/15 mx-auto mt-2.5 mb-1 h-1.5 w-10 shrink-0" aria-hidden />
-          <div className="flex items-start justify-between gap-3 px-5 pt-2 pb-1">
+          <div className={cn("flex shrink-0 items-start justify-between gap-3 px-5 pt-2 pb-1", headerEdge(scrolled))}>
             {back && <IconButton icon={BackIcon} label={back.label} onClick={back.onClick} className="-ml-2.5" />}
             <div className="min-w-0 flex-1">
-              <Drawer.Title className="font-display text-title text-ink line-clamp-2 font-semibold break-words">
+              <Drawer.Title
+                className={cn(
+                  "font-display text-title text-ink line-clamp-2 font-semibold break-words",
+                  titleHidden && "sr-only",
+                )}
+              >
                 {title}
               </Drawer.Title>
               {description ? (
@@ -112,7 +137,10 @@ function PhoneSheet({
           {fill ? (
             <div className="min-h-0 flex-1 overflow-hidden pt-2">{children}</div>
           ) : (
-            <div className="scroll-fade min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 pt-3 pb-4">
+            <div
+              onScroll={onScroll}
+              className="scroll-fade min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 pt-3 pb-4"
+            >
               {children}
             </div>
           )}
@@ -132,6 +160,7 @@ function DesktopSheet({
   open,
   onOpenChange,
   title,
+  titleHidden,
   description,
   footer,
   headerActions,
@@ -145,6 +174,7 @@ function DesktopSheet({
   const isPanel = desktop === "panel";
   const returnFocus = useReturnFocus(open);
   const body = useRef<HTMLDivElement>(null);
+  const { scrolled, onScroll } = useScrolled();
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange} modal={!(isPanel && modeless)}>
       <Dialog.Portal>
@@ -198,7 +228,7 @@ function DesktopSheet({
                 ),
           )}
         >
-          <div className="flex items-start justify-between gap-4 px-6 pt-5 pb-1">
+          <div className={cn("flex shrink-0 items-start justify-between gap-4 px-6 pt-5 pb-1", headerEdge(scrolled))}>
             {back && (
               <IconButton
                 icon={BackIcon}
@@ -209,7 +239,12 @@ function DesktopSheet({
               />
             )}
             <div className="flex-1">
-              <Dialog.Title className="font-display text-title text-ink line-clamp-2 font-semibold break-words">
+              <Dialog.Title
+                className={cn(
+                  "font-display text-title text-ink line-clamp-2 font-semibold break-words",
+                  titleHidden && "sr-only",
+                )}
+              >
                 {title}
               </Dialog.Title>
               {description ? (
@@ -227,6 +262,7 @@ function DesktopSheet({
           </div>
           <div
             ref={body}
+            onScroll={fill ? undefined : onScroll}
             className={
               fill
                 ? "min-h-0 flex-1 overflow-hidden pt-3"
