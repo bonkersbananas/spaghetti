@@ -154,6 +154,9 @@ pub struct Colours {
     flushing: Vec<bool>,
     /// Whether a prime tower prints: without one each change happens where the nozzle is (`change_steps`).
     pub towered: bool,
+    /// Orca's farthest-point timelapse on a plate with a tower (`farthest_point_timelapse`, without wrapping
+    /// detection): where each layer's photo comes follows from its paths (`gcode.rs`), so `photo_in_layer` knows none.
+    pub farthest_photo: bool,
     /// Whether the nozzle's wrapping detection retracts and lifts before each layer's first visit to the tower.
     wrapping: bool,
     /// Without a tower, what each change finds, in the order of `flushes`.
@@ -671,8 +674,12 @@ impl Colours {
         // Where each layer's photo comes, as `gcode.rs` takes it: before the first visit to the tower (or change, without
         // one) that starts in a filament on the camera's extruder, as `combine` makes the visits.
         let photo_head = |f: usize| extruder_of.get(f) == Some(&most_used_extruder);
+        let farthest_photo = towered && settings.farthest_photo && !settings.wrapping_detection;
         let photo_in_layer: Vec<bool> = (0..layers)
             .map(|g| {
+                if farthest_photo {
+                    return false;
+                }
                 let order = &orders[g];
                 let mut current = starts[g];
                 if !towered {
@@ -724,6 +731,7 @@ impl Colours {
             support_passes,
             flushing,
             towered,
+            farthest_photo,
             wrapping: settings.wrapping_detection,
             untowered,
             photo_in_layer,
@@ -774,6 +782,30 @@ impl Colours {
     /// than after it (`photo_in_layer`).
     pub fn photo_in_layer(&self, g: usize) -> bool {
         self.photo_in_layer.get(g).copied().unwrap_or(false)
+    }
+
+    /// Where Orca's timelapse picker may not send the camera's nozzle on this plate (`TimelapsePosPicker::init`): the
+    /// prime tower's box on the plate, grown by half the toolhead's clearance radius, and the box the camera's nozzle
+    /// can reach (`extruder_printable_area` of `most_used_extruder`).
+    pub fn photo_limits(&self) -> ([f64; 4], Option<[f64; 4]>) {
+        let s = &self.settings[0];
+        let half = s.extruder_clearance_radius / 2.0;
+        let b = self.bbx.map(f64::from);
+        let (x, y) = (self.origin.x as f64, self.origin.y as f64);
+        let tower = [x + b[0] - half, y + b[1] - half, x + b[2] + half, y + b[3] + half];
+        let area = s.profile.list("extruder_printable_area").get(self.most_used_extruder).and_then(|area| {
+            let pts: Vec<[f64; 2]> = area
+                .split(',')
+                .filter_map(|c| {
+                    let (x, y) = c.split_once('x')?;
+                    Some([x.trim().parse().ok()?, y.trim().parse().ok()?])
+                })
+                .collect();
+            let min = |k: usize| pts.iter().map(|q| q[k]).fold(f64::MAX, f64::min);
+            let max = |k: usize| pts.iter().map(|q| q[k]).fold(f64::MIN, f64::max);
+            (!pts.is_empty()).then(|| [min(0), min(1), max(0), max(1)])
+        });
+        (tower, area)
     }
 
     /// mm on the plate of a point in the tower's frame.
