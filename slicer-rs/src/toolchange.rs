@@ -1592,7 +1592,12 @@ impl Colours {
 
     /// The physical extruder (the printer's numbering) of filament `f`.
     pub fn physical_of(&self, f: usize) -> i64 {
-        self.physical.get(self.extruder_of.get(f).copied().unwrap_or(0)).copied().unwrap_or(0)
+        self.physical_extruder(self.extruder_of.get(f).copied().unwrap_or(0))
+    }
+
+    /// The physical extruder (the printer's numbering) of extruder `e` (Orca's `physical_extruder_map`).
+    pub fn physical_extruder(&self, e: usize) -> i64 {
+        self.physical.get(e).copied().unwrap_or(0)
     }
 }
 
