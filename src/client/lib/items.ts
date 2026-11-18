@@ -579,8 +579,10 @@ interface FreshEntry {
 /** This tab's name (sessionStorage outlives a reload, not the tab), and its heartbeat, so another tab can tell it is open. */
 const tabId = (() => {
   try {
-    let id = sessionStorage.getItem("spaghetti.tab");
-    if (!id) sessionStorage.setItem("spaghetti.tab", (id = crypto.randomUUID()));
+    const known = sessionStorage.getItem("spaghetti.tab");
+    if (known) return known;
+    const id = crypto.randomUUID();
+    sessionStorage.setItem("spaghetti.tab", id);
     return id;
   } catch {
     return "tab";
