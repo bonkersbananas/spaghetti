@@ -6,7 +6,7 @@ import { lazy, Suspense, useState } from "react";
 import { PantryJar } from "@/components/illustrations/PantryJar";
 import { AmsLoadout } from "@/components/pantry/Ams";
 import { RunningLow } from "@/components/pantry/RunningLow";
-import { SpoolCard } from "@/components/pantry/SpoolCard";
+import { SpoolCard, SpoolChip } from "@/components/pantry/SpoolCard";
 import { SpoolRow } from "@/components/pantry/SpoolRow";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { ActionBar } from "@/components/ui/ActionBar";
@@ -20,7 +20,7 @@ import { shortcutCaps, useHotkeys } from "@/lib/hotkeys";
 import { useListPicker } from "@/lib/list-picker";
 import { loadSlot } from "@/lib/pantry";
 import { spoolsQuery } from "@/lib/pantry-queries";
-import { type PantryView, usePantryView } from "@/lib/pantry-view";
+import { COMPACT_ABOVE, type PantryDensity, type PantryView, usePantryDensity, usePantryView } from "@/lib/pantry-view";
 import { canEdit, useReadOnly } from "@/lib/read-only";
 import { recipesQuery } from "@/lib/recipes-query";
 import { useRunningLow } from "@/lib/running-low";
@@ -36,6 +36,7 @@ export const Route = createFileRoute("/_app/pantry/")({
   component: Pantry,
 });
 
+const compactGrid = "grid grid-cols-3 gap-2";
 const grid = "grid grid-cols-2 gap-3 md:grid-cols-2 md:gap-4 xl:grid-cols-3";
 
 const GroupRecipes = lazy(() => import("@/components/recipes/GroupRecipes").then((m) => ({ default: m.GroupRecipes })));
@@ -84,6 +85,10 @@ function Pantry() {
   // Cards or a list, remembered on this device. Phones always show cards.
   const [storedView, setView] = usePantryView();
   const view: PantryView = isDesktop ? storedView : "cards";
+  // Phones: with many spools the compact view (three across) is where it starts; a choice made here is remembered.
+  const [storedDensity, setDensity] = usePantryDensity();
+  const many = (spools?.length ?? 0) > COMPACT_ABOVE;
+  const compact = !isDesktop && (storedDensity ?? (many ? "compact" : "tiles")) === "compact";
   const [adding, setAdding] = useState<{ open: boolean; slot: string | null }>({ open: !!add, slot: null });
   // Offline, the pantry is only for reading (see lib/read-only.ts).
   const readOnly = useReadOnly();
@@ -121,10 +126,16 @@ function Pantry() {
                 <SpoolRow key={spool.id} spool={spool} draggable={!readOnly} />
               ))}
             </ul>
+          ) : compact ? (
+            <ul data-picks className={compactGrid} aria-label={`${group.material} spools`}>
+              {group.spools.map((spool) => (
+                <SpoolChip key={spool.id} spool={spool} />
+              ))}
+            </ul>
           ) : (
             <ul data-picks className={grid} aria-label={`${group.material} spools`}>
               {group.spools.map((spool) => (
-                <SpoolCard key={spool.id} spool={spool} draggable={isDesktop && !readOnly} />
+                <SpoolCard key={spool.id} spool={spool} draggable={isDesktop && !readOnly} heading={group.material} />
               ))}
             </ul>
           )}
@@ -132,6 +143,21 @@ function Pantry() {
         </Section>
       ))}
     </div>
+  );
+
+  // The one quiet choice on a phone with many spools: tiles or compact.
+  const densityControl = !isDesktop && many && (
+    <SegmentedControl<PantryDensity>
+      label="Spool size"
+      labelHidden
+      options={[
+        { value: "tiles", label: "Tiles" },
+        { value: "compact", label: "Compact" },
+      ]}
+      value={compact ? "compact" : "tiles"}
+      onChange={setDensity}
+      className="w-44 self-end"
+    />
   );
 
   return (
@@ -222,7 +248,10 @@ function Pantry() {
               {materials}
             </Section>
           ) : (
-            materials
+            <>
+              {densityControl}
+              {materials}
+            </>
           )}
         </div>
       )}
