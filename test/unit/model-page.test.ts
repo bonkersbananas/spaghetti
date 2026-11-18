@@ -8,6 +8,7 @@ import {
   printablesApiId,
   printablesApiUrl,
   printablesId,
+  printablesTitleFromLink,
   WEB_FETCH_MAX_URL,
 } from "../../src/shared/model-page.ts";
 
@@ -154,5 +155,39 @@ describe("reading a model page", () => {
     const html =
       '<meta property="og:title" content="Hook &#x110000; &#99999999; &#xZZ; &amp; &#65;"><meta property="og:description" content="x">';
     expect(extractModelPage("printables", html)?.title).toBe("Hook &#x110000; &#99999999; &#xZZ; & A");
+  });
+});
+
+describe("printablesTitleFromLink", () => {
+  const base = "https://www.printables.com/model/1577248-";
+  it("spaces the slug's words, capitalises the first and keeps brand words as people write them", () => {
+    expect(printablesTitleFromLink(`${base}carrying-handle-for-ikea-antilop-high-chair`)).toBe(
+      "Carrying handle for IKEA antilop high chair",
+    );
+    expect(printablesTitleFromLink(`${base}usb-c-led-holder`)).toBe("USB c LED holder");
+  });
+  it("takes a locale prefix, a query, a hash and a trailing path", () => {
+    expect(printablesTitleFromLink("https://www.printables.com/de/model/12-spool-holder?lang=en#files")).toBe(
+      "Spool holder",
+    );
+    expect(printablesTitleFromLink("https://printables.com/model/12-spool-holder/files#preview.eSga8")).toBe(
+      "Spool holder",
+    );
+  });
+  it("has no name without a slug, for another site or for a bare number", () => {
+    expect(printablesTitleFromLink("https://www.printables.com/model/1577248")).toBeNull();
+    expect(printablesTitleFromLink("https://www.printables.com/model/1577248/files")).toBeNull();
+    expect(printablesTitleFromLink("https://makerworld.com/en/models/1-cable-comb")).toBeNull();
+    expect(printablesTitleFromLink("not a link")).toBeNull();
+  });
+  it("copes with odd characters and long slugs", () => {
+    expect(printablesTitleFromLink("https://www.printables.com/model/5-caf%C3%A9-h%C3%A5ll-_--ok")).toBe(
+      "Café håll ok",
+    );
+    expect(printablesTitleFromLink("https://www.printables.com/model/5-50%-off")).toBe("50 off");
+    expect(printablesTitleFromLink("https://www.printables.com/model/5---")).toBeNull();
+    const long = printablesTitleFromLink(`${base}${"word-".repeat(30)}end`);
+    expect(long?.length).toBeLessThanOrEqual(60);
+    expect(long?.endsWith(" ")).toBe(false);
   });
 });

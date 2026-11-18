@@ -3,7 +3,7 @@ import { firstModelLink } from "@shared/model-links";
 import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/Button";
 import { ClaudeLine } from "@/components/ui/ClaudeLine";
-import { ImageIcon, SparkleIcon, UndoIcon } from "@/components/ui/icons";
+import { ImageIcon, LinkIcon, SparkleIcon, UndoIcon } from "@/components/ui/icons";
 import { Overline } from "@/components/ui/Overline";
 import { getPictures, requestDraft, siteName, undoDraft, useDraftsEnabled } from "@/lib/drafts";
 import type { ItemView } from "@/lib/items";
@@ -40,6 +40,17 @@ export function DraftNote({ item, title, note, readOnly }: DraftNoteProps) {
 
   if (draft?.status === "failed") {
     const failure: DraftFailure = draft.failure ?? "unreadable";
+    // The site is closed to us and a retry can't change that: the idea is named from the link's own words.
+    if (failure === "closed") {
+      const named = draft.applied.includes("title") && !!draft.title && title === draft.title;
+      return (
+        <p className="text-small text-ink-faint mt-1 flex items-center gap-1.5" role="status">
+          <LinkIcon size={14} aria-hidden className="shrink-0" />
+          {named ? "Named from the link. " : ""}
+          {FAILURE_LINES.closed}
+        </p>
+      );
+    }
     return (
       <p className="text-small text-ink-soft mt-1 flex flex-wrap items-center gap-x-2" role="status">
         {FAILURE_LINES[failure]}
