@@ -287,10 +287,14 @@ fn replay(path: &str, args: &Args) -> ExitCode {
                 other => return Err(format!("unknown call {other}")),
             }
             .map_err(|e| format!("can't slice {name}: {e}"))?;
-            for (key, supports) in [("paint", false), ("supports", true)] {
+            for key in ["paint", "supports", "seams"] {
                 if let Some(file) = text(call.get(key)) {
                     let paint = Paint::from_bytes(&read(&file)?).ok_or_else(|| format!("{file} isn't paint"))?;
-                    let taken = if supports { plate.paint_supports(&paint) } else { plate.paint(&paint) };
+                    let taken = match key {
+                        "paint" => plate.paint(&paint),
+                        "supports" => plate.paint_supports(&paint),
+                        _ => plate.paint_seams(&paint),
+                    };
                     if !taken {
                         return Err(format!("{file} isn't paint for {stl}"));
                     }

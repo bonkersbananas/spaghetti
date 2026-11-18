@@ -43,6 +43,7 @@ pub mod raft;
 pub mod region;
 pub mod seam;
 pub mod seam_mesh;
+pub mod seampaint;
 pub mod section;
 pub mod segment;
 pub mod setup;
@@ -246,7 +247,7 @@ fn retain_by(
     meshes: &mut Vec<Mesh>,
     filaments: &mut Vec<usize>,
     groups: &mut Vec<usize>,
-    paints: [&mut Vec<Option<paint::Paint>>; 2],
+    paints: [&mut Vec<Option<paint::Paint>>; 3],
     keep: &[bool],
 ) {
     for paints in paints {
@@ -365,6 +366,8 @@ pub struct Plate {
     paints: Vec<Option<paint::Paint>>,
     /// Each mesh's painted supports (state 1 enforcing support, 2 blocking it), when it has any.
     support_paints: Vec<Option<paint::Paint>>,
+    /// Each mesh's painted seams (state 1 enforcing a seam, 2 blocking it), when it has any.
+    seam_paints: Vec<Option<paint::Paint>>,
     /// The mesh an STL last added became, and where its triangles went: paint for it (`paint`) goes by the STL's.
     last_stl: Option<(usize, mesh::Moves)>,
     project: bool,
@@ -372,6 +375,14 @@ pub struct Plate {
     unassigned: bool,
     title: Option<String>,
     read_ms: f64,
+}
+
+/// What a mesh is painted with.
+#[derive(Clone, Copy)]
+enum PaintKind {
+    Colours,
+    Supports,
+    Seams,
 }
 
 impl Plate {
@@ -396,6 +407,8 @@ impl Plate {
             self.paints.extend(model.paints);
             self.support_paints.resize(self.meshes.len(), None);
             self.support_paints.extend(model.support_paints);
+            self.seam_paints.resize(self.meshes.len(), None);
+            self.seam_paints.extend(model.seam_paints);
             self.meshes.extend(model.meshes);
         } else {
             let (mut m, moves) = mesh::read_stl_moved(name, input.bytes)?;
@@ -420,15 +433,15 @@ impl Plate {
         let t0 = now();
         let name = input.name.rsplit(['/', '\\']).next().unwrap_or(input.name);
         self.last_stl = None;
-        let (meshes, paints, support_paints, moves) = if input.bytes.starts_with(b"PK\x03\x04") {
+        let (meshes, paints, support_paints, seam_paints, moves) = if input.bytes.starts_with(b"PK\x03\x04") {
             let model = threemf::read(input.bytes)?;
-            (model.meshes, model.paints, model.support_paints, None)
+            (model.meshes, model.paints, model.support_paints, model.seam_paints, None)
         } else {
             let (mut m, moves) = mesh::read_stl_moved(name, input.bytes)?;
             let n = m.vertices.len();
             // Its heights as Orca holds a part's, not dropped onto the bed on its own.
             mesh::settle_heights(&mut m.vertices, &[(0..n, 0.0)], false);
-            (vec![m], vec![None], vec![None], Some(moves))
+            (vec![m], vec![None], vec![None], vec![None], Some(moves))
         };
         let group = match self.groups.last() {
             Some(&g) if !first => g,
@@ -439,12 +452,14 @@ impl Plate {
         }
         self.paints.resize(self.meshes.len(), None);
         self.support_paints.resize(self.meshes.len(), None);
-        for ((m, paint), supports) in meshes.into_iter().zip(paints).zip(support_paints) {
+        self.seam_paints.resize(self.meshes.len(), None);
+        for (((m, paint), supports), seams) in meshes.into_iter().zip(paints).zip(support_paints).zip(seam_paints) {
             self.meshes.push(m);
             self.groups.push(group);
             self.filaments.push(filament);
             self.paints.push(paint);
             self.support_paints.push(supports);
+            self.seam_paints.push(seams);
         }
         self.title.get_or_insert_with(|| name.to_string());
         self.read_ms += now() - t0;
@@ -454,15 +469,20 @@ impl Plate {
     /// Paints the mesh the last STL added became (`add`, `add_in`, `add_part`): `paint`'s triangles are the STL's,
     /// in its order. False when the last model added wasn't an STL, or the paint names triangles it doesn't have.
     pub fn paint(&mut self, paint: &paint::Paint) -> bool {
-        self.paint_kind(paint, false)
+        self.paint_kind(paint, PaintKind::Colours)
     }
 
     /// As `paint`, with painted supports (state 1 enforcing support, 2 blocking it).
     pub fn paint_supports(&mut self, paint: &paint::Paint) -> bool {
-        self.paint_kind(paint, true)
+        self.paint_kind(paint, PaintKind::Supports)
     }
 
-    fn paint_kind(&mut self, paint: &paint::Paint, supports: bool) -> bool {
+    /// As `paint`, with painted seams (state 1 enforcing a seam, 2 blocking one).
+    pub fn paint_seams(&mut self, paint: &paint::Paint) -> bool {
+        self.paint_kind(paint, PaintKind::Seams)
+    }
+
+    fn paint_kind(&mut self, paint: &paint::Paint, kind: PaintKind) -> bool {
         let Some((k, moves)) = &self.last_stl else { return false };
         let count = self.meshes[*k].triangles.len() as u32;
         let places = moves.new_places();
@@ -470,7 +490,11 @@ impl Plate {
             return false;
         }
         let moved = paint.moved(places);
-        let paints = if supports { &mut self.support_paints } else { &mut self.paints };
+        let paints = match kind {
+            PaintKind::Colours => &mut self.paints,
+            PaintKind::Supports => &mut self.support_paints,
+            PaintKind::Seams => &mut self.seam_paints,
+        };
         paints.resize(self.meshes.len(), None);
         paints[*k] = (!moved.is_empty()).then_some(moved);
         true
@@ -484,6 +508,7 @@ impl Plate {
             mut groups,
             mut paints,
             mut support_paints,
+            mut seam_paints,
             project,
             unassigned,
             title,
@@ -509,14 +534,23 @@ impl Plate {
             return Err(Error::NoModel);
         }
         let keep: Vec<bool> = meshes.iter().map(|m| !m.triangles.is_empty()).collect();
-        retain_by(&mut meshes, &mut filaments, &mut groups, [&mut paints, &mut support_paints], &keep);
+        retain_by(
+            &mut meshes,
+            &mut filaments,
+            &mut groups,
+            [&mut paints, &mut support_paints, &mut seam_paints],
+            &keep,
+        );
         let scaled = options.scale > 0.0 && (options.scale - 100.0).abs() > 1e-9;
         paints.resize(meshes.len(), None);
         support_paints.resize(meshes.len(), None);
-        for ((m, paint), supports) in meshes.iter_mut().zip(&mut paints).zip(&mut support_paints) {
+        seam_paints.resize(meshes.len(), None);
+        for (((m, paint), supports), seams) in
+            meshes.iter_mut().zip(&mut paints).zip(&mut support_paints).zip(&mut seam_paints)
+        {
             // A mesh turned right way out has its corners in the other order: its paint goes by the file's still.
             if m.signed_volume() < 0.0 {
-                for paint in [paint, supports].into_iter().flatten() {
+                for paint in [paint, supports, seams].into_iter().flatten() {
                     paint.turned.iter_mut().for_each(|t| *t = !*t);
                 }
             }
@@ -542,7 +576,13 @@ impl Plate {
                 return Err(Error::OffPlate);
             }
             let keep: Vec<bool> = places.iter().map(|p| *p == mesh::OnPlate::Inside).collect();
-            retain_by(&mut meshes, &mut filaments, &mut groups, [&mut paints, &mut support_paints], &keep);
+            retain_by(
+                &mut meshes,
+                &mut filaments,
+                &mut groups,
+                [&mut paints, &mut support_paints, &mut seam_paints],
+                &keep,
+            );
             if meshes.is_empty() {
                 return Err(Error::OffPlate);
             }
@@ -658,7 +698,17 @@ impl Plate {
                 .iter()
                 .map(|m| [(centres[m[0]].0 / geom::SCALE) as f32, (centres[m[0]].1 / geom::SCALE) as f32])
                 .collect();
-            seam::place(&mut regions, &by_part, (&middles, &layers.slice_z(), &layers.height), settings);
+            // Each object's painted seams (Orca's enforcers and blockers), from its parts'.
+            let painted: Vec<Option<seampaint::Painted>> = parts
+                .members
+                .iter()
+                .map(|members| {
+                    let parts: Vec<_> =
+                        members.iter().map(|&m| (&meshes[m], seam_paints.get(m).and_then(Option::as_ref))).collect();
+                    seampaint::Painted::of(&parts)
+                })
+                .collect();
+            seam::place(&mut regions, &by_part, &painted, (&middles, &layers.slice_z(), &layers.height), settings);
         }
         // Where travels lift in spirals rather than slopes, for filaments that lift as Orca's Auto Lift does.
         let auto_lift = match &settings.palette {

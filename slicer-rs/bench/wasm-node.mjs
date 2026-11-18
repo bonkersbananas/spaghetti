@@ -70,6 +70,7 @@ for (const call of code === 0 && job ? job.calls : []) {
   for (const [key, fn] of [
     ["paint", e.paint],
     ["supports", e.paint_supports],
+    ["seams", e.paint_seam],
   ]) {
     if (code !== 0 || !call[key]) continue;
     const bytes = fs.readFileSync(path.join(jobDir, call[key]));

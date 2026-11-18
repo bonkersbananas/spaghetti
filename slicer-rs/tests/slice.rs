@@ -3939,3 +3939,60 @@ fn an_inline_photo_on_a_tower_plate_stays_where_the_camera_nozzle_prints() {
         assert!(!p.contains("G0 Y-20") && !p.contains("G1 Z"), "{p}");
     }
 }
+
+/// A project of a 20 mm box, 10 mm high, at 118..138 on the plate, its sides' seams painted: `paint` gives each side
+/// (front, right, back, left) its `paint_seam` code, if any ("4" enforces a seam there, "8" blocks one).
+fn seam_painted_box(paint: [Option<&str>; 4]) -> Vec<u8> {
+    let (lo, hi, h) = (118.0, 138.0, 10.0);
+    let corners = [[lo, lo], [hi, lo], [hi, hi], [lo, hi]];
+    let mut vertices = String::new();
+    for z in [0.0, h] {
+        for [x, y] in corners {
+            vertices += &format!(r#"<vertex x="{x}" y="{y}" z="{z}"/>"#);
+        }
+    }
+    let triangle = |a: usize, b: usize, c: usize, code: Option<&str>| {
+        let painted = code.map_or(String::new(), |c| format!(r#" paint_seam="{c}""#));
+        format!(r#"<triangle v1="{a}" v2="{b}" v3="{c}"{painted}/>"#)
+    };
+    let mut triangles = triangle(0, 2, 1, None) + &triangle(0, 3, 2, None) + &triangle(4, 5, 6, None);
+    triangles += &triangle(4, 6, 7, None);
+    for (k, code) in paint.iter().enumerate() {
+        let (i, j) = (k, (k + 1) % 4);
+        triangles += &(triangle(i, j, j + 4, *code) + &triangle(i, j + 4, i + 4, *code));
+    }
+    let model = format!(
+        r#"<model unit="millimeter"><resources><object id="1" type="model"><mesh><vertices>{vertices}</vertices><triangles>{triangles}</triangles></mesh></object></resources><build><item objectid="1"/></build></model>"#
+    );
+    let mut w = zip::Writer::default();
+    w.add("3D/3dmodel.model", model.as_bytes(), 6);
+    w.finish()
+}
+
+/// A project's painted seams (`paint_seam`) place them as Orca 2.5.1's seam placer does: on a box, the seam goes to
+/// the corner of an enforced side, or away from blocked sides, where unpainted it is at the back right corner. Native
+/// Orca 2.5.1 with the app's setup (Nov 18) starts every layer's outer wall at the same corner in each case; ours
+/// started all of them at the back right before. (On a cylinder with an enforced stripe, and on a Benchy with an
+/// enforced patch, ours starts within 0.5 mm of Orca's on every layer of the stripe and 67 of the patch's 69 loops.)
+#[test]
+fn painted_seams_go_where_paint_enforces_and_not_where_it_blocks() {
+    let settings = setup::read(r#"{"process": {"seam_position": "aligned"}}"#).unwrap().settings;
+    let options = Options { arrange: false, thumbnail: false, ..Options::default() };
+    let corner = |paint: [Option<&str>; 4]| -> Vec<[i64; 2]> {
+        let file = seam_painted_box(paint);
+        let out = slice(&[Input { name: "box.3mf", bytes: &file }], &settings, &options).unwrap();
+        let layers = extrusions(&String::from_utf8(out.gcode).unwrap());
+        layers
+            .iter()
+            .filter_map(|l| l.iter().find(|e| e.1 == "Outer wall"))
+            .map(|e| [(e.2[0] - 128.0).signum() as i64, (e.2[1] - 128.0).signum() as i64])
+            .collect()
+    };
+    let all = |corners: Vec<[i64; 2]>, at: [i64; 2]| {
+        assert!(corners.len() >= 49, "{} layers", corners.len());
+        assert!(corners.iter().all(|&c| c == at), "{corners:?}");
+    };
+    all(corner([None; 4]), [1, 1]);
+    all(corner([Some("4"), None, None, None]), [1, -1]);
+    all(corner([None, Some("8"), Some("8"), None]), [-1, -1]);
+}
