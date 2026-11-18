@@ -47,7 +47,7 @@ export default function Now() {
                 key="bed"
                 exit={{ opacity: 0, transition: { duration: reduce ? 0 : duration.base, ease: ease.inOut } }}
               >
-                {/* All compact (a small square picture beside the name): the journal must still start on the first screen. */}
+                {/* All alike: a wide picture with the Printing badge, then the name and the time left; the journal starts below them. */}
                 <section aria-label="On the bed" className="flex flex-col gap-3">
                   <AnimatePresence initial={false}>
                     {onBed.map(({ item, attempt }) => (
@@ -62,6 +62,7 @@ export default function Now() {
                       >
                         <PrintingCard
                           compact
+                          lead={onBed.length > 1 ? "short" : "wide"}
                           item={item}
                           attempt={attempt}
                           person={people?.find((person) => person.id === attempt.createdBy)}

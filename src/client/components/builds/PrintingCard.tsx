@@ -41,6 +41,11 @@ interface PrintingCardProps {
    */
   compact?: boolean;
   /**
+   * Phones only, with `compact`: the picture leads instead of the small square: wide (16:10, or 2:1 as "short" when several prints share the screen) with the Printing badge over
+   * it, then the name, the time left and one row of actions, every card the same height. The Journal's Now block.
+   */
+  lead?: "wide" | "short";
+  /**
    * From `lg`: `row` (Today's column: the picture on two fifths, the text beside it), `half` (one print across the
    * Builds list: the picture on half the card, 16:9), or the picture on top for prints side by side, `wide` (two
    * across, 16:9) or `stack` (three across, 4:3), so the focal cards' pictures are never smaller than the grid's below.
@@ -94,6 +99,8 @@ const desktopLayouts = {
 /** The card's grid on phones, big or compact; from md both are the same row: picture on two fifths, text beside. */
 const layouts = {
   big: { card: "grid-cols-1", picture: "aspect-4/3", head: "px-2 pt-2.5", body: "px-2 pt-2.5 pb-2" },
+  lead: { card: "grid-cols-1", picture: "aspect-[16/10]", head: "px-2 pt-2.5", body: "px-2 pt-2 pb-1" },
+  leadShort: { card: "grid-cols-1", picture: "aspect-2/1", head: "px-2 pt-2", body: "px-2 pt-2 pb-1" },
   compact: {
     card: "grid-cols-[auto_minmax(0,1fr)]",
     picture: "size-20 self-start",
@@ -115,10 +122,13 @@ export function PrintingCard({
   person,
   via,
   compact = false,
+  lead,
   desktop = "row",
   unread = 0,
 }: PrintingCardProps) {
-  const layout = layouts[compact ? "compact" : "big"];
+  const layout = layouts[lead === "wide" ? "lead" : lead === "short" ? "leadShort" : compact ? "compact" : "big"];
+  // A small square on a phone (compact without `lead`): too small for words or the state chip.
+  const square = compact && !lead;
   const wide = desktopLayouts[desktop];
   // Each time a compact card becomes the big one on a phone (or back), its content is swapped and fades in; from
   // md both layouts are the same row, so nothing is swapped there, and a change of breakpoint never remounts it.
@@ -140,7 +150,7 @@ export function PrintingCard({
   const cover = coverOf(item, { file: attempt.file });
   // Its name is right beside the picture, in Fraunces: a build with only a name shows the glyph, not its name twice.
   // So does a compact card's small square on a phone, too small for words (from md it is the full row).
-  const glyph = cover.kind === "note" ? <BuildsIcon size={compact ? 28 : 36} /> : undefined;
+  const glyph = cover.kind === "note" ? <BuildsIcon size={square ? 28 : 36} /> : undefined;
   const nameOnly = cover.kind === "note" && cover.fromTitle;
   const name = itemName(item);
   const partsLabel = attemptPartsLabel(attempt, item.parts);
@@ -195,8 +205,8 @@ export function PrintingCard({
               <>
                 <CoverPicture
                   cover={cover}
-                  glyph={compact ? glyph : undefined}
-                  shape="strip"
+                  glyph={square ? glyph : undefined}
+                  shape={lead ? "wide" : "strip"}
                   className="size-full md:hidden"
                 />
                 <CoverPicture cover={cover} shape="wide" className="size-full max-md:hidden" />
@@ -206,9 +216,9 @@ export function PrintingCard({
                 cover={cover}
                 // A compact card's square on a phone is too small to carry it; from md it is the full row's picture. An
                 // unread badge takes the corner, as on the grid's cards.
-                label={showUnread ? false : compact ? "md" : true}
+                label={showUnread ? false : square ? "md" : true}
                 glyph={nameOnly ? glyph : undefined}
-                inset={compact ? "p-1 md:p-3" : "p-3"}
+                inset={square ? "p-1 md:p-3" : "p-3"}
                 className="size-full"
               />
             )}
@@ -220,7 +230,7 @@ export function PrintingCard({
             <span
               className={cn(
                 "pointer-events-none absolute z-20",
-                compact ? "top-1.5 left-1.5 md:top-2 md:left-2" : "top-2 left-2",
+                square ? "top-1.5 left-1.5 md:top-2 md:left-2" : "top-2 left-2",
               )}
             >
               <UnreadBadge count={unread} />
@@ -232,10 +242,7 @@ export function PrintingCard({
             <OutcomeChip
               outcome={null}
               onPhoto
-              className={cn(
-                "shadow-soft pointer-events-none absolute bottom-2 left-2 z-20",
-                compact && "max-md:hidden",
-              )}
+              className={cn("shadow-soft pointer-events-none absolute bottom-2 left-2 z-20", square && "max-md:hidden")}
             />
           )}
         </div>
@@ -272,12 +279,22 @@ export function PrintingCard({
               </span>
             )}
           </div>
-          <div className="text-small text-ink-faint flex min-w-0 flex-col gap-0.5">
+          <div
+            className={cn(
+              "text-small text-ink-faint flex min-w-0 flex-col gap-0.5",
+              lead && "max-md:flex-row max-md:items-center max-md:gap-x-2",
+            )}
+          >
             <MetaList>
               <span className="whitespace-nowrap">Attempt {attempt.number}</span>
               {partsLabel && <span>{partsLabel}</span>}
             </MetaList>
             {/* One line for the spools, however many: the first named, "+1" for the rest, so every card has the same rhythm. */}
+            {lead && filaments.length > 0 && (
+              <span aria-hidden className="md:hidden">
+                ·
+              </span>
+            )}
             {filaments.length > 0 && <FilamentGlance filaments={filaments} />}
           </div>
         </div>
