@@ -440,6 +440,9 @@ function Build({ item }: { item: ItemView }) {
   }, [item.stage]);
 
   const started = item.startedAt ?? item.createdAt;
+  // The newest answered attempt worked and nothing is on the bed: the build's next step is to finish it.
+  const lastAnswered = [...item.attempts].reverse().find((attempt) => attempt.outcome !== null);
+  const finishNext = active && !printing && lastAnswered?.outcome === "success";
   const fromIdea = item.startedAt !== null && item.startedAt - item.createdAt > 60_000;
   const worked = [...item.attempts].reverse().find((attempt) => attempt.outcome === "success");
   // The finished attempts, and the one that came closest when none worked (the newest that worked partly).
@@ -487,14 +490,17 @@ function Build({ item }: { item: ItemView }) {
           <Button variant="quiet" icon={ShelveIcon} disabled={readOnly} onClick={() => shelveBuild(queryClient, item)}>
             Shelve
           </Button>
-          <Button
-            variant={isDesktop ? "secondary" : "quiet"}
-            icon={FinishIcon}
-            disabled={readOnly}
-            onClick={() => finishBuild(queryClient, item)}
-          >
-            Finish build
-          </Button>
+          {/* On a phone the bar under the page already leads with it. */}
+          {(isDesktop || !finishNext) && (
+            <Button
+              variant={isDesktop ? (finishNext ? "primary" : "secondary") : "quiet"}
+              icon={FinishIcon}
+              disabled={readOnly}
+              onClick={() => finishBuild(queryClient, item)}
+            >
+              Finish build
+            </Button>
+          )}
         </>
       ) : (
         <Button icon={ReopenIcon} disabled={readOnly} onClick={() => reopenBuild(queryClient, item)}>
@@ -678,7 +684,14 @@ function Build({ item }: { item: ItemView }) {
               selected={selected}
             />
 
-            {!!item.files?.length && <ItemFiles itemId={item.id} files={item.files} readOnly={readOnly} />}
+            {!!item.files?.length && (
+              <ItemFiles
+                itemId={item.id}
+                files={item.files}
+                readOnly={readOnly}
+                folded={item.attempts.length > 0 && !isDesktop}
+              />
+            )}
 
             <PartsSection
               editing={editingParts}
@@ -830,9 +843,27 @@ function Build({ item }: { item: ItemView }) {
             one that is off the bed asks on the attempt itself, with its three answers: one question, never two. */}
         {!isDesktop && (active || printing) && !(printing && isOffTheBed(printing)) && (
           <ActionBar>
-            <Button variant="primary" size="lg" icon={printing ? undefined : PlusIcon} fullWidth onClick={primary}>
-              {printing ? "How did it go?" : "Log attempt"}
-            </Button>
+            {finishNext ? (
+              <>
+                <Button
+                  variant="primary"
+                  size="lg"
+                  icon={FinishIcon}
+                  disabled={readOnly}
+                  className="flex-1"
+                  onClick={() => finishBuild(queryClient, item)}
+                >
+                  Finish build
+                </Button>
+                <Button variant="secondary" size="lg" onClick={primary}>
+                  Log another try
+                </Button>
+              </>
+            ) : (
+              <Button variant="primary" size="lg" icon={printing ? undefined : PlusIcon} fullWidth onClick={primary}>
+                {printing ? "How did it go?" : "Log attempt"}
+              </Button>
+            )}
           </ActionBar>
         )}
 

@@ -129,6 +129,10 @@ test("grows an idea into a build, logs a failure and a success, and finishes it"
     .poll(async () => (await getItem(page, id)).attempts.map((a: { outcome: string }) => a.outcome))
     .toEqual(["failed", "success"]);
 
+  // The newest answer is "Worked": Finish build leads (the bar on phones, the header on desktop), with another try beside it.
+  await expect(page.getByRole("button", { name: "Finish build" })).toHaveCount(1);
+  if (isMobile) await expect(page.getByRole("button", { name: "Log another try" })).toBeVisible();
+
   // Finish it: one action, a little delight after the spaghetti, and undo.
   await page.getByRole("button", { name: "Finish build" }).click();
   await expect(page.getByText("Al dente")).toBeVisible();

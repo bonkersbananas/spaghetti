@@ -7018,6 +7018,56 @@ shots.push(
   ] as Shot[]),
 );
 
+// The phone build page follows a print: Finish build after a worked attempt, the attempts ahead of the files, the new file in view.
+shots.push(
+  ...([
+    {
+      // The newest answered attempt worked and nothing is printing: Finish build leads (phone bar, desktop header).
+      name: "build-finish-next",
+      path: `/builds/${SEED_IDS.desiccantHook}`,
+    },
+    {
+      // A build with attempts and a file: the file is one line on a phone, the attempts come up the page.
+      name: "build-file-folded",
+      path: `/ideas/${SEED_IDS.bigTugboat}`,
+      fullPage: true,
+      prepare: async (page) => {
+        // The idea's kept files go with it into a build; one attempt in, its file folds to a line.
+        const headers = { Origin: new URL(page.url()).origin };
+        await page.request.patch(`/api/items/${SEED_IDS.bigTugboat}`, { headers, data: { stage: "building" } });
+        await page.request.post(`/api/items/${SEED_IDS.bigTugboat}/attempts`, {
+          headers,
+          data: {
+            id: crypto.randomUUID(),
+            outcome: "partial",
+            printedAt: Date.now(),
+            note: "Brim helped, the bow is rough.",
+            failureTags: [],
+            successNotes: [],
+            settings: {},
+          },
+        });
+        await page.goto(`/builds/${SEED_IDS.bigTugboat}`);
+        await page.getByRole("heading", { name: "Attempts" }).waitFor();
+      },
+    },
+    {
+      // Right after adding a file on the idea: the new card is scrolled into view, not left below the fold.
+      name: "idea-file-added-in-view",
+      path: `/ideas/${SEED_IDS.bigTugboat}`,
+      prepare: async (page) => {
+        await page.getByTestId("idea-file-input").setInputFiles({
+          name: SLICER_FILE_NAME,
+          mimeType: "application/octet-stream",
+          buffer: Buffer.from(slicerFile()),
+        });
+        await page.getByText(SLICER_FILE_NAME).waitFor();
+        await page.waitForTimeout(800);
+      },
+    },
+  ] as Shot[]),
+);
+
 // Last: the queued finish stays offline and unsent, so nothing after it would work.
 shots.push(
   ...([
