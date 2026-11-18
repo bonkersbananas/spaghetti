@@ -219,19 +219,26 @@ function Setup({ initial }: { initial: PrinterSetup }) {
             </div>
           </PrinterSection>
         </fieldset>
-        {/* What is low, right under the bays that hold it, with the way onto the shopping list. */}
-        <Suspense fallback={null}>
-          <LowUnderBays />
-        </Suspense>
       </div>
 
-      {idle ? (
-        <Suspense fallback={<UpkeepSkeleton />}>
-          <Upkeep />
-        </Suspense>
-      ) : (
-        <UpkeepSkeleton />
-      )}
+      {/* From 1280 the right column is what needs you: Upkeep, then what is low (the left holds the machine and its
+          bays), so the columns end near each other. Below 1280 it is one column: what is low sits under the bays. */}
+      <div className="flex flex-col gap-12 max-xl:contents md:gap-16">
+        <div className="empty:hidden max-xl:order-0 xl:order-2">
+          <Suspense fallback={null}>
+            <LowUnderBays />
+          </Suspense>
+        </div>
+        <div className="max-xl:order-1 xl:order-1">
+          {idle ? (
+            <Suspense fallback={<UpkeepSkeleton />}>
+              <Upkeep />
+            </Suspense>
+          ) : (
+            <UpkeepSkeleton />
+          )}
+        </div>
+      </div>
 
       <div className="xl:col-span-2">
         <PrinterSection title="Setup">
