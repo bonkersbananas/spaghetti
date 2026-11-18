@@ -1331,6 +1331,14 @@ impl Settings {
         }
     }
 
+    /// Whether the walls' seams are nearest ones, picked from where the nozzle is as each loop starts (Orca's
+    /// `place_seam`): not in spiral vase mode, which places no seams, nor yet on plates in several filaments.
+    pub fn nearest_seams(&self) -> bool {
+        self.seam_position == "nearest"
+            && !self.spiral_mode
+            && self.palette.as_ref().is_none_or(|p| p.profiles.len() <= 1)
+    }
+
     /// What this prints otherwise than the presets ask, in a few words each (empty when it prints what they ask).
     pub fn fallbacks(&self) -> Vec<String> {
         let mut out = Vec::new();
@@ -1410,8 +1418,8 @@ impl Settings {
         if self.elephant_foot > 0.0 && self.elephant_foot_layers > 1 && self.support.raft_layers <= 0 {
             out.push("elephant's foot compensated on the first layer only".into());
         }
-        if self.seam_position == "nearest" && !self.spiral_mode {
-            out.push(format!("{} seams placed as aligned ones", self.seam_position));
+        if self.seam_position == "nearest" && !self.spiral_mode && !self.nearest_seams() {
+            out.push("nearest seams placed as aligned ones on plates in several filaments".into());
         }
         // In spiral vase mode every lift goes straight up, as Orca's do there.
         if self.z_hop > 0.0 && !self.spiral_mode && !matches!(self.z_hop_type.as_str(), "Spiral Lift" | "Auto Lift") {

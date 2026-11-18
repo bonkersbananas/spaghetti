@@ -3872,3 +3872,33 @@ fn classic_walls_give_up_their_inner_walls_over_a_grown_top_as_orcas_do() {
     assert!((inner - 291.6).abs() < 0.3 && (top - 304.6).abs() < 0.3, "{inner} {top} mm³");
     assert!((inner_grown - 288.8).abs() < 0.3 && (top_grown - 307.2).abs() < 0.3, "{inner_grown} {top_grown} mm³");
 }
+
+/// Nearest seams (`seam_position = nearest`) are picked as Orca's `place_seam` picks them, from where the nozzle is as
+/// each loop starts: on a 20 mm cube each layer's first wall starts at the corner nearest where the layer before
+/// ended, as on every layer of native Orca 2.5.1's (Nov 18), where the aligned seams this printed before kept to
+/// one side on 96 of the 99.
+#[test]
+fn nearest_seams_start_each_layer_at_the_corner_nearest_the_nozzle_as_orcas_do() {
+    let stl = cube_stl(20.0);
+    let settings = setup::read(r#"{"process": {"seam_position": "nearest"}}"#).unwrap().settings;
+    let out = slice(&[Input { name: "cube.stl", bytes: &stl }], &settings, &Options::default()).unwrap();
+    assert!(out.fallbacks.is_empty(), "{:?}", out.fallbacks);
+    let layers = extrusions(&String::from_utf8(out.gcode).unwrap());
+    let near = |corners: &[[f64; 2]], p: [f64; 2]| -> usize {
+        let d = |c: &[f64; 2]| (c[0] - p[0]).hypot(c[1] - p[1]);
+        (0..corners.len()).min_by(|&a, &b| d(&corners[a]).total_cmp(&d(&corners[b]))).unwrap()
+    };
+    let mut checked = 0;
+    for k in 4..layers.len() {
+        let walls: Vec<[f64; 2]> = layers[k].iter().filter(|e| e.1 == "Inner wall").flat_map(|e| [e.2, e.3]).collect();
+        let (lo, hi) = walls.iter().fold(([f64::MAX; 2], [f64::MIN; 2]), |(lo, hi), p| {
+            ([lo[0].min(p[0]), lo[1].min(p[1])], [hi[0].max(p[0]), hi[1].max(p[1])])
+        });
+        let corners = [[lo[0], lo[1]], [hi[0], lo[1]], [lo[0], hi[1]], [hi[0], hi[1]]];
+        let ended = layers[k - 1].last().unwrap().3;
+        let started = layers[k][0].2;
+        assert_eq!(near(&corners, started), near(&corners, ended), "layer {}: {started:?} after {ended:?}", k + 1);
+        checked += 1;
+    }
+    assert!(checked > 90, "{checked} layers");
+}
