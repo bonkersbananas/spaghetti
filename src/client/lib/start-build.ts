@@ -1,7 +1,7 @@
 import type { QueryClient } from "@tanstack/react-query";
 import { createBuild } from "./builds";
 import { addItemFile } from "./item-files";
-import { forgetFresh } from "./items";
+import { forgetFresh, markFresh } from "./items";
 import { outbox } from "./outbox";
 import { sessionQuery } from "./queries";
 
@@ -18,7 +18,9 @@ export function startBuildFrom(queryClient: QueryClient, what: { link: string } 
   // It has no title or note until the file shows: leaving the page meanwhile must not count as leaving it blank.
   forgetFresh(id);
   // The file goes to a build the server has: wait for the outbox to send the record first.
-  const send = () => void addItemFile(queryClient, id, what.file);
+  // Once it has settled the build counts as a blank one again: a file that was unreadable or refused leaves it empty
+  // (swept), one that was kept makes it not blank.
+  const send = () => void addItemFile(queryClient, id, what.file).finally(() => markFresh(id));
   if (!outbox.isPending(id)) send();
   else {
     const stop = outbox.subscribe(() => {

@@ -606,9 +606,10 @@ function beat() {
   });
   window.addEventListener("pageshow", write);
 }
+// A hidden tab's timers slow to about one a minute: three minutes of silence is a closed tab.
 const isAlive = (tab: string) => {
   try {
-    return Date.now() - Number(localStorage.getItem(aliveKey(tab)) ?? 0) < 30_000;
+    return Date.now() - Number(localStorage.getItem(aliveKey(tab)) ?? 0) < 180_000;
   } catch {
     return false;
   }
