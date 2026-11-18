@@ -54,7 +54,7 @@ export interface FieldsProps {
    * "finish" (a print still printing) lets the outcome, note and tags be filled in, to be sent later.
    */
   readOnly?: "all" | "finish";
-  /** Claude's ideas for the next try, right under the outcome: for a new attempt. */
+  /** Claude's ideas for the next try, after the photo, the note and the tags: for a new attempt. */
   coach?: ReactNode;
   /**
    * "What worked last time" and "Start from a recipe", for a new attempt: they sit inside the settings row, above the
@@ -186,7 +186,7 @@ export function AttemptFields(props: FieldsProps) {
             else event.currentTarget.blur();
           }}
         />
-        {(outcome === "failed" || outcome === "partial") && (
+        {withTags && (
           <TagPicker
             kind="failure"
             label="What went wrong?"
