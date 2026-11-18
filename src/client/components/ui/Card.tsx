@@ -170,7 +170,7 @@ export function Card({
             note={note ?? ""}
             maxSize="lg"
             clearBottom={!!mark}
-            doodle={aspect === "portrait" || aspect === "tall"}
+            doodle={(aspect === "portrait" || aspect === "tall") && !chips}
           />
         )}
         {badge && <div className="absolute top-2 right-2">{badge}</div>}

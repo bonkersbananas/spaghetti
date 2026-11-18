@@ -55,7 +55,9 @@ function useWholeLines() {
       const lines = Math.floor((el.clientHeight + 1) / Number.parseFloat(getComputedStyle(note).lineHeight));
       if (lines > 0) note.style.webkitLineClamp = String(lines);
     });
+    // The note too: a note edited into another size step changes its line height, not the box.
     observer.observe(el);
+    observer.observe(el.firstElementChild ?? el);
     observer.observe(el.parentElement?.parentElement ?? el);
     return () => observer.disconnect();
   }, []);
@@ -88,7 +90,7 @@ export function NoteFace({ note, size, className, compact, clearBottom, maxSize,
               compact === true ? "text-caption line-clamp-3 leading-snug" : cn(sizes[face], "line-clamp-3"),
             )}
           >
-            {keepUnits(text)}
+            {link ? keepUnits(text) : breakAfterSlashes(keepUnits(note))}
           </p>
         ) : (
           // The box is measured; the note inside it is exactly as many lines tall as fit, so no line shows partly.
