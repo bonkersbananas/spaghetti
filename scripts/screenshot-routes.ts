@@ -1732,7 +1732,6 @@ async function restoreDeskTidy(page: Page) {
   });
 }
 
-
 /** Three filaments and a nozzle bought a minute ago, and the list scrolled to Bought. */
 async function boughtThings(page: Page) {
   const headers = { Origin: new URL(page.url()).origin };
