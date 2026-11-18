@@ -38,8 +38,7 @@ export function materialMismatch(
   return { page: wanted[0] ?? "", filament: first, material: materialKey(first.material) };
 }
 
-/** "The page says PETG; A1 holds PLA." Where the filament is a loaded spool, its slot; else "this slice uses". */
-export function materialMismatchSentence(mismatch: MaterialMismatch, slot?: string | null): string {
-  const holder = slot ? `${slot === "Ext" ? "the external spool" : slot} holds` : "this slice uses";
-  return `The page says ${mismatch.page}; ${holder} ${mismatch.material}.`;
+/** "MakerWorld says PETG; this is sliced with PLA." The site names where the words come from, never "the page". */
+export function materialMismatchSentence(mismatch: MaterialMismatch, siteName: string): string {
+  return `${siteName} says ${mismatch.page}; this is sliced with ${mismatch.material}.`;
 }

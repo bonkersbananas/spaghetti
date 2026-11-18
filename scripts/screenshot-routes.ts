@@ -735,6 +735,26 @@ async function removeTwistModels(page: Page) {
 }
 
 /** Waits for a sliced model's card and brings it into view. */
+/** Every read of an item answers with a drafted model page that names this material (the stand-in has no page to read). */
+async function draftSays(page: Page, material: string, site: "makerworld" | "printables") {
+  await page.route(/\/api\/items\/[\w-]+$/, async (route) => {
+    const response = await route.fetch();
+    const json = await response.json();
+    json.item.draft = {
+      status: "drafted",
+      site,
+      url: GOOD_LINK,
+      failure: null,
+      applied: [],
+      title: null,
+      note: null,
+      findings: { designer: null, license: null, material, plate: null, settings: null },
+      draftedAt: Date.now(),
+    };
+    await route.fulfill({ response, json });
+  });
+}
+
 async function modelInView(page: Page) {
   await page.getByRole("region", { name: /^Files/ }).evaluate((region) => region.scrollIntoView({ block: "center" }));
   await page.waitForTimeout(300);
@@ -2851,29 +2871,69 @@ export const shots: Shot[] = [
     cleanup: removeModelItems,
   },
   {
-    // The model's page says PETG and the slice is PLA: one quiet line on the card.
+    // The model's page says PETG and the slice is PLA: one quiet line on the card, the two materials a little firmer.
     name: "idea-model-material",
     path: "/ideas",
     prepare: async (page) => {
       await ideaWithModel(page, FUSILLI_IDEA, FUSILLI, /Sliced by Spaghetti/);
-      await page.route(/\/api\/items\/[\w-]+$/, async (route) => {
-        const response = await route.fetch();
-        const json = await response.json();
-        json.item.draft = {
-          status: "drafted",
-          site: "makerworld",
-          url: GOOD_LINK,
-          failure: null,
-          applied: [],
-          title: null,
-          note: null,
-          findings: { designer: null, license: null, material: "PETG", plate: null, settings: null },
-          draftedAt: Date.now(),
-        };
-        await route.fulfill({ response, json });
-      });
+      await draftSays(page, "PETG", "makerworld");
       await page.reload();
-      await page.getByText(/The page says PETG/).waitFor();
+      if (!BEFORE_MAIN) await page.getByText(/MakerWorld says/).waitFor();
+      await page.waitForTimeout(300);
+    },
+    beforeShot: modelInView,
+    cleanup: async (page) => {
+      await page.unrouteAll({ behavior: "ignoreErrors" });
+      await removeModelItems(page);
+    },
+  },
+  {
+    // The same on the build's page, where the idea's file went with it.
+    name: "build-model-material",
+    path: "/ideas",
+    prepare: async (page) => {
+      await ideaWithModel(page, FUSILLI_IDEA, FUSILLI, /Sliced by Spaghetti/);
+      await sliceSaved(page);
+      const id = modelItems.at(-1) as string;
+      const headers = { Origin: new URL(page.url()).origin };
+      await page.request.patch(`/api/items/${id}`, { headers, data: { stage: "building" } });
+      await draftSays(page, "PETG", "makerworld");
+      await page.goto(`/builds/${id}`, { waitUntil: "networkidle" });
+      if (!BEFORE_MAIN) await page.getByText(/MakerWorld says/).waitFor();
+      await page.waitForTimeout(500);
+    },
+    beforeShot: modelInView,
+    cleanup: async (page) => {
+      await page.unrouteAll({ behavior: "ignoreErrors" });
+      await removeModelItems(page);
+    },
+  },
+  {
+    // Beside the other caution a slice can have (a part in the air).
+    name: "idea-model-material-floating",
+    path: "/ideas",
+    prepare: async (page) => {
+      await ideaWithModel(page, RACK_IDEA, RACK, /Parts of it float/);
+      await draftSays(page, "PETG", "makerworld");
+      await page.reload();
+      if (!BEFORE_MAIN) await page.getByText(/MakerWorld says/).waitFor();
+      await page.waitForTimeout(300);
+    },
+    beforeShot: modelInView,
+    cleanup: async (page) => {
+      await page.unrouteAll({ behavior: "ignoreErrors" });
+      await removeModelItems(page);
+    },
+  },
+  {
+    // The longest sentence it makes (Printables, a carbon-fibre PETG against PLA): it wraps on a phone.
+    name: "idea-model-material-long",
+    path: "/ideas",
+    prepare: async (page) => {
+      await ideaWithModel(page, FUSILLI_IDEA, FUSILLI, /Sliced by Spaghetti/);
+      await draftSays(page, "PETG-CF", "printables");
+      await page.reload();
+      if (!BEFORE_MAIN) await page.getByText(/Printables says/).waitFor();
       await page.waitForTimeout(300);
     },
     beforeShot: modelInView,

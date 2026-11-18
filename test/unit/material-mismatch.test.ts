@@ -20,11 +20,11 @@ describe("material mismatch between a model's page and its slice", () => {
     expect(materialMismatch("PETG", [filament("PLA"), filament("PETG")])).toBeNull();
   });
 
-  it("is one when the materials differ, and says so with the slot or without", () => {
+  it("is one when the materials differ, and names the site and the slice", () => {
     const mismatch = materialMismatch("PETG", [filament("PLA")]);
     expect(mismatch).toMatchObject({ page: "PETG", material: "PLA" });
-    expect(materialMismatchSentence(mismatch!, "A1")).toBe("The page says PETG; A1 holds PLA.");
-    expect(materialMismatchSentence(mismatch!)).toBe("The page says PETG; this slice uses PLA.");
+    expect(materialMismatchSentence(mismatch!, "MakerWorld")).toBe("MakerWorld says PETG; this is sliced with PLA.");
+    expect(materialMismatchSentence(mismatch!, "Printables")).toBe("Printables says PETG; this is sliced with PLA.");
     expect(materialMismatch("PETG-CF", [filament("PETG")])).not.toBeNull();
   });
 

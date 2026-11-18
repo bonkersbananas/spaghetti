@@ -1,7 +1,8 @@
 import { fileUrl } from "@shared/api";
 import type { AttemptSettings } from "@shared/attempts";
+import { MODEL_SITES } from "@shared/model-links";
 import { isStlName, slicedName } from "@shared/slicing/files.ts";
-import { materialMismatch, materialMismatchSentence } from "@shared/slicing/material.ts";
+import { materialMismatch } from "@shared/slicing/material.ts";
 import { changeWords, modelSlicing, slicingAhead, slicingOfSlice } from "@shared/slicing/model.ts";
 import { workshopDefaults } from "@shared/slicing/pantry.ts";
 import { recipesFor } from "@shared/slicing/recipe.ts";
@@ -368,7 +369,7 @@ export interface ModelActions {
    */
   mainNozzle?: number;
   /** The page of the model names another material than the slice uses ("The page says PETG; A1 holds PLA."). */
-  materialNote?: string | null;
+  materialNote?: { site: string; page: string; material: string } | null;
   /** The nozzle size was the model's own pick: the way back is Undo, or More's Nozzle, not a button of its own. */
   nozzlePicked?: boolean;
 }
@@ -548,7 +549,12 @@ function statusOf(
             {standIn && <span className="text-small text-ink-soft">{standIn}</span>}
             {floating && <Caution className="px-0">Parts of it float in the air.</Caution>}
             {elsewhere && <Caution className="px-0">{elsewhere}</Caution>}
-            {materialNote && !again && !quiet && <span className="text-small text-ink-soft">{materialNote}</span>}
+            {materialNote && !again && !quiet && (
+              <span className="text-small text-ink-soft">
+                {materialNote.site} says <b className="text-ink font-semibold">{materialNote.page}</b>; this is sliced
+                with <b className="text-ink font-semibold">{materialNote.material}</b>.
+              </span>
+            )}
           </>
         ),
         primary: (
@@ -860,7 +866,11 @@ export default function ModelFileCard({
       ? materialMismatch(pageItem?.draft?.findings?.material, slicingOfSlice(file.slice).filaments)
       : null;
   const materialNote = mismatch
-    ? materialMismatchSentence(mismatch, spools.find((spool) => spool.id === mismatch.filament.spoolId)?.slot)
+    ? {
+        site: MODEL_SITES.find((site) => site.id === pageItem?.draft?.site)?.name ?? "The model's page",
+        page: mismatch.page,
+        material: mismatch.material,
+      }
     : null;
   useWarmSoon(() => (target ? loadSettings() : Promise.resolve()));
   // Ordered for the filament it has when they arrive, and kept so: picking a recipe for another filament doesn't
