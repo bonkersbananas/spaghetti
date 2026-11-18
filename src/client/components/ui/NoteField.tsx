@@ -22,7 +22,23 @@ interface NoteFieldProps {
    * the page shows a card for each link in the note, so a note that is only one other link reads as empty too.
    */
   model?: ModelMark | null;
+  /**
+   * The page draws the model's card right under the note (idea and build pages): a line of the note that is only the
+   * model's link isn't repeated in the read view, as a note that is only that link reads as empty. Typing still
+   * shows the note as written.
+   */
+  modelCardBelow?: boolean;
   className?: string;
+}
+
+/** The note without the lines that are only a link to `model`: the card says them. */
+function withoutModelLines(note: string, isModel: (url: string) => boolean): string {
+  const kept = note.split("\n").filter((line) => {
+    const links = findLinks(line);
+    const first = links[0];
+    return !(links.length === 1 && first && isModel(first.url) && line.trim() === first.url);
+  });
+  return kept.join("\n").replace(/\n{3,}/g, "\n\n").trim();
 }
 
 /** "makerworld.com/…": as much of a model's address as a note needs while its title is unknown. */
@@ -41,6 +57,7 @@ export function NoteField({
   maxLength,
   readOnly,
   model,
+  modelCardBelow,
   className,
 }: NoteFieldProps) {
   const [editing, setEditing] = useState(false);
@@ -111,7 +128,7 @@ export function NoteField({
       ) : (
         <p className="text-lead text-ink md:text-body pointer-events-none relative break-words whitespace-pre-wrap">
           {linkify(
-            value,
+            modelCardBelow && page ? withoutModelLines(value, isModel) : value,
             "pointer-events-auto text-ink underline decoration-ink-ghost decoration-1 underline-offset-3 hover:decoration-ink focus-ring rounded-xs",
             page ? modelText : undefined,
           )}

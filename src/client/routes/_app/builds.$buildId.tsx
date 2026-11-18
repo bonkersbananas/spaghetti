@@ -617,6 +617,7 @@ function Build({ item }: { item: ItemView }) {
                 readOnly={readOnly}
                 placeholder="Notes for the whole build: the plan, a link, what to try next…"
                 model={model}
+                modelCardBelow
                 className="mt-1"
               />
               <NoteLinks note={note} model={model} />

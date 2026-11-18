@@ -9,7 +9,7 @@ import {
 import { useQueryClient } from "@tanstack/react-query";
 import { lazy, Suspense, useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/Button";
-import { CheckCircleIcon, FinishIcon, SlicerFileIcon } from "@/components/ui/icons";
+import { CheckCircleIcon, FinishIcon, PlusIcon, SlicerFileIcon } from "@/components/ui/icons";
 import { Overline } from "@/components/ui/Overline";
 import { Photo } from "@/components/ui/Photo";
 import { cn } from "@/lib/cn";
@@ -141,9 +141,12 @@ export function PartsSection({
             </span>
           </button>
         )}
-        <Button variant="quiet" size="sm" disabled={disabled} onClick={() => setEditing(true)} className="-ml-2.5">
-          Add parts
-        </Button>
+        {/* The same quiet action as "Twist" above it (an icon, the medium size, the row's -mx-3). */}
+        <div className="-mx-3 -mt-1">
+          <Button variant="quiet" icon={PlusIcon} disabled={disabled} onClick={() => setEditing(true)}>
+            Add parts
+          </Button>
+        </div>
       </section>
     );
   }
