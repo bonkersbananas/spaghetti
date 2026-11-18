@@ -88,11 +88,11 @@ test("saves an attempt as a recipe, finds it on the spool page and in search, st
   if (isMobile) await page.getByRole("button", { name: "Log attempt" }).click();
   else await page.keyboard.press("a");
   const sheet = page.getByRole("dialog", { name: "Attempt 2" });
+  // The recipes are one tap inside the settings row.
+  await sheet.getByRole("button", { name: /^Settings/ }).click();
   await sheet.getByRole("button", { name: "Start from a recipe" }).click();
   await sheet.getByRole("button", { name: /Silk PLA, slow outer wall/ }).click();
   await expect(sheet.getByText("Starting from “Silk PLA, slow outer wall”")).toBeVisible();
-  await expect(sheet.getByText(/Same as recipe “Silk PLA, slow outer wall”/)).toBeVisible();
-  await sheet.getByRole("button", { name: /^Settings/ }).click();
   await sheet.getByLabel("Bed", { exact: true }).fill("70");
   await sheet.getByRole("button", { name: /^Settings/ }).click();
   await expect(sheet.getByText(/Changed from recipe “Silk PLA, slow outer wall”: bed 70 °C/)).toBeVisible();

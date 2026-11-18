@@ -2,7 +2,7 @@ import { type AttemptSettings, carryOver, describeChanges } from "@shared/attemp
 import { inlineTime } from "@shared/time";
 import { useQuery } from "@tanstack/react-query";
 import { AnimatePresence, m } from "motion/react";
-import { Fragment, useState } from "react";
+import { Fragment } from "react";
 import { Button } from "@/components/ui/Button";
 import { BuildsIcon, CheckIcon, UndoIcon, WorkedIcon } from "@/components/ui/icons";
 import { MetaList } from "@/components/ui/MetaList";
@@ -20,6 +20,9 @@ interface WhatWorkedSuggestionProps {
   /** The settings the new attempt starts from now. */
   settings: AttemptSettings;
   onUse: (settings: AttemptSettings) => void;
+  /** Which match was used and the settings from before it, kept by the sheet: they outlive this card when its row closes. */
+  used: { id: string; before: AttemptSettings } | null;
+  onUsed: (used: { id: string; before: AttemptSettings } | null) => void;
 }
 
 /**
@@ -28,12 +31,9 @@ interface WhatWorkedSuggestionProps {
  * and one tap to start from them. It stays out of the way when there is
  * nothing to offer, or when the attempt already starts from those settings.
  */
-export function WhatWorkedSuggestion({ itemId, settings, onUse }: WhatWorkedSuggestionProps) {
+export function useWhatWorked(itemId: string, settings: AttemptSettings) {
   const material = settings.filaments?.find((filament) => filament.type?.trim())?.type?.trim();
   const { data: matches } = useQuery(whatWorkedQuery(itemId, material));
-  const isDesktop = useIsDesktop();
-  const [used, setUsed] = useState<{ id: string; before: AttemptSettings } | null>(null);
-
   const best = matches?.[0];
   // Its settings, on the spool already chosen (same material; the color is this print's own).
   const suggested = best
@@ -43,6 +43,20 @@ export function WhatWorkedSuggestion({ itemId, settings, onUse }: WhatWorkedSugg
       }
     : undefined;
   const changes = suggested ? describeChanges(settings, suggested) : [];
+  return { matches, best, suggested, changes, offers: !!best && changes.length > 0 };
+}
+
+/** One line for the closed settings row: what worked, where, and the settings that did ("Worked on Hook: Textured PEI, 250 °C"). */
+export function offerLine(match: NonNullable<ReturnType<typeof useWhatWorked>["best"]>): string {
+  const where = match.sameBuild ? `attempt ${match.number}` : match.item.title?.trim() || "another build";
+  const settings = summarizeSettings(match.attempt.settings).slice(0, 1).join(", ");
+  return `Worked ${match.sameBuild ? "in" : "on"} ${where}${settings ? `: ${settings}` : ""}`;
+}
+
+export function WhatWorkedSuggestion({ itemId, settings, onUse, used, onUsed }: WhatWorkedSuggestionProps) {
+  const { matches, best, suggested, changes } = useWhatWorked(itemId, settings);
+  const isDesktop = useIsDesktop();
+
   const usedMatch = used && matches?.find((match) => match.attempt.id === used.id);
   const show = usedMatch ?? (best && changes.length > 0 ? best : null);
   if (!show) return null;
@@ -102,7 +116,7 @@ export function WhatWorkedSuggestion({ itemId, settings, onUse }: WhatWorkedSugg
               icon={UndoIcon}
               onClick={() => {
                 onUse(used.before);
-                setUsed(null);
+                onUsed(null);
               }}
             >
               Undo
@@ -125,7 +139,7 @@ export function WhatWorkedSuggestion({ itemId, settings, onUse }: WhatWorkedSugg
               size={isDesktop ? "sm" : "md"}
               onClick={() => {
                 if (!suggested) return;
-                setUsed({ id: show.attempt.id, before: settings });
+                onUsed({ id: show.attempt.id, before: settings });
                 onUse(suggested);
               }}
               className="max-md:w-full"

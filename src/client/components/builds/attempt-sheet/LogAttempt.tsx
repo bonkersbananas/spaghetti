@@ -1,4 +1,4 @@
-import { carryOver, type Outcome } from "@shared/attempts";
+import { type AttemptSettings, carryOver, type Outcome } from "@shared/attempts";
 import { partsOnPlate } from "@shared/parts";
 import { useSuspenseQuery } from "@tanstack/react-query";
 import { lazy, Suspense, useEffect, useState } from "react";
@@ -16,7 +16,7 @@ import { photoSrc } from "@/lib/previews";
 import { sessionQuery } from "@/lib/queries";
 import { queueSlicerFile } from "@/lib/slicer-files";
 import { useIsDesktop } from "@/lib/use-media-query";
-import { WhatWorkedSuggestion } from "../WhatWorkedSuggestion";
+import { offerLine, useWhatWorked, WhatWorkedSuggestion } from "../WhatWorkedSuggestion";
 import { AttemptFields } from "./AttemptFields";
 import { useOutcomeCounts } from "./PlateParts";
 import { DraftFile, fetchKeptFile, SlicerFileSection, useSlicerFile } from "./SheetSlicerFile";
@@ -60,6 +60,7 @@ export function LogAttempt({
   const [draft, setDraft] = useState(blank);
   const [when, setWhen] = useState<number | null>(null);
   const [recipe, setRecipe] = useState<AppliedRecipe | null>(null);
+  const [usedMatch, setUsedMatch] = useState<{ id: string; before: AttemptSettings } | null>(null);
   const [dirty, setDirty] = useState(false);
   const { photos, addFiles, removePhoto: removeDraftPhoto, clear } = useDraftPhotos();
   const camera = useFilePicker({ camera: true, onFiles: addFiles });
@@ -80,6 +81,8 @@ export function LogAttempt({
     incomingFile,
   });
 
+  const worked = useWhatWorked(item.id, draft.settings);
+
   // A fresh sheet starts from the latest attempt (one may have been logged since), but a
   // half-filled one is kept when it closes: nothing typed is lost.
   // biome-ignore lint/correctness/useExhaustiveDependencies: only on opening.
@@ -87,6 +90,7 @@ export function LogAttempt({
     if (open && !dirty && !photos.length && !slicer.state) {
       setDraft(blank());
       setRecipe(null);
+      setUsedMatch(null);
     }
   }, [open]);
 
@@ -108,6 +112,7 @@ export function LogAttempt({
     setDirty(false);
     setWhen(null);
     setRecipe(null);
+    setUsedMatch(null);
     setDraft(blank());
     onOpenChange(false);
     // A failed print is worth keeping: say so, in a different small way each time.
@@ -235,6 +240,7 @@ export function LogAttempt({
               </Suspense>
             )
           }
+          suggestionOffer={!slicer.state && worked.best && worked.offers ? offerLine(worked.best) : undefined}
           suggestion={
             <>
               {/* A slicer file says what this attempt is: no other settings to offer. */}
@@ -244,6 +250,8 @@ export function LogAttempt({
                     itemId={item.id}
                     settings={draft.settings}
                     onUse={(settings) => change({ settings })}
+                    used={usedMatch}
+                    onUsed={setUsedMatch}
                   />
                   <RecipePicker
                     settings={draft.settings}

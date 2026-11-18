@@ -4715,6 +4715,7 @@ export const shots: Shot[] = [
     prepare: async (page) => {
       await page.getByRole("button", { name: "Log attempt" }).first().click();
       const sheet = page.getByRole("dialog");
+      await sheet.getByRole("button", { name: /^Settings/ }).click();
       await sheet.getByRole("button", { name: "Start from a recipe" }).click();
       const first = sheet.getByRole("button", { name: /PETG, dried and 245/ });
       await first.waitFor();
@@ -4726,11 +4727,48 @@ export const shots: Shot[] = [
     },
   },
   {
+    // The same sheet from its top: the outcome, then the photo and the note, the one Settings row saying what worked.
+    name: "attempt-new-top",
+    path: `/builds/${SEED_BUILD_IDS.cableChain}`,
+    prepare: async (page) => {
+      await page.getByRole("button", { name: "Log attempt" }).first().click();
+      await page
+        .getByRole("dialog")
+        .getByRole("button", { name: /^Settings/ })
+        .waitFor();
+      await page.waitForTimeout(800);
+    },
+    cleanup: async (page) => {
+      await page.keyboard.press("Escape");
+    },
+  },
+  {
+    // A new attempt as it opens on a build with a past: the photo, note and outcome lead, one quiet settings row.
+    name: "attempt-new",
+    path: `/builds/${SEED_BUILD_IDS.cableChain}`,
+    prepare: async (page) => {
+      await page.getByRole("button", { name: "Log attempt" }).first().click();
+      const row = page.getByRole("dialog").getByRole("button", { name: /^Settings/ });
+      await row.waitFor();
+      await page.waitForTimeout(600);
+      // The bottom of the sheet: the one settings row above the buttons.
+      await row.evaluate((element) => element.scrollIntoView({ block: "end" }));
+      await page.waitForTimeout(300);
+    },
+    cleanup: async (page) => {
+      await page.keyboard.press("Escape");
+    },
+  },
+  {
     // "What worked last time" in the attempt sheet: PETG that warped, offered the PETG that didn't.
     name: "what-worked",
     path: `/builds/${SEED_BUILD_IDS.cableChain}`,
     prepare: async (page) => {
       await page.getByRole("button", { name: "Log attempt" }).first().click();
+      await page
+        .getByRole("dialog")
+        .getByRole("button", { name: /^Settings/ })
+        .click();
       const suggestion = page.getByRole("dialog").getByRole("region", { name: "What worked last time" });
       await suggestion.waitFor();
       await page.waitForTimeout(400);

@@ -102,7 +102,7 @@ test("grows an idea into a build, logs a failure and a success, and finishes it"
   else await page.keyboard.press("a");
   sheet = page.getByRole("dialog", { name: "Attempt 2" });
   await expect(sheet).toBeVisible();
-  await expect(sheet.getByRole("button", { name: /^Settings(?! worth)/ })).toContainText("Same as attempt 1");
+  await expect(sheet.getByRole("button", { name: /^Settings(?! worth)/ })).toContainText("As attempt 1");
   await sheet.getByRole("radio", { name: "Worked" }).click();
   await sheet.getByRole("button", { name: "Great first layer" }).click();
   await sheet.getByRole("button", { name: /^Settings(?! worth)/ }).click();

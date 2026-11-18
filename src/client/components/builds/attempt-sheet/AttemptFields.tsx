@@ -54,10 +54,15 @@ export interface FieldsProps {
    * "finish" (a print still printing) lets the outcome, note and tags be filled in, to be sent later.
    */
   readOnly?: "all" | "finish";
-  /** Claude's ideas for the next try, right under the outcome: for a new attempt. */
+  /** Claude's ideas for the next try, after the photo, the note and the tags: for a new attempt. */
   coach?: ReactNode;
-  /** Shown above the settings: "what worked last time", for a new attempt. */
+  /**
+   * "What worked last time" and "Start from a recipe", for a new attempt: they sit inside the settings row, above the
+   * editor, so the row is one line until someone wants them.
+   */
   suggestion?: ReactNode;
+  /** The closed settings row says what `suggestion` offers, in one line ("Worked on Hook: Textured PEI, 250 °C"). */
+  suggestionOffer?: string;
   /** The slicer file: its card, a plate to pick, or the well to add one. */
   file?: ReactNode;
   /** What the slicer file said, to mark the values that came from it. */
@@ -93,11 +98,8 @@ export function AttemptFields(props: FieldsProps) {
     changes.length ? (
       `Changed from ${base.label}: ${changes.map((c) => c.text).join(", ")}`
     ) : (
-      <MetaList>
-        {[`Same as ${base.label}`, ...pieces.slice(0, 4)].map((piece) => (
-          <span key={piece}>{piece}</span>
-        ))}
-      </MetaList>
+      // One line, cut with an ellipsis rather than wrapped: "0.20 mm" never sits alone on a second line.
+      <span className="block truncate">{[`As ${base.label}`, ...pieces.slice(0, 2)].join(" · ")}</span>
     )
   ) : pieces.length ? (
     <MetaList>
@@ -108,13 +110,21 @@ export function AttemptFields(props: FieldsProps) {
   ) : (
     "Filament, plate, temperatures, times. All optional."
   );
-  const summaryWithFile = props.fromFile ? (
-    <span className="inline-flex min-w-0 items-start gap-1.5">
-      <FromFileMark className="mt-0.5" />
-      <span className="min-w-0">{settingsSummary}</span>
+  const withOffer = props.suggestionOffer ? (
+    <span className="flex min-w-0 flex-col gap-0.5">
+      {settingsSummary}
+      <span className="text-basil-ink truncate font-semibold">{props.suggestionOffer}</span>
     </span>
   ) : (
     settingsSummary
+  );
+  const summaryWithFile = props.fromFile ? (
+    <span className="inline-flex min-w-0 items-start gap-1.5">
+      <FromFileMark className="mt-0.5" />
+      <span className="min-w-0">{withOffer}</span>
+    </span>
+  ) : (
+    withOffer
   );
 
   return (
@@ -146,9 +156,6 @@ export function AttemptFields(props: FieldsProps) {
           {props.estimate}
         </div>
       </fieldset>
-      {/* Claude's ideas for the next try sit under the outcome, until a failure's own questions (tags) need the room:
-          then they wait under them, so the photo and the tags stay within reach of the thumb. */}
-      {!withTags && props.coach}
       {props.plate && (
         <fieldset disabled={!!props.readOnly} className="contents">
           <PlateParts
@@ -179,7 +186,7 @@ export function AttemptFields(props: FieldsProps) {
             else event.currentTarget.blur();
           }}
         />
-        {(outcome === "failed" || outcome === "partial") && (
+        {withTags && (
           <TagPicker
             kind="failure"
             label="What went wrong?"
@@ -201,17 +208,17 @@ export function AttemptFields(props: FieldsProps) {
           />
         )}
       </fieldset>
+      {/* Claude's ideas for the next try come after the photo, the note and the tags: those are what someone at the printer is doing. */}
+      {props.coach}
       {/* Rarely changed, so it sits under the tags: a failed attempt's tags are in reach without a scroll. */}
       <fieldset disabled={!!props.readOnly} className="contents">
         {props.when}
       </fieldset>
-      {withTags && props.coach}
       <fieldset disabled={!!props.readOnly} className="contents">
         {props.file}
       </fieldset>
       {/* Nothing has come off the spool until the print is done: a heads-up only while it hasn't been. */}
       {!outcome && <NotEnoughNote settings={settings} />}
-      {props.suggestion}
       <div className="flex flex-col gap-2">
         <fieldset disabled={!!props.readOnly} className="contents">
           <Disclosure
@@ -221,6 +228,7 @@ export function AttemptFields(props: FieldsProps) {
             icon={SettingsIcon}
             summary={summaryWithFile}
           >
+            {props.suggestion && <div className="mb-3 flex flex-col gap-3">{props.suggestion}</div>}
             <SettingsEditor value={settings} onChange={props.onSettings} outcome={outcome} fromFile={props.fromFile} />
           </Disclosure>
         </fieldset>
