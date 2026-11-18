@@ -435,6 +435,7 @@ const Idea = memo(function Idea({ item }: { item: ItemView }) {
               onChange={setNote}
               readOnly={readOnly}
               model={linkedModel}
+              modelCardBelow
               placeholder="Add a note: a link, a measurement, a half-thought…"
             />
             <NoteLinks note={note} model={linkedModel} modelShownElsewhere />
