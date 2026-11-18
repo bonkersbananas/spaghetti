@@ -95,7 +95,7 @@ test("saves an attempt as a recipe, finds it on the spool page and in search, st
   await expect(sheet.getByText("Starting from “Silk PLA, slow outer wall”")).toBeVisible();
   await sheet.getByLabel("Bed", { exact: true }).fill("70");
   await sheet.getByRole("button", { name: /^Settings/ }).click();
-  await expect(sheet.getByText(/Changed from recipe “Silk PLA, slow outer wall”: bed 70 °C/)).toBeVisible();
+  await expect(sheet.getByText(/Changed from recipe “Silk PLA, slow outer wall”/)).toBeVisible();
   await page.keyboard.press("Escape");
 
   // Delete it from the spool page: an undo toast, no dialog; Undo brings it back.
@@ -126,4 +126,26 @@ test("R saves the attempt that worked as a recipe", async ({ page, isMobile }) =
   // Saved already: R has nothing more to do.
   await page.keyboard.press("r");
   await expect(page.getByRole("dialog")).toHaveCount(0);
+});
+
+test("a build with no attempt that worked says so in the What worked place, with the closest try one tap away", async ({
+  page,
+}) => {
+  await signIn(page);
+  const headers = { Origin: origin(page) };
+  const buildId = crypto.randomUUID();
+  await page.request.post("/api/items", { headers, data: { id: buildId, title: "Nothing yet", stage: "building" } });
+  for (const outcome of ["failed", "partial"]) {
+    await page.request.post(`/api/items/${buildId}/attempts`, {
+      headers,
+      data: { id: crypto.randomUUID(), outcome, settings: { layerHeight: 0.2 } },
+    });
+  }
+
+  await page.goto(`/builds/${buildId}`);
+  const card = page.getByRole("region", { name: "What worked" });
+  await expect(card.getByText("Nothing has worked for this yet.")).toBeVisible();
+  await expect(card.getByText("2 tries so far.")).toBeVisible();
+  await card.getByRole("button", { name: "Attempt 2 came closest" }).click();
+  await expect(page.getByRole("dialog")).toBeVisible();
 });

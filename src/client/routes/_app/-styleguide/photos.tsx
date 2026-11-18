@@ -3,6 +3,7 @@ import dragonPhoto from "@/assets/samples/dragon.svg";
 import planterPhoto from "@/assets/samples/planter.svg";
 import vasePhoto from "@/assets/samples/vase.svg";
 import { ActionMenu, ActionMenuItem } from "@/components/ui/ActionMenu";
+import { Button } from "@/components/ui/Button";
 import * as Icons from "@/components/ui/icons";
 import { Photo } from "@/components/ui/Photo";
 import { PhotoMenuDot } from "@/components/ui/PhotoMenuDot";
@@ -60,6 +61,11 @@ export function PhotoSection() {
           <div className="grid grid-cols-2 gap-3">
             <AddPhotoTile icon={Icons.CameraIcon} label="Take photo" />
             <AddPhotoTile icon={Icons.ImageIcon} label="From library" />
+          </div>
+          <Label>No photos yet, on a phone, under the title: two secondary buttons, not wells</Label>
+          <div className="mt-1 grid grid-cols-2 gap-3">
+            <Button icon={Icons.CameraIcon}>Take photo</Button>
+            <Button icon={Icons.ImageIcon}>From library</Button>
           </div>
         </Panel>
       </div>

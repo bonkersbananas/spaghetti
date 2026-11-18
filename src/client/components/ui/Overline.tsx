@@ -6,8 +6,8 @@ interface OverlineProps {
   as?: "h2" | "h3" | "span";
   /** A count after the label, in tabular figures: "Attempts 3". */
   count?: number;
-  /** "basil" for a quiet success caption ("What worked"). */
-  tone?: "faint" | "basil";
+  /** "basil" for a quiet success caption ("What worked"), "semolina" on a semolina-soft card. */
+  tone?: "faint" | "basil" | "semolina";
   id?: string;
   className?: string;
   children: ReactNode;
@@ -24,7 +24,7 @@ export function Overline({ as: Tag = "span", count, tone = "faint", id, classNam
       id={id}
       className={cn(
         "text-caption font-sans font-semibold tracking-wider uppercase",
-        tone === "basil" ? "text-basil-ink" : "text-ink-faint",
+        tone === "basil" ? "text-basil-ink" : tone === "semolina" ? "text-semolina-ink" : "text-ink-faint",
         className,
       )}
     >

@@ -168,6 +168,9 @@ test("the other person's comment shows up live, with a new marker on the card an
   await sams.say(id, "Started the hull tonight, first layer looks great.");
   await page.evaluate(() => window.dispatchEvent(new Event("focus")));
   await expect(card.getByText("1 new comment")).toBeVisible({ timeout: 20_000 });
+  // The nav says so too, with one quiet dot: the Journal tab on a phone, Today in the sidebar.
+  const nav = page.getByRole("navigation", { name: "Sections" }).locator("visible=true");
+  await expect(nav.locator("[data-unread-dot]")).toHaveCount(1);
 
   await card.click();
   await expect(thread(page).getByText("Started the hull tonight, first layer looks great.")).toBeVisible();
@@ -185,6 +188,7 @@ test("the other person's comment shows up live, with a new marker on the card an
   await page.goto("/ideas");
   await expect(page.getByRole("link", { name: /Bath tugboat/ })).toBeVisible();
   await expect(page.getByRole("link", { name: /Bath tugboat/ }).getByText("new comment")).toHaveCount(0);
+  await expect(nav.locator("[data-unread-dot]")).toHaveCount(0);
   await sams.context.close();
   void browser;
   void isMobile;

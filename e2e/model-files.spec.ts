@@ -138,7 +138,7 @@ test("an .stl dropped in the attempt sheet is sliced there, fills in the attempt
   });
   // The card leads with what the slice says, which is now the attempt's too, as a dropped .gcode.3mf's would be.
   await expect(sheet.getByText(/^About \d+ min$/)).toBeVisible();
-  await sheet.getByRole("button", { name: "Still printing" }).click();
+  await sheet.getByRole("button", { name: "Start print" }).click();
   await expect(sheet).toBeHidden();
 
   // The model goes with the attempt, and its sliced file follows once the attempt is on the server.

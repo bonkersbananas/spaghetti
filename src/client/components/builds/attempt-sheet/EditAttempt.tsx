@@ -190,7 +190,6 @@ export function EditAttempt({
         onOutcome={finish}
         plate={{ parts: item.parts, value: value.parts, onChange: (parts) => change({ parts }) }}
         fromFile={attempt.file?.prefill}
-        settingsKey={slicer.settingsKey}
         estimate={
           value.outcome && estimatedMinutes !== undefined && actualMinutes !== undefined ? (
             <EstimateLine estimated={estimatedMinutes} actual={actualMinutes} className="px-0.5" />

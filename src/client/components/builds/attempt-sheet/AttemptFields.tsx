@@ -2,7 +2,7 @@ import type { Part } from "@shared/api";
 import { type AttemptSettings, describeChanges, OUTCOMES, type Outcome } from "@shared/attempts";
 import type { AttemptPart } from "@shared/parts";
 import { printerHints } from "@shared/spools";
-import { type ReactNode, useEffect, useState } from "react";
+import { type ReactNode, useState } from "react";
 import { Caution, FromFileMark } from "@/components/ui/Caution";
 import { Disclosure } from "@/components/ui/Disclosure";
 import { TextArea } from "@/components/ui/Field";
@@ -16,6 +16,7 @@ import { OutcomePicker } from "../Outcome";
 import { SettingsEditor } from "../SettingsEditor";
 import { summarizeSettings } from "../settings";
 import { TagPicker } from "../TagPicker";
+import { ChangeChips, chipMarks } from "./ChangeChips";
 import { PlateParts } from "./PlateParts";
 
 export interface FieldsProps {
@@ -63,12 +64,12 @@ export interface FieldsProps {
   suggestion?: ReactNode;
   /** The closed settings row says what `suggestion` offers, in one line ("Worked on Hook: Textured PEI, 250 °C"). */
   suggestionOffer?: string;
+  /** A new attempt: what carried over shows as chips to change one thing in place. */
+  changeChips?: boolean;
   /** The slicer file: its card, a plate to pick, or the well to add one. */
   file?: ReactNode;
   /** What the slicer file said, to mark the values that came from it. */
   fromFile?: AttemptSettings;
-  /** Changes when a file was read: the settings open to show what it filled in. */
-  settingsKey?: number;
   /** Shown under the outcome: how long it took next to the estimate. */
   estimate?: ReactNode;
   /** The build's parts and what the plate holds of them; nothing is shown for a build without parts. */
@@ -80,10 +81,6 @@ export function AttemptFields(props: FieldsProps) {
   const isDesktop = useIsDesktop();
   const withTags = outcome === "failed" || outcome === "partial";
   const [settingsOpen, setSettingsOpen] = useState(false);
-  // A file was read: show what it filled in.
-  useEffect(() => {
-    if (props.settingsKey) setSettingsOpen(true);
-  }, [props.settingsKey]);
   const setup = usePrinterSetup();
   const hints = printerHints(settings, setup);
   const base =
@@ -94,12 +91,33 @@ export function AttemptFields(props: FieldsProps) {
     .map((f) => [f.brand, f.type].filter(Boolean).join(" "))
     .filter(Boolean);
   const pieces = [...filamentNames, ...summary];
+  // With chips under the row (what the attempt before had), "same" needs no list of pieces.
+  const withChips = !!base && !!props.changeChips && !props.readOnly;
+  // The chips mark what they cover; the line says the rest (supports, brim, walls, a second filament…), cut past three.
+  const marks = chipMarks(settings, base?.settings);
+  const covered = (key: string) =>
+    (/^filaments\.0(\.|$)/.test(key) && marks.filament) ||
+    (key === "bedType" && marks.bedType) ||
+    (key === "layerHeight" && marks.layerHeight) ||
+    (key === "infillDensity" && marks.infillDensity) ||
+    (key === "nozzleTemperature" && marks.nozzleTemperature) ||
+    (key === "bedTemperature" && marks.bedTemperature);
+  const unseen = changes.filter((change) => !covered(change.key));
+  const said = (list: typeof changes) =>
+    list.length > 3
+      ? `${list
+          .slice(0, 3)
+          .map((c) => c.text)
+          .join(", ")} and ${list.length - 3} more`
+      : list.map((c) => c.text).join(", ");
   const settingsSummary: ReactNode = base ? (
     changes.length ? (
-      `Changed from ${base.label}: ${changes.map((c) => c.text).join(", ")}`
+      `Changed from ${base.label}${withChips ? (unseen.length ? `: ${said(unseen)}` : "") : `: ${said(changes)}`}`
+    ) : withChips ? (
+      `Same as ${base.label}`
     ) : (
       // One line, cut with an ellipsis rather than wrapped: "0.20 mm" never sits alone on a second line.
-      <span className="block truncate">{[`As ${base.label}`, ...pieces.slice(0, 2)].join(" · ")}</span>
+      <span className="block truncate">{[`As ${base.label}`, ...pieces.slice(0, 3)].join(" · ")}</span>
     )
   ) : pieces.length ? (
     <MetaList>
@@ -227,6 +245,16 @@ export function AttemptFields(props: FieldsProps) {
             title="Settings"
             icon={SettingsIcon}
             summary={summaryWithFile}
+            peek={
+              withChips ? (
+                <ChangeChips
+                  settings={settings}
+                  base={base?.settings}
+                  onChange={props.onSettings}
+                  onMore={() => setSettingsOpen(true)}
+                />
+              ) : undefined
+            }
           >
             {props.suggestion && <div className="mb-3 flex flex-col gap-3">{props.suggestion}</div>}
             <SettingsEditor value={settings} onChange={props.onSettings} outcome={outcome} fromFile={props.fromFile} />

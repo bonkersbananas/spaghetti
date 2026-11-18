@@ -134,25 +134,17 @@ export function LogAttempt({
         <>
           {isDesktop && (
             <span className="text-caption text-ink-faint mr-auto inline-flex items-center gap-1.5">
-              <Kbd keys={["Enter"]} /> logs it
+              <Kbd keys={["Enter"]} /> {draft.outcome ? "logs it" : "starts it"}
             </span>
           )}
-          <Button
-            variant="secondary"
-            size={isDesktop ? "md" : "lg"}
-            onClick={() => save(null)}
-            className="max-md:flex-1"
-          >
-            Still printing
-          </Button>
+          {/* One primary at a time: "Start print" until an outcome is picked, then "Log attempt" takes over. */}
           <Button
             variant="primary"
             size={isDesktop ? "md" : "lg"}
-            disabled={!draft.outcome}
             onClick={() => save(draft.outcome)}
             className="max-md:flex-1"
           >
-            Log attempt
+            {draft.outcome ? "Log attempt" : "Start print"}
           </Button>
         </>
       }
@@ -174,7 +166,7 @@ export function LogAttempt({
             save(draft.outcome);
             return;
           }
-          if (event.key === "Enter" && (event.metaKey || event.ctrlKey) && draft.outcome) {
+          if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
             event.preventDefault();
             save(draft.outcome);
           }
@@ -185,8 +177,8 @@ export function LogAttempt({
         {slicer.picker.input}
         <AttemptFields
           outcomeLabel="How did it go?"
+          changeChips
           fromFile={slicer.state?.prefill ?? undefined}
-          settingsKey={slicer.settingsKey}
           file={
             <SlicerFileSection
               state={slicer.state}
@@ -207,9 +199,7 @@ export function LogAttempt({
               }
             />
           }
-          onEnter={() => {
-            if (draft.outcome) save(draft.outcome);
-          }}
+          onEnter={() => save(draft.outcome)}
           outcome={draft.outcome}
           onOutcome={(outcome) => change({ outcome, parts: outcomeCounts(draft.parts, outcome) })}
           plate={{ parts: item.parts, value: draft.parts, onChange: (parts) => change({ parts }) }}
@@ -271,6 +261,7 @@ export function LogAttempt({
           }
           when={
             <WhenField
+              starting={!draft.outcome}
               value={when}
               onChange={(time) => {
                 setWhen(time);
