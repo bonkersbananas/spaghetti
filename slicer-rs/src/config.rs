@@ -183,8 +183,8 @@ pub struct Settings {
     pub staggered_inner_seams: bool,
     pub only_one_wall_top: bool,
     /// `top_surface_expansion` (mm) and `top_surface_density` (percent): with both above 0, Orca grows top surfaces
-    /// (`region::grow_tops`) and its `only_one_wall_top` on Arachne walls cuts the inner walls over the top surface
-    /// instead of walling round it. The growth's margin from the walls (mm) and which way it may go
+    /// (`region::grow_tops`) and its `only_one_wall_top` cuts the inner walls over the top surface (Arachne's) or drops
+    /// those running over it (the classic walls') instead of walling round it. The growth's margin from the walls (mm) and which way it may go
     /// (`inward_and_outward`, `inward` or `outward`).
     pub top_surface_expansion: f64,
     pub top_surface_expansion_margin: f64,
@@ -1406,11 +1406,6 @@ impl Settings {
             {
                 out.push(format!("{pattern} {what} printed in the nearest order, not {order}"));
             }
-        }
-        // With the classic walls Orca drops the inner walls that run over a grown top surface (`process_classic`'s
-        // "only_one_wall_top reduction"), which these walls don't.
-        if self.grows_tops() && self.only_one_wall_top && self.wall_generator != "arachne" && self.wall_loops > 1 {
-            out.push("inner walls kept over top surfaces grown by top_surface_expansion (classic walls)".into());
         }
         if self.elephant_foot > 0.0 && self.elephant_foot_layers > 1 && self.support.raft_layers <= 0 {
             out.push("elephant's foot compensated on the first layer only".into());
