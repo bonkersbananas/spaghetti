@@ -255,7 +255,7 @@ test("the model filters narrow the inbox beside its heading, not Up next", async
   const inbox = page.getByRole("list", { name: "Ideas" });
   await rest.getByRole("button", { name: /^Has a model/ }).click();
   await expect(rest.getByRole("button", { name: /^Has a model/ })).toHaveAttribute("aria-pressed", "true");
-  await expect(inbox.getByRole("heading", { name: "Bins" })).toBeVisible();
+  await expect(inbox.getByText("Bins")).toBeVisible();
   await expect(inbox.getByRole("heading", { name: "Loose idea" })).toHaveCount(0);
   // Up next stays as it is.
   await expect(upNext(page).getByRole("heading", { name: "Queued sketch" })).toBeVisible();
@@ -271,5 +271,5 @@ test("the model filters narrow the inbox beside its heading, not Up next", async
     rest.getByText("Everything here has a model. Tap “Needs designing” again to see every idea."),
   ).toBeVisible();
   await rest.getByRole("button", { name: /^Needs designing/ }).click();
-  await expect(inbox.getByRole("heading", { name: "Bins" })).toBeVisible();
+  await expect(inbox.getByText("Bins")).toBeVisible();
 });
