@@ -2,8 +2,8 @@ import { type AttemptSettings, BED_TYPES, LAYER_HEIGHTS, plateName } from "@shar
 import { filamentFromSpool, spoolName } from "@shared/spools";
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
-import { ValueChip } from "@/components/ui/Chip";
 import { NumberField } from "@/components/ui/Field";
+import { ValueChip } from "@/components/ui/ValueChip";
 import { spoolsQuery } from "@/lib/pantry-queries";
 import { ChipRow, SpoolChoices } from "../SettingsEditor";
 
