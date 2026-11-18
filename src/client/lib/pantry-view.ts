@@ -59,7 +59,6 @@ export type PantryDensity = "tiles" | "compact";
 export const COMPACT_ABOVE = 12;
 
 const DENSITY_KEY = "sg-pantry-density";
-const densityListeners = new Set<() => void>();
 const storedDensity = (): PantryDensity | null => {
   try {
     const value = localStorage.getItem(DENSITY_KEY);
@@ -81,8 +80,8 @@ const readDensity = () => {
 export function usePantryDensity(): [PantryDensity | null, (next: PantryDensity) => void] {
   const value = useSyncExternalStore(
     (listener) => {
-      densityListeners.add(listener);
-      return () => densityListeners.delete(listener);
+      listeners.add(listener);
+      return () => void listeners.delete(listener);
     },
     readDensity,
     () => null,
@@ -94,7 +93,7 @@ export function usePantryDensity(): [PantryDensity | null, (next: PantryDensity)
     } catch {
       // Private mode: the choice lasts until the page closes.
     }
-    for (const listener of densityListeners) listener();
+    for (const listener of listeners) listener();
   };
   return [value, set];
 }
