@@ -17,6 +17,11 @@ interface PhotoViewerProps {
   onIndexChange: (index: number) => void;
   alt: string;
   className?: string;
+  /**
+   * On a phone, no taller than 40 % of the screen (a portrait photo is letterboxed on the paper ground, and the page
+   * keeps its text in the first screen): for a build with attempts, whose answers are under the photo.
+   */
+  capOnPhone?: boolean;
 }
 
 /** Keeps the frame between 4:5 and 4:3, shaped by the cover. */
@@ -86,7 +91,7 @@ function ViewerFigure({
  * nothing is cropped. Nothing on it removes or closes: removing a photo is in the strip's menu (`PhotoStrip`,
  * decision 0054), away from where a hand reaches for "back".
  */
-export function PhotoViewer({ photos, index, onIndexChange, alt, className }: PhotoViewerProps) {
+export function PhotoViewer({ photos, index, onIndexChange, alt, className, capOnPhone }: PhotoViewerProps) {
   const scroller = useRef<HTMLDivElement>(null);
   const settle = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
@@ -151,7 +156,10 @@ export function PhotoViewer({ photos, index, onIndexChange, alt, className }: Ph
           onScroll={onScroll}
           // Reachable with Tab when it scrolls (several photos), so arrow keys can move through them without a mouse.
           tabIndex={many ? 0 : undefined}
-          className="focus-ring bg-paper-deep flex max-h-[72dvh] w-full snap-x snap-mandatory overflow-x-auto overscroll-x-contain md:rounded-xl [&::-webkit-scrollbar]:hidden"
+          className={cn(
+            "focus-ring bg-paper-deep flex max-h-[72dvh] w-full snap-x snap-mandatory overflow-x-auto overscroll-x-contain md:rounded-xl [&::-webkit-scrollbar]:hidden",
+            capOnPhone && "max-md:max-h-[40dvh]",
+          )}
           style={{ aspectRatio: frameAspect(photos[0]), scrollbarWidth: "none" }}
         >
           {photos.map((photo, i) => (

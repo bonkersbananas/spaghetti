@@ -441,6 +441,9 @@ function Build({ item }: { item: ItemView }) {
   const started = item.startedAt ?? item.createdAt;
   const fromIdea = item.startedAt !== null && item.startedAt - item.createdAt > 60_000;
   const worked = [...item.attempts].reverse().find((attempt) => attempt.outcome === "success");
+  // The finished attempts, and the one that came closest when none worked (the newest that worked partly).
+  const tried = item.attempts.filter((attempt) => attempt.outcome !== null).length;
+  const closest = worked ? undefined : [...item.attempts].reverse().find((attempt) => attempt.outcome === "partial");
   const [savingRecipe, setSavingRecipe] = useState<RecipeSourceAttempt | null>(null);
   const [openRecipe, setOpenRecipe] = useState<string | null>(null);
   // The sheets are closed on arrival: they mount once the page has painted (sooner if one is asked for at once).
@@ -500,6 +503,21 @@ function Build({ item }: { item: ItemView }) {
     </>
   );
 
+  // What worked last time, or that nothing has yet. Under the title and its chips on a phone, where the page is long and
+  // this is the answer; at the end of the column on a keyboard, beside the attempts.
+  const answer = worked ? (
+    <WhatWorked
+      attempt={worked}
+      onOpen={() => openSheet(worked.id)}
+      recipes={recipesFor(allRecipes, { material: settingsMaterial(worked.settings) }).slice(0, 2)}
+      saved={allRecipes.some((recipe) => recipe.source?.attemptId === worked.id)}
+      onSaveRecipe={recipeSource(worked) && (() => setSavingRecipe(recipeSource(worked) ?? null))}
+      onOpenRecipe={setOpenRecipe}
+    />
+  ) : tried > 0 ? (
+    <NothingWorked tries={tried} closest={closest} onOpen={closest && (() => openSheet(closest.id))} />
+  ) : null;
+
   return (
     <PullToGo back={back} title={title.trim() || "Untitled build"}>
       <article className="pb-6">
@@ -542,6 +560,7 @@ function Build({ item }: { item: ItemView }) {
                   onIndexChange={selectPhoto}
                   alt={alt}
                   className="-mx-5 md:mx-0"
+                  capOnPhone={item.attempts.length > 0}
                 />
                 {item.stage === "done" && hero && gallery[photoIndex]?.id === hero.id && (
                   <Chip tone="basil" icon={FinishIcon} className="shadow-soft absolute top-3 left-3">
@@ -612,6 +631,7 @@ function Build({ item }: { item: ItemView }) {
                   </Button>
                 )}
               </BuildTitleLine>
+              {!isDesktop && answer}
               <NoteField
                 value={note}
                 onChange={setNote}
@@ -662,16 +682,7 @@ function Build({ item }: { item: ItemView }) {
               onFinishBuild={() => finishBuild(queryClient, item)}
             />
 
-            {worked && (
-              <WhatWorked
-                attempt={worked}
-                onOpen={() => openSheet(worked.id)}
-                recipes={recipesFor(allRecipes, { material: settingsMaterial(worked.settings) }).slice(0, 2)}
-                saved={allRecipes.some((recipe) => recipe.source?.attemptId === worked.id)}
-                onSaveRecipe={recipeSource(worked) && (() => setSavingRecipe(recipeSource(worked) ?? null))}
-                onOpenRecipe={setOpenRecipe}
-              />
-            )}
+            {isDesktop && answer}
           </div>
 
           {/* The story: every attempt, newest first. */}
@@ -845,6 +856,35 @@ function Build({ item }: { item: ItemView }) {
         )}
       </article>
     </PullToGo>
+  );
+}
+
+/**
+ * The same place when nothing has worked yet: said plainly, in Search's words, with the closest try (a partly) one tap
+ * away. Neutral, not basil: it is a fact, not a failure.
+ */
+function NothingWorked({ tries, closest, onOpen }: { tries: number; closest?: AttemptView; onOpen?: () => void }) {
+  return (
+    <section aria-label="What worked" className="bg-ink/4 flex flex-col gap-1 rounded-lg p-4">
+      <Overline>What worked</Overline>
+      <p className="text-body text-ink font-semibold">Nothing has worked for this yet.</p>
+      <p className="text-small text-ink-soft">
+        {tries === 1 ? "One try so far." : `${tries} tries so far.`}
+        {closest && onOpen && (
+          <>
+            {" "}
+            <button
+              type="button"
+              onClick={onOpen}
+              className="focus-ring touch-target rounded-xs font-semibold underline underline-offset-2"
+            >
+              Attempt {closest.number} came closest
+            </button>{" "}
+            (partly).
+          </>
+        )}
+      </p>
+    </section>
   );
 }
 

@@ -127,3 +127,25 @@ test("R saves the attempt that worked as a recipe", async ({ page, isMobile }) =
   await page.keyboard.press("r");
   await expect(page.getByRole("dialog")).toHaveCount(0);
 });
+
+test("a build with no attempt that worked says so in the What worked place, with the closest try one tap away", async ({
+  page,
+}) => {
+  await signIn(page);
+  const headers = { Origin: origin(page) };
+  const buildId = crypto.randomUUID();
+  await page.request.post("/api/items", { headers, data: { id: buildId, title: "Nothing yet", stage: "building" } });
+  for (const outcome of ["failed", "partial"]) {
+    await page.request.post(`/api/items/${buildId}/attempts`, {
+      headers,
+      data: { id: crypto.randomUUID(), outcome, settings: { layerHeight: 0.2 } },
+    });
+  }
+
+  await page.goto(`/builds/${buildId}`);
+  const card = page.getByRole("region", { name: "What worked" });
+  await expect(card.getByText("Nothing has worked for this yet.")).toBeVisible();
+  await expect(card.getByText("2 tries so far.")).toBeVisible();
+  await card.getByRole("button", { name: "Attempt 2 came closest" }).click();
+  await expect(page.getByRole("dialog")).toBeVisible();
+});
