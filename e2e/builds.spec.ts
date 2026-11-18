@@ -72,7 +72,9 @@ test("grows an idea into a build, logs a failure and a success, and finishes it"
   else await page.keyboard.press("a");
   let sheet = page.getByRole("dialog", { name: "Attempt 1" });
   await expect(sheet).toBeVisible();
-  await expect(sheet.getByRole("button", { name: "Log attempt" })).toBeDisabled();
+  // No outcome yet: the one primary button starts the print; picking an outcome turns it into "Log attempt".
+  await expect(sheet.getByRole("button", { name: "Start print" })).toBeEnabled();
+  await expect(sheet.getByRole("button", { name: "Log attempt" })).toHaveCount(0);
   await sheet.getByRole("radio", { name: "Spaghetti" }).click();
   await sheet.getByRole("button", { name: "Bed adhesion" }).click();
   await sheet.getByTestId("photo-input").setInputFiles("e2e/fixtures/tugboat.jpg");
@@ -102,12 +104,17 @@ test("grows an idea into a build, logs a failure and a success, and finishes it"
   else await page.keyboard.press("a");
   sheet = page.getByRole("dialog", { name: "Attempt 2" });
   await expect(sheet).toBeVisible();
-  await expect(sheet.getByRole("button", { name: /^Settings(?! worth)/ })).toContainText("As attempt 1");
+  await expect(sheet.getByRole("button", { name: /^Settings(?! worth)/ })).toContainText("Same as attempt 1");
   await sheet.getByRole("radio", { name: "Worked" }).click();
   await sheet.getByRole("button", { name: "Great first layer" }).click();
-  await sheet.getByRole("button", { name: /^Settings(?! worth)/ }).click();
+  // What carried over is a chip: tap the bed, change it in place, the settings stay folded.
+  await sheet.getByRole("button", { name: "Change Bed 55 °C" }).click();
   await expect(sheet.getByLabel("Bed", { exact: true })).toHaveValue("55");
+  // Emptied to type a new number, the chip stays (in its place) and so does its field.
+  await sheet.getByLabel("Bed", { exact: true }).fill("");
+  await expect(sheet.getByRole("button", { name: "Change Bed" })).toBeVisible();
   await sheet.getByLabel("Bed", { exact: true }).fill("60");
+  await sheet.getByRole("button", { name: /^Settings(?! worth)/ }).click();
   await sheet.getByRole("button", { name: "No brim" }).click();
   await sheet.getByRole("button", { name: "Log attempt" }).click();
   await expect(sheet).toBeHidden();
@@ -464,4 +471,22 @@ test("the summary's attempt steps are touch targets and mark the open attempt", 
   expect(box?.width).toBeGreaterThanOrEqual(43.5);
   await tile.click();
   await expect(tile).toHaveAttribute("aria-current", "true");
+});
+
+test("Enter in the note starts the print when no outcome is picked", async ({ page, isMobile }) => {
+  test.skip(isMobile, "Keys are for the desktop");
+  const id = crypto.randomUUID();
+  await page.request.post("/api/items", { headers: { Origin: origin(page) }, data: { id, title: "Latch" } });
+  await page.request.patch(`/api/items/${id}`, { headers: { Origin: origin(page) }, data: { stage: "building" } });
+  await page.goto(`/builds/${id}`);
+  await expect(page.getByRole("textbox", { name: "Title" })).toHaveValue("Latch");
+  await page.keyboard.press("a");
+  const sheet = page.getByRole("dialog", { name: "Attempt 1" });
+  await expect(sheet.getByText("starts it")).toBeVisible();
+  await sheet.getByRole("textbox", { name: "Note" }).fill("Printing now");
+  await page.keyboard.press("Enter");
+  await expect(sheet).toBeHidden();
+  await expect
+    .poll(async () => (await getItem(page, id)).attempts.map((a: { outcome: string | null }) => a.outcome))
+    .toEqual([null]);
 });

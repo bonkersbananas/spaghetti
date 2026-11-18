@@ -11,6 +11,7 @@ import {
   ReactionPicker,
   ReactionPills,
 } from "@/components/ui/Message";
+import { UnreadDot } from "@/components/ui/UnreadDot";
 import { Label, Panel, people, Section } from "./shared";
 
 const [alex, sam] = people as [Person, Person];
@@ -123,6 +124,23 @@ export function ConversationSection() {
             <p className="text-small text-ink-faint mt-3">
               A tomato "1 new" over the photo's corner when the other person has written something you haven't read yet;
               it goes when you open the thread.
+            </p>
+          </Panel>
+          <Panel>
+            <Label>Unread, as a dot</Label>
+            <div className="text-small text-ink-soft flex items-center gap-6">
+              <span className="flex items-center gap-2">
+                Journal <UnreadDot label="Something new" />
+              </span>
+              <span className="bg-veil flex items-center gap-2 rounded-md px-3 py-2">
+                <span className="text-on-veil">Over a photo</span>
+                <UnreadDot label="New comment" ring="ring-on-veil" className="size-2.5" />
+              </span>
+            </div>
+            <p className="text-small text-ink-faint mt-3">
+              Where there is no room for words: the Journal tab on phones, Today in the sidebar, and a card in the Up
+              next strip. One quiet dot, never a count; it goes when you read the thread (and while you are on the
+              screen that shows it).
             </p>
           </Panel>
         </div>

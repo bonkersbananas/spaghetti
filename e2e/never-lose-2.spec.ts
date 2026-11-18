@@ -207,3 +207,18 @@ test("a tick's late answer doesn't undo a rename made meanwhile", async ({ page 
   await expect(page.getByRole("list", { name: "Bought" }).getByText(thing, { exact: true })).toHaveCount(0);
   await page.request.delete(`/api/shopping-items/${id}`, { headers });
 });
+
+test("on a phone the capture sheet opens with the note focused once it has settled @phone", async ({
+  page,
+  isMobile,
+}) => {
+  test.skip(!isMobile, "a laptop autofocuses it at once (C)");
+  await page.getByRole("button", { name: "New idea" }).click();
+  const note = page.getByRole("dialog", { name: "New idea" }).getByRole("textbox", { name: "Note" });
+  await expect(note).toBeFocused({ timeout: 3000 });
+  // Typing goes straight in, and Camera and Library are still on screen beside it.
+  await page.keyboard.type("A kettle handle");
+  await expect(note).toHaveValue("A kettle handle");
+  await expect(page.getByRole("button", { name: "Take photo" })).toBeInViewport();
+  await expect(page.getByRole("button", { name: "From library" })).toBeInViewport();
+});

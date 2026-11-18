@@ -7,6 +7,7 @@ import { ImageIcon } from "./icons";
 import { NoteFace } from "./NoteFace";
 import { Photo } from "./Photo";
 import { useReflow } from "./Reflow";
+import { UnreadDot } from "./UnreadDot";
 
 /** Dragging a mini card to another place in its row (desktop, with a mouse). */
 export interface MiniDrag {
@@ -42,6 +43,8 @@ interface MiniCardProps {
    * stays shorter than a full card, and its title in `text-body`: a strip that sits above that grid (Up next on Ideas).
    */
   gridScale?: boolean;
+  /** The other person wrote here and you haven't read it: one quiet dot on the picture's corner (no count; the page has the thread). */
+  unread?: boolean;
   /** Laid over the photo's top-right corner (the card's menu button). A link can't hold a button, so it is a sibling. */
   corner?: ReactNode;
   landing?: boolean;
@@ -65,6 +68,7 @@ export function MiniCard({
   roomy,
   fill,
   gridScale,
+  unread,
   corner,
   landing,
   id,
@@ -156,6 +160,7 @@ export function MiniCard({
                 <ImageIcon size={24} weight="light" aria-hidden />
               </div>
             )}
+            {unread && <UnreadDot label="New comment" ring="ring-on-veil" className="absolute top-2 left-2 size-2.5" />}
           </div>
           {(heading || ((photo || !note) && meta)) && (
             // The padding is on the wrapper: a clamped heading shows its next line in its own padding.
