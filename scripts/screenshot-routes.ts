@@ -4777,6 +4777,8 @@ export const shots: Shot[] = [
       await page
         .getByRole("dialog")
         .getByRole("group", { name: "What carried over" })
+        .or(row)
+        .first()
         .evaluate((element) => element.scrollIntoView({ block: "center" }));
       await page.waitForTimeout(300);
     },
