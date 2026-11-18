@@ -42,13 +42,13 @@ import { deleteItem, type ItemView, useIdeas, useItem, useItemFields } from "@/l
 import { whyNotMove } from "@/lib/move";
 import { useBackTo } from "@/lib/origin";
 import { useScreenActions } from "@/lib/palette";
+import { spoolsQuery } from "@/lib/pantry-queries";
 import { photoSrc } from "@/lib/previews";
 import { keepOrigin } from "@/lib/previous-path";
-import { spoolsQuery } from "@/lib/pantry-queries";
 import { peopleQuery, sessionQuery } from "@/lib/queries";
-import { recipesQuery } from "@/lib/recipes-query";
 import { canEdit, useReadOnly } from "@/lib/read-only";
 import { itemName, useRememberItem } from "@/lib/recent";
+import { recipesQuery } from "@/lib/recipes-query";
 import { SLICER_ACCEPT, useSlicerDropTarget } from "@/lib/slicer-drop";
 import { useStickyColumn } from "@/lib/sticky-column";
 import { makeTwist, suggestedTwistName, useTwists } from "@/lib/twists";
