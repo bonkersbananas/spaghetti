@@ -28,7 +28,11 @@ interface MonthBarsProps {
  * each month its count above its bar, and the figures under it say it all in words for
  * screen readers. Not interactive.
  */
-export function MonthBars({ months, through = 11, className }: MonthBarsProps) {
+export function MonthBars({ months: all, through = 11, className }: MonthBarsProps) {
+  // Start at the first month with anything in it (but keep at least four months), so a year that
+  // began in July doesn't open with six empty bars.
+  const first = all.findIndex((bar) => total(bar) > 0);
+  const months = first > 0 ? all.slice(Math.min(first, Math.max(0, all.length - 4))) : all;
   const peak = Math.max(1, ...months.map(total));
   const busiest = months.reduce(
     (best, bar) => (total(bar) > total(best) ? bar : best),

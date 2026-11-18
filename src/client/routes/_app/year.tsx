@@ -112,8 +112,12 @@ function Story({ insights, current }: { insights: Insights; current: boolean }) 
               What went wrong, and what helped
             </Overline>
             <ul className="m-0 flex list-none flex-col gap-5 p-0">
-              {insights.failures.map((failure) => {
+              {insights.failures.map((failure, index) => {
                 const fixed = fixSentence(failure.fixes);
+                // The same fixes again (one attempt carried both tags) are said once, then pointed back to.
+                const before = fixed
+                  ? insights.failures.slice(0, index).find((other) => fixSentence(other.fixes) === fixed)
+                  : undefined;
                 return (
                   <li key={failure.slug} className="flex flex-col gap-0.5">
                     <Link
@@ -123,13 +127,15 @@ function Story({ insights, current }: { insights: Insights; current: boolean }) 
                     >
                       {failure.label}
                       <span className="text-ink-faint tabular text-lead ml-2 font-sans">
-                        {failure.count} {failure.count === 1 ? "time" : "times"}
+                        noted on {failure.count} {failure.count === 1 ? "print" : "prints"}
                       </span>
                     </Link>
                     <p className="text-body text-ink-soft">
-                      {fixed
-                        ? `${fixed.charAt(0).toUpperCase()}${fixed.slice(1)}.`
-                        : "Nothing has fixed it yet: that is still to find."}
+                      {before
+                        ? `Just as for ${before.label.toLowerCase()}.`
+                        : fixed
+                          ? `${fixed.charAt(0).toUpperCase()}${fixed.slice(1)}.`
+                          : "Nothing has fixed it yet: that is still to find."}
                     </p>
                   </li>
                 );

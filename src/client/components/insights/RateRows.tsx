@@ -18,8 +18,10 @@ export function RateRows({ rows, label, className }: RateRowsProps) {
   return (
     <ul className={cn("m-0 flex list-none flex-col gap-3.5 p-0", className)}>
       {rows.map((row) => (
-        <li key={row.label} className="grid grid-cols-[minmax(4.5rem,8rem)_1fr] items-center gap-x-4 gap-y-1.5">
-          <span className="text-body text-ink min-w-0 truncate font-semibold">{label ? label(row) : row.label}</span>
+        <li key={row.label} className="grid grid-cols-[minmax(4.5rem,9rem)_1fr] items-center gap-x-4 gap-y-1.5">
+          <span className="text-body text-ink min-w-0 text-pretty break-words font-semibold">
+            {label ? label(row) : row.label}
+          </span>
           <span aria-hidden className="bg-ink/10 order-3 col-span-2 h-2 overflow-hidden rounded-full">
             {row.percent > 0 && (
               <span className="bg-basil block h-full rounded-full" style={{ width: `${Math.max(row.percent, 6)}%` }} />
