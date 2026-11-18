@@ -69,23 +69,22 @@ function FilamentGlance({ filaments }: { filaments: NonNullable<AttemptView["set
 
 /** What `desktop` changes from `lg`, over the md row. */
 const desktopLayouts = {
-  // The row's picture takes the height the text gives it (never less than min-h), so a short card ends where its words end.
-  row: { card: "", picture: "md:aspect-auto md:min-h-32", head: "", body: "" },
+  row: { card: "", picture: "", head: "", body: "" },
   half: {
     card: "lg:grid-cols-2",
-    picture: "md:aspect-4/3 lg:col-span-1 lg:aspect-video",
+    picture: "lg:col-span-1 lg:aspect-video",
     head: "lg:col-span-1 lg:px-5 lg:pt-4",
     body: "lg:col-span-1 lg:px-5 lg:pb-4",
   },
   wide: {
     card: "lg:grid-cols-1 lg:grid-rows-[auto_auto_1fr]",
-    picture: "md:aspect-4/3 lg:col-span-1 lg:row-span-1 lg:aspect-video",
+    picture: "lg:col-span-1 lg:row-span-1 lg:aspect-video",
     head: "lg:col-span-1 lg:px-2 lg:pt-3",
     body: "lg:col-span-1 lg:px-2 lg:pb-2",
   },
   stack: {
     card: "lg:grid-cols-1 lg:grid-rows-[auto_auto_1fr]",
-    picture: "md:aspect-4/3 lg:col-span-1 lg:row-span-1",
+    picture: "lg:col-span-1 lg:row-span-1",
     head: "lg:col-span-1 lg:px-2 lg:pt-3",
     body: "lg:col-span-1 lg:px-2 lg:pb-2",
   },
@@ -173,7 +172,7 @@ export function PrintingCard({
       >
         <div
           className={cn(
-            "relative overflow-hidden rounded-md md:col-span-2 md:row-span-2 md:h-auto md:w-full md:self-stretch",
+            "relative overflow-hidden rounded-md md:col-span-2 md:row-span-2 md:aspect-4/3 md:h-auto md:w-full md:self-stretch",
             // A big card with only a note keeps a shorter strip on phones: a 4:3 index card would only push the
             // print's state down; the slicer's plate picture (a render, not the result) gets a calmer 16:9.
             compact
@@ -186,33 +185,29 @@ export function PrintingCard({
             wide.picture,
           )}
         >
-          {/* From md the picture is laid over the frame, not in it, so a tall picture (a square plate render) never
-              sets the card's height: the frame takes it from the text. */}
-          <div className="size-full md:absolute md:inset-0">
-            {cover.kind === "note" && !nameOnly ? (
-              // A note: in the phone's 5:2 strip (or, compact, the glyph: its square is too small for words), and in
-              // the desktop row's 4:3, each set by the frame's short side.
-              <>
-                <CoverPicture
-                  cover={cover}
-                  glyph={compact ? glyph : undefined}
-                  shape="strip"
-                  className="size-full md:hidden"
-                />
-                <CoverPicture cover={cover} shape="wide" className="size-full max-md:hidden" />
-              </>
-            ) : (
+          {cover.kind === "note" && !nameOnly ? (
+            // A note: in the phone's 5:2 strip (or, compact, the glyph: its square is too small for words), and in
+            // the desktop row's 4:3, each set by the frame's short side.
+            <>
               <CoverPicture
                 cover={cover}
-                // A compact card's square on a phone is too small to carry it; from md it is the full row's picture. An
-                // unread badge takes the corner, as on the grid's cards.
-                label={showUnread ? false : compact ? "md" : true}
-                glyph={nameOnly ? glyph : undefined}
-                inset={compact ? "p-1 md:p-3" : "p-3"}
-                className="size-full"
+                glyph={compact ? glyph : undefined}
+                shape="strip"
+                className="size-full md:hidden"
               />
-            )}
-          </div>
+              <CoverPicture cover={cover} shape="wide" className="size-full max-md:hidden" />
+            </>
+          ) : (
+            <CoverPicture
+              cover={cover}
+              // A compact card's square on a phone is too small to carry it; from md it is the full row's picture. An
+              // unread badge takes the corner, as on the grid's cards.
+              label={showUnread ? false : compact ? "md" : true}
+              glyph={nameOnly ? glyph : undefined}
+              inset={compact ? "p-1 md:p-3" : "p-3"}
+              className="size-full"
+            />
+          )}
           {/* The picture and the name lead to the build, each with its own area; the progress below has its own, so
               nothing presses through a button. This one is for the pointer only: the name's link is the stop for the keyboard. */}
           <Link {...to} tabIndex={-1} aria-hidden className="absolute inset-0 z-10" />
@@ -313,10 +308,10 @@ export function PrintingCard({
                   attemptId={attempt.id}
                   showLabel={false}
                 />
-                <div className="flex items-center justify-between gap-3 md:flex-wrap md:gap-y-2">
+                <div className="flex items-center justify-between gap-3">
                   <p
                     className={cn(
-                      "text-small tabular min-w-0 flex-1 md:flex-auto",
+                      "text-small tabular min-w-0 flex-1",
                       progress.state === "due" ? "text-semolina-ink font-semibold" : "text-ink-soft",
                     )}
                   >
@@ -333,7 +328,7 @@ export function PrintingCard({
                       </Fragment>
                     ))}
                   </p>
-                  <div className="pointer-events-auto flex shrink-0 items-center gap-1.5 md:ml-auto">
+                  <div className="pointer-events-auto flex shrink-0 items-center gap-1.5">
                     {!readOnly && (
                       <IconButton
                         icon={CameraIcon}
