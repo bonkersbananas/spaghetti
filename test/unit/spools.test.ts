@@ -1,16 +1,15 @@
 import { describe, expect, it } from "vitest";
 import { type BridgeStatus, bridgeLine } from "../../src/shared/bridge.ts";
+import { colourNameOf, nextEmptySlot } from "../../src/shared/spool-lookup.ts";
 import {
   colorDistance,
   colorTone,
-  colourNameOf,
   DEFAULT_PRINTER,
   filamentFromSpool,
   matchFilaments,
   matchSpool,
   materialKey,
   nearestColorName,
-  nextEmptySlot,
   type PrinterSetup,
   printerHints,
   type SpoolLike,
