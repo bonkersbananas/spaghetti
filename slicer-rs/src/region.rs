@@ -1142,6 +1142,9 @@ fn wall_group(
     let mut last_spacing = sp_outer;
     // Top infill beside the outer wall alone (`split_top`).
     let mut top: Option<Shapes> = None;
+    // Where the top's fill takes the inner walls' place (`top_surface_expansion`): the walls go round the whole
+    // region, and those running over the top are dropped once they are made.
+    let mut over_top: Shapes = Vec::new();
     if !region.is_empty() {
         depths.push(region.clone());
         if loops > 1
@@ -1150,7 +1153,13 @@ fn wall_group(
             && s.top_shell_layers > 0
             && let Some(split) = split_top(&region, around, layer, height, s)
         {
-            region = split.rest;
+            if s.grows_tops() {
+                if !split.fill.is_empty() {
+                    over_top = geom::difference(&region, &split.rest);
+                }
+            } else {
+                region = split.rest;
+            }
             top = Some(split.fill);
         }
         // Each inner wall, and one more past the last to find the gaps the last one leaves (not with no sparse
@@ -1176,6 +1185,64 @@ fn wall_group(
             region = next;
             depths.push(region.clone());
             last_spacing = sp_inner;
+        }
+    }
+    // Orca's "only_one_wall_top reduction": an inner wall running over the top goes, unless it only grazes it (less
+    // than two widths of it over the top), when it stays and the top's fill keeps out of its band; the gaps keep out
+    // of the top, and what the top's fill doesn't cover of the dropped walls goes to infill.
+    let mut kept_bands: Vec<Shapes> = Vec::new();
+    let mut reclaimed: Shapes = Vec::new();
+    if !over_top.is_empty() {
+        let b = geom::bbox(&over_top).map(|b| geom::inflate(b, 1e-4)).unwrap_or([0; 4]);
+        // The band a wall covers, round its middle anticlockwise whichever way it runs (a hole's runs clockwise).
+        let band = |c: &Contour| -> Shapes {
+            let mut c = c.clone();
+            if geom::area2(&c) < 0 {
+                c.reverse();
+            }
+            let centre: Shapes = vec![vec![c]];
+            geom::difference(&off(&centre, sp_inner / 2.0), &off(&centre, -sp_inner / 2.0))
+        };
+        let mut dropped: Vec<Shapes> = Vec::new();
+        for shapes in depths.iter_mut().skip(1) {
+            for shape in shapes.iter_mut() {
+                shape.retain(|c| {
+                    // Only the top's shapes near the wall, and none when the wall's box misses the top's.
+                    let cb = geom::bbox_of(&vec![c.clone()]);
+                    if cb[0] > b[2] || cb[2] < b[0] || cb[1] > b[3] || cb[3] < b[1] {
+                        return true;
+                    }
+                    let near = geom::near(&over_top, cb);
+                    let inside = |p: &geom::Pt| {
+                        p.x >= b[0] && p.x <= b[2] && p.y >= b[1] && p.y <= b[3] && geom::contains(&near, *p)
+                    };
+                    let n = if near.is_empty() { 0 } else { c.iter().filter(|p| inside(p)).count() };
+                    if n == 0 {
+                        return true;
+                    }
+                    if n < c.len() {
+                        let mut line = c.clone();
+                        line.push(c[0]);
+                        let whole = geom::length_mm(&line, false);
+                        let outside: f64 = geom::difference_open(std::slice::from_ref(&line), &near)
+                            .iter()
+                            .map(|l| geom::length_mm(l, false))
+                            .sum();
+                        if whole - outside < 2.0 * w_inner {
+                            kept_bands.push(band(c));
+                            return true;
+                        }
+                    }
+                    dropped.push(band(c));
+                    false
+                });
+            }
+            shapes.retain(|shape| !shape.is_empty());
+        }
+        gaps = geom::difference(&gaps, &over_top);
+        if !dropped.is_empty() {
+            let refs: Vec<&Shapes> = dropped.iter().collect();
+            reclaimed = geom::difference(&geom::union_all(&refs), &over_top);
         }
     }
     // Gaps: neither slivers thinner than gap fill's narrowest line nor parts wide enough for anything else,
@@ -1213,10 +1280,20 @@ fn wall_group(
     let overlap = if loops == 0 { 0.0 } else { share * (inset + sp_solid / 2.0) };
     // A top beside the outer wall alone: Orca's top fill, reaching into the wall by `top_bottom_infill_wall_overlap`
     // (nothing on the first layer) rather than the infill's overlap.
-    if let Some(fill) = top {
+    if let Some(mut fill) = top {
+        if !kept_bands.is_empty() {
+            let refs: Vec<&Shapes> = kept_bands.iter().collect();
+            fill = geom::difference(&fill, &geom::union_all(&refs));
+        }
         let top_overlap = if first { 0.0 } else { s.top_bottom_infill_wall_overlap * (inset + sp_solid / 2.0) };
         let fill = if (top_overlap - overlap).abs() > 1e-6 { off(&fill, top_overlap - overlap) } else { fill };
         inner = geom::simplify_shapes(&geom::union(&inner, &fill), PATH_RESOLUTION);
+    }
+    // The dropped walls' room, less what gap fill takes. (Orca adds it without the infill's overlap, which the
+    // planner adds here: taking it off first and growing it back splits it from the infill beside it.)
+    if !reclaimed.is_empty() {
+        let room = if gaps.is_empty() { reclaimed } else { geom::difference(&reclaimed, &gaps) };
+        inner = geom::simplify_shapes(&geom::union(&inner, &room), PATH_RESOLUTION);
     }
 
     // Share everything out to the islands of the slice it lies in.

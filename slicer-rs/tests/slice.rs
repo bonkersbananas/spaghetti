@@ -3845,3 +3845,30 @@ fn top_surfaces_grow_by_the_expansion_as_orca_grows_them() {
     assert!((plain - 304.73).abs() < 0.3, "{plain} mm³");
     assert!((grown - 307.20).abs() < 0.3 && grown - plain > 2.0, "{grown} mm³");
 }
+
+/// With the classic walls, `top_surface_expansion` drops the inner walls that run over the grown top surface, as Orca
+/// 2.5.1's `process_classic` does ("only_one_wall_top reduction"): on the slab with a pillar, native Orca (Nov 17)
+/// prints 291.6 mm³ of inner wall and 304.6 of top surface without the growth, 288.8 and 307.2 with 0.5 mm.
+#[test]
+fn classic_walls_give_up_their_inner_walls_over_a_grown_top_as_orcas_do() {
+    let mut plate = String::from("solid s\n");
+    for (lo, hi) in [([88.0, 108.0, 0.0], [128.0, 148.0, 4.0]), ([103.0, 123.0, 4.0], [113.0, 133.0, 8.0])] {
+        let b = String::from_utf8(boxes_stl(&[(lo, hi)])).unwrap();
+        plate += b.trim_start_matches("solid boxes\n").trim_end().trim_end_matches("endsolid boxes");
+        plate.push('\n');
+    }
+    plate += "endsolid s\n";
+    let options = Options { arrange: false, thumbnail: false, ..Options::default() };
+    let volumes = |expansion: &str| {
+        let setup =
+            format!(r#"{{"process": {{"wall_generator": "classic", "top_surface_expansion": "{expansion}"}}}}"#);
+        let settings = setup::read(&setup).unwrap().settings;
+        let out = slice(&[Input { name: "slab.stl", bytes: plate.as_bytes() }], &settings, &options).unwrap();
+        assert!(out.fallbacks.is_empty(), "{:?}", out.fallbacks);
+        let of = |role: Role| out.stats.features[Role::ALL.iter().position(|&r| r == role).unwrap()].volume;
+        (of(Role::InnerWall), of(Role::TopSurface))
+    };
+    let ((inner, top), (inner_grown, top_grown)) = (volumes("0"), volumes("0.5"));
+    assert!((inner - 291.6).abs() < 0.3 && (top - 304.6).abs() < 0.3, "{inner} {top} mm³");
+    assert!((inner_grown - 288.8).abs() < 0.3 && (top_grown - 307.2).abs() < 0.3, "{inner_grown} {top_grown} mm³");
+}
