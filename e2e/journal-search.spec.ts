@@ -164,8 +164,8 @@ test("starts an attempt from what worked last time", { tag: "@phone" }, async ({
   if (isMobile) await page.getByRole("button", { name: "Log attempt" }).click();
   else await page.keyboard.press("a");
   const sheet = page.getByRole("dialog", { name: "Attempt 2" });
-  // The closed settings row says a setup that worked is inside; one tap opens it.
-  await expect(sheet.getByRole("button", { name: /^Settings/ })).toContainText("A setup that worked is in here");
+  // The closed settings row names a setup that worked; one tap opens it.
+  await expect(sheet.getByRole("button", { name: /^Settings/ })).toContainText("Worked on Desiccant hook");
   await sheet.getByRole("button", { name: /^Settings/ }).click();
   const suggestion = sheet.getByRole("region", { name: "What worked last time" });
   await expect(suggestion).toContainText("Desiccant hook");

@@ -61,8 +61,8 @@ export interface FieldsProps {
    * editor, so the row is one line until someone wants them.
    */
   suggestion?: ReactNode;
-  /** The closed settings row says so when `suggestion` has something to offer ("Worked before"). */
-  suggestionOffered?: boolean;
+  /** The closed settings row says what `suggestion` offers, in one line ("Worked on Hook: Textured PEI, 250 °C"). */
+  suggestionOffer?: string;
   /** The slicer file: its card, a plate to pick, or the well to add one. */
   file?: ReactNode;
   /** What the slicer file said, to mark the values that came from it. */
@@ -98,11 +98,8 @@ export function AttemptFields(props: FieldsProps) {
     changes.length ? (
       `Changed from ${base.label}: ${changes.map((c) => c.text).join(", ")}`
     ) : (
-      <MetaList>
-        {[`Same as ${base.label}`, ...pieces.slice(0, 2)].map((piece) => (
-          <span key={piece}>{piece}</span>
-        ))}
-      </MetaList>
+      // One line, cut with an ellipsis rather than wrapped: "0.20 mm" never sits alone on a second line.
+      <span className="block truncate">{[`As ${base.label}`, ...pieces.slice(0, 2)].join(" · ")}</span>
     )
   ) : pieces.length ? (
     <MetaList>
@@ -113,10 +110,10 @@ export function AttemptFields(props: FieldsProps) {
   ) : (
     "Filament, plate, temperatures, times. All optional."
   );
-  const withOffer = props.suggestionOffered ? (
+  const withOffer = props.suggestionOffer ? (
     <span className="flex min-w-0 flex-col gap-0.5">
       {settingsSummary}
-      <span className="text-basil-ink font-semibold">A setup that worked is in here</span>
+      <span className="text-basil-ink truncate font-semibold">{props.suggestionOffer}</span>
     </span>
   ) : (
     settingsSummary
@@ -159,9 +156,6 @@ export function AttemptFields(props: FieldsProps) {
           {props.estimate}
         </div>
       </fieldset>
-      {/* Claude's ideas for the next try sit under the outcome, until a failure's own questions (tags) need the room:
-          then they wait under them, so the photo and the tags stay within reach of the thumb. */}
-      {!withTags && props.coach}
       {props.plate && (
         <fieldset disabled={!!props.readOnly} className="contents">
           <PlateParts
@@ -214,11 +208,12 @@ export function AttemptFields(props: FieldsProps) {
           />
         )}
       </fieldset>
+      {/* Claude's ideas for the next try come after the photo, the note and the tags: those are what someone at the printer is doing. */}
+      {props.coach}
       {/* Rarely changed, so it sits under the tags: a failed attempt's tags are in reach without a scroll. */}
       <fieldset disabled={!!props.readOnly} className="contents">
         {props.when}
       </fieldset>
-      {withTags && props.coach}
       <fieldset disabled={!!props.readOnly} className="contents">
         {props.file}
       </fieldset>

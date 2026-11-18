@@ -4697,6 +4697,22 @@ export const shots: Shot[] = [
     },
   },
   {
+    // The same sheet from its top: the outcome, then the photo and the note, the one Settings row saying what worked.
+    name: "attempt-new-top",
+    path: `/builds/${SEED_BUILD_IDS.cableChain}`,
+    prepare: async (page) => {
+      await page.getByRole("button", { name: "Log attempt" }).first().click();
+      await page
+        .getByRole("dialog")
+        .getByRole("button", { name: /^Settings/ })
+        .waitFor();
+      await page.waitForTimeout(800);
+    },
+    cleanup: async (page) => {
+      await page.keyboard.press("Escape");
+    },
+  },
+  {
     // A new attempt as it opens on a build with a past: the photo, note and outcome lead, one quiet settings row.
     name: "attempt-new",
     path: `/builds/${SEED_BUILD_IDS.cableChain}`,

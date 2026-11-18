@@ -46,6 +46,13 @@ export function useWhatWorked(itemId: string, settings: AttemptSettings) {
   return { matches, best, suggested, changes, offers: !!best && changes.length > 0 };
 }
 
+/** One line for the closed settings row: what worked, where, and the settings that did ("Worked on Hook: Textured PEI, 250 °C"). */
+export function offerLine(match: NonNullable<ReturnType<typeof useWhatWorked>["best"]>): string {
+  const where = match.sameBuild ? `attempt ${match.number}` : match.item.title?.trim() || "another build";
+  const settings = summarizeSettings(match.attempt.settings).slice(0, 1).join(", ");
+  return `Worked ${match.sameBuild ? "in" : "on"} ${where}${settings ? `: ${settings}` : ""}`;
+}
+
 export function WhatWorkedSuggestion({ itemId, settings, onUse, used, onUsed }: WhatWorkedSuggestionProps) {
   const { matches, best, suggested, changes } = useWhatWorked(itemId, settings);
   const isDesktop = useIsDesktop();

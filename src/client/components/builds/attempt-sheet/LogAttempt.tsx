@@ -16,7 +16,7 @@ import { photoSrc } from "@/lib/previews";
 import { sessionQuery } from "@/lib/queries";
 import { queueSlicerFile } from "@/lib/slicer-files";
 import { useIsDesktop } from "@/lib/use-media-query";
-import { useWhatWorked, WhatWorkedSuggestion } from "../WhatWorkedSuggestion";
+import { offerLine, useWhatWorked, WhatWorkedSuggestion } from "../WhatWorkedSuggestion";
 import { AttemptFields } from "./AttemptFields";
 import { useOutcomeCounts } from "./PlateParts";
 import { DraftFile, fetchKeptFile, SlicerFileSection, useSlicerFile } from "./SheetSlicerFile";
@@ -240,7 +240,7 @@ export function LogAttempt({
               </Suspense>
             )
           }
-          suggestionOffered={!slicer.state && worked.offers}
+          suggestionOffer={!slicer.state && worked.best && worked.offers ? offerLine(worked.best) : undefined}
           suggestion={
             <>
               {/* A slicer file says what this attempt is: no other settings to offer. */}
