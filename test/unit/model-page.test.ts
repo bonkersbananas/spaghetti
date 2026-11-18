@@ -174,6 +174,10 @@ describe("printablesTitleFromLink", () => {
       "Spool holder",
     );
   });
+  it("doesn't take a word for an object property", () => {
+    expect(printablesTitleFromLink(`${base}constructor-kit`)).toBe("Constructor kit");
+    expect(printablesTitleFromLink(`${base}the-toString-box`)).toBe("The toString box");
+  });
   it("has no name without a slug, for another site or for a bare number", () => {
     expect(printablesTitleFromLink("https://www.printables.com/model/1577248")).toBeNull();
     expect(printablesTitleFromLink("https://www.printables.com/model/1577248/files")).toBeNull();

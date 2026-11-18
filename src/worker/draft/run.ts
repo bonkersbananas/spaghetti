@@ -1,4 +1,4 @@
-import { and, desc, eq, gte, isNull, lt, or, sql } from "drizzle-orm";
+import { and, eq, gte, isNull, lt, or, sql } from "drizzle-orm";
 import type { BatchItem } from "drizzle-orm/batch";
 import { DRAFTS_PER_DAY, type DraftFailure, type ItemDraft } from "../../shared/draft.ts";
 import { isModelImageUrl, modelSite, pictureRequestUrl } from "../../shared/model-links.ts";
@@ -600,23 +600,17 @@ export async function nameClosedPrintables(db: Db): Promise<number> {
         eq(itemDrafts.failure, "unreadable"),
         isNull(items.deletedAt),
         or(isNull(items.title), sql`trim(${items.title}) = ''`),
+        // A model Printables says isn't there stays as it failed.
+        sql`NOT EXISTS (SELECT 1 FROM draft_runs r WHERE r.item_id = ${itemDrafts.itemId} AND r.outcome = 'not_found')`,
       ),
     )
     .limit(20);
   let named = 0;
   for (const { draft } of rows) {
-    const last = await db
-      .select({ outcome: draftRuns.outcome })
-      .from(draftRuns)
-      .where(eq(draftRuns.itemId, draft.itemId))
-      .orderBy(desc(draftRuns.at))
-      .limit(1)
-      .get();
-    if (last?.outcome === "not_found") continue;
+    // A link without a slug has no name to give; it reads as closed all the same, so it isn't picked again.
     const name = printablesTitleFromLink(draft.url);
-    if (!name) continue;
     await fail(db, draft, "closed", name);
-    named++;
+    if (name) named++;
   }
   return named;
 }

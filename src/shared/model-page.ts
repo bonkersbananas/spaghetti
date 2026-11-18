@@ -320,7 +320,8 @@ export function printablesTitleFromLink(link: string): string | null {
   let title = "";
   for (const [index, word] of words.entries()) {
     const shown =
-      BRAND_WORDS[word.toLowerCase()] ?? (index === 0 ? word.charAt(0).toUpperCase() + word.slice(1) : word);
+      (Object.hasOwn(BRAND_WORDS, word.toLowerCase()) ? BRAND_WORDS[word.toLowerCase()] : undefined) ??
+      (index === 0 ? word.charAt(0).toUpperCase() + word.slice(1) : word);
     const next = title ? `${title} ${shown}` : shown;
     if (next.length > SLUG_TITLE_MAX) break;
     title = next;
