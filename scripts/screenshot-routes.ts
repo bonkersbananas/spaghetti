@@ -7395,6 +7395,12 @@ shots.push(
         await page.getByRole("heading", { name: "Attempts" }).waitFor();
         await page.getByRole("region", { name: /^Files/ }).waitFor();
       },
+      beforeShot: async (page) => {
+        await page
+          .getByRole("region", { name: /^Files/ })
+          .evaluate((region) => region.scrollIntoView({ block: "center", behavior: "instant" }));
+        await page.waitForTimeout(300);
+      },
       cleanup: removeModelItems,
     },
     {

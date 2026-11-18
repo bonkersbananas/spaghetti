@@ -238,12 +238,12 @@ test("a print on the bed has one way to log it; closing the build waits in the â
   await sheet.getByRole("button", { name: /^(Done|Finish attempt)$/ }).click();
   await expect(sheet).toBeHidden();
 
-  // It worked: Finish build is back (desktop's bar; on phones the quiet pair at the page's end), and the menu has gone.
+  // It worked: Finish build is back and leads (desktop's bar; on phones the action bar), and the menu has gone.
   await expect(page.getByRole("button", { name: "Finish build" })).toBeVisible();
   await expect(page.getByRole("button", { name: "More for this build" })).toHaveCount(0);
   await expect(ask).toHaveCount(0);
   if (!isMobile) {
-    await expect(page.getByRole("button", { name: "Log attempt" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Log another try" })).toBeVisible();
     await expect(page.getByRole("button", { name: "Shelve", exact: true })).toBeVisible();
   }
 });
