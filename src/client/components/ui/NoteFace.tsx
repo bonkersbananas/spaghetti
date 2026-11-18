@@ -63,6 +63,7 @@ function useWholeLines() {
 
 /** A loose strand of spaghetti on the foot of a short note's index card. */
 function Strand() {
+  // Laid over the face's foot, so it never takes a line from the note (only a short note gets one: see `doodle`).
   return (
     <svg
       aria-hidden
@@ -71,7 +72,7 @@ function Strand() {
       strokeLinecap="round"
       strokeLinejoin="round"
       strokeWidth="2"
-      className="stroke-tomato/35 mt-3 h-auto w-[26cqi] shrink-0"
+      className="stroke-tomato/35 pointer-events-none absolute bottom-[8cqi] left-[8cqi] h-auto w-[26cqi]"
     >
       <path d="M3 16c6-12 12-12 14-3s7 9 11 0 9-11 13-2 8 8 12 0 6-4 11-1" />
     </svg>
@@ -125,7 +126,8 @@ export function NoteFace({ note, size, className, compact, clearBottom, maxSize,
             </p>
           </div>
         )}
-        {doodle && !link && !compact && (face === "xl" || face === "lg") && <Strand />}
+        {/* Only a note short enough to leave the foot empty: about five lines of the large steps at most. */}
+        {doodle && !link && !compact && note.trim().length <= 48 && !/\n\s*\n/.test(note) && <Strand />}
         {link && <p className="text-caption text-ink-faint mt-1.5 truncate">{link.site}</p>}
       </div>
     </div>
