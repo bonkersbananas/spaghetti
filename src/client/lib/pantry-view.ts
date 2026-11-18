@@ -52,3 +52,48 @@ export function usePantryView(): [PantryView, (view: PantryView) => void] {
   );
   return [view, setPantryView];
 }
+
+export type PantryDensity = "tiles" | "compact";
+
+/** Above this many spools a phone starts on the compact view (three across); fewer keep the big tiles. */
+export const COMPACT_ABOVE = 12;
+
+const DENSITY_KEY = "sg-pantry-density";
+const storedDensity = (): PantryDensity | null => {
+  try {
+    const value = localStorage.getItem(DENSITY_KEY);
+    return value === "tiles" || value === "compact" ? value : null;
+  } catch {
+    return null;
+  }
+};
+let density: PantryDensity | null | undefined;
+const readDensity = () => {
+  if (density === undefined) density = storedDensity();
+  return density;
+};
+
+/**
+ * Phones: the tiles or the compact view, remembered on this device. null until someone picks (the count of spools
+ * then decides).
+ */
+export function usePantryDensity(): [PantryDensity | null, (next: PantryDensity) => void] {
+  const value = useSyncExternalStore(
+    (listener) => {
+      listeners.add(listener);
+      return () => void listeners.delete(listener);
+    },
+    readDensity,
+    () => null,
+  );
+  const set = (next: PantryDensity) => {
+    density = next;
+    try {
+      localStorage.setItem(DENSITY_KEY, next);
+    } catch {
+      // Private mode: the choice lasts until the page closes.
+    }
+    for (const listener of listeners) listener();
+  };
+  return [value, set];
+}

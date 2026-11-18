@@ -27,6 +27,7 @@ import { SEED_PASSWORD, SEED_USERS } from "../scripts/lib/local-app.ts";
  * Raise a screen's ceiling only for code that screen shows at once, and say why in the pull request.
  * 2026-11-15: /today and /journal +2: the "Since Thursday" gate on both (the block itself loads only when there is a catch-up, but its
  * lazy import adds its dependency list to the gate's chunk, about 1.5 kB gzip).
+ * 2026-11-18: /pantry +1: the phone's compact spool tile (SpoolChip) and its remembered Tiles / Compact choice, both drawn on the Pantry at once (about 0.9 kB gzip).
  * 2026-11-16: /today +1: note faces that are only a link show the link's words (linkWords, 0.3 kB) and mini cards set notes on
  * their own scale (NoteFace), both drawn on Today's cards, and Today's Up next carries the one-line batched toast (lib/up-next).
  * 2026-11-16: /ideas +1: the one cover rule every card picks its picture with (shared/cover.ts, coverOf in lib/previews.ts),
@@ -42,7 +43,7 @@ const CEILING_KB = {
   "/builds": 267,
   "/journal": 278,
   "/search": 275,
-  "/pantry": 257,
+  "/pantry": 258,
   "/printer": 259,
 } as const;
 

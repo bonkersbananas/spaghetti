@@ -301,3 +301,21 @@ test("running-low spools go on the shopping list in one tap, and only once", { t
   expect(added).toHaveLength(2);
   for (const item of added) await page.request.delete(`/api/shopping-items/${item.id}`, { headers });
 });
+
+test("a phone with many spools starts compact, and Cards brings the big ones back", { tag: "@phone" }, async ({
+  page,
+  isMobile,
+}) => {
+  test.skip(!isMobile, "The compact view is the phone's.");
+  for (let index = 0; index < 13; index++) {
+    await addSpoolByApi(page, { material: "PLA", colorName: `Shade ${index}`, colorHex: "#c0392b" });
+  }
+  await page.goto("/pantry");
+  const spools = page.getByRole("list", { name: "PLA spools" });
+  await expect(spools).toBeVisible();
+  // Compact: the spool's page holds the product line, so the tile has no second line, and the toggle shows.
+  await expect(page.getByRole("radio", { name: "List" })).toBeChecked();
+  await page.getByRole("radio", { name: "Cards" }).click({ force: true });
+  await expect(page.getByRole("radio", { name: "Cards" })).toBeChecked();
+  await page.evaluate(() => localStorage.removeItem("sg-pantry-density"));
+});

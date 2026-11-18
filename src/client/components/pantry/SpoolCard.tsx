@@ -1,5 +1,5 @@
 import type { Spool } from "@shared/api";
-import { slotLabel, spoolName } from "@shared/spools";
+import { slotLabel, softSlashes, spoolName } from "@shared/spools";
 import { Link } from "@tanstack/react-router";
 import { Chip } from "@/components/ui/Chip";
 import { RemainingMeter } from "@/components/ui/RemainingMeter";
@@ -8,12 +8,25 @@ import { cn } from "@/lib/cn";
 import { spoolDragProps } from "./Ams";
 import { ReadingLine } from "./ReadingLine";
 
+/** Whether a material word is what the group heading already says (PLA under PLA). */
+const sameAs = (material: string, heading?: string) =>
+  !!heading && material.trim().toUpperCase() === heading.toUpperCase();
+
 /**
  * A spool in the pantry: a tile with the spool itself in its color; what it is, how much is left, where it's loaded.
  * On a phone it is a tall tile, two across, with a big disc on top like a spool on a shelf; from `md` a compact row of
  * a small disc and its words, two or three across. Drag one onto an AMS slot on desktop.
  */
-export function SpoolCard({ spool, draggable = true }: { spool: Spool; draggable?: boolean }) {
+export function SpoolCard({
+  spool,
+  draggable = true,
+  heading,
+}: {
+  spool: Spool;
+  draggable?: boolean;
+  /** The material group's heading: a material word that only repeats it is not written again. */
+  heading?: string;
+}) {
   const name = spoolName(spool);
   return (
     <li className="min-w-0 list-none">
@@ -34,7 +47,13 @@ export function SpoolCard({ spool, draggable = true }: { spool: Spool; draggable
         </div>
         <div className="flex min-w-0 flex-1 flex-col gap-0.5 px-1 pb-1 md:p-0">
           <span className="text-body text-ink truncate font-semibold">{name.title}</span>
-          <span className={cn("text-small text-ink-faint truncate", !name.detail && "sr-only")}>
+          {/* The product line may take a second line on a phone, where the tile is narrow. */}
+          <span
+            className={cn(
+              "text-small text-ink-faint line-clamp-2 md:truncate",
+              !name.detail && sameAs(spool.material, heading) && "sr-only",
+            )}
+          >
             {name.detail || spool.material}
           </span>
           {spool.labelRead?.status === "reading" ? (
@@ -47,6 +66,49 @@ export function SpoolCard({ spool, draggable = true }: { spool: Spool; draggable
           <Chip tone="semolina" className="tabular absolute top-3.5 right-3.5 md:static md:self-start">
             {spool.slot === "Ext" ? "External" : slotLabel(spool.slot)}
           </Chip>
+        )}
+      </Link>
+    </li>
+  );
+}
+
+/**
+ * The compact spool for a phone with many: three across, the spool in its colour, its name (two lines at most) and
+ * what is left in grams or a word. The product line is left to the spool's own page. Where it is loaded is a small
+ * chip on the disc.
+ */
+export function SpoolChip({ spool }: { spool: Spool }) {
+  const name = spoolName(spool);
+  return (
+    <li className="min-w-0 list-none">
+      <Link
+        to="/pantry/$spoolId"
+        params={{ spoolId: spool.id }}
+        className="pressable focus-ring bg-cream shadow-soft relative flex h-full flex-col items-center gap-1.5 rounded-lg px-1.5 pt-1.5 pb-2.5 text-center"
+      >
+        <div className="bg-ink/3 flex h-16 w-full items-center justify-center rounded-md">
+          <SpoolDisc color={spool.colorHex} colors={spool.colors} size="md" />
+        </div>
+        {/* In the tile's corner, clear of the disc, as the Tiles view has it. */}
+        {spool.slot && (
+          <Chip tone="semolina" className="tabular absolute top-2.5 right-2.5">
+            {spool.slot === "Ext" ? "Ext" : spool.slot}
+          </Chip>
+        )}
+        <span className="text-small text-ink line-clamp-2 w-full leading-tight font-semibold">
+          {softSlashes(name.title)}
+        </span>
+        {spool.labelRead?.status === "reading" ? (
+          <ReadingLine className="text-caption" />
+        ) : (
+          <RemainingMeter
+            remaining={spool.remaining}
+            gramsLeft={spool.gramsLeft}
+            // Words for what isn't full (or has grams); a full spool's three bars say it.
+            showLabel={spool.remaining !== "full" || spool.gramsLeft !== null}
+            stacked
+            className="mt-auto"
+          />
         )}
       </Link>
     </li>
