@@ -7,7 +7,33 @@ import { NumberField } from "@/components/ui/Field";
 import { spoolsQuery } from "@/lib/pantry-queries";
 import { ChipRow, SpoolChoices } from "../SettingsEditor";
 
-type Key = "filament" | "bedType" | "layerHeight" | "nozzleTemperature" | "bedTemperature" | "infillDensity";
+export type Key = "filament" | "bedType" | "layerHeight" | "nozzleTemperature" | "bedTemperature" | "infillDensity";
+
+/**
+ * Which chips show a changed value (semolina): one that has a value now and differs from `base`. A change this leaves
+ * out (a cleared value, a dropped filament, supports, brim…) has no chip, so the summary line has to say it.
+ */
+export function chipMarks(settings: AttemptSettings, base?: AttemptSettings): Record<Key, boolean> {
+  const first = settings.filaments?.[0];
+  const before = base?.filaments?.[0];
+  const sameFilament =
+    before?.spoolId === first?.spoolId &&
+    before?.brand === first?.brand &&
+    before?.type === first?.type &&
+    before?.profile === first?.profile &&
+    before?.colorHex === first?.colorHex &&
+    before?.colorName === first?.colorName;
+  const differs = <K extends keyof AttemptSettings>(key: K) =>
+    !!base && settings[key] !== undefined && base[key] !== settings[key];
+  return {
+    filament: !!base && !!(first?.brand || first?.type || first?.spoolId) && !sameFilament,
+    bedType: differs("bedType"),
+    layerHeight: differs("layerHeight"),
+    nozzleTemperature: differs("nozzleTemperature"),
+    bedTemperature: differs("bedTemperature"),
+    infillDensity: differs("infillDensity"),
+  };
+}
 
 /**
  * What carried over from the attempt before, as chips: tap the one that changes and its field opens right under the
@@ -58,16 +84,7 @@ export function ChangeChips({
   chips.sort((a, b) => order.indexOf(a.key) - order.indexOf(b.key));
   if (!chips.length) return null;
 
-  const first0 = base?.filaments?.[0];
-  const changedKeys: Record<Key, boolean> = {
-    filament:
-      !!base && (first0?.spoolId !== first?.spoolId || first0?.brand !== first?.brand || first0?.type !== first?.type),
-    bedType: !!base && base.bedType !== settings.bedType,
-    layerHeight: !!base && base.layerHeight !== settings.layerHeight,
-    nozzleTemperature: !!base && base.nozzleTemperature !== settings.nozzleTemperature,
-    bedTemperature: !!base && base.bedTemperature !== settings.bedTemperature,
-    infillDensity: !!base && base.infillDensity !== settings.infillDensity,
-  };
+  const changedKeys = chipMarks(settings, base);
   const set = (next: Partial<AttemptSettings>) => onChange({ ...settings, ...next });
   const number = (
     key: "nozzleTemperature" | "bedTemperature" | "infillDensity",

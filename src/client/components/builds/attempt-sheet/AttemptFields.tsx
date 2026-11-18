@@ -16,7 +16,7 @@ import { OutcomePicker } from "../Outcome";
 import { SettingsEditor } from "../SettingsEditor";
 import { summarizeSettings } from "../settings";
 import { TagPicker } from "../TagPicker";
-import { ChangeChips } from "./ChangeChips";
+import { ChangeChips, chipMarks } from "./ChangeChips";
 import { PlateParts } from "./PlateParts";
 
 export interface FieldsProps {
@@ -94,8 +94,14 @@ export function AttemptFields(props: FieldsProps) {
   // With chips under the row (what the attempt before had), "same" needs no list of pieces.
   const withChips = !!base && !!props.changeChips && !props.readOnly;
   // The chips mark what they cover; the line says the rest (supports, brim, walls, a second filament…), cut past three.
+  const marks = chipMarks(settings, base?.settings);
   const covered = (key: string) =>
-    /^(filaments\.0(\.|$)|bedType$|layerHeight$|infillDensity$|nozzleTemperature$|bedTemperature$)/.test(key);
+    (/^filaments\.0(\.|$)/.test(key) && marks.filament) ||
+    (key === "bedType" && marks.bedType) ||
+    (key === "layerHeight" && marks.layerHeight) ||
+    (key === "infillDensity" && marks.infillDensity) ||
+    (key === "nozzleTemperature" && marks.nozzleTemperature) ||
+    (key === "bedTemperature" && marks.bedTemperature);
   const unseen = changes.filter((change) => !covered(change.key));
   const said = (list: typeof changes) =>
     list.length > 3
