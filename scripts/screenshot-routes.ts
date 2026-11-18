@@ -4812,7 +4812,7 @@ export const shots: Shot[] = [
       await sheet.getByRole("radio", { name: "Worked" }).click();
       await page.waitForTimeout(900);
       await sheet
-        .getByRole("button", { name: /^Settings/ })
+        .getByRole("button", { name: /^Settings(?! worth)/ })
         .evaluate((element) => element.scrollIntoView({ block: "end" }));
       await page.waitForTimeout(300);
     },

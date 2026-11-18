@@ -93,14 +93,20 @@ export function AttemptFields(props: FieldsProps) {
   const pieces = [...filamentNames, ...summary];
   // With chips under the row (what the attempt before had), "same" needs no list of pieces.
   const withChips = !!base && !!props.changeChips && !props.readOnly;
+  // The chips mark what they cover; the line says the rest (supports, brim, walls, a second filament…), cut past three.
+  const covered = (key: string) =>
+    /^(filaments\.0(\.|$)|bedType$|layerHeight$|infillDensity$|nozzleTemperature$|bedTemperature$)/.test(key);
+  const unseen = changes.filter((change) => !covered(change.key));
+  const said = (list: typeof changes) =>
+    list.length > 3
+      ? `${list
+          .slice(0, 3)
+          .map((c) => c.text)
+          .join(", ")} and ${list.length - 3} more`
+      : list.map((c) => c.text).join(", ");
   const settingsSummary: ReactNode = base ? (
     changes.length ? (
-      // With chips below (which show what changed), a long list is just said once.
-      withChips && changes.length > 2 ? (
-        `Changed from ${base.label}`
-      ) : (
-        `Changed from ${base.label}: ${changes.map((c) => c.text).join(", ")}`
-      )
+      `Changed from ${base.label}${withChips ? (unseen.length ? `: ${said(unseen)}` : "") : `: ${said(changes)}`}`
     ) : withChips ? (
       `Same as ${base.label}`
     ) : (
