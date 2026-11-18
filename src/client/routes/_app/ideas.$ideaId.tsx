@@ -2,7 +2,7 @@ import { modelOf } from "@shared/model-mark";
 import { fullTime, inlineTime } from "@shared/time";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { lazy, Suspense, useEffect, useRef, useState } from "react";
+import { lazy, memo, Suspense, useEffect, useRef, useState } from "react";
 import { OpenOnlyFile } from "@/components/builds/OpenInStudio";
 import { CommentThread, ItemReactions } from "@/components/comments/CommentThread";
 import { AddFirstPhotos } from "@/components/ideas/AddFirstPhotos";
@@ -67,16 +67,26 @@ export const Route = createFileRoute("/_app/ideas/$ideaId")({
   component: IdeaDetail,
 });
 
+/** Ideas whose Start building was just tapped: the tap moves to the build once its toast has painted. */
+const startedHere = new Set<string>();
+
 function IdeaDetail() {
   const { ideaId } = Route.useParams();
   const { item, isPending, error } = useItem(ideaId);
   const navigate = useNavigate();
   const isBuild = !!item && item.stage !== "idea";
+  // The idea that was on screen until the moment it became a build: it stays there (untouched) while the build's page
+  // gets ready, instead of giving way to a skeleton for a frame.
+  const shown = useRef<ItemView | undefined>(undefined);
+  if (item && !isBuild) shown.current = item;
   // It grew into a build (here or on the other phone): that's where it lives now.
   useEffect(() => {
-    if (isBuild) void navigate({ to: "/builds/$buildId", params: { buildId: ideaId }, replace: true });
+    // Not for the build this person just started here: its tap takes the page over to the build itself.
+    if (isBuild && !startedHere.has(ideaId))
+      void navigate({ to: "/builds/$buildId", params: { buildId: ideaId }, replace: true });
   }, [isBuild, ideaId, navigate]);
   if (item && !isBuild) return <Idea key={item.id} item={item} />;
+  if (isBuild && shown.current?.id === ideaId) return <Idea key={ideaId} item={shown.current} />;
   return (
     <>
       <h1 className="sr-only">Idea</h1>
@@ -113,7 +123,7 @@ function IdeaDetail() {
 
 const back = { to: "/ideas", label: "Ideas" } as const;
 
-function Idea({ item }: { item: ItemView }) {
+const Idea = memo(function Idea({ item }: { item: ItemView }) {
   const stickyColumn = useStickyColumn();
   const after = useAfterPaint();
   const queryClient = useQueryClient();
@@ -158,9 +168,16 @@ function Idea({ item }: { item: ItemView }) {
   }
 
   function build() {
-    if (!canEdit(item.pending)) return;
+    if (!canEdit(item.pending) || startedHere.has(item.id)) return;
+    // The page swap is most of the work (the build's whole page mounts): it starts once the toast has painted.
+    startedHere.add(item.id);
     startBuild(queryClient, item);
-    void navigate({ to: "/builds/$buildId", params: { buildId: item.id } });
+    requestAnimationFrame(() =>
+      setTimeout(() => {
+        startedHere.delete(item.id);
+        void navigate({ to: "/builds/$buildId", params: { buildId: item.id } });
+      }),
+    );
   }
 
   const [moving, setMoving] = useState(false);
@@ -515,4 +532,4 @@ function Idea({ item }: { item: ItemView }) {
       </article>
     </PullToGo>
   );
-}
+});
