@@ -95,15 +95,12 @@ export function AttemptFields(props: FieldsProps) {
   const withChips = !!base && !!props.changeChips && !props.readOnly;
   const settingsSummary: ReactNode = base ? (
     changes.length ? (
-      // With chips below, a long list (a whole file's worth) is cut to three and a count.
-      `Changed from ${base.label}: ${
-        withChips && changes.length > 4
-          ? `${changes
-              .slice(0, 3)
-              .map((c) => c.text)
-              .join(", ")} and ${changes.length - 3} more`
-          : changes.map((c) => c.text).join(", ")
-      }`
+      // With chips below (which show what changed), a long list is just said once.
+      withChips && changes.length > 2 ? (
+        `Changed from ${base.label}`
+      ) : (
+        `Changed from ${base.label}: ${changes.map((c) => c.text).join(", ")}`
+      )
     ) : withChips ? (
       `Same as ${base.label}`
     ) : (
@@ -238,7 +235,12 @@ export function AttemptFields(props: FieldsProps) {
             summary={summaryWithFile}
             peek={
               withChips ? (
-                <ChangeChips settings={settings} onChange={props.onSettings} onMore={() => setSettingsOpen(true)} />
+                <ChangeChips
+                  settings={settings}
+                  base={base?.settings}
+                  onChange={props.onSettings}
+                  onMore={() => setSettingsOpen(true)}
+                />
               ) : undefined
             }
           >

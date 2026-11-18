@@ -2,7 +2,7 @@ import { type AttemptSettings, BED_TYPES, LAYER_HEIGHTS, plateName } from "@shar
 import { filamentFromSpool, spoolName } from "@shared/spools";
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
-import { ToggleChip } from "@/components/ui/Chip";
+import { ValueChip } from "@/components/ui/Chip";
 import { NumberField } from "@/components/ui/Field";
 import { spoolsQuery } from "@/lib/pantry-queries";
 import { ChipRow, SpoolChoices } from "../SettingsEditor";
@@ -18,8 +18,11 @@ export function ChangeChips({
   settings,
   onChange,
   onMore,
+  base,
 }: {
   settings: AttemptSettings;
+  /** What the attempt began as: a chip whose value differs from it is marked as changed. */
+  base?: AttemptSettings;
   onChange: (settings: AttemptSettings) => void;
   onMore: () => void;
 }) {
@@ -33,7 +36,7 @@ export function ChangeChips({
   if (filamentLabel) chips.push({ key: "filament", label: filamentLabel });
   if (settings.bedType) chips.push({ key: "bedType", label: plateName(settings.bedType) });
   if (settings.layerHeight !== undefined)
-    chips.push({ key: "layerHeight", label: `${settings.layerHeight.toFixed(2)} mm` });
+    chips.push({ key: "layerHeight", label: `${settings.layerHeight.toFixed(2)} mm layers` });
   if (settings.nozzleTemperature !== undefined)
     chips.push({ key: "nozzleTemperature", label: `Nozzle ${settings.nozzleTemperature} °C` });
   if (settings.bedTemperature !== undefined)
@@ -55,6 +58,16 @@ export function ChangeChips({
   chips.sort((a, b) => order.indexOf(a.key) - order.indexOf(b.key));
   if (!chips.length) return null;
 
+  const first0 = base?.filaments?.[0];
+  const changedKeys: Record<Key, boolean> = {
+    filament:
+      !!base && (first0?.spoolId !== first?.spoolId || first0?.brand !== first?.brand || first0?.type !== first?.type),
+    bedType: !!base && base.bedType !== settings.bedType,
+    layerHeight: !!base && base.layerHeight !== settings.layerHeight,
+    nozzleTemperature: !!base && base.nozzleTemperature !== settings.nozzleTemperature,
+    bedTemperature: !!base && base.bedTemperature !== settings.bedTemperature,
+    infillDensity: !!base && base.infillDensity !== settings.infillDensity,
+  };
   const set = (next: Partial<AttemptSettings>) => onChange({ ...settings, ...next });
   const number = (
     key: "nozzleTemperature" | "bedTemperature" | "infillDensity",
@@ -82,14 +95,17 @@ export function ChangeChips({
   );
 
   return (
-    <div className="flex flex-col gap-3">
-      <p className="text-caption text-ink-faint px-0.5">What did you change?</p>
+    <div className="flex flex-col gap-3 pb-1">
+      <p className="text-small text-ink-soft px-0.5 font-semibold">
+        Trying something different? <span className="text-ink-faint font-medium">Tap a value.</span>
+      </p>
       {/* biome-ignore lint/a11y/useSemanticElements: a row of chips, not a form field set. */}
       <div role="group" aria-label="What carried over" className="flex flex-wrap gap-1.5">
         {chips.map(({ key, label }) => (
-          <ToggleChip
+          <ValueChip
             key={key}
-            selected={editing === key}
+            open={editing === key}
+            changed={changedKeys[key]}
             aria-label={`Change ${label}`}
             onClick={() => {
               if (key === "filament" && !spools.length) onMore();
@@ -97,8 +113,8 @@ export function ChangeChips({
             }}
             className="max-w-full"
           >
-            <span className="truncate">{label}</span>
-          </ToggleChip>
+            {label}
+          </ValueChip>
         ))}
       </div>
       {editing === "nozzleTemperature" && number("nozzleTemperature", "Nozzle", "°C", 350)}

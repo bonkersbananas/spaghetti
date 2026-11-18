@@ -4803,6 +4803,69 @@ export const shots: Shot[] = [
     },
   },
   {
+    // After an outcome is picked the footer's one button says "Log attempt", and the line above it is no longer "Starting now".
+    name: "attempt-new-outcome",
+    path: `/builds/${SEED_BUILD_IDS.cableChain}`,
+    prepare: async (page) => {
+      await page.getByRole("button", { name: "Log attempt" }).first().click();
+      const sheet = page.getByRole("dialog");
+      await sheet.getByRole("radio", { name: "Worked" }).click();
+      await page.waitForTimeout(900);
+      await sheet
+        .getByRole("button", { name: /^Settings/ })
+        .evaluate((element) => element.scrollIntoView({ block: "end" }));
+      await page.waitForTimeout(300);
+    },
+    cleanup: async (page) => {
+      await page.keyboard.press("Escape");
+    },
+  },
+  {
+    // Settings open on a filament from the pantry: one ✕ (remove) and its Change; "Type it in instead" is behind Change.
+    name: "attempt-settings-filament",
+    path: `/builds/${SEED_IDS.desiccantHook}`,
+    prepare: async (page) => {
+      await page.getByRole("button", { name: "Log attempt" }).first().click();
+      const sheet = page.getByRole("dialog");
+      await sheet.waitFor();
+      await page.getByTestId("slicer-file-input").setInputFiles({
+        name: SLICER_FILE_NAME,
+        mimeType: "application/octet-stream",
+        buffer: Buffer.from(slicerFile()),
+      });
+      await sheet.getByRole("button", { name: /Cable clips/ }).click();
+      await sheet.getByRole("button", { name: /^Settings/ }).click();
+      await sheet.getByRole("button", { name: /Pick another spool for filament 1/ }).waitFor();
+      await page.waitForTimeout(900);
+      await sheet.getByRole("button", { name: /Pick another spool for filament 1/ }).click();
+      await page.waitForTimeout(600);
+      await sheet
+        .getByRole("button", { name: /Type it in instead/ })
+        .evaluate((element) => element.scrollIntoView({ block: "center", behavior: "instant" }));
+      await page.waitForTimeout(400);
+    },
+    cleanup: async (page) => {
+      await page.keyboard.press("Escape");
+      await page.reload();
+    },
+  },
+  {
+    // The time fields' placeholders read as hints, in the app's format.
+    name: "attempt-time-hints",
+    path: `/builds/${SEED_BUILD_IDS.cableChain}`,
+    prepare: async (page) => {
+      await page.getByRole("button", { name: "Log attempt" }).first().click();
+      const sheet = page.getByRole("dialog");
+      await sheet.getByRole("button", { name: /^Settings/ }).click();
+      await page.waitForTimeout(900);
+      await sheet.getByLabel("Actual").evaluate((element) => element.scrollIntoView({ block: "center" }));
+      await page.waitForTimeout(300);
+    },
+    cleanup: async (page) => {
+      await page.keyboard.press("Escape");
+    },
+  },
+  {
     // "What worked last time" in the attempt sheet: PETG that warped, offered the PETG that didn't.
     name: "what-worked",
     path: `/builds/${SEED_BUILD_IDS.cableChain}`,

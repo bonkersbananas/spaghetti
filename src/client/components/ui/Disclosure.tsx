@@ -81,7 +81,7 @@ export function Disclosure({
           aria-hidden
         />
       </button>
-      {peek && !open && <div className={cn("pb-3", plain ? "pl-8" : "px-4")}>{peek}</div>}
+      {peek && !open && <div className={cn("pb-4", plain ? "pl-8" : "px-4")}>{peek}</div>}
       <AnimatePresence initial={false}>
         {open && (
           <m.div

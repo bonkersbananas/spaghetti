@@ -261,6 +261,7 @@ export function LogAttempt({
           }
           when={
             <WhenField
+              starting={!draft.outcome}
               value={when}
               onChange={(time) => {
                 setWhen(time);
