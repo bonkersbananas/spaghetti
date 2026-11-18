@@ -496,7 +496,9 @@ test("closing a sheet puts focus back on what opened it", async ({ page, isMobil
   }
   await page.keyboard.press("Escape");
   await expect(sheet).toHaveCount(0);
-  await expect(isMobile ? open : page.getByRole("button", { name: /^(Log attempt|Log another try)/ }).first()).toBeFocused();
+  await expect(
+    isMobile ? open : page.getByRole("button", { name: /^(Log attempt|Log another try)/ }).first(),
+  ).toBeFocused();
 });
 
 test("the styleguide fits a phone's width, so it doesn't widen the layout viewport", { tag: "@phone" }, async ({
