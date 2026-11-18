@@ -327,3 +327,85 @@ test("a phone with many spools starts compact, and Cards brings the big ones bac
   await expect(page.getByRole("radio", { name: "Cards" })).toBeChecked();
   await page.evaluate(() => localStorage.removeItem("sg-pantry-density"));
 });
+
+test("a filament bought on the shopping list goes to the pantry in one tap, with its colour", {
+  tag: "@phone",
+}, async ({ page }) => {
+  const headers = { Origin: origin(page) };
+  await page.goto("/shopping");
+  const field = page.getByRole("textbox", { name: "Add something to buy" });
+  for (const text of ["PLA Basic, Jade White", "0.2 mm hardened nozzle"]) {
+    await field.fill(text);
+    await field.press("Enter");
+    await expect(field).toHaveValue("");
+  }
+  for (const name of ["PLA Basic, Jade White", "0.2 mm hardened nozzle"]) {
+    await page.getByRole("checkbox", { name: `Bought: ${name}` }).click();
+  }
+  const bought = page.getByRole("list", { name: "Bought" });
+  const nozzle = bought.getByRole("listitem").filter({ hasText: "hardened nozzle" });
+  const filament = bought.getByRole("listitem").filter({ hasText: "Jade White" });
+  await expect(nozzle).toContainText("got it");
+  // Only filament offers the pantry.
+  await expect(nozzle.getByRole("button", { name: "Add to pantry" })).toHaveCount(0);
+  await filament.getByRole("button", { name: "Add to pantry" }).click();
+
+  const sheet = page.getByRole("dialog", { name: "New spool" });
+  await expect(sheet.getByRole("textbox", { name: "Color name" })).toHaveValue("Jade white");
+  await sheet.getByRole("button", { name: "Add to pantry" }).click();
+  await expect(sheet).toBeHidden();
+
+  // Once added, the row says so and doesn't offer it again.
+  await expect(filament.getByRole("button", { name: "Add to pantry" })).toHaveCount(0);
+  await expect(filament.getByRole("link", { name: "In the pantry" })).toBeVisible();
+  // The mark is the list's own (the other person sees it too): it survives a reload and a cleared device.
+  await page.evaluate(() => localStorage.clear());
+  await page.reload();
+  await expect(
+    page
+      .getByRole("list", { name: "Bought" })
+      .getByRole("listitem")
+      .filter({ hasText: "Jade White" })
+      .getByRole("link", { name: "In the pantry" }),
+  ).toBeVisible();
+  await expect
+    .poll(async () =>
+      (await (await page.request.get("/api/spools")).json()).spools.map(
+        (s: { material: string; finish: string | null; colorName: string }) => [s.material, s.finish, s.colorName],
+      ),
+    )
+    .toEqual([["PLA", "basic", "Jade white"]]);
+
+  const { shoppingItems } = await (await page.request.get("/api/shopping-items")).json();
+  for (const item of shoppingItems) await page.request.delete(`/api/shopping-items/${item.id}`, { headers });
+});
+
+test("filling the AMS: the colour picked is the colour saved, and the next slot is one tap", { tag: "@phone" }, async ({
+  page,
+}) => {
+  await page.goto("/pantry");
+  await page.getByRole("button", { name: "Add a spool" }).click();
+  let sheet = page.getByRole("dialog", { name: "New spool" });
+  await sheet.getByRole("radio", { name: "Jade white" }).click();
+  await expect(sheet.getByRole("textbox", { name: "Color name" })).toHaveValue("Jade white");
+  // A product sold in a colour brings it.
+  await sheet.getByRole("button", { name: "Bambu Lab PLA Basic · Black" }).click();
+  await expect(sheet.getByRole("textbox", { name: "Color name" })).toHaveValue("Black");
+  await sheet.getByRole("button", { name: "Add to pantry" }).click();
+  await expect(sheet).toBeHidden();
+
+  // From an empty slot: the button names the slot.
+  await page.getByRole("button", { name: /^A1 Empty/ }).click();
+  await page.getByRole("dialog", { name: "Slot A1" }).getByRole("button", { name: "New spool" }).click();
+  sheet = page.getByRole("dialog", { name: "New spool" });
+  await sheet.getByRole("button", { name: "Bambu Lab PLA Basic · Jade white" }).click();
+  await sheet.getByRole("button", { name: "Add to A1" }).click();
+  await expect(sheet).toBeHidden();
+  await expect(page.getByRole("button", { name: /^A1 Jade white/ })).toBeVisible();
+
+  // One tap on to the next slot.
+  await page.getByRole("button", { name: "Next slot, A2" }).click();
+  await expect(
+    page.getByRole("dialog", { name: "New spool" }).getByRole("button", { name: "Add to A2" }),
+  ).toBeVisible();
+});

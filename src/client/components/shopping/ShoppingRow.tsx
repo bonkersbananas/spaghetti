@@ -1,17 +1,28 @@
 import type { Person, ShoppingItem } from "@shared/api";
 import { priceSearchUrl, shoppingName, tidyPageTitle } from "@shared/shopping";
+import { filamentFromName } from "@shared/shopping-filament";
 import { inlineTime } from "@shared/time";
-import { useQuery } from "@tanstack/react-query";
-import { type ReactNode, useEffect, useRef, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { Link } from "@tanstack/react-router";
+import { lazy, type ReactNode, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { Avatar } from "@/components/ui/Avatar";
+import { Button } from "@/components/ui/Button";
 import { ChecklistRow, TickBox } from "@/components/ui/Checklist";
 import { Chip } from "@/components/ui/Chip";
-import { PriceIcon } from "@/components/ui/icons";
+import { PantryIcon, PriceIcon } from "@/components/ui/icons";
 import { LinkChip } from "@/components/ui/LinkChip";
 import { PriceLine } from "@/components/ui/Prices";
 import { Thumb } from "@/components/ui/Thumb";
 import { cn } from "@/lib/cn";
+import { spoolsQuery } from "@/lib/pantry-queries";
 import { linkPreviewQuery } from "@/lib/queries";
+import { canEdit } from "@/lib/read-only";
+import { keepInPantry } from "@/lib/shopping";
+
+// Its code loads with the first tap on "Add to pantry", not with the list.
+const AddSpoolSheet = lazy(() =>
+  import("@/components/pantry/AddSpoolSheet").then((m) => ({ default: m.AddSpoolSheet })),
+);
 
 /** How long a ticked row stays where it was before it moves to Bought. */
 const TICK_PAUSE = 450;
@@ -54,6 +65,14 @@ interface ShoppingRowProps {
 export function ShoppingRow({ item, boughtBy, onTick, onOpen, readOnly, handle, lifted, last }: ShoppingRowProps) {
   const name = useShoppingName(item);
   const bought = item.boughtAt !== null;
+  // A bought spool of filament offers the pantry: the sheet opens with what its name says.
+  const filament = useMemo(() => (bought ? filamentFromName(name) : null), [bought, name]);
+  const queryClient = useQueryClient();
+  // The spool it became, for both people (the server drops it once the spool is gone; here it goes at once).
+  const { data: spools } = useQuery({ ...spoolsQuery, enabled: !!item.spoolId });
+  const inPantry =
+    item.spoolId && (!spools || spools.some((spool) => spool.id === item.spoolId)) ? item.spoolId : undefined;
+  const [adding, setAdding] = useState(false);
   // A tick shows at once and the row stays a beat, so the check is seen landing before it moves to Bought.
   const [ticking, setTicking] = useState(false);
   const pause = useRef<number | null>(null);
@@ -130,12 +149,37 @@ export function ShoppingRow({ item, boughtBy, onTick, onOpen, readOnly, handle, 
       meta={
         bought ? (
           // Right under the name: a line of words, not a row of chips.
-          <span className="text-small text-ink-faint -mt-1.5 inline-flex items-center gap-1.5">
-            {boughtBy && <Avatar person={boughtBy} size="xs" decorative />}
-            <span>
-              {boughtBy ? `${boughtBy.name.split(" ")[0]} got it` : "Got it"}{" "}
-              {item.boughtAt && inlineTime(item.boughtAt)}
+          <span className="text-small text-ink-faint -mt-1.5 inline-flex flex-wrap items-center gap-x-3 gap-y-0.5">
+            <span className="inline-flex items-center gap-1.5">
+              {boughtBy && <Avatar person={boughtBy} size="xs" decorative />}
+              <span>
+                {boughtBy ? `${boughtBy.name.split(" ")[0]} got it` : "Got it"}{" "}
+                {item.boughtAt && inlineTime(item.boughtAt)}
+              </span>
             </span>
+            {filament &&
+              (inPantry ? (
+                <Link
+                  to="/pantry/$spoolId"
+                  params={{ spoolId: inPantry }}
+                  className="focus-ring touch-target hover:text-ink decoration-ink/25 relative inline-flex items-center gap-1 rounded-xs underline underline-offset-4"
+                >
+                  <PantryIcon size={14} aria-hidden />
+                  In the pantry
+                </Link>
+              ) : (
+                !readOnly && (
+                  <Button
+                    variant="quiet"
+                    size="sm"
+                    icon={PantryIcon}
+                    onClick={() => canEdit() && setAdding(true)}
+                    className="touch-target relative -ml-2.5"
+                  >
+                    Add to pantry
+                  </Button>
+                )
+              ))}
           </span>
         ) : item.link || item.priceLink || matched ? (
           links
@@ -154,6 +198,24 @@ export function ShoppingRow({ item, boughtBy, onTick, onOpen, readOnly, handle, 
       >
         {name}
       </button>
+      {adding && filament && (
+        <Suspense fallback={null}>
+          <AddSpoolSheet
+            open
+            onOpenChange={(open) => !open && setAdding(false)}
+            initial={{
+              material: filament.material,
+              brand: filament.brand,
+              finish: filament.finish,
+              colorName: filament.colorName,
+              colorHex: filament.colorHex,
+            }}
+            description={`From the list: ${name}.`}
+            stayPut
+            onAdded={(spool, saved) => void keepInPantry(queryClient, item, spool.id, saved)}
+          />
+        </Suspense>
+      )}
     </ChecklistRow>
   );
 }

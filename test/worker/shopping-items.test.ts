@@ -163,4 +163,23 @@ describe("/api/shopping-items", () => {
     expect(restored.status).toBe(200);
     expect((await list()).map((item) => item.id)).toEqual([b.id, a.id]);
   });
+
+  it("remembers the spool a bought thing became, for both people, until the spool is taken out", async () => {
+    const thing = await add({ name: "PLA Basic, Jade White" });
+    const spoolId = crypto.randomUUID();
+    await request("/api/spools", { method: "POST", cookie, json: { id: spoolId, material: "PLA" } });
+
+    // A spool that isn't there is refused.
+    expect((await patch(thing.id, { spoolId: crypto.randomUUID() })).status).toBe(400);
+    expect((await patch(thing.id, { spoolId })).status).toBe(200);
+    const seenBySam = (
+      await (await request("/api/shopping-items", { cookie: samCookie })).json<ShoppingItemsResponse>()
+    ).shoppingItems;
+    expect(seenBySam.find((item) => item.id === thing.id)?.spoolId).toBe(spoolId);
+
+    await request(`/api/spools/${spoolId}`, { method: "DELETE", cookie });
+    expect((await list()).find((item) => item.id === thing.id)?.spoolId).toBeNull();
+    await request(`/api/spools/${spoolId}/restore`, { method: "POST", cookie });
+    expect((await list()).find((item) => item.id === thing.id)?.spoolId).toBe(spoolId);
+  });
 });

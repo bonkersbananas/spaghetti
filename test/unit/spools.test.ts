@@ -3,12 +3,14 @@ import { type BridgeStatus, bridgeLine } from "../../src/shared/bridge.ts";
 import {
   colorDistance,
   colorTone,
+  colourNameOf,
   DEFAULT_PRINTER,
   filamentFromSpool,
   matchFilaments,
   matchSpool,
   materialKey,
   nearestColorName,
+  nextEmptySlot,
   type PrinterSetup,
   printerHints,
   type SpoolLike,
@@ -247,5 +249,26 @@ describe("the Printer page's bridge line", () => {
       state: "quiet",
       text: "Printer bridge last heard 2 h ago.",
     });
+  });
+});
+
+describe("colourNameOf", () => {
+  it("names a quick colour as it is called, not by its nearest plain name", () => {
+    expect(nearestColorName("#f4f1ea")).toBe("White");
+    expect(colourNameOf("#f4f1ea")).toBe("Jade white");
+    expect(colourNameOf("#F4F1EA")).toBe("Jade white");
+    expect(colourNameOf("#c12e1f")).toBe("Red");
+    expect(colourNameOf("#010101")).toBe("Black");
+  });
+});
+
+describe("nextEmptySlot", () => {
+  it("goes on to the next empty slot, and stops after the last", () => {
+    expect(nextEmptySlot("A1", { A1: "x" }, 1)).toBe("A2");
+    expect(nextEmptySlot("A1", { A1: "x", A2: "y" }, 1)).toBe("A3");
+    expect(nextEmptySlot("A3", { A3: "x", A4: "y" }, 1)).toBeNull();
+    expect(nextEmptySlot("A4", { A4: "x" }, 2)).toBe("B1");
+    expect(nextEmptySlot("A4", { A4: "x" }, 1)).toBeNull();
+    expect(nextEmptySlot("Ext", {}, 1)).toBeNull();
   });
 });

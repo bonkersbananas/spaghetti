@@ -15,6 +15,8 @@ export interface Product {
   finish?: string;
   /** How many colours one spool carries: 1 (the default), or 2 and 3 for the co-extruded silks. */
   colours?: 2 | 3;
+  /** The colour of a product that is sold in one ("Jade white"); otherwise the colour is picked. */
+  colour?: { name: string; hex: string };
   /** The maker's printing range in °C. */
   nozzle: readonly [number, number];
   /** The maker's bed range in °C. */
@@ -23,6 +25,24 @@ export interface Product {
 
 export const PRODUCTS: readonly Product[] = [
   { id: "bambu-basic", brand: "Bambu Lab", material: "PLA", finish: "basic", nozzle: [190, 230], bed: [35, 45] },
+  {
+    id: "bambu-basic-jade-white",
+    brand: "Bambu Lab",
+    material: "PLA",
+    finish: "basic",
+    colour: { name: "Jade white", hex: "#f4f1ea" },
+    nozzle: [190, 230],
+    bed: [35, 45],
+  },
+  {
+    id: "bambu-basic-black",
+    brand: "Bambu Lab",
+    material: "PLA",
+    finish: "basic",
+    colour: { name: "Black", hex: "#1d1d1f" },
+    nozzle: [190, 230],
+    bed: [35, 45],
+  },
   { id: "bambu-matte", brand: "Bambu Lab", material: "PLA", finish: "matte", nozzle: [190, 230], bed: [35, 45] },
   { id: "bambu-silk-plus", brand: "Bambu Lab", material: "PLA", finish: "silk+", nozzle: [210, 240], bed: [35, 45] },
   { id: "bambu-pure", brand: "Bambu Lab", material: "PLA", finish: "pure", nozzle: [190, 230], bed: [35, 45] },
@@ -74,6 +94,26 @@ export function productOf(spool: Pick<SpoolLike, "brand" | "line" | "material" |
   );
 }
 
+/** Is this spool that product: its fields, and its colour when the product comes in one. */
+export function isProduct(
+  spool: Pick<SpoolLike, "brand" | "line" | "material" | "finish" | "colorHex">,
+  product: Product,
+): boolean {
+  const match = productOf(spool);
+  if (!match || match.brand !== product.brand || match.line !== product.line || match.material !== product.material) {
+    return false;
+  }
+  if (match.finish !== product.finish) return false;
+  return !product.colour || (spool.colorHex ?? "").toLowerCase() === product.colour.hex;
+}
+
+/** The product a spool is, the colour counted: "PLA Basic · Jade white" before plain "PLA Basic". */
+export function pickedProduct(
+  spool: Pick<SpoolLike, "brand" | "line" | "material" | "finish" | "colorHex">,
+): Product | undefined {
+  return PRODUCTS.find((product) => product.colour && isProduct(spool, product)) ?? productOf(spool);
+}
+
 /** What a product is called on its chip: "Bambu Lab PLA Silk+", "Polymaker PolyTerra PLA", "SUNLU PLA+ Silk (3 colours)". */
 export function productName(product: Product): string {
   const words = [
@@ -83,12 +123,14 @@ export function productName(product: Product): string {
     product.finish ? finishLabel(product.finish) : null,
     product.colours === 2 ? "dual colour" : product.colours === 3 ? "tri-colour" : null,
   ];
-  return words.filter(Boolean).join(" ");
+  const kind = words.filter(Boolean).join(" ");
+  return product.colour ? `${kind} · ${product.colour.name}` : kind;
 }
 
 /** The spool fields a product fills in. */
 export function spoolFieldsOf(product: Product) {
   return {
+    ...(product.colour ? { colorName: product.colour.name, colorHex: product.colour.hex, colors: null } : {}),
     material: product.material,
     brand: product.brand,
     line: product.line ?? null,

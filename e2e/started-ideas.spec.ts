@@ -24,6 +24,15 @@ async function makeIdea(page: Page, title: string) {
   return id;
 }
 
+/** "New build" (or the empty page's button) opens the picker; "From scratch" there opens a blank build. */
+async function startFromScratch(page: Page) {
+  await page
+    .getByRole("button", { name: /^(New build|Pick an idea to print)$/ })
+    .first()
+    .click();
+  await page.getByRole("dialog").getByRole("button", { name: "From scratch" }).click();
+}
+
 /** A promise to wait on and the function that settles it. */
 function signal() {
   let resolve = () => {};
@@ -151,10 +160,7 @@ test("Recently deleted lists what was deleted, and Restore brings it back", asyn
 test("a new build left empty removes itself without a toast, and isn't listed as deleted", async ({ page }) => {
   await page.goto("/builds");
   await expect(page.getByRole("heading", { level: 1, name: "Builds" })).toBeVisible();
-  await page
-    .getByRole("button", { name: /^(New build|Start a build)$/ })
-    .first()
-    .click();
+  await startFromScratch(page);
   await expect(page).toHaveURL(/\/builds\/[0-9a-f-]+/);
   await expect(page.getByRole("textbox", { name: "Title" })).toBeVisible();
   const id = new URL(page.url()).pathname.split("/").pop() as string;
@@ -171,10 +177,7 @@ test("a new build left empty removes itself without a toast, and isn't listed as
 
 test("a new build with a title is kept", async ({ page }) => {
   await page.goto("/builds");
-  await page
-    .getByRole("button", { name: /^(New build|Start a build)$/ })
-    .first()
-    .click();
+  await startFromScratch(page);
   await expect(page).toHaveURL(/\/builds\/[0-9a-f-]+/);
   const title = page.getByRole("textbox", { name: "Title" });
   await title.fill("Spool holder");
@@ -188,10 +191,7 @@ test("a new build with a title is kept", async ({ page }) => {
 
 test("a title typed just before leaving a new build is not lost", async ({ page }) => {
   await page.goto("/builds");
-  await page
-    .getByRole("button", { name: /^(New build|Start a build)$/ })
-    .first()
-    .click();
+  await startFromScratch(page);
   // The new build's page has opened (its id is in the address) before anything is typed or read from it.
   await expect(page).toHaveURL(/\/builds\/[0-9a-f-]{36}/);
   const title = page.getByRole("textbox", { name: "Title" });

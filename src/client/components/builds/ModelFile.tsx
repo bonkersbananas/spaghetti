@@ -1,6 +1,7 @@
 import { fileUrl } from "@shared/api";
 import type { AttemptSettings } from "@shared/attempts";
 import { isStlName, slicedName } from "@shared/slicing/files.ts";
+import { materialMismatch } from "@shared/slicing/material.ts";
 import { changeWords, modelSlicing, slicingAhead, slicingOfSlice } from "@shared/slicing/model.ts";
 import { workshopDefaults } from "@shared/slicing/pantry.ts";
 import { recipesFor } from "@shared/slicing/recipe.ts";
@@ -51,8 +52,9 @@ import { Skeleton } from "@/components/ui/Skeleton";
 import { toast } from "@/components/ui/Toast";
 import { type UploadState, useUpload } from "@/lib/big-upload";
 import { cn } from "@/lib/cn";
+import { siteName } from "@/lib/drafts";
 import { shortcutCaps, useHotkeys } from "@/lib/hotkeys";
-import type { AttemptFileView } from "@/lib/items";
+import { type AttemptFileView, itemQuery } from "@/lib/items";
 import { printerQuery, spoolsQuery } from "@/lib/pantry-queries";
 import { fileThumbSrc } from "@/lib/previews";
 import { recipesQuery } from "@/lib/recipes-query";
@@ -366,6 +368,8 @@ export interface ModelActions {
    * size says so, with the way to slice for this one.
    */
   mainNozzle?: number;
+  /** The page of the model names another material than the slice uses ("The page says PETG; A1 holds PLA."). */
+  materialNote?: { site: string; page: string; material: string } | null;
   /** The nozzle size was the model's own pick: the way back is Undo, or More's Nozzle, not a button of its own. */
   nozzlePicked?: boolean;
 }
@@ -381,6 +385,7 @@ export function ModelStatus({
   onStop,
   settings,
   mainNozzle,
+  materialNote,
   nozzlePicked,
 }: ModelActions & {
   state: ModelState;
@@ -403,6 +408,7 @@ export function ModelStatus({
     onUndo,
     onStop,
     mainNozzle,
+    materialNote,
     nozzlePicked,
   });
   // The lines change with the state; the actions keep their places. What helps (the filled buttons) sits above the
@@ -433,6 +439,7 @@ function statusOf(
     onUndo,
     onStop,
     mainNozzle,
+    materialNote,
     nozzlePicked,
   }: Omit<ModelActions, "settings"> & {
     phone: boolean;
@@ -542,6 +549,12 @@ function statusOf(
             {standIn && <span className="text-small text-ink-soft">{standIn}</span>}
             {floating && <Caution className="px-0">Parts of it float in the air.</Caution>}
             {elsewhere && <Caution className="px-0">{elsewhere}</Caution>}
+            {materialNote && !again && !quiet && (
+              <span className="text-small text-ink-soft">
+                {materialNote.site} says <b className="text-ink font-semibold">{materialNote.page}</b>; this is sliced
+                with <b className="text-ink font-semibold">{materialNote.material}</b>.
+              </span>
+            )}
           </>
         ),
         primary: (
@@ -837,6 +850,10 @@ export default function ModelFileCard({
   // Recipes to slice with, once the settings can open (decision 0051).
   const { data: recipes = [] } = useQuery({ ...recipesQuery, enabled: !!owner });
   const setup = printer?.setup ?? DEFAULT_PRINTER;
+  // The page this model came from may name a material the slice doesn't use. Only an idea's or build's own files:
+  // an attempt's file has the slice it was printed with, and a twist's has no page.
+  const pageItemId = owner && !owner.twistId && owner.attemptId === null ? owner.itemId : undefined;
+  const { data: pageItem } = useQuery({ ...itemQuery(pageItemId ?? ""), enabled: !!pageItemId });
   const defaults = useMemo(() => workshopDefaults({ spools, setup }), [spools, setup]);
   const upload = useUpload(file.id);
   const state = modelState(file, job, change, upload);
@@ -844,6 +861,17 @@ export default function ModelFileCard({
   const kept = modelSlicing(file, defaults);
   const settings = job && Object.keys(job.chosen).length ? slicingFor(job.chosen, kept) : kept;
   const target = owner && !file.pending ? owner : undefined;
+  const mismatch =
+    file.slice?.status === "sliced"
+      ? materialMismatch(pageItem?.draft?.findings?.material, slicingOfSlice(file.slice).filaments)
+      : null;
+  const materialNote = mismatch
+    ? {
+        site: pageItem?.draft ? siteName(pageItem.draft) : "The model's page",
+        page: mismatch.page,
+        material: mismatch.material,
+      }
+    : null;
   useWarmSoon(() => (target ? loadSettings() : Promise.resolve()));
   // Ordered for the filament it has when they arrive, and kept so: picking a recipe for another filament doesn't
   // move its chip to the front under the finger.
@@ -997,6 +1025,7 @@ export default function ModelFileCard({
       raised={raised}
       className={className}
       mainNozzle={setup.nozzles.main.diameter}
+      materialNote={materialNote}
       nozzlePicked={!!settings.nozzlePicked}
       {...actions}
     />
