@@ -87,10 +87,14 @@ export function StartBuildSheet({ open, onOpenChange, onFromScratch }: StartBuil
   const noIdeas = ideas.length === 0;
   const showModel = step === "model" || noIdeas;
 
-  // Keep the ringed tile in view while the arrow keys move it.
+  // Keep the ringed tile in view while the arrow keys move it (not when the pointer or fresh data does: the list stays where it was scrolled).
+  const byKey = useRef(false);
+  const activeKey = active?.id;
   useEffect(() => {
-    if (active) list.current?.querySelector(`[data-tile="${active.id}"]`)?.scrollIntoView({ block: "nearest" });
-  }, [active]);
+    if (!activeKey || !byKey.current) return;
+    byKey.current = false;
+    list.current?.querySelector(`[data-tile="${activeKey}"]`)?.scrollIntoView({ block: "nearest" });
+  }, [activeKey]);
 
   function close(next: boolean) {
     onOpenChange(next);
@@ -150,6 +154,7 @@ export function StartBuildSheet({ open, onOpenChange, onFromScratch }: StartBuil
       if (event.target instanceof HTMLInputElement && event.target.value) return;
     }
     event.preventDefault();
+    byKey.current = true;
     const index = flat.indexOf(active);
     if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
       const next = flat[Math.min(flat.length - 1, Math.max(0, index + (event.key === "ArrowRight" ? 1 : -1)))];
