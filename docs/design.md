@@ -420,6 +420,7 @@ A short thread on every idea and build ("Talk it over", `components/comments/`, 
 - **Before typing:** recent searches on this device and the tags and materials used most, wrapped (not scrolled) so they are all in view, tags and materials as separate groups, under a one-line hint of what the search covers (no illustration or headline: it must not read as "no results"). Filter chips (outcome, material, tag, person) narrow results, and work without words too.
 - **Keyboard:** `/` focuses the box from anywhere, arrow keys move through results, `Enter` opens. On phones the Search tab opens with the keyboard up.
 - **Index:** the FTS5 table (`migrations/0003_search.sql`) is kept by triggers; `0031_search_settings_coach` redefines the attempt view (settings numbers, coach suggestions) and adds the coach triggers. `pnpm db:export` replays the index migrations after the data.
+- **Lately:** under the suggestions, a strip of the builds touched most recently (`components/search/Lately.tsx`, lazy so Search's first load doesn't grow): `MiniCard`s with how the last print went, a phone's row scrolling, a desktop's one row of three, and one small pasta line under the heading. It is there so the screen's lower half is never empty of prints; nothing until there is a build with an attempt.
 
 ## What worked last time
 
