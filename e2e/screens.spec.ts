@@ -184,7 +184,7 @@ test("the main screens and their sheets open", async ({ page, isMobile }) => {
   await page.goto(`/builds/${data.buildId}`);
   await expect(page.getByRole("textbox", { name: "Title" })).toHaveValue("Cable chain");
   await page
-    .getByRole("button", { name: /^Log attempt/ })
+    .getByRole("button", { name: /^(Log attempt|Log another try)/ })
     .first()
     .click();
   await expect(page.getByRole("dialog", { name: "Attempt 3" })).toBeVisible();
@@ -411,7 +411,7 @@ test("keyboard focus is visible in the sheets and menus", async ({ page, isMobil
   await page.goto(`/builds/${data.buildId}`);
   await expect(page.getByRole("textbox", { name: "Title" })).toHaveValue("Cable chain");
   await page
-    .getByRole("button", { name: /^Log attempt/ })
+    .getByRole("button", { name: /^(Log attempt|Log another try)/ })
     .first()
     .click();
   await expect(page.getByRole("dialog", { name: "Attempt 3" })).toBeVisible();
@@ -438,7 +438,7 @@ test("fields are 16 px or larger on phones, so iOS Safari doesn't zoom in", asyn
   await expect(page.getByRole("textbox", { name: "Title" })).toHaveValue("Cable chain");
   expect(await small()).toEqual([]);
   await page
-    .getByRole("button", { name: /^Log attempt/ })
+    .getByRole("button", { name: /^(Log attempt|Log another try)/ })
     .first()
     .click();
   const sheet = page.getByRole("dialog", { name: "Attempt 3" });
@@ -479,7 +479,7 @@ test("a phone sheet keeps its main button above the on-screen keyboard", async (
 test("closing a sheet puts focus back on what opened it", async ({ page, isMobile }) => {
   await page.goto(`/builds/${data.buildId}`);
   await expect(page.getByRole("textbox", { name: "Title" })).toHaveValue("Cable chain");
-  const open = page.getByRole("button", { name: /^Log attempt/ }).first();
+  const open = page.getByRole("button", { name: /^(Log attempt|Log another try)/ }).first();
   await open.focus();
   await page.keyboard.press("Enter");
   const sheet = page.getByRole("dialog", { name: "Attempt 3" });
@@ -496,7 +496,7 @@ test("closing a sheet puts focus back on what opened it", async ({ page, isMobil
   }
   await page.keyboard.press("Escape");
   await expect(sheet).toHaveCount(0);
-  await expect(isMobile ? open : page.getByRole("button", { name: /^Log attempt/ }).first()).toBeFocused();
+  await expect(isMobile ? open : page.getByRole("button", { name: /^(Log attempt|Log another try)/ }).first()).toBeFocused();
 });
 
 test("the styleguide fits a phone's width, so it doesn't widen the layout viewport", { tag: "@phone" }, async ({

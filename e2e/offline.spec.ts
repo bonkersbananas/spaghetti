@@ -160,7 +160,7 @@ test("shows a build and the inbox as last seen with no connection, read-only, an
   await expect(page.getByRole("button", { name: "Finish build" })).toBeDisabled();
   await expect(page.getByRole("button", { name: /^(Delete|Scrap) build$/ })).toBeDisabled();
   // Logging an attempt still works.
-  await expect(page.getByRole("button", { name: "Log attempt" })).toBeEnabled();
+  await expect(page.getByRole("button", { name: /^(Log attempt|Log another try)$/ })).toBeEnabled();
 
   // Reloaded offline again: the failed refetch must not have wiped what was kept.
   // (The refetch retries once after a second, and the copy is written at most once a second.)
