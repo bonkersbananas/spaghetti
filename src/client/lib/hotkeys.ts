@@ -9,6 +9,40 @@ export function isTyping(target: EventTarget | null): boolean {
   return target.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName);
 }
 
+/**
+ * When a text field last lost the focus to nothing (it was removed, or switched to read-only): the letters still
+ * arriving a moment later were typed into it, and are not shortcuts.
+ */
+let lostTypingAt = -Infinity;
+/** The last printable key pressed inside a text field: a field that vanishes while someone is typing in it. */
+let typedAt = -Infinity;
+const JUST_LOST_MS = 1000;
+if (typeof window !== "undefined") {
+  window.addEventListener(
+    "keydown",
+    (event) => {
+      if (isTyping(event.target) && event.key.length === 1 && !event.metaKey && !event.ctrlKey)
+        typedAt = performance.now();
+    },
+    true,
+  );
+  window.addEventListener("focusout", (event) => {
+    const field = event.target;
+    if (!isTyping(field) || (event as FocusEvent).relatedTarget) return;
+    // Only a field that was taken away (removed, or made read-only) counts: leaving one on purpose (Enter, Escape,
+    // a click on empty space) must not swallow the shortcut pressed next.
+    setTimeout(() => {
+      const el = field as HTMLInputElement;
+      // Only while words were arriving: a sheet closed with its field focused, long after the last key, is not it.
+      const typing = performance.now() - typedAt < 1500;
+      if (typing && (!el.isConnected || el.readOnly || el.disabled)) lostTypingAt = performance.now();
+    }, 0);
+  });
+}
+/** A key that arrives just after the field being typed in vanished, with nowhere to go. */
+const justLostTyping = (target: EventTarget | null) =>
+  (target === document.body || target === null) && performance.now() - lostTypingAt < JUST_LOST_MS;
+
 /** Whether the person is on a Mac, for ⌘ against Ctrl. */
 export const isMac = typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform);
 
@@ -70,7 +104,7 @@ export function useHotkeys(handlers: HotkeyHandlers) {
       const key = comboOf(event);
       if (event.defaultPrevented || key === null || document.querySelector("[role=dialog]")) return;
       const modified = key.startsWith("mod+");
-      if (!modified && isTyping(event.target)) return;
+      if (!modified && (isTyping(event.target) || justLostTyping(event.target))) return;
       // ⌘/Ctrl+Backspace in a field deletes a word, and must not delete an idea.
       if (modified && isTyping(event.target) && (key === "mod+backspace" || key === "mod+delete")) return;
       const map = bound();

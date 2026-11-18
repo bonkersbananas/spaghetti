@@ -12,6 +12,7 @@ import { MetaList } from "@/components/ui/MetaList";
 import { useForLine, useOtherPerson } from "@/lib/for-whom";
 import type { AttemptView, ItemView } from "@/lib/items";
 import { spring } from "@/lib/motion";
+import { useKeepEditing } from "@/lib/read-only";
 
 interface BuildTitleLineProps {
   item: ItemView;
@@ -44,7 +45,10 @@ export function BuildTitleLine({
   const other = useOtherPerson();
   const forLine = useForLine();
   const [asking, setAsking] = useState(false);
+  // Offline, the line being typed in stays editable (it waits to be saved); the others are read-only.
+  const keep = useKeepEditing(readOnly);
   const locked = readOnly || item.pending;
+  const fieldLocked = keep.readOnly || item.pending;
   const count = item.attempts.length;
   const attempts = count ? `${count} ${count === 1 ? "attempt" : "attempts"}` : "";
   const ended = item.stage !== "building" && item.finishedAt;
@@ -55,7 +59,9 @@ export function BuildTitleLine({
         aria-label="For"
         value={forWhom}
         onChange={(event) => setForWhom(event.target.value)}
-        readOnly={locked}
+        readOnly={fieldLocked}
+        onFocus={keep.onFocus}
+        onBlur={keep.onBlur}
         asking={asking}
         you={forLine(forWhom) === "for you"}
         onOpen={() => setAsking(true)}

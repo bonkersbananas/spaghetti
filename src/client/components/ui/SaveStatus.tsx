@@ -3,12 +3,13 @@ import { cn } from "@/lib/cn";
 import { duration } from "@/lib/motion";
 import { CheckIcon, WarningIcon } from "./icons";
 
-export type SaveState = "idle" | "saving" | "saved" | "error";
+export type SaveState = "idle" | "saving" | "saved" | "error" | "waiting";
 
 const labels: Record<Exclude<SaveState, "idle">, string> = {
   saving: "Saving…",
   saved: "Saved",
   error: "Not saved yet, retrying",
+  waiting: "Saves when online",
 };
 
 /**
@@ -29,7 +30,7 @@ export function SaveStatus({ state, className }: { state: SaveState; className?:
             className={cn(
               "inline-flex items-center gap-1",
               state === "saved" && "text-basil-ink",
-              state === "saving" && "text-ink-faint",
+              (state === "saving" || state === "waiting") && "text-ink-faint",
               state === "error" && "text-tomato-ink",
             )}
           >

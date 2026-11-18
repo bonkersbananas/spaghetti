@@ -46,7 +46,7 @@ import { spoolsQuery } from "@/lib/pantry-queries";
 import { photoSrc } from "@/lib/previews";
 import { keepOrigin } from "@/lib/previous-path";
 import { peopleQuery, sessionQuery } from "@/lib/queries";
-import { canEdit, useReadOnly } from "@/lib/read-only";
+import { canEdit, useKeepEditing, useReadOnly } from "@/lib/read-only";
 import { itemName, useRememberItem } from "@/lib/recent";
 import { recipesQuery } from "@/lib/recipes-query";
 import { SLICER_ACCEPT, useSlicerDropTarget } from "@/lib/slicer-drop";
@@ -146,6 +146,7 @@ const Idea = memo(function Idea({ item }: { item: ItemView }) {
   const via = useVia()(item.createdVia);
 
   const { title, setTitle, note, setNote, forWhom, setForWhom, saveState } = useItemFields(item);
+  const titleKeep = useKeepEditing(readOnly);
 
   // A draft that lands while this idea is open says so once, with a way to take it back (here or from the other phone).
   const draftStatus = useRef(item.draft?.status);
@@ -276,8 +277,8 @@ const Idea = memo(function Idea({ item }: { item: ItemView }) {
       : undefined;
   };
   useHotkeys({
-    ideaUpNext:
-      canEdit(item.pending) && !item.pending ? () => setUpNext(queryClient, item, item.upNext === null) : undefined,
+    // Asked when the key is pressed, not when the page draws: drawing offline toasted "Waiting for the connection".
+    ideaUpNext: item.pending ? undefined : () => canEdit() && setUpNext(queryClient, item, item.upNext === null),
     ideaNext: neighbour(1),
     ideaPrevious: neighbour(-1),
     ideaBack: backTo.go,
@@ -396,7 +397,9 @@ const Idea = memo(function Idea({ item }: { item: ItemView }) {
                 placeholder={naming ? "Naming…" : "Untitled idea"}
                 minRows={1}
                 maxLength={200}
-                readOnly={readOnly}
+                readOnly={titleKeep.readOnly}
+                onFocus={titleKeep.onFocus}
+                onBlur={titleKeep.onBlur}
                 value={title}
                 className={named && untitled ? "sg-arrive" : undefined}
                 onChange={(event) => setTitle(event.target.value.replace(/\n/g, " "))}
