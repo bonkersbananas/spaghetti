@@ -127,6 +127,39 @@ export function CaptureSheet() {
   const placeCaret = useCallback((note: HTMLTextAreaElement | null) => {
     if (note && caretAtEnd.current) note.setSelectionRange(note.value.length, note.value.length);
   }, []);
+  // On a phone the note takes focus (and raises the keyboard) once the sheet has finished sliding up, so nothing
+  // jumps under the thumb; on a laptop it autofocuses at once. A control tapped meanwhile keeps the focus.
+  // Once it is typing, the two photo tiles shrink to a slim row so the note stays in view above a keyboard; it stays
+  // that way until the sheet closes, so a tap on Camera is never moved by the keyboard going down.
+  const [typing, setTyping] = useState(false);
+  useEffect(() => {
+    if (!open) setTyping(false);
+  }, [open]);
+  useEffect(() => {
+    if (!open || isDesktop) return;
+    let timer = 0;
+    let sheet: Element | null | undefined;
+    const focusNote = () => {
+      clearTimeout(timer);
+      sheet?.removeEventListener("transitionend", onEnd);
+      const note = document.querySelector<HTMLTextAreaElement>("[data-capture] textarea");
+      const held = document.activeElement;
+      if (note && (!held || held === document.body || held === sheet)) note.focus({ preventScroll: true });
+    };
+    const onEnd = (event: Event) => {
+      if (event.target === sheet && (event as TransitionEvent).propertyName === "transform") focusNote();
+    };
+    const frame = requestAnimationFrame(() => {
+      sheet = document.querySelector("[data-capture]")?.closest("[role=dialog]");
+      sheet?.addEventListener("transitionend", onEnd);
+      timer = window.setTimeout(focusNote, 600);
+    });
+    return () => {
+      cancelAnimationFrame(frame);
+      clearTimeout(timer);
+      sheet?.removeEventListener("transitionend", onEnd);
+    };
+  }, [open, isDesktop]);
   const target: Target = asIdea ? { kind: "idea" } : auto;
   // The answer picked for this print, kept in the capture's draft (closing the sheet doesn't lose it).
   const mine = target.kind === "attempt" && printDraft?.attemptId === target.attemptId ? printDraft : null;
@@ -296,8 +329,8 @@ export function CaptureSheet() {
           <AddPhotoTile icon={ImageIcon} label="Drop, paste or choose photos" onClick={library.open} />
         ) : (
           <div className="grid grid-cols-2 gap-3">
-            <AddPhotoTile icon={CameraIcon} label="Take photo" onClick={camera.open} />
-            <AddPhotoTile icon={ImageIcon} label="From library" onClick={library.open} />
+            <AddPhotoTile icon={CameraIcon} label="Take photo" size={typing ? "row" : "lg"} onClick={camera.open} />
+            <AddPhotoTile icon={ImageIcon} label="From library" size={typing ? "row" : "lg"} onClick={library.open} />
           </div>
         )}
         <TextArea
@@ -310,12 +343,15 @@ export function CaptureSheet() {
                 ? "A line about the print: how it looks, what you noticed…"
                 : "A note to add: a measurement, a link, what to try…"
           }
-          minRows={isDesktop ? 4 : 3}
+          minRows={isDesktop ? 4 : typing ? 2 : 3}
           value={draft}
           onChange={(event) => setDraft(event.target.value)}
           ref={placeCaret}
           autoFocus={isDesktop}
-          onFocus={(event) => placeCaret(event.currentTarget)}
+          onFocus={(event) => {
+            placeCaret(event.currentTarget);
+            if (!isDesktop) setTyping(true);
+          }}
           onPointerDown={() => {
             caretAtEnd.current = false;
           }}
