@@ -336,14 +336,15 @@ function IdeaFileOffer({ files, onUse }: { files: AttemptFile[]; onUse: (file: A
  * Fetches a kept file's bytes as a File, so the sheet reads it like a dropped one. A model gives its sliced
  * .gcode.3mf: that is what an attempt prints from.
  */
-export async function fetchKeptFile(file: AttemptFile): Promise<File | null> {
+export async function fetchKeptFile(file: AttemptFile, quiet = false): Promise<File | null> {
   const model = file.kind === "model";
   try {
     const response = await fetch(fileUrl(file.id, model ? "sliced" : "file"), { credentials: "same-origin" });
     if (!response.ok) throw new Error(String(response.status));
     return new File([await response.blob()], model ? slicedName(file.name) : file.name);
   } catch {
-    toast.error("Couldn't get that file", "It needs a connection.");
+    // Taken without being asked (the idea's one slice): failing to fetch it is not worth a toast.
+    if (!quiet) toast.error("Couldn't get that file", "It needs a connection.");
     return null;
   }
 }
