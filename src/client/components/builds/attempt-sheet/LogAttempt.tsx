@@ -1,4 +1,4 @@
-import { carryOver, type Outcome } from "@shared/attempts";
+import { type AttemptSettings, carryOver, type Outcome } from "@shared/attempts";
 import { partsOnPlate } from "@shared/parts";
 import { useSuspenseQuery } from "@tanstack/react-query";
 import { lazy, Suspense, useEffect, useState } from "react";
@@ -60,6 +60,7 @@ export function LogAttempt({
   const [draft, setDraft] = useState(blank);
   const [when, setWhen] = useState<number | null>(null);
   const [recipe, setRecipe] = useState<AppliedRecipe | null>(null);
+  const [usedMatch, setUsedMatch] = useState<{ id: string; before: AttemptSettings } | null>(null);
   const [dirty, setDirty] = useState(false);
   const { photos, addFiles, removePhoto: removeDraftPhoto, clear } = useDraftPhotos();
   const camera = useFilePicker({ camera: true, onFiles: addFiles });
@@ -89,6 +90,7 @@ export function LogAttempt({
     if (open && !dirty && !photos.length && !slicer.state) {
       setDraft(blank());
       setRecipe(null);
+      setUsedMatch(null);
     }
   }, [open]);
 
@@ -110,6 +112,7 @@ export function LogAttempt({
     setDirty(false);
     setWhen(null);
     setRecipe(null);
+    setUsedMatch(null);
     setDraft(blank());
     onOpenChange(false);
     // A failed print is worth keeping: say so, in a different small way each time.
@@ -247,6 +250,8 @@ export function LogAttempt({
                     itemId={item.id}
                     settings={draft.settings}
                     onUse={(settings) => change({ settings })}
+                    used={usedMatch}
+                    onUsed={setUsedMatch}
                   />
                   <RecipePicker
                     settings={draft.settings}

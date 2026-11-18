@@ -2,7 +2,7 @@ import { type AttemptSettings, carryOver, describeChanges } from "@shared/attemp
 import { inlineTime } from "@shared/time";
 import { useQuery } from "@tanstack/react-query";
 import { AnimatePresence, m } from "motion/react";
-import { Fragment, useState } from "react";
+import { Fragment } from "react";
 import { Button } from "@/components/ui/Button";
 import { BuildsIcon, CheckIcon, UndoIcon, WorkedIcon } from "@/components/ui/icons";
 import { MetaList } from "@/components/ui/MetaList";
@@ -20,6 +20,9 @@ interface WhatWorkedSuggestionProps {
   /** The settings the new attempt starts from now. */
   settings: AttemptSettings;
   onUse: (settings: AttemptSettings) => void;
+  /** Which match was used and the settings from before it, kept by the sheet: they outlive this card when its row closes. */
+  used: { id: string; before: AttemptSettings } | null;
+  onUsed: (used: { id: string; before: AttemptSettings } | null) => void;
 }
 
 /**
@@ -43,10 +46,9 @@ export function useWhatWorked(itemId: string, settings: AttemptSettings) {
   return { matches, best, suggested, changes, offers: !!best && changes.length > 0 };
 }
 
-export function WhatWorkedSuggestion({ itemId, settings, onUse }: WhatWorkedSuggestionProps) {
+export function WhatWorkedSuggestion({ itemId, settings, onUse, used, onUsed }: WhatWorkedSuggestionProps) {
   const { matches, best, suggested, changes } = useWhatWorked(itemId, settings);
   const isDesktop = useIsDesktop();
-  const [used, setUsed] = useState<{ id: string; before: AttemptSettings } | null>(null);
 
   const usedMatch = used && matches?.find((match) => match.attempt.id === used.id);
   const show = usedMatch ?? (best && changes.length > 0 ? best : null);
@@ -107,7 +109,7 @@ export function WhatWorkedSuggestion({ itemId, settings, onUse }: WhatWorkedSugg
               icon={UndoIcon}
               onClick={() => {
                 onUse(used.before);
-                setUsed(null);
+                onUsed(null);
               }}
             >
               Undo
@@ -130,7 +132,7 @@ export function WhatWorkedSuggestion({ itemId, settings, onUse }: WhatWorkedSugg
               size={isDesktop ? "sm" : "md"}
               onClick={() => {
                 if (!suggested) return;
-                setUsed({ id: show.attempt.id, before: settings });
+                onUsed({ id: show.attempt.id, before: settings });
                 onUse(suggested);
               }}
               className="max-md:w-full"
