@@ -40,6 +40,16 @@ export function ChangeChips({
     chips.push({ key: "bedTemperature", label: `Bed ${settings.bedTemperature} °C` });
   if (settings.infillDensity !== undefined)
     chips.push({ key: "infillDensity", label: `${settings.infillDensity}% infill` });
+  // A field emptied to type a new number has no value to name its chip: the chip stays while its field is open.
+  const NAMES: Record<Key, string> = {
+    filament: "Filament",
+    bedType: "Plate",
+    layerHeight: "Layer height",
+    nozzleTemperature: "Nozzle",
+    bedTemperature: "Bed",
+    infillDensity: "Infill",
+  };
+  if (editing && !chips.some((chip) => chip.key === editing)) chips.push({ key: editing, label: NAMES[editing] });
   if (!chips.length) return null;
 
   const set = (next: Partial<AttemptSettings>) => onChange({ ...settings, ...next });
