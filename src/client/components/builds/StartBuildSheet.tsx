@@ -150,8 +150,8 @@ export function StartBuildSheet({ open, onOpenChange, onFromScratch }: StartBuil
 
   const section = (title: string, rows: ItemView[], label?: string) =>
     rows.length > 0 && (
-      <div className="flex flex-col">
-        <Overline className="mt-5 mb-1 first:mt-0" count={rows.length}>
+      <div className="mt-5 flex flex-col first:mt-0">
+        <Overline className="mb-1" count={rows.length}>
           {title}
         </Overline>
         {rows.map((idea) => row(idea, label))}
@@ -174,11 +174,11 @@ export function StartBuildSheet({ open, onOpenChange, onFromScratch }: StartBuil
       tall={!showModel}
       footer={
         showModel ? undefined : (
-          <div className="flex gap-2">
-            <Button variant="secondary" icon={LinkIcon} onClick={() => setStep("model")} className="flex-1">
+          <div className="grid grid-cols-2 gap-2">
+            <Button variant="secondary" icon={LinkIcon} onClick={() => setStep("model")} fullWidth>
               Link or file
             </Button>
-            <Button variant="secondary" icon={PlusIcon} onClick={scratch} className="flex-1">
+            <Button variant="secondary" icon={PlusIcon} onClick={scratch} fullWidth>
               Something new
             </Button>
           </div>
