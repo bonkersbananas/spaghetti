@@ -316,7 +316,7 @@ export function PrintingCard({
                 <div className="flex items-center justify-between gap-3 md:flex-wrap md:gap-y-2">
                   <p
                     className={cn(
-                      "text-small tabular min-w-0 flex-1 md:flex-auto",
+                      "text-small tabular min-w-0 flex-1 md:basis-full",
                       progress.state === "due" ? "text-semolina-ink font-semibold" : "text-ink-soft",
                     )}
                   >
