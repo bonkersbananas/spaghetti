@@ -14,8 +14,18 @@ export function isTyping(target: EventTarget | null): boolean {
  * arriving a moment later were typed into it, and are not shortcuts.
  */
 let lostTypingAt = -Infinity;
+/** The last printable key pressed inside a text field: a field that vanishes while someone is typing in it. */
+let typedAt = -Infinity;
 const JUST_LOST_MS = 1000;
 if (typeof window !== "undefined") {
+  window.addEventListener(
+    "keydown",
+    (event) => {
+      if (isTyping(event.target) && event.key.length === 1 && !event.metaKey && !event.ctrlKey)
+        typedAt = performance.now();
+    },
+    true,
+  );
   window.addEventListener("focusout", (event) => {
     const field = event.target;
     if (!isTyping(field) || (event as FocusEvent).relatedTarget) return;
@@ -23,7 +33,9 @@ if (typeof window !== "undefined") {
     // a click on empty space) must not swallow the shortcut pressed next.
     setTimeout(() => {
       const el = field as HTMLInputElement;
-      if (!el.isConnected || el.readOnly || el.disabled) lostTypingAt = performance.now();
+      // Only while words were arriving: a sheet closed with its field focused, long after the last key, is not it.
+      const typing = performance.now() - typedAt < 1500;
+      if (typing && (!el.isConnected || el.readOnly || el.disabled)) lostTypingAt = performance.now();
     }, 0);
   });
 }
