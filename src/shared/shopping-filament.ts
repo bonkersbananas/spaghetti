@@ -3,7 +3,8 @@
  * finish and colour fill the new-spool sheet once it's bought. A nozzle or a PEI plate is not. Reads the name only,
  * never guesses a material: no material word, no spool. Pure.
  */
-import { brandIn, colourByName, FINISHES, SPOOL_MATERIALS } from "./spools.ts";
+import { brandIn, colourByName } from "./spool-lookup.ts";
+import { FINISHES, SPOOL_MATERIALS } from "./spools.ts";
 
 export interface FilamentFromName {
   material: string;

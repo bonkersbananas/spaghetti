@@ -1732,8 +1732,6 @@ async function restoreDeskTidy(page: Page) {
   });
 }
 
-const BEFORE_MAIN = !!process.env.SG_BEFORE;
-
 /** Three filaments and a nozzle bought a minute ago, and the list scrolled to Bought. */
 async function boughtThings(page: Page) {
   const headers = { Origin: new URL(page.url()).origin };
