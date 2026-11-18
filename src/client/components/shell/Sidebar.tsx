@@ -7,10 +7,12 @@ import { Button } from "@/components/ui/Button";
 import { PlusIcon, SearchIcon } from "@/components/ui/icons";
 import { Kbd } from "@/components/ui/Kbd";
 import { Overline } from "@/components/ui/Overline";
+import { UnreadDot } from "@/components/ui/UnreadDot";
 import { useCapture } from "@/lib/capture";
 import { shortcutCaps } from "@/lib/hotkeys";
 import { usePalette } from "@/lib/palette";
 import { sessionQuery } from "@/lib/queries";
+import { useAnyUnread } from "@/lib/unread-comments";
 import { useWhenIdle } from "@/lib/when-idle";
 import { AccountButton } from "./AccountButton";
 import { AccountMenu, loadAccountMenu } from "./lazy-account";
@@ -39,6 +41,7 @@ const itemClass =
 
 /** The sidebar's links: an icon, the name, and the key to press. */
 function NavItems({ items }: { items: Section[] }) {
+  const unread = useAnyUnread();
   return items.map(({ to, label, icon: Icon, shortcut }) => (
     <Link key={to} to={to} className={itemClass}>
       {({ isActive }) => (
@@ -50,6 +53,8 @@ function NavItems({ items }: { items: Section[] }) {
             aria-hidden
           />
           <span className="flex-1">{label}</span>
+          {/* What waits unread is on Today (the comment line) and in the Journal's Since block. */}
+          {to === "/today" && unread && !isActive && <UnreadDot label="Something new" ring="ring-paper-deep" />}
           <Kbd
             keys={shortcutCaps(shortcut)}
             className="duration-fast opacity-60 transition-opacity group-hover:opacity-100"

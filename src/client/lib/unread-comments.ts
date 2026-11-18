@@ -1,5 +1,6 @@
 import type { UnreadCommentsResponse } from "@shared/comments";
 import { queryOptions, useQuery } from "@tanstack/react-query";
+import { useMemo } from "react";
 import { api } from "./api";
 
 // Apart from lib/comments.ts (writing, drafts, the thread) so the lists, which only need the marker, don't carry that code.
@@ -31,4 +32,16 @@ export function useUnreadThreadSearch(itemId: string): { thread?: 1; comment?: s
     select: (response) => response.threads.find((thread) => thread.itemId === itemId)?.latestId ?? null,
   });
   return data ? { thread: 1, comment: data } : {};
+}
+
+/** Whether anything unread waits for this person: the quiet dot on the Journal tab and Today's sidebar item. */
+export function useAnyUnread(): boolean {
+  const { data } = useQuery({ ...unreadQuery, select: (response) => response.threads.length > 0 });
+  return data ?? false;
+}
+
+/** The ids of the ideas and builds with unread comments: a strip of cards marks them with a dot. */
+export function useUnreadIds(): ReadonlySet<string> | undefined {
+  const { data } = useQuery({ ...unreadQuery, select: (response) => response.threads.map((thread) => thread.itemId) });
+  return useMemo(() => (data?.length ? new Set(data) : undefined), [data]);
 }
