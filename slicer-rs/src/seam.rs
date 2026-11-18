@@ -15,11 +15,14 @@ use crate::geom::{self, Contour, Pt};
 use crate::mesh::Mesh;
 use crate::region::LayerRegions;
 use crate::seam_mesh::Visibility;
+use crate::seampaint::Painted;
 use std::collections::HashMap;
 
 const PI: f32 = std::f32::consts::PI;
 /// Orca's `sharp_angle_snapping_threshold`: corners this sharp keep their seam where it is.
 const SHARP_ANGLE: f32 = 55.0 * PI / 180.0;
+/// mm between the points added along an enforced stretch (Orca's `enforcer_oversampling_distance`).
+const OVERSAMPLING: f32 = 0.2;
 /// Orca's `overhang_angle_threshold`, from the vertical.
 const OVERHANG_ANGLE: f32 = 45.0 * PI / 180.0;
 /// Orca's `angle_importance_aligned`: how much a corner counts against visibility.
@@ -84,6 +87,19 @@ struct Candidate {
     embedded: f32,
     /// Radians the wall turns there, counter-clockwise positive (concave corners negative).
     angle: f32,
+    /// Painted to block, not painted, or painted to enforce a seam (Orca's `EnforcedBlockedSeamPoint`, in its order).
+    kind: Kind,
+    /// The middle of its loop's longest enforced stretch, where aligned seams go (Orca's `central_enforcer`).
+    central: bool,
+}
+
+/// Whether a candidate is painted to take a seam, in Orca's order (`EnforcedBlockedSeamPoint`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Default)]
+enum Kind {
+    Blocked,
+    #[default]
+    Neutral,
+    Enforced,
 }
 
 /// One outer wall loop (Orca's `Perimeter`): its candidates are `start..end` of the layer's.
@@ -99,6 +115,10 @@ struct Perimeter {
     /// Placed by a string, at `at`.
     finalized: bool,
     at: [f32; 3],
+    /// Its enforced (blocked) candidates end exactly where the paint's contour crosses it (Orca's
+    /// `exact_enforced_ends`, `exact_blocked_ends`).
+    exact_enforced: bool,
+    exact_blocked: bool,
 }
 
 /// One object's outer walls on one layer, and where each loop starts.
@@ -227,12 +247,13 @@ fn norm(x: f64, y: f64) -> f64 {
     (x * x + y * y).sqrt()
 }
 
-/// Orca's `SeamComparator` for its aligned, aligned-back and back seams (no painted seams, so every candidate is
-/// neutral, and with one region no point hides inside the print).
+/// Orca's `SeamComparator` for its aligned, aligned-back, back, random and nearest seams.
 #[derive(Clone, Copy)]
 struct Comparator {
     rear: bool,
     random: bool,
+    /// Aligned or aligned-back seams, which go to the middle of an enforced stretch first.
+    aligned: bool,
 }
 
 impl Comparator {
@@ -243,6 +264,9 @@ impl Comparator {
     /// `is_first_better` for nearest seams: corners count for more (`angle_importance_nearest`), and so does how far
     /// a point is from `to`, where the nozzle is (mm).
     fn nearer_better(a: &Candidate, b: &Candidate, to: [f32; 2]) -> bool {
+        if a.kind != b.kind {
+            return a.kind > b.kind;
+        }
         if a.overhang > 0.0 || b.overhang > 0.0 {
             return a.overhang < b.overhang;
         }
@@ -260,6 +284,9 @@ impl Comparator {
 
     /// Whether `a` is a better seam than `b` (`is_first_better`).
     fn better(&self, a: &Candidate, b: &Candidate) -> bool {
+        if let Some(first) = self.painted_first(a, b) {
+            return first;
+        }
         if a.overhang > 0.0 || b.overhang > 0.0 {
             return a.overhang < b.overhang;
         }
@@ -274,6 +301,13 @@ impl Comparator {
 
     /// Whether `a` is not much worse a seam than `b` (`is_first_not_much_worse`); `width` is `a`'s loop's.
     fn not_much_worse(&self, a: &Candidate, b: &Candidate, width: f32) -> bool {
+        if let Some(first) = self.painted_first(a, b) {
+            return first;
+        }
+        // Two blocked points go on as neutral ones, so a loop blocked all round still gets a seam.
+        if a.kind == Kind::Enforced {
+            return true;
+        }
         if (a.overhang > 0.0 || b.overhang > 0.0) && (a.overhang - b.overhang).abs() > 0.1 * width {
             return a.overhang < b.overhang;
         }
@@ -288,6 +322,17 @@ impl Comparator {
         }
         let (pa, pb) = (self.penalty(a), self.penalty(b));
         pa <= pb || pa - pb < SCORE_TOLERANCE
+    }
+}
+
+impl Comparator {
+    /// Whether `a` comes before `b` by its paint: the middle of an enforced stretch first (aligned seams), then
+    /// enforced, neutral and blocked points in turn; None when that doesn't tell them apart.
+    fn painted_first(&self, a: &Candidate, b: &Candidate) -> Option<bool> {
+        if self.aligned && a.central != b.central {
+            return Some(a.central);
+        }
+        (a.kind != b.kind).then(|| a.kind > b.kind)
     }
 }
 
@@ -340,7 +385,13 @@ fn angles(points: &[Pt], lengths: &[f32], min_arm: f32) -> Vec<f32> {
 /// The outer wall loops of one object's islands on a layer as candidates (Orca's `process_perimeter_polygon` of each
 /// `extract_perimeter_polygons`): each loop as printed, simplified and closed (its first point again at its end, as
 /// an extrusion loop's points are), turned counter-clockwise.
-fn gather(regions: &LayerRegions, object: u32, z: f32, width: f32, nozzle: f32, s: &Settings) -> LayerSeams {
+fn gather(
+    regions: &LayerRegions,
+    object: u32,
+    (z, width, nozzle): (f32, f32, f32),
+    painted: Option<&Painted>,
+    s: &Settings,
+) -> LayerSeams {
     let mut out = LayerSeams::default();
     for island in regions.islands.iter().filter(|i| i.group == object) {
         let Some(outer) = island.walls.first() else { continue };
@@ -368,30 +419,222 @@ fn gather(regions: &LayerRegions, object: u32, z: f32, width: f32, nozzle: f32, 
             let turns = angles(&polygon, &lengths, nozzle);
             let index = out.perimeters.len();
             let start = out.points.len();
-            for (k, p) in polygon.iter().enumerate() {
-                let (x, y) = mm(*p);
-                let angle = if hole { -turns[k] } else { turns[k] };
-                out.points.push(Candidate {
-                    position: [x as f32, y as f32, z],
-                    perimeter: index,
-                    visibility: 0.0,
-                    overhang: 0.0,
-                    embedded: 0.0,
-                    angle,
-                });
-            }
-            out.perimeters.push(Perimeter {
+            let mut perimeter = Perimeter {
                 hole,
                 start,
-                end: out.points.len(),
+                end: start,
                 seam: start,
                 width,
                 finalized: false,
                 at: [0.0; 3],
-            });
+                exact_enforced: false,
+                exact_blocked: false,
+            };
+            match painted {
+                None => {
+                    for (k, p) in polygon.iter().enumerate() {
+                        let (x, y) = mm(*p);
+                        let angle = if hole { -turns[k] } else { turns[k] };
+                        out.points.push(candidate([x as f32, y as f32, z], index, angle, Kind::Neutral));
+                    }
+                }
+                Some(painted) => {
+                    let xy: Vec<[f64; 2]> = polygon.iter().map(|&p| mm(p)).map(|(x, y)| [x, y]).collect();
+                    paint_loop(&mut out.points, &mut perimeter, (&xy, &turns, z), index, painted);
+                }
+            }
+            perimeter.end = out.points.len();
+            out.perimeters.push(perimeter);
         }
     }
     out
+}
+
+fn candidate(position: [f32; 3], perimeter: usize, angle: f32, kind: Kind) -> Candidate {
+    Candidate { position, perimeter, visibility: 0.0, overhang: 0.0, embedded: 0.0, angle, kind, central: false }
+}
+
+/// Orca's `process_perimeter_polygon` with painted seams: a loop's candidates (`xy`, counter-clockwise, its turns,
+/// at `z`), with points added where the paint's contour crosses it and every 0.2 mm along enforced stretches, each
+/// enforced, blocked or neutral by the paint within the wall's width, and the middle of its longest enforced
+/// stretch marked.
+fn paint_loop(
+    points: &mut Vec<Candidate>,
+    perimeter: &mut Perimeter,
+    (xy, turns, z): (&[[f64; 2]], &[f32], f32),
+    loop_index: usize,
+    painted: &Painted,
+) {
+    use crate::seampaint::TOLERANCE;
+    let index = points.len();
+    let n = xy.len();
+    let width = perimeter.width;
+    let at32 = |p: [f64; 2]| [p[0] as f32, p[1] as f32, z];
+    let mut arc = vec![0.0f64];
+    for i in 0..n {
+        let (a, b) = (xy[i], xy[(i + 1) % n]);
+        arc.push(arc[i] + norm(b[0] - a[0], b[1] - a[1]));
+    }
+    let length = arc[n];
+    let zd = f64::from(z);
+    let reach = f64::from(width);
+    let intervals = painted.intervals(xy, &arc, zd, reach, false);
+    let blocked = painted.intervals(xy, &arc, zd, reach, true);
+    perimeter.exact_blocked = !blocked.is_empty();
+    let exact_marks = !intervals.is_empty() || perimeter.exact_blocked;
+    let ignore_full = intervals.is_empty() && painted.fully_enforced(xy, zd, reach);
+    perimeter.exact_enforced = !intervals.is_empty();
+    let in_interval = |at: f64, ranges: &[crate::seampaint::Interval]| {
+        ranges.iter().any(|r| [at, at + length].iter().any(|&s| s >= r.begin - TOLERANCE && s <= r.end + TOLERANCE))
+    };
+    let point_at = |s: f64| {
+        let i = arc.partition_point(|&a| a <= s).min(n) - 1;
+        let l = arc[i + 1] - arc[i];
+        let t = if l > 0.0 { (s - arc[i]) / l } else { 0.0 };
+        let (a, b) = (xy[i], xy[(i + 1) % n]);
+        [(a[0] + t * (b[0] - a[0])) as f32, (a[1] + t * (b[1] - a[1])) as f32, z]
+    };
+    let green_steps = |start: [f32; 3], len: f32| -> Vec<f32> {
+        let mut steps = Vec::new();
+        if ignore_full || !painted.is_enforced(start, len) {
+            return steps;
+        }
+        let mut step = OVERSAMPLING;
+        while step < len {
+            steps.push(step);
+            step += OVERSAMPLING;
+        }
+        steps
+    };
+    let mut marks: Vec<f64> = Vec::new();
+    let mut middles: Vec<([f32; 3], f64)> = Vec::new();
+    for (k, r) in intervals.iter().enumerate() {
+        let middle = 0.5 * (r.begin + r.end);
+        let next = intervals.get(k + 1).map_or(intervals[0].begin + length, |q| q.begin);
+        marks.extend([r.begin, r.end, middle, 0.5 * (r.end + next)]);
+        let mut s = r.begin + f64::from(OVERSAMPLING);
+        while s < r.end - TOLERANCE {
+            marks.push(s);
+            s += f64::from(OVERSAMPLING);
+        }
+        middles.push((point_at(middle % length), r.end - r.begin));
+    }
+    for (k, r) in blocked.iter().enumerate() {
+        let next = blocked.get(k + 1).map_or(blocked[0].begin + length, |q| q.begin);
+        let guard = (2.0 * TOLERANCE).min(0.25 * (next - r.end));
+        marks.extend([r.begin, r.end, 0.5 * (r.begin + r.end), r.end + guard, next - guard, 0.5 * (r.end + next)]);
+    }
+    if perimeter.exact_blocked && !perimeter.exact_enforced {
+        for i in 0..n {
+            for step in green_steps(point_at(arc[i]), (arc[i + 1] - arc[i]) as f32) {
+                marks.push(arc[i] + f64::from(step));
+            }
+        }
+    }
+    for m in &mut marks {
+        *m %= length;
+    }
+    marks.sort_by(f64::total_cmp);
+    marks.dedup_by(|b, a| *b - *a < TOLERANCE);
+    let kind_at = |position: [f32; 3], at: f64| {
+        let mut kind = Kind::Neutral;
+        if !ignore_full
+            && (!perimeter.exact_enforced || in_interval(at, &intervals))
+            && painted.is_enforced(position, width)
+        {
+            kind = Kind::Enforced;
+        }
+        if (!perimeter.exact_blocked || in_interval(at, &blocked)) && painted.is_blocked(position, width) {
+            kind = Kind::Blocked;
+        }
+        kind
+    };
+    for k in 0..n {
+        let position = at32(xy[k]);
+        let angle = if perimeter.hole { -turns[k] } else { turns[k] };
+        points.push(candidate(position, loop_index, angle, kind_at(position, arc[k])));
+        if exact_marks {
+            let (from, to) = (arc[k], arc[k + 1]);
+            let first = marks.partition_point(|&m| m <= from + TOLERANCE);
+            for &m in marks[first..].iter().take_while(|&&m| m < to - TOLERANCE) {
+                let p = point_at(m);
+                points.push(candidate(p, loop_index, 0.0, kind_at(p, m)));
+            }
+        } else {
+            let next = at32(xy[(k + 1) % n]);
+            let d = [next[0] - position[0], next[1] - position[1], next[2] - position[2]];
+            let len = (d[0] * d[0] + d[1] * d[1] + d[2] * d[2]).sqrt();
+            let unit = if len > 0.0 { [d[0] / len, d[1] / len, d[2] / len] } else { d };
+            for step in green_steps(position, len) {
+                let p = [position[0] + unit[0] * step, position[1] + unit[1] * step, position[2] + unit[2] * step];
+                points.push(candidate(p, loop_index, 0.0, kind_at(p, 0.0)));
+            }
+        }
+    }
+    mark_central(&mut points[index..], &middles);
+}
+
+/// Orca's `central_enforcer`: of a loop's candidates (`points`), the middle of its longest enforced run, else of
+/// its sharp corners there, or where a run is a whole painted stretch, that stretch's middle.
+fn mark_central(points: &mut [Candidate], middles: &[([f32; 3], f64)]) {
+    let n = points.len();
+    if !points.iter().any(|p| p.kind == Kind::Enforced) {
+        return;
+    }
+    let next = |i: usize| (i + 1) % n;
+    let mut ends: Vec<usize> = Vec::new();
+    for i in 0..n {
+        let (a, b) = (points[i].kind == Kind::Enforced, points[next(i)].kind == Kind::Enforced);
+        if a != b {
+            ends.push(next(i));
+        }
+    }
+    if ends.is_empty() {
+        return;
+    }
+    let mut start_on_second = false;
+    if points[ends[0]].kind != Kind::Enforced {
+        start_on_second = true;
+        ends.push(ends[0]);
+    }
+    let run_len = |(a, b): (usize, usize)| if b < a { n - (a - b) } else { b - a };
+    let mut longest = (0usize, 0usize);
+    let mut k = usize::from(start_on_second);
+    while k + 1 < ends.len() {
+        let run = (ends[k], ends[k + 1]);
+        if run_len(longest) < run_len(run) {
+            longest = run;
+        }
+        k += 2;
+    }
+    let mut viable = Vec::new();
+    let mut sharp = Vec::new();
+    let mut i = longest.0;
+    while i != longest.1 {
+        viable.push(i);
+        if points[i].angle.abs() > SHARP_ANGLE {
+            sharp.push(i);
+        }
+        i = next(i);
+    }
+    if viable.is_empty() {
+        return;
+    }
+    if sharp.is_empty() {
+        let mut central = viable[viable.len() / 2];
+        let mut best = -1.0;
+        for &i in &viable {
+            for &(middle, length) in middles {
+                if length > best && dist2(points[i].position, middle).sqrt() as f64 <= crate::seampaint::TOLERANCE {
+                    central = i;
+                    best = length;
+                }
+            }
+        }
+        points[central].central = true;
+    } else {
+        points[sharp[sharp.len() / 2]].central = true;
+    }
 }
 
 /// The signed distance to an object's slice on a layer (Orca's `LinesDistancer::distance_from_lines<true>`):
@@ -485,6 +728,7 @@ fn segment_distance2(s: &[f64; 4], x: f64, y: f64) -> f64 {
 pub fn place(
     regions: &mut [LayerRegions],
     meshes: &[Vec<&Mesh>],
+    painted: &[Option<Painted>],
     (middles, slice_z, heights): (&[[f32; 2]], &[f64], &[f64]),
     s: &Settings,
 ) {
@@ -500,7 +744,8 @@ pub fn place(
         if !regions_ref.iter().any(|r| r.islands.iter().any(|i| i.group == object)) {
             return Vec::new();
         }
-        object_seams(regions_ref, object, &meshes[o], mode, (middles[o], slice_z, heights), s)
+        let painted = painted.get(o).and_then(Option::as_ref);
+        object_seams(regions_ref, object, (&meshes[o], painted), mode, (middles[o], slice_z, heights), s)
     });
     for layer in regions.iter_mut() {
         layer.seams = vec![LayerSeams::default(); meshes.len()];
@@ -516,16 +761,20 @@ pub fn place(
 fn object_seams(
     regions: &[LayerRegions],
     object: u32,
-    parts: &[&Mesh],
+    (parts, painted): (&[&Mesh], Option<&Painted>),
     mode: Mode,
     (middle, slice_z, heights): ([f32; 2], &[f64], &[f64]),
     s: &Settings,
 ) -> Vec<LayerSeams> {
-    let comparator = Comparator { rear: mode == Mode::Rear, random: mode == Mode::Random };
+    let comparator = Comparator {
+        rear: mode == Mode::Rear,
+        random: mode == Mode::Random,
+        aligned: matches!(mode, Mode::Aligned | Mode::AlignedBack),
+    };
     let nozzle = s.nozzle_diameter as f32;
     let mut layers: Vec<LayerSeams> = crate::par::map_range(regions.len(), |l| {
         let width = crate::plan::flow(crate::region::Role::OuterWall, s.on_plate(l), heights[l], s).0 as f32;
-        let mut seams = gather(&regions[l], object, slice_z[l] as f32, width, nozzle, s);
+        let mut seams = gather(&regions[l], object, (slice_z[l] as f32, width, nozzle), painted, s);
         // Where the object prints as more than one region with walls on the layer, how far inside its slice each
         // point is (Orca's `calculate_overhangs_and_layer_embedding`).
         let mut walled: Vec<u32> = regions[l]
@@ -1026,6 +1275,10 @@ fn next_seam(
     }
     let seam = &here.points[nearest_perimeter.seam];
     let width = nearest_perimeter.width;
+    // The middle of an enforced stretch first, where it is near enough.
+    if seam.central && dist2(seam.position, at) < (3.0 * reach) * (3.0 * reach) {
+        return Some((layer, nearest_perimeter.seam));
+    }
     if comparator.not_much_worse(&here.points[nearest], seam, width) {
         return Some((layer, nearest));
     }
@@ -1187,6 +1440,49 @@ fn least_squares(mut a: Vec<Vec<f64>>, mut b: Vec<[f64; 2]>, cols: usize) -> Vec
     out
 }
 
+/// Corners of at least this (radians) near an enforced seam keep it towards its candidate, fully from
+/// `ENFORCED_CORNER_MAX` (Orca's `enforced_corner_angle_min`, `_max`), fading out along the loop from the protected
+/// length to `CORNER_FADE` times it.
+const ENFORCED_CORNER_MIN: f32 = 15.0 * PI / 180.0;
+const ENFORCED_CORNER_MAX: f32 = 30.0 * PI / 180.0;
+const CORNER_FADE: f32 = 2.0;
+
+fn smoothstep01(x: f32) -> f32 {
+    let x = x.clamp(0.0, 1.0);
+    x * x * (3.0 - 2.0 * x)
+}
+
+/// Orca's `enforced_corner_influence`: in 0..1, how much of a corner there is round candidate `index`, a corner of
+/// `ENFORCED_CORNER_MAX` within `protect` mm along the loop counting fully, fading out by `fade_end`.
+fn corner_influence(points: &[Candidate], perimeter: &Perimeter, index: usize, protect: f32, fade_end: f32) -> f32 {
+    let (start, count) = (perimeter.start, perimeter.end - perimeter.start);
+    let contribution = |i: usize, distance: f32| {
+        let corner =
+            smoothstep01((points[i].angle.abs() - ENFORCED_CORNER_MIN) / (ENFORCED_CORNER_MAX - ENFORCED_CORNER_MIN));
+        let weight =
+            if distance <= protect { 1.0 } else { 1.0 - smoothstep01((distance - protect) / (fade_end - protect)) };
+        corner * weight
+    };
+    let mut influence = contribution(index, 0.0);
+    for forward in [false, true] {
+        let mut i = index;
+        let mut distance = 0.0f32;
+        let mut step = 1;
+        while step < count && influence < 1.0 {
+            let j = start + if forward { (i - start + 1) % count } else { (i - start + count - 1) % count };
+            let d = [points[j].position[0] - points[i].position[0], points[j].position[1] - points[i].position[1]];
+            distance += (d[0] * d[0] + d[1] * d[1]).sqrt();
+            if distance >= fade_end {
+                break;
+            }
+            influence = influence.max(contribution(j, distance));
+            i = j;
+            step += 1;
+        }
+    }
+    influence
+}
+
 /// Orca's `place_on_loop`: where on the loop of candidate `index` a seam aimed at `target` lands: the nearest point
 /// of the loop whose normal (blended along each side from its corners') passes through the target.
 fn place_on_loop(points: &[Candidate], perimeter: &Perimeter, index: usize, target: [f32; 3]) -> [f32; 3] {
@@ -1230,6 +1526,7 @@ fn place_on_loop(points: &[Candidate], perimeter: &Perimeter, index: usize, targ
     let p = [f64::from(target[0]), f64::from(target[1])];
     let mut best: Option<[f64; 2]> = None;
     let mut best_distance = f64::INFINITY;
+    let (mut best_forward, mut best_arc) = (true, 0.0f64);
     let mut cursor = [index, index];
     let mut arc = [0.0f64, 0.0];
     for _ in 0..count {
@@ -1263,6 +1560,8 @@ fn place_on_loop(points: &[Candidate], perimeter: &Perimeter, index: usize, targ
                 if distance < best_distance {
                     best = Some([xy(a)[0] + u * d[0], xy(a)[1] + u * d[1]]);
                     best_distance = distance;
+                    best_forward = forward;
+                    best_arc = arc[side] + if forward { u } else { 1.0 - u } * length;
                 }
             };
             const EPS: f64 = 1e-12;
@@ -1284,10 +1583,51 @@ fn place_on_loop(points: &[Candidate], perimeter: &Perimeter, index: usize, targ
         arc[side] += length;
         cursor[side] = j;
     }
-    match best {
-        Some(q) => [q[0] as f32, q[1] as f32, points[index].position[2]],
-        None => points[index].position,
+    let Some(mut q) = best else { return points[index].position };
+    // A solution outside the arc the candidate's paint allows gives way to the end of it nearer the solution.
+    let enforced = points[index].kind == Kind::Enforced;
+    let blocked = points[index].kind == Kind::Blocked;
+    let painted = enforced || (start..perimeter.end).any(|k| points[k].kind == Kind::Blocked);
+    if painted {
+        let allowed = |forward: bool| -> (f64, [f64; 2]) {
+            let mut arc = 0.0f64;
+            let mut extension = if enforced && !perimeter.exact_enforced { f64::from(OVERSAMPLING) } else { 0.0 };
+            let mut in_run = true;
+            let mut i = index;
+            for _ in 1..=count {
+                let j = if forward { next(i) } else { prev(i) };
+                let kind = points[j].kind;
+                if in_run && (if enforced { kind != Kind::Enforced } else { !blocked && kind == Kind::Blocked }) {
+                    in_run = false;
+                }
+                if !in_run && (!enforced || kind == Kind::Blocked) {
+                    return (arc, xy(i));
+                }
+                let (a, b) = (xy(i), xy(j));
+                let length = norm(b[0] - a[0], b[1] - a[1]);
+                if !in_run {
+                    let reach = length.min(extension);
+                    extension -= reach;
+                    if reach < length {
+                        let t = reach / length;
+                        return (arc + reach, [a[0] + t * (b[0] - a[0]), a[1] + t * (b[1] - a[1])]);
+                    }
+                }
+                arc += length;
+                i = j;
+            }
+            (f64::INFINITY, xy(index))
+        };
+        let loop_length = arc[0] + arc[1];
+        let ahead = if best_forward { best_arc } else { loop_length - best_arc };
+        let (ahead_limit, ahead_end) = allowed(true);
+        let (behind_limit, behind_end) = allowed(false);
+        if ahead > ahead_limit && loop_length - ahead > behind_limit {
+            let d2 = |e: [f64; 2]| (e[0] - q[0]) * (e[0] - q[0]) + (e[1] - q[1]) * (e[1] - q[1]);
+            q = if d2(ahead_end) <= d2(behind_end) { ahead_end } else { behind_end };
+        }
     }
+    [q[0] as f32, q[1] as f32, points[index].position[2]]
 }
 
 /// Orca's `align_seam_points`: from the best seams down, each not yet placed starts a string (the longest of those
@@ -1362,8 +1702,13 @@ fn align(layers: &mut [LayerSeams], comparator: Comparator, mode: Mode, nozzle: 
             }
             observations.push([current.position[0], current.position[1]]);
             zs.push(current.position[2]);
-            weights.push(1.0 / (0.1 + angle_penalty(current.angle)));
-            let curling = if turn > 2.0 * current.angle.abs() { -0.8 } else { 1.0 };
+            let mut weight = 1.0 / (0.1 + angle_penalty(current.angle));
+            let mut curling = if turn > 2.0 * current.angle.abs() { -0.8 } else { 1.0 };
+            if current.kind == Kind::Enforced {
+                curling = 1.0;
+                weight += 3.0;
+            }
+            weights.push(weight);
             total += curling * dist2(last, current.position).sqrt();
             last = current.position;
         }
@@ -1374,14 +1719,27 @@ fn align(layers: &mut [LayerSeams], comparator: Comparator, mode: Mode, nozzle: 
         let curve = Curve::fit(&observations, &zs, &weights, segments);
         for &(l, k) in &string {
             let candidate = layers[l].points[k].clone();
-            let t = libm::powf(candidate.angle.abs() / SHARP_ANGLE, 3.0).min(1.0);
+            let mut t = libm::powf(candidate.angle.abs() / SHARP_ANGLE, 3.0).min(1.0);
             let fitted = curve.at(candidate.position[2]);
+            let perimeter = layers[l].perimeters[candidate.perimeter].clone();
+            if candidate.kind == Kind::Enforced && t < 1.0 {
+                // Kept towards the candidate only near a corner, then on the paint.
+                let mut protect = perimeter.width.max(nozzle);
+                if protect <= 0.0 {
+                    protect = 0.5;
+                }
+                let corner = if candidate.angle.abs() >= ENFORCED_CORNER_MAX {
+                    1.0
+                } else {
+                    corner_influence(&layers[l].points, &perimeter, k, protect, CORNER_FADE * protect)
+                };
+                t = t.max(0.4 * corner);
+            }
             let target = [
                 t * candidate.position[0] + (1.0 - t) * fitted[0],
                 t * candidate.position[1] + (1.0 - t) * fitted[1],
                 candidate.position[2],
             ];
-            let perimeter = layers[l].perimeters[candidate.perimeter].clone();
             let at =
                 if t >= 1.0 { candidate.position } else { place_on_loop(&layers[l].points, &perimeter, k, target) };
             let p = &mut layers[l].perimeters[candidate.perimeter];
@@ -1560,17 +1918,28 @@ mod tests {
                     overhang: 0.0,
                     embedded: 0.0,
                     angle: 0.0,
+                    kind: Kind::Neutral,
+                    central: false,
                 });
             }
         }
-        let perimeter =
-            Perimeter { hole: false, start: 0, end: 40, seam: 0, width: 0.42, finalized: false, at: [0.0; 3] };
+        let perimeter = Perimeter {
+            hole: false,
+            start: 0,
+            end: 40,
+            seam: 0,
+            width: 0.42,
+            finalized: false,
+            at: [0.0; 3],
+            exact_enforced: false,
+            exact_blocked: false,
+        };
         LayerSeams { perimeters: vec![perimeter], points, cells: Cells::default() }
     }
 
     #[test]
     fn random_seams_are_fixed_by_the_loop_and_spread_over_it() {
-        let comparator = Comparator { rear: false, random: true };
+        let comparator = Comparator { rear: false, random: true, aligned: false };
         let mut near_corner = 0;
         let mut seen = std::collections::HashSet::new();
         for layer in 0..200 {
