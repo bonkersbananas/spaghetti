@@ -121,6 +121,8 @@ interface Placed {
    * are on. Its triangles are those of `positions`, as `paint`'s.
    */
   supports?: ModelPaint;
+  /** A project's seams painted on it (state 1 enforces the seam, 2 blocks it): only our own slicer gets them. */
+  seams?: ModelPaint;
   /** The colours the model gives it, as runs of its triangles (a plain 3MF's, matched to filaments by `matchColours`). */
   colours?: ModelColourRun[];
 }
@@ -435,6 +437,7 @@ async function withOurs(
       ...(several ? { filament: object.extruder } : {}),
       ...(object.paint ? { paint: object.paint } : {}),
       ...(supported && object.supports && !parts ? { supports: object.supports } : {}),
+      ...(object.seams && !parts ? { seams: object.seams } : {}),
       ...(parts ? { parts } : {}),
     };
   });
@@ -457,11 +460,13 @@ function partsOf(object: Placed, supported = false): OurPart[] | null {
   const out = parts.map((part): OurPart => {
     const paint = object.paint ? paintBetween(object.paint, part.from, part.to) : null;
     const supports = supported && object.supports ? paintBetween(object.supports, part.from, part.to) : null;
+    const seams = object.seams ? paintBetween(object.seams, part.from, part.to) : null;
     return {
       positions: object.positions.subarray(part.from * 9, part.to * 9),
       filament: part.extruder,
       ...(paint ? { paint } : {}),
       ...(supports ? { supports } : {}),
+      ...(seams ? { seams } : {}),
     };
   });
   const end = Math.max(...parts.map((part) => part.to)) * 9;
@@ -669,6 +674,7 @@ function readModel(bytes: Uint8Array, name: string, plate?: number) {
           : {}),
         ...(paint ? { paint: paint.paint } : {}),
         ...(object.supports ? { supports: object.supports } : {}),
+        ...(object.seams ? { seams: object.seams } : {}),
         ...(object.colours ? { colours: object.colours } : {}),
       };
     }),

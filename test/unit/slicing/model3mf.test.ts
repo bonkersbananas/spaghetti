@@ -213,6 +213,40 @@ describe("readModel3mf", () => {
     expect(coloured?.paint?.codes).toBe("4");
   });
 
+  it("reads a project's painted seams, with only the states seams have", () => {
+    // Each triangle's `paint_seam` (1 enforces the seam there, 2 blocks it), in the mesh's order.
+    const painted = (attributes: (string | null)[]) =>
+      MESH.replace(/<triangle ([^/]*)\/>/g, (tag, inner: string) => {
+        const extra = attributes.shift();
+        return extra ? `<triangle ${inner} ${extra}/>` : tag;
+      });
+    const read = readModel3mf(
+      zip({
+        "3D/3dmodel.model": model(
+          `<resources>
+             <object id="1" type="model">${painted([
+               'paint_seam="4"',
+               'paint_seam="8" paint_supports="4"',
+               'paint_seam="0C"',
+               'paint_seam="481"',
+             ])}</object>
+             <object id="2" type="model">${painted(['paint_seam="0"', null, null, null])}</object>
+           </resources>
+           <build><item objectid="1"/><item objectid="2" transform="1 0 0 0 1 0 0 0 1 60 0 0"/></build>`,
+        ),
+      }),
+    );
+    if (typeof read === "string") throw new Error(read);
+    const [seamed, plain] = read.objects;
+    expect([...(seamed?.seams?.triangles ?? [])]).toEqual([0, 1, 3]);
+    expect(seamed?.seams?.codes).toBe("48481");
+    expect([...(seamed?.seams?.ends ?? [])]).toEqual([1, 2, 5]);
+    // Seams and supports are read apart.
+    expect([...(seamed?.supports?.triangles ?? [])]).toEqual([1]);
+    // A code that paints nothing is no seam paint.
+    expect(plain?.seams).toBeUndefined();
+  });
+
   it("knows a sliced file, and says what it can't read", () => {
     const sliced = readModel3mf(
       zip({
