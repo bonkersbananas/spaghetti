@@ -1,8 +1,9 @@
 import type { Person } from "@shared/api";
-import { useQuery, useSuspenseQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { lazy, type ReactNode, Suspense, useMemo } from "react";
+import { lazy, type ReactNode, Suspense, useEffect, useMemo, useState } from "react";
 import { BuildCard, BuildRow } from "@/components/builds/BuildCard";
+import { LazyStartBuildSheet } from "@/components/builds/LazyStartBuildSheet";
 import { SpoolStrand } from "@/components/illustrations/SpoolStrand";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { RecentlyDeletedLink } from "@/components/shell/RecentlyDeletedLink";
@@ -15,7 +16,7 @@ import { Section as PageSection } from "@/components/ui/Section";
 import { CardSkeleton, Skeleton } from "@/components/ui/Skeleton";
 import { useVia } from "@/lib/agents";
 import { createBuild, lastActivity, printingAttempts } from "@/lib/builds";
-import { type ItemView, useBuilds } from "@/lib/items";
+import { type ItemView, sweepUntouched, useBuilds } from "@/lib/items";
 import { useListPicker } from "@/lib/list-picker";
 import { useArrived } from "@/lib/live";
 import { printerQuery } from "@/lib/pantry-queries";
@@ -54,7 +55,14 @@ function Builds() {
   const byId = useMemo(() => new Map<string, Person>(people?.map((person) => [person.id, person])), [people]);
   const arrived = useArrived();
   const via = useVia();
-  const newBuild = useNewBuild();
+  const queryClient = useQueryClient();
+  const fromScratch = useNewBuild();
+  const [picking, setPicking] = useState(false);
+  const newBuild = () => setPicking(true);
+  // A blank build left by closing the tab on it is cleared at the next visit.
+  useEffect(() => {
+    if (!isPending) sweepUntouched(queryClient, items);
+  }, [isPending, items, queryClient]);
   const isDesktop = useIsDesktop();
   const now = useNow(60_000);
   const live = useQuery(printerQuery).data?.bridge?.progress;
@@ -90,7 +98,7 @@ function Builds() {
           ))}
         </div>
       ) : items.length === 0 ? (
-        <BuildsEmpty onNew={newBuild} />
+        <BuildsEmpty onNew={newBuild} onScratch={fromScratch} />
       ) : (
         <div className="flex flex-col gap-12 md:gap-16">
           {/* Only what is physically on the plate; with nothing there the section isn't drawn. */}
@@ -149,6 +157,7 @@ function Builds() {
         </div>
       )}
       {!isPending && <RecentlyDeletedLink />}
+      <LazyStartBuildSheet open={picking} onOpenChange={setPicking} onFromScratch={fromScratch} />
       {/* The list's add-action on phones, as on every list: a floating button over the tab bar. */}
       {!isPending && items.length > 0 && !isDesktop && (
         <ActionBar>
@@ -187,7 +196,7 @@ function Section({
   );
 }
 
-/** Starts an empty build and opens it, with the title ready to type. */
+/** Starts an empty build and opens it (From scratch, and "Something new" in the picker), with the title ready to type. */
 function useNewBuild() {
   const navigate = useNavigate();
   const { data: user } = useSuspenseQuery(sessionQuery);
@@ -198,16 +207,21 @@ function useNewBuild() {
   };
 }
 
-function BuildsEmpty({ onNew }: { onNew: () => void }) {
+function BuildsEmpty({ onNew, onScratch }: { onNew: () => void; onScratch: () => void }) {
   const isDesktop = useIsDesktop();
   return (
     <EmptyState
       illustration={<SpoolStrand />}
       title="Nothing cooking yet"
       action={
-        <Button variant={isDesktop ? "secondary" : "primary"} icon={PlusIcon} onClick={onNew}>
-          Start a build
-        </Button>
+        <div className="flex flex-col items-center gap-2">
+          <Button variant={isDesktop ? "secondary" : "primary"} icon={PlusIcon} onClick={onNew}>
+            Pick an idea to print
+          </Button>
+          <Button variant="quiet" size="sm" onClick={onScratch}>
+            From scratch
+          </Button>
+        </div>
       }
     >
       When an idea is ready to print, start building from it, or start one from scratch here. Every attempt, setting and

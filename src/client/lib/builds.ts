@@ -111,8 +111,11 @@ export function startBuild(queryClient: QueryClient, item: ItemView) {
   });
 }
 
-/** A build from scratch, with nothing in it yet (or named for the twist it prints). Returns its id. */
-export function createBuild(createdBy: string, from?: { title: string; twistId: string }): string {
+/**
+ * A build from scratch, with nothing in it yet (or named for the twist it prints, or opened with a note: the link
+ * "Start a build" was given). Returns its id.
+ */
+export function createBuild(createdBy: string, from?: { title?: string; twistId?: string; note?: string }): string {
   const itemId = crypto.randomUUID();
   const now = Date.now();
   markFresh(itemId);
@@ -120,7 +123,7 @@ export function createBuild(createdBy: string, from?: { title: string; twistId: 
     itemId,
     create: {
       title: from?.title ?? null,
-      note: "",
+      note: from?.note ?? "",
       createdAt: now,
       createdBy,
       stage: "building",

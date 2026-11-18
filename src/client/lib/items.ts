@@ -566,9 +566,60 @@ export function useItemFields(item: Pick<ItemView, "id" | "title" | "note" | "fo
   return { title, setTitle, note, setNote, forWhom, setForWhom, saveState };
 }
 
-/** Builds made from the New build tile in this visit: if one is left untouched it removes itself (see discardIfUntouched). */
+/**
+ * Builds made from scratch in this visit: if one is left untouched it removes itself (see discardIfUntouched). They are
+ * kept in localStorage too, so one left by closing the tab is swept away at the next visit (sweepUntouched).
+ */
 const fresh = new Set<string>();
-export const markFresh = (id: string) => void fresh.add(id);
+const FRESH_KEY = "spaghetti.fresh-builds";
+const storedFresh = (): string[] => {
+  try {
+    const ids: unknown = JSON.parse(localStorage.getItem(FRESH_KEY) ?? "[]");
+    return Array.isArray(ids) ? ids.filter((id): id is string => typeof id === "string") : [];
+  } catch {
+    return [];
+  }
+};
+const storeFresh = (ids: string[]) => {
+  try {
+    if (ids.length) localStorage.setItem(FRESH_KEY, JSON.stringify(ids.slice(-20)));
+    else localStorage.removeItem(FRESH_KEY);
+  } catch {}
+};
+export const markFresh = (id: string) => {
+  fresh.add(id);
+  storeFresh([...storedFresh().filter((known) => known !== id), id]);
+};
+const forgetFresh = (id: string) => {
+  fresh.delete(id);
+  const ids = storedFresh();
+  if (ids.includes(id)) storeFresh(ids.filter((known) => known !== id));
+};
+
+const isEmptyBuild = (item: ItemView) =>
+  item.stage === "building" &&
+  !item.title?.trim() &&
+  !item.note.trim() &&
+  item.photos.length === 0 &&
+  (item.files ?? []).length === 0 &&
+  item.attempts.length === 0;
+
+/**
+ * Builds made from scratch in an earlier visit and left empty (the tab was closed on them) are removed, silently, the
+ * way discardIfUntouched does for one left in the same visit. Call it with the loaded builds.
+ */
+export function sweepUntouched(queryClient: QueryClient, builds: ItemView[]) {
+  const known = storedFresh();
+  if (!known.length) return;
+  const byId = new Map(builds.map((build) => [build.id, build]));
+  for (const id of known) {
+    if (fresh.has(id)) continue;
+    const build = byId.get(id);
+    if (build?.pending) continue;
+    if (build && isEmptyBuild(build)) deleteItem(queryClient, build, { silent: true });
+    else forgetFresh(id);
+  }
+}
 
 /**
  * A new build left with nothing in it (no title, note, photo, file or attempt) vanishes without a toast, the way a blank
@@ -577,13 +628,7 @@ export const markFresh = (id: string) => void fresh.add(id);
  */
 export function discardIfUntouched(queryClient: QueryClient, item: ItemView) {
   if (!fresh.has(item.id)) return;
-  const empty =
-    item.stage === "building" &&
-    !item.title?.trim() &&
-    !item.note.trim() &&
-    item.photos.length === 0 &&
-    item.attempts.length === 0;
-  if (!empty) return;
+  if (!isEmptyBuild(item)) return;
   deleteItem(queryClient, item, { silent: true });
 }
 
@@ -593,7 +638,7 @@ export function discardIfUntouched(queryClient: QueryClient, item: ItemView) {
  */
 export function deleteItem(queryClient: QueryClient, item: ItemView, { silent = false } = {}) {
   if (!canEdit(item.pending)) return;
-  fresh.delete(item.id);
+  forgetFresh(item.id);
   const noun = item.stage === "idea" ? "idea" : "build";
   const cached = queryClient.getQueryData<Item | null>(itemKeys.detail(item.id));
   const pendingEntry = outbox.remove(item.id);
