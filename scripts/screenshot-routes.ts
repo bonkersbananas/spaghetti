@@ -2680,6 +2680,24 @@ export const shots: Shot[] = [
     },
   },
   {
+    // A build's note, the model's card and the quiet actions under it (Twist, Add parts), scrolled into the middle.
+    name: "build-model-actions",
+    path: `/builds/${SEED_BUILD_IDS.tugboat}`,
+    width: 390,
+    beforeShot: async (page) => {
+      await page.getByRole("button", { name: "Twist" }).evaluate((el) => el.scrollIntoView({ block: "center" }));
+    },
+  },
+  {
+    // A build with no model: "Add parts" is the only action in the row.
+    name: "build-add-parts",
+    path: `/builds/${SEED_BUILD_IDS.cableChain}`,
+    width: 390,
+    beforeShot: async (page) => {
+      await page.getByRole("button", { name: "Add parts" }).evaluate((el) => el.scrollIntoView({ block: "center" }));
+    },
+  },
+  {
     // The end of the Pantry on a phone: "Add spool" above the tab bar.
     name: "pantry-bottom",
     path: "/pantry",

@@ -86,6 +86,7 @@ export {
   PencilSimple as RenameIcon,
   Play as PlayIcon,
   Plus as PlusIcon,
+  PuzzlePiece as PartsIcon,
   Printer as PrinterIcon,
   PushPin as MakeCoverIcon,
   QrCode as QrIcon,

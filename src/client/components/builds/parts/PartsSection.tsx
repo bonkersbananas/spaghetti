@@ -7,9 +7,9 @@ import {
   showsPips,
 } from "@shared/parts";
 import { useQueryClient } from "@tanstack/react-query";
-import { lazy, Suspense, useEffect, useMemo, useState } from "react";
+import { lazy, Suspense, useEffect, useMemo, useRef } from "react";
 import { Button } from "@/components/ui/Button";
-import { CheckCircleIcon, FinishIcon, PlusIcon, SlicerFileIcon } from "@/components/ui/icons";
+import { CheckCircleIcon, FinishIcon, PartsIcon, SlicerFileIcon } from "@/components/ui/icons";
 import { Overline } from "@/components/ui/Overline";
 import { Photo } from "@/components/ui/Photo";
 import { cn } from "@/lib/cn";
@@ -69,15 +69,25 @@ export function PartsSection({
   active,
   readOnly,
   onFinishBuild,
+  editing,
+  onEditing,
 }: {
   item: ItemView;
+  /** The parts editor is open (the owner holds it: a build without parts opens it from "Add parts" in its action row). */
+  editing: boolean;
+  onEditing: (editing: boolean) => void;
   /** The build is still going: only then does "all printed" offer to finish it. */
   active: boolean;
   readOnly: boolean;
   onFinishBuild: () => void;
 }) {
   const queryClient = useQueryClient();
-  const [editing, setEditing] = useState(false);
+  const setEditing = onEditing;
+  const top = useRef<HTMLElement>(null);
+  // Opened from the action row higher up the page: bring the editor into view.
+  useEffect(() => {
+    if (editing) top.current?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+  }, [editing]);
   // A part's name or count that a killed tab left unsent is only sent by its row: open the editor so it can.
   const leftUnsent = item.parts.some((part) => unsent(`part:${part.id}`) !== undefined);
   const cannotEdit = readOnly || item.pending;
@@ -111,12 +121,14 @@ export function PartsSection({
   if (!item.parts.length) {
     if (editing) {
       return (
-        <section aria-label="Parts" className="mt-2 flex flex-col gap-2">
+        <section ref={top} aria-label="Parts" className="mt-2 flex flex-col gap-2">
           <Overline as="h2">Parts</Overline>
           {editor}
         </section>
       );
     }
+    // Nothing to say: "Add parts" is in the build's action row, beside Twist.
+    if (!fromFile.length || (fromFile.length === 1 && (fromFile[0]?.quantity ?? 0) <= 1)) return null;
     return (
       <section aria-label="Parts" className="mt-1 flex flex-col items-start gap-1">
         {(fromFile.length > 1 || (fromFile[0]?.quantity ?? 0) > 1) && (
@@ -141,12 +153,6 @@ export function PartsSection({
             </span>
           </button>
         )}
-        {/* The same quiet action as "Twist" above it (an icon, the medium size, the row's -mx-3). */}
-        <div className="-mx-3 -mt-1">
-          <Button variant="quiet" icon={PlusIcon} disabled={disabled} onClick={() => setEditing(true)}>
-            Add parts
-          </Button>
-        </div>
       </section>
     );
   }
@@ -183,5 +189,14 @@ export function PartsSection({
         </div>
       )}
     </section>
+  );
+}
+
+/** "Add parts": the quiet action beside "Twist" in a build's row, for a build that has none yet. */
+export function AddPartsButton({ disabled, onClick }: { disabled: boolean; onClick: () => void }) {
+  return (
+    <Button variant="quiet" icon={PartsIcon} disabled={disabled} onClick={onClick}>
+      Add parts
+    </Button>
   );
 }
