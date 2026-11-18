@@ -132,7 +132,7 @@ function Story({ insights, current }: { insights: Insights; current: boolean }) 
                     </Link>
                     <p className="text-body text-ink-soft">
                       {before
-                        ? `Just as for ${before.label.toLowerCase()}.`
+                        ? `Just as for ${before.label}.`
                         : fixed
                           ? `${fixed.charAt(0).toUpperCase()}${fixed.slice(1)}.`
                           : "Nothing has fixed it yet: that is still to find."}
