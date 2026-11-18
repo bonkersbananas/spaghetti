@@ -4719,7 +4719,10 @@ export const shots: Shot[] = [
     path: `/builds/${SEED_BUILD_IDS.cableChain}`,
     prepare: async (page) => {
       await page.getByRole("button", { name: "Log attempt" }).first().click();
-      await page.getByRole("dialog").getByRole("button", { name: /^Settings/ }).click();
+      await page
+        .getByRole("dialog")
+        .getByRole("button", { name: /^Settings/ })
+        .click();
       const suggestion = page.getByRole("dialog").getByRole("region", { name: "What worked last time" });
       await suggestion.waitFor();
       await page.waitForTimeout(400);
