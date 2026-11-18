@@ -5674,7 +5674,16 @@ export const shots: Shot[] = [
       await page.getByRole("link", { name: /Pen cup/ }).waitFor();
     },
   },
-  { name: "pantry", path: "/pantry", fullPage: true },
+  {
+    name: "pantry",
+    path: "/pantry",
+    fullPage: true,
+    prepare: async (page) => {
+      // The lazy parts (the bays' "Dry first", Running low's shopping button) have drawn before the picture.
+      await page.getByText("Dry first").first().waitFor();
+      await page.getByRole("button", { name: /Add to shopping list/ }).waitFor();
+    },
+  },
   {
     // Desktop only: the pantry as a list (the choice is remembered per device, so cards come back after).
     name: "pantry-list",

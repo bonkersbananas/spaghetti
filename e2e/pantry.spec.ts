@@ -302,7 +302,7 @@ test("running-low spools go on the shopping list in one tap, and only once", { t
   for (const item of added) await page.request.delete(`/api/shopping-items/${item.id}`, { headers });
 });
 
-test("a phone with many spools starts compact, and Tiles brings the big ones back", { tag: "@phone" }, async ({
+test("a phone with many spools starts compact, and Cards brings the big ones back", { tag: "@phone" }, async ({
   page,
   isMobile,
 }) => {
@@ -314,8 +314,8 @@ test("a phone with many spools starts compact, and Tiles brings the big ones bac
   const spools = page.getByRole("list", { name: "PLA spools" });
   await expect(spools).toBeVisible();
   // Compact: the spool's page holds the product line, so the tile has no second line, and the toggle shows.
-  await expect(page.getByRole("radio", { name: "Compact" })).toBeChecked();
-  await page.getByRole("radio", { name: "Tiles" }).click({ force: true });
-  await expect(page.getByRole("radio", { name: "Tiles" })).toBeChecked();
+  await expect(page.getByRole("radio", { name: "List" })).toBeChecked();
+  await page.getByRole("radio", { name: "Cards" }).click({ force: true });
+  await expect(page.getByRole("radio", { name: "Cards" })).toBeChecked();
   await page.evaluate(() => localStorage.removeItem("sg-pantry-density"));
 });

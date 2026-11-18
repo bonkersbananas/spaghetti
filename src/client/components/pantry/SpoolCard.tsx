@@ -1,5 +1,5 @@
 import type { Spool } from "@shared/api";
-import { slotLabel, spoolName } from "@shared/spools";
+import { slotLabel, softSlashes, spoolName } from "@shared/spools";
 import { Link } from "@tanstack/react-router";
 import { Chip } from "@/components/ui/Chip";
 import { RemainingMeter } from "@/components/ui/RemainingMeter";
@@ -84,18 +84,19 @@ export function SpoolChip({ spool }: { spool: Spool }) {
       <Link
         to="/pantry/$spoolId"
         params={{ spoolId: spool.id }}
-        className="pressable focus-ring bg-cream shadow-soft flex h-full flex-col items-center gap-1.5 rounded-lg px-1.5 pt-2 pb-2.5 text-center"
+        className="pressable focus-ring bg-cream shadow-soft relative flex h-full flex-col items-center gap-1.5 rounded-lg px-1.5 pt-1.5 pb-2.5 text-center"
       >
-        <div className="bg-ink/3 relative flex h-14 w-full items-center justify-center rounded-md">
-          <SpoolDisc color={spool.colorHex} colors={spool.colors} size="lg" className="size-11" />
-          {spool.slot && (
-            <Chip tone="semolina" className="tabular absolute -top-1 -right-1">
-              {spool.slot === "Ext" ? "Ext" : spool.slot}
-            </Chip>
-          )}
+        <div className="bg-ink/3 flex h-16 w-full items-center justify-center rounded-md">
+          <SpoolDisc color={spool.colorHex} colors={spool.colors} size="md" />
         </div>
-        <span className="text-small text-ink line-clamp-2 w-full leading-tight font-semibold [overflow-wrap:anywhere]">
-          {name.title}
+        {/* In the tile's corner, clear of the disc, as the Tiles view has it. */}
+        {spool.slot && (
+          <Chip tone="semolina" className="tabular absolute top-2.5 right-2.5">
+            {spool.slot === "Ext" ? "Ext" : spool.slot}
+          </Chip>
+        )}
+        <span className="text-small text-ink line-clamp-2 w-full leading-tight font-semibold">
+          {softSlashes(name.title)}
         </span>
         {spool.labelRead?.status === "reading" ? (
           <ReadingLine className="text-caption" />
@@ -103,7 +104,8 @@ export function SpoolChip({ spool }: { spool: Spool }) {
           <RemainingMeter
             remaining={spool.remaining}
             gramsLeft={spool.gramsLeft}
-            showLabel
+            // Words for what isn't full (or has grams); a full spool's three bars say it.
+            showLabel={spool.remaining !== "full" || spool.gramsLeft !== null}
             stacked
             className="mt-auto"
           />

@@ -103,6 +103,8 @@ function Pantry() {
     ? `${spools.length} ${spools.length === 1 ? "spool" : "spools"} on hand, ${loaded} loaded in the printer.`
     : "Every spool on hand, and what's loaded in the AMS.";
 
+  // On phones the "All spools" heading, with its choice, comes only with many spools (or while Compact is chosen).
+  const underAll = isDesktop || many || compact;
   // The spools by material: under "All spools" on desktop, straight on the page on phones.
   const materials = (
     <div className="flex flex-col gap-10 md:gap-12">
@@ -111,7 +113,7 @@ function Pantry() {
           key={group.material}
           id={`material-${group.material}`}
           // Under "All spools" on desktop; on phones, where that heading isn't drawn, they are the page's own sections.
-          as={isDesktop ? "h3" : "h2"}
+          as={underAll ? "h3" : "h2"}
           title={group.material}
           count={group.spools.length}
           size={view === "list" ? "overline" : "title"}
@@ -143,22 +145,6 @@ function Pantry() {
         </Section>
       ))}
     </div>
-  );
-
-  // The one quiet choice on a phone with many spools: tiles or compact.
-  // Shown with many spools, and wherever Compact was chosen (so it can always be undone).
-  const densityControl = !isDesktop && (many || compact) && (
-    <SegmentedControl<PantryDensity>
-      label="Spool size"
-      labelHidden
-      options={[
-        { value: "tiles", label: "Tiles" },
-        { value: "compact", label: "Compact" },
-      ]}
-      value={compact ? "compact" : "tiles"}
-      onChange={setDensity}
-      className="w-44 self-end"
-    />
   );
 
   return (
@@ -227,32 +213,44 @@ function Pantry() {
             <AmsLoadout readOnly={readOnly} onAddSpool={(slot) => openAdd(slot)} />
           </Section>
           <RunningLow low={low} />
-          {isDesktop ? (
+          {underAll ? (
             <Section
               id="all-spools"
               title="All spools"
               count={spools.length}
               aside={
-                <SegmentedControl<PantryView>
-                  label="View"
-                  labelHidden
-                  options={[
-                    { value: "cards", label: "Cards" },
-                    { value: "list", label: "List" },
-                  ]}
-                  value={view}
-                  onChange={setView}
-                  className="w-48"
-                />
+                isDesktop ? (
+                  <SegmentedControl<PantryView>
+                    label="View"
+                    labelHidden
+                    options={[
+                      { value: "cards", label: "Cards" },
+                      { value: "list", label: "List" },
+                    ]}
+                    value={view}
+                    onChange={setView}
+                    className="w-48"
+                  />
+                ) : (
+                  // The same words as the desktop's: on a phone, List is the compact three-across view.
+                  <SegmentedControl<PantryDensity>
+                    label="View"
+                    labelHidden
+                    options={[
+                      { value: "tiles", label: "Cards" },
+                      { value: "compact", label: "List" },
+                    ]}
+                    value={compact ? "compact" : "tiles"}
+                    onChange={setDensity}
+                    className="w-48"
+                  />
+                )
               }
             >
               {materials}
             </Section>
           ) : (
-            <>
-              {densityControl}
-              {materials}
-            </>
+            materials
           )}
         </div>
       )}
