@@ -9,6 +9,7 @@ import { RemainingMeter } from "@/components/ui/RemainingMeter";
 import { Section } from "@/components/ui/Section";
 import { SpoolDisc } from "@/components/ui/SpoolDisc";
 import { toast } from "@/components/ui/Toast";
+import { cn } from "@/lib/cn";
 import { type LowSpool, shoppingList } from "@/lib/running-low";
 import { useIsDesktop } from "@/lib/use-media-query";
 
@@ -75,7 +76,11 @@ export function RunningLow({
       }
     >
       <ul
-        className="bg-cream shadow-soft overflow-hidden rounded-lg xl:has-[li+li]:grid xl:has-[li+li]:grid-cols-2"
+        className={cn(
+          "bg-cream shadow-soft overflow-hidden rounded-lg",
+          // Two across only on the Pantry's full width; the Printer's half-width column keeps one.
+          copy && "xl:has-[li+li]:grid xl:has-[li+li]:grid-cols-2",
+        )}
         aria-label="Spools running low"
       >
         {low.map(({ spool, needs }) => {
