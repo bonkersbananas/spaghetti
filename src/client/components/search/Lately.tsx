@@ -58,7 +58,7 @@ function LatelyTile({ build }: { build: ItemView }) {
   else if (last) {
     // The time left (the last part of "Layer 70 of 205 · 30 min left"), the same words the sidebar and the cards use.
     const left = progress.state === "running" ? progress.label.split(" · ").at(-1) : undefined;
-    sub = left ? `Printing · ${left}` : "Printing";
+    sub = left ? `Printing · ${left.replace(/^Done around /, "till ")}` : "Printing";
   }
   return (
     <MiniCard
