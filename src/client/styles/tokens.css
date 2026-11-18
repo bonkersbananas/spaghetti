@@ -585,11 +585,13 @@
 }
 /*
  * A scrolling area inside a surface (a sheet's body): what scrolls under its
- * header or footer fades out instead of being cut off mid-line. The fade
- * sits within the area's own padding, so nothing is faded at rest.
+ * footer fades out instead of being cut off mid-line. The fade sits within the
+ * area's own padding, so nothing is faded at rest. Its top is cut clean: the
+ * sheet's header is solid and shows a hairline once the body has scrolled
+ * (Sheet.tsx), so no text shows through behind the title.
  */
 @utility scroll-fade {
-  mask-image: linear-gradient(to bottom, transparent, black 0.75rem, black calc(100% - 0.75rem), transparent);
+  mask-image: linear-gradient(to bottom, black calc(100% - 0.75rem), transparent);
 }
 
 /*
