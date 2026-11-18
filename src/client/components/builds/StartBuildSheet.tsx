@@ -36,7 +36,7 @@ function modelPlace(idea: ItemView): string | null {
   if (file) return file.name.split(".").at(-1)?.toUpperCase() || null;
   const mark = modelMarkIn(idea.note);
   if (!mark) return null;
-  return mark.kind === "file" ? mark.name.toUpperCase() : mark.name;
+  return mark.kind === "file" ? mark.name.replace(/^\./, "").toUpperCase() : mark.name;
 }
 
 const hasModel = (idea: ItemView) => modelPlace(idea) !== null;
@@ -227,7 +227,7 @@ export function StartBuildSheet({ open, onOpenChange, onFromScratch }: StartBuil
       tall={!showModel}
       footer={
         showModel ? undefined : (
-          <div className="flex items-center gap-3 md:justify-between">
+          <div className="flex w-full items-center gap-3 md:justify-between">
             <span className="text-caption text-ink-faint hidden items-center gap-3 md:flex">
               <Kbd keys={["↑", "↓"]} />
               <span className="flex items-center gap-1.5">
@@ -235,11 +235,11 @@ export function StartBuildSheet({ open, onOpenChange, onFromScratch }: StartBuil
               </span>
               <Kbd keys={["Esc"]} />
             </span>
-            <div className="grid flex-1 grid-cols-2 gap-2 md:flex md:flex-none">
-              <Button variant="secondary" icon={LinkIcon} onClick={() => setStep("model")} fullWidth>
+            <div className="grid flex-1 grid-cols-2 gap-2 md:flex md:flex-none md:gap-3">
+              <Button variant="secondary" icon={LinkIcon} onClick={() => setStep("model")} className="w-full md:w-auto">
                 Link or file
               </Button>
-              <Button variant="secondary" icon={PlusIcon} onClick={scratch} fullWidth>
+              <Button variant="secondary" icon={PlusIcon} onClick={scratch} className="w-full md:w-auto">
                 From scratch
               </Button>
             </div>

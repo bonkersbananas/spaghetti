@@ -202,7 +202,7 @@ export function PickTile({
       <span className="min-w-0">
         <span
           className={cn(
-            "text-small line-clamp-2 block break-words",
+            "text-small line-clamp-2 break-words",
             picked || active ? "text-ink font-semibold" : "text-ink-soft",
           )}
         >
