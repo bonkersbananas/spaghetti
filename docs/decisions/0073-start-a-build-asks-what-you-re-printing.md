@@ -1,0 +1,9 @@
+# 0073. "Start a build" asks what you're printing
+
+Status: Accepted
+
+**Decision:** "Start a build" (the empty Builds page's "Pick an idea to print") and the "New build" button, its + on phones and the N key on Builds open a picker, "What are you printing?": a bottom sheet on phones, a dialog on desktop, loaded on its own (not in Builds' first load, warmed just after the page). The ideas are a photo grid (`PickTile`, as the wishlist's picker), Up next first, then "Has a model" (a file or a model link), then "The rest"; each tile says where the model is and when the idea was captured ("MakerWorld · 2 days ago"), and note-only ideas show their note on an index card. On a desktop a search field is focused, the first tile is ringed, arrows move the ring and Enter starts it; phones have no search field. Picking an idea is Start building (the same record becomes the build, with Undo) and opens its build. "Link or file" is a second step, "From a link or a file": a model link (the app says what it recognised, "Benchy · MakerWorld"), or a picked or dropped .stl/.3mf. "From scratch" opens a blank build. With no ideas it goes straight to link and file.
+
+**Why:** in production 9 of 10 builds were opened from scratch and thrown away within minutes: an empty build page has nowhere to pick a model, a link or an idea.
+
+**A blank build leaves no ghost:** "From scratch" still makes the record at once (`createBuild`, which twist printing keeps using), because a lazily made build would have touched the build page's every effect. Instead the ids of builds made this way are kept in localStorage with their tab, and the Builds page silently deletes one that is still empty (no title, note, photo, file or attempt) at the next visit (`sweepUntouched`), as `discardIfUntouched` does on leaving. A tab that is still open (it keeps a heartbeat, cleared when it closes) keeps its own; a build someone typed into is kept.

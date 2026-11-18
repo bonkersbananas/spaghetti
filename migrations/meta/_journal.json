@@ -330,6 +330,13 @@
       "when": 1794846617693,
       "tag": "0046_item-titles",
       "breakpoints": true
+    },
+    {
+      "idx": 47,
+      "version": "6",
+      "when": 1795032702708,
+      "tag": "0047_shopping-item-spool",
+      "breakpoints": true
     }
   ]
 }

@@ -18,7 +18,7 @@ import { SegmentedControl } from "@/components/ui/SegmentedControl";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { shortcutCaps, useHotkeys } from "@/lib/hotkeys";
 import { useListPicker } from "@/lib/list-picker";
-import { loadSlot } from "@/lib/pantry";
+import { loadSlot, offerNextSlot } from "@/lib/pantry";
 import { spoolsQuery } from "@/lib/pantry-queries";
 import { COMPACT_ABOVE, type PantryDensity, type PantryView, usePantryDensity, usePantryView } from "@/lib/pantry-view";
 import { canEdit, useReadOnly } from "@/lib/read-only";
@@ -273,14 +273,12 @@ function Pantry() {
           <AddSpoolSheet
             open={adding.open}
             onOpenChange={(open) => setAdding((current) => ({ ...current, open }))}
-            description={
-              adding.slot
-                ? `It goes straight into ${adding.slot === "Ext" ? "the external holder" : `slot ${adding.slot}`}.`
-                : undefined
-            }
             stayPut={!!adding.slot}
+            slot={adding.slot}
             onAdded={(spool, saved) => {
-              if (adding.slot) void loadSlot(queryClient, adding.slot, spool.id, saved);
+              if (!adding.slot) return;
+              void loadSlot(queryClient, adding.slot, spool.id, saved);
+              offerNextSlot(queryClient, adding.slot, openAdd);
             }}
           />
         </Suspense>
