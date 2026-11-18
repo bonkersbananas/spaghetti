@@ -2,7 +2,7 @@ import type { Part } from "@shared/api";
 import { type AttemptSettings, describeChanges, OUTCOMES, type Outcome } from "@shared/attempts";
 import type { AttemptPart } from "@shared/parts";
 import { printerHints } from "@shared/spools";
-import { Fragment, type ReactNode, useState } from "react";
+import { Fragment, type ReactNode, useEffect, useRef, useState } from "react";
 import { Caution, FromFileMark } from "@/components/ui/Caution";
 import { Disclosure } from "@/components/ui/Disclosure";
 import { TextArea } from "@/components/ui/Field";
@@ -64,6 +64,8 @@ export interface FieldsProps {
   suggestion?: ReactNode;
   /** The closed settings row says what `suggestion` offers, in one line ("Worked on Hook: Textured PEI, 250 °C"). */
   suggestionOffer?: string;
+  /** A phone's sheet opens scrolled to its foot; false where something at the top asks first (a choice of slicer file). */
+  atFoot?: boolean;
   /** A new attempt: what carried over shows as chips to change one thing in place. */
   changeChips?: boolean;
   /** The slicer file: its card, a plate to pick, or the well to add one. */
@@ -183,6 +185,9 @@ export function AttemptFields(props: FieldsProps) {
           placeholder={outcome ? "One line is plenty." : "A line about this attempt"}
           maxLength={500}
           enterKeyHint="done"
+          onFocus={() => {
+            toEnd([150, 400]);
+          }}
           value={props.note}
           onChange={(event) => props.onNote(event.target.value.replace(/\n/g, " "))}
           onKeyDown={(event) => {
@@ -193,6 +198,12 @@ export function AttemptFields(props: FieldsProps) {
             else event.currentTarget.blur();
           }}
         />
+      </fieldset>
+    </Fragment>
+  );
+  const tagsBlock = (
+    <Fragment key="tagsBlock">
+      <fieldset disabled={props.readOnly === "all"} className="contents">
         {withTags && (
           <TagPicker
             kind="failure"
@@ -281,12 +292,32 @@ export function AttemptFields(props: FieldsProps) {
   );
   // On a phone the sheet reads bottom-up: what is done standing at the printer (the note, the photos, and "How did it
   // go?" last) sits at the foot, under the thumb, and the rarely changed settings are above. Desktop reads top-down.
+  // The sheet opens at its foot, where the thumb is: the part that reads bottom-up starts scrolled to its end, and
+  // goes back there when what sits below the outcome grows (its hint) or the keyboard comes up for the note.
+  const root = useRef<HTMLDivElement>(null);
+  const touched = useRef(false);
+  const toEnd = (delays: number[]) => {
+    if (isDesktop) return () => {};
+    let body: HTMLElement | null = root.current?.parentElement ?? null;
+    while (body && getComputedStyle(body).overflowY !== "auto") body = body.parentElement;
+    const scroller = body;
+    if (!scroller) return () => {};
+    const go = () => scroller.scrollTo({ top: scroller.scrollHeight });
+    if (!touched.current) go();
+    const timers = delays.map((ms) => window.setTimeout(go, ms));
+    return () => {
+      for (const timer of timers) window.clearTimeout(timer);
+    };
+  };
+  // biome-ignore lint/correctness/useExhaustiveDependencies: on opening, and when the outcome changes.
+  useEffect(() => (props.atFoot === false && outcome === null ? undefined : toEnd([60, 200, 450])), [outcome]);
   const blocks = isDesktop
     ? [
         outcomeBlock,
         plateBlock,
         photosBlock,
         noteBlock,
+        tagsBlock,
         coachBlock,
         whenBlock,
         fileBlock,
@@ -299,6 +330,7 @@ export function AttemptFields(props: FieldsProps) {
         notEnoughBlock,
         whenBlock,
         coachBlock,
+        tagsBlock,
         noteBlock,
         plateBlock,
         photosBlock,
@@ -308,6 +340,10 @@ export function AttemptFields(props: FieldsProps) {
   return (
     // biome-ignore lint/a11y/noStaticElementInteractions: it only listens to keys that bubble up from the controls inside.
     <div
+      ref={root}
+      onPointerDownCapture={(event) => {
+        if ((event.target as HTMLElement).closest("[role=radiogroup]") === null) touched.current = true;
+      }}
       className="flex flex-col gap-5"
       data-capture
       onKeyDown={(event) => {
