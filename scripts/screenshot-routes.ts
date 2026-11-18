@@ -734,7 +734,8 @@ async function removeTwistModels(page: Page) {
   modelTwists.splice(0);
 }
 
-/** Waits for a sliced model's card and brings it into view. */
+const BEFORE_MAIN = !!process.env.SG_BEFORE;
+
 /** Every read of an item answers with a drafted model page that names this material (the stand-in has no page to read). */
 async function draftSays(page: Page, material: string, site: "makerworld" | "printables") {
   await page.route(/\/api\/items\/[\w-]+$/, async (route) => {
@@ -755,6 +756,7 @@ async function draftSays(page: Page, material: string, site: "makerworld" | "pri
   });
 }
 
+/** Waits for a sliced model's card and brings it into view. */
 async function modelInView(page: Page) {
   await page.getByRole("region", { name: /^Files/ }).evaluate((region) => region.scrollIntoView({ block: "center" }));
   await page.waitForTimeout(300);

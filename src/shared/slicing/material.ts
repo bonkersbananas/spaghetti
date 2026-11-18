@@ -37,8 +37,3 @@ export function materialMismatch(
   if (used.some((key) => wanted.includes(key))) return null;
   return { page: wanted[0] ?? "", filament: first, material: materialKey(first.material) };
 }
-
-/** "MakerWorld says PETG; this is sliced with PLA." The site names where the words come from, never "the page". */
-export function materialMismatchSentence(mismatch: MaterialMismatch, siteName: string): string {
-  return `${siteName} says ${mismatch.page}; this is sliced with ${mismatch.material}.`;
-}

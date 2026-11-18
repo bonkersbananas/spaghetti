@@ -1,6 +1,5 @@
 import { fileUrl } from "@shared/api";
 import type { AttemptSettings } from "@shared/attempts";
-import { MODEL_SITES } from "@shared/model-links";
 import { isStlName, slicedName } from "@shared/slicing/files.ts";
 import { materialMismatch } from "@shared/slicing/material.ts";
 import { changeWords, modelSlicing, slicingAhead, slicingOfSlice } from "@shared/slicing/model.ts";
@@ -53,6 +52,7 @@ import { Skeleton } from "@/components/ui/Skeleton";
 import { toast } from "@/components/ui/Toast";
 import { type UploadState, useUpload } from "@/lib/big-upload";
 import { cn } from "@/lib/cn";
+import { siteName } from "@/lib/drafts";
 import { shortcutCaps, useHotkeys } from "@/lib/hotkeys";
 import { type AttemptFileView, itemQuery } from "@/lib/items";
 import { printerQuery, spoolsQuery } from "@/lib/pantry-queries";
@@ -867,7 +867,7 @@ export default function ModelFileCard({
       : null;
   const materialNote = mismatch
     ? {
-        site: MODEL_SITES.find((site) => site.id === pageItem?.draft?.site)?.name ?? "The model's page",
+        site: pageItem?.draft ? siteName(pageItem.draft) : "The model's page",
         page: mismatch.page,
         material: mismatch.material,
       }
