@@ -31,6 +31,8 @@ const RecipeResult = lazy(() => import("@/components/search/RecipeResult").then(
 
 /** What only some answers need (a spool, a mended typo, "Start again" on one that worked) loads when one appears. */
 const Extra = lazy(() => import("@/components/search/Extra"));
+/** The builds touched lately, under the suggestions: its code and photos come after the screen has drawn. */
+const Lately = lazy(() => import("@/components/search/Lately"));
 // The empty notebook's drawing (a long path): only a brand-new notebook shows it, so it isn't in Search's first load.
 const NoodleSearch = lazy(() =>
   import("@/components/illustrations/NoodleSearch").then((m) => ({ default: m.NoodleSearch })),
@@ -484,7 +486,9 @@ function Suggestions({
   }
   return (
     <div className="flex flex-col gap-6">
-      <p className="text-small text-ink-faint -mb-2">Ideas, builds and every attempt, by any word you remember.</p>
+      <p className="text-small text-ink-faint -mb-2 max-md:order-first">
+        Ideas, builds and every attempt, by any word you remember.
+      </p>
       {recent.length > 0 && (
         <SuggestionGroup
           title="Recent"
@@ -522,6 +526,13 @@ function Suggestions({
           ))}
         </SuggestionGroup>
       )}
+      {/* On a phone the strip leads (the tags and materials would push it under the tab bar), and its room is held while its
+          code arrives so nothing below it jumps; from md it sits last. */}
+      <div className="empty:hidden max-md:order-first">
+        <Suspense fallback={<div className="h-52 md:hidden" />}>
+          <Lately />
+        </Suspense>
+      </div>
     </div>
   );
 }

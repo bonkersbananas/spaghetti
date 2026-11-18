@@ -30,6 +30,11 @@ interface MiniCardProps {
   meta?: string;
   /** One quiet line under the title: what happened to it ("worked"). */
   sub?: string;
+  /**
+   * Wider on phones (about 150 px, so a Fraunces title fits a line) with the title on one line and the `sub` straight
+   * under it: a strip of builds, not a row of thumbnails (Search's Lately).
+   */
+  roomy?: boolean;
   /** Fill its cell on a phone (three across a grid) instead of the strip's fixed width. */
   fill?: boolean;
   /**
@@ -57,6 +62,7 @@ export function MiniCard({
   note,
   title,
   sub,
+  roomy,
   fill,
   gridScale,
   corner,
@@ -74,8 +80,12 @@ export function MiniCard({
       ref={ref}
       className={cn(
         "group/mini relative shrink-0 snap-start list-none",
-        gridScale ? "md:w-[calc((100%-2.5rem)/3)] xl:w-[calc((100%-3.75rem)/4)]" : "md:w-32 xl:w-44",
-        fill ? "w-full" : "w-26",
+        gridScale
+          ? "md:w-[calc((100%-2.5rem)/3)] xl:w-[calc((100%-3.75rem)/4)]"
+          : roomy
+            ? "md:w-44"
+            : "md:w-32 xl:w-44",
+        fill ? "w-full" : roomy ? "w-38" : "w-26",
         className,
       )}
     >
@@ -153,7 +163,8 @@ export function MiniCard({
               {heading ? (
                 <h3
                   className={cn(
-                    "text-small line-clamp-2 min-h-[2lh] leading-snug break-words",
+                    "text-small leading-snug break-words",
+                    roomy ? "truncate" : "line-clamp-2 min-h-[2lh]",
                     gridScale && "md:text-body md:min-h-0",
                     // A note standing in for a title is set as on Card: plain Figtree, not a title.
                     title ? "text-ink font-semibold" : "text-ink font-sans font-medium",

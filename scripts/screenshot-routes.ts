@@ -4579,7 +4579,19 @@ export const shots: Shot[] = [
     },
   },
   { name: "journal-failures", path: "/journal?outcome=failures" },
-  { name: "search", path: "/search" },
+  {
+    name: "search",
+    path: "/search",
+    prepare: async (page) => {
+      // Lately's tiles load after the screen has drawn (the base has none: no wait there).
+      await page
+        .getByRole("region", { name: "Lately" })
+        .locator("img")
+        .first()
+        .waitFor({ timeout: 4000 })
+        .catch(() => undefined);
+    },
+  },
   {
     // The search field's × with its target outlined: the field's full height to its right edge (before, the browser's
     // own 16 px button). The outline is the shot's, not the app's.
