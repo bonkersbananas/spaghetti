@@ -1715,6 +1715,13 @@ const BEFORE_MAIN = !!process.env.SG_BEFORE;
 /** Three filaments and a nozzle bought a minute ago, and the list scrolled to Bought. */
 async function boughtThings(page: Page) {
   const headers = { Origin: new URL(page.url()).origin };
+  // A second theme's run finds the first one's things: start from none of them.
+  const { shoppingItems } = (await (await page.request.get("/api/shopping-items")).json()) as {
+    shoppingItems: Array<{ id: string; name: string }>;
+  };
+  for (const old of shoppingItems.filter((item) => /Jade White|Black$|Charcoal|hardened nozzle/.test(item.name))) {
+    await page.request.delete(`/api/shopping-items/${old.id}`, { headers });
+  }
   for (const name of ["PLA Basic, Jade White", "PETG HF, Black", "PLA Matte, Charcoal", "0.2 mm hardened nozzle"]) {
     const id = crypto.randomUUID();
     await page.request.post("/api/shopping-items", { headers, data: { id, name } });
@@ -6524,6 +6531,28 @@ export const shots: Shot[] = [
       await page.getByRole("dialog", { name: "New spool" }).waitFor();
       await page.getByRole("textbox", { name: "Color name" }).scrollIntoViewIfNeeded();
       await page.waitForTimeout(500);
+    },
+    cleanup: async (page) => {
+      await page.keyboard.press("Escape");
+    },
+  },
+  {
+    // Adding a spool from an empty AMS slot: the button names the slot, the product chips carry a colour.
+    name: "spool-add-to-slot",
+    path: "/pantry",
+    prepare: async (page) => {
+      const headers = { Origin: new URL(page.url()).origin };
+      await page.request.put("/api/printer/slots/A1", { headers, data: { spoolId: null } });
+      await page.reload();
+      await page.getByRole("button", { name: /^A1 Empty/ }).click();
+      await page
+        .getByRole("dialog", { name: /^Slot / })
+        .getByRole("button", { name: "New spool" })
+        .click();
+      const sheet = page.getByRole("dialog", { name: "New spool" });
+      if (BEFORE_MAIN) await sheet.getByRole("radio", { name: "Jade white" }).click();
+      else await sheet.getByRole("button", { name: /Jade white$/ }).click();
+      await page.waitForTimeout(400);
     },
     cleanup: async (page) => {
       await page.keyboard.press("Escape");
