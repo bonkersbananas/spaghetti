@@ -297,14 +297,19 @@ const Idea = memo(function Idea({ item }: { item: ItemView }) {
   const keepFile = (file: File) => {
     if (!canEdit(item.pending)) return;
     // The new card comes in below the fold on a phone: bring it into view once it is there.
-    wantsNewFile.current = true;
+    // Only a longer list counts, and only for a while: a file that can't be read adds nothing, and a later removal
+    // or sync must not scroll the page.
+    wantsNewFile.current = files.length;
+    window.setTimeout(() => {
+      wantsNewFile.current = null;
+    }, 10_000);
     void addItemFile(queryClient, item.id, file);
   };
-  const wantsNewFile = useRef(false);
+  const wantsNewFile = useRef<number | null>(null);
   // biome-ignore lint/correctness/useExhaustiveDependencies: once per added file.
   useEffect(() => {
-    if (!wantsNewFile.current) return;
-    wantsNewFile.current = false;
+    if (wantsNewFile.current === null || files.length <= wantsNewFile.current) return;
+    wantsNewFile.current = null;
     let frames = 0;
     // The file list loads lazily: look for its last card for a few frames.
     const look = () => {
