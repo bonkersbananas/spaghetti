@@ -5680,7 +5680,8 @@ export const shots: Shot[] = [
     fullPage: true,
     prepare: async (page) => {
       // The lazy parts (the bays' "Dry first", Running low's shopping button) have drawn before the picture.
-      await page.getByText(/Dry (first|it before printing)/).first().waitFor();
+      // (A wide unit shows when a spool was dried instead.)
+      if ((page.viewportSize()?.width ?? 0) < 768) await page.getByText("Dry first").first().waitFor();
       await page.getByRole("button", { name: /Add to shopping list/ }).waitFor();
     },
   },
