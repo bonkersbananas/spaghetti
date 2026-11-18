@@ -1,4 +1,5 @@
 import { OUTCOME_LABELS } from "@shared/attempts";
+import { isOffTheBed } from "@shared/print-progress";
 import { relativeTime } from "@shared/time";
 import { useMemo } from "react";
 import { coverPhoto } from "@/components/ui/Card";
@@ -49,7 +50,7 @@ export default function Lately() {
                 title={cover.kind === "note" && cover.fromTitle ? undefined : build.title?.trim() || undefined}
                 sub={
                   last
-                    ? `${last.outcome ? OUTCOME_LABELS[last.outcome] : "Printing"} · ${relativeTime(last.finishedAt ?? last.printedAt)}`
+                    ? `${last.outcome ? OUTCOME_LABELS[last.outcome] : isOffTheBed(last) ? "Off the bed" : "Printing"} · ${relativeTime(last.finishedAt ?? last.endedAt ?? last.printedAt)}`
                     : undefined
                 }
               />
