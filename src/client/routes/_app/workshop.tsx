@@ -41,7 +41,7 @@ function Workshop() {
   const due = useDueUpkeep();
   const { toBuy, isPending: shoppingPending } = useShopping();
   const { twists } = useTwists();
-  // The pictures are drawn smaller on a phone, where the tile is as wide as the screen but short, so all four tiles show at once.
+  // The pictures are drawn smaller on a phone, where the tile is as wide as the screen but short (72 px wells), so all four tiles show at once.
   const isDesktop = useIsDesktop();
 
   // The first AMS unit as the printer has it, drawn as the unit: four bays, an empty ring in a free one (the printer's
@@ -95,7 +95,7 @@ function Workshop() {
                   color={spool.colorHex}
                   colors={spool.colors}
                   size={isDesktop ? "xl" : "md"}
-                  className="-ml-4 first:ml-0 md:-ml-9"
+                  className="-ml-3 first:ml-0 md:-ml-9"
                 />
               ))}
               {spools?.length === 0 && <SpoolDisc empty size={isDesktop ? "xl" : "md"} />}
@@ -144,12 +144,12 @@ function Workshop() {
                       key={thing.id}
                       src={thing.picture.url}
                       alt=""
-                      className="ring-cream -ml-3 size-12 rounded-md ring-2 first:ml-0 md:-ml-4 md:size-20"
+                      className="ring-cream -ml-3 size-16 rounded-md ring-2 first:ml-0 md:-ml-4 md:size-20"
                     />
                   ) : null,
                 )}
                 {toBuy.length > shown.length && (
-                  <span className="bg-cream text-ink-soft shadow-soft ring-cream tabular text-small -ml-3 flex size-12 items-center justify-center rounded-md font-semibold ring-2 md:-ml-4 md:size-20">
+                  <span className="bg-cream text-ink-soft shadow-soft ring-cream tabular text-small -ml-3 flex size-16 items-center justify-center rounded-md font-semibold ring-2 md:-ml-4 md:size-20">
                     +{toBuy.length - shown.length}
                   </span>
                 )}
@@ -173,8 +173,8 @@ function Workshop() {
                     alt=""
                     color={photo.color || undefined}
                     className={cn(
-                      "ring-cream shadow-raised h-12 w-16 rounded-md ring-2 md:h-24 md:w-32 md:ring-4",
-                      index === 0 ? "z-10 -rotate-3" : "-ml-4 rotate-6 opacity-90 md:-ml-8",
+                      "ring-cream shadow-raised h-16 w-[5.5rem] rounded-md ring-2 md:h-24 md:w-32 md:ring-4",
+                      index === 0 ? "z-10 -rotate-3" : "-ml-5 rotate-6 opacity-90 md:-ml-8",
                     )}
                   />
                 ))}
