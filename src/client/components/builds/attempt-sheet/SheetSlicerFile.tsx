@@ -7,6 +7,7 @@ import { filamentFromSpool, spoolFromFilament } from "@shared/spools";
 import { applyFileSettings, printablePlates } from "@shared/threemf/prefill.ts";
 import { useQuery, useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
 import { lazy, type ReactNode, Suspense, useEffect, useRef, useState } from "react";
+import { Button } from "@/components/ui/Button";
 import { ToggleChip } from "@/components/ui/Chip";
 import { SlicerFileIcon } from "@/components/ui/icons";
 import { useFilePicker } from "@/components/ui/PhotoTiles";
@@ -201,10 +202,13 @@ const ModelDraftCard = lazy(() => import("../ModelFile").then((m) => ({ default:
 export function DraftFile({
   state,
   onRemove,
+  onChange,
   onSlice,
 }: {
   state: SlicerState;
   onRemove: () => void;
+  /** A file the sheet took by itself (the idea's one slice): a way to pick another. */
+  onChange?: () => void;
   /** A model: slice it again, differently. */
   onSlice?: (chosen: SliceOptions) => void;
 }) {
@@ -215,10 +219,18 @@ export function DraftFile({
       </Suspense>
     );
   }
-  return <SlicerDraftFile state={state} onRemove={onRemove} />;
+  return <SlicerDraftFile state={state} onRemove={onRemove} onChange={onChange} />;
 }
 
-function SlicerDraftFile({ state, onRemove }: { state: SlicerState; onRemove: () => void }) {
+function SlicerDraftFile({
+  state,
+  onRemove,
+  onChange,
+}: {
+  state: SlicerState;
+  onRemove: () => void;
+  onChange?: () => void;
+}) {
   const plate = plateOf(state.draft, state.plate);
   const src = usePlateThumbUrl(plate);
   const plateCount = state.draft.result.plates.length;
@@ -236,6 +248,13 @@ function SlicerDraftFile({ state, onRemove }: { state: SlicerState; onRemove: ()
         state.draft.file.size > MAX_SLICER_FILE_BYTES
           ? `Over ${formatBytes(MAX_SLICER_FILE_BYTES)}, so only what it said will be kept.`
           : undefined
+      }
+      opener={
+        onChange && (
+          <Button variant="quiet" size="sm" onClick={onChange} className="-ml-2 self-start">
+            Change
+          </Button>
+        )
       }
       onRemove={onRemove}
       draft
@@ -282,19 +301,32 @@ export function SlicerFileSection({
   );
 }
 
-/** "From the idea": the files kept with the idea, to print this attempt from (the file's bytes come from the server). */
+/** The files kept with the idea that an attempt can print from: a slicer's file, or a model that has been sliced. */
+export const keptSlices = (files: readonly AttemptFile[]) =>
+  files.filter((file) => file.stored && (file.kind !== "model" || file.slice?.status === "sliced"));
+
+/** The name of what a kept file attaches: a model gives its sliced .gcode.3mf, not the .stl it was made from. */
+export const attachedName = (file: AttemptFile) => (file.kind === "model" ? slicedName(file.name) : file.name);
+
+/** "Sliced for this idea": the files kept with the idea, to print this attempt from (the file's bytes come from the server). */
 function IdeaFileOffer({ files, onUse }: { files: AttemptFile[]; onUse: (file: AttemptFile) => void }) {
+  const slices = keptSlices(files);
+  const latest = slices.reduce<AttemptFile | undefined>((a, b) => (a && a.createdAt >= b.createdAt ? a : b), undefined);
+  if (!latest) return null;
   return (
     <div className="flex flex-col gap-1.5 px-0.5">
-      <span className="text-small text-ink-faint">Kept with the idea:</span>
+      {slices.length > 1 && (
+        <Button variant="secondary" size="md" onClick={() => onUse(latest)} className="self-start">
+          Use the latest slice
+        </Button>
+      )}
+      <span className="text-small text-ink-faint">{slices.length > 1 ? "Or pick one:" : "Sliced for this idea:"}</span>
       <div className="flex flex-wrap gap-2">
-        {files
-          .filter((file) => file.stored && (file.kind !== "model" || file.slice?.status === "sliced"))
-          .map((file) => (
-            <ToggleChip key={file.id} icon={SlicerFileIcon} onClick={() => onUse(file)}>
-              <span className="max-w-48 truncate">{file.name}</span>
-            </ToggleChip>
-          ))}
+        {slices.map((file) => (
+          <ToggleChip key={file.id} icon={SlicerFileIcon} onClick={() => onUse(file)}>
+            <span className="max-w-48 truncate">{attachedName(file)}</span>
+          </ToggleChip>
+        ))}
       </div>
     </div>
   );

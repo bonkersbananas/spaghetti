@@ -1,3 +1,4 @@
+import { inlineTime } from "@shared/time";
 import { useState } from "react";
 import { TextField } from "@/components/ui/Field";
 import { CalendarIcon } from "@/components/ui/icons";
@@ -7,7 +8,10 @@ export const toLocalInput = (time: number) => {
   return date.toISOString().slice(0, 16);
 };
 
-/** When it printed: "Now" until someone picks another time. */
+/**
+ * When it printed, as one quiet line ("Printed just now · change", "Printed 12 min ago · change"); the date field
+ * only opens when someone taps "change".
+ */
 export function WhenField({
   value,
   onChange,
@@ -15,11 +19,11 @@ export function WhenField({
 }: {
   value: number | null;
   onChange: (time: number | null) => void;
-  /** No outcome yet: the print is starting, not already printed. */
+  /** No outcome yet: the print is starting (or was started), not already printed. */
   starting?: boolean;
 }) {
   const [editing, setEditing] = useState(false);
-  if (!editing && value === null) {
+  if (!editing) {
     return (
       <button
         type="button"
@@ -28,7 +32,11 @@ export function WhenField({
         className="pressable focus-ring touch-target text-small text-ink-soft hover:text-ink rounded-pill relative mb-2 -ml-2.5 inline-flex h-9 items-center gap-1.5 self-start pr-3 pl-2.5 font-semibold md:h-8"
       >
         <CalendarIcon size={16} aria-hidden />
-        {starting ? "Starting now" : "Printed just now"}
+        {value === null
+          ? starting
+            ? "Starting now"
+            : "Printed just now"
+          : `${starting ? "Started" : "Printed"} ${inlineTime(value)}`}
         <span className="text-ink-faint font-medium">· change</span>
       </button>
     );

@@ -490,3 +490,41 @@ test("Enter in the note starts the print when no outcome is picked", async ({ pa
     .poll(async () => (await getItem(page, id)).attempts.map((a: { outcome: string | null }) => a.outcome))
     .toEqual([null]);
 });
+
+test("on a phone the outcome and the photo tiles sit at the foot of the sheet, and the when line says 'Printed … · change'", async ({
+  page,
+  isMobile,
+}) => {
+  test.skip(!isMobile, "The order is for phones");
+  const id = crypto.randomUUID();
+  const headers = { Origin: origin(page) };
+  await page.request.post("/api/items", { headers, data: { id, title: "Hinge", stage: "building" } });
+  await page.goto(`/builds/${id}`);
+  await page.getByRole("button", { name: "Log attempt" }).first().click();
+  const sheet = page.getByRole("dialog", { name: "Attempt 1" });
+  const radio = sheet.getByRole("radio", { name: "Spaghetti" });
+  const note = sheet.getByRole("textbox", { name: "Note" });
+  const take = sheet.getByRole("button", { name: "Take photo" });
+  const start = sheet.getByRole("button", { name: "Start print" });
+  await expect(radio).toBeVisible();
+  const [r, n, t, s] = await Promise.all([radio, note, take, start].map((l) => l.boundingBox()));
+  // Bottom-up: the note, then the photo tiles, then the outcome, then the button.
+  expect(n && t && r && s && n.y < t.y && t.y < r.y && r.y < s.y).toBe(true);
+  await expect(sheet.getByText("Starting now")).toBeVisible();
+  await radio.click();
+  await expect(sheet.getByRole("button", { name: /Printed just now/ })).toBeVisible();
+  await sheet.getByRole("button", { name: "Log attempt" }).click();
+  await expect(sheet).toBeHidden();
+
+  // Finishing it later: the date is the same quiet line, and Delete is behind "…", not beside Done.
+  await expect.poll(async () => (await getItem(page, id)).attempts.length).toBe(1);
+  await page
+    .getByRole("button", { name: /Attempt 1/ })
+    .first()
+    .click();
+  const edit = page.getByRole("dialog", { name: "Attempt 1" });
+  await expect(edit.getByRole("button", { name: /^Printed just now/ })).toBeVisible();
+  await expect(edit.getByRole("button", { name: "Delete", exact: true })).toHaveCount(0);
+  await edit.getByRole("button", { name: "More for this attempt" }).click();
+  await expect(page.getByRole("button", { name: "Delete attempt" })).toBeVisible();
+});

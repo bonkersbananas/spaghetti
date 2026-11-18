@@ -1,3 +1,4 @@
+import type { AttemptFile } from "@shared/api";
 import { type AttemptSettings, carryOver, type Outcome } from "@shared/attempts";
 import { partsOnPlate } from "@shared/parts";
 import { useSuspenseQuery } from "@tanstack/react-query";
@@ -19,7 +20,7 @@ import { useIsDesktop } from "@/lib/use-media-query";
 import { offerLine, useWhatWorked, WhatWorkedSuggestion } from "../WhatWorkedSuggestion";
 import { AttemptFields } from "./AttemptFields";
 import { useOutcomeCounts } from "./PlateParts";
-import { DraftFile, fetchKeptFile, SlicerFileSection, useSlicerFile } from "./SheetSlicerFile";
+import { DraftFile, fetchKeptFile, keptSlices, SlicerFileSection, useSlicerFile } from "./SheetSlicerFile";
 import { WhenField } from "./WhenField";
 
 // Claude's ideas from the attempt before: only there when it went wrong.
@@ -80,6 +81,25 @@ export function LogAttempt({
     },
     incomingFile,
   });
+
+  // The first attempt prints from the idea's slice: with exactly one, it is attached as the sheet opens (taking it
+  // off, or picking another, is the person's choice and stays). With several there is a plain choice in the well.
+  const only = previous
+    ? undefined
+    : (() => {
+        const slices = keptSlices(item.files ?? []);
+        return slices.length === 1 ? slices[0] : undefined;
+      })();
+  const [declined, setDeclined] = useState(false);
+  const attachKept = async (kept: AttemptFile) => {
+    const file = await fetchKeptFile(kept);
+    // A kept model gives its sliced file, and what its slice said (no stand-in filament claimed).
+    if (file) void slicer.take(file, kept.kind === "model" ? kept.prefill : undefined);
+  };
+  // biome-ignore lint/correctness/useExhaustiveDependencies: once for each file the idea has, as the sheet opens.
+  useEffect(() => {
+    if (open && only && !declined && !slicer.state && !incomingFile) void attachKept(only);
+  }, [open, only?.id, declined]);
 
   const worked = useWhatWorked(item.id, draft.settings);
 
@@ -186,15 +206,19 @@ export function LogAttempt({
               onPlate={slicer.choosePlate}
               onAddUnknown={slicer.addUnknown}
               ideaFiles={previous ? undefined : item.files}
-              onUseIdeaFile={async (kept) => {
-                const file = await fetchKeptFile(kept);
-                // A kept model gives its sliced file, and what its slice said (no stand-in filament claimed).
-                if (file) void slicer.take(file, kept.kind === "model" ? kept.prefill : undefined);
-              }}
+              onUseIdeaFile={(kept) => void attachKept(kept)}
               unknown={slicer.unknownFilaments}
               card={
                 slicer.state && (slicer.state.prefill || slicer.state.draft.kind === "model") ? (
-                  <DraftFile state={slicer.state} onRemove={slicer.remove} onSlice={slicer.reslice} />
+                  <DraftFile
+                    state={slicer.state}
+                    onRemove={() => {
+                      setDeclined(true);
+                      slicer.remove();
+                    }}
+                    onChange={only ? slicer.picker.open : undefined}
+                    onSlice={slicer.reslice}
+                  />
                 ) : null
               }
             />

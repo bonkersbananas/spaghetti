@@ -6,6 +6,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef } from "react";
 import { createPortal } from "react-dom";
 import { SaveAsRecipe } from "@/components/recipes/SaveAsRecipe";
+import { ActionMenuItem, MoreMenu } from "@/components/ui/ActionMenu";
 import { Button } from "@/components/ui/Button";
 import { CameraIcon, ImageIcon, PlusIcon, TrashIcon } from "@/components/ui/icons";
 import { AddPhotoTile, PhotoThumb, useFilePicker } from "@/components/ui/PhotoTiles";
@@ -146,19 +147,20 @@ export function EditAttempt({
 
   const footer = (
     <>
-      <Button
-        variant="quiet"
-        icon={TrashIcon}
-        size={isDesktop ? "md" : "lg"}
-        disabled={!!readOnly}
-        onClick={() => {
-          deleteAttempt(queryClient, item.id, attempt);
-          onOpenChange(false);
-        }}
-        className="max-md:px-4"
-      >
-        Delete
-      </Button>
+      {/* Rare, and a slip next to Done is costly: delete lives behind "…", on the far side of the footer. */}
+      <MoreMenu label="More for this attempt" title="Attempt" description={`Attempt ${attempt.number}`} inSheet>
+        <ActionMenuItem
+          icon={TrashIcon}
+          tone="danger"
+          disabled={!!readOnly}
+          onSelect={() => {
+            deleteAttempt(queryClient, item.id, attempt);
+            onOpenChange(false);
+          }}
+        >
+          Delete attempt
+        </ActionMenuItem>
+      </MoreMenu>
       <SaveStatus state={saveState} className="ml-auto" />
       <Button
         variant={printing && !value.outcome ? "secondary" : "primary"}
@@ -245,7 +247,13 @@ export function EditAttempt({
             />
           ) : undefined
         }
-        when={<WhenField value={value.printedAt} onChange={(time) => change({ printedAt: time ?? Date.now() })} />}
+        when={
+          <WhenField
+            starting={printing && !value.outcome}
+            value={value.printedAt}
+            onChange={(time) => change({ printedAt: time ?? Date.now() })}
+          />
+        }
         photos={
           <div className="-mx-5 flex gap-2.5 overflow-x-auto px-5 py-1 md:-mx-6 md:px-6">
             {photos.map((photo, index) => (

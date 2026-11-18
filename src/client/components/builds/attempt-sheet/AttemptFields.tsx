@@ -2,7 +2,7 @@ import type { Part } from "@shared/api";
 import { type AttemptSettings, describeChanges, OUTCOMES, type Outcome } from "@shared/attempts";
 import type { AttemptPart } from "@shared/parts";
 import { printerHints } from "@shared/spools";
-import { type ReactNode, useState } from "react";
+import { Fragment, type ReactNode, useState } from "react";
 import { Caution, FromFileMark } from "@/components/ui/Caution";
 import { Disclosure } from "@/components/ui/Disclosure";
 import { TextArea } from "@/components/ui/Field";
@@ -145,27 +145,8 @@ export function AttemptFields(props: FieldsProps) {
     withOffer
   );
 
-  return (
-    // biome-ignore lint/a11y/noStaticElementInteractions: it only listens to keys that bubble up from the controls inside.
-    <div
-      className="flex flex-col gap-5"
-      data-capture
-      onKeyDown={(event) => {
-        // 1, 2, 3 answer "How did it go?" when focus isn't in a field (a note's digits are the note's).
-        if (props.readOnly === "all" || event.defaultPrevented || event.metaKey || event.ctrlKey || event.altKey)
-          return;
-        const target = event.target as HTMLElement;
-        if (target.closest("input, textarea, select, [contenteditable]")) return;
-        const index = Number(event.key) - 1;
-        if (!OUTCOMES[index]) return;
-        // Through the button itself, as a tap: the outcome's own moment plays and focus moves to the picked one.
-        const button = event.currentTarget.querySelectorAll<HTMLElement>('[role="radiogroup"] [role="radio"]')[index];
-        if (!button) return;
-        event.preventDefault();
-        button.focus();
-        button.click();
-      }}
-    >
+  const outcomeBlock = (
+    <Fragment key="outcomeBlock">
       <fieldset disabled={props.readOnly === "all"} className="contents">
         <div className="flex flex-col gap-3">
           <p className="text-small text-ink-soft px-0.5 font-semibold">{props.outcomeLabel}</p>
@@ -174,6 +155,10 @@ export function AttemptFields(props: FieldsProps) {
           {props.estimate}
         </div>
       </fieldset>
+    </Fragment>
+  );
+  const plateBlock = (
+    <Fragment key="plateBlock">
       {props.plate && (
         <fieldset disabled={!!props.readOnly} className="contents">
           <PlateParts
@@ -184,7 +169,11 @@ export function AttemptFields(props: FieldsProps) {
           />
         </fieldset>
       )}
-      {props.photos}
+    </Fragment>
+  );
+  const photosBlock = <Fragment key="photos">{props.photos}</Fragment>;
+  const noteBlock = (
+    <Fragment key="noteBlock">
       <fieldset disabled={props.readOnly === "all"} className="contents">
         {/* One line of meaning, but it wraps and grows so the whole note stays in view while typing. */}
         <TextArea
@@ -226,17 +215,37 @@ export function AttemptFields(props: FieldsProps) {
           />
         )}
       </fieldset>
+    </Fragment>
+  );
+  const coachBlock = (
+    <Fragment key="coachBlock">
       {/* Claude's ideas for the next try come after the photo, the note and the tags: those are what someone at the printer is doing. */}
       {props.coach}
+    </Fragment>
+  );
+  const whenBlock = (
+    <Fragment key="whenBlock">
       {/* Rarely changed, so it sits under the tags: a failed attempt's tags are in reach without a scroll. */}
       <fieldset disabled={!!props.readOnly} className="contents">
         {props.when}
       </fieldset>
+    </Fragment>
+  );
+  const fileBlock = (
+    <Fragment key="fileBlock">
       <fieldset disabled={!!props.readOnly} className="contents">
         {props.file}
       </fieldset>
+    </Fragment>
+  );
+  const notEnoughBlock = (
+    <Fragment key="notEnoughBlock">
       {/* Nothing has come off the spool until the print is done: a heads-up only while it hasn't been. */}
       {!outcome && <NotEnoughNote settings={settings} />}
+    </Fragment>
+  );
+  const settingsBlock = (
+    <Fragment key="settings">
       <div className="flex flex-col gap-2">
         <fieldset disabled={!!props.readOnly} className="contents">
           <Disclosure
@@ -268,6 +277,56 @@ export function AttemptFields(props: FieldsProps) {
           </Caution>
         )}
       </div>
+    </Fragment>
+  );
+  // On a phone the sheet reads bottom-up: what is done standing at the printer (the note, the photos, and "How did it
+  // go?" last) sits at the foot, under the thumb, and the rarely changed settings are above. Desktop reads top-down.
+  const blocks = isDesktop
+    ? [
+        outcomeBlock,
+        plateBlock,
+        photosBlock,
+        noteBlock,
+        coachBlock,
+        whenBlock,
+        fileBlock,
+        notEnoughBlock,
+        settingsBlock,
+      ]
+    : [
+        fileBlock,
+        settingsBlock,
+        notEnoughBlock,
+        whenBlock,
+        coachBlock,
+        noteBlock,
+        plateBlock,
+        photosBlock,
+        outcomeBlock,
+      ];
+
+  return (
+    // biome-ignore lint/a11y/noStaticElementInteractions: it only listens to keys that bubble up from the controls inside.
+    <div
+      className="flex flex-col gap-5"
+      data-capture
+      onKeyDown={(event) => {
+        // 1, 2, 3 answer "How did it go?" when focus isn't in a field (a note's digits are the note's).
+        if (props.readOnly === "all" || event.defaultPrevented || event.metaKey || event.ctrlKey || event.altKey)
+          return;
+        const target = event.target as HTMLElement;
+        if (target.closest("input, textarea, select, [contenteditable]")) return;
+        const index = Number(event.key) - 1;
+        if (!OUTCOMES[index]) return;
+        // Through the button itself, as a tap: the outcome's own moment plays and focus moves to the picked one.
+        const button = event.currentTarget.querySelectorAll<HTMLElement>('[role="radiogroup"] [role="radio"]')[index];
+        if (!button) return;
+        event.preventDefault();
+        button.focus();
+        button.click();
+      }}
+    >
+      {blocks}
     </div>
   );
 }
