@@ -1,11 +1,8 @@
 import { linkWords } from "@shared/links";
 import { type NoteSize, noteSize } from "@shared/notes";
 import { keepUnits } from "@shared/typography";
-import { Fragment, lazy, type ReactNode, Suspense, useCallback } from "react";
+import { Fragment, type ReactNode, useCallback } from "react";
 import { cn } from "@/lib/cn";
-
-// Its own chunk: only the grids that draw a doodle load it (the Journal, which also sets notes, never does).
-const Strand = lazy(() => import("./Strand"));
 
 const sizes: Record<NoteSize, string> = {
   xl: "text-note-xl",
@@ -45,33 +42,23 @@ interface NoteFaceProps {
 }
 
 /**
- * How many whole lines a box shows: the clamp that ends a note on a full line with an ellipsis, never through the
- * middle of one. Measured when the box's size is known (before paint) and again whenever it changes.
+ * The clamp that ends a note on a whole line with an ellipsis, never through the middle of one: the box's height in
+ * lines, set in the resize observer's own callback (it runs before the frame is painted, so a resize never shows a
+ * frame with the old count). The face's width is watched too: the type is in container units, so a wider face has
+ * taller lines in the same box.
  */
 function useWholeLines() {
-  const ref = useCallback((el: HTMLElement | null) => {
+  return useCallback((el: HTMLElement | null) => {
     if (!el) return;
-    const measure = () => {
-      const note = el.firstElementChild as HTMLElement | null;
-      if (!note) return;
-      const lh = Number.parseFloat(getComputedStyle(note).lineHeight);
-      if (!(lh > 0 && el.clientHeight > 0)) return;
-      // Set on the element itself, in the observer's callback: it runs before the frame is painted, so a resize
-      // never shows a frame with the old count (a state update could land a frame late).
-      const lines = Math.max(1, Math.floor((el.clientHeight + 1) / lh));
-      note.style.webkitLineClamp = String(lines);
-      note.style.maxHeight = `${lines}lh`;
-    };
-    // The box's height, and the face's width (the type is in container units: a wider face is a larger line height
-    // in the same box), and again once the fonts have arrived.
-    const observer = new ResizeObserver(measure);
+    const observer = new ResizeObserver(() => {
+      const note = el.firstElementChild as HTMLElement;
+      const lines = Math.floor((el.clientHeight + 1) / Number.parseFloat(getComputedStyle(note).lineHeight));
+      if (lines > 0) note.style.webkitLineClamp = String(lines);
+    });
     observer.observe(el);
-    if (el.parentElement?.parentElement) observer.observe(el.parentElement.parentElement);
-    measure();
-    void document.fonts?.ready.then(measure);
+    observer.observe(el.parentElement?.parentElement ?? el);
     return () => observer.disconnect();
   }, []);
-  return ref;
 }
 
 /**
@@ -119,9 +106,10 @@ export function NoteFace({ note, size, className, compact, clearBottom, maxSize,
         )}
         {/* Only a note short enough to leave the foot empty: a title-only idea or a few words: most of the card is empty. */}
         {doodle && !link && !compact && note.trim().length <= 32 && !/\n\s*\n/.test(note) && (
-          <Suspense fallback={null}>
-            <Strand />
-          </Suspense>
+          <span
+            aria-hidden
+            className="note-strand bg-tomato/25 pointer-events-none absolute bottom-[8cqi] left-[8cqi] aspect-[100/44] w-[34cqi]"
+          />
         )}
         {link && <p className="text-caption text-ink-faint mt-1.5 truncate">{link.site}</p>}
       </div>
