@@ -41,7 +41,7 @@ function Workshop() {
   const due = useDueUpkeep();
   const { toBuy, isPending: shoppingPending } = useShopping();
   const { twists } = useTwists();
-  // The pictures are drawn smaller on a phone, where the tile is as wide as the screen but not as tall.
+  // The pictures are drawn smaller on a phone, where the tile is as wide as the screen but short (72 px wells), so all four tiles show at once.
   const isDesktop = useIsDesktop();
 
   // The first AMS unit as the printer has it, drawn as the unit: four bays, an empty ring in a free one (the printer's
@@ -94,11 +94,11 @@ function Workshop() {
                   key={spool.id}
                   color={spool.colorHex}
                   colors={spool.colors}
-                  size={isDesktop ? "xl" : "lg"}
-                  className="-ml-6 first:ml-0 md:-ml-9"
+                  size={isDesktop ? "xl" : "md"}
+                  className="-ml-3 ring-2 first:ml-0 md:-ml-9 md:ring-1"
                 />
               ))}
-              {spools?.length === 0 && <SpoolDisc empty size="xl" />}
+              {spools?.length === 0 && <SpoolDisc empty size={isDesktop ? "xl" : "md"} />}
             </span>
           }
         />
@@ -114,10 +114,12 @@ function Workshop() {
                   return (
                     <span key={slot} className="flex flex-col items-center gap-1">
                       <SpoolDisc
-                        size="lg"
+                        size={isDesktop ? "lg" : "md"}
                         color={spools?.find((spool) => spool.id === spoolId)?.colorHex}
                         colors={spools?.find((spool) => spool.id === spoolId)?.colors}
                         empty={!spoolId}
+                        // A firmer rim at this size, so a black spool doesn't vanish on the dark well.
+                        className={spoolId ? "ring-2 md:ring-1" : undefined}
                       />
                       <span className="text-caption text-ink-faint tabular font-semibold tracking-wider uppercase">
                         {slot}
@@ -173,7 +175,7 @@ function Workshop() {
                     alt=""
                     color={photo.color || undefined}
                     className={cn(
-                      "ring-cream shadow-raised h-[4.5rem] w-24 rounded-md ring-2 md:h-24 md:w-32 md:ring-4",
+                      "ring-cream shadow-raised h-16 w-[5.5rem] rounded-md ring-2 md:h-24 md:w-32 md:ring-4",
                       index === 0 ? "z-10 -rotate-3" : "-ml-5 rotate-6 opacity-90 md:-ml-8",
                     )}
                   />
