@@ -110,6 +110,9 @@ test("grows an idea into a build, logs a failure and a success, and finishes it"
   // What carried over is a chip: tap the bed, change it in place, the settings stay folded.
   await sheet.getByRole("button", { name: "Change Bed 55 °C" }).click();
   await expect(sheet.getByLabel("Bed", { exact: true })).toHaveValue("55");
+  // Emptied to type a new number, the chip stays (in its place) and so does its field.
+  await sheet.getByLabel("Bed", { exact: true }).fill("");
+  await expect(sheet.getByRole("button", { name: "Change Bed" })).toBeVisible();
   await sheet.getByLabel("Bed", { exact: true }).fill("60");
   await sheet.getByRole("button", { name: /^Settings(?! worth)/ }).click();
   await sheet.getByRole("button", { name: "No brim" }).click();

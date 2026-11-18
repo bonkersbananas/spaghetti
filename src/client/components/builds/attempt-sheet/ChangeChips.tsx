@@ -50,6 +50,9 @@ export function ChangeChips({
     infillDensity: "Infill",
   };
   if (editing && !chips.some((chip) => chip.key === editing)) chips.push({ key: editing, label: NAMES[editing] });
+  // Always in the same order, so the chip under a finger stays put while its value is emptied and typed again.
+  const order = Object.keys(NAMES);
+  chips.sort((a, b) => order.indexOf(a.key) - order.indexOf(b.key));
   if (!chips.length) return null;
 
   const set = (next: Partial<AttemptSettings>) => onChange({ ...settings, ...next });
