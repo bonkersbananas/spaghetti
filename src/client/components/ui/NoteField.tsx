@@ -1,5 +1,5 @@
 import { findLinks, isLink } from "@shared/links";
-import { type ModelMark, sameModel, tidyModelLinks } from "@shared/model-mark";
+import { type ModelMark, sameModel, tidyModelLinks, withoutModelLines } from "@shared/model-mark";
 import { useQuery } from "@tanstack/react-query";
 import { useRef, useState } from "react";
 import { cn } from "@/lib/cn";
@@ -29,16 +29,6 @@ interface NoteFieldProps {
    */
   modelCardBelow?: boolean;
   className?: string;
-}
-
-/** The note without the lines that are only a link to `model`: the card says them. */
-function withoutModelLines(note: string, isModel: (url: string) => boolean): string {
-  const kept = note.split("\n").filter((line) => {
-    const links = findLinks(line);
-    const first = links[0];
-    return !(links.length === 1 && first && isModel(first.url) && line.trim() === first.url);
-  });
-  return kept.join("\n").replace(/\n{3,}/g, "\n\n").trim();
 }
 
 /** "makerworld.com/…": as much of a model's address as a note needs while its title is unknown. */
@@ -128,7 +118,7 @@ export function NoteField({
       ) : (
         <p className="text-lead text-ink md:text-body pointer-events-none relative break-words whitespace-pre-wrap">
           {linkify(
-            modelCardBelow && page ? withoutModelLines(value, isModel) : value,
+            modelCardBelow && page ? withoutModelLines(value, page.url) : value,
             "pointer-events-auto text-ink underline decoration-ink-ghost decoration-1 underline-offset-3 hover:decoration-ink focus-ring rounded-xs",
             page ? modelText : undefined,
           )}

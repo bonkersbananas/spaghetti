@@ -9,6 +9,7 @@ import {
   modelPlace,
   sameModel,
   tidyModelLinks,
+  withoutModelLines,
 } from "../../src/shared/model-mark.ts";
 
 const site = (url: string) => modelMarkOf(url)?.site ?? null;
@@ -153,5 +154,30 @@ describe("mirror links", () => {
     expect(sameModel(mirror, "https://makerworld.com/en/models/2487194-infinity-heart")).toBe(true);
     expect(linkKey(mirror)).toBe(linkKey("https://makerworld.com/models/2487194"));
     expect(sameModel(mirror, "https://makerworld.com/models/1")).toBe(false);
+  });
+});
+
+describe("withoutModelLines", () => {
+  const model = "https://www.printables.com/model/512340-bath-tugboat";
+
+  it("leaves out a line that is only the model's link", () => {
+    expect(withoutModelLines(`Chunky enough.\n\n${model}`, model)).toBe("Chunky enough.");
+  });
+
+  it("keeps a link inside a sentence", () => {
+    const note = `Print it from ${model} in halves`;
+    expect(withoutModelLines(note, model)).toBe(note);
+  });
+
+  it("returns a note with nothing to leave out exactly as typed", () => {
+    expect(withoutModelLines("  A\n\n\n\nB  \n", model)).toBe("  A\n\n\n\nB  \n");
+  });
+
+  it("keeps the model's link when it would get no card (past the first three links)", () => {
+    const note = ["https://a.example/1", "https://b.example/2", "https://c.example/3", model].join("\n");
+    expect(withoutModelLines(note, model)).toBe(note);
+    expect(withoutModelLines(["https://a.example/1", "https://b.example/2", model].join("\n"), model)).toBe(
+      "https://a.example/1\nhttps://b.example/2",
+    );
   });
 });
