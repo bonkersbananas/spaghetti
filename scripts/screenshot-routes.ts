@@ -6591,7 +6591,7 @@ export const shots: Shot[] = [
     path: "/builds",
     prepare: async (page) => {
       const sheet = await buildKeeping(page, 3);
-      await sheet.getByRole("button", { name: "Use the latest slice" }).waitFor();
+      await sheet.getByRole("list", { name: "Slices kept with the idea" }).waitFor();
       await page.waitForTimeout(600);
     },
     cleanup: async (page) => {
@@ -6620,7 +6620,7 @@ export const shots: Shot[] = [
     prepare: async (page) => {
       const sheet = await finishSheet(page);
       await sheet.getByRole("radio", { name: "Spaghetti" }).click();
-      await page.waitForTimeout(900);
+      await page.waitForTimeout(3500);
     },
     cleanup: async (page) => {
       await page.keyboard.press("Escape");
@@ -6661,9 +6661,9 @@ export const shots: Shot[] = [
     prepare: async (page) => {
       const sheet = await finishSheet(page);
       await sheet.getByRole("radio", { name: "Spaghetti" }).click();
-      await page.waitForTimeout(900);
-      await sheet.evaluate((element) => {
-        for (const child of element.querySelectorAll<HTMLElement>("*")) {
+      await page.waitForTimeout(3500);
+      await page.evaluate(() => {
+        for (const child of Array.from(document.querySelectorAll<HTMLElement>("[role=dialog] *"))) {
           if (getComputedStyle(child).overflowY === "auto") child.scrollTo({ top: 0 });
         }
       });
@@ -6686,7 +6686,8 @@ export const shots: Shot[] = [
         .or(sheet.getByRole("button", { name: /change$/ }))
         .first()
         .click();
-      await page.waitForTimeout(700);
+      await sheet.getByLabel("When it printed").scrollIntoViewIfNeeded();
+      await page.waitForTimeout(3500);
     },
     cleanup: async (page) => {
       await page.keyboard.press("Escape");

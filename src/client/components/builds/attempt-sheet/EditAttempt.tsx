@@ -149,7 +149,11 @@ export function EditAttempt({
 
   const footer = (
     <>
-      <SaveStatus state={saveState} className="md:ml-auto" />
+      {/* On a phone it floats just above Done (the sheet is its positioned parent), so Done keeps the whole width. */}
+      <SaveStatus
+        state={saveState}
+        className="max-md:absolute max-md:right-5 max-md:bottom-[max(5.25rem,calc(var(--sg-safe-bottom)+4.25rem))] md:ml-auto"
+      />
       <Button
         variant={printing && !value.outcome ? "secondary" : "primary"}
         size={isDesktop ? "md" : "lg"}
