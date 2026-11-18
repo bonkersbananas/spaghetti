@@ -84,6 +84,7 @@ export const SHORTCUTS = define([
 
   { id: "listNext", group: "lists", label: "Next card", keys: ["j"] },
   { id: "listPrevious", group: "lists", label: "Previous card", keys: ["k"] },
+  { id: "buildStart", group: "lists", label: "New build (on Builds)", keys: ["n"] },
   { id: "listUpNext", group: "lists", label: "Up next on or off (Ideas)", keys: ["u"] },
   { id: "listMoveEarlier", group: "lists", label: "Earlier in Up next", keys: ["["] },
   { id: "listMoveLater", group: "lists", label: "Later in Up next", keys: ["]"] },

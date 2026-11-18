@@ -23,8 +23,8 @@ async function openPicker(page: Page) {
     .getByRole("button", { name: /^(New build|Pick an idea to print)$/ })
     .first()
     .click();
-  const sheet = page.getByRole("dialog", { name: "What are you printing?" });
-  await expect(sheet).toBeVisible();
+  const sheet = page.getByRole("dialog");
+  await expect(sheet.getByRole("heading", { name: "What are you printing?" })).toBeVisible();
   return sheet;
 }
 
@@ -57,6 +57,18 @@ test("Enter in the search takes the first idea, Up next first", async ({ page })
   await expect(page).toHaveURL(new RegExp(`/builds/${queued}`));
 });
 
+test("arrow keys move the ringed tile and Enter starts that one", async ({ page }) => {
+  await makeIdea(page, "First idea");
+  const second = await makeIdea(page, "Second idea");
+  const sheet = await openPicker(page);
+  // Newest first: Second idea is ringed on open. Right goes to the next tile.
+  const search = sheet.getByRole("textbox", { name: "Search ideas" });
+  await search.press("ArrowRight");
+  await search.press("ArrowLeft");
+  await search.press("Enter");
+  await expect(page).toHaveURL(new RegExp(`/builds/${second}`));
+});
+
 test("a model link starts a build that has the link", async ({ page }) => {
   await makeIdea(page, "Something else");
   const sheet = await openPicker(page);
@@ -75,10 +87,10 @@ test("with no ideas the sheet says so and goes to link and file", async ({ page 
   await expect(sheet.getByRole("textbox", { name: "Model link" })).toBeVisible();
 });
 
-test("Something new left empty leaves nothing behind", async ({ page }) => {
+test("From scratch left empty leaves nothing behind", async ({ page }) => {
   await makeIdea(page, "An idea");
   const sheet = await openPicker(page);
-  await sheet.getByRole("button", { name: "Something new" }).click();
+  await sheet.getByRole("button", { name: "From scratch" }).click();
   await expect(page).toHaveURL(/\/builds\/[0-9a-f-]{36}/);
   const id = new URL(page.url()).pathname.split("/").pop() as string;
   await expect.poll(async () => (await page.request.get(`/api/items/${id}`)).status()).toBe(200);
@@ -90,7 +102,7 @@ test("Something new left empty leaves nothing behind", async ({ page }) => {
 test("a build left by a closed tab is swept on the next visit to Builds", async ({ page }) => {
   await makeIdea(page, "An idea");
   const sheet = await openPicker(page);
-  await sheet.getByRole("button", { name: "Something new" }).click();
+  await sheet.getByRole("button", { name: "From scratch" }).click();
   const id = new URL(page.url()).pathname.split("/").pop() as string;
   await expect.poll(async () => (await page.request.get(`/api/items/${id}`)).status()).toBe(200);
   // A reload is a closed tab: the page's own cleanup never runs.

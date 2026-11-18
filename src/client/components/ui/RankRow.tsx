@@ -126,39 +126,69 @@ function NoteCardThumb({ size }: { size: number }) {
 }
 
 interface PickTileProps {
-  photo?: { src: string; color?: string };
+  photo?: { src: string; color?: string; fit?: "cover" | "contain" };
   /** The note, when it says more than the name under the tile (otherwise leave it out). */
   note?: string;
   title: string;
-  /** Its place on the list when picked; null when it isn't on it. */
-  rank: number | null;
+  /** A quiet line under the name ("MakerWorld · 2 days ago"). */
+  meta?: ReactNode;
+  /** Its place on the list when picked; null when it isn't on it. Left out (undefined): not a toggle, a tap just takes it. */
+  rank?: number | null;
+  /** The tile Enter would take: a ring while the keys move it (a picker with a search field). */
+  active?: boolean;
+  onActive?: () => void;
   onToggle: () => void;
   disabled?: boolean;
+  className?: string;
 }
 
 /**
- * An idea to pick for a list, photo first: a square tile with the name under it. Picked, it wears its place
- * (the RankMark) over the photo's corner and a semolina ring. It is a toggle button (`aria-pressed`).
+ * An idea to pick, photo first: a square tile with the name under it. For a list, picked it wears its place
+ * (the RankMark) over the photo's corner and a semolina ring, and is a toggle button (`aria-pressed`). Without a
+ * `rank` it is a plain choice (start a build from it), and `active` rings the one the keyboard is on.
  */
-export function PickTile({ photo, note, title, rank, onToggle, disabled }: PickTileProps) {
-  const picked = rank !== null;
+export function PickTile({
+  photo,
+  note,
+  title,
+  meta,
+  rank,
+  active,
+  onActive,
+  onToggle,
+  disabled,
+  className,
+}: PickTileProps) {
+  const picked = rank !== null && rank !== undefined;
   const isDesktop = useIsDesktop();
   return (
     <button
       type="button"
-      aria-pressed={picked}
+      aria-pressed={rank === undefined ? undefined : picked}
       disabled={disabled}
       onClick={onToggle}
-      className="pressable focus-ring group/pick flex min-w-0 flex-col gap-1.5 rounded-lg text-left"
+      onPointerMove={onActive}
+      className={cn("pressable focus-ring group/pick flex min-w-0 flex-col gap-1.5 rounded-lg text-left", className)}
     >
       <span
         className={cn(
           "bg-well duration-fast relative aspect-square w-full overflow-hidden rounded-lg transition-shadow",
-          picked ? "ring-semolina ring-offset-lifted ring-3 ring-offset-2" : "shadow-well",
+          picked
+            ? "ring-semolina ring-offset-lifted ring-3 ring-offset-2"
+            : active
+              ? "ring-select ring-offset-lifted shadow-well ring-2 ring-offset-2"
+              : "shadow-well",
         )}
       >
         {photo ? (
-          <Photo src={photo.src} alt="" color={photo.color} className="size-full" />
+          <Photo
+            src={photo.src}
+            alt=""
+            color={photo.color}
+            fit={photo.fit}
+            frame={photo.fit === "contain" ? "render-tile" : undefined}
+            className={cn("size-full", photo.fit === "contain" && "p-1")}
+          />
         ) : note ? (
           // The note's words, set small on a phone so no word breaks, and clear of the rank badge.
           <NoteFace note={note} compact={!isDesktop} clearBottom />
@@ -169,8 +199,16 @@ export function PickTile({ photo, note, title, rank, onToggle, disabled }: PickT
         )}
         {picked && <RankMark rank={rank} tone="badge" className="absolute right-1.5 bottom-1.5" />}
       </span>
-      <span className={cn("text-small line-clamp-2 break-words", picked ? "text-ink font-semibold" : "text-ink-soft")}>
-        {title}
+      <span className="min-w-0">
+        <span
+          className={cn(
+            "text-small line-clamp-2 block break-words",
+            picked || active ? "text-ink font-semibold" : "text-ink-soft",
+          )}
+        >
+          {title}
+        </span>
+        {meta && <span className="text-caption text-ink-faint block truncate">{meta}</span>}
       </span>
     </button>
   );

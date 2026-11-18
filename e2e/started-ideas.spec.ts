@@ -24,13 +24,13 @@ async function makeIdea(page: Page, title: string) {
   return id;
 }
 
-/** "New build" (or the empty page's button) opens the picker; "Something new" there opens a blank build. */
+/** "New build" (or the empty page's button) opens the picker; "From scratch" there opens a blank build. */
 async function startFromScratch(page: Page) {
   await page
     .getByRole("button", { name: /^(New build|Pick an idea to print)$/ })
     .first()
     .click();
-  await page.getByRole("dialog").getByRole("button", { name: "Something new" }).click();
+  await page.getByRole("dialog").getByRole("button", { name: "From scratch" }).click();
 }
 
 /** A promise to wait on and the function that settles it. */

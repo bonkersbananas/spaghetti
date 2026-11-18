@@ -16,6 +16,7 @@ import { Section as PageSection } from "@/components/ui/Section";
 import { CardSkeleton, Skeleton } from "@/components/ui/Skeleton";
 import { useVia } from "@/lib/agents";
 import { createBuild, lastActivity, printingAttempts } from "@/lib/builds";
+import { shortcutCaps, useHotkeys } from "@/lib/hotkeys";
 import { type ItemView, sweepUntouched, useBuilds } from "@/lib/items";
 import { useListPicker } from "@/lib/list-picker";
 import { useArrived } from "@/lib/live";
@@ -59,6 +60,7 @@ function Builds() {
   const fromScratch = useNewBuild();
   const [picking, setPicking] = useState(false);
   const newBuild = () => setPicking(true);
+  useHotkeys({ buildStart: isPending ? undefined : newBuild });
   // A blank build left by closing the tab on it is cleared at the next visit.
   useEffect(() => {
     if (!isPending) sweepUntouched(queryClient, items);
@@ -84,7 +86,7 @@ function Builds() {
         actions={
           // An empty list has its own "Start a build": one way to start, not two.
           (isPending || items.length > 0) && (
-            <Button variant="secondary" icon={PlusIcon} onClick={newBuild}>
+            <Button variant="secondary" icon={PlusIcon} onClick={newBuild} shortcut={shortcutCaps("buildStart")}>
               New build
             </Button>
           )
@@ -196,7 +198,7 @@ function Section({
   );
 }
 
-/** Starts an empty build and opens it (From scratch, and "Something new" in the picker), with the title ready to type. */
+/** Starts an empty build and opens it (From scratch, here and in the picker), with the title ready to type. */
 function useNewBuild() {
   const navigate = useNavigate();
   const { data: user } = useSuspenseQuery(sessionQuery);
@@ -215,7 +217,7 @@ function BuildsEmpty({ onNew, onScratch }: { onNew: () => void; onScratch: () =>
       title="Nothing cooking yet"
       action={
         <div className="flex flex-col items-center gap-2">
-          <Button variant={isDesktop ? "secondary" : "primary"} icon={PlusIcon} onClick={onNew}>
+          <Button variant={isDesktop ? "secondary" : "primary"} onClick={onNew}>
             Pick an idea to print
           </Button>
           <Button variant="quiet" size="sm" onClick={onScratch}>
@@ -224,8 +226,7 @@ function BuildsEmpty({ onNew, onScratch }: { onNew: () => void; onScratch: () =>
         </div>
       }
     >
-      When an idea is ready to print, start building from it, or start one from scratch here. Every attempt, setting and
-      photo gets tracked.
+      A build follows one print from the first try to the one that worked: every attempt, setting and photo.
     </EmptyState>
   );
 }
