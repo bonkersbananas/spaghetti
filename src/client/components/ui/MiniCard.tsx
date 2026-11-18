@@ -160,7 +160,7 @@ export function MiniCard({
                 <ImageIcon size={24} weight="light" aria-hidden />
               </div>
             )}
-            {unread && <UnreadDot label="New comment" ring="ring-cream" className="absolute top-2 left-2 size-2.5" />}
+            {unread && <UnreadDot label="New comment" ring="ring-on-veil" className="absolute top-2 left-2 size-2.5" />}
           </div>
           {(heading || ((photo || !note) && meta)) && (
             // The padding is on the wrapper: a clamped heading shows its next line in its own padding.

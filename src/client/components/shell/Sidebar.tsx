@@ -46,15 +46,19 @@ function NavItems({ items }: { items: Section[] }) {
     <Link key={to} to={to} className={itemClass}>
       {({ isActive }) => (
         <>
-          <Icon
-            size={20}
-            weight={isActive ? "fill" : "regular"}
-            className={isActive ? "text-tomato" : "text-ink-faint group-hover:text-ink-soft"}
-            aria-hidden
-          />
+          {/* What waits unread is on Today (the comment line): the dot sits on the icon's corner, as on the tab bar. */}
+          <span className="relative flex">
+            <Icon
+              size={20}
+              weight={isActive ? "fill" : "regular"}
+              className={isActive ? "text-tomato" : "text-ink-faint group-hover:text-ink-soft"}
+              aria-hidden
+            />
+            {to === "/today" && unread && !isActive && (
+              <UnreadDot label="Something new" ring="ring-paper-deep" className="absolute -top-0.5 -right-1" />
+            )}
+          </span>
           <span className="flex-1">{label}</span>
-          {/* What waits unread is on Today (the comment line) and in the Journal's Since block. */}
-          {to === "/today" && unread && !isActive && <UnreadDot label="Something new" ring="ring-paper-deep" />}
           <Kbd
             keys={shortcutCaps(shortcut)}
             className="duration-fast opacity-60 transition-opacity group-hover:opacity-100"

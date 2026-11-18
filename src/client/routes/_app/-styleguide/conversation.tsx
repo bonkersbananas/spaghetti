@@ -132,8 +132,9 @@ export function ConversationSection() {
               <span className="flex items-center gap-2">
                 Journal <UnreadDot label="Something new" />
               </span>
-              <span className="flex items-center gap-2">
-                Up next card <UnreadDot label="New comment" className="size-2.5" />
+              <span className="bg-veil flex items-center gap-2 rounded-md px-3 py-2">
+                <span className="text-on-veil">Over a photo</span>
+                <UnreadDot label="New comment" ring="ring-on-veil" className="size-2.5" />
               </span>
             </div>
             <p className="text-small text-ink-faint mt-3">
