@@ -486,7 +486,9 @@ function Suggestions({
   }
   return (
     <div className="flex flex-col gap-6">
-      <p className="text-small text-ink-faint -mb-2">Ideas, builds and every attempt, by any word you remember.</p>
+      <p className="text-small text-ink-faint -mb-2 max-md:order-first">
+        Ideas, builds and every attempt, by any word you remember.
+      </p>
       {recent.length > 0 && (
         <SuggestionGroup
           title="Recent"
@@ -524,9 +526,13 @@ function Suggestions({
           ))}
         </SuggestionGroup>
       )}
-      <Suspense fallback={null}>
-        <Lately />
-      </Suspense>
+      {/* On a phone the strip leads (the tags and materials would push it under the tab bar), and its room is held while its
+          code arrives so nothing below it jumps; from md it sits last. */}
+      <div className="empty:hidden max-md:order-first">
+        <Suspense fallback={<div className="h-52 md:hidden" />}>
+          <Lately />
+        </Suspense>
+      </div>
     </div>
   );
 }
