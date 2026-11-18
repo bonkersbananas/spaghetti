@@ -98,7 +98,7 @@ function Workshop() {
                   className="-ml-4 first:ml-0 md:-ml-9"
                 />
               ))}
-              {spools?.length === 0 && <SpoolDisc empty size="xl" />}
+              {spools?.length === 0 && <SpoolDisc empty size={isDesktop ? "xl" : "md"} />}
             </span>
           }
         />
