@@ -451,6 +451,9 @@ async function newModelIdea(page: Page, note: string) {
   }, note);
 }
 
+let namedFromLink: string | null = null;
+const PRINTABLES_CLOSED =
+  "https://www.printables.com/model/1577248-carrying-handle-for-ikea-antilop-high-chair-legs#preview.eSga8";
 const FLEXI_LINK = "https://makerworld.com/en/models/3531476-flexi-mini-hummingbird?from=search#profileId-4037895";
 
 /**
@@ -4999,10 +5002,42 @@ export const shots: Shot[] = [
     name: "draft-failed",
     path: "/ideas",
     prepare: async (page) => {
-      const id = await newModelIdea(page, "https://www.printables.com/model/3-broken-hook");
+      const id = await newModelIdea(page, "https://makerworld.com/en/models/3-broken-hook");
       await openIdea(page, id);
       await page.getByRole("button", { name: "Draft from this page" }).click();
       await page.getByText("Claude couldn't read that page.").waitFor();
+      await page.waitForTimeout(300);
+    },
+  },
+  {
+    // A Printables link Printables keeps closed to us: named from the link, no retry (decision 0071).
+    name: "draft-named-from-link",
+    path: "/ideas",
+    prepare: async (page) => {
+      const id = await newModelIdea(page, PRINTABLES_CLOSED);
+      namedFromLink = id;
+      await openIdea(page, id);
+      await page.getByRole("button", { name: "Draft from this page" }).click();
+      await page.getByText("Named from the link.").waitFor();
+      await page.waitForTimeout(300);
+    },
+    cleanup: async (page) => {
+      if (namedFromLink)
+        await page.request.delete(`/api/items/${namedFromLink}`, { headers: { Origin: new URL(page.url()).origin } });
+    },
+  },
+  {
+    // The same idea as its card in Ideas.
+    name: "ideas-named-from-link",
+    path: "/ideas",
+    prepare: async (page) => {
+      const id = await newModelIdea(page, PRINTABLES_CLOSED);
+      await page.request.post(`/api/items/${id}/draft`, {
+        headers: { Origin: new URL(page.url()).origin },
+        data: {},
+      });
+      await page.reload();
+      await page.getByText("Carrying handle for IKEA Antilop high chair legs").first().waitFor();
       await page.waitForTimeout(300);
     },
   },

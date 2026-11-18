@@ -8,12 +8,13 @@ import type { ModelSiteId } from "./model-links.ts";
 export const DRAFTS_PER_DAY = 30;
 
 /** Why a draft didn't come: each is shown as one honest line with a retry (the cap says it plainly). */
-export type DraftFailure = "unreadable" | "refused" | "timeout" | "cap";
+export type DraftFailure = "unreadable" | "refused" | "timeout" | "cap" | "closed";
 
 export const FAILURE_LINES: Record<DraftFailure, string> = {
   unreadable: "Claude couldn't read that page.",
   refused: "Claude couldn't draft that one.",
   timeout: "Reading the page took too long.",
+  closed: "Printables keeps its pages closed to Claude.",
   cap: "That's enough drafts for today. It starts fresh tomorrow.",
 };
 
@@ -32,7 +33,7 @@ export interface DraftFindings {
 export interface ItemDraft {
   status: "reading" | "drafted" | "failed";
   site: ModelSiteId;
-  /** The page it reads or read. */
+  /** The page it reads or read. For a failed draft whose title is applied, the title came from the link's own words (decision 0071). */
   url: string;
   failure: DraftFailure | null;
   /** Which of the idea's own fields it filled; the text it wrote is `title` and `note`, so the screen can tell whether they are still untouched. */

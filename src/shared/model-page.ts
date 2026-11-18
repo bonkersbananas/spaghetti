@@ -7,6 +7,8 @@
  */
 import type { ModelSiteId } from "./model-links.ts";
 
+export { printablesTitleFromLink } from "./model-name.ts";
+
 export interface PageFacts {
   title: string | null;
   designer: string | null;

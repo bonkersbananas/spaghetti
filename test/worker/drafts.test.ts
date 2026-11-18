@@ -3,9 +3,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { NewTokenResponse } from "../../src/shared/agents.ts";
 import type { DraftResponse, FeaturesResponse, ItemResponse } from "../../src/shared/api.ts";
 import { DRAFTS_PER_DAY } from "../../src/shared/draft.ts";
-import { printablesApiUrl as printablesApiUrlFor } from "../../src/shared/model-page.ts";
 import { app } from "../../src/worker/app.ts";
-import { resumeDrafts, STALE_MS } from "../../src/worker/draft/run.ts";
+import { getDb } from "../../src/worker/db/index.ts";
+import { nameClosedPrintables, resumeDrafts, STALE_MS } from "../../src/worker/draft/run.ts";
 import makerworldPage from "../fixtures/pages/makerworld.html?raw";
 import makerworldDesign from "../fixtures/pages/makerworld-design.json?raw";
 import golfPage from "../fixtures/pages/makerworld-golf.html?raw";
@@ -518,122 +518,53 @@ describe("drafting an idea from a model page", () => {
       expect((await getItem(id)).title).toBeNull();
     });
 
-    it("when the Worker is throttled, Claude's fetch is handed the API's address, and what it read is the model", async () => {
-      const web = stubWeb(
-        {
-          // Claude's own words for the facts are not taken: the API's are.
-          json: { ...goodDraft, title: "Antilop leg handle", designer: "someone", imageUrls: [] },
-          fetched: { [MODEL]: null, [printablesApiUrlFor("1577248")]: printablesPrint },
-        },
-        blocked,
-      );
-      const id = await addIdea({ note: MODEL });
+    it("when Printables is closed to the Worker, Claude isn't asked: the idea is named from its link and there is no retry", async () => {
+      const web = stubWeb(undefined, blocked);
+      const id = await addIdea({ note: `${MODEL}#preview.eSga8` });
       const { draft } = await (await draftIt(id)).json<DraftResponse>();
-      expect(draft).toMatchObject({ status: "drafted", findings: { designer: "DaBloch", license: "CC BY-NC-SA" } });
-      const item = await getItem(id);
-      expect(item.title).toBe("Carrying handle for IKEA Antilop high chair legs.");
-      expect(item.photos).toHaveLength(4);
-      const sent = web.bodies[0] as { tools: unknown[]; messages: Array<{ content: string }> };
-      expect(sent.tools).toHaveLength(1);
-      // The address Claude is handed is one its fetch takes: at most 250 characters.
-      const handed = sent.messages[0]?.content.match(/https:\/\/api\.printables\.com\/\S+/)?.[0] ?? "";
-      expect(handed).toBe(printablesApiUrlFor("1577248"));
-      expect(handed.length).toBeLessThanOrEqual(250);
+      expect(draft).toMatchObject({ status: "failed", failure: "closed", applied: ["title"] });
+      expect(web.bodies).toHaveLength(0);
+      expect((await getItem(id)).title).toBe("Carrying handle for IKEA Antilop high chair legs");
       expect(await runs()).toMatchObject([
-        {
-          outcome: "drafted",
-          detail: {
-            source: "web_fetch_api",
-            apiFetch: "read",
-            pageStatus: 403,
-            // The stub's 403 has no cf-mitigated header (production's does: "challenge").
-            unread: "http_403",
-            apiUnread: "http_429",
-            fetchErrors: ["url_not_accessible"],
-            pictures: { found: 5, stored: 4 },
-          },
-        },
+        { outcome: "closed", detail: { source: "worker_api", apiUnread: "http_429", unread: "http_403" } },
       ]);
     });
 
-    it("when Claude won't take the API's JSON its fetch read, it is asked again with the model as data", async () => {
-      let calls = 0;
-      const web = stubWeb(
-        () =>
-          ++calls === 1
-            ? {
-                json: { ...goodDraft, readable: false },
-                fetched: { [printablesApiUrlFor("1577248")]: printablesPrint },
-              }
-            : { json: note },
-        blocked,
-      );
-      const id = await addIdea({ note: MODEL });
-      expect((await (await draftIt(id)).json<DraftResponse>()).draft?.status).toBe("drafted");
-      expect((await getItem(id)).title).toBe("Carrying handle for IKEA Antilop high chair legs.");
-      expect((web.bodies[1] as { tools?: unknown[] }).tools ?? []).toEqual([]);
-      expect(await runs()).toMatchObject([
-        { outcome: "drafted", detail: { source: "web_fetch_api", apiFetch: "read", asked: 2 } },
-      ]);
+    it("never names over a title a person wrote, and a link without a slug stays untitled", async () => {
+      stubWeb(undefined, blocked);
+      const written = await addIdea({ note: MODEL, title: "For the high chair" });
+      expect((await (await draftIt(written)).json<DraftResponse>()).draft).toMatchObject({
+        failure: "closed",
+        applied: [],
+      });
+      expect((await getItem(written)).title).toBe("For the high chair");
+      const bare = await addIdea({ note: "https://www.printables.com/model/1577248" });
+      await draftIt(bare);
+      expect((await getItem(bare)).title).toBeNull();
     });
 
-    it("reads the short GET answer, which has no id, and says when Claude never tried the API", async () => {
-      const { id: _, ...print } = JSON.parse(printablesPrint).data.print;
-      stubWeb(
-        {
-          json: { ...goodDraft, imageUrls: [] },
-          fetched: { [printablesApiUrlFor("1577248")]: JSON.stringify({ data: { print } }) },
-        },
-        blocked,
-      );
-      const id = await addIdea({ note: MODEL });
-      expect((await (await draftIt(id)).json<DraftResponse>()).draft?.status).toBe("drafted");
-      expect((await getItem(id)).title).toBe("Carrying handle for IKEA Antilop high chair legs.");
-
-      vi.restoreAllMocks();
-      stubWeb({ json: { ...goodDraft, readable: false }, fetched: { [MODEL]: null } }, blocked);
-      const other = await addIdea({ note: MODEL });
-      await draftIt(other);
-      expect((await runs()).map((run) => run.detail.apiFetch)).toEqual(["read", "not_tried"]);
-    });
-
-    it("a model the API tells Claude's fetch isn't there is no draft, whatever Claude says", async () => {
-      stubWeb({ json: goodDraft, fetched: { [printablesApiUrlFor("1577248")]: '{"data":{"print":null}}' } }, blocked);
+    it("a failure a retry can fix (the API answering 500) still offers one, and names the idea", async () => {
+      stubWeb(undefined, { [API]: { status: 500, type: "text/plain", body: "oops" } });
       const id = await addIdea({ note: MODEL });
       expect((await (await draftIt(id)).json<DraftResponse>()).draft).toMatchObject({
-        status: "failed",
         failure: "unreadable",
+        applied: ["title"],
       });
-      expect((await getItem(id)).title).toBeNull();
-      expect(await runs()).toMatchObject([
-        { outcome: "not_found", detail: { source: "web_fetch", apiUnread: "http_429" } },
-      ]);
     });
 
-    it("says why when neither the Worker nor Claude's fetch could read it", async () => {
-      stubWeb(
-        {
-          json: { ...goodDraft, readable: false },
-          fetched: { [MODEL]: null, [printablesApiUrlFor("1577248")]: null },
-        },
-        blocked,
-      );
+    it("names the Printables ideas that failed before this, once, from the cron", async () => {
+      stubWeb(undefined, blocked);
       const id = await addIdea({ note: MODEL });
-      expect((await (await draftIt(id)).json<DraftResponse>()).draft?.failure).toBe("unreadable");
-      expect(await runs()).toMatchObject([
-        {
-          outcome: "not_readable",
-          detail: {
-            source: "web_fetch",
-            apiFetch: "url_not_accessible",
-            pageStatus: 403,
-            // The stub's 403 has no cf-mitigated header (production's does: "challenge").
-            unread: "http_403",
-            apiUnread: "http_429",
-            fetchErrors: ["url_not_accessible", "url_not_accessible"],
-          },
-        },
+      await draftIt(id);
+      await env.DB.batch([
+        env.DB.prepare("UPDATE items SET title = NULL WHERE id = ?1").bind(id),
+        env.DB.prepare(
+          "UPDATE item_drafts SET failure = 'unreadable', applied = '[]', result = NULL WHERE item_id = ?1",
+        ).bind(id),
       ]);
+      expect(await nameClosedPrintables(getDb(env.DB))).toBe(1);
+      expect((await getItem(id)).title).toBe("Carrying handle for IKEA Antilop high chair legs");
+      expect(await nameClosedPrintables(getDb(env.DB))).toBe(0);
     });
   });
 

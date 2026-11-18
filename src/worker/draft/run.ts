@@ -3,7 +3,7 @@ import type { BatchItem } from "drizzle-orm/batch";
 import { DRAFTS_PER_DAY, type DraftFailure, type ItemDraft } from "../../shared/draft.ts";
 import { isModelImageUrl, modelSite, pictureRequestUrl } from "../../shared/model-links.ts";
 import { cleanModelUrl } from "../../shared/model-mark.ts";
-import { printablesApiId, printablesApiUrl, printablesId } from "../../shared/model-page.ts";
+import { printablesTitleFromLink } from "../../shared/model-page.ts";
 import { afterChange, recordChange } from "../changes.ts";
 import { type Db, getDb } from "../db/index.ts";
 import { draftRuns, type ItemDraftRow, itemDrafts, items, linkPreviews, photos } from "../db/schema.ts";
@@ -11,11 +11,7 @@ import { fromUrl, readImage } from "../mcp/image.ts";
 import { photoKey } from "../photos.ts";
 import { NEUTRAL, photoIdFor } from "../routes/capture.ts";
 import { type AskResult, askClaude, MAX_DRAFT_IMAGES, type RunDiagnosis } from "./claude.ts";
-import { printablesFromFetched, readModel } from "./page.ts";
-
-/** How Claude finds a Printables model's pictures in its API's answer. */
-const PRINTABLES_PICTURES =
-  "Its pictures' full addresses are https://media.printables.com/ followed by each image's filePath.";
+import { readModel } from "./page.ts";
 
 /** A worker that has had a draft this long is taken to be gone (the browser closed, the Worker was recycled). */
 export const STALE_MS = 4 * 60 * 1000;
@@ -102,15 +98,53 @@ export async function startDraft(
   return true;
 }
 
-async function fail(db: Db, row: ItemDraftRow, failure: DraftFailure) {
+async function fail(db: Db, row: ItemDraftRow, failure: DraftFailure, name: string | null = null) {
+  // A name from the link's own words goes only on an idea that has no title (or still the shared one), in the
+  // database too, so a person typing at the same moment wins.
+  const owner = (await ownerOf(db, row.itemId)) ?? "";
+  let applied: ItemDraft["applied"] = [];
+  if (name) {
+    const shared = row.sharedTitle?.trim() || null;
+    await db
+      .update(items)
+      .set({ title: name, updatedAt: new Date() })
+      .where(
+        and(
+          eq(items.id, row.itemId),
+          isNull(items.deletedAt),
+          or(isNull(items.title), sql`trim(${items.title}) = ''`, shared ? eq(items.title, shared) : undefined),
+        ),
+      );
+    const after = await db.select({ title: items.title }).from(items).where(eq(items.id, row.itemId)).get();
+    if (after?.title === name) applied = ["title"];
+  }
   await db.batch([
-    db.update(itemDrafts).set({ status: "failed", failure, claimedAt: null }).where(eq(itemDrafts.itemId, row.itemId)),
+    db
+      .update(itemDrafts)
+      .set({
+        status: "failed",
+        failure,
+        claimedAt: null,
+        applied,
+        ...(applied.length
+          ? {
+              result: {
+                title: name,
+                note: null,
+                photoIds: [],
+                imageUrls: [],
+                findings: { designer: null, license: null, material: null, plate: null, settings: null },
+              },
+            }
+          : {}),
+      })
+      .where(eq(itemDrafts.itemId, row.itemId)),
     recordChange(db, {
       entity: "item",
       id: row.itemId,
       itemId: row.itemId,
       action: "updated",
-      actor: { kind: "person", id: (await ownerOf(db, row.itemId)) ?? "" },
+      actor: { kind: "person", id: owner },
     }),
   ]);
 }
@@ -243,7 +277,10 @@ export async function runDraft(env: Env, itemId: string, db: Db = getDb(env.DB))
   // The day's cap is shared by both people (UTC days: it only has to be about right).
   const since = new Date(now - (now % DAY_MS));
   // Fetching pictures again isn't a call to Claude.
-  const used = await db.$count(draftRuns, and(gte(draftRuns.at, since), sql`${draftRuns.outcome} IS NOT 'pictures'`));
+  const used = await db.$count(
+    draftRuns,
+    and(gte(draftRuns.at, since), sql`${draftRuns.outcome} IS NOT 'pictures' AND ${draftRuns.outcome} IS NOT 'closed'`),
+  );
   if (used >= DRAFTS_PER_DAY) return fail(db, row, "cap");
   const runId = crypto.randomUUID();
   await db.insert(draftRuns).values({ id: runId, itemId, at: new Date(now) });
@@ -261,45 +298,26 @@ export async function runDraft(env: Env, itemId: string, db: Db = getDb(env.DB))
     // MakerWorld's design API is asked when its page is behind a bot challenge (decision 0067), Printables' GraphQL
     // API before its page, which a Worker never gets (decision 0071).
     const read = base ? null : await readModel(site.site.id, row.url);
-    let facts = read?.facts ?? null;
+    const facts = read?.facts ?? null;
     let source: RunDiagnosis["source"] = read?.via === "api" ? "worker_api" : facts ? "worker_fetch" : "web_fetch";
-    // Printables throttles the addresses Workers share: Claude's fetch is handed its API's address instead, and
-    // the Worker reads what it got back itself.
-    const printables = !facts && site.site.id === "printables" ? printablesId(row.url) : null;
-    if (site.site.id === "printables" && read?.apiReason === "not_found") {
-      // Printables' API says there is no such model: nothing to draft, and nothing for Claude to make up. (Other
-      // sites' "not found" still goes to Claude's fetch, as before decision 0071.)
-      answer = { ok: false, failure: "unreadable", diagnosis: { outcome: "not_found" } };
+    if (site.site.id === "printables" && !facts) {
+      // Printables is closed to a Worker and to Claude's fetch (throttled, challenged, url_not_accessible: no web
+      // fetch has read it since November 16), so Claude isn't asked. The Worker's own API try above is the whole
+      // read; the day it answers, drafts work again by themselves (decision 0071).
       source = "worker_api";
+      const missing = read?.apiReason === "not_found";
+      // What a retry can't fix: a throttle, a challenge, a refusal. A stand-in has no reason, and is closed too.
+      const closed =
+        !read?.apiReason || read.apiReason === "challenge" || /^http_(401|403|429|451)$/.test(read.apiReason);
+      answer = {
+        ok: false,
+        failure: missing ? "unreadable" : closed ? "closed" : "unreadable",
+        diagnosis: { outcome: missing ? "not_found" : closed ? "closed" : "not_readable" },
+      };
     } else if (facts) {
       answer = await askClaude(apiKey, row.url, site.site, base, facts);
     } else {
-      answer = await askClaude(
-        apiKey,
-        row.url,
-        site.site,
-        base,
-        undefined,
-        printables ? { url: printablesApiUrl(printables), hint: PRINTABLES_PICTURES } : undefined,
-      );
-      if (printables) {
-        // Which way Claude's fetch went with the API's address, for draft_runs: the path that worked, or why not.
-        const apiTry = answer.tried?.find((attempt) => printablesApiId(attempt.url) === printables);
-        answer.diagnosis = { ...answer.diagnosis, apiFetch: apiTry?.result ?? "not_tried" };
-      }
-      const fetched = printables ? printablesFromFetched(answer.fetched, printables) : null;
-      if (fetched === "missing")
-        answer = { ok: false, failure: "unreadable", diagnosis: { ...answer.diagnosis, outcome: "not_found" } };
-      else if (fetched) {
-        facts = fetched;
-        source = "web_fetch_api";
-        // Claude may not take the API's JSON for a model page; the Worker read it, so Claude writes from that.
-        if (!answer.ok && answer.diagnosis.outcome === "not_readable") {
-          const { fetchErrors, apiFetch } = answer.diagnosis;
-          answer = await askClaude(apiKey, row.url, site.site, base, facts);
-          answer.diagnosis = { ...answer.diagnosis, ...(fetchErrors ? { fetchErrors } : {}), apiFetch, asked: 2 };
-        }
-      }
+      answer = await askClaude(apiKey, row.url, site.site, base);
     }
     answer.diagnosis = {
       ...answer.diagnosis,
@@ -326,7 +344,11 @@ export async function runDraft(env: Env, itemId: string, db: Db = getDb(env.DB))
     .update(draftRuns)
     .set({ outcome, detail: Object.keys(detail).length ? JSON.stringify(detail) : null })
     .where(eq(draftRuns.id, runId));
-  if (!answer.ok) return fail(db, row, answer.failure);
+  if (!answer.ok) {
+    // A Printables link names the idea by its own words when the page can't be read (never a not-found model).
+    const named = site?.site.id === "printables" && answer.diagnosis.outcome !== "not_found";
+    return fail(db, row, answer.failure, named ? printablesTitleFromLink(row.url) : null);
+  }
   const draft = answer.draft;
 
   const item = await db
@@ -488,6 +510,7 @@ export async function undoDraft(db: Db, itemId: string, actor: { id: string }): 
 export async function resumeDrafts(env: Env, now = Date.now()): Promise<number> {
   if (!draftsEnabled(env)) return 0;
   const db = getDb(env.DB);
+  await nameClosedPrintables(db);
   const stale = new Date(now - STALE_MS);
   const waiting = await db
     .select()
@@ -558,4 +581,36 @@ export async function getPictures(env: Env, db: Db, itemId: string, actor: { id:
     ]);
   }
   return stored.ids.length;
+}
+
+/**
+ * Printables ideas whose draft failed before ideas were named from their link (decision 0071): the Printables
+ * drafts that failed as unreadable and whose idea still has no title get the link's name, and from then on read as
+ * closed (no Try again). It asks nothing of Printables or Claude, and a model Printables says isn't there is left alone.
+ */
+export async function nameClosedPrintables(db: Db): Promise<number> {
+  const rows = await db
+    .select({ draft: itemDrafts })
+    .from(itemDrafts)
+    .innerJoin(items, eq(items.id, itemDrafts.itemId))
+    .where(
+      and(
+        eq(itemDrafts.site, "printables"),
+        eq(itemDrafts.status, "failed"),
+        eq(itemDrafts.failure, "unreadable"),
+        isNull(items.deletedAt),
+        or(isNull(items.title), sql`trim(${items.title}) = ''`),
+        // A model Printables says isn't there stays as it failed.
+        sql`NOT EXISTS (SELECT 1 FROM draft_runs r WHERE r.item_id = ${itemDrafts.itemId} AND r.outcome = 'not_found')`,
+      ),
+    )
+    .limit(20);
+  let named = 0;
+  for (const { draft } of rows) {
+    // A link without a slug has no name to give; it reads as closed all the same, so it isn't picked again.
+    const name = printablesTitleFromLink(draft.url);
+    await fail(db, draft, "closed", name);
+    if (name) named++;
+  }
+  return named;
 }

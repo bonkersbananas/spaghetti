@@ -4,7 +4,9 @@ import { signIn as signInThroughApi } from "./helpers";
 // The Worker asks a stand-in for Anthropic (scripts/lib/fake-claude.ts): a word in the address picks the answer.
 const GOOD = "https://makerworld.com/en/models/1-cable-comb";
 const SLOW = "https://makerworld.com/en/models/2-slow-comb";
-const BROKEN = "https://www.printables.com/model/3-broken-hook";
+const BROKEN = "https://makerworld.com/en/models/3-broken-hook";
+// Printables is closed to a Worker: no Claude call, no retry, the idea is named from the link.
+const CLOSED = "https://www.printables.com/model/4-carrying-handle-for-ikea-antilop?lang=en#files";
 
 const signIn = (page: Page) => signInThroughApi(page);
 
@@ -63,6 +65,15 @@ test("a page that can't be read leaves the idea as captured, with one line and a
   await expect(page.getByText("Claude couldn't read that page.")).toBeVisible({ timeout: 20_000 });
   await expect(page.getByRole("textbox", { name: "Title" })).toHaveValue("");
   await expect(page.getByRole("button", { name: "Try again" })).toBeVisible();
+});
+
+test("a Printables link that can't be read names the idea from the link, with no retry", async ({ page, isMobile }) => {
+  await capture(page, isMobile, CLOSED);
+  await page.getByRole("list", { name: "Ideas" }).getByRole("link").first().click();
+  await expect(page.getByText("Named from the link.")).toBeVisible({ timeout: 20_000 });
+  await expect(page.getByText("Printables keeps its pages closed to Claude.")).toBeVisible();
+  await expect(page.getByRole("textbox", { name: "Title" })).toHaveValue("Carrying handle for IKEA Antilop");
+  await expect(page.getByRole("button", { name: "Try again" })).toBeHidden();
 });
 
 test("words a person wrote are never replaced; the page's link can be drafted by hand", async ({ page, isMobile }) => {
