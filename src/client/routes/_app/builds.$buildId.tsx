@@ -88,7 +88,7 @@ import { canBeRecipe, type RecipeSourceAttempt, useRecipes } from "@/lib/recipes
 import { useSlicerDropTarget } from "@/lib/slicer-drop";
 import { useStickyColumn } from "@/lib/sticky-column";
 import { twistFromBuild, useTwists } from "@/lib/twists";
-import { useIsDesktop } from "@/lib/use-media-query";
+import { useAfterPaint, useIsDesktop } from "@/lib/use-media-query";
 import { useWho } from "@/lib/who";
 
 /** A build with more attempts than this shows only its newest few, with a line that unfolds the rest. */
@@ -442,6 +442,9 @@ function Build({ item }: { item: ItemView }) {
   const worked = [...item.attempts].reverse().find((attempt) => attempt.outcome === "success");
   const [savingRecipe, setSavingRecipe] = useState<RecipeSourceAttempt | null>(null);
   const [openRecipe, setOpenRecipe] = useState<string | null>(null);
+  // The sheets are closed on arrival: they mount once the page has painted (sooner if one is asked for at once).
+  const afterPaint = useAfterPaint();
+  const sheetsMounted = afterPaint || compare.open || sheet.open || !!savingRecipe || !!openRecipe;
   const allRecipes = useRecipes();
   const recipeSource = (attempt: AttemptView): RecipeSourceAttempt | undefined =>
     canBeRecipe(attempt) && !attempt.pending && !readOnly
@@ -790,7 +793,7 @@ function Build({ item }: { item: ItemView }) {
                 />
               )}
             </Section>
-            {!item.pending && <CommentThread itemId={item.id} writeAsk={writeAsk} readOnly={readOnly} />}
+            {!item.pending && afterPaint && <CommentThread itemId={item.id} writeAsk={writeAsk} readOnly={readOnly} />}
             {/* On a phone the closing actions stay the last thing on the page, quiet beside the primary action bar. */}
             {!isDesktop && active && !printing && (
               <div className="-mt-6 flex items-center justify-center gap-3 md:-mt-8">{stageActions}</div>
@@ -808,27 +811,31 @@ function Build({ item }: { item: ItemView }) {
           </ActionBar>
         )}
 
-        <CompareSheet
-          item={item}
-          open={compare.open}
-          onOpenChange={(open) => setCompare((current) => ({ ...current, open }))}
-          pair={compare.pair}
-          onPairChange={(pair) => setCompare({ open: true, pair })}
-        />
-        <AttemptSheet
-          item={item}
-          attemptId={sheet.attemptId}
-          incomingFile={sheet.file}
-          initialOutcome={sheet.outcome}
-          open={sheet.open}
-          onOpenChange={(open) => setSheet((current) => ({ ...current, open }))}
-          onStep={(attemptId) => {
-            setSheet((current) => ({ ...current, attemptId, file: null }));
-            setSelected(attemptId);
-          }}
-        />
-        <SaveRecipeSheet source={savingRecipe} onOpenChange={(open) => !open && setSavingRecipe(null)} />
-        <RecipeSheet recipeId={openRecipe} onOpenChange={(open) => !open && setOpenRecipe(null)} />
+        {sheetsMounted && (
+          <>
+            <CompareSheet
+              item={item}
+              open={compare.open}
+              onOpenChange={(open) => setCompare((current) => ({ ...current, open }))}
+              pair={compare.pair}
+              onPairChange={(pair) => setCompare({ open: true, pair })}
+            />
+            <AttemptSheet
+              item={item}
+              attemptId={sheet.attemptId}
+              incomingFile={sheet.file}
+              initialOutcome={sheet.outcome}
+              open={sheet.open}
+              onOpenChange={(open) => setSheet((current) => ({ ...current, open }))}
+              onStep={(attemptId) => {
+                setSheet((current) => ({ ...current, attemptId, file: null }));
+                setSelected(attemptId);
+              }}
+            />
+            <SaveRecipeSheet source={savingRecipe} onOpenChange={(open) => !open && setSavingRecipe(null)} />
+            <RecipeSheet recipeId={openRecipe} onOpenChange={(open) => !open && setOpenRecipe(null)} />
+          </>
+        )}
       </article>
     </PullToGo>
   );

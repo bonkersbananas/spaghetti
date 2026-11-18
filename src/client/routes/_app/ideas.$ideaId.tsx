@@ -44,7 +44,9 @@ import { useBackTo } from "@/lib/origin";
 import { useScreenActions } from "@/lib/palette";
 import { photoSrc } from "@/lib/previews";
 import { keepOrigin } from "@/lib/previous-path";
+import { spoolsQuery } from "@/lib/pantry-queries";
 import { peopleQuery, sessionQuery } from "@/lib/queries";
+import { recipesQuery } from "@/lib/recipes-query";
 import { canEdit, useReadOnly } from "@/lib/read-only";
 import { itemName, useRememberItem } from "@/lib/recent";
 import { SLICER_ACCEPT, useSlicerDropTarget } from "@/lib/slicer-drop";
@@ -134,6 +136,12 @@ const Idea = memo(function Idea({ item }: { item: ItemView }) {
   const { data: user } = useQuery(sessionQuery);
   const who = useWho();
   useCaptureHere(item);
+  // What the build's page asks for as it opens (its spools and recipes) is fetched while this idea is read, so
+  // Start building doesn't begin two requests in the middle of its first paint.
+  useEffect(() => {
+    void queryClient.prefetchQuery(spoolsQuery);
+    void queryClient.prefetchQuery(recipesQuery);
+  }, [queryClient]);
   const person = people?.find((p) => p.id === item.createdBy);
   const via = useVia()(item.createdVia);
 
@@ -172,12 +180,10 @@ const Idea = memo(function Idea({ item }: { item: ItemView }) {
     // The page swap is most of the work (the build's whole page mounts): it starts once the toast has painted.
     startedHere.add(item.id);
     startBuild(queryClient, item);
-    requestAnimationFrame(() =>
-      setTimeout(() => {
-        startedHere.delete(item.id);
-        void navigate({ to: "/builds/$buildId", params: { buildId: item.id } });
-      }),
-    );
+    setTimeout(() => {
+      startedHere.delete(item.id);
+      void navigate({ to: "/builds/$buildId", params: { buildId: item.id } });
+    });
   }
 
   const [moving, setMoving] = useState(false);
