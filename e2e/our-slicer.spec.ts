@@ -617,7 +617,7 @@ test("a project's brim ears or brim inside holes is sliced by ours", async ({ pa
   }
 });
 
-test("a project's nearest seams are sliced by ours as aligned ones, which it notes", async ({ page }) => {
+test("a project's nearest seams are sliced by ours as Orca's are, with no note", async ({ page }) => {
   test.setTimeout(2 * SLICED);
   await signIn(page);
   try {
@@ -628,9 +628,9 @@ test("a project's nearest seams are sliced by ours as aligned ones, which it not
       .toBe("spaghetti");
     const slice = (await sliceOf(page, id)).slice;
     expect(slice.fallback).toBeUndefined();
-    // Until release 13 ours started every wall at the back, whatever the project asked for, and said nothing; now it
-    // places Orca's aligned seams.
-    expect(slice.notes ?? []).toEqual(["nearest seams placed as aligned ones"]);
+    // Until release 13 ours started every wall at the back and said nothing; until release 39 it placed aligned seams
+    // and noted "nearest seams placed as aligned ones"; since release 40 a plate in one filament gets nearest seams.
+    expect(slice.notes ?? []).toEqual([]);
   } finally {
     await setDefaults(page, null);
   }
