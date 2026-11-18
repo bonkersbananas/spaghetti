@@ -95,7 +95,7 @@ function Workshop() {
                   color={spool.colorHex}
                   colors={spool.colors}
                   size={isDesktop ? "xl" : "md"}
-                  className="-ml-3 first:ml-0 md:-ml-9"
+                  className="-ml-3 ring-2 first:ml-0 md:-ml-9 md:ring-1"
                 />
               ))}
               {spools?.length === 0 && <SpoolDisc empty size={isDesktop ? "xl" : "md"} />}
@@ -118,6 +118,8 @@ function Workshop() {
                         color={spools?.find((spool) => spool.id === spoolId)?.colorHex}
                         colors={spools?.find((spool) => spool.id === spoolId)?.colors}
                         empty={!spoolId}
+                        // A firmer rim at this size, so a black spool doesn't vanish on the dark well.
+                        className={spoolId ? "ring-2 md:ring-1" : undefined}
                       />
                       <span className="text-caption text-ink-faint tabular font-semibold tracking-wider uppercase">
                         {slot}
