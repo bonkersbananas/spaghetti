@@ -53,8 +53,10 @@ const FOCUSABLE =
  * Whether a sheet's body has scrolled under its header: the header then shows a hairline, where it is otherwise as
  * plain as the sheet. Only flips at the edge, so scrolling doesn't re-render.
  */
-function useScrolled() {
+function useScrolled(open: boolean) {
   const [scrolled, setScrolled] = useState(false);
+  // A closed sheet's body unmounts and its scroll resets: so does the hairline.
+  if (!open && scrolled) setScrolled(false);
   return {
     scrolled,
     onScroll: (event: { currentTarget: HTMLElement }) => setScrolled(event.currentTarget.scrollTop > 1),
@@ -89,7 +91,7 @@ function PhoneSheet({
   children,
 }: SheetProps) {
   const returnFocus = useReturnFocus(open);
-  const { scrolled, onScroll } = useScrolled();
+  const { scrolled, onScroll } = useScrolled(open);
   return (
     <Drawer.Root open={open} onOpenChange={onOpenChange} repositionInputs={false}>
       <Drawer.Portal>
@@ -174,7 +176,7 @@ function DesktopSheet({
   const isPanel = desktop === "panel";
   const returnFocus = useReturnFocus(open);
   const body = useRef<HTMLDivElement>(null);
-  const { scrolled, onScroll } = useScrolled();
+  const { scrolled, onScroll } = useScrolled(open);
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange} modal={!(isPanel && modeless)}>
       <Dialog.Portal>
