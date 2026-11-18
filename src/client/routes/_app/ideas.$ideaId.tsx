@@ -278,9 +278,7 @@ const Idea = memo(function Idea({ item }: { item: ItemView }) {
   };
   useHotkeys({
     // Asked when the key is pressed, not when the page draws: drawing offline toasted "Waiting for the connection".
-    ideaUpNext: item.pending
-      ? undefined
-      : () => canEdit() && setUpNext(queryClient, item, item.upNext === null),
+    ideaUpNext: item.pending ? undefined : () => canEdit() && setUpNext(queryClient, item, item.upNext === null),
     ideaNext: neighbour(1),
     ideaPrevious: neighbour(-1),
     ideaBack: backTo.go,
