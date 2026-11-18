@@ -8,7 +8,16 @@ export const toLocalInput = (time: number) => {
 };
 
 /** When it printed: "Now" until someone picks another time. */
-export function WhenField({ value, onChange }: { value: number | null; onChange: (time: number | null) => void }) {
+export function WhenField({
+  value,
+  onChange,
+  starting,
+}: {
+  value: number | null;
+  onChange: (time: number | null) => void;
+  /** No outcome yet: the print is starting, not already printed. */
+  starting?: boolean;
+}) {
   const [editing, setEditing] = useState(false);
   if (!editing && value === null) {
     return (
@@ -19,7 +28,7 @@ export function WhenField({ value, onChange }: { value: number | null; onChange:
         className="pressable focus-ring touch-target text-small text-ink-soft hover:text-ink rounded-pill relative mb-2 -ml-2.5 inline-flex h-9 items-center gap-1.5 self-start pr-3 pl-2.5 font-semibold md:h-8"
       >
         <CalendarIcon size={16} aria-hidden />
-        Printed just now
+        {starting ? "Starting now" : "Printed just now"}
         <span className="text-ink-faint font-medium">· change</span>
       </button>
     );

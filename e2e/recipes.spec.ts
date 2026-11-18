@@ -95,7 +95,7 @@ test("saves an attempt as a recipe, finds it on the spool page and in search, st
   await expect(sheet.getByText("Starting from “Silk PLA, slow outer wall”")).toBeVisible();
   await sheet.getByLabel("Bed", { exact: true }).fill("70");
   await sheet.getByRole("button", { name: /^Settings/ }).click();
-  await expect(sheet.getByText(/Changed from recipe “Silk PLA, slow outer wall”: bed 70 °C/)).toBeVisible();
+  await expect(sheet.getByText(/Changed from recipe “Silk PLA, slow outer wall”/)).toBeVisible();
   await page.keyboard.press("Escape");
 
   // Delete it from the spool page: an undo toast, no dialog; Undo brings it back.

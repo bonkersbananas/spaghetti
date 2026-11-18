@@ -3,6 +3,7 @@ import { Chip, ToggleChip } from "@/components/ui/Chip";
 import { ClaudeLine } from "@/components/ui/ClaudeLine";
 import * as Icons from "@/components/ui/icons";
 import { SectionHeading } from "@/components/ui/SectionHeading";
+import { ValueChip } from "@/components/ui/ValueChip";
 import { Label, Panel, Section } from "./shared";
 
 export function ChipSection() {
@@ -33,6 +34,16 @@ export function ChipSection() {
               {m}
             </ToggleChip>
           ))}
+        </div>
+        <Label>
+          Value chips (`ValueChip`): a setting as an editable value, a pencil at its end and a ring while its field is
+          open; semolina when it differs from where it started (the attempt sheet's "Trying something different?")
+        </Label>
+        <div className="flex flex-wrap gap-1.5">
+          <ValueChip>Bambu PETG</ValueChip>
+          <ValueChip>0.20 mm layers</ValueChip>
+          <ValueChip changed>Nozzle 250 °C</ValueChip>
+          <ValueChip open>Bed 65 °C</ValueChip>
         </div>
         <Label>
           Quiet toggle chips (`appearance="quiet"`), for a filter that must sit in running text: words and a count at

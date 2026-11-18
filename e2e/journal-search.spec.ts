@@ -174,7 +174,9 @@ test("starts an attempt from what worked last time", { tag: "@phone" }, async ({
   await suggestion.getByRole("button", { name: "Use these settings" }).click();
   await expect(suggestion).toContainText("Starting from these settings");
   await sheet.getByRole("button", { name: /^Settings(?! worth)/ }).click();
-  await expect(sheet.getByRole("button", { name: /^Settings(?! worth)/ })).toContainText("bed 60 → 70 °C");
+  await expect(sheet.getByRole("button", { name: /^Settings(?! worth)/ })).toContainText("Changed from attempt 1");
+  // What changed is said on its chip.
+  await expect(sheet.getByRole("button", { name: "Change Bed 70 °C" })).toBeVisible();
 
   await sheet.getByRole("radio", { name: "Worked" }).click();
   await sheet.getByRole("button", { name: "Log attempt" }).click();
