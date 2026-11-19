@@ -4,8 +4,8 @@ import { relativeTime } from "@shared/time";
 import { useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { type KeyboardEvent, useEffect, useMemo, useRef, useState } from "react";
+import { ideaTile } from "@/components/ideas/pick-tile";
 import { Button } from "@/components/ui/Button";
-import { coverPhoto } from "@/components/ui/Card";
 import { TextField } from "@/components/ui/Field";
 import { LinkIcon, PlusIcon, SearchIcon, SlicerFileIcon } from "@/components/ui/icons";
 import { Kbd } from "@/components/ui/Kbd";
@@ -17,7 +17,6 @@ import { PickTile } from "@/components/ui/RankRow";
 import { Sheet } from "@/components/ui/Sheet";
 import { startBuild } from "@/lib/builds";
 import { type ItemView, useIdeas } from "@/lib/items";
-import { coverOf } from "@/lib/previews";
 import { itemName } from "@/lib/recent";
 import { isSlicerFile, SLICER_ACCEPT, useSlicerDropTarget } from "@/lib/slicer-drop";
 import { startBuildFrom } from "@/lib/start-build";
@@ -178,14 +177,15 @@ export function StartBuildSheet({ open, onOpenChange, onFromScratch }: StartBuil
 
   const tile = (idea: ItemView) => {
     const place = modelPlace(idea);
-    const photo = coverPhoto(coverOf(idea), "") ?? undefined;
-    const text = idea.note.trim() || idea.title?.trim() || "";
+    const face = ideaTile(idea);
     return (
       <li key={idea.id} data-tile={idea.id} className="min-w-0">
         <PickTile
-          title={itemName(idea, "idea")}
-          photo={photo}
-          note={photo ? undefined : text}
+          title={face.caption}
+          cutTitle={face.cutCaption}
+          label={face.label}
+          photo={face.photo}
+          note={face.note}
           meta={
             <MetaList>
               {[place, relativeTime(idea.createdAt)]

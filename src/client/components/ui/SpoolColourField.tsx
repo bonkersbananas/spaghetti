@@ -115,8 +115,8 @@ export function SpoolColourField({ value, onChange, className }: SpoolColourFiel
               title={color.name}
               onClick={() => setSlot(color.hex, true)}
               className={cn(
-                "pressable focus-ring shadow-well ring-ink/15 size-10 rounded-full ring-1 ring-inset md:size-8",
-                selected && "ring-ink ring-offset-paper ring-2 ring-offset-2",
+                "pressable focus-ring shadow-well size-9 rounded-full md:size-8",
+                selected ? "ring-ink ring-offset-lifted ring-2 ring-offset-2" : "ring-ink/15 ring-1 ring-inset",
               )}
               style={{ backgroundColor: color.hex }} // design-lint-ignore: a filament's color is data
             />
@@ -126,7 +126,7 @@ export function SpoolColourField({ value, onChange, className }: SpoolColourFiel
           value={colors[slot] && !QUICK_COLORS.some((c) => c.hex === colors[slot]) ? colors[slot] : undefined}
           onChange={(hex) => setSlot(hex, false)}
           label="Another color"
-          className="size-10 rounded-full md:size-8"
+          className="size-9 rounded-full md:size-8"
         />
       </div>
     </div>

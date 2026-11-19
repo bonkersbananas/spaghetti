@@ -4,7 +4,7 @@
  * never guesses a material: no material word, no spool. Pure.
  */
 import { brandIn, colourByName } from "./spool-lookup.ts";
-import { FINISHES, SPOOL_MATERIALS } from "./spools.ts";
+import { FINISHES, QUICK_COLORS, SPOOL_MATERIALS } from "./spools.ts";
 
 export interface FilamentFromName {
   material: string;
@@ -37,13 +37,18 @@ export function filamentFromName(name: string): FilamentFromName | null {
   if (finish) rest = rest.replace(wordRe(finish), " ");
   const colour = rest
     .replace(/\b\d+(?:[.,]\d+)?\s?(?:kg|g)\b/gi, " ")
-    .replace(/\b(?:filament|spool|spools|hf|x\s?\d+)\b/gi, " ")
+    .replace(/\b(?:filament|spool|spools|roll|rolls|of|a|an|the|some|new|colou?r|hf|x\s?\d+)\b/gi, " ")
     .replace(/[,;:|·\-–()]/g, " ")
     .replace(/\s+/g, " ")
     .trim();
   const known = colour ? colourByName(colour) : undefined;
+  // A plain colour word that is one of the quick swatches ("white" is Jade white, "green" Bambu green) takes its hex,
+  // so that swatch is the one lit in the sheet rather than a near-twin that no swatch matches.
+  const quick =
+    known &&
+    QUICK_COLORS.find((c) => c.hex === known.hex || c.name.toLowerCase().endsWith(` ${known.name.toLowerCase()}`));
   const colorName = known?.name ?? (colour && colour.split(" ").length <= 3 ? sentence(colour) : null);
-  return { material, brand, finish, colorName, colorHex: known?.hex ?? null };
+  return { material, brand, finish, colorName, colorHex: quick?.hex ?? known?.hex ?? null };
 }
 
 const sentence = (text: string) => text.charAt(0).toUpperCase() + text.slice(1).toLowerCase();
