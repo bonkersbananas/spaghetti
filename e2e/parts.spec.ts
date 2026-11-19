@@ -177,7 +177,10 @@ test("takes parts from the slicer file, and preselects a plate's parts", async (
     ]);
 
   // A new attempt from the same file's plate: its parts are on the plate already.
-  await page.getByRole("button", { name: /^(Log attempt|Log another try)$/ }).first().click();
+  await page
+    .getByRole("button", { name: /^(Log attempt|Log another try)$/ })
+    .first()
+    .click();
   const sheet = page.getByRole("dialog", { name: "Attempt 2" });
   await sheet.getByTestId("slicer-file-input").setInputFiles({
     name: PARTS_FILE_NAME,
