@@ -1,6 +1,5 @@
 import type { AttemptFile, Person } from "@shared/api";
-import { findLinks, shortUrl } from "@shared/links";
-import { cleanModelUrl, modelOf } from "@shared/model-mark";
+import { modelOf } from "@shared/model-mark";
 import { relativeTime } from "@shared/time";
 import { m } from "motion/react";
 import { lazy, type Ref, Suspense, useState } from "react";

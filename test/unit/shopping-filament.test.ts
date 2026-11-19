@@ -29,7 +29,7 @@ describe("filamentFromName", () => {
 
   it("reads the colour from a sentence: filler words are not part of it", () => {
     expect(filamentFromName("Spool of white PETG")).toMatchObject({ material: "PETG", colorName: "White" });
-    expect(filamentFromName("A new roll of PETG")).toMatchObject({ material: "PETG" });
+    expect(filamentFromName("A new roll of PETG")).toMatchObject({ material: "PETG", colorName: null });
   });
 
   it("says nothing for what is not filament", () => {
