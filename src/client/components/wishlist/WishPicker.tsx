@@ -45,6 +45,7 @@ export function WishPicker({ open, onOpenChange, me, ideas, picked }: WishPicker
               <li key={item.id} className="min-w-0">
                 <PickTile
                   title={tile.caption}
+                  cutTitle={tile.cutCaption}
                   label={tile.label}
                   photo={tile.photo}
                   note={tile.note}

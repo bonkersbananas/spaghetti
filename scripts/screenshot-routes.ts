@@ -324,15 +324,16 @@ async function removePickerIdeas(page: Page) {
   for (const id of pickerIdeas.splice(0)) await page.request.delete(`/api/items/${id}`, { headers });
 }
 
-/** The pantry sheet opened from a bought "Spool of white PETG". */
-async function openPetgSheet(page: Page) {
+/** The pantry sheet opened from a bought "Spool of white PETG" (or PLA). */
+async function openSpoolSheetFor(page: Page, material: "PETG" | "PLA") {
+  const name = `Spool of white ${material}`;
   const field = page.getByRole("textbox", { name: "Add something to buy" });
-  await field.fill("Spool of white PETG");
+  await field.fill(name);
   await field.press("Enter");
-  await page.getByRole("checkbox", { name: "Bought: Spool of white PETG" }).click();
+  await page.getByRole("checkbox", { name: `Bought: ${name}` }).click();
   await page
     .getByRole("listitem")
-    .filter({ hasText: "white PETG" })
+    .filter({ hasText: `white ${material}` })
     .getByRole("button", { name: "Add to pantry" })
     .click();
   await page.getByRole("dialog", { name: "New spool" }).waitFor();
@@ -2662,7 +2663,21 @@ export const shots: Shot[] = [
     // "Spool of white PETG" bought: PETG picked, no PLA products, the colour in view.
     name: "pantry-petg-sheet",
     path: "/shopping",
-    prepare: openPetgSheet,
+    prepare: (page) => openSpoolSheetFor(page, "PETG"),
+    cleanup: async (page) => {
+      await page.keyboard.press("Escape");
+    },
+  },
+  {
+    // The same from "Spool of white PLA": three of PLA's products, the colour's match first, and "More".
+    name: "pantry-pla-sheet",
+    path: "/shopping",
+    prepare: async (page) => {
+      await openSpoolSheetFor(page, "PLA");
+      // On main the products are the 14 chips; here, three and "More".
+      await page.getByText("Start from a product").scrollIntoViewIfNeeded();
+      await page.waitForTimeout(300);
+    },
     cleanup: async (page) => {
       await page.keyboard.press("Escape");
     },

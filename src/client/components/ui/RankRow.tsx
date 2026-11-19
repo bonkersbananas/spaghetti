@@ -1,7 +1,6 @@
 import { Link, type LinkProps } from "@tanstack/react-router";
-import type { ReactNode } from "react";
+import { type ReactNode, useState } from "react";
 import { cn } from "@/lib/cn";
-import { useIsDesktop } from "@/lib/use-media-query";
 import { IdeasIcon, NoteIcon } from "./icons";
 import { MetaList } from "./MetaList";
 import { NoteFace } from "./NoteFace";
@@ -13,10 +12,7 @@ interface RankRowProps {
   /** The picture: a photo, else the note on a small index card, else the idea glyph. */
   photo?: { src: string; color?: string };
   note?: string;
-  /** The name under the tile; left out when the picture already says it (a note card). */
-  title?: string;
-  /** What a screen reader calls the tile, when there is no `title` to read. */
-  label?: string;
+  title: string;
   /** Short pieces for the line under the name ("for Mila", "2 days ago"), wrapped by MetaList. */
   meta?: string[];
   link: LinkProps;
@@ -134,7 +130,9 @@ interface PickTileProps {
   note?: string;
   /** The name under the tile; left out when the picture already says it (a note card). */
   title?: string;
-  /** What a screen reader calls the tile, when there is no `title` to read. */
+  /** The name when the note face had to cut it short; left off while the face says all of it (no second copy). */
+  cutTitle?: string;
+  /** What a screen reader calls the tile, when there is no caption to read. */
   label?: string;
   /** A quiet line under the name ("MakerWorld · 2 days ago"). */
   meta?: ReactNode;
@@ -157,6 +155,7 @@ export function PickTile({
   photo,
   note,
   title,
+  cutTitle,
   label,
   meta,
   rank,
@@ -167,11 +166,13 @@ export function PickTile({
   className,
 }: PickTileProps) {
   const picked = rank !== null && rank !== undefined;
-  const isDesktop = useIsDesktop();
+  const [cut, setCut] = useState(false);
+  // The caption: the name, or (under a note card that says it all) none; a quiet line under a missing name would read as one lost.
+  const caption = title ?? (cut ? cutTitle : undefined);
   return (
     <button
       type="button"
-      aria-label={title ? undefined : label}
+      aria-label={caption ? undefined : label}
       aria-pressed={rank === undefined ? undefined : picked}
       disabled={disabled}
       onClick={onToggle}
@@ -202,7 +203,7 @@ export function PickTile({
           />
         ) : note ? (
           // The note's words, set small on a phone so no word breaks, and clear of the rank badge.
-          <NoteFace note={note} compact={!isDesktop} clearBottom />
+          <NoteFace note={note} compact="tile" clearBottom onCut={setCut} />
         ) : (
           <span className="text-ink-faint flex size-full items-center justify-center">
             <IdeasIcon size={28} />
@@ -211,17 +212,17 @@ export function PickTile({
         {picked && <RankMark rank={rank} tone="badge" className="absolute right-1.5 bottom-1.5" />}
       </span>
       <span className="min-w-0">
-        {title && (
+        {caption && (
           <span
             className={cn(
               "text-small line-clamp-2 break-words",
               picked || active ? "text-ink font-semibold" : "text-ink-soft",
             )}
           >
-            {title}
+            {caption}
           </span>
         )}
-        {meta && <span className="text-caption text-ink-faint block truncate">{meta}</span>}
+        {meta && (caption || !cutTitle) && <span className="text-caption text-ink-faint block truncate">{meta}</span>}
       </span>
     </button>
   );

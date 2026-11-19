@@ -62,6 +62,18 @@ async function expectTidyTiles(sheet: Locator, tiles: Locator, count: number) {
   expect(await sheet.evaluate((el) => el.scrollWidth <= el.clientWidth + 1)).toBe(true);
 }
 
+/** No words twice in the picker (a face and a caption saying the same), and no ellipsis behind punctuation. */
+async function expectNamedOnce(sheet: Locator) {
+  const texts = await sheet.evaluate((root) =>
+    Array.from(root.querySelectorAll("li *"))
+      .filter((el) => el.children.length === 0)
+      .map((el) => (el.textContent ?? "").trim())
+      .filter((text) => text.length > 12),
+  );
+  expect(new Set(texts).size, `repeated: ${texts.join(" | ")}`).toBe(texts.length);
+  for (const text of texts) expect(text, "punctuation before the ellipsis").not.toMatch(/[.,:;!?-]…$/);
+}
+
 test.beforeEach(async ({ page }) => {
   await signIn(page);
   await clearIdeas(page);
@@ -82,7 +94,7 @@ test("the Start a build picker's tiles share one size and keep to their cells", 
   await expectTidyTiles(sheet, sheet.locator("[data-tile] > button"), 5);
   // A link is named in words, never as an address; a note says its words once (the face), not again as a caption.
   await expect(sheet.getByText("https://", { exact: false })).toHaveCount(0);
-  await expect(sheet.getByText(/^Spice rack for the drawer/)).toHaveCount(1);
+  await expectNamedOnce(sheet);
 });
 
 test("the wishlist picker's tiles share one size and keep to their cells", { tag: "@phone" }, async ({ page }) => {
@@ -91,5 +103,5 @@ test("the wishlist picker's tiles share one size and keep to their cells", { tag
   const sheet = page.getByRole("dialog", { name: "Pick your top ideas" });
   await expectTidyTiles(sheet, sheet.getByRole("list", { name: "Ideas" }).locator("li > button"), 5);
   await expect(sheet.getByText("https://", { exact: false })).toHaveCount(0);
-  await expect(sheet.getByText(/^Spice rack for the drawer/)).toHaveCount(1);
+  await expectNamedOnce(sheet);
 });

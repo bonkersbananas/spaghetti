@@ -10,8 +10,10 @@ export interface IdeaTile {
   photo?: { src: string; color?: string; fit?: "cover" | "contain" };
   /** The face of a tile without a picture: the same words the Ideas card's note card has. */
   note?: string;
-  /** The line under the tile, left out when the face already says it: never a raw address, never the same words twice. */
+  /** The line under the tile: never a raw address. */
   caption?: string;
+  /** The name for a tile whose face is the name itself: shown only once the face cuts it short, so no words appear twice. */
+  cutCaption?: string;
   /** The tile's name for a screen reader, whatever it shows. */
   label: string;
 }
@@ -36,5 +38,6 @@ export function ideaTile(idea: ItemView): IdeaTile {
   // A note card: an idea whose note is only its model link and that has a name shows the name, as the grid card does.
   const namedLink = !!title && modelOf(idea)?.kind === "page" && /^https?:\/\/\S+$/.test(idea.note.trim());
   const face = namedLink ? title : idea.note.trim() ? shortenLinks(idea.note.trim()) : (title ?? "");
-  return { note: face, caption: title && title !== face ? title : undefined, label: name };
+  if (title && title !== face) return { note: face, caption: title, label: name };
+  return { note: face, cutCaption: name, label: name };
 }

@@ -182,6 +182,7 @@ export function StartBuildSheet({ open, onOpenChange, onFromScratch }: StartBuil
       <li key={idea.id} data-tile={idea.id} className="min-w-0">
         <PickTile
           title={face.caption}
+          cutTitle={face.cutCaption}
           label={face.label}
           photo={face.photo}
           note={face.note}

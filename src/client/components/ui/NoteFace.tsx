@@ -1,7 +1,7 @@
 import { linkWords } from "@shared/links";
 import { type NoteSize, noteSize } from "@shared/notes";
 import { keepUnits } from "@shared/typography";
-import { Fragment, type ReactNode, useCallback } from "react";
+import { Fragment, type ReactNode, useCallback, useLayoutEffect, useRef } from "react";
 import { cn } from "@/lib/cn";
 
 const sizes: Record<NoteSize, string> = {
@@ -32,11 +32,13 @@ interface NoteFaceProps {
    * a mini card's whole face (Up next): the note's own size step on the mini scale (12 px on a phone, larger on a
    * desktop's wider card) and as many lines as fit, fading out a whole line before the edge.
    */
-  compact?: boolean | "fill";
+  compact?: boolean | "fill" | "tile";
   /** The largest size a short note may take (a card in a grid caps it at "lg": two words needn't shout). */
   maxSize?: NoteSize;
   /** Keeps the bottom corner free for a badge laid over the card (the rank on a picked tile). */
   clearBottom?: boolean;
+  /** `compact="tile"`: told whether the note had to be cut short to fit, so a picker can add the whole name as a caption. */
+  onCut?: (cut: boolean) => void;
   /** A tall face: a short note leaves its foot empty, so a loose strand of spaghetti is doodled there. */
   doodle?: boolean;
 }
@@ -72,7 +74,7 @@ function useWholeLines() {
  * what it links to in words ("Skadis pegboard white") over its site, not the
  * address. Fills its parent.
  */
-export function NoteFace({ note, size, className, compact, clearBottom, maxSize, doodle }: NoteFaceProps) {
+export function NoteFace({ note, size, className, compact, clearBottom, maxSize, doodle, onCut }: NoteFaceProps) {
   const measured = useWholeLines();
   const link = BARE_LINK.test(note.trim()) ? linkWords(note) : undefined;
   const text = link?.words ?? note;
@@ -81,9 +83,16 @@ export function NoteFace({ note, size, className, compact, clearBottom, maxSize,
   const face = size ?? (maxSize && order.indexOf(sized) < order.indexOf(maxSize) ? maxSize : sized);
   return (
     <div className={cn("paper-grain bg-note @container relative flex size-full flex-col", className)}>
-      <div className={cn("p-note-inset flex min-h-0 flex-1 flex-col", clearBottom && "pb-12")}>
+      <div
+        className={cn(
+          "p-note-inset flex min-h-0 flex-1 flex-col",
+          clearBottom && (compact === "tile" ? "pb-9" : "pb-12"),
+        )}
+      >
         <span aria-hidden className="bg-tomato/25 mb-note-rule h-px w-full shrink-0" />
-        {link || compact === true ? (
+        {compact === "tile" ? (
+          <TileText text={keepUnits(text)} onCut={onCut} />
+        ) : link || compact === true ? (
           <p
             className={cn(
               "font-display text-ink font-normal break-words whitespace-pre-line",
@@ -113,7 +122,16 @@ export function NoteFace({ note, size, className, compact, clearBottom, maxSize,
             className="note-strand bg-tomato/25 pointer-events-none absolute bottom-[8cqi] left-[8cqi] aspect-[100/44] w-[34cqi]"
           />
         )}
-        {link && compact !== true && <p className="text-caption text-ink-faint mt-1.5 truncate">{link.site}</p>}
+        {link && compact !== true && (
+          <p
+            className={cn(
+              "text-caption text-ink-faint mt-1.5 shrink-0 truncate",
+              compact === "tile" && "max-md:hidden",
+            )}
+          >
+            {link.site}
+          </p>
+        )}
       </div>
     </div>
   );
@@ -136,4 +154,57 @@ function breakAfterSlashes(note: string): ReactNode {
       )}
     </Fragment>
   ));
+}
+
+/**
+ * A picker tile's note: one type size whatever the note's length (12 px, 14 from md), and as many whole lines as the
+ * face has room for. A note too long ends at a word with an ellipsis and no punctuation in front of it ("bearing…",
+ * never "bearing:…"); `onCut` says whether that happened. Measured in a layout effect (and again when the face
+ * resizes), so no frame shows the full text.
+ */
+function TileText({ text, onCut }: { text: string; onCut?: (cut: boolean) => void }) {
+  const box = useRef<HTMLDivElement>(null);
+  const line = useRef<HTMLParagraphElement>(null);
+  const report = useRef(onCut);
+  report.current = onCut;
+  useLayoutEffect(() => {
+    const el = box.current;
+    const p = line.current;
+    if (!el || !p) return;
+    const fit = () => {
+      p.textContent = text;
+      let cut = false;
+      if (p.scrollHeight > el.clientHeight + 1) {
+        cut = true;
+        const words = text.split(/\s+/);
+        let low = 0;
+        let high = words.length - 1;
+        const shows = (count: number) =>
+          `${words
+            .slice(0, count)
+            .join(" ")
+            .replace(/[\s.,:;!?\-–—(/]+$/, "")}…`;
+        while (low < high) {
+          const mid = Math.ceil((low + high) / 2);
+          p.textContent = shows(mid);
+          if (p.scrollHeight > el.clientHeight + 1) high = mid - 1;
+          else low = mid;
+        }
+        p.textContent = shows(low);
+      }
+      report.current?.(cut);
+    };
+    fit();
+    const observer = new ResizeObserver(fit);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [text]);
+  return (
+    <div ref={box} className="min-h-0 flex-1 overflow-hidden">
+      <p
+        ref={line}
+        className="font-display text-ink text-caption md:text-small leading-snug font-normal break-words whitespace-pre-line"
+      />
+    </div>
+  );
 }

@@ -32,6 +32,11 @@ describe("filamentFromName", () => {
     expect(filamentFromName("A new roll of PETG")).toMatchObject({ material: "PETG", colorName: null });
   });
 
+  it("takes a quick swatch's own hex for its plain colour word, so that swatch can be lit", () => {
+    expect(filamentFromName("Spool of white PETG")).toMatchObject({ colorName: "White", colorHex: "#f4f1ea" });
+    expect(filamentFromName("Black PLA")).toMatchObject({ colorHex: "#1d1d1f" });
+  });
+
   it("says nothing for what is not filament", () => {
     for (const name of [
       "0.4 mm hardened nozzle",

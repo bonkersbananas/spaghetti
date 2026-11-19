@@ -428,6 +428,8 @@ test("a bought PETG item offers no PLA products and shows its colour on a phone"
   const sheet = page.getByRole("dialog", { name: "New spool" });
   await expect(sheet.getByRole("button", { name: "PETG", exact: true })).toHaveAttribute("aria-pressed", "true");
   await expect(sheet.getByRole("textbox", { name: "Color name" })).toHaveValue("White");
+  // "white" is the Jade white swatch: it is the one lit, and the custom swatch stays a palette.
+  await expect(sheet.getByRole("radio", { name: "Jade white" })).toBeChecked();
   // None of the products is PETG: no row of PLA ones, and the colour is in view without scrolling.
   await expect(sheet.getByText("Start from a product")).toHaveCount(0);
   await expect(sheet.getByRole("button", { name: /Bambu Lab PLA/ })).toHaveCount(0);

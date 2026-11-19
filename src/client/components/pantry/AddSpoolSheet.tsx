@@ -241,31 +241,6 @@ export function AddSpoolSheet({
           )}
         </div>
 
-        {products.length > 0 && (
-          <fieldset className="flex flex-col">
-            <legend className="text-small text-ink-soft mb-2 px-0.5 font-semibold">Start from a product</legend>
-            <ChipRow label="Products" wrap={allProducts}>
-              {shown.map((product) => (
-                <ToggleChip
-                  key={product.id}
-                  selected={litProduct?.id === product.id}
-                  onClick={() => pickProduct(product.id)}
-                  lead={!!product.colour}
-                  className="shrink-0"
-                >
-                  {product.colour && <SpoolDisc color={product.colour.hex} size="sm" />}
-                  {productName(product)}
-                </ToggleChip>
-              ))}
-              {!allProducts && products.length > FEW && (
-                <ToggleChip onClick={() => setAllProducts(true)} className="shrink-0">
-                  More
-                </ToggleChip>
-              )}
-            </ChipRow>
-          </fieldset>
-        )}
-
         <fieldset className="flex flex-col gap-2.5">
           <legend className="text-small text-ink-soft mb-2.5 px-0.5 font-semibold">Material</legend>
           <div className="flex flex-wrap gap-2">
@@ -322,6 +297,31 @@ export function AddSpoolSheet({
             }}
           />
         </fieldset>
+
+        {products.length > 0 && (
+          <fieldset className="flex flex-col">
+            <legend className="text-small text-ink-soft mb-2 px-0.5 font-semibold">Start from a product</legend>
+            <ChipRow label="Products" wrap={allProducts}>
+              {shown.map((product) => (
+                <ToggleChip
+                  key={product.id}
+                  selected={litProduct?.id === product.id}
+                  onClick={() => pickProduct(product.id)}
+                  lead={!!product.colour}
+                  className="shrink-0"
+                >
+                  {product.colour && <SpoolDisc color={product.colour.hex} size="sm" />}
+                  {productName(product)}
+                </ToggleChip>
+              ))}
+              {!allProducts && products.length > FEW && (
+                <ToggleChip onClick={() => setAllProducts(true)} className="shrink-0">
+                  More
+                </ToggleChip>
+              )}
+            </ChipRow>
+          </fieldset>
+        )}
 
         <div>
           <TextField

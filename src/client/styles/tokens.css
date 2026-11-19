@@ -296,6 +296,9 @@
 [data-theme="dark"] .sg-lifted-surface {
   --sg-cream: var(--sg-tile);
   --color-cream: var(--sg-tile);
+  /* A note card is the lifted colour at night: on a sheet it would vanish, so there it takes the tile step too. */
+  --sg-note: var(--sg-tile);
+  --color-note: var(--sg-tile);
 }
 
 @theme {
