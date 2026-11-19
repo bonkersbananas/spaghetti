@@ -4655,7 +4655,10 @@ export const shots: Shot[] = [
     name: "attempt",
     path: `/builds/${SEED_IDS.desiccantHook}`,
     prepare: async (page) => {
-      await page.getByRole("button", { name: "Log attempt" }).first().click();
+      await page
+        .getByRole("button", { name: /^Log (attempt|another try)$/ })
+        .first()
+        .click();
       const sheet = page.getByRole("dialog");
       await sheet.getByRole("radio", { name: "Spaghetti" }).click();
       await sheet.getByRole("button", { name: "Bed adhesion" }).click();

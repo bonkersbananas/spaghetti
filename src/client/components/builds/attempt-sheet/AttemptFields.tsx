@@ -133,7 +133,7 @@ export function AttemptFields(props: FieldsProps) {
     settingsSummary
   );
   const summaryWithFile = props.fromFile ? (
-    <span className="inline-flex min-w-0 items-start gap-1.5">
+    <span className="flex min-w-0 items-start gap-1.5">
       <FromFileMark className="mt-0.5" />
       <span className="min-w-0">{withOffer}</span>
     </span>
