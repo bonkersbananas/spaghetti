@@ -154,7 +154,7 @@ export function EditableBubble({
       disabled={readOnly}
       onClick={openSheet}
       className={cn(
-        "pressable focus-ring touch-target text-ink-faint hover:bg-ink/5 hover:text-ink flex size-8 shrink-0 items-center justify-center rounded-full transition-colors disabled:opacity-40",
+        "pressable focus-ring touch-target relative text-ink-faint hover:bg-ink/5 hover:text-ink flex size-8 shrink-0 items-center justify-center rounded-full transition-colors disabled:opacity-40",
         buttonClass,
       )}
     >

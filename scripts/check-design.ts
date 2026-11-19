@@ -6,6 +6,7 @@
  *   - arbitrary Tailwind values that bypass tokens: text-[13px], bg-[#fff],
  *     p-[7px], rounded-[10px], shadow-[…], and any [..px] value
  *   - inline style colors and font sizes
+ *   - a touch-target class with no relative/absolute/fixed/sticky (scripts/lib/touch-target.ts)
  *
  * Arbitrary values that reference a token (var(--sg-…)) or use viewport
  * units for layout (max-h-[92dvh]) are fine. If you need a new value, add a
@@ -13,6 +14,7 @@
  */
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join, relative } from "node:path";
+import { TOUCH_TARGET_MESSAGE, unpositionedTouchTargets } from "./lib/touch-target.ts";
 import { root } from "./lib/wrangler.ts";
 
 const clientDir = join(root, "src/client");
@@ -50,7 +52,13 @@ function* files(dir: string): Generator<string> {
 
 const problems: string[] = [];
 for (const file of files(clientDir)) {
-  const lines = readFileSync(file, "utf8").split("\n");
+  const source = readFileSync(file, "utf8");
+  const lines = source.split("\n");
+  if (!file.endsWith(".css")) {
+    for (const line of unpositionedTouchTargets(source)) {
+      problems.push(`${relative(root, file)}:${line}  touch-target  ${TOUCH_TARGET_MESSAGE}`);
+    }
+  }
   lines.forEach((line, index) => {
     if (line.includes("design-lint-ignore")) return;
     for (const { pattern, message } of rules) {
