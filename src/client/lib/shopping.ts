@@ -104,9 +104,15 @@ export async function addToShopping(queryClient: QueryClient, text: string, user
   void settled.finally(() => adding.delete(settled));
   try {
     const { shoppingItem } = await sending;
-    // The server's copy, in the place the row has here: it may have been moved while it was being saved.
+    // The server's copy, in the place the row has here: it may have been moved while it was being saved. A tick made
+    // meanwhile stays too (the server has it bought only once its own tick follows the add): taking the new thing's
+    // open state would put a bought row back on the list, and close what was opened from it ("Add to pantry").
     patchList(queryClient, (items) =>
-      items.map((item) => (item.id === id ? { ...shoppingItem, position: item.position } : item)),
+      items.map((item) =>
+        item.id === id
+          ? { ...shoppingItem, position: item.position, boughtAt: item.boughtAt, boughtBy: item.boughtBy }
+          : item,
+      ),
     );
     if (!entry.name) void nameFromPage(queryClient, shoppingItem);
     return true;

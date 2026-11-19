@@ -25,6 +25,9 @@ test.afterEach(async ({ page }) => {
   for (const item of items) await page.request.delete(`/api/items/${item.id}`, { headers });
   const { spools } = await (await page.request.get("/api/spools")).json();
   for (const spool of spools) await page.request.delete(`/api/spools/${spool.id}`, { headers });
+  // The shopping list too: a test that fails halfway must not leave its things for its retry or the next spec.
+  const { shoppingItems } = await (await page.request.get("/api/shopping-items")).json();
+  for (const item of shoppingItems) await page.request.delete(`/api/shopping-items/${item.id}`, { headers });
 });
 
 test("adds a spool to the pantry and loads it into the AMS", { tag: "@phone" }, async ({ page, isMobile }) => {
@@ -436,4 +439,39 @@ test("a bought PETG item offers no PLA products and shows its colour on a phone"
   const colour = sheet.getByRole("textbox", { name: "Color name" });
   await expect(colour).toBeInViewport();
   if (isMobile) expect((await colour.boundingBox())?.y ?? 9999).toBeLessThan(844);
+});
+
+test("a thing ticked while it is still being added stays bought, and its Add to pantry sheet stays open", {
+  tag: "@phone",
+}, async ({ page }) => {
+  // Hold the server's answer to the add: the tick and the tap on "Add to pantry" come before it (a slow connection).
+  let release = () => {};
+  const held = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  await page.route("**/api/shopping-items", async (route) => {
+    if (route.request().method() !== "POST") return route.fallback();
+    await held;
+    await route.fallback();
+  });
+  await page.goto("/shopping");
+  const field = page.getByRole("textbox", { name: "Add something to buy" });
+  await field.fill("Spool of white PETG");
+  await field.press("Enter");
+  await page.getByRole("checkbox", { name: "Bought: Spool of white PETG" }).click();
+  const bought = page.getByRole("list", { name: "Bought" }).getByRole("listitem").filter({ hasText: "white PETG" });
+  await bought.getByRole("button", { name: "Add to pantry" }).click();
+  const sheet = page.getByRole("dialog", { name: "New spool" });
+  await expect(sheet).toBeVisible();
+
+  release();
+  // The server's copy of the new thing arrives: it is still bought and the sheet is still there.
+  await expect(sheet.getByRole("button", { name: "PETG", exact: true })).toHaveAttribute("aria-pressed", "true");
+  await expect
+    .poll(async () => (await (await page.request.get("/api/shopping-items")).json()).shoppingItems[0]?.boughtAt)
+    .not.toBeNull();
+  await expect(sheet).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(sheet).toBeHidden();
+  await expect(page.getByRole("list", { name: "Bought" }).getByRole("checkbox")).toBeChecked();
 });
