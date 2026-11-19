@@ -91,7 +91,13 @@ test("an .stl kept with an idea is sliced in the browser, kept beside its origin
   await page.goto("/builds");
   await expect(page.getByRole("img", { name: "Slicer preview: Cube" })).toBeVisible();
   expect((await page.request.patch(`/api/items/${id}`, { headers: origin, data: { stage: "idea" } })).ok()).toBe(true);
+  // The page was a build when this device last saw it, and the idea's page follows what it has kept: it opens on the
+  // build, then goes back to the idea once the server's answer comes. A file chosen before then goes to a page that is
+  // about to be replaced, so wait for the answer and for the idea to settle.
+  const answered = page.waitForResponse((r) => r.request().method() === "GET" && r.url().endsWith(`/api/items/${id}`));
   await page.goto(`/ideas/${id}`);
+  await answered;
+  await expect(page).toHaveURL(new RegExp(`/ideas/${id}$`));
   await expect(cover).toBeVisible();
   await page.getByTestId("photo-input").setInputFiles("e2e/fixtures/tugboat.jpg");
   await expect(page.getByRole("img", { name: "Photo: Cube" }).first()).toBeVisible();
