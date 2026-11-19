@@ -129,6 +129,10 @@ test("grows an idea into a build, logs a failure and a success, and finishes it"
     .poll(async () => (await getItem(page, id)).attempts.map((a: { outcome: string }) => a.outcome))
     .toEqual(["failed", "success"]);
 
+  // The newest answer is "Worked": Finish build leads (the bar on phones, the header on desktop), with another try beside it.
+  await expect(page.getByRole("button", { name: "Finish build" })).toHaveCount(1);
+  if (isMobile) await expect(page.getByRole("button", { name: "Log another try" })).toBeVisible();
+
   // Finish it: one action, a little delight after the spaghetti, and undo.
   await page.getByRole("button", { name: "Finish build" }).click();
   await expect(page.getByText("Al dente")).toBeVisible();
@@ -234,12 +238,12 @@ test("a print on the bed has one way to log it; closing the build waits in the â
   await sheet.getByRole("button", { name: /^(Done|Finish attempt)$/ }).click();
   await expect(sheet).toBeHidden();
 
-  // It worked: Finish build is back (desktop's bar; on phones the quiet pair at the page's end), and the menu has gone.
+  // It worked: Finish build is back and leads (desktop's bar; on phones the action bar), and the menu has gone.
   await expect(page.getByRole("button", { name: "Finish build" })).toBeVisible();
   await expect(page.getByRole("button", { name: "More for this build" })).toHaveCount(0);
   await expect(ask).toHaveCount(0);
   if (!isMobile) {
-    await expect(page.getByRole("button", { name: "Log attempt" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Log another try" })).toBeVisible();
     await expect(page.getByRole("button", { name: "Shelve", exact: true })).toBeVisible();
   }
 });

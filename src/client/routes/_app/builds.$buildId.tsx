@@ -440,6 +440,9 @@ function Build({ item }: { item: ItemView }) {
   }, [item.stage]);
 
   const started = item.startedAt ?? item.createdAt;
+  // The newest answered attempt worked and nothing is on the bed: the build's next step is to finish it.
+  const lastAnswered = [...item.attempts].reverse().find((attempt) => attempt.outcome !== null);
+  const finishNext = active && !printing && lastAnswered?.outcome === "success";
   const fromIdea = item.startedAt !== null && item.startedAt - item.createdAt > 60_000;
   const worked = [...item.attempts].reverse().find((attempt) => attempt.outcome === "success");
   // The finished attempts, and the one that came closest when none worked (the newest that worked partly).
@@ -487,14 +490,17 @@ function Build({ item }: { item: ItemView }) {
           <Button variant="quiet" icon={ShelveIcon} disabled={readOnly} onClick={() => shelveBuild(queryClient, item)}>
             Shelve
           </Button>
-          <Button
-            variant={isDesktop ? "secondary" : "quiet"}
-            icon={FinishIcon}
-            disabled={readOnly}
-            onClick={() => finishBuild(queryClient, item)}
-          >
-            Finish build
-          </Button>
+          {/* On a phone the bar under the page already leads with it. */}
+          {(isDesktop || !finishNext) && (
+            <Button
+              variant={isDesktop ? (finishNext ? "primary" : "secondary") : "quiet"}
+              icon={FinishIcon}
+              disabled={readOnly}
+              onClick={() => finishBuild(queryClient, item)}
+            >
+              Finish build
+            </Button>
+          )}
         </>
       ) : (
         <Button icon={ReopenIcon} disabled={readOnly} onClick={() => reopenBuild(queryClient, item)}>
@@ -678,7 +684,14 @@ function Build({ item }: { item: ItemView }) {
               selected={selected}
             />
 
-            {!!item.files?.length && <ItemFiles itemId={item.id} files={item.files} readOnly={readOnly} />}
+            {!!item.files?.length && (
+              <ItemFiles
+                itemId={item.id}
+                files={item.files}
+                readOnly={readOnly}
+                folded={item.attempts.length > 0 && !isDesktop}
+              />
+            )}
 
             <PartsSection
               editing={editingParts}
@@ -703,8 +716,13 @@ function Build({ item }: { item: ItemView }) {
                 // A print on the bed is asked about on its own card, so the section offers nothing beside it.
                 isDesktop &&
                 !printing && (
-                  <Button variant="primary" icon={PlusIcon} shortcut={shortcutCaps("buildLog")} onClick={primary}>
-                    Log attempt
+                  <Button
+                    variant={finishNext ? "secondary" : "primary"}
+                    icon={PlusIcon}
+                    shortcut={shortcutCaps("buildLog")}
+                    onClick={primary}
+                  >
+                    {finishNext ? "Log another try" : "Log attempt"}
                   </Button>
                 )
               }
@@ -830,9 +848,28 @@ function Build({ item }: { item: ItemView }) {
             one that is off the bed asks on the attempt itself, with its three answers: one question, never two. */}
         {!isDesktop && (active || printing) && !(printing && isOffTheBed(printing)) && (
           <ActionBar>
-            <Button variant="primary" size="lg" icon={printing ? undefined : PlusIcon} fullWidth onClick={primary}>
-              {printing ? "How did it go?" : "Log attempt"}
-            </Button>
+            {finishNext ? (
+              // As the idea's bar: the second action a quiet word on the left, the one primary on the thumb's side.
+              <>
+                <Button variant="quiet" className="shrink-0" onClick={primary}>
+                  Log another try
+                </Button>
+                <Button
+                  variant="primary"
+                  size="lg"
+                  icon={FinishIcon}
+                  disabled={readOnly}
+                  className="min-w-0 flex-1 px-4"
+                  onClick={() => finishBuild(queryClient, item)}
+                >
+                  Finish build
+                </Button>
+              </>
+            ) : (
+              <Button variant="primary" size="lg" icon={printing ? undefined : PlusIcon} fullWidth onClick={primary}>
+                {printing ? "How did it go?" : "Log attempt"}
+              </Button>
+            )}
           </ActionBar>
         )}
 
