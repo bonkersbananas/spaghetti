@@ -652,23 +652,46 @@ const isEmptyBuild = (item: ItemView) =>
   (item.files ?? []).length === 0 &&
   item.attempts.length === 0;
 
+/** Entries being checked against the server right now, so a list that changes meanwhile doesn't start a second check. */
+const sweeping = new Set<string>();
+
 /**
  * Builds made from scratch in an earlier visit and left empty (the tab was closed on them) are removed, silently, the
  * way discardIfUntouched does for one left in the same visit. Call it with the loaded builds.
+ *
+ * The loaded list may be a stale one (restored from the device, or fetched before the build existed), so it decides
+ * nothing: each candidate is asked of the server. Only a build the server no longer has, or one that isn't empty
+ * there, is forgotten; an answer that doesn't come leaves the entry for the next visit.
  */
 export function sweepUntouched(queryClient: QueryClient, builds: ItemView[]) {
   const known = storedFresh();
   if (!known.length) return;
-  const byId = new Map(builds.map((build) => [build.id, build]));
+  const listed = new Map(builds.map((build) => [build.id, build]));
   for (const { id, tab } of known) {
-    if (fresh.has(id)) continue;
+    if (fresh.has(id) || sweeping.has(id)) continue;
     // Still open in another tab: that tab decides.
     if (tab !== tabId && isAlive(tab)) continue;
-    const build = byId.get(id);
-    if (build?.pending) continue;
-    if (build && isEmptyBuild(build)) deleteItem(queryClient, build, { silent: true });
-    else forgetFresh(id);
+    // Still on its way to the server (or with a photo or attempt waiting there): not blank, not gone.
+    if (listed.get(id)?.pending || outbox.getSnapshot().entries.some((entry) => entry.itemId === id)) continue;
+    sweeping.add(id);
+    void sweepOne(queryClient, id).finally(() => sweeping.delete(id));
   }
+}
+
+async function sweepOne(queryClient: QueryClient, id: string) {
+  let item: Item;
+  try {
+    item = (await api<ItemResponse>(`/items/${id}`)).item;
+  } catch (error) {
+    if (error instanceof ApiError && error.status === 404) forgetFresh(id);
+    return;
+  }
+  // Something was queued for it, or it was claimed by this visit, while the server was answering.
+  if (fresh.has(id) || outbox.getSnapshot().entries.some((entry) => entry.itemId === id)) return;
+  if (!storedFresh().some((entry) => entry.id === id)) return;
+  const build = withOutbox(item, outbox.getSnapshot());
+  if (isEmptyBuild(build)) deleteItem(queryClient, build, { silent: true });
+  else forgetFresh(id);
 }
 
 /**

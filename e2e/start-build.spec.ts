@@ -111,3 +111,46 @@ test("a build left by a closed tab is swept on the next visit to Builds", async 
   await expect(page.getByRole("heading", { level: 1, name: "Builds" })).toBeVisible();
   await expect.poll(async () => (await page.request.get(`/api/items/${id}`)).status()).toBe(404);
 });
+
+// The Builds list on screen may be older than the build (restored from the device, or fetched before it existed):
+// the sweep asks the server about each blank build it remembers instead of trusting that list.
+async function staleBuildsList(page: Page, stale: unknown[]) {
+  await page.route(/\/api\/items\?stage=building/, (route) =>
+    route.fulfill({ json: { items: stale }, headers: { "content-type": "application/json" } }),
+  );
+}
+async function rememberAsBlank(page: Page, id: string) {
+  await page.addInitScript((id) => {
+    if (!localStorage.getItem("spaghetti.fresh-builds"))
+      localStorage.setItem("spaghetti.fresh-builds", JSON.stringify([{ id, tab: "closed-tab" }]));
+  }, id);
+}
+
+test("a blank build missing from a stale Builds list is still swept", async ({ page }) => {
+  const id = crypto.randomUUID();
+  await page.request.post("/api/items", {
+    headers: headers(page),
+    data: { id, stage: "building", createdAt: Date.now() - 120_000 },
+  });
+  await rememberAsBlank(page, id);
+  await staleBuildsList(page, []);
+  await page.goto("/builds");
+  await expect(page.getByRole("heading", { level: 1, name: "Builds" })).toBeVisible();
+  await expect.poll(async () => (await page.request.get(`/api/items/${id}`)).status()).toBe(404);
+});
+
+test("a build that has words on the server is kept even when a stale list shows it blank", async ({ page }) => {
+  const id = crypto.randomUUID();
+  await page.request.post("/api/items", {
+    headers: headers(page),
+    data: { id, stage: "building", createdAt: Date.now() - 120_000 },
+  });
+  const blank = (await getItem(page, id)) as Record<string, unknown>;
+  await page.request.patch(`/api/items/${id}`, { headers: headers(page), data: { note: "Added from my phone" } });
+  await rememberAsBlank(page, id);
+  await staleBuildsList(page, [blank]);
+  await page.goto("/builds");
+  await expect(page.getByRole("heading", { level: 1, name: "Builds" })).toBeVisible();
+  await expect.poll(() => page.evaluate(() => localStorage.getItem("spaghetti.fresh-builds"))).toBeNull();
+  expect((await page.request.get(`/api/items/${id}`)).status()).toBe(200);
+});
