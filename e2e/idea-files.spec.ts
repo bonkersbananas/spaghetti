@@ -25,6 +25,8 @@ test("a slicer file kept with an idea shows, counts as a model, can go and come 
   });
   const files = page.getByRole("region", { name: /^Files/ });
   await expect(files.getByText(TUGBOAT_FILE_NAME)).toBeVisible();
+  // The new card is brought into view, not left below the fold behind the tab bar.
+  await expect(files.getByText(TUGBOAT_FILE_NAME)).toBeInViewport();
   await expect(files.getByText(/est\./)).toBeVisible();
   await expect(files.getByRole("link", { name: `Download ${TUGBOAT_FILE_NAME}` })).toHaveAttribute(
     "href",

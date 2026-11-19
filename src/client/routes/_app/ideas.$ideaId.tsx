@@ -39,6 +39,7 @@ import { announceDraft } from "@/lib/drafts";
 import { ariaShortcuts, shortcutCaps, useHotkeys } from "@/lib/hotkeys";
 import { addItemFile } from "@/lib/item-files";
 import { deleteItem, type ItemView, useIdeas, useItem, useItemFields } from "@/lib/items";
+import { scrollBehavior } from "@/lib/motion";
 import { whyNotMove } from "@/lib/move";
 import { useBackTo } from "@/lib/origin";
 import { useScreenActions } from "@/lib/palette";
@@ -294,8 +295,31 @@ const Idea = memo(function Idea({ item }: { item: ItemView }) {
   const files = item.files ?? [];
   const filePicker = useRef<HTMLInputElement>(null);
   const keepFile = (file: File) => {
-    if (canEdit(item.pending)) void addItemFile(queryClient, item.id, file);
+    if (!canEdit(item.pending)) return;
+    // The new card comes in below the fold on a phone: bring it into view once it is there.
+    // Only a longer list counts, and only for a while: a file that can't be read adds nothing, and a later removal
+    // or sync must not scroll the page.
+    wantsNewFile.current = files.length;
+    window.setTimeout(() => {
+      wantsNewFile.current = null;
+    }, 10_000);
+    void addItemFile(queryClient, item.id, file);
   };
+  const wantsNewFile = useRef<number | null>(null);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: once per added file.
+  useEffect(() => {
+    if (wantsNewFile.current === null || files.length <= wantsNewFile.current) return;
+    wantsNewFile.current = null;
+    let frames = 0;
+    // The file list loads lazily: look for its last card for a few frames.
+    const look = () => {
+      const cards = document.querySelectorAll<HTMLElement>(`section[aria-labelledby="files-${item.id}"] > ul > li`);
+      const last = cards[cards.length - 1];
+      if (last) last.scrollIntoView({ block: "center", behavior: scrollBehavior() });
+      else if (frames++ < 30) requestAnimationFrame(look);
+    };
+    requestAnimationFrame(look);
+  }, [files.length]);
   useSlicerDropTarget(keepFile);
 
   const hasPhotos = photos.length > 0;
