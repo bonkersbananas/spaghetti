@@ -384,7 +384,9 @@ test("finishes a print that is printing with no signal: outcome, note and photo 
   await sheet.getByRole("textbox", { name: "Note" }).press("End");
   await sheet.getByRole("textbox", { name: "Note" }).pressSequentially(" and a hotter bed");
   // What isn't about finishing stays read-only.
-  await expect(sheet.getByRole("button", { name: "Delete" })).toBeDisabled();
+  await sheet.getByRole("button", { name: "More for this attempt" }).click();
+  await expect(page.getByRole("button", { name: "Delete attempt" })).toBeDisabled();
+  await page.keyboard.press("Escape");
   await sheet.getByRole("button", { name: "Finish attempt" }).click();
   await expect(sheet).toBeHidden();
 

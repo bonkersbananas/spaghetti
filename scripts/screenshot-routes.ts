@@ -2,6 +2,7 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
 import type { Locator, Page, Route } from "@playwright/test";
+import { TUGBOAT_FILE_NAME, tugboatFile } from "../e2e/fixtures/gcode-tugboat.ts";
 import {
   hotdogModel,
   makerworldProject,
@@ -1147,6 +1148,57 @@ async function buildWithModel(page: Page) {
     buffer: Buffer.from(FUSILLI.bytes),
   });
   await sheet.getByText("Sliced by Spaghetti").waitFor({ timeout: 90_000 });
+  return sheet;
+}
+
+/**
+ * A build whose idea keeps this many sliced files (the tugboat's single-plate .gcode.3mf under other names), on its
+ * page; the first attempt's sheet is opened by the shot.
+ */
+async function buildKeeping(page: Page, files: number) {
+  const headers = { Origin: new URL(page.url()).origin };
+  const id = crypto.randomUUID();
+  modelItems.push(id);
+  await page.request.post("/api/items", { headers, data: { id, title: "Tugboat", note: "for the bath" } });
+  if (files > 0) {
+    await page.goto(`/ideas/${id}`);
+    const names = [TUGBOAT_FILE_NAME, "tugboat-v2.gcode.3mf", "tugboat-v3.gcode.3mf"].slice(0, files);
+    for (const name of names) {
+      await page.getByTestId("idea-file-input").setInputFiles({
+        name,
+        mimeType: "application/octet-stream",
+        buffer: Buffer.from(tugboatFile()),
+      });
+      await page
+        .getByRole("region", { name: /^Files/ })
+        .getByText(name)
+        .waitFor();
+      await page.waitForTimeout(400);
+    }
+  }
+  await page.request.patch(`/api/items/${id}`, { headers, data: { stage: "building" } });
+  await page.goto(`/builds/${id}`);
+  await page.getByRole("button", { name: "Log attempt" }).first().click();
+  const sheet = page.getByRole("dialog", { name: "Attempt 1" });
+  await sheet.waitFor();
+  return sheet;
+}
+
+/** A build with a print on the bed, opened on its "How did it go?" sheet (a phone's thumb-reach order). */
+async function finishSheet(page: Page) {
+  const headers = { Origin: new URL(page.url()).origin };
+  const id = crypto.randomUUID();
+  modelItems.push(id);
+  await page.request.post("/api/items", { headers, data: { id, title: "Fusilli hook", stage: "building" } });
+  await page.request.post(`/api/items/${id}/attempts`, {
+    headers,
+    data: { id: crypto.randomUUID(), printedAt: Date.now() - 95 * 60_000, settings: { estimatedMinutes: 90 } },
+  });
+  await page.goto(`/builds/${id}`);
+  await page.getByRole("button", { name: "How did it go?" }).first().click();
+  const sheet = page.getByRole("dialog", { name: /^Finish attempt 1/ });
+  await sheet.waitFor();
+  await page.waitForTimeout(700);
   return sheet;
 }
 
@@ -6823,6 +6875,129 @@ export const shots: Shot[] = [
       await page.getByText("No spools yet").waitFor();
     },
     cleanup: unmockToday,
+  },
+  {
+    // A build whose idea keeps one sliced file: attempt 1 prints from it as the sheet opens.
+    name: "attempt-slice-one",
+    path: "/builds",
+    prepare: async (page) => {
+      const sheet = await buildKeeping(page, 1);
+      await sheet.getByText(/est\./).waitFor();
+      await page.waitForTimeout(900);
+    },
+    cleanup: async (page) => {
+      await page.keyboard.press("Escape");
+      await removeModelItems(page);
+    },
+  },
+  {
+    // Several sliced files: a plain choice, "Use the latest slice" or a pick.
+    name: "attempt-slice-several",
+    path: "/builds",
+    prepare: async (page) => {
+      const sheet = await buildKeeping(page, 3);
+      await sheet.getByRole("list", { name: "Slices kept with the idea" }).waitFor();
+      await page.waitForTimeout(600);
+    },
+    cleanup: async (page) => {
+      await page.keyboard.press("Escape");
+      await removeModelItems(page);
+    },
+  },
+  {
+    // No sliced file: the well, as before.
+    name: "attempt-slice-none",
+    path: "/builds",
+    prepare: async (page) => {
+      const sheet = await buildKeeping(page, 0);
+      await sheet.getByRole("button", { name: "Add the slicer file" }).waitFor();
+      await page.waitForTimeout(600);
+    },
+    cleanup: async (page) => {
+      await page.keyboard.press("Escape");
+      await removeModelItems(page);
+    },
+  },
+  {
+    // Finishing a print: on a phone the note, the photo tiles and "How did it go?" sit at the foot, with Spaghetti picked.
+    name: "attempt-finish-foot",
+    path: "/builds",
+    prepare: async (page) => {
+      const sheet = await finishSheet(page);
+      await sheet.getByRole("radio", { name: "Spaghetti" }).click();
+      await page.waitForTimeout(3500);
+    },
+    cleanup: async (page) => {
+      await page.keyboard.press("Escape");
+      await removeModelItems(page);
+    },
+  },
+  {
+    // The same with the keyboard up while the note is typed (the sheet sits on the keyboard's inset).
+    name: "attempt-finish-keyboard",
+    path: "/builds",
+    width: 390,
+    why: "the keyboard is a phone's",
+    prepare: async (page) => {
+      const sheet = await finishSheet(page);
+      await sheet.getByRole("radio", { name: "Spaghetti" }).click();
+      await page.evaluate(() => {
+        document.documentElement.style.setProperty("--sg-keyboard-inset", "300px");
+        document.documentElement.style.setProperty("--sg-visible-height", "544px");
+      });
+      await sheet.getByRole("textbox", { name: "Note" }).fill("Stringing from the first layer, bed too cold");
+      await page.waitForTimeout(700);
+    },
+    cleanup: async (page) => {
+      await page.evaluate(() => {
+        document.documentElement.style.removeProperty("--sg-keyboard-inset");
+        document.documentElement.style.removeProperty("--sg-visible-height");
+      });
+      await page.keyboard.press("Escape");
+      await removeModelItems(page);
+    },
+  },
+  {
+    // The finish sheet on a phone scrolled to its top: the file, the settings row (one line), the when line.
+    name: "attempt-finish-top",
+    path: "/builds",
+    width: 390,
+    why: "the bottom-up order is a phone's",
+    prepare: async (page) => {
+      const sheet = await finishSheet(page);
+      await sheet.getByRole("radio", { name: "Spaghetti" }).click();
+      await page.waitForTimeout(3500);
+      await page.evaluate(() => {
+        for (const child of Array.from(document.querySelectorAll<HTMLElement>("[role=dialog] *"))) {
+          if (getComputedStyle(child).overflowY === "auto") child.scrollTo({ top: 0 });
+        }
+      });
+      await page.waitForTimeout(400);
+    },
+    cleanup: async (page) => {
+      await page.keyboard.press("Escape");
+      await removeModelItems(page);
+    },
+  },
+  {
+    // The when line changed: "Started 95 min ago · change" opens the date field.
+    name: "attempt-finish-when",
+    path: "/builds",
+    prepare: async (page) => {
+      const sheet = await finishSheet(page);
+      await sheet.getByRole("radio", { name: "Spaghetti" }).click();
+      await sheet
+        .getByRole("button", { name: /^Started .* · change$/ })
+        .or(sheet.getByRole("button", { name: /change$/ }))
+        .first()
+        .click();
+      await sheet.getByLabel("When it printed").scrollIntoViewIfNeeded();
+      await page.waitForTimeout(3500);
+    },
+    cleanup: async (page) => {
+      await page.keyboard.press("Escape");
+      await removeModelItems(page);
+    },
   },
   // pnpm new route adds its screens above this line.
   {

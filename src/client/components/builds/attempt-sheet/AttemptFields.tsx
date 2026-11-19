@@ -2,12 +2,11 @@ import type { Part } from "@shared/api";
 import { type AttemptSettings, describeChanges, OUTCOMES, type Outcome } from "@shared/attempts";
 import type { AttemptPart } from "@shared/parts";
 import { printerHints } from "@shared/spools";
-import { type ReactNode, useState } from "react";
+import { Fragment, type ReactNode, useEffect, useRef, useState } from "react";
 import { Caution, FromFileMark } from "@/components/ui/Caution";
 import { Disclosure } from "@/components/ui/Disclosure";
 import { TextArea } from "@/components/ui/Field";
 import { SettingsIcon } from "@/components/ui/icons";
-import { MetaList } from "@/components/ui/MetaList";
 import type { AttemptView } from "@/lib/items";
 import { usePrinterSetup } from "@/lib/pantry-queries";
 import { useIsDesktop } from "@/lib/use-media-query";
@@ -120,11 +119,8 @@ export function AttemptFields(props: FieldsProps) {
       <span className="block truncate">{[`As ${base.label}`, ...pieces.slice(0, 3)].join(" · ")}</span>
     )
   ) : pieces.length ? (
-    <MetaList>
-      {pieces.map((piece) => (
-        <span key={piece}>{piece}</span>
-      ))}
-    </MetaList>
+    // One line, cut with an ellipsis (design.md): the closed row never grows with what the file said.
+    <span className="block truncate">{pieces.join(" · ")}</span>
   ) : (
     "Filament, plate, temperatures, times. All optional."
   );
@@ -145,27 +141,8 @@ export function AttemptFields(props: FieldsProps) {
     withOffer
   );
 
-  return (
-    // biome-ignore lint/a11y/noStaticElementInteractions: it only listens to keys that bubble up from the controls inside.
-    <div
-      className="flex flex-col gap-5"
-      data-capture
-      onKeyDown={(event) => {
-        // 1, 2, 3 answer "How did it go?" when focus isn't in a field (a note's digits are the note's).
-        if (props.readOnly === "all" || event.defaultPrevented || event.metaKey || event.ctrlKey || event.altKey)
-          return;
-        const target = event.target as HTMLElement;
-        if (target.closest("input, textarea, select, [contenteditable]")) return;
-        const index = Number(event.key) - 1;
-        if (!OUTCOMES[index]) return;
-        // Through the button itself, as a tap: the outcome's own moment plays and focus moves to the picked one.
-        const button = event.currentTarget.querySelectorAll<HTMLElement>('[role="radiogroup"] [role="radio"]')[index];
-        if (!button) return;
-        event.preventDefault();
-        button.focus();
-        button.click();
-      }}
-    >
+  const outcomeBlock = (
+    <Fragment key="outcomeBlock">
       <fieldset disabled={props.readOnly === "all"} className="contents">
         <div className="flex flex-col gap-3">
           <p className="text-small text-ink-soft px-0.5 font-semibold">{props.outcomeLabel}</p>
@@ -174,6 +151,10 @@ export function AttemptFields(props: FieldsProps) {
           {props.estimate}
         </div>
       </fieldset>
+    </Fragment>
+  );
+  const plateBlock = (
+    <Fragment key="plateBlock">
       {props.plate && (
         <fieldset disabled={!!props.readOnly} className="contents">
           <PlateParts
@@ -184,16 +165,27 @@ export function AttemptFields(props: FieldsProps) {
           />
         </fieldset>
       )}
-      {props.photos}
+    </Fragment>
+  );
+  const photosBlock = <Fragment key="photos">{props.photos}</Fragment>;
+  const noteBlock = (
+    <Fragment key="noteBlock">
       <fieldset disabled={props.readOnly === "all"} className="contents">
         {/* One line of meaning, but it wraps and grows so the whole note stays in view while typing. */}
         <TextArea
           aria-label="Note"
+          className="scroll-mb-3"
           minRows={1}
           // The tags under it ask "What went wrong?" / "What worked?": the note doesn't repeat the question.
           placeholder={outcome ? "One line is plenty." : "A line about this attempt"}
           maxLength={500}
           enterKeyHint="done"
+          onFocus={(event) => {
+            // The keyboard is coming up: keep the whole field right above the footer, not pushed under the header.
+            const field = event.currentTarget;
+            if (isDesktop) return;
+            for (const ms of [0, 150, 400]) window.setTimeout(() => field.scrollIntoView({ block: "end" }), ms);
+          }}
           value={props.note}
           onChange={(event) => props.onNote(event.target.value.replace(/\n/g, " "))}
           onKeyDown={(event) => {
@@ -204,6 +196,12 @@ export function AttemptFields(props: FieldsProps) {
             else event.currentTarget.blur();
           }}
         />
+      </fieldset>
+    </Fragment>
+  );
+  const tagsBlock = (
+    <Fragment key="tagsBlock">
+      <fieldset disabled={props.readOnly === "all"} className="contents">
         {withTags && (
           <TagPicker
             kind="failure"
@@ -226,17 +224,37 @@ export function AttemptFields(props: FieldsProps) {
           />
         )}
       </fieldset>
+    </Fragment>
+  );
+  const coachBlock = (
+    <Fragment key="coachBlock">
       {/* Claude's ideas for the next try come after the photo, the note and the tags: those are what someone at the printer is doing. */}
       {props.coach}
+    </Fragment>
+  );
+  const whenBlock = (
+    <Fragment key="whenBlock">
       {/* Rarely changed, so it sits under the tags: a failed attempt's tags are in reach without a scroll. */}
       <fieldset disabled={!!props.readOnly} className="contents">
         {props.when}
       </fieldset>
+    </Fragment>
+  );
+  const fileBlock = (
+    <Fragment key="fileBlock">
       <fieldset disabled={!!props.readOnly} className="contents">
         {props.file}
       </fieldset>
+    </Fragment>
+  );
+  const notEnoughBlock = (
+    <Fragment key="notEnoughBlock">
       {/* Nothing has come off the spool until the print is done: a heads-up only while it hasn't been. */}
       {!outcome && <NotEnoughNote settings={settings} />}
+    </Fragment>
+  );
+  const settingsBlock = (
+    <Fragment key="settings">
       <div className="flex flex-col gap-2">
         <fieldset disabled={!!props.readOnly} className="contents">
           <Disclosure
@@ -268,6 +286,95 @@ export function AttemptFields(props: FieldsProps) {
           </Caution>
         )}
       </div>
+    </Fragment>
+  );
+  // On a phone the sheet reads bottom-up: what is done standing at the printer (the note, the photos, and "How did it
+  // go?" last) sits at the foot, under the thumb, and the rarely changed settings are above. Desktop reads top-down.
+  // The sheet opens at its foot, where the thumb is: the part that reads bottom-up starts scrolled to its end, and
+  // goes back there when what sits below the outcome grows (its hint) or the keyboard comes up for the note.
+  const root = useRef<HTMLDivElement>(null);
+  const touched = useRef(false);
+  // Scrolls the sheet's body to its end and keeps it there while its height settles (the sheet's own opening, the
+  // settings, a hint arriving): a watcher on the content's size for a moment, not one scroll on mount.
+  const toEnd = (force: boolean) => {
+    if (isDesktop || !root.current) return () => {};
+    let body: HTMLElement | null = root.current.parentElement;
+    while (body && getComputedStyle(body).overflowY !== "auto") body = body.parentElement;
+    const scroller = body;
+    if (!scroller) return () => {};
+    const go = () => {
+      if (force || !touched.current) scroller.scrollTo({ top: scroller.scrollHeight });
+    };
+    go();
+    const watcher = new ResizeObserver(go);
+    watcher.observe(root.current);
+    watcher.observe(scroller);
+    const stop = window.setTimeout(() => watcher.disconnect(), 900);
+    return () => {
+      window.clearTimeout(stop);
+      watcher.disconnect();
+    };
+  };
+  const opened = useRef(false);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: on opening, and when the outcome changes.
+  useEffect(() => {
+    const first = !opened.current;
+    opened.current = true;
+    return toEnd(!first);
+  }, [outcome]);
+
+  const blocks = isDesktop
+    ? [
+        outcomeBlock,
+        plateBlock,
+        photosBlock,
+        noteBlock,
+        tagsBlock,
+        coachBlock,
+        whenBlock,
+        fileBlock,
+        notEnoughBlock,
+        settingsBlock,
+      ]
+    : [
+        fileBlock,
+        settingsBlock,
+        notEnoughBlock,
+        whenBlock,
+        coachBlock,
+        noteBlock,
+        plateBlock,
+        photosBlock,
+        tagsBlock,
+        outcomeBlock,
+      ];
+
+  return (
+    // biome-ignore lint/a11y/noStaticElementInteractions: it only listens to keys that bubble up from the controls inside.
+    <div
+      ref={root}
+      onPointerDownCapture={(event) => {
+        if ((event.target as HTMLElement).closest("[role=radiogroup]") === null) touched.current = true;
+      }}
+      className="flex flex-col gap-5 max-md:pb-2"
+      data-capture
+      onKeyDown={(event) => {
+        // 1, 2, 3 answer "How did it go?" when focus isn't in a field (a note's digits are the note's).
+        if (props.readOnly === "all" || event.defaultPrevented || event.metaKey || event.ctrlKey || event.altKey)
+          return;
+        const target = event.target as HTMLElement;
+        if (target.closest("input, textarea, select, [contenteditable]")) return;
+        const index = Number(event.key) - 1;
+        if (!OUTCOMES[index]) return;
+        // Through the button itself, as a tap: the outcome's own moment plays and focus moves to the picked one.
+        const button = event.currentTarget.querySelectorAll<HTMLElement>('[role="radiogroup"] [role="radio"]')[index];
+        if (!button) return;
+        event.preventDefault();
+        button.focus();
+        button.click();
+      }}
+    >
+      {blocks}
     </div>
   );
 }

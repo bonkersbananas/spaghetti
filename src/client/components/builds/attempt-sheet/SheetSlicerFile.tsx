@@ -7,12 +7,12 @@ import { filamentFromSpool, spoolFromFilament } from "@shared/spools";
 import { applyFileSettings, printablePlates } from "@shared/threemf/prefill.ts";
 import { useQuery, useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
 import { lazy, type ReactNode, Suspense, useEffect, useRef, useState } from "react";
-import { ToggleChip } from "@/components/ui/Chip";
-import { SlicerFileIcon } from "@/components/ui/icons";
+import { Button } from "@/components/ui/Button";
 import { useFilePicker } from "@/components/ui/PhotoTiles";
 import { toast } from "@/components/ui/Toast";
 import { addSpool } from "@/lib/pantry";
 import { spoolsQuery } from "@/lib/pantry-queries";
+import { fileThumbSrc } from "@/lib/previews";
 import { sessionQuery } from "@/lib/queries";
 import { SLICER_ACCEPT, useSlicerDropTarget } from "@/lib/slicer-drop";
 import {
@@ -25,7 +25,7 @@ import {
 } from "@/lib/slicer-files";
 import type { SliceOutcome } from "@/lib/slicing/slice-model";
 import { useIsDesktop } from "@/lib/use-media-query";
-import { AddSlicerFile, FileCard, PlateChooser, UnknownFilaments, usePlateThumbUrl } from "../SlicerFile";
+import { AddSlicerFile, FileCard, PlateChooser, PlateThumb, UnknownFilaments, usePlateThumbUrl } from "../SlicerFile";
 import { formatMinutes } from "../settings";
 
 /** A slicer file being read into the sheet: which plate, what it said, which filaments aren't in the pantry. */
@@ -201,10 +201,13 @@ const ModelDraftCard = lazy(() => import("../ModelFile").then((m) => ({ default:
 export function DraftFile({
   state,
   onRemove,
+  onChange,
   onSlice,
 }: {
   state: SlicerState;
   onRemove: () => void;
+  /** A file the sheet took by itself (the idea's one slice): a way to pick another. */
+  onChange?: () => void;
   /** A model: slice it again, differently. */
   onSlice?: (chosen: SliceOptions) => void;
 }) {
@@ -215,10 +218,18 @@ export function DraftFile({
       </Suspense>
     );
   }
-  return <SlicerDraftFile state={state} onRemove={onRemove} />;
+  return <SlicerDraftFile state={state} onRemove={onRemove} onChange={onChange} />;
 }
 
-function SlicerDraftFile({ state, onRemove }: { state: SlicerState; onRemove: () => void }) {
+function SlicerDraftFile({
+  state,
+  onRemove,
+  onChange,
+}: {
+  state: SlicerState;
+  onRemove: () => void;
+  onChange?: () => void;
+}) {
   const plate = plateOf(state.draft, state.plate);
   const src = usePlateThumbUrl(plate);
   const plateCount = state.draft.result.plates.length;
@@ -230,12 +241,18 @@ function SlicerDraftFile({ state, onRemove }: { state: SlicerState; onRemove: ()
       meta={[
         plateCount > 1 && plate ? `plate ${plate.index} of ${plateCount}` : "",
         estimate !== undefined ? `est. ${formatMinutes(estimate)}` : "",
-        formatBytes(state.draft.file.size),
       ].filter(Boolean)}
       note={
         state.draft.file.size > MAX_SLICER_FILE_BYTES
           ? `Over ${formatBytes(MAX_SLICER_FILE_BYTES)}, so only what it said will be kept.`
           : undefined
+      }
+      opener={
+        onChange && (
+          <Button variant="quiet" size="sm" onClick={onChange} className="-ml-2 self-start">
+            Change
+          </Button>
+        )
       }
       onRemove={onRemove}
       draft
@@ -276,27 +293,56 @@ export function SlicerFileSection({
   }
   return (
     <div className="flex flex-col gap-2">
-      <AddSlicerFile onClick={onPick} desktop={isDesktop} />
       {ideaFiles.length > 0 && onUseIdeaFile && <IdeaFileOffer files={ideaFiles} onUse={onUseIdeaFile} />}
+      <AddSlicerFile onClick={onPick} desktop={isDesktop} />
     </div>
   );
 }
 
-/** "From the idea": the files kept with the idea, to print this attempt from (the file's bytes come from the server). */
+/** The files kept with the idea that an attempt can print from: a slicer's file, or a model that has been sliced. */
+export const keptSlices = (files: readonly AttemptFile[]) =>
+  files.filter((file) => file.stored && (file.kind !== "model" || file.slice?.status === "sliced"));
+
+/** The name of what a kept file attaches: a model gives its sliced .gcode.3mf, not the .stl it was made from. */
+export const attachedName = (file: AttemptFile) => (file.kind === "model" ? slicedName(file.name) : file.name);
+
+/**
+ * The idea's kept slices, as compact rows (plate picture, name, estimate), newest first, the newest marked "latest":
+ * one tap attaches one. Shown above the well, which is the quieter choice.
+ */
 function IdeaFileOffer({ files, onUse }: { files: AttemptFile[]; onUse: (file: AttemptFile) => void }) {
+  const slices = keptSlices(files).sort((a, b) => b.createdAt - a.createdAt);
+  if (!slices.length) return null;
   return (
-    <div className="flex flex-col gap-1.5 px-0.5">
-      <span className="text-small text-ink-faint">Kept with the idea:</span>
-      <div className="flex flex-wrap gap-2">
-        {files
-          .filter((file) => file.stored && (file.kind !== "model" || file.slice?.status === "sliced"))
-          .map((file) => (
-            <ToggleChip key={file.id} icon={SlicerFileIcon} onClick={() => onUse(file)}>
-              <span className="max-w-48 truncate">{file.name}</span>
-            </ToggleChip>
-          ))}
-      </div>
-    </div>
+    <ul aria-label="Slices kept with the idea" className="flex flex-col gap-2">
+      {slices.map((file, index) => {
+        const estimate = file.prefill.estimatedMinutes;
+        return (
+          <li key={file.id}>
+            <button
+              type="button"
+              onClick={() => onUse(file)}
+              aria-label={`Use ${attachedName(file)}`}
+              className="pressable focus-ring bg-ink/3 hover:bg-ink/5 flex w-full items-center gap-3 rounded-lg p-2.5 text-left"
+            >
+              <PlateThumb
+                src={file.hasThumb ? fileThumbSrc(file) : undefined}
+                alt="The plate, as sliced"
+                className="size-12"
+              />
+              <span className="flex min-w-0 flex-1 flex-col">
+                <span className="text-small text-ink truncate font-semibold">{attachedName(file)}</span>
+                <span className="text-caption text-ink-faint">
+                  {[estimate !== undefined ? `est. ${formatMinutes(estimate)}` : "", index === 0 ? "latest" : ""]
+                    .filter(Boolean)
+                    .join(" · ")}
+                </span>
+              </span>
+            </button>
+          </li>
+        );
+      })}
+    </ul>
   );
 }
 
@@ -304,14 +350,15 @@ function IdeaFileOffer({ files, onUse }: { files: AttemptFile[]; onUse: (file: A
  * Fetches a kept file's bytes as a File, so the sheet reads it like a dropped one. A model gives its sliced
  * .gcode.3mf: that is what an attempt prints from.
  */
-export async function fetchKeptFile(file: AttemptFile): Promise<File | null> {
+export async function fetchKeptFile(file: AttemptFile, quiet = false): Promise<File | null> {
   const model = file.kind === "model";
   try {
     const response = await fetch(fileUrl(file.id, model ? "sliced" : "file"), { credentials: "same-origin" });
     if (!response.ok) throw new Error(String(response.status));
     return new File([await response.blob()], model ? slicedName(file.name) : file.name);
   } catch {
-    toast.error("Couldn't get that file", "It needs a connection.");
+    // Taken without being asked (the idea's one slice): failing to fetch it is not worth a toast.
+    if (!quiet) toast.error("Couldn't get that file", "It needs a connection.");
     return null;
   }
 }
