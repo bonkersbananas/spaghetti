@@ -920,7 +920,7 @@ function NothingWorked({ tries, closest, onOpen }: { tries: number; closest?: At
             <button
               type="button"
               onClick={onOpen}
-              className="focus-ring touch-target rounded-xs font-semibold underline underline-offset-2"
+              className="focus-ring touch-target relative rounded-xs font-semibold underline underline-offset-2"
             >
               Attempt {closest.number} came closest
             </button>{" "}
@@ -989,7 +989,7 @@ function WhatWorked({
               key={recipe.id}
               type="button"
               onClick={() => onOpenRecipe(recipe.id)}
-              className="focus-ring text-small text-ink touch-target -mx-1 flex items-center gap-2 rounded-md px-1 py-1.5 text-left font-semibold"
+              className="focus-ring text-small text-ink touch-target relative -mx-1 flex items-center gap-2 rounded-md px-1 py-1.5 text-left font-semibold"
             >
               <RecipeIcon size={18} aria-hidden className="shrink-0" />
               <span className="min-w-0 truncate">{recipe.name}</span>

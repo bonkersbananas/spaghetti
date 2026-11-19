@@ -90,7 +90,7 @@ export function SpoolColourField({ value, onChange, className }: SpoolColourFiel
                 aria-label={`Colour ${index + 1}`}
                 onClick={() => setActive(index)}
                 className={cn(
-                  "pressable focus-ring touch-target grid size-10 place-items-center rounded-full md:size-8",
+                  "pressable focus-ring touch-target relative grid size-10 place-items-center rounded-full md:size-8",
                   index === slot && "ring-ink ring-offset-paper ring-2 ring-offset-2",
                 )}
               >
