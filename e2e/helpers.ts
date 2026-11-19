@@ -20,6 +20,20 @@ export async function signIn(
   await expect(page.getByRole("heading", { level: 1, name: "Ideas" })).toBeVisible();
 }
 
+/**
+ * Opens an address the app answers with a redirect of its own (signed out, a link to the sign-in page). WebKit's
+ * goto rejects when the page navigates again before it has loaded, which is what the redirect is; the person ends
+ * on the sign-in page either way, and the test's next assertion checks where.
+ */
+export async function gotoRedirected(page: Page, url: string) {
+  await page.goto(url).catch((error: Error) => {
+    if (!/interrupted by another navigation/.test(error.message)) throw error;
+  });
+  // Where WebKit gave up on the goto the redirect is still under way: let it finish before the next navigation.
+  await page.waitForURL(/\/sign-in/);
+  await page.waitForLoadState("networkidle");
+}
+
 /** The same through the sign-in form, for the tests that are about signing in (the quiet passkey offer follows a password sign-in). */
 export async function signInWithForm(page: Page) {
   await page.goto("/sign-in");

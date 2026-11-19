@@ -1,5 +1,6 @@
 import { type APIRequestContext, expect, type Page, test } from "@playwright/test";
 import { SEED_PASSWORD, SEED_USERS } from "../scripts/lib/local-app.ts";
+import { gotoRedirected } from "./helpers";
 
 // A link to a page, opened signed out, goes through sign-in and on to that page, by every way of signing in; and the
 // sign-in page's own address carries it, so a browser that is already signed in goes straight there. That is what
@@ -40,8 +41,8 @@ test("a link to an idea opened signed out lands on the idea after signing in wit
   tag: "@phone",
 }, async ({ page, request }) => {
   const id = await addItem(request, "Spaghetti merch ideas");
-  await page.goto("/journal");
-  await page.goto(`/ideas/${id}`);
+  await gotoRedirected(page, "/journal");
+  await gotoRedirected(page, `/ideas/${id}`);
   // The sign-in page says where it goes on to, in its own address.
   await expect(page).toHaveURL(new RegExp(`/sign-in\\?redirect=%2Fideas%2F${id}$`));
   await fillPassword(page);

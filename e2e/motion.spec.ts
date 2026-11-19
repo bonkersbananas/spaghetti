@@ -118,13 +118,16 @@ test("an outcome answers the tap with a short vibration, unless motion is reduce
     expect(buzzes).toEqual(reduced ? [] : [10]);
     // The spring only scales the icon, and it rests at its own size (never left mid-way, with or without motion).
     await page.waitForTimeout(600);
-    expect(
-      await sheet
-        .getByRole("radio", { name: "Worked" })
-        .locator("span")
-        .first()
-        .evaluate((el) => getComputedStyle(el).transform),
-    ).toBe("none");
+    // Polled: WebKit's frames come later than Chromium's under load, and the spring is still a few thousandths off.
+    await expect
+      .poll(() =>
+        sheet
+          .getByRole("radio", { name: "Worked" })
+          .locator("span")
+          .first()
+          .evaluate((el) => getComputedStyle(el).transform),
+      )
+      .toBe("none");
     await page.keyboard.press("Escape");
   }
 });

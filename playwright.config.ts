@@ -15,6 +15,26 @@ if (e2eSlot() >= workers) throw new Error(`Worker ${e2eSlot()} has no server: se
 
 const desktop = { ...devices["Desktop Chrome"], viewport: { width: 1440, height: 900 } };
 const phone = { ...devices["Desktop Chrome"], viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true };
+// iPhone Safari's engine (opt-in, E2E_WEBKIT=1): 390x844, touch, three pixels per pixel, an iPhone's user agent.
+// Playwright's WebKit on Linux is not iOS, but it shares Safari's engine. launchOptions is reset: SPAGHETTI_BROWSER
+// names a Chromium.
+// Tests that drive a touch, a pinch, a hold or an authenticator through the Chrome DevTools Protocol, or hold the
+// clipboard permission: Playwright's WebKit has no CDP, no TouchEvent constructor and no clipboard permission, so
+// they can't run there at all (they stay Chromium-only; a real iPhone is the check for them).
+const needsChromium = new RegExp(
+  [
+    "agents\\.spec.*sets up sharing from iPhone", // clipboard-read/write permissions
+    "ideas\\.spec.*(real touch hold|sliding off)", // CDP touch
+    "page-zoom\\.spec", // CDP pinch
+    "passkeys\\.spec", // CDP virtual authenticator
+    "photo-remove\\.spec.*hold on a thumbnail", // CDP touch
+    "pull-to-go\\.spec", // CDP touch
+    "touch-press\\.spec", // CDP touch
+    "offline-typing\\.spec.*words typed after", // lazy chunks first needed offline: no service worker here to hold them
+    "viewer\\.spec.*tilting just under", // CDP touch
+  ].join("|"),
+);
+const iphone = { ...devices["iPhone 14"], viewport: { width: 390, height: 844 }, launchOptions: {} };
 /** The specs with projects of their own, below. */
 const ownProject = /(offline|performance|push|share|safe-area)\.spec/;
 
@@ -78,6 +98,17 @@ export default defineConfig({
       testMatch: /share\.spec/,
       use: { ...desktop, serviceWorkers: "allow" },
     },
+    // Opt-in (CI never sets it): the phone's and the offline specs in WebKit, docs/ci.md.
+    ...(process.env.E2E_WEBKIT
+      ? [
+          { name: "phone-webkit", testIgnore: ownProject, grep: onPhone, grepInvert: needsChromium, use: iphone },
+          {
+            name: "offline-webkit",
+            testMatch: /(offline|share)\.spec/,
+            use: { ...iphone, serviceWorkers: "allow" as const },
+          },
+        ]
+      : []),
   ],
   webServer: {
     command: "node scripts/e2e-server.ts",

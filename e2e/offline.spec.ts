@@ -264,10 +264,18 @@ const cachedPhotos = (page: Page) =>
     (await (await caches.open("sg-photos")).keys()).map((request) => new URL(request.url).pathname),
   );
 
-/** Every picture in the main area has loaded (none is a flat color block). */
+/**
+ * Every picture in the main area has loaded (none is a flat color block), the ones scrolled past
+ * aside: a jump straight to the end of a long list skips the lazy pictures it
+ * passes, and WebKit leaves them unloaded where Chromium's wider margin loads some; they load as they come back.
+ */
 const picturesLoaded = (page: Page) =>
   page.evaluate(() => {
-    const images = Array.from(document.querySelectorAll<HTMLImageElement>("main img"));
+    const near = (img: HTMLImageElement) => {
+      const { top, bottom } = img.getBoundingClientRect();
+      return bottom > 0 && top < 3 * innerHeight;
+    };
+    const images = Array.from(document.querySelectorAll<HTMLImageElement>("main img")).filter(near);
     return images.length > 0 && images.every((img) => img.complete && img.naturalWidth > 0);
   });
 

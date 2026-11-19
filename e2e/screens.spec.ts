@@ -484,7 +484,8 @@ test("closing a sheet puts focus back on what opened it", async ({ page, isMobil
   await page.keyboard.press("Enter");
   const sheet = page.getByRole("dialog", { name: "Attempt 3" });
   await expect(sheet).toBeVisible();
-  // Focus moves into the sheet and stays there while tabbing.
+  // Focus moves into the sheet (a frame or two after it shows, later in WebKit) and stays there while tabbing.
+  await expect.poll(() => page.evaluate(() => !!document.activeElement?.closest("[role=dialog]"))).toBe(true);
   for (let i = 0; i < 12; i++) {
     await page.keyboard.press("Tab");
     const outside = await page.evaluate(() =>

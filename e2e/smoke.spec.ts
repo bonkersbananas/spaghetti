@@ -1,5 +1,6 @@
 import { expect, type Page, test } from "@playwright/test";
 import { SEED_PASSWORD, SEED_USERS } from "../scripts/lib/local-app.ts";
+import { gotoRedirected } from "./helpers";
 
 const user = SEED_USERS[0];
 
@@ -73,6 +74,7 @@ test("signs in, browses the four sections, opens capture and signs out", async (
   // left the account sheet moving under the tap now and then (the flake this test was known for).
   await page.goto("/ideas");
   await expect(page.getByRole("heading", { name: "Nothing simmering yet" })).toBeVisible();
+  const ended = page.waitForResponse((r) => r.request().method() === "DELETE" && r.url().endsWith("/api/session"));
   if (isMobile) {
     await page.getByRole("button", { name: "Account" }).click();
     await page.getByRole("dialog").getByRole("button", { name: "Sign out" }).click();
@@ -81,7 +83,12 @@ test("signs in, browses the four sections, opens capture and signs out", async (
     await page.getByRole("dialog", { name: "Account" }).getByRole("button", { name: "Sign out" }).click();
   }
   await expect(page).toHaveURL(/\/sign-in/);
-  await page.goto("/ideas");
+  // WebKit takes a moment to settle after the server's answer (it clears the cache): a goto sooner is overtaken
+  // by a navigation to sign-in and ends on a plain sign-in page.
+  await ended;
+  await page.waitForLoadState("networkidle");
+  await page.waitForTimeout(500);
+  await gotoRedirected(page, "/ideas");
   await expect(page).toHaveURL(/\/sign-in\?redirect=/);
 });
 
