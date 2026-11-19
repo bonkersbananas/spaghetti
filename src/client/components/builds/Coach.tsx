@@ -62,7 +62,7 @@ export function CoachNote({ coach, itemId, attemptId, className, label = IDEAS }
                 icon={CloseIcon}
                 label={`Dismiss: ${item.title}`}
                 size="sm"
-                className="touch-target -mt-1 -mr-1"
+                className="-mt-1 -mr-1"
                 onClick={() => void setCoachDismissed(queryClient, itemId, attemptId, item.id, true)}
               />
             )}
@@ -180,7 +180,6 @@ export function CoachSuggestions({
                     icon={CloseIcon}
                     label={`Dismiss: ${item.title}`}
                     size="sm"
-                    className="touch-target"
                     onClick={() => void setCoachDismissed(queryClient, itemId, attemptId, item.id, true)}
                   />
                 )}

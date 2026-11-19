@@ -64,7 +64,7 @@ export function ConfirmRemove({ what, onRemove, size = "md", className }: Confir
         aria-label={asking ? `Remove ${what}? Press again to remove` : `Remove ${what}`}
         title={asking ? "Press again to remove" : "Remove"}
         className={cn(
-          "pressable focus-ring touch-target bg-veil text-on-veil shadow-raised flex items-center justify-center overflow-hidden rounded-full backdrop-blur-md",
+          "pressable focus-ring touch-target relative bg-veil text-on-veil shadow-raised flex items-center justify-center overflow-hidden rounded-full backdrop-blur-md",
           small ? "h-7" : "h-8",
           asking
             ? small
