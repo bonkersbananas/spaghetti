@@ -409,3 +409,29 @@ test("filling the AMS: the colour picked is the colour saved, and the next slot 
     page.getByRole("dialog", { name: "New spool" }).getByRole("button", { name: "Add to A2" }),
   ).toBeVisible();
 });
+
+test("a bought PETG item offers no PLA products and shows its colour on a phone", {
+  tag: "@phone",
+}, async ({ page, isMobile }) => {
+  await page.goto("/shopping");
+  const field = page.getByRole("textbox", { name: "Add something to buy" });
+  await field.fill("Spool of white PETG");
+  await field.press("Enter");
+  await page.getByRole("checkbox", { name: "Bought: Spool of white PETG" }).click();
+  await page
+    .getByRole("list", { name: "Bought" })
+    .getByRole("listitem")
+    .filter({ hasText: "white PETG" })
+    .getByRole("button", { name: "Add to pantry" })
+    .click();
+
+  const sheet = page.getByRole("dialog", { name: "New spool" });
+  await expect(sheet.getByRole("button", { name: "PETG", exact: true })).toHaveAttribute("aria-pressed", "true");
+  await expect(sheet.getByRole("textbox", { name: "Color name" })).toHaveValue("White");
+  // None of the products is PETG: no row of PLA ones, and the colour is in view without scrolling.
+  await expect(sheet.getByText("Start from a product")).toHaveCount(0);
+  await expect(sheet.getByRole("button", { name: /Bambu Lab PLA/ })).toHaveCount(0);
+  const colour = sheet.getByRole("textbox", { name: "Color name" });
+  await expect(colour).toBeInViewport();
+  if (isMobile) expect((await colour.boundingBox())?.y ?? 9999).toBeLessThan(844);
+});

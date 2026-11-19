@@ -13,7 +13,10 @@ interface RankRowProps {
   /** The picture: a photo, else the note on a small index card, else the idea glyph. */
   photo?: { src: string; color?: string };
   note?: string;
-  title: string;
+  /** The name under the tile; left out when the picture already says it (a note card). */
+  title?: string;
+  /** What a screen reader calls the tile, when there is no `title` to read. */
+  label?: string;
   /** Short pieces for the line under the name ("for Mila", "2 days ago"), wrapped by MetaList. */
   meta?: string[];
   link: LinkProps;
@@ -129,7 +132,10 @@ interface PickTileProps {
   photo?: { src: string; color?: string; fit?: "cover" | "contain" };
   /** The note, when it says more than the name under the tile (otherwise leave it out). */
   note?: string;
-  title: string;
+  /** The name under the tile; left out when the picture already says it (a note card). */
+  title?: string;
+  /** What a screen reader calls the tile, when there is no `title` to read. */
+  label?: string;
   /** A quiet line under the name ("MakerWorld · 2 days ago"). */
   meta?: ReactNode;
   /** Its place on the list when picked; null when it isn't on it. Left out (undefined): not a toggle, a tap just takes it. */
@@ -151,6 +157,7 @@ export function PickTile({
   photo,
   note,
   title,
+  label,
   meta,
   rank,
   active,
@@ -164,11 +171,15 @@ export function PickTile({
   return (
     <button
       type="button"
+      aria-label={title ? undefined : label}
       aria-pressed={rank === undefined ? undefined : picked}
       disabled={disabled}
       onClick={onToggle}
       onPointerMove={onActive}
-      className={cn("pressable focus-ring group/pick flex min-w-0 flex-col gap-1.5 rounded-lg text-left", className)}
+      className={cn(
+        "pressable focus-ring group/pick flex w-full min-w-0 flex-col gap-1.5 rounded-lg text-left",
+        className,
+      )}
     >
       <span
         className={cn(
@@ -200,14 +211,16 @@ export function PickTile({
         {picked && <RankMark rank={rank} tone="badge" className="absolute right-1.5 bottom-1.5" />}
       </span>
       <span className="min-w-0">
-        <span
-          className={cn(
-            "text-small line-clamp-2 break-words",
-            picked || active ? "text-ink font-semibold" : "text-ink-soft",
-          )}
-        >
-          {title}
-        </span>
+        {title && (
+          <span
+            className={cn(
+              "text-small line-clamp-2 break-words",
+              picked || active ? "text-ink font-semibold" : "text-ink-soft",
+            )}
+          >
+            {title}
+          </span>
+        )}
         {meta && <span className="text-caption text-ink-faint block truncate">{meta}</span>}
       </span>
     </button>

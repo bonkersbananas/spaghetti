@@ -52,3 +52,16 @@ export function spoolFieldsOf(product: Product) {
     ...(product.bed ? { bedTempMin: product.bed[0], bedTempMax: product.bed[1] } : {}),
   };
 }
+
+/**
+ * The products worth offering for a spool of this material: only its own ("PETG" gets no PLA chips), those sold in
+ * the wanted colour first ("white" lifts "Jade white"). With no material yet (a field being typed) every product is
+ * offered, with the colour match first. A material no product is made in gets none: the fields below do the work.
+ */
+export function suggestedProducts(material: string, colour?: string | null): Product[] {
+  const wanted = material.trim().toLowerCase();
+  const word = colour?.trim().toLowerCase();
+  const own = PRODUCTS.filter((product) => !wanted || product.material.toLowerCase() === wanted);
+  const matches = (product: Product) => !!word && !!product.colour && product.colour.name.toLowerCase().includes(word);
+  return [...own.filter(matches), ...own.filter((product) => !matches(product))];
+}

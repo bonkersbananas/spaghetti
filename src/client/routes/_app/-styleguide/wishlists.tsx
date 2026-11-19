@@ -21,7 +21,7 @@ export function WishlistsSection() {
     <Section
       id="wishlists"
       title="Wishlists"
-      note="RankRow: a place in a ranked list (the first on a semolina medal), the picture, the name, then actions and the DragHandle, which the arrow keys move too. Lifted while it is dragged. PickTile: an idea to pick, wearing its place once picked."
+      note="RankRow: a place in a ranked list (the first on a semolina medal), the picture, the name, then actions and the DragHandle, which the arrow keys move too. Lifted while it is dragged. PickTile: an idea to pick, wearing its place once picked. Every tile is the same square and keeps to its cell; one without a photo shows its note (a link in words), and its caption is left out when the face already says it."
     >
       <div className="grid grid-cols-1 gap-8 md:grid-cols-2">
         <div className="flex flex-col gap-2">
@@ -75,6 +75,18 @@ export function WishlistsSection() {
             />
             <PickTile title="Wall mount" note="Keyhole slots, 160 mm apart." rank={null} onToggle={noop} />
             <PickTile title="Bag clips" rank={2} onToggle={noop} />
+            <PickTile
+              label="Modular wall hook system for garage pegboards"
+              note="https://www.printables.com/model/1234567-modular-wall-hook-system-for-garage-pegboards"
+              rank={null}
+              onToggle={noop}
+            />
+            <PickTile
+              title="A modular wall hook system for the garage that grows with your pegboard"
+              note="Keyhole slots, 160 mm apart."
+              rank={null}
+              onToggle={noop}
+            />
           </div>
           <Label>Empty</Label>
           <WishingBowl />

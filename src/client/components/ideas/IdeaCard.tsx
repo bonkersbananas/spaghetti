@@ -19,8 +19,9 @@ import { coverOf, newestPlate, photoAlt, photoSrc, plateAlt } from "@/lib/previe
 // Where they used to live: the idea page and Up next read them from here.
 // The styleguide shows the mark from here, so it stays in the idea card's chunk (its only other user) rather than a
 // chunk of its own on every Ideas first load.
-export { ModelMark, photoAlt, plateAlt };
+export { ModelMark, photoAlt, plateAlt, shortenLinks };
 
+import { shortenLinks } from "@/lib/short-links";
 import { useUnreadCount, useUnreadThreadSearch } from "@/lib/unread-comments";
 
 // The menu's code (popover, sheet) arrives after the first screen: it is only needed once a card is touched.
@@ -155,11 +156,4 @@ export function IdeaCard({ item, person, via, landing, menu, headingLevel = 2, r
       )}
     </m.li>
   );
-}
-
-/** Links read better short on a card: printables.com/model/123, a model page without ?from=search and the like. */
-export function shortenLinks(text: string): string {
-  let result = text;
-  for (const { url } of findLinks(text).reverse()) result = result.replace(url, shortUrl(cleanModelUrl(url)));
-  return result;
 }

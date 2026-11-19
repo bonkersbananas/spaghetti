@@ -113,7 +113,7 @@ export function NoteFace({ note, size, className, compact, clearBottom, maxSize,
             className="note-strand bg-tomato/25 pointer-events-none absolute bottom-[8cqi] left-[8cqi] aspect-[100/44] w-[34cqi]"
           />
         )}
-        {link && <p className="text-caption text-ink-faint mt-1.5 truncate">{link.site}</p>}
+        {link && compact !== true && <p className="text-caption text-ink-faint mt-1.5 truncate">{link.site}</p>}
       </div>
     </div>
   );

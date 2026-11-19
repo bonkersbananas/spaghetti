@@ -27,6 +27,11 @@ describe("filamentFromName", () => {
     expect(filamentFromName("PLA+ silk")).toMatchObject({ material: "PLA+", finish: "silk", colorName: null });
   });
 
+  it("reads the colour from a sentence: filler words are not part of it", () => {
+    expect(filamentFromName("Spool of white PETG")).toMatchObject({ material: "PETG", colorName: "White" });
+    expect(filamentFromName("A new roll of PETG")).toMatchObject({ material: "PETG" });
+  });
+
   it("says nothing for what is not filament", () => {
     for (const name of [
       "0.4 mm hardened nozzle",

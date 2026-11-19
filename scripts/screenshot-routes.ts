@@ -302,6 +302,42 @@ async function mockWebhooks(
   });
 }
 
+/** Ideas without a photo of each kind, among the seed's photo ideas, for the pickers' shots (removed by their cleanup). */
+const pickerIdeas: string[] = [];
+async function addPickerIdeas(page: Page) {
+  const headers = { Origin: new URL(page.url()).origin };
+  const notes: Array<Record<string, string>> = [
+    { note: "https://www.printables.com/model/1234567-modular-wall-hook-system-for-garage-pegboards?utm_source=x" },
+    { note: "Spice rack for the drawer: three rows, 40 mm deep, no screws, and a lip at the front" },
+    { title: "A modular wall hook system for the garage that grows with your pegboard", note: "" },
+    { title: "Hose clip", note: "Fits 25 mm hose." },
+  ];
+  for (const data of notes) {
+    const id = crypto.randomUUID();
+    pickerIdeas.push(id);
+    await page.request.post("/api/items", { headers, data: { id, createdAt: Date.now() - 60_000, ...data } });
+  }
+}
+async function removePickerIdeas(page: Page) {
+  const headers = { Origin: new URL(page.url()).origin };
+  for (const id of pickerIdeas.splice(0)) await page.request.delete(`/api/items/${id}`, { headers });
+}
+
+/** The pantry sheet opened from a bought "Spool of white PETG". */
+async function openPetgSheet(page: Page) {
+  const field = page.getByRole("textbox", { name: "Add something to buy" });
+  await field.fill("Spool of white PETG");
+  await field.press("Enter");
+  await page.getByRole("checkbox", { name: "Bought: Spool of white PETG" }).click();
+  await page
+    .getByRole("listitem")
+    .filter({ hasText: "white PETG" })
+    .getByRole("button", { name: "Add to pantry" })
+    .click();
+  await page.getByRole("dialog", { name: "New spool" }).waitFor();
+  await page.waitForTimeout(600);
+}
+
 /** The wishlists page with both lists in. */
 async function waitForWishlist(page: Page) {
   await page.getByRole("heading", { level: 1, name: "Wishlists" }).waitFor();
@@ -2533,6 +2569,50 @@ export const shots: Shot[] = [
       await page.getByRole("button", { name: "Pick ideas" }).click();
       await page.getByRole("dialog", { name: "Pick your top ideas" }).waitFor();
       await page.waitForTimeout(500);
+    },
+  },
+  {
+    // Ideas without a photo among those with one: every tile the same size, a link said in words, a note once.
+    name: "picker-mixed-wishlist",
+    path: "/wishlist",
+    prepare: async (page) => {
+      await addPickerIdeas(page);
+      await page.reload();
+      await waitForWishlist(page);
+      await page.getByRole("button", { name: "Pick ideas" }).click();
+      await page.getByRole("dialog", { name: "Pick your top ideas" }).waitFor();
+      await page.waitForTimeout(700);
+    },
+    cleanup: async (page) => {
+      await page.keyboard.press("Escape");
+      await removePickerIdeas(page);
+    },
+  },
+  {
+    name: "picker-mixed-start-build",
+    path: "/builds",
+    prepare: async (page) => {
+      await addPickerIdeas(page);
+      await page.reload();
+      await page
+        .getByRole("button", { name: /^(New build|Pick an idea to print)$/ })
+        .first()
+        .click();
+      await page.getByRole("heading", { name: "What are you printing?" }).waitFor();
+      await page.waitForTimeout(700);
+    },
+    cleanup: async (page) => {
+      await page.keyboard.press("Escape");
+      await removePickerIdeas(page);
+    },
+  },
+  {
+    // "Spool of white PETG" bought: PETG picked, no PLA products, the colour in view.
+    name: "pantry-petg-sheet",
+    path: "/shopping",
+    prepare: openPetgSheet,
+    cleanup: async (page) => {
+      await page.keyboard.press("Escape");
     },
   },
   {

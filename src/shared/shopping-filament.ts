@@ -37,7 +37,7 @@ export function filamentFromName(name: string): FilamentFromName | null {
   if (finish) rest = rest.replace(wordRe(finish), " ");
   const colour = rest
     .replace(/\b\d+(?:[.,]\d+)?\s?(?:kg|g)\b/gi, " ")
-    .replace(/\b(?:filament|spool|spools|hf|x\s?\d+)\b/gi, " ")
+    .replace(/\b(?:filament|spool|spools|of|a|an|the|some|new|colou?r|hf|x\s?\d+)\b/gi, " ")
     .replace(/[,;:|·\-–()]/g, " ")
     .replace(/\s+/g, " ")
     .trim();

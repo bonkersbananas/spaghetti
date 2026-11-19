@@ -1,6 +1,6 @@
 import type { Spool } from "@shared/api";
 import { DEFAULT_NET_GRAMS } from "@shared/ledger";
-import { isProduct, pickedProduct, productName, spoolFieldsOf } from "@shared/product-picks";
+import { isProduct, pickedProduct, productName, spoolFieldsOf, suggestedProducts } from "@shared/product-picks";
 import { PRODUCTS } from "@shared/products";
 import { colourNameOf } from "@shared/spool-lookup";
 import { BRANDS, colorsName, FINISHES, finishLabel, linesFor, SPOOL_MATERIALS, spoolColors } from "@shared/spools";
@@ -10,6 +10,7 @@ import { useEffect, useId, useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { ToggleChip } from "@/components/ui/Chip";
 import { TextField } from "@/components/ui/Field";
+import { ChipRow } from "@/components/ui/FilterChips";
 import { CameraIcon, CheckIcon, ImageIcon, PlusIcon, SparkleIcon } from "@/components/ui/icons";
 import { AddPhotoTile, PhotoThumb, useFilePicker } from "@/components/ui/PhotoTiles";
 import { Sheet } from "@/components/ui/Sheet";
@@ -37,6 +38,9 @@ interface AddSpoolSheetProps {
   /** The slot it goes into: the button then says "Add to A1". */
   slot?: string | null;
 }
+
+/** How many products show before "More". */
+const FEW = 3;
 
 const blank = (initial?: SpoolDraft): SpoolDraft => ({
   material: "PLA",
@@ -78,6 +82,8 @@ export function AddSpoolSheet({
   // Basic" stays lit with Jade white picked, though "PLA Basic · Jade white" is the same spool).
   const [tapped, setTapped] = useState<string | null>(null);
   const [otherMaterial, setOtherMaterial] = useState(false);
+  // The product row shows a few; "More" lays out the rest of that material's.
+  const [allProducts, setAllProducts] = useState(false);
   // What the person has set themselves: a label read may fill the rest, and the starting material and weight.
   const [touched, setTouched] = useState<ReadonlySet<string>>(new Set());
 
@@ -85,6 +91,7 @@ export function AddSpoolSheet({
   useEffect(() => {
     if (!open) return;
     setTapped(null);
+    setAllProducts(false);
     setDraft(blank(initial));
     setNamedByHand(!!initial?.colorName);
     setTouched(
@@ -117,8 +124,13 @@ export function AddSpoolSheet({
     const guess = colors.length > 1 ? colorsName(colors) : colors[0] ? colourNameOf(colors[0]) : undefined;
     change({ ...next, ...(namedByHand ? {} : { colorName: guess ?? null }) });
   };
+  // Only this material's products, and a few of them: the colour and the fields are what the sheet is for.
+  const products = suggestedProducts(otherMaterial ? "" : draft.material, initial?.colorName);
   const tappedProduct = PRODUCTS.find((entry) => entry.id === tapped);
   const litProduct = tappedProduct && isProduct(draft, tappedProduct) ? tappedProduct : pickedProduct(draft);
+  // The lit product always shows, first.
+  const lit = products.find((product) => product.id === litProduct?.id);
+  const shown = allProducts ? products : [...(lit ? [lit] : []), ...products.filter((p) => p !== lit)].slice(0, FEW);
   // A known product fills in what its label says; the colours stay as picked, spread over as many as it has.
   const pickProduct = (id: string) => {
     const product = PRODUCTS.find((entry) => entry.id === id);
@@ -229,22 +241,30 @@ export function AddSpoolSheet({
           )}
         </div>
 
-        <fieldset className="flex flex-col gap-2.5">
-          <legend className="text-small text-ink-soft mb-2.5 px-0.5 font-semibold">Start from a product</legend>
-          <div className="flex flex-wrap gap-2">
-            {PRODUCTS.map((product) => (
-              <ToggleChip
-                key={product.id}
-                selected={litProduct?.id === product.id}
-                onClick={() => pickProduct(product.id)}
-                lead={!!product.colour}
-              >
-                {product.colour && <SpoolDisc color={product.colour.hex} size="sm" />}
-                {productName(product)}
-              </ToggleChip>
-            ))}
-          </div>
-        </fieldset>
+        {products.length > 0 && (
+          <fieldset className="flex flex-col">
+            <legend className="text-small text-ink-soft mb-2 px-0.5 font-semibold">Start from a product</legend>
+            <ChipRow label="Products" wrap={allProducts}>
+              {shown.map((product) => (
+                <ToggleChip
+                  key={product.id}
+                  selected={litProduct?.id === product.id}
+                  onClick={() => pickProduct(product.id)}
+                  lead={!!product.colour}
+                  className="shrink-0"
+                >
+                  {product.colour && <SpoolDisc color={product.colour.hex} size="sm" />}
+                  {productName(product)}
+                </ToggleChip>
+              ))}
+              {!allProducts && products.length > FEW && (
+                <ToggleChip onClick={() => setAllProducts(true)} className="shrink-0">
+                  More
+                </ToggleChip>
+              )}
+            </ChipRow>
+          </fieldset>
+        )}
 
         <fieldset className="flex flex-col gap-2.5">
           <legend className="text-small text-ink-soft mb-2.5 px-0.5 font-semibold">Material</legend>
