@@ -140,6 +140,7 @@ test("a half-written comment survives leaving the page and a reload", { tag: "@p
   await field.fill("Half a thought, and then");
   if (isMobile) await page.keyboard.press("Escape");
   await page.goto("/ideas");
+  await expect(page.getByRole("heading", { level: 1, name: "Ideas" })).toBeVisible();
   await page.goto(`/ideas/${id}`);
   if (isMobile) await expect(page.getByRole("button", { name: /Draft: Half a thought/ })).toBeVisible();
   else await expect(page.getByRole("textbox", { name: /Say something to/ })).toHaveValue("Half a thought, and then");
