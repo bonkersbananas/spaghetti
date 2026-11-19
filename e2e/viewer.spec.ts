@@ -116,15 +116,18 @@ test("the arrow keys step layers as soon as the 3D view opens, and after a drag 
   await expect(dialog.locator("[data-viewer=ready]")).toBeVisible({ timeout: 30_000 });
   await expect(dialog.getByText("Layer 317 of 317")).toBeVisible();
 
-  // Nothing clicked yet: focus is outside the viewer.
-  await page.keyboard.press("ArrowLeft");
-  await expect(dialog.getByText(/^Layer 316 of 317/)).toBeVisible();
-  await page.keyboard.press("Shift+ArrowLeft");
-  await expect(dialog.getByText(/^Layer 306 of 317/)).toBeVisible();
+  // Nothing clicked yet: focus is outside the viewer. Work from the first layer: the software GL of a runner draws
+  // all 317 layers slowly (this test took 66 s on CI at the top, where each step is a full redraw).
+  await page.keyboard.press("Home");
+  await expect(dialog.getByText(/^Layer 1 of 317/)).toBeVisible();
   await page.keyboard.press("ArrowRight");
-  await expect(dialog.getByText(/^Layer 307 of 317/)).toBeVisible();
+  await expect(dialog.getByText(/^Layer 2 of 317/)).toBeVisible();
   await page.keyboard.press("Shift+ArrowRight");
-  await expect(dialog.getByText(/^Layer 317 of 317/)).toBeVisible();
+  await expect(dialog.getByText(/^Layer 12 of 317/)).toBeVisible();
+  await page.keyboard.press("ArrowLeft");
+  await expect(dialog.getByText(/^Layer 11 of 317/)).toBeVisible();
+  await page.keyboard.press("Shift+ArrowLeft");
+  await expect(dialog.getByText(/^Layer 1 of 317/)).toBeVisible();
 
   // After a drag on the canvas, which doesn't move focus.
   const box = await dialog.locator("canvas").boundingBox();
@@ -133,15 +136,15 @@ test("the arrow keys step layers as soon as the 3D view opens, and after a drag 
   await page.mouse.down();
   await page.mouse.move(box.x + box.width / 2 + 60, box.y + box.height / 2 + 30, { steps: 5 });
   await page.mouse.up();
-  await page.keyboard.press("Shift+ArrowLeft");
-  await expect(dialog.getByText(/^Layer 307 of 317/)).toBeVisible();
+  await page.keyboard.press("Shift+ArrowRight");
+  await expect(dialog.getByText(/^Layer 11 of 317/)).toBeVisible();
 
   // On the slider, Shift steps ten and a plain arrow steps one (not twice).
   await dialog.getByRole("slider", { name: "Layer" }).focus();
-  await page.keyboard.press("Shift+ArrowLeft");
-  await expect(dialog.getByText(/^Layer 297 of 317/)).toBeVisible();
-  await page.keyboard.press("ArrowRight");
-  await expect(dialog.getByText(/^Layer 298 of 317/)).toBeVisible();
+  await page.keyboard.press("Shift+ArrowRight");
+  await expect(dialog.getByText(/^Layer 21 of 317/)).toBeVisible();
+  await page.keyboard.press("ArrowLeft");
+  await expect(dialog.getByText(/^Layer 20 of 317/)).toBeVisible();
 
   await page.keyboard.press("Escape");
   await expect(dialog).toHaveCount(0);
