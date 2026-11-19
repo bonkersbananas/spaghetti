@@ -1,11 +1,11 @@
 import { fieldsFor, type SheetFields, type SheetValue, toChanges, toFields, toValue } from "@shared/attempt-fields";
 import type { Outcome } from "@shared/attempts";
 import { partsOnPlate } from "@shared/parts";
-import { offTheBedLabel } from "@shared/print-progress";
 import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef } from "react";
 import { createPortal } from "react-dom";
 import { SaveAsRecipe } from "@/components/recipes/SaveAsRecipe";
+import { ActionMenuItem, MoreMenu } from "@/components/ui/ActionMenu";
 import { Button } from "@/components/ui/Button";
 import { CameraIcon, ImageIcon, PlusIcon, TrashIcon } from "@/components/ui/icons";
 import { AddPhotoTile, PhotoThumb, useFilePicker } from "@/components/ui/PhotoTiles";
@@ -34,6 +34,7 @@ export function EditAttempt({
   initialOutcome,
   incomingFile,
   footerHost,
+  menuHost,
 }: {
   item: ItemView;
   attempt: AttemptView;
@@ -44,6 +45,8 @@ export function EditAttempt({
   incomingFile?: { file: File; key: number } | null;
   /** Where the footer (Delete, the save state, Done) is drawn: the sheet's own footer. */
   footerHost: HTMLElement | null;
+  /** Where its "…" menu is drawn: the sheet's header, top right, as the app's other menus. */
+  menuHost: HTMLElement | null;
 }) {
   const queryClient = useQueryClient();
   const isDesktop = useIsDesktop();
@@ -146,23 +149,15 @@ export function EditAttempt({
 
   const footer = (
     <>
-      <Button
-        variant="quiet"
-        icon={TrashIcon}
-        size={isDesktop ? "md" : "lg"}
-        disabled={!!readOnly}
-        onClick={() => {
-          deleteAttempt(queryClient, item.id, attempt);
-          onOpenChange(false);
-        }}
-        className="max-md:px-4"
-      >
-        Delete
-      </Button>
-      <SaveStatus state={saveState} className="ml-auto" />
+      {/* On a phone it floats just above Done (the sheet is its positioned parent), so Done keeps the whole width. */}
+      <SaveStatus
+        state={saveState}
+        className="max-md:absolute max-md:right-5 max-md:bottom-[max(5.25rem,calc(var(--sg-safe-bottom)+4.25rem))] md:ml-auto"
+      />
       <Button
         variant={printing && !value.outcome ? "secondary" : "primary"}
         size={isDesktop ? "md" : "lg"}
+        className="max-md:flex-1"
         onClick={() => {
           if (readOnly === "finish" && value.outcome) {
             finishQueued.current = true;
@@ -180,6 +175,26 @@ export function EditAttempt({
     <>
       {/* The footer belongs to the sheet's frame, which stays put when stepping to another attempt: it is drawn there. */}
       {footerHost && createPortal(footer, footerHost)}
+      {menuHost &&
+        createPortal(
+          <>
+            {/* Rare, and a slip next to Done is costly: delete lives behind "…" in the header, away from Done. */}
+            <MoreMenu label="More for this attempt" title="Attempt" description={`Attempt ${attempt.number}`} inSheet>
+              <ActionMenuItem
+                icon={TrashIcon}
+                tone="danger"
+                disabled={!!readOnly}
+                onSelect={() => {
+                  deleteAttempt(queryClient, item.id, attempt);
+                  onOpenChange(false);
+                }}
+              >
+                Delete attempt
+              </ActionMenuItem>
+            </MoreMenu>
+          </>,
+          menuHost,
+        )}
       {camera.input}
       {library.input}
       {slicer.picker.input}
@@ -245,7 +260,13 @@ export function EditAttempt({
             />
           ) : undefined
         }
-        when={<WhenField value={value.printedAt} onChange={(time) => change({ printedAt: time ?? Date.now() })} />}
+        when={
+          <WhenField
+            starting={printing && !value.outcome}
+            value={value.printedAt}
+            onChange={(time) => change({ printedAt: time ?? Date.now() })}
+          />
+        }
         photos={
           <div className="-mx-5 flex gap-2.5 overflow-x-auto px-5 py-1 md:-mx-6 md:px-6">
             {photos.map((photo, index) => (

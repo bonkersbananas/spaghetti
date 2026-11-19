@@ -1,6 +1,5 @@
 import type { Outcome } from "@shared/attempts";
 import { offTheBedLabel } from "@shared/print-progress";
-import { fullTime, relativeTime } from "@shared/time";
 import { AnimatePresence, m, useReducedMotion } from "motion/react";
 import { useEffect, useState } from "react";
 import { IconButton } from "@/components/ui/Button";
@@ -54,6 +53,7 @@ export function AttemptSheet({
   const reduce = useReducedMotion();
   // The sheet's frame (title, arrows, footer) stays put when stepping; only what is inside it changes.
   const [footerHost, setFooterHost] = useState<HTMLElement | null>(null);
+  const [menuHost, setMenuHost] = useState<HTMLElement | null>(null);
   if (attemptId) {
     if (!attempt) return null;
     const printing = attempt.outcome === null;
@@ -66,33 +66,34 @@ export function AttemptSheet({
         onOpenChange={onOpenChange}
         desktop="panel"
         title={printing ? `Finish attempt ${attempt.number}` : `Attempt ${attempt.number}`}
+        // The build's name, as the new attempt's sheet says it: when it printed is the when line's to say.
         description={
-          <time dateTime={new Date(attempt.printedAt).toISOString()} title={fullTime(attempt.printedAt)}>
-            {printing ? "Started printing " : "Printed "}
-            {relativeTime(attempt.printedAt).toLowerCase()}
-            {printing && attempt.endedAt !== null && <> · {lowerFirst(offTheBedLabel(attempt.endedAt))}</>}
-          </time>
+          [item.title, printing && attempt.endedAt !== null ? lowerFirst(offTheBedLabel(attempt.endedAt)) : ""]
+            .filter(Boolean)
+            .join(" · ") || undefined
         }
         headerActions={
-          onStep &&
-          item.attempts.length > 1 && (
-            <>
-              <IconButton
-                icon={PreviousIcon}
-                label="Previous attempt"
-                size="sm"
-                disabled={!before}
-                onClick={() => before && onStep(before.id)}
-              />
-              <IconButton
-                icon={NextIcon}
-                label="Next attempt"
-                size="sm"
-                disabled={!after}
-                onClick={() => after && onStep(after.id)}
-              />
-            </>
-          )
+          <>
+            {onStep && item.attempts.length > 1 && (
+              <>
+                <IconButton
+                  icon={PreviousIcon}
+                  label="Previous attempt"
+                  size="sm"
+                  disabled={!before}
+                  onClick={() => before && onStep(before.id)}
+                />
+                <IconButton
+                  icon={NextIcon}
+                  label="Next attempt"
+                  size="sm"
+                  disabled={!after}
+                  onClick={() => after && onStep(after.id)}
+                />
+              </>
+            )}
+            <span ref={setMenuHost} className="contents" />
+          </>
         }
         footer={<div ref={setFooterHost} className="contents" />}
       >
@@ -116,6 +117,7 @@ export function AttemptSheet({
               initialOutcome={initialOutcome}
               incomingFile={incomingFile}
               footerHost={footerHost}
+              menuHost={menuHost}
             />
           </m.div>
         </AnimatePresence>

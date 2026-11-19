@@ -58,6 +58,25 @@ test("a slicer file kept with an idea shows, counts as a model, can go and come 
   await expect(page.getByRole("region", { name: /^Files/ }).getByText(TUGBOAT_FILE_NAME)).toBeVisible();
   await page.getByRole("button", { name: "Log attempt" }).first().click();
   const sheet = page.getByRole("dialog", { name: "Attempt 1" });
-  await sheet.getByRole("button", { name: TUGBOAT_FILE_NAME }).click();
+  // The idea's one slice is attached as the sheet opens: a row named for it, its estimate, and a way to change it.
+  await expect(sheet.getByText(TUGBOAT_FILE_NAME)).toBeVisible();
   await expect(sheet.getByText(/est\./)).toBeVisible();
+  await expect(sheet.getByRole("button", { name: "Change", exact: true })).toBeVisible();
+  await expect(sheet.getByRole("button", { name: "Add the slicer file" })).toHaveCount(0);
+
+  // Attempt 1 starts with what the file said: settings, estimate and filament, with no chip tapped.
+  await sheet.getByRole("button", { name: "Start print" }).click();
+  await expect(sheet).toBeHidden();
+  await expect
+    .poll(async () => {
+      const { item } = await (await page.request.get(`/api/items/${id}`)).json();
+      const settings = item.attempts[0]?.settings ?? {};
+      return [
+        settings.estimatedMinutes !== undefined,
+        settings.layerHeight !== undefined,
+        (settings.filaments?.length ?? 0) > 0,
+        item.attempts[0]?.file?.name === TUGBOAT_FILE_NAME,
+      ];
+    })
+    .toEqual([true, true, true, true]);
 });
