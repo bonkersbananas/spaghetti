@@ -106,7 +106,8 @@ export function makeTwist(queryClient: QueryClient, input: NewTwist, userId: str
         twists.map((t) => (t.id === id ? (edits.has(id) ? keepShown(t, twist) : twist) : t)),
       );
       // Called-off list fetches may have left the cache with only this twist: ask for the whole list again.
-      void queryClient.invalidateQueries({ queryKey: twistsQuery.queryKey });
+      // A change waiting for this create asks again once it has gone out, or the list could answer with the old name.
+      if (!edits.has(id)) void queryClient.invalidateQueries({ queryKey: twistsQuery.queryKey });
       whenSaved?.();
     },
     (error) => {
@@ -151,8 +152,10 @@ export async function updateTwist(queryClient: QueryClient, id: string, changes:
     }),
   );
   // A twist still being made isn't on the server yet: the change follows it, or it would answer "not found".
-  await making.get(id)?.catch(() => undefined);
+  const waited = making.get(id);
+  await waited?.catch(() => undefined);
   const { twist } = await api<TwistResponse>(`/twists/${id}`, { method: "PATCH", json: changes });
+  if (waited) void queryClient.invalidateQueries({ queryKey: twistsQuery.queryKey });
   // A model still on its way to the server isn't in its answer yet: it stays on the page. Changed again since: that
   // newer change stays, and only what the server works out is taken.
   patchTwists(queryClient, (twists) =>

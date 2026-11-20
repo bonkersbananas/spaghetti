@@ -232,3 +232,41 @@ test("shopping: a rename made while the thing is still being added stays, and re
     .toContain(renamed);
   await sheet.getByRole("button", { name: "Delete" }).click();
 });
+
+test("shopping: a delete waits only for its own thing's add", async ({ page }) => {
+  test.setTimeout(60_000);
+  await signIn(page);
+  let holding = false;
+  let release = () => {};
+  const held = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  await page.route("**/api/shopping-items", async (route) => {
+    if (route.request().method() !== "POST" || !holding) return route.fallback();
+    await held;
+    await route.fallback();
+  });
+  await page.goto("/shopping");
+  const first = `Nozzle ${tag()}`;
+  await add(page, first);
+  await expect
+    .poll(async () => JSON.stringify(await (await page.request.get("/api/shopping-items")).json()))
+    .toContain(first);
+  // Another thing is still being added when the first is deleted: the delete goes out at once.
+  holding = true;
+  const second = `Bed tape ${tag()}`;
+  await add(page, second);
+  const sent = page.waitForRequest(
+    (request) => request.method() === "DELETE" && request.url().includes("/api/shopping-items/"),
+    {
+      timeout: 10_000,
+    },
+  );
+  await toBuy(page).getByRole("button", { name: first, exact: true }).click();
+  await page.getByRole("dialog").getByRole("button", { name: "Delete" }).click();
+  await sent;
+  release();
+  await expect(toBuy(page).getByRole("button", { name: second, exact: true })).toBeVisible();
+  await toBuy(page).getByRole("button", { name: second, exact: true }).click();
+  await page.getByRole("dialog").getByRole("button", { name: "Delete" }).click();
+});

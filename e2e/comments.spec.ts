@@ -392,3 +392,40 @@ test("a comment edited while it is still being sent keeps the edit", { tag: "@ph
   await expect(thread(page).getByText("Blue PETG, please?")).toBeVisible();
   await expect(thread(page).getByText("(edited)")).toBeVisible();
 });
+
+test("a comment deleted while its send is failing stays gone, and no delete is sent", { tag: "@phone" }, async ({
+  page,
+  isMobile,
+}) => {
+  test.setTimeout(60_000);
+  const id = await newIdea(page);
+  // Hold the send, then fail it (and its retries): the delete comes while it is held.
+  let release = () => {};
+  const held = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  await page.route(`**/api/items/${id}/comments`, async (route) => {
+    if (route.request().method() !== "POST") return route.fallback();
+    await held;
+    await route.abort("failed");
+  });
+  const deletes: string[] = [];
+  page.on("request", (request) => {
+    if (request.method() === "DELETE") deletes.push(request.url());
+  });
+  await page.goto(`/ideas/${id}`);
+  const field = await openComposer(page, isMobile);
+  await field.fill("Red PETG?");
+  await send(page, isMobile);
+  await expect(thread(page).getByText("Red PETG?")).toBeVisible();
+  await settle(page);
+  await openMessageMenu(page, isMobile, "Red PETG?");
+  await page.getByRole("button", { name: "Delete", exact: true }).click();
+  await expect(thread(page)).toHaveCount(0);
+  release();
+  await expect(page.getByText("Couldn't send that")).toBeVisible({ timeout: 20_000 });
+  await page.waitForTimeout(500);
+  await expect(page.getByText("Couldn't delete that comment")).toHaveCount(0);
+  await expect(thread(page)).toHaveCount(0);
+  expect(deletes).toEqual([]);
+});

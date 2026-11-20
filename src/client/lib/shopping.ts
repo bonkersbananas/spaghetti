@@ -55,7 +55,9 @@ const keepServer = (queryClient: QueryClient, saved: ShoppingItem, edit?: number
   );
 
 /** Adds still on their way to the server: an order waits for them, or it would name a thing the server doesn't have yet. */
-const adding = new Set<Promise<unknown>>();
+const adding = new Map<string, Promise<unknown>>();
+/** Waits for the adds of these things only: a thing the server already has goes out at once. */
+const afterAdd = (...ids: string[]) => Promise.all(ids.map((id) => adding.get(id)));
 /** The newest order sent: an older one's answer doesn't move rows. */
 let latestOrder = 0;
 
@@ -100,8 +102,8 @@ export async function addToShopping(queryClient: QueryClient, text: string, user
     },
   });
   const settled = sending.catch(() => undefined);
-  adding.add(settled);
-  void settled.finally(() => adding.delete(settled));
+  adding.set(id, settled);
+  void settled.finally(() => adding.delete(id));
   try {
     const { shoppingItem } = await sending;
     // The server's copy, in the place the row has here: it may have been moved while it was being saved. A tick made
@@ -173,7 +175,7 @@ export async function updateShopping(queryClient: QueryClient, id: string, chang
   }));
   const edit = edits.get(id) ?? 0;
   // A thing still being added isn't on the server yet: the change follows the add, or it would answer "not found".
-  await Promise.all(adding);
+  await afterAdd(id);
   const { shoppingItem } = await api<ShoppingItemResponse>(`/shopping-items/${id}`, {
     method: "PATCH",
     json: changes,
@@ -220,9 +222,9 @@ export async function setBought(queryClient: QueryClient, item: ShoppingItem, bo
     // A thing still being added isn't on the server yet: its tick follows the add, or it would answer "not found".
     // The page may go before the add is answered (a reload): the tick is kept on this device then, and sent on the
     // next visit to the list (replayTicks).
-    if (adding.size > 0) {
+    if (adding.has(item.id)) {
       keepTick(item.id, bought);
-      await Promise.all(adding);
+      await afterAdd(item.id);
     }
     const { shoppingItem } = await api<ShoppingItemResponse>(`/shopping-items/${item.id}`, {
       method: "PATCH",
@@ -254,7 +256,7 @@ export async function reorderShopping(queryClient: QueryClient, ids: string[]) {
     items.map((item) => (place.has(item.id) ? { ...item, position: place.get(item.id) as number } : item)),
   );
   try {
-    await Promise.all(adding);
+    await afterAdd(...ids);
     const { shoppingItems } = await api<ShoppingItemsResponse>("/shopping-items/order", {
       method: "PUT",
       json: { ids },
@@ -297,7 +299,7 @@ export function removeShopping(queryClient: QueryClient, gone: ShoppingItem[], p
   // A thing still being added is deleted after the add lands, or the add would bring it back on the server.
   const deleted = Promise.all(
     gone.map((item) =>
-      Promise.all(adding)
+      afterAdd(item.id)
         .then(() => api(`/shopping-items/${item.id}`, { method: "DELETE" }))
         .catch((error) => {
           if (error instanceof ApiError && error.status === 404) return;
