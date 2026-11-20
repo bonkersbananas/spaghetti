@@ -29,6 +29,7 @@ const needsChromium = new RegExp(
     "passkeys\\.spec", // CDP virtual authenticator
     "photo-remove\\.spec.*hold on a thumbnail", // CDP touch
     "photo-hold\\.spec", // CDP touch
+    "gestures\\.spec", // CDP touch
     "pull-to-go\\.spec", // CDP touch
     "touch-press\\.spec", // CDP touch
     "offline-typing\\.spec.*words typed after", // lazy chunks first needed offline: no service worker here to hold them
