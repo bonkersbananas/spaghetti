@@ -26,6 +26,11 @@ export interface RecipeSourceAttempt {
 export const canBeRecipe = (attempt: { outcome: string | null; settings: AttemptSettings }) =>
   attempt.outcome === "success" && settingsMaterial(attempt.settings) !== null;
 
+/** Recipes still being saved, by id: a change to one waits for the save. */
+const saving = new Map<string, Promise<unknown>>();
+/** Recipes changed here since they were saved: the save's answer mustn't undo those. */
+const touched = new Set<string>();
+
 function patchRecipes(queryClient: QueryClient, change: (recipes: Recipe[]) => Recipe[]) {
   queryClient.setQueryData<Recipe[]>(recipesQuery.queryKey, (recipes) => (recipes ? change(recipes) : recipes));
 }
@@ -68,11 +73,17 @@ export async function saveRecipe(
   };
   queryClient.setQueryData<Recipe[]>(recipesQuery.queryKey, (recipes) => [optimistic, ...(recipes ?? [])]);
   try {
-    const { recipe } = await api<RecipeResponse>("/recipes", {
+    const sending = api<RecipeResponse>("/recipes", {
       method: "POST",
       json: { id, name, note, sourceAttemptId: source.id },
     });
-    patchRecipes(queryClient, (recipes) => recipes.map((r) => (r.id === id ? recipe : r)));
+    saving.set(id, sending);
+    const { recipe } = await sending.finally(() => saving.delete(id));
+    // Renamed meanwhile: the new words stay.
+    patchRecipes(queryClient, (recipes) =>
+      recipes.map((r) => (r.id === id ? (touched.has(id) ? { ...recipe, name: r.name, note: r.note } : recipe) : r)),
+    );
+    touched.delete(id);
     refreshElsewhere(queryClient);
     toast.success("Saved as a recipe", name);
     return true;
@@ -86,8 +97,13 @@ export async function saveRecipe(
 /** Renames a recipe or changes its note (the settings never change). Resolves once the server has it. */
 export async function updateRecipe(queryClient: QueryClient, id: string, changes: { name?: string; note?: string }) {
   patchRecipes(queryClient, (recipes) => recipes.map((r) => (r.id === id ? { ...r, ...changes } : r)));
+  if (saving.has(id)) touched.add(id);
+  await saving.get(id)?.catch(() => undefined);
   const { recipe } = await api<RecipeResponse>(`/recipes/${id}`, { method: "PATCH", json: changes });
-  patchRecipes(queryClient, (recipes) => recipes.map((r) => (r.id === id ? recipe : r)));
+  // The words stay as they are here: they may be newer than this answer (autosave sends one change after another).
+  patchRecipes(queryClient, (recipes) =>
+    recipes.map((r) => (r.id === id ? { ...recipe, name: r.name, note: r.note } : r)),
+  );
   refreshElsewhere(queryClient);
 }
 

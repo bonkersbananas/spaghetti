@@ -200,3 +200,35 @@ test("shopping: 'Not this one' drops a suggested page, and a name with no match 
   await expect(sheet.getByText("No Prisjakt page found for it.")).toBeVisible();
   await expect(sheet.getByLabel("Prisjakt")).toHaveValue("");
 });
+
+test("shopping: a rename made while the thing is still being added stays, and reaches the server", async ({ page }) => {
+  test.setTimeout(60_000);
+  await signIn(page);
+  // Hold the server's answer to the add (a slow connection): the rename comes before it.
+  let release = () => {};
+  const held = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  await page.route("**/api/shopping-items", async (route) => {
+    if (route.request().method() !== "POST") return route.fallback();
+    await held;
+    await route.fallback();
+  });
+  await page.goto("/shopping");
+  const name = `Glue stick ${tag()}`;
+  await add(page, name);
+  await toBuy(page).getByRole("button", { name, exact: true }).click();
+  const sheet = page.getByRole("dialog");
+  const renamed = `${name} XL`;
+  await sheet.getByLabel("Name").fill(renamed);
+  await page.waitForTimeout(1500);
+  release();
+  await expect(sheet.getByText("Saved")).toBeVisible();
+  await expect(sheet.getByLabel("Name")).toHaveValue(renamed);
+  await expect
+    .poll(async () =>
+      (await (await page.request.get("/api/shopping-items")).json()).shoppingItems.map((i: { name: string }) => i.name),
+    )
+    .toContain(renamed);
+  await sheet.getByRole("button", { name: "Delete" }).click();
+});

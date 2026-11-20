@@ -360,3 +360,35 @@ test("a print on the bed shows the other person's new comment on Builds, as the 
   await expect(bed.getByText("1 new comment")).toBeVisible({ timeout: 20_000 });
   await sams.context.close();
 });
+
+test("a comment edited while it is still being sent keeps the edit", { tag: "@phone" }, async ({ page, isMobile }) => {
+  const id = await newIdea(page);
+  // Hold the server's answer to the send (a slow connection): the edit comes before it.
+  let release = () => {};
+  const held = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  await page.route(`**/api/items/${id}/comments`, async (route) => {
+    if (route.request().method() !== "POST") return route.fallback();
+    await held;
+    await route.fallback();
+  });
+  await page.goto(`/ideas/${id}`);
+  const field = await openComposer(page, isMobile);
+  await field.fill("Blue PETG?");
+  await send(page, isMobile);
+  await expect(thread(page).getByText("Blue PETG?")).toBeVisible();
+  await settle(page);
+  await openMessageMenu(page, isMobile, "Blue PETG?");
+  await page.getByRole("button", { name: "Edit", exact: true }).click();
+  const editor = page.getByRole("textbox", { name: "Edit your comment" });
+  await editor.fill("Blue PETG, please?");
+  await editor.evaluate((element) => (element as HTMLTextAreaElement).blur());
+  await expect(thread(page).getByText("Blue PETG, please?")).toBeVisible();
+  release();
+  await expect
+    .poll(async () => (await (await page.request.get(`/api/items/${id}/comments`)).json()).comments[0]?.body)
+    .toBe("Blue PETG, please?");
+  await expect(thread(page).getByText("Blue PETG, please?")).toBeVisible();
+  await expect(thread(page).getByText("(edited)")).toBeVisible();
+});

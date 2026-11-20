@@ -32,6 +32,7 @@ import {
   cachedItem,
   type ItemView,
   markFresh,
+  noteAttemptEdit,
   type PhotoView,
   patchCachedItem,
   useBuilds,
@@ -273,6 +274,7 @@ export async function saveAttemptChanges(
   settingsMerge?: SettingsMerge,
 ) {
   const now = Date.now();
+  noteAttemptEdit(attemptId, changes);
   patchCachedItem(queryClient, itemId, (item) => ({
     ...item,
     attempts: item.attempts.map((attempt) =>

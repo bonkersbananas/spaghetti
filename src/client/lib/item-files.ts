@@ -37,6 +37,9 @@ function bodyOf(draft: SlicerFileDraft) {
  * which says so and offers another go (its bytes are in this tab); a small one, or a refused one, is given up on at
  * once. Calls `saved` with the row, or `giveUp`.
  */
+/** Files on their way to the server, by id: taking one off goes after its upload, or the upload would bring it back. */
+const uploading = new Map<string, Promise<void>>();
+
 export function keepFile(
   path: string,
   file: File,
@@ -79,7 +82,12 @@ export function keepFile(
       after.giveUp();
     }
   };
-  return attempt();
+  const run = attempt();
+  uploading.set(id, run);
+  void run.finally(() => {
+    if (uploading.get(id) === run) uploading.delete(id);
+  });
+  return run;
 }
 
 /**
@@ -180,7 +188,9 @@ export function removeItemFile(queryClient: QueryClient, itemId: string, file: A
   withFiles(queryClient, itemId, (files) => files.filter((f) => f.id !== file.id));
   // A model still slicing stops: brought back, it offers "Slice it".
   if (file.kind === "model") void import("./slicing/jobs").then(({ cancelSlice }) => cancelSlice(file.id));
-  const deleted = api(`/items/${itemId}/files/${file.id}`, { method: "DELETE" }).catch(() => undefined);
+  const deleted = (uploading.get(file.id) ?? Promise.resolve())
+    .then(() => api(`/items/${itemId}/files/${file.id}`, { method: "DELETE" }))
+    .catch(() => undefined);
   toast.undo("File removed", {
     description: file.name,
     onUndo: async () => {
