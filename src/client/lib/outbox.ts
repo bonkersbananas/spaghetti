@@ -504,7 +504,14 @@ class Outbox {
     if (this.cancelledItems.has(entry.itemId)) {
       // Deleted while its request was in flight: delete it on the server too.
       await api(`/items/${entry.itemId}`, { method: "DELETE" }).catch(() => undefined);
-      return;
+      // Undone while that delete was on its way: the entry is back in the queue, and a second create would meet the
+      // deleted row (409) and be dropped as "gone", leaving the idea on screen and deleted on the server.
+      if (this.cancelledItems.has(entry.itemId)) return;
+      const restored = await api<ItemResponse>(`/items/${entry.itemId}/restore`, { method: "POST" }).catch(
+        () => undefined,
+      );
+      if (!restored) throw new RetryLater();
+      item = restored.item;
     }
     // Edits made meanwhile went into the entry; send them now.
     const current = this.entry(entry.itemId);

@@ -144,6 +144,54 @@ test("asks before deleting an idea, then deletes it and brings it back with undo
   await expect.poll(async () => (await (await page.request.get("/api/items")).json()).items.length).toBe(1);
 });
 
+test("undoing a delete while the first save was still on its way brings the idea back on the server too", async ({
+  page,
+  isMobile,
+}) => {
+  // The create is held, then the delete it triggers is held: the person taps Undo while that delete is in flight.
+  let releaseCreate = () => {};
+  let releaseDelete = () => {};
+  const createHeld = new Promise<void>((resolve) => {
+    releaseCreate = resolve;
+  });
+  const deleteHeld = new Promise<void>((resolve) => {
+    releaseDelete = resolve;
+  });
+  let deleteSeen = () => {};
+  const deleteArrived = new Promise<void>((resolve) => {
+    deleteSeen = resolve;
+  });
+  await page.route(/\/api\/items(\/[\w-]+)?$/, async (route) => {
+    const method = route.request().method();
+    if (method === "POST") {
+      await createHeld;
+      await route.continue();
+    } else if (method === "DELETE") {
+      deleteSeen();
+      await deleteHeld;
+      await route.continue();
+    } else await route.continue();
+  });
+
+  const sheet = await openCapture(page, isMobile);
+  await sheet.getByRole("textbox", { name: "Note" }).fill("Cable chain");
+  await sheet.getByRole("button", { name: "Save idea" }).click();
+  await ideas(page)
+    .getByRole("link", { name: /Cable chain/ })
+    .click();
+  await expect(page.getByRole("textbox", { name: "Title" })).toBeVisible();
+  await page.getByRole("button", { name: "Delete idea" }).click();
+  await page.getByRole("button", { name: "Delete", exact: true }).click();
+  await expect(page).toHaveURL(/\/ideas$/);
+
+  releaseCreate();
+  await deleteArrived;
+  await page.getByRole("button", { name: "Undo" }).click();
+  await expect(ideas(page).getByRole("link", { name: /Cable chain/ })).toBeVisible();
+  releaseDelete();
+  await expect.poll(async () => (await (await page.request.get("/api/items")).json()).items.length).toBe(1);
+});
+
 test("holding the capture button opens the camera, and the photo lands in the sheet", { tag: "@phone" }, async ({
   page,
   isMobile,
