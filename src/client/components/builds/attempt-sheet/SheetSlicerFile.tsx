@@ -336,9 +336,7 @@ function IdeaFileOffer({ files, onUse }: { files: AttemptFile[]; onUse: (file: A
               />
               <span className="flex min-w-0 flex-1 flex-col">
                 <span className="text-small text-ink truncate font-semibold">{attachedName(file)}</span>
-                <span className="text-caption text-ink-faint">
-                  {details}
-                </span>
+                <span className="text-caption text-ink-faint">{details}</span>
               </span>
             </button>
           </li>

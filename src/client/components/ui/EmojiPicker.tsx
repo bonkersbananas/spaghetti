@@ -47,6 +47,7 @@ const components = {
   ),
   // Frimousse counts rows and columns from 0; ARIA counts from 1 (0 is not a valid index).
   Row: ({ "aria-rowindex": row, ...props }: ComponentProps<"div">) => (
+    // biome-ignore lint/a11y/useAriaPropsSupportedByRole: Frimousse gives the row its role="row" in props
     <div {...props} aria-rowindex={row === undefined ? undefined : Number(row) + 1} />
   ),
   Emoji: ({ emoji, "aria-colindex": column, ...props }: ComponentProps<"button"> & { emoji: FrimousseEmoji }) => {
