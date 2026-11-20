@@ -45,11 +45,21 @@ const components = {
       <Overline>{category.label}</Overline>
     </div>
   ),
-  Row: (props: ComponentProps<"div">) => <div {...props} />,
-  Emoji: ({ emoji, ...props }: ComponentProps<"button"> & { emoji: FrimousseEmoji }) => {
+  // Frimousse counts rows and columns from 0; ARIA counts from 1 (0 is not a valid index).
+  Row: ({ "aria-rowindex": row, ...props }: ComponentProps<"div">) => (
+    <div {...props} aria-rowindex={row === undefined ? undefined : Number(row) + 1} />
+  ),
+  Emoji: ({ emoji, "aria-colindex": column, ...props }: ComponentProps<"button"> & { emoji: FrimousseEmoji }) => {
     const { given, sheet } = useContext(PickerContext);
     return (
-      <EmojiButton {...props} emoji={emoji.emoji} label={emoji.label} given={given?.has(emoji.emoji)} sheet={sheet} />
+      <EmojiButton
+        {...props}
+        aria-colindex={column === undefined ? undefined : Number(column) + 1}
+        emoji={emoji.emoji}
+        label={emoji.label}
+        given={given?.has(emoji.emoji)}
+        sheet={sheet}
+      />
     );
   },
 };

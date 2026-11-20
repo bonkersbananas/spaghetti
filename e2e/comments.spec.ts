@@ -217,6 +217,8 @@ test("a keyboard writes without the mouse: M focuses, Enter sends, Shift+Enter b
   await expect(thread(page).getByText("First line")).toBeVisible();
   await expect(thread(page).getByText("Second line")).toBeVisible();
   await expect(field).toHaveValue("");
+  // The first message remakes the thread's layout: the keyboard stays in the field, not on the page's body.
+  await expect(field).toBeFocused();
 });
 
 test("a build has its thread too, and the story includes it", async ({ page, isMobile }) => {

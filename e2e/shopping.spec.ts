@@ -270,3 +270,25 @@ test("shopping: a delete waits only for its own thing's add", async ({ page }) =
   await toBuy(page).getByRole("button", { name: second, exact: true }).click();
   await page.getByRole("dialog").getByRole("button", { name: "Delete" }).click();
 });
+
+test("ticking a thing with the space bar keeps the keyboard on its box in the Bought list", async ({
+  page,
+  isMobile,
+}) => {
+  test.skip(isMobile, "A keyboard test.");
+  await signIn(page);
+  await page.goto("/shopping");
+  const name = `Glue stick ${tag()}`;
+  await add(page, name);
+  const box = toBuy(page).getByRole("checkbox", { name: `Bought: ${name}` });
+  await box.focus();
+  await page.keyboard.press("Space");
+  const done = bought(page).getByRole("checkbox", { name: `Bought: ${name}` });
+  await expect(done).toBeChecked();
+  await expect(done).toBeFocused();
+  // Back to the list the same way.
+  await page.keyboard.press("Space");
+  await expect(toBuy(page).getByRole("checkbox", { name: `Bought: ${name}` })).toBeFocused();
+  await toBuy(page).getByRole("button", { name, exact: true }).click();
+  await page.getByRole("dialog").getByRole("button", { name: "Delete" }).click();
+});
