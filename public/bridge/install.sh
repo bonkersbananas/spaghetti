@@ -107,8 +107,15 @@ main() {
 
   if [ -z "$tag" ]; then
     say "Looking for the latest bridge…"
-    curl -fsSL "https://api.github.com/repos/$REPO/releases?per_page=30" -o "$work/releases.json" || fail "Couldn't reach GitHub. Are you online?"
-    tag=$(latest_tag <"$work/releases.json")
+    # The repository also publishes slicer releases, which come in far greater numbers, so the newest bridge release can
+    # sit well past the first page: look page by page until one turns up.
+    page=1
+    while [ -z "$tag" ] && [ "$page" -le 10 ]; do
+      curl -fsSL "https://api.github.com/repos/$REPO/releases?per_page=100&page=$page" -o "$work/releases.json" || fail "Couldn't reach GitHub. Are you online?"
+      grep -q '"tag_name"' "$work/releases.json" || break
+      tag=$(latest_tag <"$work/releases.json")
+      page=$((page + 1))
+    done
     [ -n "$tag" ] || fail "No bridge release was found yet."
   fi
   version="${tag#bridge-v}"
