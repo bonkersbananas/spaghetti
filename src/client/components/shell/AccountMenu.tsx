@@ -15,8 +15,11 @@ export default function AccountMenu({
   user,
   open,
   onOpenChange,
+  takeFocus,
 }: {
   user: Person;
+  /** Asked when the button mounts: whether the look-alike it replaces had focus (then the button takes it). */
+  takeFocus?: () => boolean;
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
@@ -38,7 +41,14 @@ export default function AccountMenu({
         align="start"
         open={open}
         onOpenChange={onOpenChange}
-        trigger={<AccountButton user={user} />}
+        trigger={
+          <AccountButton
+            user={user}
+            ref={(button) => {
+              if (button && takeFocus?.()) button.focus({ preventScroll: true });
+            }}
+          />
+        }
       >
         <div className="flex flex-col gap-3">
           <Suspense fallback={<div className="h-14" />}>

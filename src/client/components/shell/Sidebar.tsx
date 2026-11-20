@@ -1,7 +1,7 @@
 import type { Person } from "@shared/api";
 import { useSuspenseQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { lazy, Suspense, useState } from "react";
+import { lazy, Suspense, useRef, useState } from "react";
 import { Mark } from "@/components/illustrations";
 import { Button } from "@/components/ui/Button";
 import { PlusIcon, SearchIcon } from "@/components/ui/icons";
@@ -133,8 +133,17 @@ function SidebarAccount({ user }: { user: Person }) {
   // lives here, so a press opens it even when it lands on the stand-in just as the real menu mounts.
   const [wanted, setWanted] = useState(false);
   const [open, setOpen] = useState(false);
+  // The look-alike is replaced by the real button: if it had focus (tabbed to, or just pressed), the new one takes it,
+  // rather than focus falling to the page and the next Tab starting from the top.
+  const hadFocus = useRef(false);
+  const keepFocus = () => {
+    hadFocus.current = document.activeElement?.hasAttribute("data-account-button") ?? false;
+  };
   useWhenIdle(() => {
-    void loadAccountMenu().then(() => setWanted(true));
+    void loadAccountMenu().then(() => {
+      keepFocus();
+      setWanted(true);
+    });
   });
   const stand = (
     <AccountButton
@@ -148,7 +157,16 @@ function SidebarAccount({ user }: { user: Person }) {
   if (!wanted) return stand;
   return (
     <Suspense fallback={stand}>
-      <AccountMenu user={user} open={open} onOpenChange={setOpen} />
+      <AccountMenu
+        user={user}
+        open={open}
+        onOpenChange={setOpen}
+        takeFocus={() => {
+          const had = hadFocus.current;
+          hadFocus.current = false;
+          return had;
+        }}
+      />
     </Suspense>
   );
 }

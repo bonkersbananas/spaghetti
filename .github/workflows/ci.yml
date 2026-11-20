@@ -92,10 +92,13 @@ jobs:
           path: .first-load/main.json
           key: first-load-${{ github.sha }}
       - uses: actions/upload-artifact@v4
-        if: failure()
+        # Also when a test failed once and passed on its retry (the run is green): that first failure's trace is what
+        # explains a flake, and without it there is nothing to look at.
+        if: always()
         with:
           name: playwright-traces-${{ matrix.shard }}
           path: test-results/
+          if-no-files-found: ignore
           retention-days: 7
 
   # How fast it feels (e2e/performance.spec.ts: taps, the installed app opening, a hundred photos scrolling) needs a

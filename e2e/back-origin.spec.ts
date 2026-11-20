@@ -37,6 +37,9 @@ test("from the Journal, back returns to the Journal where it was, by the control
   for (let n = 0; n < 24; n++) await addItem(page, `Filler idea ${n}`);
   await page.goto("/journal");
   await expect(page.getByRole("heading", { level: 1, name: "Journal" })).toBeVisible();
+  // Wait for the end of the notebook: until then the next page's skeleton sits at the bottom, and a scroll position
+  // measured with it there is further down than the Journal can come back to once it is gone.
+  await expect(page.getByText("The first page of the notebook")).toBeVisible();
   const entry = page.locator(`main a[href="/ideas/${target}"]`).first();
   await entry.scrollIntoViewIfNeeded();
   await page.evaluate(() => window.scrollBy(0, -120));

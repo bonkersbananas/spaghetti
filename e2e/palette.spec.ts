@@ -265,3 +265,30 @@ test("phones have no palette", { tag: "@phone" }, async ({ page, isMobile }) => 
   await expect(page.getByRole("dialog")).toHaveCount(0);
   await expect(page.getByRole("button", { name: /Jump to/ })).toBeHidden();
 });
+
+test("the account button keeps focus when the real menu replaces the look-alike a moment after load", async ({
+  page,
+  isMobile,
+}) => {
+  test.skip(isMobile, "phones have no sidebar");
+  // Hold the menu's code, so the look-alike is on screen and focused when it arrives (a slow connection, or Tab pressed
+  // within the first second).
+  let release = () => {};
+  const held = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  await page.route(/\/assets\/AccountMenu-[\w-]+\.js$/, async (route) => {
+    await held;
+    await route.continue();
+  });
+  await page.goto("/ideas");
+  const account = page.getByRole("button", { name: "Account menu" });
+  await account.focus();
+  await expect(account).toBeFocused();
+  await expect(account).not.toHaveAttribute("aria-haspopup", "dialog");
+  release();
+  // The real menu's button has taken its place...
+  await expect(account).toHaveAttribute("aria-haspopup", "dialog");
+  // ...and keeps the focus.
+  await expect(account).toBeFocused();
+});
