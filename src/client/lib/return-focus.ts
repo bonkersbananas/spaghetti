@@ -1,4 +1,5 @@
 import { useRef } from "react";
+import { heldFrom, keyboardProxy } from "./keyboard-proxy";
 
 /** What the palette was opened from, for the real palette that takes over from its frame while open (see `inherit`). */
 let recent: HTMLElement | null = null;
@@ -13,7 +14,12 @@ export function useReturnFocus(open: boolean, inherit = false) {
   const wasOpen = useRef(false);
   if (open && !wasOpen.current && typeof document !== "undefined") {
     const active = document.activeElement;
-    opener.current = active instanceof HTMLElement && active !== document.body ? active : null;
+    // Opened by a tap that holds the keyboard up (lib/keyboard-proxy.ts): the stand-in goes, what it took over from stays.
+    opener.current = keyboardProxy()
+      ? heldFrom()
+      : active instanceof HTMLElement && active !== document.body
+        ? active
+        : null;
     // `inherit` (the palette): focus is in the palette's own frame, which is being swapped for the real palette and
     // is about to go, so the opener is what the frame was opened from, however long the swap took.
     if (inherit) {

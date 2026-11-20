@@ -2,6 +2,7 @@ import * as Dialog from "@radix-ui/react-dialog";
 import { type ReactNode, useRef, useState } from "react";
 import { Drawer } from "vaul";
 import { cn } from "@/lib/cn";
+import { keyboardProxy } from "@/lib/keyboard-proxy";
 import { useReturnFocus } from "@/lib/return-focus";
 import { useIsDesktop } from "@/lib/use-media-query";
 import { IconButton } from "./Button";
@@ -107,7 +108,9 @@ function PhoneSheet({
             const sheet = event.currentTarget;
             if (!(sheet instanceof HTMLElement)) return;
             requestAnimationFrame(() => {
-              if (!sheet.contains(document.activeElement)) sheet.focus({ preventScroll: true });
+              // Nor the stand-in that holds the keyboard up for the sheet's field (lib/keyboard-proxy.ts): moving it
+              // to the sheet would drop the keyboard.
+              if (!sheet.contains(document.activeElement) && !keyboardProxy()) sheet.focus({ preventScroll: true });
             });
           }}
           onCloseAutoFocus={returnFocus}

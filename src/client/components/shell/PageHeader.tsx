@@ -4,6 +4,7 @@ import { type ReactNode, useState } from "react";
 import { Avatar } from "@/components/ui/Avatar";
 import { IconButton } from "@/components/ui/Button";
 import { SearchIcon } from "@/components/ui/icons";
+import { holdKeyboard } from "@/lib/keyboard-proxy";
 import { sessionQuery } from "@/lib/queries";
 import { LazyAccountSheet } from "./LazyAccountSheet";
 
@@ -32,7 +33,9 @@ export function PageHeader({ title, subtitle, actions, search = true }: PageHead
         {actions && <div className="hidden shrink-0 items-center gap-2 md:flex">{actions}</div>}
         <div className="flex shrink-0 items-center gap-1 md:hidden">
           {search && (
-            <Link to="/search" className="focus-ring rounded-md">
+            // Search opens ready to type: the keyboard comes up inside the tap (iOS raises it only there), and the
+            // search box takes it over once its screen is in (lib/keyboard-proxy.ts).
+            <Link to="/search" onClick={holdKeyboard} className="focus-ring rounded-md">
               <IconButton icon={SearchIcon} label="Search" tabIndex={-1} />
             </Link>
           )}
