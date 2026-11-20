@@ -35,7 +35,8 @@ function ChangeLine({ change, onEdit, readOnly }: { change: TwistChange; onEdit:
       type="button"
       onClick={onEdit}
       disabled={readOnly}
-      aria-label={`Edit ${changeName(change).toLowerCase()}`}
+      // The name carries what the row shows (kind, value, words), so "Scale 84 %" is heard, not just "Edit scale".
+      aria-label={`Edit ${[changeName(change), value, change.note.trim()].filter(Boolean).join(" ")}`}
       className="focus-ring text-body text-ink-soft hover:text-ink block min-h-11 w-full rounded-sm py-2 text-left leading-snug disabled:cursor-default"
     >
       <span className="text-ink font-semibold">{changeName(change)}</span>{" "}

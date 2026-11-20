@@ -40,6 +40,29 @@ export const Route = createFileRoute("/_app/shopping")({
   component: Shopping,
 });
 
+/**
+ * A ticked thing moves to the other list, and its row is made anew there: a keyboard that ticked it would be left on the
+ * page's body. Once the row has landed, focus goes to its box again (unless it has gone somewhere on purpose).
+ */
+function keepFocusOnTick() {
+  const box = document.activeElement;
+  const label =
+    box instanceof HTMLElement && box.getAttribute("role") === "checkbox" ? box.getAttribute("aria-label") : null;
+  if (!label) return;
+  let tries = 0;
+  const timer = window.setInterval(() => {
+    const active = document.activeElement;
+    if ((active && active !== document.body && active.getAttribute("aria-label") !== label) || ++tries > 20)
+      return window.clearInterval(timer);
+    const next = [...document.querySelectorAll<HTMLElement>('[role="checkbox"]')].find(
+      (element) => element.getAttribute("aria-label") === label,
+    );
+    if (!next || next === active) return;
+    next.focus({ preventScroll: true });
+    window.clearInterval(timer);
+  }, 100);
+}
+
 /** Bought things shown before "Show all". */
 const BOUGHT_SHOWN = 8;
 
@@ -54,7 +77,10 @@ function Shopping() {
   const field = useRef<HTMLInputElement>(null);
   const byId = new Map(people?.map((person) => [person.id, person]));
   // Without the session yet the tick still counts: the server knows who it is, and its copy replaces this one.
-  const tick = (item: ShoppingItem, next: boolean) => void setBought(queryClient, item, next, me?.id ?? null);
+  const tick = (item: ShoppingItem, next: boolean) => {
+    keepFocusOnTick();
+    void setBought(queryClient, item, next, me?.id ?? null);
+  };
 
   // A tick a closed page left waiting for its thing's add goes out now that the list is the server's.
   // Once per visit: later changes of the list are this page's own ticks, which are still on their way.

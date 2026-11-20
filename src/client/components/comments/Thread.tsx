@@ -105,7 +105,14 @@ export default function Thread({ itemId, writeAsk, readOnly, className }: Thread
     if (sendComment(queryClient, itemId, me.id, draft)) {
       setSheetOpen(false);
       // The new message is in view: it is what you did.
-      requestAnimationFrame(() => root.current?.scrollIntoView({ block: "end", behavior: scrollBehavior() }));
+      requestAnimationFrame(() => {
+        root.current?.scrollIntoView({ block: "end", behavior: scrollBehavior() });
+        // The first message swaps the thread's layout and the field is made anew, so focus fell to the page: a
+        // keyboard stays in the field for the next line (unless it has gone somewhere on purpose).
+        if (isDesktop && (!document.activeElement || document.activeElement === document.body)) {
+          field.current?.focus({ preventScroll: true });
+        }
+      });
     }
   }
 

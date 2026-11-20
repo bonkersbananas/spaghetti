@@ -125,7 +125,7 @@ function LinkedSpool({
             .join(" · ")}
         </span>
       </span>
-      <Button variant="quiet" size="sm" onClick={onChange} aria-label={`Pick another spool for filament ${index + 1}`}>
+      <Button variant="quiet" size="sm" onClick={onChange} aria-label={`Change spool for filament ${index + 1}`}>
         Change
       </Button>
     </div>

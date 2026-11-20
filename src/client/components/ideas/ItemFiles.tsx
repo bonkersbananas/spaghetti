@@ -79,7 +79,7 @@ function FileLine({ file, folded, children }: { file: AttemptFile; folded?: bool
     <button
       type="button"
       onClick={() => setOpen(true)}
-      aria-label={`Show file ${file.name}`}
+      aria-label={`Show file ${foldedPieces(file).join(" ")}`}
       className="pressable focus-ring bg-cream shadow-soft hover:shadow-raised text-small text-ink-soft flex min-h-14 w-full min-w-0 items-center gap-3 rounded-lg p-2 pr-3 text-left"
     >
       <PlateThumb src={file.hasThumb ? fileThumbSrc(file) : undefined} alt="" className="size-10" />

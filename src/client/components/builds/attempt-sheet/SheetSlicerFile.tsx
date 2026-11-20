@@ -317,12 +317,16 @@ function IdeaFileOffer({ files, onUse }: { files: AttemptFile[]; onUse: (file: A
     <ul aria-label="Slices kept with the idea" className="flex flex-col gap-2">
       {slices.map((file, index) => {
         const estimate = file.prefill.estimatedMinutes;
+        const details = [estimate !== undefined ? `est. ${formatMinutes(estimate)}` : "", index === 0 ? "latest" : ""]
+          .filter(Boolean)
+          .join(" · ");
         return (
           <li key={file.id}>
             <button
               type="button"
               onClick={() => onUse(file)}
-              aria-label={`Use ${attachedName(file)}`}
+              // The name holds the words the row shows, name first, so a voice command that says them finds it.
+              aria-label={`Use ${attachedName(file)} ${details}`.trim()}
               className="pressable focus-ring bg-ink/3 hover:bg-ink/5 flex w-full items-center gap-3 rounded-lg p-2.5 text-left"
             >
               <PlateThumb
@@ -332,11 +336,7 @@ function IdeaFileOffer({ files, onUse }: { files: AttemptFile[]; onUse: (file: A
               />
               <span className="flex min-w-0 flex-1 flex-col">
                 <span className="text-small text-ink truncate font-semibold">{attachedName(file)}</span>
-                <span className="text-caption text-ink-faint">
-                  {[estimate !== undefined ? `est. ${formatMinutes(estimate)}` : "", index === 0 ? "latest" : ""]
-                    .filter(Boolean)
-                    .join(" · ")}
-                </span>
+                <span className="text-caption text-ink-faint">{details}</span>
               </span>
             </button>
           </li>
