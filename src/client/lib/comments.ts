@@ -73,6 +73,10 @@ const withComments = (queryClient: QueryClient, itemId: string, change: (list: C
 
 const SEND_RETRIES = [1500, 4000];
 
+/** Comments on their way to the server, by id: a change to one (edit, delete) goes after its send, or it would find nothing. */
+const sending = new Map<string, Promise<void>>();
+const afterSend = (id: string) => sending.get(id) ?? Promise.resolve();
+
 /** Comments whose first send failed and wait to be retried: their text is only in memory until they land. */
 const retrying = new Map<string, { itemId: string; body: string; restored?: boolean }>();
 
@@ -101,7 +105,7 @@ export function sendComment(queryClient: QueryClient, itemId: string, me: string
   const comment: Comment = { id, itemId, authorId: me, via: null, body, createdAt: Date.now(), editedAt: null };
   withComments(queryClient, itemId, (list) => [...list, comment]);
   setDraft(itemId, "");
-  void (async () => {
+  const done = (async () => {
     for (let attempt = 0; ; attempt++) {
       try {
         const { comment: saved } = await api<{ comment: Comment }>(`/items/${itemId}/comments`, {
@@ -112,7 +116,12 @@ export function sendComment(queryClient: QueryClient, itemId: string, me: string
         retrying.delete(id);
         // The page came back (back/forward cache) and the retry landed: it is not unsent any more.
         if (sent?.restored) setDraft(itemId, readDraft(itemId).replace(`${body}\n`, "").replace(body, ""));
-        withComments(queryClient, itemId, (list) => list.map((c) => (c.id === id ? saved : c)));
+        // Edited meanwhile: the new words stay (the answer still has the first ones).
+        withComments(queryClient, itemId, (list) =>
+          list.map((c) =>
+            c.id === id ? (c.body === body ? saved : { ...saved, body: c.body, editedAt: c.editedAt }) : c,
+          ),
+        );
         // Writing counts as reading the thread; the server did the same.
         queryClient.setQueryData<CommentsResponse>(commentsQuery(itemId).queryKey, (current) =>
           current ? { ...current, readAt: Math.max(current.readAt ?? 0, saved.createdAt) } : current,
@@ -137,6 +146,8 @@ export function sendComment(queryClient: QueryClient, itemId: string, me: string
       }
     }
   })();
+  sending.set(id, done);
+  void done.finally(() => sending.delete(id));
   return true;
 }
 
@@ -146,9 +157,13 @@ export function editComment(queryClient: QueryClient, comment: Comment, text: st
   if (!body || body === comment.body || !canEdit()) return;
   const edited = { ...comment, body, editedAt: Date.now() };
   withComments(queryClient, comment.itemId, (list) => list.map((c) => (c.id === comment.id ? edited : c)));
-  api<{ comment: Comment }>(`/comments/${comment.id}`, { method: "PATCH", json: { body } })
+  afterSend(comment.id)
+    .then(() => api<{ comment: Comment }>(`/comments/${comment.id}`, { method: "PATCH", json: { body } }))
     .then(({ comment: saved }) =>
-      withComments(queryClient, comment.itemId, (list) => list.map((c) => (c.id === comment.id ? saved : c))),
+      // Edited again since: that newer text stays.
+      withComments(queryClient, comment.itemId, (list) =>
+        list.map((c) => (c.id === comment.id && c.body === body ? saved : c)),
+      ),
     )
     .catch(() => {
       withComments(queryClient, comment.itemId, (list) => list.map((c) => (c.id === comment.id ? comment : c)));
@@ -164,11 +179,13 @@ export function deleteComment(queryClient: QueryClient, comment: Comment) {
     withComments(queryClient, comment.itemId, (list) =>
       list.some((c) => c.id === comment.id) ? list : [...list, comment].sort((a, b) => a.createdAt - b.createdAt),
     );
-  const deleted = api(`/comments/${comment.id}`, { method: "DELETE" }).catch(() => {
-    put();
-    toast.error("Couldn't delete that comment", "It's back where it was.");
-    throw new Error("delete failed");
-  });
+  const deleted = afterSend(comment.id)
+    .then(() => api(`/comments/${comment.id}`, { method: "DELETE" }))
+    .catch(() => {
+      put();
+      toast.error("Couldn't delete that comment", "It's back where it was.");
+      throw new Error("delete failed");
+    });
   deleted.catch(() => undefined);
   toast.undo("Comment deleted", {
     description: comment.body.length > 60 ? `${comment.body.slice(0, 59)}…` : comment.body,

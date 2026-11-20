@@ -132,7 +132,10 @@ export interface OutboxHandlers {
   itemSaved: (item: Item, info: { sharedTitle: string | null }) => void;
   attemptSaved: (attempt: Attempt) => void;
   /** A queued finish landed. `finished` is false when someone else had finished that print first. */
-  attemptFinished: (attempt: Attempt, result: { finished: boolean; pending: PendingFinish; photos: number }) => void;
+  attemptFinished: (
+    attempt: Attempt,
+    result: { finished: boolean; pending: PendingFinish; photos: number; sentAt: number },
+  ) => void;
   photoSaved: (photo: Photo) => void;
   /** A slicer file is on the server: the attempt as it now is. */
   fileSaved: (attempt: Attempt) => void;
@@ -551,9 +554,12 @@ class Outbox {
       this.dropAttempt(entry.itemId, pending.id);
       return;
     }
-    // Edits made while it was on its way.
-    const current = this.entry(entry.itemId)?.attempts?.find((a) => a.id === pending.id);
-    if (current && current !== pending) {
+    // Edits made while it was on its way, and while those were: sent until the server's copy has the latest.
+    let sent = pending;
+    for (;;) {
+      const current = this.entry(entry.itemId)?.attempts?.find((a) => a.id === pending.id);
+      if (!current || current === sent) break;
+      sent = current;
       ({ attempt } = await api<AttemptResponse>(`/attempts/${pending.id}`, {
         method: "PATCH",
         json: {
@@ -574,6 +580,7 @@ class Outbox {
 
   private async sendFinish(entry: OutboxEntry, pending: PendingFinish) {
     let result: FinishAttemptResponse;
+    const sentAt = Date.now();
     try {
       result = await api<FinishAttemptResponse>(`/attempts/${pending.attemptId}/finish`, {
         method: "POST",
@@ -595,7 +602,7 @@ class Outbox {
     }
     const photos =
       this.entry(entry.itemId)?.photos.filter((photo) => photo.attemptId === pending.attemptId).length ?? 0;
-    this.handlers.attemptFinished?.(result.attempt, { finished: result.finished, pending, photos });
+    this.handlers.attemptFinished?.(result.attempt, { finished: result.finished, pending, photos, sentAt });
     this.dropFinish(entry.itemId, pending.attemptId);
   }
 

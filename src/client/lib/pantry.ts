@@ -20,6 +20,14 @@ export function patchSpools(queryClient: QueryClient, change: (spools: Spool[]) 
   queryClient.setQueryData<Spool[]>(spoolsQuery.queryKey, (spools) => (spools ? change(spools) : spools));
 }
 
+/** Spools still being added, by id: a change to one waits for the add (the server doesn't have it before). */
+const adding = new Map<string, Promise<boolean>>();
+const afterAdd = async (id: string) => {
+  await adding.get(id);
+};
+/** Spools changed here since they were added: the add's answer mustn't undo those changes. */
+const changedSinceAdd = new Set<string>();
+
 export function patchSpool(queryClient: QueryClient, id: string, change: (spool: Spool) => Spool) {
   patchSpools(queryClient, (spools) => spools.map((spool) => (spool.id === id ? change(spool) : spool)));
 }
@@ -113,7 +121,12 @@ export function addSpool(
           createdAt: now,
         },
       });
-      patchSpool(queryClient, spool.id, (current) => ({ ...stored, photo: current.photo, slot: current.slot }));
+      // Changes made while it was being added stay (the answer is only the first copy); the server fills in the rest.
+      patchSpool(queryClient, spool.id, (current) =>
+        changedSinceAdd.has(spool.id)
+          ? { ...stored, ...current, updatedAt: stored.updatedAt }
+          : { ...stored, photo: current.photo, slot: current.slot },
+      );
       if (photo) {
         const uploaded = setSpoolPhoto(queryClient, spool.id, photo);
         afterPhoto?.(uploaded, spool.id);
@@ -125,12 +138,21 @@ export function addSpool(
       return false;
     }
   })();
+  adding.set(spool.id, saved);
+  void saved.finally(() => {
+    adding.delete(spool.id);
+    changedSinceAdd.delete(spool.id);
+  });
   return { spool, saved };
 }
 
 /** Saves edits to a spool (autosave): the cache first, then the server. */
 export async function saveSpool(queryClient: QueryClient, id: string, changes: UpdateSpoolRequest) {
   patchSpool(queryClient, id, (spool) => ({ ...spool, ...changes, updatedAt: Date.now() }) as Spool);
+  if (adding.has(id)) {
+    changedSinceAdd.add(id);
+    await afterAdd(id);
+  }
   const { spool } = await api<SpoolResponse>(`/spools/${id}`, { method: "PATCH", json: changes, keepalive: true });
   patchSpool(queryClient, id, (current) => ({ ...current, updatedAt: spool.updatedAt }));
 }
@@ -173,6 +195,10 @@ export async function setSpoolWeight(
     return { ...next, remaining: levelOf(next) };
   });
   try {
+    if (adding.has(spool.id)) {
+      changedSinceAdd.add(spool.id);
+      await afterAdd(spool.id);
+    }
     const { spool: stored } = await api<SpoolResponse>(`/spools/${spool.id}/weight`, {
       method: "PUT",
       json: weight,
@@ -208,6 +234,10 @@ export async function weighSpool(
     gramsApproximate: false,
   }));
   try {
+    if (adding.has(spool.id)) {
+      changedSinceAdd.add(spool.id);
+      await afterAdd(spool.id);
+    }
     const { spool: stored } = await api<SpoolResponse>(`/spools/${spool.id}/weighings`, {
       method: "POST",
       json: { id, ...weighing },

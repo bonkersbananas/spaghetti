@@ -107,12 +107,13 @@ export async function addToShopping(queryClient: QueryClient, text: string, user
     // The server's copy, in the place the row has here: it may have been moved while it was being saved. A tick made
     // meanwhile stays too (the server has it bought only once its own tick follows the add): taking the new thing's
     // open state would put a bought row back on the list, and close what was opened from it ("Add to pantry").
+    // Words changed meanwhile (a rename, a pasted link) stay too: the server's copy still has the first ones.
     patchList(queryClient, (items) =>
-      items.map((item) =>
-        item.id === id
-          ? { ...shoppingItem, position: item.position, boughtAt: item.boughtAt, boughtBy: item.boughtBy }
-          : item,
-      ),
+      items.map((item) => {
+        if (item.id !== id) return item;
+        if (edits.has(id)) return { ...item, ...serverOwn(shoppingItem), updatedAt: shoppingItem.updatedAt };
+        return { ...shoppingItem, position: item.position, boughtAt: item.boughtAt, boughtBy: item.boughtBy };
+      }),
     );
     if (!entry.name) void nameFromPage(queryClient, shoppingItem);
     return true;
@@ -171,6 +172,8 @@ export async function updateShopping(queryClient: QueryClient, id: string, chang
       (changes.link !== undefined && item.picture?.source === "shop")) && { picture: null }),
   }));
   const edit = edits.get(id) ?? 0;
+  // A thing still being added isn't on the server yet: the change follows the add, or it would answer "not found".
+  await Promise.all(adding);
   const { shoppingItem } = await api<ShoppingItemResponse>(`/shopping-items/${id}`, {
     method: "PATCH",
     json: changes,
@@ -291,13 +294,16 @@ export function removeShopping(queryClient: QueryClient, gone: ShoppingItem[], p
   if (!gone.length || !canEdit()) return;
   const ids = new Set(gone.map((item) => item.id));
   patchList(queryClient, (items) => items.filter((item) => !ids.has(item.id)));
+  // A thing still being added is deleted after the add lands, or the add would bring it back on the server.
   const deleted = Promise.all(
     gone.map((item) =>
-      api(`/shopping-items/${item.id}`, { method: "DELETE" }).catch((error) => {
-        if (error instanceof ApiError && error.status === 404) return;
-        patchList(queryClient, (items) => [...items.filter((i) => i.id !== item.id), item]);
-        toast.error("Couldn't take that off the list", "It's back where it was.");
-      }),
+      Promise.all(adding)
+        .then(() => api(`/shopping-items/${item.id}`, { method: "DELETE" }))
+        .catch((error) => {
+          if (error instanceof ApiError && error.status === 404) return;
+          patchList(queryClient, (items) => [...items.filter((i) => i.id !== item.id), item]);
+          toast.error("Couldn't take that off the list", "It's back where it was.");
+        }),
     ),
   );
   const [only] = gone;

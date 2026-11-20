@@ -32,6 +32,9 @@ function bodyOf(draft: SlicerFileDraft) {
   return { form, plate, prefill };
 }
 
+/** Files on their way to the server, by id: taking one off goes after its upload, or the upload would bring it back. */
+const uploading = new Map<string, Promise<void>>();
+
 /**
  * Saves a file's row, its bytes first in parts when it is big. A big file that doesn't get through stays on its card,
  * which says so and offers another go (its bytes are in this tab); a small one, or a refused one, is given up on at
@@ -70,7 +73,7 @@ export function keepFile(
       after.saved(row);
     } catch (error) {
       if (big && !isRefusal(error)) {
-        setUpload(id, { fraction: 0, failed: true, retry: () => void attempt() });
+        setUpload(id, { fraction: 0, failed: true, retry: () => void track() });
         return;
       }
       setUpload(id, null);
@@ -79,7 +82,16 @@ export function keepFile(
       after.giveUp();
     }
   };
-  return attempt();
+  // Every run, a retry too, is recorded: taking the file off waits for the one in flight.
+  const track = () => {
+    const run = attempt();
+    uploading.set(id, run);
+    void run.finally(() => {
+      if (uploading.get(id) === run) uploading.delete(id);
+    });
+    return run;
+  };
+  return track();
 }
 
 /**
@@ -180,7 +192,9 @@ export function removeItemFile(queryClient: QueryClient, itemId: string, file: A
   withFiles(queryClient, itemId, (files) => files.filter((f) => f.id !== file.id));
   // A model still slicing stops: brought back, it offers "Slice it".
   if (file.kind === "model") void import("./slicing/jobs").then(({ cancelSlice }) => cancelSlice(file.id));
-  const deleted = api(`/items/${itemId}/files/${file.id}`, { method: "DELETE" }).catch(() => undefined);
+  const deleted = (uploading.get(file.id) ?? Promise.resolve())
+    .then(() => api(`/items/${itemId}/files/${file.id}`, { method: "DELETE" }))
+    .catch(() => undefined);
   toast.undo("File removed", {
     description: file.name,
     onUndo: async () => {

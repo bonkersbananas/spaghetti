@@ -27,6 +27,22 @@ function showFirst(queryClient: QueryClient, change: (twists: Twist[]) => Twist[
   queryClient.setQueryData<Twist[]>(twistsQuery.queryKey, (twists) => change(twists ?? []));
 }
 
+/** Twists still being made, by id: a change to one waits for the add (the server doesn't have it before). */
+const making = new Map<string, Promise<unknown>>();
+/** How many times each twist was changed here: an answer to an older change mustn't overwrite a newer one. */
+const edits = new Map<string, number>();
+const bump = (id: string) => {
+  const count = (edits.get(id) ?? 0) + 1;
+  edits.set(id, count);
+  return count;
+};
+/** An answer for a twist changed here since it was asked: what the server works out, over what is shown. */
+const keepShown = (shown: Twist, saved: Twist): Twist => ({
+  ...shown,
+  updatedAt: saved.updatedAt,
+  model: saved.model ?? shown.model,
+});
+
 /** What a twist made from an idea is called until someone renames it: the idea's title, else where the model lives. */
 export function suggestedTwistName(idea: { title: string | null }, modelUrl: string | null): string {
   const title = idea.title?.trim();
@@ -74,7 +90,7 @@ export function makeTwist(queryClient: QueryClient, input: NewTwist, userId: str
   };
   // The list may not have loaded yet: a twist opened straight away still finds itself.
   showFirst(queryClient, (twists) => [optimistic, ...twists]);
-  api<TwistResponse>("/twists", {
+  const made = api<TwistResponse>("/twists", {
     method: "POST",
     json: {
       id,
@@ -85,7 +101,10 @@ export function makeTwist(queryClient: QueryClient, input: NewTwist, userId: str
     },
   }).then(
     ({ twist }) => {
-      patchTwists(queryClient, (twists) => twists.map((t) => (t.id === id ? twist : t)));
+      // Changed since it was asked (a rename on its page): that change stays.
+      patchTwists(queryClient, (twists) =>
+        twists.map((t) => (t.id === id ? (edits.has(id) ? keepShown(t, twist) : twist) : t)),
+      );
       // Called-off list fetches may have left the cache with only this twist: ask for the whole list again.
       void queryClient.invalidateQueries({ queryKey: twistsQuery.queryKey });
       whenSaved?.();
@@ -94,6 +113,11 @@ export function makeTwist(queryClient: QueryClient, input: NewTwist, userId: str
       patchTwists(queryClient, (twists) => twists.filter((t) => t.id !== id));
       toast.error("Couldn't make the twist", error instanceof ApiError ? error.message : "Try again in a moment.");
     },
+  );
+  making.set(id, made);
+  void made.then(
+    () => making.delete(id),
+    () => making.delete(id),
   );
   return id;
 }
@@ -109,6 +133,7 @@ export interface TwistChanges {
 
 /** Changes a twist; the screen shows the change first and the server's copy replaces it. Resolves once the server has it. */
 export async function updateTwist(queryClient: QueryClient, id: string, changes: TwistChanges) {
+  const mine = bump(id);
   showFirst(queryClient, (twists) =>
     twists.map((t) => {
       if (t.id !== id) return t;
@@ -125,12 +150,17 @@ export async function updateTwist(queryClient: QueryClient, id: string, changes:
       };
     }),
   );
+  // A twist still being made isn't on the server yet: the change follows it, or it would answer "not found".
+  await making.get(id)?.catch(() => undefined);
   const { twist } = await api<TwistResponse>(`/twists/${id}`, { method: "PATCH", json: changes });
-  // A model still on its way to the server isn't in its answer yet: it stays on the page.
+  // A model still on its way to the server isn't in its answer yet: it stays on the page. Changed again since: that
+  // newer change stays, and only what the server works out is taken.
   patchTwists(queryClient, (twists) =>
-    twists.map((t) =>
-      t.id === id ? { ...twist, model: twist.model ?? (t.model && "pending" in t.model ? t.model : null) } : t,
-    ),
+    twists.map((t) => {
+      if (t.id !== id) return t;
+      if (edits.get(id) !== mine) return keepShown(t, twist);
+      return { ...twist, model: twist.model ?? (t.model && "pending" in t.model ? t.model : null) };
+    }),
   );
 }
 

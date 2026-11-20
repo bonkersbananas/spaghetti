@@ -86,13 +86,40 @@ function withSavedWords(id: string, item: Item, sentAt: number): Item {
   return { ...item, ...saved.words };
 }
 
+/** What was last changed in each field of an attempt from this screen, and when, by attempt. */
+const attemptEdits = new Map<string, Map<string, { value: unknown; at: number }>>();
+
+/** Notes the fields of an attempt changed here just now. */
+export function noteAttemptEdit(attemptId: string, changes: Record<string, unknown>) {
+  const edits = attemptEdits.get(attemptId) ?? new Map();
+  attemptEdits.set(attemptId, edits);
+  const at = Date.now();
+  for (const [field, value] of Object.entries(changes)) edits.set(field, { value, at });
+}
+
+/**
+ * Puts what was changed here since `sentAt` over the server's copy of an attempt: an answer asked before the change
+ * landed (a late refetch, a finish) carries the old words, and would undo them.
+ */
+function withAttemptEdits<T extends Attempt>(server: T, sentAt: number): T {
+  const edits = attemptEdits.get(server.id);
+  if (!edits) return server;
+  const kept: Record<string, unknown> = {};
+  for (const [field, { value, at }] of edits) if (at >= sentAt) kept[field] = value;
+  return Object.keys(kept).length ? { ...server, ...kept } : server;
+}
+
+const withEditedAttempts = (item: Item, sentAt: number): Item =>
+  attemptEdits.size ? { ...item, attempts: item.attempts.map((attempt) => withAttemptEdits(attempt, sentAt)) } : item;
+
 export function itemQuery(id: string) {
   return queryOptions({
     queryKey: itemKeys.detail(id),
     queryFn: async () => {
       const sentAt = performance.now();
+      const askedAt = Date.now();
       try {
-        return withSavedWords(id, (await api<ItemResponse>(`/items/${id}`)).item, sentAt);
+        return withEditedAttempts(withSavedWords(id, (await api<ItemResponse>(`/items/${id}`)).item, sentAt), askedAt);
       } catch (error) {
         if (error instanceof ApiError && error.status === 404) return null;
         throw error;
@@ -267,11 +294,12 @@ export function connectOutbox(queryClient: QueryClient) {
       }));
       if (attempt.outcome) spoolsMoved();
     },
-    attemptFinished: (attempt, { finished, pending, photos }) => {
+    attemptFinished: (attempt, { finished, pending, photos, sentAt }) => {
       spoolsMoved();
+      // Words typed into the attempt while the finish was on its way stay: the answer was read before they landed.
       patchCachedItem(queryClient, attempt.itemId, (item) => ({
         ...item,
-        attempts: item.attempts.map((a) => (a.id === attempt.id ? attempt : a)),
+        attempts: item.attempts.map((a) => (a.id === attempt.id ? withAttemptEdits(attempt, sentAt) : a)),
       }));
       if (finished) return;
       // Someone else gave it an outcome first: theirs stands, and what was added is said once.
@@ -849,7 +877,14 @@ export async function reorderPhotos(queryClient: QueryClient, itemId: string, ph
       method: "PUT",
       json: { photoIds },
     });
-    patchCachedItem(queryClient, itemId, () => item);
+    // Only the order and the cover come from the answer: a photo added or removed, and words typed, meanwhile stay.
+    const place = new Map(item.photos.map((photo) => [photo.id, photo.position]));
+    patchCachedItem(queryClient, itemId, (cached) => ({
+      ...cached,
+      coverPhotoId: item.coverPhotoId,
+      updatedAt: item.updatedAt,
+      photos: sortPhotos(cached.photos.map((photo) => ({ ...photo, position: place.get(photo.id) ?? photo.position }))),
+    }));
   } catch {
     toast.error("Couldn't save the new order");
     void queryClient.invalidateQueries({ queryKey: itemKeys.all });
