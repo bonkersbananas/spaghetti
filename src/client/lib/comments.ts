@@ -75,6 +75,9 @@ const SEND_RETRIES = [1500, 4000];
 
 /** Comments on their way to the server, by id: a change to one (edit, delete) goes after its send, or it would find nothing. */
 const sending = new Map<string, Promise<void>>();
+/** Sends that gave up: a delete waiting for one has nothing to do. */
+const failedSends = new Set<string>();
+class Skipped extends Error {}
 const afterSend = (id: string) => sending.get(id) ?? Promise.resolve();
 
 /** Comments whose first send failed and wait to be retried: their text is only in memory until they land. */
@@ -134,6 +137,7 @@ export function sendComment(queryClient: QueryClient, itemId: string, me: string
         if (wait === undefined || final) {
           const restored = retrying.get(id)?.restored;
           retrying.delete(id);
+          failedSends.add(id);
           withComments(queryClient, itemId, (list) => list.filter((c) => c.id !== id));
           // Back in the box, ahead of anything typed since.
           const typed = readDraft(itemId);
@@ -180,8 +184,13 @@ export function deleteComment(queryClient: QueryClient, comment: Comment) {
       list.some((c) => c.id === comment.id) ? list : [...list, comment].sort((a, b) => a.createdAt - b.createdAt),
     );
   const deleted = afterSend(comment.id)
-    .then(() => api(`/comments/${comment.id}`, { method: "DELETE" }))
-    .catch(() => {
+    .then(() => {
+      // The send it waited for failed: the comment is already out of the thread and its words are back in the box.
+      if (failedSends.delete(comment.id)) throw new Skipped();
+      return api(`/comments/${comment.id}`, { method: "DELETE" });
+    })
+    .catch((error) => {
+      if (error instanceof Skipped) throw error;
       put();
       toast.error("Couldn't delete that comment", "It's back where it was.");
       throw new Error("delete failed");
