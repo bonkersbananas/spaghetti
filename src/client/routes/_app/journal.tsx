@@ -386,7 +386,12 @@ function Group({
 }: Omit<MonthProps, "month" | "first"> & { group: JournalGroup<Entry>; weekEnds: boolean }) {
   const via = useVia();
   return (
-    <section aria-label={group.kind === "day" ? dayLabel(group.start) : weekLabel(group.start, group.end)}>
+    <section
+      // "Friday" alone repeats under every week: the date makes each landmark's name its own.
+      aria-label={
+        group.kind === "day" ? `${dayLabel(group.start)}, ${shortDate(group.start)}` : weekLabel(group.start, group.end)
+      }
+    >
       {group.kind === "day" ? (
         <h3 className="text-body text-ink mb-3 flex items-baseline gap-2.5 font-sans font-semibold md:mb-3.5">
           {dayLabel(group.start)}

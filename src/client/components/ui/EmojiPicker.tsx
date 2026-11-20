@@ -312,8 +312,9 @@ function EmojiButton({
     <button
       type="button"
       {...props}
-      aria-label={label}
-      aria-pressed={given}
+      // A grid cell can't be "pressed": there the name says it has been given.
+      aria-label={props.role === "gridcell" && given ? `${label}, already given` : label}
+      aria-pressed={props.role === "gridcell" ? undefined : given}
       data-active={active ? "" : undefined}
       title={label}
       className={cn(

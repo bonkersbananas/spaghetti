@@ -5222,9 +5222,9 @@ export const shots: Shot[] = [
       });
       await sheet.getByRole("button", { name: /Cable clips/ }).click();
       await sheet.getByRole("button", { name: /^Settings/ }).click();
-      await sheet.getByRole("button", { name: /Pick another spool for filament 1/ }).waitFor();
+      await sheet.getByRole("button", { name: /Change spool for filament 1/ }).waitFor();
       await page.waitForTimeout(900);
-      await sheet.getByRole("button", { name: /Pick another spool for filament 1/ }).click();
+      await sheet.getByRole("button", { name: /Change spool for filament 1/ }).click();
       await page.waitForTimeout(600);
       await sheet
         .getByRole("button", { name: /Type it in instead/ })
