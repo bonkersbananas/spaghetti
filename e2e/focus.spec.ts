@@ -107,3 +107,17 @@ test("backing out of 'Delete this idea?' puts focus back on the trash can", asyn
   await page.keyboard.press("Enter");
   await expect(trash).toBeFocused();
 });
+
+test("the sidebar link of the page you're on still shows a focus ring", async ({ page }) => {
+  await page.goto("/ideas");
+  const current = page.getByRole("navigation", { name: "Sections" }).getByRole("link", { name: /^Ideas/ });
+  await expect(current).toBeVisible();
+  await page.waitForTimeout(500);
+  for (let tab = 0; tab < 12; tab++) {
+    await page.keyboard.press("Tab");
+    if (await current.evaluate((link) => link === document.activeElement)) break;
+  }
+  await expect(current).toBeFocused();
+  // The ring is a 4 px spread shadow; the current link's own soft shadow must not replace it.
+  await expect.poll(() => current.evaluate((link) => getComputedStyle(link).boxShadow)).toContain("0px 0px 0px 4px");
+});

@@ -37,7 +37,7 @@ function LateNowPrinting() {
 }
 
 const itemClass =
-  "pressable focus-ring group flex h-9 items-center gap-3 rounded-sm px-3 text-body font-medium text-ink-soft hover:bg-ink/5 hover:text-ink data-[status=active]:bg-cream data-[status=active]:text-ink data-[status=active]:shadow-soft";
+  "pressable focus-ring group flex h-9 items-center gap-3 rounded-sm px-3 text-body font-medium text-ink-soft hover:bg-ink/5 hover:text-ink data-[status=active]:bg-cream data-[status=active]:text-ink data-[status=active]:shadow-soft data-[status=active]:focus-visible:shadow-ring";
 
 /** The sidebar's links: an icon, the name, and the key to press. */
 function NavItems({ items }: { items: Section[] }) {
