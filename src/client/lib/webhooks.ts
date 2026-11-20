@@ -80,6 +80,8 @@ export async function retryDelivery(queryClient: QueryClient, webhook: WebhookIn
 /** Removes a webhook at once, with an Undo that brings it back. */
 export async function removeWebhook(queryClient: QueryClient, webhook: WebhookInfo) {
   if (!canEdit()) return;
+  // A list fetched before this (a test event or a retry just ended) must not answer after it and bring the row back.
+  await queryClient.cancelQueries({ queryKey: webhooksQuery.queryKey, exact: true });
   queryClient.setQueryData<WebhookInfo[]>(webhooksQuery.queryKey, (list) => list?.filter((w) => w.id !== webhook.id));
   try {
     await api(`/webhooks/${webhook.id}`, { method: "DELETE" });

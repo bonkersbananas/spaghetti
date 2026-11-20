@@ -50,6 +50,34 @@ test.afterEach(async ({ page }) => {
   await clearIdeas(page);
 });
 
+test("ideas picked quickly reach the server in the order they were picked, even when the first answer is slow", async ({
+  page,
+}) => {
+  for (const title of ["Hose clip", "Lamp shade"]) await makeIdea(page, title);
+  await page.goto("/wishlist");
+  await page.getByRole("button", { name: "Pick ideas" }).click();
+  const picker = page.getByRole("dialog", { name: "Pick your top ideas" });
+  // The first write is held on its way; a second one sent meanwhile must wait for it.
+  let held = true;
+  let release = () => {};
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  await page.route(/\/api\/wishlists\/me\/items\//, async (route) => {
+    if (held) {
+      held = false;
+      await gate;
+    }
+    await route.continue();
+  });
+  await picker.getByRole("button", { name: "Lamp shade" }).click();
+  await picker.getByRole("button", { name: "Hose clip" }).click();
+  await expect(picker.getByRole("button", { name: "Hose clip", pressed: true })).toBeVisible();
+  await page.waitForTimeout(500);
+  release();
+  await expect.poll(() => serverList(page)).toEqual(["Lamp shade", "Hose clip"]);
+});
+
 test("picks ideas, reorders them with the keyboard and starts a build from a row", async ({ page, isMobile }) => {
   for (const title of ["Hose clip", "Lamp shade", "Seed tray"]) await makeIdea(page, title);
   await page.goto("/wishlist");
