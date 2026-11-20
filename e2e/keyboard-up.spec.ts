@@ -137,3 +137,29 @@ test("search from the page header opens ready to type, the keyboard raised insid
   await page.keyboard.type("PETG");
   await expect(box).toHaveValue("PETG");
 });
+
+test("what is typed while the search screen is still loading lands in the search box @phone", async ({ page }) => {
+  // The search screen's code is held back until the letters are in, so they go into the stand-in. Only from the tap
+  // on: other chunks are named search-… too, and the first load needs them.
+  let release = () => {};
+  const held = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  let holding = false;
+  await page.route(/\/assets\/search-[\w-]+\.js$/, async (route) => {
+    if (holding) await held;
+    await route.fallback();
+  });
+  // A fresh load, so the screen's code isn't in yet.
+  await page.reload();
+  await expect(plus(page)).toBeVisible();
+  holding = true;
+  await page.getByRole("link", { name: "Search" }).click();
+  expect(await page.evaluate(() => document.activeElement?.hasAttribute("data-keyboard-proxy"))).toBe(true);
+  await page.keyboard.type("PE");
+  release();
+  const box = page.getByRole("searchbox", { name: "Search" }).or(page.getByRole("textbox", { name: "Search" }));
+  await expect(box).toBeFocused();
+  await page.keyboard.type("TG");
+  await expect(box).toHaveValue("PETG");
+});

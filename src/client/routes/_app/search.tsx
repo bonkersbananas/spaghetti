@@ -23,6 +23,7 @@ import { useTagOptions } from "@/lib/builds";
 import { cn } from "@/lib/cn";
 import { useHotkeys } from "@/lib/hotkeys";
 import { type Filters as FilterValues, facetsQuery, filterParams, hasFilters, readFilters } from "@/lib/journal";
+import { keyboardProxy } from "@/lib/keyboard-proxy";
 import { peopleQuery } from "@/lib/queries";
 import { forgetSearches, recentSearches, rememberSearch, SEARCH_BOX_ID, searchQuery } from "@/lib/search";
 
@@ -80,7 +81,9 @@ function Search() {
   const inputRef = useRef<HTMLInputElement>(null);
 
   // What's in the box answers at once; the URL (and so the search) follows a beat later.
-  const [text, setText] = useState(q);
+  // Opened from the header's search on a phone, the keyboard came up on a stand-in inside the tap
+  // (lib/keyboard-proxy.ts): what was typed there while this screen loaded starts the box.
+  const [text, setText] = useState(() => q || keyboardProxy()?.value || "");
   const pushed = useRef(q);
   useEffect(() => {
     if (text === pushed.current) return;
