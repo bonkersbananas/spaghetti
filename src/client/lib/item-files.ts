@@ -32,14 +32,14 @@ function bodyOf(draft: SlicerFileDraft) {
   return { form, plate, prefill };
 }
 
+/** Files on their way to the server, by id: taking one off goes after its upload, or the upload would bring it back. */
+const uploading = new Map<string, Promise<void>>();
+
 /**
  * Saves a file's row, its bytes first in parts when it is big. A big file that doesn't get through stays on its card,
  * which says so and offers another go (its bytes are in this tab); a small one, or a refused one, is given up on at
  * once. Calls `saved` with the row, or `giveUp`.
  */
-/** Files on their way to the server, by id: taking one off goes after its upload, or the upload would bring it back. */
-const uploading = new Map<string, Promise<void>>();
-
 export function keepFile(
   path: string,
   file: File,
