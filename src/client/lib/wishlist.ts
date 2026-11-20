@@ -69,19 +69,25 @@ const idsOf = (queryClient: QueryClient, me: string) =>
     ?.find((list) => list.personId === me)
     ?.entries.map((entry) => entry.itemId) ?? [];
 
+/** The writes go one after another: sent side by side they can reach the server in another order than they were made. */
+let queue: Promise<void> = Promise.resolve();
+
 /** Sends one write; the shown list already changed. A failure puts the server's list back and says so. */
-async function send(queryClient: QueryClient, me: string, path: string, init: { method: string; json?: unknown }) {
+function send(queryClient: QueryClient, me: string, path: string, init: { method: string; json?: unknown }) {
   inFlight++;
   void queryClient.cancelQueries({ queryKey: wishlistsQuery.queryKey });
-  try {
-    const { wishlist } = await api<WishlistResponse>(`/wishlists/me${path}`, init);
-    if (inFlight === 1) patchMine(queryClient, me, () => wishlist);
-  } catch {
-    toast.error("Couldn't save your wishlist", "It's back the way it was. Try again in a moment.");
-    void queryClient.invalidateQueries({ queryKey: wishlistsQuery.queryKey });
-  } finally {
-    inFlight--;
-  }
+  queue = queue.then(async () => {
+    try {
+      const { wishlist } = await api<WishlistResponse>(`/wishlists/me${path}`, init);
+      if (inFlight === 1) patchMine(queryClient, me, () => wishlist);
+    } catch {
+      toast.error("Couldn't save your wishlist", "It's back the way it was. Try again in a moment.");
+      void queryClient.invalidateQueries({ queryKey: wishlistsQuery.queryKey });
+    } finally {
+      inFlight--;
+    }
+  });
+  return queue;
 }
 
 /** Puts an idea on your wishlist (at the end, or at `position`), at once. */
