@@ -149,3 +149,39 @@ test("the Agents page links the API reference, and the document is served", asyn
   expect(document.openapi).toBe("3.1.0");
   expect(Object.keys(document.paths)).toContain("/api/webhooks");
 });
+
+test("a list answered late, after a webhook is removed, doesn't bring its row back", async ({ page, isMobile }) => {
+  test.setTimeout(90_000);
+  await goToAgents(page, isMobile);
+  const section = page.getByRole("region", { name: "Webhooks" });
+  await section.getByRole("button", { name: "New webhook" }).click();
+  const sheet = page.getByRole("dialog", { name: "New webhook" });
+  await sheet.getByLabel("Address").fill(`${receiver(page)}/hooks/ok`);
+  await sheet.getByRole("button", { name: "Add webhook" }).click();
+  await page.getByRole("dialog", { name: "Copy the secret" }).getByRole("button", { name: "Done" }).click();
+  const card = section.getByRole("listitem").first();
+
+  // The list the test event asks for is read at once and answered only after the row is removed.
+  let release = () => {};
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  let held = false;
+  await page.route(/\/api\/webhooks$/, async (route) => {
+    if (route.request().method() !== "GET") return route.continue();
+    const response = await route.fetch();
+    held = true;
+    await gate;
+    await route.fulfill({ response });
+  });
+  await card.getByRole("button", { name: "Send a test event" }).filter({ visible: true }).click();
+  await expect.poll(() => held).toBe(true);
+  await card
+    .getByRole("button", { name: /^Remove/ })
+    .filter({ visible: true })
+    .click();
+  await expect(section.getByText("Nobody's listening yet")).toBeVisible();
+  release();
+  await page.waitForTimeout(600);
+  await expect(section.getByText("Nobody's listening yet")).toBeVisible();
+});
