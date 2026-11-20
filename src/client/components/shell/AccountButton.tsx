@@ -11,6 +11,7 @@ export function AccountButton({ user, ...props }: { user: Person } & ComponentPr
   return (
     <button
       type="button"
+      data-account-button=""
       className="pressable focus-ring hover:bg-ink/5 data-[state=open]:bg-ink/5 mt-2 flex w-full items-center gap-2.5 rounded-md px-2 py-2 text-left"
       {...props}
     >
