@@ -1,6 +1,6 @@
 import type { Outcome } from "@shared/attempts";
 import { useLocation, useNavigate } from "@tanstack/react-router";
-import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { OutcomePicker } from "@/components/builds/Outcome";
 import { Button } from "@/components/ui/Button";
 import { ToggleChip } from "@/components/ui/Chip";
@@ -15,6 +15,7 @@ import { toast } from "@/components/ui/Toast";
 import { printingAttempts, usePrintingNow } from "@/lib/builds";
 import { type CaptureTarget, useCapture } from "@/lib/capture";
 import { useBuilds } from "@/lib/items";
+import { keyboardProxy, releaseKeyboard } from "@/lib/keyboard-proxy";
 import { photoSrc } from "@/lib/previews";
 import { useIsDesktop } from "@/lib/use-media-query";
 
@@ -127,28 +128,53 @@ export function CaptureSheet() {
   const placeCaret = useCallback((note: HTMLTextAreaElement | null) => {
     if (note && caretAtEnd.current) note.setSelectionRange(note.value.length, note.value.length);
   }, []);
-  // On a phone the note takes focus (and raises the keyboard) once the sheet has finished sliding up, so nothing
-  // jumps under the thumb; on a laptop it autofocuses at once. A control tapped meanwhile keeps the focus.
+  // On a phone the note takes focus once the sheet has finished sliding up, so nothing jumps under the thumb; on a
+  // laptop it autofocuses at once. A control tapped meanwhile keeps the focus. The keyboard is already up by then:
+  // the tab bar's + focused a stand-in inside its tap (iOS raises the keyboard only there, lib/keyboard-proxy.ts),
+  // and the focus goes from it straight to the note, so the keyboard stays.
   // Once it is typing, the two photo tiles shrink to a slim row so the note stays in view above a keyboard; it stays
-  // that way until the sheet closes, so a tap on Camera is never moved by the keyboard going down.
+  // that way until the sheet closes, so a tap on Camera is never moved by the keyboard going down. With the keyboard
+  // coming up with the sheet, it rises already slim.
   const [typing, setTyping] = useState(false);
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!open) setTyping(false);
-  }, [open]);
+    else if (!isDesktop && keyboardProxy()) setTyping(true);
+  }, [open, isDesktop]);
   useEffect(() => {
     if (!open || isDesktop) return;
     let timer = 0;
     let sheet: Element | null | undefined;
+    // A tap in the sheet before it has settled is where the person wants to be: the note doesn't take over. Unless
+    // it is on a field, the keyboard goes down (a photo tile opens the camera).
+    let tapped = false;
+    const onDown = (event: PointerEvent) => {
+      const dialog = document.querySelector("[data-capture]")?.closest("[role=dialog]");
+      if (!(event.target instanceof Element) || !dialog?.contains(event.target)) return;
+      tapped = true;
+      if (!event.target.closest("textarea, input:not([type=file])")) releaseKeyboard();
+    };
     const focusNote = () => {
       clearTimeout(timer);
       sheet?.removeEventListener("transitionend", onEnd);
+      if (tapped) return;
       const note = document.querySelector<HTMLTextAreaElement>("[data-capture] textarea");
+      if (!note) return;
+      // From the stand-in straight to the note: nothing between them, or the keyboard would go down. What was typed
+      // into the stand-in comes along, through the editing command so that the note's onChange sees it as typing.
       const held = document.activeElement;
-      if (note && (!held || held === document.body || held === sheet)) note.focus({ preventScroll: true });
+      const typed = keyboardProxy()?.value;
+      if (!held || held === document.body || held === sheet || held === keyboardProxy()) {
+        note.focus({ preventScroll: true });
+        if (typed && document.activeElement === note) document.execCommand("insertText", false, typed);
+      }
     };
     const onEnd = (event: Event) => {
       if (event.target === sheet && (event as TransitionEvent).propertyName === "transform") focusNote();
     };
+    // Typing before the sheet has settled: the note takes over at once.
+    const proxy = keyboardProxy();
+    proxy?.addEventListener("input", focusNote, { once: true });
+    document.addEventListener("pointerdown", onDown, true);
     const frame = requestAnimationFrame(() => {
       sheet = document.querySelector("[data-capture]")?.closest("[role=dialog]");
       sheet?.addEventListener("transitionend", onEnd);
@@ -157,7 +183,11 @@ export function CaptureSheet() {
     return () => {
       cancelAnimationFrame(frame);
       clearTimeout(timer);
+      proxy?.removeEventListener("input", focusNote);
+      document.removeEventListener("pointerdown", onDown, true);
       sheet?.removeEventListener("transitionend", onEnd);
+      // Closed before the note took over: the keyboard goes down with the sheet.
+      releaseKeyboard();
     };
   }, [open, isDesktop]);
   const target: Target = asIdea ? { kind: "idea" } : auto;

@@ -3,6 +3,7 @@ import { useRef, useState } from "react";
 import { CameraIcon, PlusIcon } from "@/components/ui/icons";
 import { UnreadDot } from "@/components/ui/UnreadDot";
 import { useCapture } from "@/lib/capture";
+import { holdKeyboard } from "@/lib/keyboard-proxy";
 import { useAnyUnread } from "@/lib/unread-comments";
 import { type Section, tabs } from "./sections";
 
@@ -94,7 +95,11 @@ function CaptureButton() {
           held.current = false;
           stop();
           if (camera) input.current?.click();
-          else setOpen(true);
+          else {
+            // The keyboard comes up inside this tap (iOS raises it only here), for the note once the sheet is up.
+            holdKeyboard();
+            setOpen(true);
+          }
         }}
         aria-label="New idea"
         aria-description="Hold to take a photo"

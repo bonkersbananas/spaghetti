@@ -462,6 +462,22 @@
   touch-action: none;
 }
 
+/* The stand-in field a tap focuses to raise the phone's keyboard for a field still to come (lib/keyboard-proxy.ts):
+   invisible, out of the way, and 16 px so iOS doesn't zoom. Not display:none or visibility:hidden (neither can take
+   focus), and not 0×0 (iOS may not raise a keyboard for it). */
+[data-keyboard-proxy] {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  border: 0;
+  opacity: 0;
+  font-size: 16px;
+  pointer-events: none;
+}
+
 /* Desktop sheet motion (Radix waits for these exit animations). */
 @keyframes sg-fade-in {
   from {

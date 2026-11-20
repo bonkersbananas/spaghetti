@@ -10,6 +10,7 @@ import { Overline } from "@/components/ui/Overline";
 import { UnreadDot } from "@/components/ui/UnreadDot";
 import { useCapture } from "@/lib/capture";
 import { shortcutCaps } from "@/lib/hotkeys";
+import { holdKeyboard } from "@/lib/keyboard-proxy";
 import { usePalette } from "@/lib/palette";
 import { sessionQuery } from "@/lib/queries";
 import { useAnyUnread } from "@/lib/unread-comments";
@@ -90,14 +91,21 @@ export function Sidebar() {
         icon={PlusIcon}
         shortcut={shortcutCaps("capture")}
         fullWidth
-        onClick={() => setOpen(true)}
+        // On a touch tablet the keyboard comes up inside the tap, for the note (lib/keyboard-proxy.ts).
+        onClick={() => {
+          holdKeyboard();
+          setOpen(true);
+        }}
       >
         New idea
       </Button>
 
       <button
         type="button"
-        onClick={() => setPaletteOpen(true)}
+        onClick={() => {
+          holdKeyboard();
+          setPaletteOpen(true);
+        }}
         aria-keyshortcuts="Control+K Meta+K"
         className="pressable focus-ring bg-ink/4 shadow-well text-small text-ink-faint hover:text-ink-soft mt-3 flex h-9 w-full items-center gap-2.5 rounded-md px-3 text-left"
       >
