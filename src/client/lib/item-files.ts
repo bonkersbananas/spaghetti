@@ -73,7 +73,7 @@ export function keepFile(
       after.saved(row);
     } catch (error) {
       if (big && !isRefusal(error)) {
-        setUpload(id, { fraction: 0, failed: true, retry: () => void attempt() });
+        setUpload(id, { fraction: 0, failed: true, retry: () => void track() });
         return;
       }
       setUpload(id, null);
@@ -82,12 +82,16 @@ export function keepFile(
       after.giveUp();
     }
   };
-  const run = attempt();
-  uploading.set(id, run);
-  void run.finally(() => {
-    if (uploading.get(id) === run) uploading.delete(id);
-  });
-  return run;
+  // Every run, a retry too, is recorded: taking the file off waits for the one in flight.
+  const track = () => {
+    const run = attempt();
+    uploading.set(id, run);
+    void run.finally(() => {
+      if (uploading.get(id) === run) uploading.delete(id);
+    });
+    return run;
+  };
+  return track();
 }
 
 /**
