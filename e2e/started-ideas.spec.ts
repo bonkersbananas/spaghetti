@@ -200,7 +200,7 @@ test("a title typed just before leaving a new build is not lost", async ({ page 
   const id = new URL(page.url()).pathname.split("/").pop() as string;
   await page.getByRole("link", { name: "Builds" }).first().click();
   await expect(page).toHaveURL(/\/builds$/);
-  await expect.poll(async () => (await getItem(page, id)).title).toBe("Quick title");
+  await expect.poll(async () => (await getItem(page, id))?.title).toBe("Quick title");
 });
 
 test("a build asks before it goes: one press asks, Escape keeps it, Ctrl+Backspace again deletes", async ({ page }) => {

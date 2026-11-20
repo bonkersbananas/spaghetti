@@ -121,8 +121,10 @@ test("logs what's on the plate, counts good pieces, and offers to finish when al
   await sheet.getByRole("button", { name: "Log attempt" }).click();
   await expect(page.getByTestId("attempt-parts").filter({ hasText: /^Deck$/ })).toBeVisible();
   await expect(page.getByText("0 of 1")).toBeVisible();
-  const [, second] = (await getItem(page, id)).attempts;
-  expect(second.parts).toEqual([{ partId: expect.any(String), count: 0 }]);
+  // The page shows the attempt before the outbox has sent it: wait for the server to have it.
+  await expect
+    .poll(async () => (await getItem(page, id)).attempts[1]?.parts)
+    .toEqual([{ partId: expect.any(String), count: 0 }]);
 
   // Attempt 3: the deck again, and it worked: everything is printed.
   await expect(page.getByRole("dialog")).toHaveCount(0);
