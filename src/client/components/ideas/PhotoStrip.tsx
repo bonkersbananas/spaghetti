@@ -12,6 +12,10 @@ import { photoSrc } from "@/lib/previews";
 import { useReadOnly } from "@/lib/read-only";
 import { useAfterPaint, useIsDesktop } from "@/lib/use-media-query";
 
+/** A photo held or dragged by the finger stands up from the strip; let go, it settles back. */
+const LIFTED = { scale: 1.06, zIndex: 10 };
+const RESTING = { scale: 1, zIndex: 0 };
+
 interface PhotoStripProps {
   itemId: string;
   photos: PhotoView[];
@@ -25,7 +29,7 @@ interface PhotoStripProps {
  * An idea's photos in a row: tap one to show it, drag to reorder (the first
  * is the cover; Alt+arrows with the keyboard), or add more. The rare things, Make cover and Remove, are a small
  * menu here, never a control on the big photo (decision 0054): tap the photo that's showing again (its "…" says so),
- * hold any photo with a finger, or right-click one (with a mouse, its "…" shows on hover). A sheet on phones, a
+ * hold any photo with a finger and let go (a hold lifts it; moving it then reorders), or right-click one (with a mouse, its "…" shows on hover). A sheet on phones, a
  * popover from the thumbnail on desktop; Remove goes at once, with Undo.
  */
 export function PhotoStrip({ itemId, photos, selectedId, onSelect, fixedCover }: PhotoStripProps) {
@@ -82,10 +86,36 @@ export function PhotoStrip({ itemId, photos, selectedId, onSelect, fixedCover }:
     });
     setMenuOpen(true);
   }
-  const longPress = useLongPress((target) => {
-    const id = target.dataset.photoId;
-    if (id) openMenu(id);
-  });
+  // A finger's hold lifts the photo (the look it has while dragged): moving it on takes it to a new place, letting go
+  // where it is opens the menu. Nothing opens under the finger, which may still be on its way somewhere.
+  const [lifted, setLifted] = useState<string | null>(null);
+  const longPress = useLongPress(
+    (target) => {
+      const id = target.dataset.photoId;
+      if (id) openMenu(id);
+    },
+    (target) => {
+      // The lift replaces the pressed look (touch-press.ts lets go of it as the finger does).
+      target?.removeAttribute("data-pressed");
+      setLifted(target?.dataset.photoId ?? null);
+    },
+  );
+  // While a photo is lifted or dragged the strip keeps the touch: the page doesn't scroll (which would cancel the
+  // drag) and a downward move doesn't pull the page back (pull-to-go.ts leaves a touch someone has taken). A
+  // listener of its own, because React's touch listeners are passive.
+  const strip = useRef<HTMLDivElement>(null);
+  const draggingNow = useRef(false);
+  const holding = useRef<() => boolean>(() => false);
+  holding.current = () => longPress.holding() || draggingNow.current;
+  useEffect(() => {
+    const element = strip.current;
+    if (!element) return;
+    const keep = (event: TouchEvent) => {
+      if (holding.current() && event.cancelable) event.preventDefault();
+    };
+    element.addEventListener("touchmove", keep, { passive: false });
+    return () => element.removeEventListener("touchmove", keep);
+  }, []);
 
   function commit(next: string[]) {
     if (next.join() === key) return;
@@ -137,8 +167,10 @@ export function PhotoStrip({ itemId, photos, selectedId, onSelect, fixedCover }:
         aria-description={selected && actionable ? "Press again for Make cover and Remove" : undefined}
         aria-keyshortcuts="Alt+ArrowLeft Alt+ArrowRight"
         className={cn(
-          // No callout or text selection under a finger that holds it: the hold opens the menu.
+          // No callout, text selection or image drag under a finger that holds it, its photo's included (app.css
+          // gives a pressable's photos the save menu back): the hold is ours, to lift it.
           "pressable focus-ring block rounded-md select-none [-webkit-touch-callout:none]",
+          "[&_img]:[-webkit-touch-callout:none] [&_img]:[-webkit-user-drag:none]",
           selected && "ring-semolina ring-offset-paper ring-2 ring-offset-2",
         )}
       >
@@ -163,7 +195,10 @@ export function PhotoStrip({ itemId, photos, selectedId, onSelect, fixedCover }:
   };
 
   return (
-    <div className="-mx-5 flex items-center gap-2.5 overflow-x-auto px-5 pt-2 pb-1 md:mx-0 md:-mt-2 md:px-1">
+    <div
+      ref={strip}
+      className="-mx-5 flex items-center gap-2.5 overflow-x-auto px-5 pt-2 pb-1 md:mx-0 md:-mt-2 md:px-1"
+    >
       {camera.input}
       {library.input}
       {draggable ? (
@@ -184,16 +219,20 @@ export function PhotoStrip({ itemId, photos, selectedId, onSelect, fixedCover }:
                 key={id}
                 value={id}
                 drag={photo.upload || offline ? false : "x"}
+                // A drag doesn't end a hold: a finger that wobbles a few px and lets go still gets the menu (the
+                // hold ends once it has moved past its slop).
                 onDragStart={() => {
-                  longPress.cancel();
+                  draggingNow.current = true;
                   setDragging(true);
                 }}
                 onDragEnd={() => {
+                  draggingNow.current = false;
                   setDragging(false);
                   commit(order);
                 }}
                 className="group/thumb relative shrink-0 list-none"
-                whileDrag={{ scale: 1.06, zIndex: 10 }}
+                animate={lifted === id ? LIFTED : RESTING}
+                whileDrag={LIFTED}
               >
                 {thumb(id, index, photo)}
               </Reorder.Item>

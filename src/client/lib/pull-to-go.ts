@@ -138,6 +138,11 @@ export function usePullToGo(list: { to: string; label: string }, reduced: boolea
       const dy = touch.clientY - startY;
       const dx = touch.clientX - startX;
       if (mode === "armed") {
+        // Something under the finger has taken this touch (a photo lifted to be moved): it isn't a pull.
+        if (event.defaultPrevented) {
+          mode = "off";
+          return;
+        }
         // Sideways stays the carousel's, upward is plain scrolling; either ends the chance for this touch.
         if (Math.abs(dx) > SLOP || dy < -SLOP || window.scrollY > 0) {
           mode = "off";
