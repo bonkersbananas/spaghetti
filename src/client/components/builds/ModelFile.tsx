@@ -306,8 +306,7 @@ function SettingsRow({
   return (
     <button
       type="button"
-      // The name holds the row's words in order, so a voice command that says them finds the button.
-      aria-label={`Slice with… ${summary.join(" · ")}`}
+      aria-label={`Slice with… ${summary.join(", ")}`}
       aria-haspopup="dialog"
       data-keeps-panel
       {...props}
