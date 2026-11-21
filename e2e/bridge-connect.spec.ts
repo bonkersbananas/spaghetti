@@ -15,7 +15,7 @@ test("connect the bridge: a code, the command, waiting, connected, disconnect", 
 
   const dialog = page.getByRole("dialog", { name: "Connect the bridge" });
   await expect(dialog.getByText("Waiting for the bridge…")).toBeVisible();
-  await expect(dialog.getByText("LAN Only mode")).toBeVisible();
+  await expect(dialog.getByText("LAN Only Liveview")).toBeVisible();
   const command = await dialog.locator("code").innerText();
   expect(command).toMatch(/curl -fsSL .*\/bridge\/install\.sh \| sh -s -- [A-Z2-9]{4}-[A-Z2-9]{4}/);
   expect(command).not.toContain("spg_");

@@ -13,7 +13,7 @@ export function StepsSection() {
       <Panel className="flex flex-col gap-8 md:max-w-2xl">
         <Steps>
           <Step n={1} title="On the printer" state="done">
-            <p>Turn on LAN Only mode.</p>
+            <p>Turn on LAN Only Liveview.</p>
           </Step>
           <Step n={2} title="On your Mac" state="active">
             <p>Paste the command into Terminal.</p>

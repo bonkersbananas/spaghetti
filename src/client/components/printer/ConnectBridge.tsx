@@ -103,17 +103,21 @@ export function ConnectBridge({ open, onOpenChange }: { open: boolean; onOpenCha
         ) : undefined
       }
       title="Connect the bridge"
-      description="A small program on a Mac that's usually on. It listens to the X2D, so prints sent from Bambu Studio show up here by themselves. It never sends the printer a command."
+      description="A small program on a Mac that's usually on. It listens to the X2D and asks it for its status, so prints sent from Bambu Studio show up here by themselves. It can't start, stop or change a print."
     >
       <Steps className="pb-4">
         <Step n={1} title="On the printer" state={heard ? "done" : "todo"}>
           <p>
-            Turn on <strong className="text-ink">LAN Only mode</strong>, then{" "}
-            <strong className="text-ink">Developer mode</strong> (under the access code, in Settings → General), and
-            keep its IP address, serial number and access code to hand.
+            Leave it in cloud mode, so Handy keeps working. Turn on{" "}
+            <strong className="text-ink">LAN Only Liveview</strong> for photos, and keep its IP address, serial number
+            and access code to hand. The code is in the LAN Only mode menu; leave that switch off.
           </p>
           <p className="text-small text-ink-faint">
-            LAN Only turns off Bambu's cloud and Handy app. You can switch it back.
+            Optional: for each print's file, add a USB drive and turn on Store Sent Files on External Storage.
+          </p>
+          <p className="text-small text-ink-faint">
+            If the check on your Mac says it won't talk in cloud mode, use LAN Only with Developer mode instead. That
+            stops Handy and lets anything on your network command the printer.
           </p>
         </Step>
         <Step n={2} title={heard ? "On your Mac" : "On your Mac: paste this"} state={heard ? "done" : "active"}>
