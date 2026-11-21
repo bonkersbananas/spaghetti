@@ -491,6 +491,58 @@ describe("a build's story", () => {
     expect(html).toContain("Jade white");
     expect(html).toContain("background-color:#e8e8e0");
     expect(html).toContain("2 attempts");
+    // Each temperature has its own cell, so none breaks over two lines of a narrow column.
+    expect(html).toMatch(/<dt>Bed temp<\/dt><dd>55\u00a0°C<\/dd>/);
+    expect(html).not.toContain("Temperatures");
+  });
+
+  it("leaves out a tag that only repeats the outcome, and gives each place a photo shows its own way back", async () => {
+    const item = await createItem({ title: "Tugboat" });
+    const failed = await addAttempt(item.id, { outcome: "failed", failureTags: ["spaghetti", "bed-adhesion"] });
+    const photo = await addPhoto(item.id, { attemptId: failed });
+    const made = await share("items", item.id);
+    const { html } = await guest(`/s/${made.token}`);
+    // The outcome chip says Spaghetti once; the failure tag that says it again is left out, the other one stays.
+    expect(html.match(/>Spaghetti</g)).toHaveLength(1);
+    expect(html).toContain("Bed adhesion");
+    // The attempt's photo is the cover too: two places, two large views, each closing back to its own place.
+    expect(
+      html.match(new RegExp(`class="gp-lightbox-img" src="/s/${made.token}/photos/${photo}/large"`, "g")),
+    ).toHaveLength(2);
+    for (const key of ["lead-0", "a1-0"]) {
+      expect(html).toContain(`id="from-${key}"`);
+      expect(html).toContain(`href="#photo-${key}"`);
+      expect(html).toContain(`id="photo-${key}"`);
+      expect(html).toContain(`href="#from-${key}"`);
+    }
+  });
+});
+
+describe("a twist's source", () => {
+  it("is named as the app's twist page names it: the page's own title, not the idea it came from", async () => {
+    const idea = await createItem({ title: "Desk tidy-up" });
+    const url = "https://makerworld.com/en/models/123456-drawer-bins";
+    await env.DB.prepare(
+      "INSERT OR REPLACE INTO link_previews (url, title, site, failed, fetched_at) VALUES (?, ?, ?, 0, ?)",
+    )
+      .bind(url, "Drawer bins, 42 mm grid", "MakerWorld", Date.now())
+      .run();
+    try {
+      const response = await request("/api/twists", {
+        method: "POST",
+        json: { id: uuid(), name: "Bins at 84 %", fromItemId: idea.id, sourceUrl: url },
+        cookie,
+      });
+      const twist = (await response.json<TwistResponse>()).twist;
+      const made = await share("twists", twist.id);
+      const { html } = await guest(`/s/${made.token}`);
+      expect(html).toContain("Drawer bins, 42 mm grid");
+      expect(html).not.toContain("Desk tidy-up");
+      // The site's letter on the tile, as the app's LinkCard draws it.
+      expect(html).toMatch(/<span class="gp-model-mark" aria-hidden="true">M<\/span>/);
+    } finally {
+      await env.DB.prepare("DELETE FROM link_previews WHERE url = ?").bind(url).run();
+    }
   });
 });
 

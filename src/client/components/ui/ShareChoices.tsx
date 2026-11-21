@@ -90,32 +90,25 @@ export function ShareChoices({
         }
       />
       {state === "on" && publicUrl ? (
+        // Live: the title has the row to itself (one line on a phone); the link's own action is the private row's
+        // (Copy link, or Share on a phone), in the address's well; stopping it is a quiet word under it, with Undo.
         <Choice
           icon={PublicIcon}
           tone="basil"
           title="Anyone with the link can look"
-          meta={[since, "they can look, not change"].filter(Boolean).join(" · ")}
-          action={
-            readOnly ? undefined : (
-              <Button variant="danger" size="sm" onClick={onStop}>
-                Stop sharing
-              </Button>
-            )
-          }
+          meta={[since, "nobody can change it"].filter(Boolean).join(" · ")}
         >
           <div className="bg-ink/4 flex min-h-11 items-center gap-2 rounded-md py-1.5 pr-1.5 pl-3">
             <span className="text-small text-ink-soft min-w-0 flex-1 truncate" title={publicUrl}>
               {publicUrl.replace(/^https?:\/\//, "")}
             </span>
-            {!canShare && (
-              <Button variant="secondary" size="sm" icon={CopyIcon} onClick={onPublic}>
-                Copy
-              </Button>
-            )}
+            <Button variant="secondary" size="sm" icon={send} onClick={onPublic}>
+              {canShare ? "Share" : "Copy link"}
+            </Button>
           </div>
-          {canShare && (
-            <Button variant="primary" icon={ShareIcon} fullWidth onClick={onPublic}>
-              Share the link
+          {!readOnly && (
+            <Button variant="quiet" size="sm" onClick={onStop} className="-mt-1 self-start">
+              Stop sharing
             </Button>
           )}
         </Choice>
@@ -123,7 +116,7 @@ export function ShareChoices({
         <Choice
           icon={PublicIcon}
           title="Anyone with the link"
-          meta="A read-only page: the photos, the notes and how it printed."
+          meta="A read-only page that stays up to date: photos, notes, how it printed."
           action={
             <Button variant="secondary" size="sm" loading={state === "making"} disabled={readOnly} onClick={onMake}>
               {state === "making" ? "Making…" : "Make a link"}

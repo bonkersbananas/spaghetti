@@ -3,6 +3,7 @@ import type { Child } from "hono/jsx";
 import { checkLinkUrl } from "../../shared/link-safety.ts";
 import { findLinks, linkWords, shortUrl } from "../../shared/links.ts";
 import { sameModel } from "../../shared/model-mark.ts";
+import { noteSize } from "../../shared/notes.ts";
 import { colorTone } from "../../shared/spools.ts";
 import { GUEST_ICONS, type GuestIconName } from "./icons.ts";
 import {
@@ -130,54 +131,47 @@ function Picture({
   );
 }
 
-/** A photo that opens large over the page (a CSS :target view, no script); Back or the cross closes it. */
-function Zoomable({
-  photo,
-  alt,
-  anchors,
-  children,
-}: {
+/**
+ * One place a photo shows on the page. Each place has its own large view and its own anchor to come back to, so a
+ * photo shown twice (a build's cover is often an attempt's photo too) closes back to where it was opened.
+ */
+interface Shown {
+  key: string;
   photo: GuestPhoto;
   alt: string;
-  /** The photos given a place to come back to so far (one per photo: the cover can also be an attempt's). */
-  anchors: Set<string>;
-  children: Child;
-}) {
-  const first = !anchors.has(photo.id);
-  anchors.add(photo.id);
+}
+
+/** A photo that opens large over the page (a CSS :target view, no script). */
+function Zoomable({ shown, children }: { shown: Shown; children: Child }) {
   return (
-    <a
-      class="gp-zoom"
-      href={`#photo-${photo.id}`}
-      id={first ? `from-${photo.id}` : undefined}
-      aria-label={`${alt}, larger`}
-    >
+    <a class="gp-zoom" href={`#photo-${shown.key}`} id={`from-${shown.key}`} aria-label={`${shown.alt}, larger`}>
       {children}
     </a>
   );
 }
 
-/** Every photo's large view, once each, at the end of the page. */
-function Lightboxes({ token, photos }: { token: string; photos: { photo: GuestPhoto; alt: string }[] }) {
+/**
+ * Every place's large view, at the end of the page: the photo whole on a dark ground, as large as the screen allows.
+ * The whole of it is the way back (a tap anywhere, or the cross), to the photo's own place on the page.
+ */
+function Lightboxes({ token, shown }: { token: string; shown: Shown[] }) {
   return (
     <>
-      {photos.map(({ photo, alt }) => (
-        <div class="gp-lightbox" id={`photo-${photo.id}`} role="dialog" aria-label={alt}>
-          <a class="gp-lightbox-back" href={`#from-${photo.id}`} tabindex={-1}>
-            <span class="gp-sr">Close</span>
-          </a>
-          <img
-            class="gp-lightbox-img"
-            src={photoUrl(token, photo.id, "large")}
-            width={photo.width}
-            height={photo.height}
-            alt={alt}
-            loading="lazy"
-            decoding="async"
-            style={photo.color ? `background-color:${photo.color}` : undefined}
-          />
-          <a class="gp-lightbox-close" href={`#from-${photo.id}`} aria-label="Close">
-            <Icon name="close" />
+      {shown.map(({ key, photo, alt }) => (
+        <div class="gp-lightbox" id={`photo-${key}`} role="dialog" aria-label={alt}>
+          <a class="gp-lightbox-back" href={`#from-${key}`} aria-label="Close">
+            <img
+              class="gp-lightbox-img"
+              src={photoUrl(token, photo.id, "large")}
+              width={photo.width}
+              height={photo.height}
+              alt=""
+              loading="lazy"
+              decoding="async"
+            />
+            <span class="gp-lightbox-close">
+              <Icon name="close" />
+            </span>
           </a>
         </div>
       ))}
@@ -186,33 +180,23 @@ function Lightboxes({ token, photos }: { token: string; photos: { photo: GuestPh
 }
 
 /** The photos the page leads with: a row to swipe on a phone, one large photo and a few beside it on a computer. */
-function Gallery({
-  token,
-  photos,
-  title,
-  anchors,
-}: {
-  token: string;
-  photos: GuestPhoto[];
-  title: string;
-  anchors: Set<string>;
-}) {
-  const [lead, ...rest] = photos;
-  if (!lead) return null;
-  const alt = (index: number) => (photos.length > 1 ? `${title}, photo ${index + 1} of ${photos.length}` : title);
+function Gallery({ token, shown }: { token: string; shown: Shown[] }) {
+  const [first, ...rest] = shown;
+  if (!first) return null;
+  const lead = first.photo;
   return (
     <section
       class={`gp-gallery gp-gallery--${shape(lead)} ${rest.length ? `gp-gallery--many gp-gallery--rest-${Math.min(rest.length, 3)}` : ""}`}
       aria-label="Photos"
     >
       <ul class="gp-strip">
-        {photos.map((photo, index) => (
+        {shown.map((place, index) => (
           <li class="gp-slide">
-            <Zoomable photo={photo} alt={alt(index)} anchors={anchors}>
+            <Zoomable shown={place}>
               <Picture
                 token={token}
-                photo={photo}
-                alt={alt(index)}
+                photo={place.photo}
+                alt={place.alt}
                 sizes={index === 0 ? "(min-width: 48rem) 42rem, 90vw" : "(min-width: 48rem) 14rem, 90vw"}
                 eager={index === 0}
               />
@@ -220,17 +204,33 @@ function Gallery({
           </li>
         ))}
       </ul>
-      {rest.length > 0 && <p class="gp-swipe">{photos.length} photos</p>}
+      {rest.length > 0 && <p class="gp-swipe">{shown.length} photos</p>}
     </section>
   );
 }
 
+/**
+ * No photo: the note takes the photo's place, set as the app's note cards are (NoteFace: Fraunces on the note
+ * surface under one faint rule, its size stepping down as the note grows), and grows with the note: nothing is cut.
+ */
+function NoteCard({ text, model }: { text: string; model: GuestModel | null }) {
+  return (
+    <section class="gp-gallery gp-notecard" aria-label="Note">
+      <div class={`gp-noteface gp-noteface--${noteSize(text)}`}>
+        <span class="gp-noteface-rule" aria-hidden="true" />
+        <Note text={text} model={model} class="gp-note--face" />
+      </div>
+    </section>
+  );
+}
+
+/** The model's page as the app's LinkCard shows it: the site's letter on a tile, "Model on …" and the title. */
 function ModelCard({ model }: { model: GuestModel }) {
   const byline = [model.designer ? `by ${model.designer}` : "", model.license ?? ""].filter(Boolean).join(" · ");
   return (
     <a class="gp-model" href={model.url} {...OUT}>
       <span class="gp-model-mark" aria-hidden="true">
-        <Icon name="model" />
+        {model.letter}
       </span>
       <span class="gp-model-words">
         <span class="gp-overline gp-overline--basil">Model on {model.place}</span>
@@ -268,6 +268,7 @@ function Filaments({ filaments }: { filaments: GuestFilament[] }) {
   );
 }
 
+/** The settings to print it with, straight on the card or page: the filaments over a grid of label and value. */
 function Settings({ settings, filaments }: { settings: GuestSetting[]; filaments: GuestFilament[] }) {
   if (!settings.length && !filaments.length) return null;
   return (
@@ -299,58 +300,74 @@ function OutcomeBadge({ attempt }: { attempt: GuestAttempt }) {
   );
 }
 
-function Chips({ label, items, tone }: { label: string; items: string[]; tone?: "tomato" | "basil" }) {
-  if (!items.length) return null;
+/** What changed since the attempt before, as the app's ChangeLine: the turning arrows, each change on semolina. */
+function ChangeLine({ changes, number }: { changes: string[]; number: number }) {
+  if (!changes.length) return null;
   return (
-    <div class="gp-chips-row">
-      <span class="gp-chips-label">{label}</span>
-      <ul class="gp-chips">
-        {items.map((item) => (
-          <li class={`gp-chip ${tone ? `gp-chip--${tone}` : ""}`}>{item}</li>
+    <p class="gp-changeline">
+      <Icon name="changed" class="gp-changeline-icon" />
+      <span class="gp-sr">Changed since attempt {number - 1}: </span>
+      <span>
+        {changes.map((change, index) => (
+          <>
+            {index > 0 && <span aria-hidden="true"> · </span>}
+            <span class="gp-mark">{change}</span>
+          </>
         ))}
-      </ul>
-    </div>
+      </span>
+    </p>
   );
 }
 
-function Attempt({
-  token,
-  attempt,
-  title,
-  anchors,
-}: {
-  token: string;
-  attempt: GuestAttempt;
-  title: string;
-  anchors: Set<string>;
-}) {
-  const alt = (index: number) =>
-    `${title}, attempt ${attempt.number}${attempt.photos.length > 1 ? `, photo ${index + 1}` : ""}`;
+/** What went wrong (tomato) and what went well (basil, with a tick), as the app's AttemptTags. */
+function Tags({ wrong, well }: { wrong: string[]; well: string[] }) {
+  if (!wrong.length && !well.length) return null;
   return (
-    <li class={`gp-attempt ${attempt.photos.length ? "gp-attempt--photos" : ""}`}>
+    <ul class="gp-chips" aria-label="Tags">
+      {wrong.map((tag) => (
+        <li class="gp-chip gp-chip--tomato">{tag}</li>
+      ))}
+      {well.map((tag) => (
+        <li class="gp-chip gp-chip--basil">
+          <Icon name="check" />
+          {tag}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+function Attempt({ token, attempt, shown }: { token: string; attempt: GuestAttempt; shown: Shown[] }) {
+  const settings = attempt.settings.length > 0;
+  return (
+    <li class={`gp-attempt ${shown.length ? "gp-attempt--photos" : ""}`}>
       <div class="gp-attempt-head">
-        <OutcomeBadge attempt={attempt} />
-        <h3 class="gp-attempt-title">Attempt {attempt.number}</h3>
-        <span class="gp-attempt-date">{guestDate(attempt.printedAt)}</span>
+        <div class="gp-attempt-line">
+          <OutcomeBadge attempt={attempt} />
+          <h3 class="gp-attempt-title">Attempt {attempt.number}</h3>
+        </div>
+        <p class="gp-attempt-meta">{[guestDate(attempt.printedAt), ...attempt.results].join(" · ")}</p>
       </div>
-      {attempt.photos.length > 0 && (
-        <ul class={`gp-attempt-photos ${attempt.photos.length % 2 ? "gp-attempt-photos--odd" : ""}`}>
-          {attempt.photos.map((photo, index) => (
+      {shown.length > 0 && (
+        <ul class={`gp-attempt-photos ${shown.length % 2 ? "gp-attempt-photos--odd" : ""}`}>
+          {shown.map((place) => (
             <li>
-              <Zoomable photo={photo} alt={alt(index)} anchors={anchors}>
-                <Picture token={token} photo={photo} alt={alt(index)} sizes="(min-width: 48rem) 15rem, 70vw" />
+              <Zoomable shown={place}>
+                <Picture token={token} photo={place.photo} alt={place.alt} sizes="(min-width: 48rem) 15rem, 70vw" />
               </Zoomable>
             </li>
           ))}
         </ul>
       )}
       <div class="gp-attempt-body">
+        <ChangeLine changes={attempt.changes} number={attempt.number} />
         <Note text={attempt.note} class="gp-note--attempt" />
-        {attempt.results.length > 0 && <p class="gp-results">{attempt.results.join(" · ")}</p>}
-        <Chips label="Changed" items={attempt.changes} />
-        <Chips label="Went wrong" items={attempt.wentWrong} tone="tomato" />
-        <Chips label="Went well" items={attempt.wentWell} tone="basil" />
-        <Settings settings={attempt.settings} filaments={attempt.settings.length ? attempt.filaments : []} />
+        <Tags wrong={attempt.wentWrong} well={attempt.wentWell} />
+        {settings && (
+          <div class="gp-details">
+            <Settings settings={attempt.settings} filaments={attempt.filaments} />
+          </div>
+        )}
       </div>
     </li>
   );
@@ -374,12 +391,18 @@ function Changes({ changes }: { changes: GuestChange[] }) {
       <h2 class="gp-block-title" id="gp-changes">
         What we changed
       </h2>
+      {/* As the app's TwistChanges reads: "Scale 84 % fits the 42 mm grid", the value on semolina, plain lines. */}
       <ul class="gp-changes">
         {changes.map((change) => (
           <li>
             <span class="gp-change-name">{change.name}</span>
-            {change.value && <span class="gp-change-value">{change.value}</span>}
-            {change.note && <span class="gp-change-note">{change.note}</span>}
+            {change.value && (
+              <>
+                {" "}
+                <span class="gp-mark">{change.value}</span>
+              </>
+            )}
+            {change.note && <span class="gp-change-note"> {change.note}</span>}
           </li>
         ))}
       </ul>
@@ -390,7 +413,7 @@ function Changes({ changes }: { changes: GuestChange[] }) {
 const OVERLINE: Record<GuestView["kind"], string> = { idea: "An idea", build: "A build", twist: "A twist on a model" };
 
 /** The words beside (or under) the photos: what it is, its note, the model, and for a build how it went. */
-function Story({ view }: { view: GuestView }) {
+function Story({ view, noteShown }: { view: GuestView; noteShown: boolean }) {
   const dates =
     view.kind === "idea"
       ? `Noted ${guestDate(view.capturedAt)}`
@@ -412,12 +435,12 @@ function Story({ view }: { view: GuestView }) {
       </p>
       <h1 class="gp-title">{view.title}</h1>
       {dates && <p class="gp-dates">{dates}</p>}
-      <Note text={view.note} model={view.model} />
+      {!noteShown && <Note text={view.note} model={view.model} />}
       {view.model && <ModelCard model={view.model} />}
       {view.kind === "build" && (
         <section class="gp-summary" aria-label="How it went">
-          <Trail build={view} />
           <p class="gp-summary-words">{view.summary}</p>
+          <Trail build={view} />
           {view.totals.length > 0 && <p class="gp-summary-totals">{view.totals.join(" · ")}</p>}
         </section>
       )}
@@ -447,43 +470,43 @@ function MadeWith() {
 
 /** The whole body of a shared thing's page. */
 export function GuestBody({ view, token }: { view: GuestView; token: string }) {
-  const anchors = new Set<string>();
-  const zoomed: { photo: GuestPhoto; alt: string }[] = view.photos.map((photo, index) => ({
+  const gallery: Shown[] = view.photos.map((photo, index) => ({
+    key: `lead-${index}`,
     photo,
     alt: view.photos.length > 1 ? `${view.title}, photo ${index + 1} of ${view.photos.length}` : view.title,
   }));
-  if (view.kind === "build") {
-    for (const attempt of view.attempts)
-      attempt.photos.forEach((photo, index) => {
-        if (zoomed.some((seen) => seen.photo.id === photo.id)) return;
-        zoomed.push({
-          photo,
-          alt: `${view.title}, attempt ${attempt.number}${attempt.photos.length > 1 ? `, photo ${index + 1}` : ""}`,
-        });
-      });
-  }
+  const ofAttempt = (attempt: GuestAttempt): Shown[] =>
+    attempt.photos.map((photo, index) => ({
+      key: `a${attempt.number}-${index}`,
+      photo,
+      alt: `${view.title}, attempt ${attempt.number}${attempt.photos.length > 1 ? `, photo ${index + 1}` : ""}`,
+    }));
+  const attempts =
+    view.kind === "build" ? view.attempts.map((attempt) => ({ attempt, shown: ofAttempt(attempt) })) : [];
+  // No photo but a note: the note leads, in the photo's place.
+  const noteLeads = !gallery.length && Boolean(view.note);
   return (
     <>
-      <main class={`gp-page gp-page--${view.kind} ${view.photos.length ? "" : "gp-page--no-photos"}`} id="top">
+      <main class={`gp-page gp-page--${view.kind} ${gallery.length || noteLeads ? "" : "gp-page--no-photos"}`} id="top">
         <article class="gp-article">
-          <Gallery token={token} photos={view.photos} title={view.title} anchors={anchors} />
-          <Story view={view} />
+          {noteLeads ? <NoteCard text={view.note} model={view.model} /> : <Gallery token={token} shown={gallery} />}
+          <Story view={view} noteShown={noteLeads} />
         </article>
-        {view.kind === "build" && view.attempts.length > 0 && (
+        {attempts.length > 0 && (
           <section class="gp-attempts" aria-labelledby="gp-attempts">
             <h2 class="gp-section-title" id="gp-attempts">
               Attempt by attempt
             </h2>
             <ol class="gp-attempt-list">
-              {view.attempts.map((attempt) => (
-                <Attempt token={token} attempt={attempt} title={view.title} anchors={anchors} />
+              {attempts.map(({ attempt, shown }) => (
+                <Attempt token={token} attempt={attempt} shown={shown} />
               ))}
             </ol>
           </section>
         )}
         <MadeWith />
       </main>
-      <Lightboxes token={token} photos={zoomed} />
+      <Lightboxes token={token} shown={[...gallery, ...attempts.flatMap(({ shown }) => shown)]} />
     </>
   );
 }

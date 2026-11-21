@@ -1990,7 +1990,21 @@ export const shots: Shot[] = [
     cleanup: unshareAll,
   },
   {
-    // An idea with no photo: the words lead, in one column.
+    // The same photo closed again (a tap on the dark ground): the page is back at that photo, not at the top.
+    name: "shared-photo-closed",
+    path: "/sign-in",
+    signedOut: true,
+    prepare: async (page) => {
+      await openShared("items", SEED_BUILD_IDS.tugboat)(page);
+      await page.locator(".gp-attempt-photos a").first().click();
+      await page.locator(".gp-lightbox:target img").waitFor();
+      await page.locator(".gp-lightbox:target .gp-lightbox-back").click({ position: { x: 20, y: 200 } });
+      await page.locator(".gp-lightbox:target").waitFor({ state: "detached" });
+    },
+    cleanup: unshareAll,
+  },
+  {
+    // An idea with no photo: its note takes the photo's place, as a note card.
     name: "shared-note",
     path: "/sign-in",
     signedOut: true,

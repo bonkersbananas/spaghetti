@@ -12,7 +12,15 @@ import {
 } from "../../shared/attempts.ts";
 import { bestPhoto } from "../../shared/cover.ts";
 import { checkLinkUrl } from "../../shared/link-safety.ts";
-import { modelMarkOf, modelOf, modelPlace, sameModel, withoutModelLines } from "../../shared/model-mark.ts";
+import {
+  modelLetter,
+  modelMarkOf,
+  modelOf,
+  modelPlace,
+  sameModel,
+  withoutModelLines,
+} from "../../shared/model-mark.ts";
+import { printablesTitleFromLink } from "../../shared/model-name.ts";
 import { showsSettings } from "../../shared/story-settings.ts";
 import { formatDuration } from "../../shared/time.ts";
 import { changeName } from "../../shared/twists.ts";
@@ -41,7 +49,10 @@ export interface GuestPhoto {
 export interface GuestModel {
   /** "MakerWorld", "Printables". */
   place: string;
+  /** The site's letter on the card's tile, as the app's LinkCard draws it ("M" for MakerWorld). */
+  letter: string;
   url: string;
+  /** What the app's card calls the model: the page's own title, else the draft's, else what a Printables link says. */
   title: string | null;
   designer: string | null;
   license: string | null;
@@ -190,15 +201,12 @@ function settingRows(settings: AttemptSettings): GuestSetting[] {
   }
   if (settings.brim !== undefined) rows.push({ label: "Brim", value: settings.brim ? "Yes" : "No" });
   if (settings.bedType) rows.push({ label: "Plate", value: plateName(settings.bedType) });
-  const temperatures = [
-    settings.nozzleTemperature !== undefined ? `nozzle ${settings.nozzleTemperature} °C` : "",
-    settings.bedTemperature !== undefined ? `bed ${settings.bedTemperature} °C` : "",
-    settings.chamberTemperature !== undefined ? `chamber ${settings.chamberTemperature} °C` : "",
-  ].filter(Boolean);
-  if (temperatures.length) {
-    const words = temperatures.join(", ");
-    rows.push({ label: "Temperatures", value: words.charAt(0).toUpperCase() + words.slice(1) });
-  }
+  // One cell each, so a value never breaks over two lines of a narrow column.
+  if (settings.nozzleTemperature !== undefined)
+    rows.push({ label: "Nozzle temp", value: `${settings.nozzleTemperature} °C` });
+  if (settings.bedTemperature !== undefined) rows.push({ label: "Bed temp", value: `${settings.bedTemperature} °C` });
+  if (settings.chamberTemperature !== undefined)
+    rows.push({ label: "Chamber temp", value: `${settings.chamberTemperature} °C` });
   if (settings.filamentDried !== undefined)
     rows.push({ label: "Filament dried", value: settings.filamentDried ? "Yes" : "No" });
   return rows;
@@ -224,8 +232,9 @@ function guestModel(item: Pick<Item, "note" | "draft">): GuestModel | null {
   const draft = item.draft && sameModel(item.draft.url, mark.url) ? item.draft : null;
   return {
     place: modelPlace(mark),
+    letter: modelLetter(mark),
     url,
-    title: draft?.title?.trim() || null,
+    title: draft?.title?.trim() || printablesTitleFromLink(url),
     designer: draft?.findings?.designer?.trim() || null,
     license: draft?.findings?.license?.trim() || null,
   };
@@ -257,16 +266,23 @@ export function itemView(item: Item, custom: { failure: TagDefinition[]; success
 
   const attempts: GuestAttempt[] = item.attempts.map((attempt, index) => {
     const number = index + 1;
+    const outcomeLabel = attempt.outcome
+      ? OUTCOME_LABELS[attempt.outcome]
+      : attempt.endedAt
+        ? "Off the bed"
+        : "Printing";
+    // A tag that only says the outcome again ("Spaghetti" on a spaghetti) is left out: the outcome already says it.
+    const notTheOutcome = (label: string) => label.trim().toLowerCase() !== outcomeLabel.toLowerCase();
     return {
       number,
       outcome: attempt.outcome,
-      outcomeLabel: attempt.outcome ? OUTCOME_LABELS[attempt.outcome] : attempt.endedAt ? "Off the bed" : "Printing",
+      outcomeLabel,
       printedAt: attempt.printedAt,
       note: attempt.note.trim(),
       photos: onlyPhotos(shown.filter((photo) => photo.attemptId === attempt.id).map(guestPhoto)),
       changes: index === 0 ? [] : attempt.changes.map((change) => keepUnits(change.text)),
-      wentWrong: attempt.failureTags.map((slug) => tagLabel("failure", slug, custom.failure)),
-      wentWell: attempt.successNotes.map((slug) => tagLabel("success", slug, custom.success)),
+      wentWrong: attempt.failureTags.map((slug) => tagLabel("failure", slug, custom.failure)).filter(notTheOutcome),
+      wentWell: attempt.successNotes.map((slug) => tagLabel("success", slug, custom.success)).filter(notTheOutcome),
       settings: showsSettings({ number, outcome: attempt.outcome, changes: attempt.changes })
         ? guestSettings(attempt.settings)
         : [],
@@ -309,9 +325,9 @@ export async function loadItemView(db: Db, id: string): Promise<GuestView | null
   return withPageTitle(db, view);
 }
 
-/** A model's card without a title from a draft takes the page's own title, as the idea page's card does (link previews). */
+/** The model's card takes the page's own title first, as the app's LinkCard does (link previews). */
 async function withPageTitle<V extends GuestView>(db: Db, view: V): Promise<V> {
-  if (!view.model || view.model.title) return view;
+  if (!view.model) return view;
   const row = await db
     .select({ title: linkPreviews.title })
     .from(linkPreviews)
@@ -357,6 +373,8 @@ export async function loadTwistView(db: Db, id: string): Promise<GuestTwist | nu
   const mark = sourceUrl ? modelMarkOf(sourceUrl) : null;
   let host: string | null = null;
   if (sourceUrl) host = new URL(sourceUrl).hostname.replace(/^www\./, "");
+  // Named as the app's twist page names it (LinkCard): the page's own title, never the idea it was made from
+  // (source_title keeps that).
   return withPageTitle(db, {
     kind: "twist",
     title: twist.name.trim() || "A twist",
@@ -366,8 +384,9 @@ export async function loadTwistView(db: Db, id: string): Promise<GuestTwist | nu
     model: sourceUrl
       ? {
           place: mark ? modelPlace(mark) : (host ?? "The source"),
+          letter: mark ? modelLetter(mark) : (host ?? "?").charAt(0).toUpperCase(),
           url: sourceUrl,
-          title: twist.sourceTitle?.trim() || null,
+          title: printablesTitleFromLink(sourceUrl),
           designer: twist.designer?.trim() || null,
           license: twist.license?.trim() || null,
         }

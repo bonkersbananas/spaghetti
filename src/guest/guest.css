@@ -230,6 +230,8 @@ a {
   background: var(--sg-well);
   box-shadow: var(--sg-shadow-soft);
   cursor: zoom-in;
+  /* Closing the large view comes back here: the photo lands a little below the top, not flush against it. */
+  scroll-margin-block: 12vh;
   transition:
     transform var(--sg-duration-instant) var(--sg-ease-out),
     box-shadow var(--sg-duration-fast) var(--sg-ease-out);
@@ -285,19 +287,20 @@ a {
   }
 }
 
-/* A photo opened large over the page (:target, no script). */
+/*
+ * A photo opened large (:target, no script): the whole photo on an opaque dark ground, as large as the screen
+ * allows, edge to edge on a phone. The whole view is the link back to the photo's place on the page.
+ */
 .gp-lightbox {
   display: none;
   position: fixed;
   inset: 0;
   z-index: 10;
-  padding: max(1rem, env(safe-area-inset-top)) 1rem max(1rem, env(safe-area-inset-bottom));
-  background: var(--sg-veil-strong);
-  place-items: center;
+  background: color-mix(in oklab, var(--sg-ink), black 45%);
 }
 
 .gp-lightbox:target {
-  display: grid;
+  display: block;
 }
 
 html:has(.gp-lightbox:target) {
@@ -307,33 +310,120 @@ html:has(.gp-lightbox:target) {
 .gp-lightbox-back {
   position: absolute;
   inset: 0;
+  display: block;
   cursor: zoom-out;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.gp-lightbox-back:focus-visible {
+  box-shadow: none;
 }
 
 .gp-lightbox-img {
-  position: relative;
-  width: auto;
-  height: auto;
-  max-width: calc(100vw - 2rem);
-  max-height: calc(100dvh - 2rem - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  max-width: none;
   object-fit: contain;
-  border-radius: var(--gp-radius-md);
-  pointer-events: none;
-  box-shadow: var(--sg-shadow-float);
 }
 
 .gp-lightbox-close {
   position: absolute;
-  top: max(1rem, env(safe-area-inset-top));
-  right: 1rem;
+  top: max(0.75rem, env(safe-area-inset-top));
+  right: max(0.75rem, env(safe-area-inset-right));
   display: grid;
   place-items: center;
   width: 2.75rem;
   height: 2.75rem;
   border-radius: 999px;
-  background: var(--sg-veil);
-  color: var(--sg-on-veil);
+  background: color-mix(in srgb, var(--sg-paper) 16%, transparent);
+  color: var(--sg-paper);
   font-size: 1.125rem;
+  backdrop-filter: blur(12px);
+}
+
+.gp-lightbox-back:focus-visible .gp-lightbox-close {
+  box-shadow: var(--gp-ring);
+}
+
+@media (min-width: 48rem) {
+  .gp-lightbox-img {
+    inset: 2.5rem;
+    width: calc(100% - 5rem);
+    height: calc(100% - 5rem);
+  }
+
+  .gp-lightbox-close {
+    top: 1.25rem;
+    right: 1.25rem;
+  }
+}
+
+/* ---- A note in the photo's place ---- */
+
+/* The app's note card face (NoteFace): Fraunces on the note surface under one faint tomato rule, the type sized by
+   the card's width and stepping down as the note grows. */
+/* The card's width is the container: its padding and rule are in cqi too, which a container can't use on itself. */
+.gp-notecard {
+  container-type: inline-size;
+}
+
+.gp-noteface {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  aspect-ratio: 1;
+  padding: 8cqi;
+  border-radius: var(--gp-radius-lg);
+  background: var(--sg-note);
+  box-shadow: var(--sg-shadow-soft);
+}
+
+.gp-noteface-rule {
+  flex: none;
+  height: 1px;
+  margin-bottom: 6cqi;
+  background: color-mix(in srgb, var(--sg-tomato) 25%, transparent);
+}
+
+.gp-note--face {
+  margin-top: 0;
+  gap: 0.6em;
+  font-family: var(--gp-display);
+  font-variation-settings:
+    "SOFT" 100,
+    "WONK" 0;
+  font-weight: 400;
+  color: var(--sg-ink);
+}
+
+.gp-noteface--xl .gp-note--face {
+  font-size: min(16.5cqi, 4.5rem);
+  line-height: 1.1;
+  letter-spacing: -0.015em;
+}
+
+.gp-noteface--lg .gp-note--face {
+  font-size: min(12.5cqi, 3.5rem);
+  line-height: 1.15;
+  letter-spacing: -0.01em;
+}
+
+.gp-noteface--md .gp-note--face {
+  font-size: clamp(1rem, 9.5cqi, 2.5rem);
+  line-height: 1.25;
+}
+
+.gp-noteface--sm .gp-note--face {
+  font-size: clamp(0.9375rem, 7.5cqi, 1.875rem);
+  line-height: 1.32;
+}
+
+@media (min-width: 48rem) {
+  .gp-noteface {
+    aspect-ratio: 4 / 3;
+  }
 }
 
 /* ---- The words ---- */
@@ -406,16 +496,23 @@ html:has(.gp-lightbox:target) {
     box-shadow var(--sg-duration-fast) var(--sg-ease-out);
 }
 
+/* The site's letter on a tile, as the app's LinkCard draws it. */
 .gp-model-mark {
   display: grid;
   place-items: center;
   flex: none;
-  width: 2.75rem;
-  height: 2.75rem;
-  border-radius: var(--gp-radius-md);
-  background: var(--sg-basil-soft);
-  color: var(--sg-basil-ink);
-  font-size: 1.375rem;
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 0.5rem;
+  background: color-mix(in srgb, var(--sg-ink) 5%, transparent);
+  color: var(--sg-ink-soft);
+  font-family: var(--gp-display);
+  font-variation-settings:
+    "SOFT" 100,
+    "WONK" 0;
+  font-size: var(--sg-text-title);
+  line-height: 1;
+  font-weight: 600;
 }
 
 .gp-model-words {
@@ -456,7 +553,7 @@ html:has(.gp-lightbox:target) {
   display: flex;
   flex-wrap: wrap;
   gap: 0.375rem;
-  margin-bottom: 0.625rem;
+  margin: 0.625rem 0 0.5rem;
 }
 
 .gp-trail-step {
@@ -520,6 +617,12 @@ html:has(.gp-lightbox:target) {
 
 .gp-attempt-head {
   display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+}
+
+.gp-attempt-line {
+  display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 0.5rem 0.75rem;
@@ -531,11 +634,12 @@ html:has(.gp-lightbox:target) {
   letter-spacing: -0.01em;
 }
 
-.gp-attempt-date {
-  margin-left: auto;
+/* When it was printed, then how long it took and what it used: one quiet line under the title. */
+.gp-attempt-meta {
   font-size: var(--sg-text-small);
   line-height: var(--sg-text-small-lh);
   color: var(--sg-ink-faint);
+  font-variant-numeric: tabular-nums;
 }
 
 .gp-outcome {
@@ -615,29 +719,34 @@ html:has(.gp-lightbox:target) {
   display: none;
 }
 
-.gp-results {
+/* What changed since the attempt before (the app's ChangeLine): the turning arrows, each change on semolina. */
+.gp-changeline {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.375rem;
   font-size: var(--sg-text-small);
   line-height: var(--sg-text-small-lh);
   color: var(--sg-ink-soft);
-  font-variant-numeric: tabular-nums;
 }
 
-.gp-chips-row {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 0.375rem 0.625rem;
+.gp-changeline-icon {
+  flex: none;
+  margin-top: 0.125rem;
+  font-size: 1rem;
+  color: var(--sg-semolina-ink);
 }
 
-.gp-chips-label {
-  font-size: var(--sg-text-caption);
-  line-height: var(--sg-text-caption-lh);
-  font-weight: 650;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--sg-ink-faint);
+/* A value or a change on the semolina highlight, as the app marks them. */
+.gp-mark {
+  padding: 0 0.25rem;
+  border-radius: 0.25rem;
+  background: color-mix(in srgb, var(--sg-semolina-soft) 70%, transparent);
+  color: var(--sg-ink);
+  font-weight: 500;
+  white-space: nowrap;
 }
 
+/* Tags, as the app's AttemptTags: what went wrong in tomato, what went well in basil with a tick. */
 .gp-chips {
   display: flex;
   flex-wrap: wrap;
@@ -645,12 +754,19 @@ html:has(.gp-lightbox:target) {
 }
 
 .gp-chip {
-  padding: 0.125rem 0.625rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  height: 1.75rem;
+  padding: 0 0.625rem;
   border-radius: 999px;
   font-size: var(--sg-text-small);
-  line-height: var(--sg-text-small-lh);
-  background: var(--sg-paper);
-  color: var(--sg-ink-soft);
+  line-height: 1;
+  font-weight: 600;
+}
+
+.gp-chip .gp-icon {
+  font-size: 0.875rem;
 }
 
 .gp-chip--tomato {
@@ -663,20 +779,21 @@ html:has(.gp-lightbox:target) {
   color: var(--sg-basil-ink);
 }
 
-/* The settings someone would print it with, on a note card's face. */
+/* The details under an attempt's story (the app's attempt entry): after a hairline, straight on the card. */
+.gp-details {
+  padding-top: 0.875rem;
+  box-shadow: inset 0 1px 0 var(--sg-hairline);
+}
+
+/* The settings someone would print it with: the filaments over a grid of label and value. */
 .gp-settings {
   display: flex;
   flex-direction: column;
   gap: 0.875rem;
-  padding: 1rem;
-  border-radius: var(--gp-radius-md);
-  background: var(--sg-note);
 }
 
 .gp-block .gp-settings {
-  margin-top: 0.75rem;
-  background: var(--sg-cream);
-  box-shadow: var(--sg-shadow-soft);
+  margin-top: 1rem;
 }
 
 .gp-filaments {
@@ -787,45 +904,20 @@ html:has(.gp-lightbox:target) {
   letter-spacing: -0.01em;
 }
 
+/* What we changed, as the app's TwistChanges: plain lines, the name in ink and the value on semolina. */
 .gp-changes {
-  margin-top: 0.75rem;
-  border-radius: var(--gp-radius-lg);
-  background: var(--sg-cream);
-  box-shadow: var(--sg-shadow-soft);
+  margin-top: 0.5rem;
 }
 
 .gp-changes li {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.25rem 0.625rem;
-  padding: 0.875rem 1rem;
-}
-
-.gp-changes li + li {
-  box-shadow: inset 0 1px 0 var(--sg-hairline);
+  padding: 0.5rem 0;
+  color: var(--sg-ink-soft);
+  overflow-wrap: anywhere;
 }
 
 .gp-change-name {
   font-weight: 600;
-}
-
-.gp-change-value {
-  padding: 0.0625rem 0.625rem;
-  border-radius: 999px;
-  background: var(--sg-semolina-soft);
-  color: var(--sg-semolina-ink);
-  font-size: var(--sg-text-small);
-  line-height: var(--sg-text-small-lh);
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
-}
-
-.gp-change-note {
-  flex-basis: 100%;
-  font-size: var(--sg-text-small);
-  line-height: var(--sg-text-small-lh);
-  color: var(--sg-ink-soft);
+  color: var(--sg-ink);
 }
 
 .gp-recipe-name {
