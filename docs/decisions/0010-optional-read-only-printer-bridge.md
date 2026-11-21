@@ -2,7 +2,7 @@
 
 Status: Accepted (built: `bridge/`, see [docs/bridge.md](../bridge.md))
 
-**Decision:** Carl Oscar chose to build a printer bridge: a small program on a home computer that listens to the X2D over the local network (its local MQTT, FTP and camera; the printer can stay in cloud mode, see [0074](0074-the-bridge-listens-in-cloud-mode.md)). It starts and finishes attempts, keeps the AMS slots in sync, and saves a camera frame as the attempt's photo. It is read-only: it never sends a command to the printer. It replaces the earlier "no connection to the printer, for now".
+**Decision:** Carl Oscar chose to build a printer bridge: a small program on a home computer that listens to the X2D over the local network (its local MQTT, FTP and camera; the printer can stay in cloud mode, see [0074](0074-the-bridge-listens-in-cloud-mode.md)). It starts and finishes attempts, keeps the AMS slots in sync, and saves a camera frame as the attempt's photo. It is read-only: it listens and asks the printer for its status (the status request `pushall`); it can't start, stop or change a print. It replaces the earlier "no connection to the printer, for now".
 
 **Why:** the moments the journal cares about (a print starting, finishing, failing) are visible on the printer, so people shouldn't have to log them by hand. Keeping it local and read-only means it needs no Bambu account and can't interfere with a print.
 
