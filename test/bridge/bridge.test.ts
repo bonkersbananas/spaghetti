@@ -190,6 +190,17 @@ describe("a printer in cloud mode that refuses pushall", () => {
     await until(() => bridge.state.complete, "the state pieced together");
   });
 
+  it("counts what already came once it stops waiting for a whole report", async () => {
+    const bridge = runBridge();
+    await until(() => printer.published.length === 1, "the request");
+    const { ams, ...withoutAms } = (fullReport({ state: "IDLE" }) as { print: Record<string, unknown> }).print;
+    await printer.replay([delta(withoutAms), delta({ ams })]);
+    await settle(bridge);
+    expect(bridge.state.complete).toBe(false);
+    bridge.listenOnly();
+    expect(bridge.state.complete).toBe(true);
+  });
+
   it("isn't taken for a refusal when the link restarts itself", async () => {
     const bridge = runBridge();
     await until(() => printer.published.length === 1, "the first request");

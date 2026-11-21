@@ -132,8 +132,8 @@ export class Bridge {
   listenOnly() {
     if (this.listening) return;
     this.listening = true;
-    // What has come so far may already be whole.
-    this.onReport("{}");
+    // What has come so far may already be whole: an empty status report re-reads it.
+    this.onReport(JSON.stringify({ print: { command: "push_status" } }));
   }
 
   onConnection(connected: boolean) {
