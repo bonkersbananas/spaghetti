@@ -21,6 +21,8 @@ import { DownloadIcon, SlicerFileIcon, UndoIcon } from "@/components/ui/icons";
 import { SegmentedControl } from "@/components/ui/SegmentedControl";
 import { Sheet } from "@/components/ui/Sheet";
 import { toast } from "@/components/ui/Toast";
+import { modelAccept } from "@/lib/model-pick";
+import { takeModels } from "@/lib/take-models";
 import { MeshPreview } from "./MeshPreview";
 
 /** What the sheet hands back when the adapted file is made: the changes, in the twist's words. */
@@ -197,11 +199,11 @@ export default function AdaptSheet({
         <input
           ref={picker}
           type="file"
-          accept=".stl,model/stl"
+          accept={modelAccept("stl")}
           hidden
           data-testid="adapt-file-input"
           onChange={(event) => {
-            void choose(event.target.files?.[0]);
+            void takeModels([...(event.target.files ?? [])].slice(0, 1), (file) => void choose(file), "stl");
             event.target.value = "";
           }}
         />

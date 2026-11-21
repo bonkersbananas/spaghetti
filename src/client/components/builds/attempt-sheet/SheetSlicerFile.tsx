@@ -10,11 +10,12 @@ import { lazy, type ReactNode, Suspense, useEffect, useRef, useState } from "rea
 import { Button } from "@/components/ui/Button";
 import { useFilePicker } from "@/components/ui/PhotoTiles";
 import { toast } from "@/components/ui/Toast";
+import { modelAccept } from "@/lib/model-pick";
 import { addSpool } from "@/lib/pantry";
 import { spoolsQuery } from "@/lib/pantry-queries";
 import { fileThumbSrc } from "@/lib/previews";
 import { sessionQuery } from "@/lib/queries";
-import { SLICER_ACCEPT, useSlicerDropTarget } from "@/lib/slicer-drop";
+import { useSlicerDropTarget } from "@/lib/slicer-drop";
 import {
   fileSettings,
   formatBytes,
@@ -24,6 +25,7 @@ import {
   type SlicerFileDraft,
 } from "@/lib/slicer-files";
 import type { SliceOutcome } from "@/lib/slicing/slice-model";
+import { takeModels } from "@/lib/take-models";
 import { useIsDesktop } from "@/lib/use-media-query";
 import { AddSlicerFile, FileCard, PlateChooser, PlateThumb, UnknownFilaments, usePlateThumbUrl } from "../SlicerFile";
 import { formatMinutes } from "../settings";
@@ -145,8 +147,8 @@ export function useSlicerFile({
     else apply(draft, draft.plates[0]?.index ?? null, true, sliced);
   };
   const picker = useFilePicker({
-    accept: SLICER_ACCEPT,
-    onFiles: ([file]) => file && void receive(file),
+    accept: modelAccept(),
+    onFiles: (files) => void takeModels(files.slice(0, 1), (file) => void receive(file)),
     testId: "slicer-file-input",
   });
   useSlicerDropTarget((file) => void receive(file), open);

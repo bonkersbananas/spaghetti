@@ -82,3 +82,25 @@ test("a slicer file kept with an idea shows, counts as a model, can go and come 
     })
     .toEqual([true, true, true, true]);
 });
+
+test("picking a file that isn't a model says so and still adds the models picked with it", async ({ page }) => {
+  await signIn(page);
+  const id = crypto.randomUUID();
+  await page.request.post("/api/items", {
+    headers: { Origin: origin(page) },
+    data: { id, title: "Picker", note: "" },
+  });
+  await page.goto(`/ideas/${id}`);
+  // setInputFiles ignores `accept`, as iOS's picker (which has none) does.
+  await page.getByTestId("idea-file-input").setInputFiles([
+    { name: "holiday.jpg", mimeType: "image/jpeg", buffer: Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0, 16]) },
+    { name: "fake.3mf", mimeType: "application/octet-stream", buffer: Buffer.from("not a zip") },
+    { name: TUGBOAT_FILE_NAME, mimeType: "application/octet-stream", buffer: Buffer.from(tugboatFile()) },
+  ]);
+  await expect(page.getByText("That isn't a model file")).toHaveCount(1);
+  await expect(page.getByText("Spaghetti takes .stl and .3mf.")).toBeVisible();
+  const files = page.getByRole("region", { name: /^Files/ });
+  await expect(files.getByText(TUGBOAT_FILE_NAME)).toBeVisible();
+  await expect(files.getByText("holiday.jpg")).toHaveCount(0);
+  await expect(files.getByText("fake.3mf")).toHaveCount(0);
+});
