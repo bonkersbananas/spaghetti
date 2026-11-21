@@ -1,3 +1,6 @@
+import { hex, parseProject, parseSliceInfo } from "../../shared/gcode/slice-config.ts";
+import { crc32 } from "../../shared/threemf/stl-wrap.ts";
+
 /**
  * The plate's toolpaths out of a sliced `.gcode.3mf`, for the shared page's 3D view (decision 0077): a zip of its own
  * that holds only what the viewer reads (shared/gcode/read-file.ts) for one plate: that plate's G-code, the slice's
@@ -5,9 +8,12 @@
  * (`3D/3dmodel.model`, often half the file), the other plates, their pictures and everything else stay behind, so a
  * guest's browser never receives the model itself, and a phone fetches about half as much.
  *
- * Nothing is inflated or deflated here: the entries are copied as they are compressed, read from R2 by range (the
- * central directory at the end of the file says where each one is), under fresh local headers and a central
- * directory of their own. The Worker spends almost no CPU on it, and a 100 MB file never sits in its memory.
+ * The G-code is copied as it is compressed, read from R2 by range (the central directory at the end of the file says
+ * where each entry is), under a fresh local header and a central directory of its own: the Worker spends almost no
+ * CPU on it, and a 100 MB file never sits in its memory. The two configs are small, and a desktop slicer's carry far
+ * more than colours (a print host's address and password, a post-processing script's path in someone's home folder,
+ * preset names, every plate's objects), so they are inflated here and written anew, stored, with only what the
+ * viewer reads (shared/gcode/slice-config.ts): the plate's time, its filaments' colours, types and nozzles.
  */
 
 const EOCD = 0x06054b50;
@@ -20,8 +26,19 @@ const MAX_COMMENT = 0xffff;
 const MAX_DIRECTORY = 4 * 1024 * 1024;
 const U32 = 0xffffffff;
 
+const SLICE_INFO = "Metadata/slice_info.config";
+const PROJECT = "Metadata/project_settings.config";
 /** What the viewer reads besides the plate's G-code: the slice's figures and filaments, and the project's colours. */
-const KEPT = new Set(["Metadata/slice_info.config", "Metadata/project_settings.config"]);
+const CONFIGS = new Set([SLICE_INFO, PROJECT]);
+/**
+ * A slice's configs are a few kilobytes, a project's settings a few hundred: one bigger than this, packed or not, is
+ * left out unread, so a crafted file can't make the Worker inflate much.
+ */
+export const MAX_CONFIG = 1024 * 1024;
+/** More filaments than any printer takes: a list past it is cut there. */
+const MAX_FILAMENTS = 64;
+/** A filament's type as the viewer shows it: a material's short name (PLA, PETG-CF, PLA Silk+), never a path. */
+const TYPE = /^[A-Za-z0-9][\w .+-]{0,31}$/;
 
 /** A stored file read by range: R2 in the Worker (index.tsx `r2Source`), bytes in a test. */
 export interface RangedSource {
@@ -147,10 +164,107 @@ export interface Toolpaths {
   pieces: Piece[];
 }
 
+/** An entry's data, packed or stored: inflated with the platform's own stream, or null past `limit` or when broken. */
+async function unpacked(bytes: Uint8Array, method: number, limit: number): Promise<Uint8Array | null> {
+  if (method === 0) return bytes.length <= limit ? bytes : null;
+  const reader = new Blob([new Uint8Array(bytes)])
+    .stream()
+    .pipeThrough(new DecompressionStream("deflate-raw"))
+    .getReader();
+  const parts: Uint8Array[] = [];
+  let size = 0;
+  try {
+    for (;;) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      size += value.length;
+      if (size > limit) {
+        await reader.cancel();
+        return null;
+      }
+      parts.push(value);
+    }
+  } catch {
+    return null;
+  }
+  const out = new Uint8Array(size);
+  let at = 0;
+  for (const part of parts) {
+    out.set(part, at);
+    at += part.length;
+  }
+  return out;
+}
+
+/** The plate's block of slice_info.config, with only what the viewer reads: its time and its filaments. */
+export function plainSliceInfo(xml: string, plate: number): string {
+  const info = parseSliceInfo(xml, plate);
+  const lines = [`<metadata key="index" value="${plate}"/>`];
+  if (info.prediction) lines.push(`<metadata key="prediction" value="${info.prediction}"/>`);
+  if (info.nozzles?.length) {
+    lines.push(`<metadata key="filament_maps" value="${info.nozzles.slice(0, MAX_FILAMENTS).join(" ")}"/>`);
+  }
+  for (const [id, filament] of [...info.filaments].slice(0, MAX_FILAMENTS)) {
+    const type = filament.type && TYPE.test(filament.type) ? ` type="${filament.type}"` : "";
+    const color = filament.color ? ` color="${filament.color}"` : "";
+    lines.push(`<filament id="${id}"${type}${color}/>`);
+  }
+  return `<?xml version="1.0" encoding="UTF-8"?>\n<config>\n  <plate>\n${lines.map((line) => `    ${line}\n`).join("")}  </plate>\n</config>\n`;
+}
+
+/** project_settings.config with only the filaments' colours, types and nozzles; null when it has none of them. */
+export function plainProject(json: string): string | null {
+  const project = parseProject(json);
+  const out: Record<string, string[]> = {};
+  const each = (values: string[], keep: (value: string) => string | undefined) =>
+    values.slice(0, MAX_FILAMENTS).map((value) => keep(value) ?? "");
+  if (project.colors.length) out.filament_colour = each(project.colors, hex);
+  if (project.types.length) out.filament_type = each(project.types, (type) => (TYPE.test(type) ? type : undefined));
+  if (project.nozzles.length) out.filament_map = each(project.nozzles, (n) => (/^\d{1,2}$/.test(n) ? n : undefined));
+  return Object.keys(out).length ? JSON.stringify(out) : null;
+}
+
+/** What goes into the guest's zip: an entry's header fields, and its data as bytes made here or a range of the file. */
+interface Packed {
+  name: Uint8Array;
+  method: number;
+  time: number;
+  date: number;
+  crc: number;
+  compressed: number;
+  size: number;
+  data: Piece;
+}
+
+const encoder = new TextEncoder();
+
+/** A config written anew from the file's own, stored; null when there is nothing the viewer would read in it. */
+async function rewritten(source: RangedSource, entry: Entry, name: string, plate: number): Promise<Uint8Array | null> {
+  if ((entry.method !== 0 && entry.method !== 8) || entry.flags & 1) return null;
+  if (!(entry.compressed <= MAX_CONFIG && entry.size <= MAX_CONFIG)) return null;
+  const start = await dataStart(source, entry);
+  if (start === null) return null;
+  const bytes = await unpacked(await source.read(start, entry.compressed), entry.method, MAX_CONFIG);
+  if (!bytes) return null;
+  const text = new TextDecoder().decode(bytes);
+  const plain = name === SLICE_INFO ? plainSliceInfo(text, plate) : plainProject(text);
+  return plain === null ? null : encoder.encode(plain);
+}
+
+/** Where an entry's data starts: after its own local header, whose name and extra field may differ from the directory's. */
+async function dataStart(source: RangedSource, entry: Entry): Promise<number | null> {
+  if (entry.offset + 30 > source.size) return null;
+  const local = view(await source.read(entry.offset, 30));
+  if (local.getUint32(0, true) !== LOCAL) return null;
+  const start = entry.offset + 30 + local.getUint16(26, true) + local.getUint16(28, true);
+  return start + entry.compressed <= source.size ? start : null;
+}
+
 /**
- * What a guest's 3D view gets of a sliced file's plate: the zip's layout (headers made here, compressed data by
- * range), or null when the file has no G-code for that plate, isn't a zip it can read, or keeps its entries in a
- * way the viewer couldn't read either (only stored and deflated entries are; nothing encrypted).
+ * What a guest's 3D view gets of a sliced file's plate: the zip's layout (headers and configs made here, the G-code by
+ * range), or null when the file has no G-code for that plate, isn't a zip it can read, lists an entry twice, or keeps
+ * its G-code in a way the viewer couldn't read either (only stored and deflated entries are; nothing encrypted). A
+ * config it can't read, or one past MAX_CONFIG, is left out: the view then shows the slicer's own colours.
  */
 export async function plateToolpaths(source: RangedSource, plate: number): Promise<Toolpaths | null> {
   if (source.size < 22) return null;
@@ -158,51 +272,71 @@ export async function plateToolpaths(source: RangedSource, plate: number): Promi
   if (!where) return null;
   const entries = entriesOf(await source.read(where.offset, where.size));
   if (!entries) return null;
-  const gcode = `Metadata/plate_${plate}.gcode`;
+  const gcodeName = `Metadata/plate_${plate}.gcode`;
   const kept = entries.filter((entry) => {
     const name = nameOf(entry);
-    return name === gcode || KEPT.has(name);
+    return name === gcodeName || CONFIGS.has(name);
   });
   // A slicer writes each of these once. A directory that lists one twice (or 5,000 times, each a range read and a
   // copy in the answer) isn't a slicer's file: nothing, rather than a guest's one request costing thousands of reads.
   const names = kept.map(nameOf);
-  if (names.filter((name) => name === gcode).length !== 1 || new Set(names).size !== names.length) return null;
+  if (names.filter((name) => name === gcodeName).length !== 1 || new Set(names).size !== names.length) return null;
+  const gcode = kept[names.indexOf(gcodeName)] as Entry;
   // The viewer's unzip reads stored and deflated entries, unencrypted (bit 0), and nothing past 4 GB.
   if (
-    kept.some(
-      (entry) =>
-        (entry.method !== 0 && entry.method !== 8) ||
-        entry.flags & 1 ||
-        !Number.isFinite(entry.compressed + entry.size + entry.offset) ||
-        entry.compressed >= U32 ||
-        entry.size >= U32,
-    )
+    (gcode.method !== 0 && gcode.method !== 8) ||
+    gcode.flags & 1 ||
+    !Number.isFinite(gcode.compressed + gcode.size + gcode.offset) ||
+    gcode.compressed >= U32 ||
+    gcode.size >= U32
   ) {
     return null;
   }
-  // Each entry's data starts after its own local header, whose name and extra field may differ from the directory's.
-  const starts = await Promise.all(
-    kept.map(async (entry) => {
-      if (entry.offset + 30 > source.size) return null;
-      const local = view(await source.read(entry.offset, 30));
-      if (local.getUint32(0, true) !== LOCAL) return null;
-      const start = entry.offset + 30 + local.getUint16(26, true) + local.getUint16(28, true);
-      return start + entry.compressed <= source.size ? start : null;
+  const [start, ...configs] = await Promise.all([
+    dataStart(source, gcode),
+    ...[SLICE_INFO, PROJECT].map(async (name) => {
+      const entry = kept[names.indexOf(name)];
+      const bytes = entry ? await rewritten(source, entry, name, plate).catch(() => null) : null;
+      return bytes ? { name, bytes } : null;
     }),
-  );
-  if (starts.some((start) => start === null)) return null;
+  ]);
+  if (start === null || start === undefined) return null;
+
+  const packed: Packed[] = [
+    {
+      name: encoder.encode(gcodeName),
+      method: gcode.method,
+      time: gcode.time,
+      date: gcode.date,
+      crc: gcode.crc,
+      compressed: gcode.compressed,
+      size: gcode.size,
+      data: { offset: start, length: gcode.compressed },
+    },
+  ];
+  for (const config of configs) {
+    if (!config) continue;
+    packed.push({
+      name: encoder.encode(config.name),
+      method: 0,
+      time: gcode.time,
+      date: gcode.date,
+      crc: crc32(config.bytes),
+      compressed: config.bytes.length,
+      size: config.bytes.length,
+      data: config.bytes,
+    });
+  }
 
   const pieces: Piece[] = [];
   const central: Uint8Array[] = [];
   let at = 0;
-  kept.forEach((entry, index) => {
-    // The sizes are in the header, so no data descriptor follows (bit 3 off); UTF-8 names keep bit 11.
-    const flags = entry.flags & 0x0800;
+  for (const entry of packed) {
+    // The sizes are in the header, so no data descriptor follows (bit 3 off); the names are ASCII.
     const header = new Uint8Array(30 + entry.name.length);
     const local = view(header);
     local.setUint32(0, LOCAL, true);
     local.setUint16(4, 20, true);
-    local.setUint16(6, flags, true);
     local.setUint16(8, entry.method, true);
     local.setUint16(10, entry.time, true);
     local.setUint16(12, entry.date, true);
@@ -211,14 +345,13 @@ export async function plateToolpaths(source: RangedSource, plate: number): Promi
     local.setUint32(22, entry.size, true);
     local.setUint16(26, entry.name.length, true);
     header.set(entry.name, 30);
-    pieces.push(header, { offset: starts[index] as number, length: entry.compressed });
+    pieces.push(header, entry.data);
 
     const record = new Uint8Array(46 + entry.name.length);
     const row = view(record);
     row.setUint32(0, CENTRAL, true);
     row.setUint16(4, 20, true);
     row.setUint16(6, 20, true);
-    row.setUint16(8, flags, true);
     row.setUint16(10, entry.method, true);
     row.setUint16(12, entry.time, true);
     row.setUint16(14, entry.date, true);
@@ -230,13 +363,13 @@ export async function plateToolpaths(source: RangedSource, plate: number): Promi
     record.set(entry.name, 46);
     central.push(record);
     at += header.length + entry.compressed;
-  });
+  }
   const directorySize = central.reduce((total, record) => total + record.length, 0);
   const end = new Uint8Array(22);
   const tail = view(end);
   tail.setUint32(0, EOCD, true);
-  tail.setUint16(8, kept.length, true);
-  tail.setUint16(10, kept.length, true);
+  tail.setUint16(8, packed.length, true);
+  tail.setUint16(10, packed.length, true);
   tail.setUint32(12, directorySize, true);
   tail.setUint32(16, at, true);
   pieces.push(...central, end);

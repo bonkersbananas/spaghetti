@@ -84,8 +84,17 @@ const MESH = "<model><mesh>the designer's licensed mesh</mesh></model>";
 function slicedFile(plates = [1]) {
   return zipSync({
     "3D/3dmodel.model": strToU8(MESH),
-    "Metadata/slice_info.config": strToU8('<config><plate><metadata key="index" value="1"/></plate></config>'),
-    "Metadata/project_settings.config": strToU8('{"filament_colour":["#F4C430"]}'),
+    "Metadata/slice_info.config": strToU8(
+      '<config><plate><metadata key="index" value="1"/><object identify_id="7" name="Gift for Alex"/></plate></config>',
+    ),
+    // A desktop slicer's settings carry a print host's secrets and paths in someone's home folder.
+    "Metadata/project_settings.config": strToU8(
+      JSON.stringify({
+        filament_colour: ["#F4C430"],
+        printhost_apikey: "secret-api-key",
+        post_process: ["C:\\Users\\someone\\tidy.py"],
+      }),
+    ),
     "Metadata/plate_1.png": png(),
     ...Object.fromEntries(
       plates.map((n) => [`Metadata/plate_${n}.gcode`, strToU8(`; plate ${n}\nG28\nG1 X10 Y10 Z0.2 E1\n`)]),
@@ -227,6 +236,13 @@ describe("a shared thing's models", () => {
       "Metadata/slice_info.config",
     ]);
     expect(new TextDecoder().decode(bytes)).not.toContain("licensed mesh");
+    // The configs are written anew with only what the view reads: no secrets, paths or objects' names.
+    const files = unzipSync(bytes);
+    expect(JSON.parse(new TextDecoder().decode(files["Metadata/project_settings.config"]))).toEqual({
+      filament_colour: ["#f4c430"],
+    });
+    for (const secret of ["secret-api-key", "Users", "Alex"])
+      expect(new TextDecoder().decode(bytes)).not.toContain(secret);
   });
 
   it("isn't a file to open or save: a navigation, a download or another site's page gets the 404", async () => {

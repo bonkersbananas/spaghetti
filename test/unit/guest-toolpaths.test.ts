@@ -1,6 +1,7 @@
+import { crc32 } from "node:zlib";
 import { strToU8, unzipSync, Zip, ZipDeflate, ZipPassThrough, zipSync } from "fflate";
 import { describe, expect, it } from "vitest";
-import { tugboatFile } from "../../e2e/fixtures/gcode-tugboat.ts";
+import { tugboatFile, tugboatGcode } from "../../e2e/fixtures/gcode-tugboat.ts";
 import { partsSlicerFile } from "../../e2e/fixtures/slicer-file.ts";
 import { readToolpaths } from "../../src/shared/gcode/read-file.ts";
 import { plateToolpaths, type RangedSource, streamToolpaths } from "../../src/worker/guest/toolpaths.ts";
@@ -93,6 +94,57 @@ function listedOften(zip: Uint8Array, name: string, times: number, as = name): U
   return out;
 }
 
+/** A zip's entries as written, walking its local headers: name, method, CRC and data. */
+function localEntries(zip: Uint8Array) {
+  const data = new DataView(zip.buffer, zip.byteOffset, zip.byteLength);
+  const out: { name: string; method: number; crc: number; data: Uint8Array }[] = [];
+  let at = 0;
+  while (data.getUint32(at, true) === 0x04034b50) {
+    const length = data.getUint32(at + 18, true);
+    const start = at + 30 + data.getUint16(at + 26, true) + data.getUint16(at + 28, true);
+    out.push({
+      name: new TextDecoder().decode(zip.subarray(at + 30, at + 30 + data.getUint16(at + 26, true))),
+      method: data.getUint16(at + 8, true),
+      crc: data.getUint32(at + 14, true),
+      data: zip.subarray(start, start + length),
+    });
+    at = start + length;
+  }
+  return out;
+}
+
+/** A desktop slicer's file as a hostile or careless upload has it: a print host's secrets, a home folder, two plates. */
+function desktopFile() {
+  // The tugboat's two filaments, at 1 mm layers so the test stays quick.
+  const gcode = (_plate: number) => strToU8(tugboatGcode({ layerHeight: 1 }));
+  const project = {
+    filament_colour: ["#F4C430FF", "#2E5E4E"],
+    filament_type: ["PLA", "PETG-CF"],
+    filament_map: ["1", "2"],
+    filament_settings_id: ["Marie's silk PLA", "Bambu PETG-CF @BBL X2D"],
+    print_host: "192.168.1.20",
+    printhost_user: "marie",
+    printhost_password: "hunter2-password",
+    printhost_apikey: "secret-api-key",
+    post_process: ["C:\\Users\\marie.svensson\\scripts\\tidy.py"],
+    printer_notes: "Kitchen printer, the one by the window",
+  };
+  const plateBlock = (n: number, object: string) =>
+    `<plate>\n <metadata key="index" value="${n}"/>\n <metadata key="prediction" value="${n * 61.4}"/>\n <metadata key="filament_maps" value="1 2"/>\n <object identify_id="9${n}" name="${object}" skipped="false" />\n <filament id="1" tray_info_idx="GFA00" type="PLA" color="#F4C430" used_m="1.2" used_g="3.4" />\n <filament id="2" tray_info_idx="GFG98" type="PETG-CF" color="#2E5E4E" used_m="0.5" used_g="1.1" />\n <warning msg="bed_temperature_too_high_than_filament" level="1" error_code ="1000C001"  />\n</plate>`;
+  return zipSync({
+    "3D/3dmodel.model": strToU8("<model>licensed mesh</model>"),
+    "Metadata/plate_1.gcode": gcode(1),
+    "Metadata/plate_2.gcode": gcode(2),
+    "Metadata/slice_info.config": strToU8(
+      `<?xml version="1.0" encoding="UTF-8"?>\n<config>\n <header><header_item key="X-BBL-Client-Version" value="02.03.00.70"/></header>\n${plateBlock(1, "Birthday gift for Alex")}\n${plateBlock(2, "Secret second plate")}\n</config>\n`,
+    ),
+    "Metadata/project_settings.config": strToU8(JSON.stringify(project)),
+    "Metadata/model_settings.config": strToU8(
+      '<config><plate><metadata key="plater_name" value="Alex"/></plate></config>',
+    ),
+  });
+}
+
 const read = (bytes: Uint8Array, plate: number) =>
   readToolpaths(new Blob([new Uint8Array(bytes)]), { plate, keepLayers: true, maxSegments: 2_000_000 });
 
@@ -165,9 +217,77 @@ describe("a plate's toolpaths for a guest", () => {
     const { out } = await repack(bytes, 1);
     const files = unzipSync(out as Uint8Array);
     expect(new TextDecoder().decode(files["Metadata/plate_1.gcode"])).toBe(new TextDecoder().decode(gcode));
-    expect(new TextDecoder().decode(files["Metadata/slice_info.config"])).toBe("<config/>");
+    expect(new TextDecoder().decode(files["Metadata/slice_info.config"])).toContain(
+      '<metadata key="index" value="1"/>',
+    );
     expect(files["3D/3dmodel.model"]).toBeUndefined();
     expect(new TextDecoder().decode(out as Uint8Array)).not.toContain("secret mesh");
+  });
+
+  it("writes the configs anew, stored, with only what the viewer reads of this plate", async () => {
+    const file = desktopFile();
+    const { out } = await repack(file, 1);
+    const entries = localEntries(out as Uint8Array);
+    expect(entries.map((entry) => entry.name)).toEqual([
+      "Metadata/plate_1.gcode",
+      "Metadata/slice_info.config",
+      "Metadata/project_settings.config",
+    ]);
+    // The configs are stored, with their own CRC, so anything can unzip them.
+    for (const entry of entries.slice(1)) {
+      expect(entry.method, entry.name).toBe(0);
+      expect(entry.crc, entry.name).toBe(crc32(entry.data));
+    }
+    const text = new TextDecoder().decode(out as Uint8Array);
+    for (const secret of [
+      "printhost",
+      "print_host",
+      "hunter2",
+      "secret-api-key",
+      "Users",
+      "marie",
+      "Marie",
+      "window",
+    ]) {
+      expect(text, secret).not.toContain(secret);
+    }
+    // Only this plate's block, without its objects' names or the slicer's warnings.
+    for (const other of ["Alex", "Secret second plate", "identify_id", "warning", "X-BBL-Client-Version"]) {
+      expect(text, other).not.toContain(other);
+    }
+    const files = unzipSync(out as Uint8Array);
+    expect(JSON.parse(new TextDecoder().decode(files["Metadata/project_settings.config"]))).toEqual({
+      filament_colour: ["#f4c430", "#2e5e4e"],
+      filament_type: ["PLA", "PETG-CF"],
+      filament_map: ["1", "2"],
+    });
+    // And the view reads it exactly as it reads the whole file.
+    const whole = await read(file, 1);
+    const part = await read(out as Uint8Array, 1);
+    expect(part.filaments).toEqual(whole.filaments);
+    expect(part.filaments.map((f) => f.color)).toEqual(["#f4c430", "#2e5e4e"]);
+    expect(part.totalSeconds).toBe(whole.totalSeconds);
+    expect(part.layers.length).toBe(whole.layers.length);
+  });
+
+  it("leaves out a config that unpacks past a megabyte, or that can't be read, and still has the plate", async () => {
+    const big = zipSync({
+      "Metadata/plate_1.gcode": strToU8("; HEADER_BLOCK_START\n; HEADER_BLOCK_END\nG28\n"),
+      // 8 MB of spaces packs into a few kilobytes: a crafted file's way to make the Worker inflate a lot.
+      "Metadata/project_settings.config": strToU8(`{"filament_colour":["#ffffff"]${" ".repeat(8 * 1024 * 1024)}}`),
+      "Metadata/slice_info.config": strToU8("<config/>"),
+    });
+    expect(big.length).toBeLessThan(100_000);
+    const { out } = await repack(big, 1);
+    expect(Object.keys(unzipSync(out as Uint8Array)).sort()).toEqual([
+      "Metadata/plate_1.gcode",
+      "Metadata/slice_info.config",
+    ]);
+    const broken = zipSync({
+      "Metadata/plate_1.gcode": strToU8("; HEADER_BLOCK_START\n; HEADER_BLOCK_END\nG28\n"),
+      "Metadata/project_settings.config": strToU8("not json, just a slicer's notes"),
+    });
+    expect(Object.keys(unzipSync((await repack(broken, 1)).out as Uint8Array))).toEqual(["Metadata/plate_1.gcode"]);
   });
 
   it("has nothing for a directory that lists an entry more than once, and reads only a few ranges to find out", async () => {
