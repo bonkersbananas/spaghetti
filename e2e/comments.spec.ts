@@ -363,6 +363,35 @@ test("a print on the bed shows the other person's new comment on Builds, as the 
   await sams.context.close();
 });
 
+test("a comment sent before the thread has loaded stays in it when the answer comes", { tag: "@phone" }, async ({
+  page,
+  isMobile,
+}) => {
+  const id = await newIdea(page);
+  // Hold the thread's first answer: the field is there before it, and the answer (without the new comment) comes after.
+  let release = () => {};
+  const held = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  await page.route(`**/api/items/${id}/comments`, async (route) => {
+    if (route.request().method() !== "GET") return route.fallback();
+    const response = await route.fetch();
+    await held;
+    await route.fulfill({ response });
+  });
+  await page.goto(`/ideas/${id}`);
+  const field = await openComposer(page, isMobile);
+  await field.fill("Too early?");
+  await send(page, isMobile);
+  await expect(thread(page).getByText("Too early?")).toBeVisible();
+  release();
+  await expect(thread(page).getByText("Too early?")).toBeVisible();
+  await expect
+    .poll(async () => (await (await page.request.get(`/api/items/${id}/comments`)).json()).comments.length)
+    .toBe(1);
+  await expect(thread(page).getByText("Too early?")).toHaveCount(1);
+});
+
 test("a comment edited while it is still being sent keeps the edit", { tag: "@phone" }, async ({ page, isMobile }) => {
   const id = await newIdea(page);
   // Hold the server's answer to the send (a slow connection): the edit comes before it.

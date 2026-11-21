@@ -15,7 +15,15 @@ import { unreadQuery } from "./unread-comments";
 export const commentsQuery = (itemId: string) =>
   queryOptions({
     queryKey: ["comments", itemId] as const,
-    queryFn: () => api<CommentsResponse>(`/items/${itemId}/comments`),
+    queryFn: async () => {
+      const answer = await api<CommentsResponse>(`/items/${itemId}/comments`);
+      // An answer that was on its way while a comment was sent (or one the server read before the send landed) doesn't
+      // have it yet: it stays in the thread until its own answer comes.
+      const unsent = [...unsentComments.values()].filter(
+        (c) => c.itemId === itemId && !answer.comments.some((known) => known.id === c.id),
+      );
+      return unsent.length ? { ...answer, comments: [...answer.comments, ...unsent] } : answer;
+    },
     staleTime: 30_000,
     gcTime: 7 * 24 * 60 * 60 * 1000,
   });
@@ -71,6 +79,9 @@ const withComments = (queryClient: QueryClient, itemId: string, change: (list: C
     current ? { ...current, comments: change(current.comments) } : current,
   );
 
+/** Comments sent and not yet answered, as they are in the thread now (an edit updates them): see commentsQuery. */
+const unsentComments = new Map<string, Comment>();
+
 const SEND_RETRIES = [1500, 4000];
 
 /** Comments on their way to the server, by id: a change to one (edit, delete) goes after its send, or it would find nothing. */
@@ -106,7 +117,11 @@ export function sendComment(queryClient: QueryClient, itemId: string, me: string
   if (!body || !canEdit()) return false;
   const id = crypto.randomUUID();
   const comment: Comment = { id, itemId, authorId: me, via: null, body, createdAt: Date.now(), editedAt: null };
-  withComments(queryClient, itemId, (list) => [...list, comment]);
+  unsentComments.set(id, comment);
+  // Before the thread has loaded there is no copy to add to: it starts as this one comment, and the answer joins it.
+  if (!queryClient.getQueryData(commentsQuery(itemId).queryKey)) {
+    queryClient.setQueryData<CommentsResponse>(commentsQuery(itemId).queryKey, { comments: [comment], readAt: null });
+  } else withComments(queryClient, itemId, (list) => [...list, comment]);
   setDraft(itemId, "");
   const done = (async () => {
     for (let attempt = 0; ; attempt++) {
@@ -151,7 +166,10 @@ export function sendComment(queryClient: QueryClient, itemId: string, me: string
     }
   })();
   sending.set(id, done);
-  void done.finally(() => sending.delete(id));
+  void done.finally(() => {
+    sending.delete(id);
+    unsentComments.delete(id);
+  });
   return true;
 }
 
@@ -160,6 +178,7 @@ export function editComment(queryClient: QueryClient, comment: Comment, text: st
   const body = text.trim();
   if (!body || body === comment.body || !canEdit()) return;
   const edited = { ...comment, body, editedAt: Date.now() };
+  if (unsentComments.has(comment.id)) unsentComments.set(comment.id, edited);
   withComments(queryClient, comment.itemId, (list) => list.map((c) => (c.id === comment.id ? edited : c)));
   afterSend(comment.id)
     .then(() => api<{ comment: Comment }>(`/comments/${comment.id}`, { method: "PATCH", json: { body } }))
@@ -178,6 +197,7 @@ export function editComment(queryClient: QueryClient, comment: Comment, text: st
 /** Deletes your comment at once and offers Undo. */
 export function deleteComment(queryClient: QueryClient, comment: Comment) {
   if (!canEdit()) return;
+  unsentComments.delete(comment.id);
   withComments(queryClient, comment.itemId, (list) => list.filter((c) => c.id !== comment.id));
   const put = () =>
     withComments(queryClient, comment.itemId, (list) =>
