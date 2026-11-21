@@ -50,6 +50,34 @@ test.describe("on a laptop", () => {
     await expect(account).toBeFocused();
   });
 
+  test("the account button, swapped for the real one while the palette is open, still gets focus back", async ({
+    page,
+  }) => {
+    // Hold the account menu's code back until the palette is open, so the look-alike button that had focus is replaced
+    // under it.
+    let release = () => {};
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    await page.route(/\/assets\/AccountMenu-[\w-]+\.js$/, async (route) => {
+      await held;
+      await route.continue();
+    });
+    await page.goto("/ideas");
+    const account = page.getByRole("button", { name: "Account menu" });
+    await expect(account).toBeVisible();
+    await account.focus();
+    await page.keyboard.press(open);
+    const palette = page.getByRole("dialog", { name: "Command palette" });
+    await expect(palette).toBeVisible();
+    release();
+    // The real button replaces the look-alike: only it has a data-state.
+    await expect(page.locator("[data-account-button][data-state]")).toHaveCount(1);
+    await page.keyboard.press("Escape");
+    await expect(palette).toBeHidden();
+    await expect(account).toBeFocused();
+  });
+
   test("the palette's frame, swapped for the real palette while open, still returns focus", async ({ page }) => {
     // Hold the palette's code back, so ⌘K opens only its frame and the commands arrive after.
     let release = () => {};
