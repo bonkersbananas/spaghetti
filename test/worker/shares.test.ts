@@ -6,6 +6,7 @@ import type { ItemResponse, TwistResponse } from "../../src/shared/api.ts";
 import type { ShareResponse, SharesResponse } from "../../src/shared/shares.ts";
 import { guestRoute } from "../../src/worker/guest/index.tsx";
 import { hashShareToken } from "../../src/worker/shares.ts";
+import { ascii, be16, cameraJpeg, ICC, le32, safariJpeg, withSegments } from "../support/photo-fixtures.ts";
 import { addUser, ORIGIN, request, resetDb, signIn } from "./helpers.ts";
 
 /**
@@ -47,10 +48,6 @@ async function share(kind: "items" | "twists", id: string, as = cookie) {
 }
 
 // ---- Photo bytes: the smallest JPEG and WebP containers the metadata check reads. ----
-
-const ascii = (text: string) => Array.from(text, (char) => char.charCodeAt(0));
-const be16 = (value: number) => [(value >> 8) & 0xff, value & 0xff];
-const le32 = (value: number) => [value & 0xff, (value >> 8) & 0xff, (value >> 16) & 0xff, (value >> 24) & 0xff];
 
 /** A JPEG: SOI, JFIF, optionally an EXIF block with a GPS position, then image data and EOI. */
 function jpeg({ exif = false }: { exif?: boolean } = {}) {
@@ -408,22 +405,58 @@ describe("photos through a link", () => {
       expect((await guest(`/s/${made.token}/photos/${ofAttempt}/${variant}`)).response.status).toBe(404);
   });
 
-  it("never serves a photo that carries EXIF or XMP, whatever its row says", async () => {
+  it("serves Safari's resized JPEG, Exif block and all, stripped to clean bytes", async () => {
+    const item = await createItem({ title: "Cable clip" });
+    // What an iPhone stores: a canvas JPEG with Safari's Exif (colour space, pixel size) and Photoshop blocks.
+    const stored = safariJpeg(jpeg());
+    const photoId = await addPhoto(item.id, { bytes: stored, type: "image/jpeg" });
+    const made = await share("items", item.id);
+    const { html } = await guest(`/s/${made.token}`);
+    expect(html).toContain(`/s/${made.token}/photos/${photoId}/thumb`);
+
+    for (const variant of ["thumb", "large"]) {
+      const served = (await guest(`/s/${made.token}/photos/${photoId}/${variant}`)).response;
+      expect(served.status, variant).toBe(200);
+      expect(served.headers.get("Content-Type")).toBe("image/jpeg");
+      const bytes = new Uint8Array(await served.arrayBuffer());
+      expect(served.headers.get("Content-Length")).toBe(String(bytes.byteLength));
+      expect(String.fromCharCode(...bytes)).not.toMatch(/Exif|Photoshop|8BIM/);
+      // JFIF and its colour profile, then the image data as stored.
+      expect(bytes).toEqual(withSegments(jpeg(), [ICC]));
+    }
+    const head = await guestRoute(
+      new Request(`http://spaghetti.test/s/${made.token}/photos/${photoId}/thumb`, { method: "HEAD" }),
+      env,
+    );
+    expect(head.status).toBe(200);
+    expect(head.headers.get("Content-Length")).toBe(String(withSegments(jpeg(), [ICC]).byteLength));
+  });
+
+  it("strips EXIF and XMP from what it serves, and withholds what it can't read or what is stored as it came", async () => {
     const item = await createItem({ title: "Tugboat" });
     const clean = await addPhoto(item.id, { bytes: jpeg(), type: "image/jpeg" });
-    // Sent as if a browser had resized it, but with the camera's EXIF (a GPS position) still in it.
-    const withExif = await addPhoto(item.id, { bytes: jpeg({ exif: true }), type: "image/jpeg" });
+    // Sent as if a browser had resized it, but with the camera's EXIF (a GPS position), XMP and the rest in it.
+    const camera = await addPhoto(item.id, { bytes: cameraJpeg(jpeg({ exif: true })), type: "image/jpeg" });
     const webpWithExif = await addPhoto(item.id, { bytes: webp({ exif: true }) });
+    // A JPEG cut short (no end marker): it can't be vouched for.
+    const cut = await addPhoto(item.id, { bytes: jpeg().subarray(0, jpeg().length - 2), type: "image/jpeg" });
     // Stored as it came (an agent, the bridge): the original, which may carry everything.
     const unresized = await addPhoto(item.id, { bytes: jpeg(), type: "image/jpeg", unresized: true });
     const made = await share("items", item.id);
 
-    const served = await guest(`/s/${made.token}/photos/${clean}/large`);
-    expect(served.response.status).toBe(200);
-    const bytes = new Uint8Array(await served.response.arrayBuffer());
-    expect(String.fromCharCode(...bytes)).not.toMatch(/Exif|GPS|xmpmeta/);
+    for (const [id, expected] of [
+      [clean, jpeg()],
+      [camera, withSegments(jpeg(), [ICC])],
+      [webpWithExif, webp()],
+    ] as const) {
+      const served = await guest(`/s/${made.token}/photos/${id}/large`);
+      expect(served.response.status).toBe(200);
+      const bytes = new Uint8Array(await served.response.arrayBuffer());
+      expect(String.fromCharCode(...bytes)).not.toMatch(/Exif|GPS|xmpmeta|xap|Photoshop|Storgatan/);
+      expect(bytes).toEqual(expected);
+    }
 
-    for (const id of [withExif, webpWithExif, unresized]) {
+    for (const id of [cut, unresized]) {
       for (const variant of ["large", "thumb"]) {
         expect((await guest(`/s/${made.token}/photos/${id}/${variant}`)).response.status, `${id} ${variant}`).toBe(404);
       }

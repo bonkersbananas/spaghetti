@@ -1,7 +1,18 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import sharp from "sharp";
 import { describe, expect, it } from "vitest";
-import { hasPhotoMetadata } from "../../src/shared/photo-metadata.ts";
+import { hasPhotoMetadata, stripPhotoMetadata } from "../../src/shared/photo-metadata.ts";
+import {
+  cameraJpeg,
+  ICC,
+  SAFARI_EXIF,
+  SAFARI_PHOTOSHOP,
+  safariJpeg,
+  scanStart,
+  webpChunks,
+  webpWithMetadata,
+} from "../support/photo-fixtures.ts";
 
 /** What a shared link may serve (decision 0075): photos with no EXIF, XMP or IPTC in their bytes. */
 
@@ -71,3 +82,142 @@ describe("hasPhotoMetadata", () => {
     expect(hasPhotoMetadata(new Uint8Array(0))).toBe(true);
   });
 });
+
+/** JPEG marker segments before the first scan, as [marker, body]. */
+function segmentsOf(bytes: Uint8Array): [number, Uint8Array][] {
+  const out: [number, Uint8Array][] = [];
+  for (let at = 2; bytes[at + 1] !== 0xda; ) {
+    const length = ((bytes[at + 2] as number) << 8) | (bytes[at + 3] as number);
+    out.push([bytes[at + 1] as number, bytes.slice(at + 4, at + 2 + length)]);
+    at += 2 + length;
+  }
+  return out;
+}
+
+const text = (bytes: Uint8Array) => String.fromCharCode(...bytes);
+
+/** The image data: the first scan to EOI (entropy-coded data never holds FF D9). */
+function imageData(bytes: Uint8Array) {
+  const start = scanStart(bytes);
+  for (let at = start; at < bytes.length - 1; at++)
+    if (bytes[at] === 0xff && bytes[at + 1] === 0xd9) return bytes.slice(start, at + 2);
+  throw new Error("no EOI");
+}
+
+function expectClean(bytes: Uint8Array) {
+  const all = text(bytes);
+  expect(all).not.toContain("Exif\0\0");
+  expect(all).not.toContain("<x:xmpmeta");
+  expect(all).not.toContain("http://ns.adobe.com/xap/1.0/");
+  expect(all).not.toContain("GPS");
+  expect(hasPhotoMetadata(bytes)).toBe(false);
+}
+
+describe("stripPhotoMetadata", () => {
+  const base = fixture("model-1.jpg"); // JFIF, a colour profile, a real 1200 x 900 picture
+
+  it("strips Safari's canvas JPEG to JFIF, its colour profile and the same image data", async () => {
+    const safari = safariJpeg(base);
+    expect(hasPhotoMetadata(safari)).toBe(true);
+    const stripped = stripPhotoMetadata(safari);
+    if (!stripped) throw new Error("not stripped");
+    expectClean(stripped);
+    const markers = segmentsOf(stripped).map(([marker]) => marker);
+    expect(markers).not.toContain(0xe1);
+    expect(markers).not.toContain(0xed);
+    expect(markers).not.toContain(0xfe);
+    expect(markers[0]).toBe(0xe0);
+    // Both colour profiles (the picture's own and the added one) are kept, byte for byte.
+    const profiles = segmentsOf(stripped).filter(([marker]) => marker === 0xe2);
+    expect(profiles.map(([, body]) => text(body.subarray(0, 12)))).toEqual(["ICC_PROFILE\0", "ICC_PROFILE\0"]);
+    expect(profiles[0]?.[1]).toEqual(new Uint8Array(ICC.slice(4)));
+    expect(profiles[1]?.[1]).toEqual(segmentsOf(base)[1]?.[1]);
+    // The image data, from the first scan to EOI, is untouched: the result is the picture as it was before the blocks.
+    expect(imageData(stripped)).toEqual(imageData(safari));
+    expect(stripped).toEqual(withProfile(base));
+    expect(stripped.byteLength).toBe(safari.byteLength - SAFARI_EXIF.length - SAFARI_PHOTOSHOP.length);
+    const decoded = await sharp(stripped).raw().toBuffer({ resolveWithObject: true });
+    expect([decoded.info.width, decoded.info.height]).toEqual([1200, 900]);
+    expect(decoded.data).toEqual((await sharp(base).raw().toBuffer({ resolveWithObject: true })).data);
+  });
+
+  it("strips a camera's GPS EXIF, XMP, IPTC, comment and what comes after the image", async () => {
+    const camera = cameraJpeg(base);
+    const stripped = stripPhotoMetadata(camera);
+    if (!stripped) throw new Error("not stripped");
+    expectClean(stripped);
+    expect(text(stripped)).not.toContain("Storgatan");
+    expect(text(stripped)).not.toContain("Sergels");
+    const markers = segmentsOf(stripped).map(([marker]) => marker);
+    for (const dropped of [0xe1, 0xed, 0xfe]) expect(markers).not.toContain(dropped);
+    expect(markers.filter((marker) => marker === 0xe2)).toHaveLength(2);
+    expect(imageData(stripped)).toEqual(imageData(camera));
+    // It ends at EOI: nothing after the picture.
+    expect(Array.from(stripped.subarray(-2))).toEqual([0xff, 0xd9]);
+    expect(stripped.byteLength).toBe(scanStart(stripped) + imageData(camera).byteLength);
+    const decoded = await sharp(stripped).raw().toBuffer({ resolveWithObject: true });
+    expect([decoded.info.width, decoded.info.height]).toEqual([1200, 900]);
+  });
+
+  it("keeps a clean JPEG as it is, and keeps markers between progressive scans' data", async () => {
+    for (const name of ["model-2.jpg", "portrait.jpg", "label-jade.jpg"]) {
+      const bytes = fixture(name);
+      expect(stripPhotoMetadata(bytes), name).toEqual(bytes);
+    }
+    const progressive = new Uint8Array(await sharp(base).jpeg({ progressive: true }).toBuffer());
+    expect(stripPhotoMetadata(progressive)).toEqual(progressive);
+    // A comment and an Exif block between two scans go too.
+    let second = scanStart(progressive) + 2;
+    while (!(progressive[second] === 0xff && progressive[second + 1] === 0xda)) second++;
+    const between = new Uint8Array([
+      ...progressive.subarray(0, second),
+      ...segment(0xfe, ascii("GPS!")),
+      ...SAFARI_EXIF,
+      ...progressive.subarray(second),
+    ]);
+    expect(stripPhotoMetadata(between)).toEqual(progressive);
+  });
+
+  it("strips a WebP's EXIF and XMP chunks, clears their flags and fixes the RIFF size", async () => {
+    const lossy = new Uint8Array(await sharp(base).resize(300, 225).webp().toBuffer());
+    const webp = webpWithMetadata(lossy, 300, 225);
+    expect(hasPhotoMetadata(webp)).toBe(true);
+    const stripped = stripPhotoMetadata(webp);
+    if (!stripped) throw new Error("not stripped");
+    expectClean(stripped);
+    const chunks = webpChunks(stripped);
+    expect(chunks.map(([name]) => name)).toEqual(["VP8X", "ICCP", ...webpChunks(lossy).map(([name]) => name)]);
+    // ICC (bit 5) stays; EXIF (bit 3) and XMP (bit 2) are cleared; the canvas size is untouched.
+    expect(chunks[0]?.[1][0]).toBe(0b0010_0000);
+    expect(Array.from(chunks[0]?.[1].subarray(4) ?? [])).toEqual(
+      Array.from(webpChunks(webp)[0]?.[1].subarray(4) ?? []),
+    );
+    expect(new DataView(stripped.buffer).getUint32(4, true)).toBe(stripped.byteLength - 8);
+    expect(chunks.at(-1)?.[1]).toEqual(webpChunks(lossy).at(-1)?.[1]);
+    const decoded = await sharp(stripped).raw().toBuffer({ resolveWithObject: true });
+    expect([decoded.info.width, decoded.info.height]).toEqual([300, 225]);
+    // A WebP from a browser (no VP8X) comes back as it was.
+    expect(stripPhotoMetadata(lossy)).toEqual(lossy);
+  });
+
+  it("gives nothing for what it can't read whole", () => {
+    const whole = safariJpeg(base);
+    for (const bytes of [
+      new Uint8Array(0),
+      new Uint8Array([1, 2, 3, 4]),
+      fixture("plate-hook.png"),
+      new Uint8Array([0xff, 0xd8, 0xff]),
+      whole.subarray(0, whole.length - 2), // no EOI
+      whole.subarray(0, 40), // cut inside a segment
+      new Uint8Array([...whole.subarray(0, 2), 0x12, ...whole.subarray(2)]), // not a marker where one must be
+      new Uint8Array([...ascii("RIFF"), 0xff, 0, 0, 0, ...ascii("WEBP")]), // a RIFF size past the end
+    ])
+      expect(stripPhotoMetadata(bytes)).toBeNull();
+  });
+});
+
+/** The picture with the added colour profile and nothing else added: what stripping Safari's JPEG should give. */
+function withProfile(bytes: Uint8Array) {
+  const at = 4 + (((bytes[4] as number) << 8) | (bytes[5] as number));
+  return new Uint8Array([...bytes.subarray(0, at), ...ICC, ...bytes.subarray(at)]);
+}

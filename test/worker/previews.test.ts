@@ -2,6 +2,7 @@ import { env } from "cloudflare:workers";
 import { beforeEach, describe, expect, it } from "vitest";
 import type { ItemResponse } from "../../src/shared/api.ts";
 import { cut, previewImage, previewPage, previewTarget, words } from "../../src/worker/previews.ts";
+import { ascii, ICC, safariJpeg, segment, withSegments } from "../support/photo-fixtures.ts";
 import { addUser, request, resetDb, signIn, uploadPhoto } from "./helpers.ts";
 
 const INDEX =
@@ -121,7 +122,7 @@ describe("the image", () => {
     expect((await request(`/og/ideas/${id}.jpg`)).status).toBe(404);
   });
 
-  it("never sends a cover that carries EXIF, or an original waiting to be resized", async () => {
+  it("sends a cover without its EXIF, and never one it can't strip or an original waiting to be resized", async () => {
     const id = await idea({ title: "From the camera" });
     const photoId = crypto.randomUUID();
     await uploadPhoto(id, photoId, cookie);
@@ -136,6 +137,35 @@ describe("the image", () => {
     ]);
     await env.PHOTOS.put(`photos/${photoId}/large`, exif, { httpMetadata: { contentType: "image/jpeg" } });
     expect((await request(`/og/ideas/${id}.jpg`)).status).toBe(404);
+    // A whole JPEG with Safari's Exif block is sent without it.
+    const jfif = segment(0xe0, [...ascii("JFIF\0"), 1, 1, 0, 0, 1, 0, 1, 0, 0]);
+    const picture = new Uint8Array([
+      0xff,
+      0xd8,
+      ...jfif,
+      0xff,
+      0xda,
+      0,
+      8,
+      1,
+      1,
+      0,
+      0,
+      0x3f,
+      0,
+      0x12,
+      0x34,
+      0xff,
+      0xd9,
+    ]);
+    await env.PHOTOS.put(`photos/${photoId}/large`, safariJpeg(picture), {
+      httpMetadata: { contentType: "image/jpeg" },
+    });
+    const sent = await request(`/og/ideas/${id}.jpg`);
+    expect(sent.status).toBe(200);
+    const bytes = new Uint8Array(await sent.arrayBuffer());
+    expect(sent.headers.get("Content-Length")).toBe(String(bytes.byteLength));
+    expect(bytes).toEqual(withSegments(picture, [ICC]));
     await env.PHOTOS.put(`photos/${photoId}/large`, new Uint8Array([1, 2, 3, 4]), {
       httpMetadata: { contentType: "image/webp" },
       customMetadata: { provisional: "1" },
