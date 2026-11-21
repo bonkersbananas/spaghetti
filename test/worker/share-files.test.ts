@@ -217,6 +217,8 @@ describe("a shared thing's models", () => {
     expect(response.status).toBe(200);
     expect(response.headers.get("Cache-Control")).toBe("private, max-age=300");
     expect(response.headers.get("Content-Disposition")).toBeNull();
+    // The browser's copy is the view's fetch's only: a navigation to the address never gets it from the cache.
+    expect(response.headers.get("Vary")).toBe("Sec-Fetch-Mode, Sec-Fetch-Dest, Sec-Fetch-Site");
     const bytes = new Uint8Array(await response.arrayBuffer());
     expect(Number(response.headers.get("Content-Length"))).toBe(bytes.length);
     expect(Object.keys(unzipSync(bytes)).sort()).toEqual([

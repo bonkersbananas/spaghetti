@@ -431,6 +431,9 @@ async function file(request: Request, env: Env, token: string, fileId: string, p
     "Content-Type": "application/octet-stream",
     "Content-Length": String(toolpaths.size),
     ...FILE_HEADERS,
+    // The browser keeps the view's copy a few minutes, for that fetch only: a navigation to the address (an address
+    // bar, a download) never matches it, so it goes to the server, which says 404.
+    Vary: "Sec-Fetch-Mode, Sec-Fetch-Dest, Sec-Fetch-Site",
   };
   if (request.method === "HEAD") return new Response(null, { headers });
   const fixed = new FixedLengthStream(toolpaths.size);
