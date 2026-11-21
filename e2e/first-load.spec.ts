@@ -40,13 +40,10 @@ import { SEED_PASSWORD, SEED_USERS } from "../scripts/lib/local-app.ts";
  * every card and the idea's note use), a note that is only a link shows it once as its card, and a shared title loses its site's name.
  * 2026-11-18: /ideas, /journal and /pantry +2: the quiet unread dot on the Journal tab and Today's sidebar item (UnreadDot and the
  * unread-comments query, about 1.1 kB gzip), drawn by the shell on every screen; main's /journal was already 0.6 over its ceiling.
- * 2026-11-21: /today +2: the print on the bed asks "Which build is this?" or says why it is in its build (decision 0076). The
- * question, the why line and the move sheet load only for a print the printer filed, but the card's lazy import carries their
- * dependency list (63 chunk names, about 1.1 kB gzip in PrintingCard's chunk); main's /today was already 0.1 over its ceiling.
  */
 const CEILING_KB = {
   "/sign-in": 185,
-  "/today": 297,
+  "/today": 295,
   "/ideas": 264,
   "/builds": 267,
   "/journal": 281,

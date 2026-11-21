@@ -7,7 +7,7 @@ import type { Item, MoveAttemptResponse, PrintSuggestionsResponse } from "@share
 import { type MatchReason, namesIn, rowWords, sharedWords } from "@shared/print-match";
 import { inlineTime } from "@shared/time";
 import { type QueryClient, queryOptions, useQueryClient } from "@tanstack/react-query";
-import { useNavigate, useParams } from "@tanstack/react-router";
+import { useNavigate } from "@tanstack/react-router";
 import { toast } from "@/components/ui/Toast";
 import { api } from "./api";
 import { type AttemptView, cachedItem, type ItemView, insertCachedItem, patchCachedItem } from "./items";
@@ -240,7 +240,6 @@ export function keepAsNew(queryClient: QueryClient, item: ItemView, attempt: Att
 export function useMoveAttempt(item: ItemView, attempt: AttemptView) {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
-  const params = useParams({ strict: false }) as { buildId?: string };
   const go = (buildId: string, attemptId: string) =>
     void navigate({ to: "/builds/$buildId", params: { buildId }, search: { attempt: attemptId } });
   return {
@@ -251,7 +250,8 @@ export function useMoveAttempt(item: ItemView, attempt: AttemptView) {
         to,
         go,
         onMoved: ({ toId, fromGoes }) => {
-          if (fromGoes && params.buildId === item.id) go(toId, attempt.id);
+          // Read where the page is when the move goes, not as a hook: the printing card on any screen calls this.
+          if (fromGoes && window.location.pathname === `/builds/${item.id}`) go(toId, attempt.id);
         },
       }),
     keep: () => keepAsNew(queryClient, item, attempt),
