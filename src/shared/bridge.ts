@@ -88,12 +88,17 @@ export function bridgeLine(
   if (!isFresh(status.lastSeenAt, now, BRIDGE_CONNECTED_MS)) {
     return { state: "quiet", text: `Printer bridge last heard ${since(status.lastSeenAt).toLowerCase()}.` };
   }
-  const problem = status.problems?.[0];
+  // The camera is optional: its problem is a note on a working bridge, not a failed connection.
+  const problem = status.problems?.find((p) => p.code !== "camera");
   if (problem) return { state: "problem", text: problem.message };
   if (status.printerState === "offline") {
     return { state: "no-printer", text: "Printer bridge is running but can't reach the printer." };
   }
-  return { state: "connected", text: "Printer bridge connected." };
+  const camera = status.problems?.find((p) => p.code === "camera");
+  return {
+    state: "connected",
+    text: camera ? `Printer bridge connected. ${camera.message}` : "Printer bridge connected.",
+  };
 }
 
 /** Where the pairing code is made and exchanged: see worker/routes/bridge.ts. */

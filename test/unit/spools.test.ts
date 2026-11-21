@@ -244,6 +244,13 @@ describe("the Printer page's bridge line", () => {
     expect(bridgeLine(null, now, since)).toEqual({ state: "none", text: "No printer bridge set up." });
     expect(bridgeLine(status({}), now, since).state).toBe("connected");
     expect(bridgeLine(status({ printerState: "offline" }), now, since).state).toBe("no-printer");
+    // A camera problem is a note on a working bridge: it never hides that the printer can't be reached.
+    const camera = { code: "camera" as const, message: "No photos." };
+    expect(bridgeLine(status({ problems: [camera] }), now, since)).toEqual({
+      state: "connected",
+      text: "Printer bridge connected. No photos.",
+    });
+    expect(bridgeLine(status({ printerState: "offline", problems: [camera] }), now, since).state).toBe("no-printer");
     expect(bridgeLine(status({ lastSeenAt: now - 7_200_000 }), now, since)).toEqual({
       state: "quiet",
       text: "Printer bridge last heard 2 h ago.",

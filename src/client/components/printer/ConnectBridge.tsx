@@ -76,7 +76,7 @@ export function ConnectBridge({ open, onOpenChange }: { open: boolean; onOpenCha
       bridge.lastSeenAt >= bridge.pairedAt &&
       isFresh(bridge.lastSeenAt, now, BRIDGE_CONNECTED_MS),
   );
-  const problem = heard ? bridge?.problems?.[0] : undefined;
+  const problem = heard ? bridge?.problems?.find((p) => p.code !== "camera") : undefined;
   const connected = heard && !problem && bridge?.printerState !== "offline";
 
   const slots = Object.entries(printer.data?.slots ?? {}).sort(([a], [b]) => a.localeCompare(b));
