@@ -84,15 +84,19 @@ export const emptyState = (): PrinterState => ({ print: {}, complete: false });
 /**
  * Adds one report. Reports that aren't a status (`info`, `system`…) change nothing. A full report is recognised by
  * carrying `gcode_state` and `ams` together, which is what `pushall` answers with.
+ *
+ * `listening`: the printer refused `pushall`, so no answer to it will come. The state then counts as complete once the
+ * reports so far, merged, hold both (the X series sends its whole state in each report anyway).
  */
-export function foldReport(state: PrinterState, report: unknown): PrinterState {
+export function foldReport(state: PrinterState, report: unknown, options: { listening?: boolean } = {}): PrinterState {
   if (!isObject(report) || !isObject(report.print)) return state;
   const print = report.print;
   if (print.command !== undefined && print.command !== "push_status") return state;
   const { command: _command, sequence_id: _sequence, msg: _msg, ...fields } = print;
   const next = merge(state.print as unknown as Json, fields) as unknown as PrintState;
   const full = "gcode_state" in fields && "ams" in fields;
-  return { print: next, complete: state.complete || full };
+  const merged = Boolean(options.listening) && "gcode_state" in next && "ams" in next;
+  return { print: next, complete: state.complete || full || merged };
 }
 
 /** MQTT payload bytes → a report, or null when it isn't JSON. */

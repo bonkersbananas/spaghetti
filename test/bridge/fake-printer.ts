@@ -15,6 +15,11 @@ export class FakePrinter {
   subscribed: string[] = [];
   /** Called when a client connects: how a test plays the printer's answer to `pushall`. */
   onFullStatusRequested: (() => void) | undefined;
+  /**
+   * Plays a printer in cloud mode that won't take `pushall`: "error" answers it with a refusal on the report topic,
+   * "drop" closes the connection that sent it.
+   */
+  refusePushall: "error" | "drop" | null = null;
   private broker!: Aedes;
   private server!: Server;
   url = "";
@@ -39,14 +44,33 @@ export class FakePrinter {
       if (!client) return; // our own replays
       const payload = packet.payload.toString();
       this.published.push({ topic: packet.topic, payload });
-      if (packet.topic === `device/${this.serial}/request` && payload.includes("pushall"))
-        this.onFullStatusRequested?.();
+      if (packet.topic !== `device/${this.serial}/request` || !payload.includes("pushall")) return;
+      if (this.refusePushall === "drop") setTimeout(() => client.close(), 5);
+      else if (this.refusePushall === "error") void this.answer(REFUSED_PUSHALL);
+      else this.onFullStatusRequested?.();
     });
     this.server = certificate ? tls.createServer(certificate, this.broker.handle) : createServer(this.broker.handle);
     await new Promise<void>((resolve) => this.server.listen(0, "127.0.0.1", resolve));
     const address = this.server.address();
     this.url = `${certificate ? "mqtts" : "mqtt"}://127.0.0.1:${typeof address === "object" && address ? address.port : 0}`;
     return this;
+  }
+
+  /** Sends one message on the report topic, as the printer would. */
+  answer(message: unknown): Promise<void> {
+    return new Promise<void>((resolve) => {
+      this.broker.publish(
+        {
+          cmd: "publish",
+          qos: 0,
+          dup: false,
+          retain: false,
+          topic: `device/${this.serial}/report`,
+          payload: Buffer.from(JSON.stringify(message)),
+        },
+        () => resolve(),
+      );
+    });
   }
 
   /** Sends reports as the printer would, one after another. */
@@ -80,3 +104,11 @@ export class FakePrinter {
     await new Promise<void>((resolve) => this.server.close(() => resolve()));
   }
 }
+
+/**
+ * A refusal in the shape of Bambu's other refused commands (`result: "fail"`, an `err_code`, a `reason`): what an X2D
+ * in cloud mode sends, if it refuses `pushall` at all, is [uncertain].
+ */
+export const REFUSED_PUSHALL = {
+  pushing: { command: "pushall", sequence_id: "0", result: "fail", reason: "verify failed", err_code: 84033543 },
+};

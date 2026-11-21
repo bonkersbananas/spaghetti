@@ -5,7 +5,7 @@ import { homedir } from "node:os";
 import { createInterface } from "node:readline/promises";
 import { discoverPrinters, serialFromCertificate } from "../discover.ts";
 import { PLATFORM, VERSION } from "../version.ts";
-import { checkPrinter } from "./check.ts";
+import { checkPrinter, describeCheck } from "./check.ts";
 import { pairWithApp } from "./pair.ts";
 import { LABEL, macPaths } from "./paths.ts";
 import { readSettings } from "./settings.ts";
@@ -72,18 +72,21 @@ export async function checkCommand(argv: readonly string[]): Promise<number> {
     console.error("✗ Nothing to check yet: run the installer first, or give --ip, --serial and --access-code.");
     return 1;
   }
-  say(`Asking the printer at ${host}…`);
+  say(`Asking the printer at ${host}, one channel at a time (up to half a minute)…`);
   const result = await checkPrinter({
     host,
     serial,
     accessCode,
     dataDir: saved.dataDir ?? macPaths(homedir()).dataDir,
+    camera: args.camera ?? saved.camera,
+    trustNewCertificate: argv.includes("--trust-new-certificate"),
   });
+  for (const line of describeCheck(result)) say(line);
   if (result.ok) {
-    say("✓ The printer answered. If macOS asked about the local network, this is where it was allowed.");
+    say("\nThe bridge can follow this printer. If macOS asked about the local network, this is where it was allowed.");
     return 0;
   }
-  console.error(`✗ ${result.problem.message}`);
+  console.error(`\nThe bridge can't follow the printer yet: ${result.problem.message}`);
   return 1;
 }
 

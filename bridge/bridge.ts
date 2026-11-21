@@ -62,6 +62,8 @@ export class Bridge {
   state: PrinterState = emptyState();
   machine: JobMachine;
   connected = false;
+  /** Whether the printer refused `pushall`, so the bridge only listens. */
+  listening = false;
   private deps: Required<Omit<BridgeDeps, "camera" | "log" | "version" | "platform" | "problems">> &
     Pick<BridgeDeps, "camera" | "log" | "version" | "platform" | "problems">;
   private chain: Promise<void> = Promise.resolve();
@@ -113,7 +115,7 @@ export class Bridge {
   /** The link calls this with every message from the printer. */
   onReport(payload: Uint8Array | string) {
     const report = parseReport(payload);
-    const next = foldReport(this.state, report);
+    const next = foldReport(this.state, report, { listening: this.listening });
     if (next === this.state) return;
     this.state = next;
     const events = this.machine.feed(this.state, this.deps.now());
@@ -121,6 +123,17 @@ export class Bridge {
     if (events.length) this.deps.store.save();
     for (const event of events) this.later(() => this.handle(event));
     this.scheduleAms();
+  }
+
+  /**
+   * The printer refused `pushall` (the link stops asking), or never answered it with its whole state: the state is
+   * pieced together from the reports it pushes by itself instead.
+   */
+  listenOnly() {
+    if (this.listening) return;
+    this.listening = true;
+    // What has come so far may already be whole: an empty status report re-reads it.
+    this.onReport(JSON.stringify({ print: { command: "push_status" } }));
   }
 
   onConnection(connected: boolean) {
@@ -161,7 +174,10 @@ export class Bridge {
         if (found) {
           bytes = await this.deps.files.download(found.path);
           fileName = found.path.split("/").pop() ?? null;
-        } else this.log("The print's file wasn't on the printer's card; going on without it.");
+        } else
+          this.log(
+            "The print's file wasn't on the printer's USB drive or SD card (is \"Store Sent Files on External Storage\" on?); going on without it.",
+          );
       } catch (error) {
         this.log(`Couldn't fetch the print's file (${message(error)}); going on without it.`);
       }

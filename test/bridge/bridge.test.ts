@@ -11,7 +11,16 @@ import { Store } from "../../bridge/store.ts";
 import { slicerFile } from "../../e2e/fixtures/slicer-file.ts";
 import { FakeApp } from "./fake-app.ts";
 import { FakePrinter } from "./fake-printer.ts";
-import { amsChanges, cancelledPrint, failedPrint, fullPrint, fullReport, NAME, restartMidPrint } from "./fixtures.ts";
+import {
+  amsChanges,
+  cancelledPrint,
+  delta,
+  failedPrint,
+  fullPrint,
+  fullReport,
+  NAME,
+  restartMidPrint,
+} from "./fixtures.ts";
 
 const JPEG = Uint8Array.from([
   0xff,
@@ -98,10 +107,11 @@ function runBridge(options: { camera?: Camera | null } = {}) {
     accessCode: printer.accessCode,
     onReport: (payload) => bridge.onReport(payload),
     onConnection: (connected) => bridge.onConnection(connected),
+    onPushallRefused: () => bridge.listenOnly(),
   });
   links.push(link);
   bridge.start();
-  return bridge;
+  return Object.assign(bridge, { link });
 }
 
 async function until(check: () => boolean, what: string, timeoutMs = 4000) {
@@ -138,6 +148,65 @@ describe("read-only", () => {
     printer.dropClients();
     await until(() => printer.published.length === 2, "a request after reconnecting", 15_000);
     expect(new Set(printer.published.map((message) => message.payload))).toEqual(new Set([PUSHALL]));
+  }, 20_000);
+});
+
+describe("a printer in cloud mode that refuses pushall", () => {
+  it("answered with an error: never asks again, even after a reconnect, and still logs the print", async () => {
+    printer.refusePushall = "error";
+    const bridge = runBridge();
+    await until(() => bridge.link.pushallRefused === "answered-error", "the refusal");
+    printer.dropClients();
+    await until(() => printer.subscribed.length === 2, "listening again", 15_000);
+    await printer.replay(fullPrint);
+    await until(() => [...app.items.values()][0]?.attempts[0]?.endedAt != null, "the print logged");
+    expect(printer.published).toEqual([{ topic: `device/${printer.serial}/request`, payload: PUSHALL }]);
+  }, 20_000);
+
+  it("dropped the connection twice: connects once more and only listens, with no loop of asking and being dropped", async () => {
+    printer.refusePushall = "drop";
+    const bridge = runBridge();
+    await until(() => bridge.link.pushallRefused === "dropped", "the refusal by dropped connections", 10_000);
+    expect(printer.published).toHaveLength(2);
+    await until(() => printer.subscribed.length === 3, "listening again", 10_000);
+    await printer.replay(fullPrint);
+    await until(() => [...app.items.values()][0]?.attempts[0]?.endedAt != null, "the print logged");
+    // Well past another reconnect's 5 s: still the same connection, and pushall wasn't sent again.
+    await new Promise((resolve) => setTimeout(resolve, 6_000));
+    expect(printer.connections).toBe(3);
+    expect(bridge.connected).toBe(true);
+    expect(printer.published).toHaveLength(2);
+  }, 40_000);
+
+  it("pieces the whole state together from reports that each carry only part of it", async () => {
+    printer.refusePushall = "error";
+    const bridge = runBridge();
+    await until(() => bridge.link.pushallRefused !== null, "the refusal");
+    const { ams: _ams, ...withoutAms } = (fullReport({ state: "IDLE" }) as { print: Record<string, unknown> }).print;
+    await printer.replay([delta(withoutAms)]);
+    await settle(bridge);
+    expect(bridge.state.complete).toBe(false);
+    await printer.replay([delta({ ams: (fullReport({ state: "IDLE" }) as { print: { ams: unknown } }).print.ams })]);
+    await until(() => bridge.state.complete, "the state pieced together");
+  });
+
+  it("counts what already came once it stops waiting for a whole report", async () => {
+    const bridge = runBridge();
+    await until(() => printer.published.length === 1, "the request");
+    const { ams, ...withoutAms } = (fullReport({ state: "IDLE" }) as { print: Record<string, unknown> }).print;
+    await printer.replay([delta(withoutAms), delta({ ams })]);
+    await settle(bridge);
+    expect(bridge.state.complete).toBe(false);
+    bridge.listenOnly();
+    expect(bridge.state.complete).toBe(true);
+  });
+
+  it("isn't taken for a refusal when the link restarts itself", async () => {
+    const bridge = runBridge();
+    await until(() => printer.published.length === 1, "the first request");
+    bridge.link.restart();
+    await until(() => printer.published.length === 2, "a request after the restart", 15_000);
+    expect(bridge.link.pushallRefused).toBeNull();
   }, 20_000);
 });
 
