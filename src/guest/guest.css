@@ -819,28 +819,35 @@ html:has(.gp-lightbox:target) {
 }
 
 /*
- * A filament's colour as a small spool, as the app's SpoolDisc draws one: the colour with the faint rings of wound
- * filament and a soft highlight, in a sunk well. So a white one reads as white filament, never as an empty ring.
+ * A filament's colour as a small bead: SpoolDisc's soft highlight on the colour and a little shade on its far side, in
+ * a rim. It reads as a thing in that colour, so a white one is white filament, never an empty radio button (a flat
+ * white disc in a ring is one, and SpoolDisc's wound rings at this size are a target).
  */
 .gp-swatch {
-  --gp-swatch-rim: color-mix(in srgb, var(--sg-ink) 15%, transparent);
-  --gp-swatch-wind: color-mix(in srgb, var(--sg-ink) 8%, transparent);
   flex: none;
   width: 1rem;
   height: 1rem;
   border-radius: 999px;
-  background-image:
-    radial-gradient(circle at 32% 26%, color-mix(in srgb, var(--sg-cream) 45%, transparent), transparent 46%),
-    repeating-radial-gradient(circle, var(--gp-swatch-wind) 0 1px, transparent 1px 3px);
+  background-image: radial-gradient(
+    circle at 32% 26%,
+    color-mix(in srgb, var(--sg-cream) 40%, transparent),
+    transparent 50%
+  );
   box-shadow:
-    var(--sg-shadow-well),
-    inset 0 0 0 1px var(--gp-swatch-rim);
+    inset -1px -1.5px 2.5px color-mix(in srgb, var(--sg-ink) 12%, transparent),
+    inset 0 0 0 1px color-mix(in srgb, var(--sg-ink) 15%, transparent);
 }
 
-/* A light filament on a light panel: SpoolDisc's firmer rim and winding (docs/design.md). */
+/* A light filament on a light panel: SpoolDisc's firmer rim, and a little more shade and light to round it. */
 .gp-swatch--light {
-  --gp-swatch-rim: color-mix(in srgb, var(--sg-ink) 35%, transparent);
-  --gp-swatch-wind: color-mix(in srgb, var(--sg-ink) 14%, transparent);
+  background-image: radial-gradient(
+    circle at 32% 26%,
+    color-mix(in srgb, var(--sg-cream) 60%, transparent),
+    transparent 55%
+  );
+  box-shadow:
+    inset -1px -1.5px 2.5px color-mix(in srgb, var(--sg-ink) 22%, transparent),
+    inset 0 0 0 1px color-mix(in srgb, var(--sg-ink) 30%, transparent);
 }
 
 .gp-dl {
@@ -1309,6 +1316,14 @@ html:has(.gp-lightbox:target) {
     gap: 0.5rem;
     align-self: center;
     min-width: 0;
+  }
+
+  /* An attempt's file row is as wide as what it says, not a bar across the attempt's whole card. */
+  .gp-attempt-file--3d {
+    align-self: flex-start;
+    width: fit-content;
+    min-width: min(100%, 18rem);
+    max-width: 100%;
   }
 }
 
