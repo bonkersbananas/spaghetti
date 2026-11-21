@@ -114,10 +114,16 @@ export default function Thread({ itemId, writeAsk, readOnly, className }: Thread
     }
   }, [empty, isDesktop]);
 
+  // Only the render that follows a send may put focus back: a later layout swap (the last comment deleted) is not it.
+  useEffect(() => {
+    keepFocus.current = false;
+  });
+
   function send() {
     if (!me) return;
-    keepFocus.current = isDesktop && document.activeElement === field.current;
+    const focused = isDesktop && document.activeElement === field.current;
     if (sendComment(queryClient, itemId, me.id, draft)) {
+      keepFocus.current = focused;
       setSheetOpen(false);
       // The new message is in view: it is what you did.
       requestAnimationFrame(() => {
