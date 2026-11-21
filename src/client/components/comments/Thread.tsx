@@ -1,7 +1,7 @@
 import { COMMENT_MAX, type Comment, groupThread, type ThreadEntry } from "@shared/comments";
 import { displayName } from "@shared/people";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Composer } from "@/components/ui/Composer";
 import { CommentIcon } from "@/components/ui/icons";
 import { MessageGroup, NewDivider } from "@/components/ui/Message";
@@ -47,6 +47,8 @@ export default function Thread({ itemId, writeAsk, readOnly, className }: Thread
   const [editing, setEditing] = useState<string | null>(null);
   const [lit, setLit] = useState<string | null>(null);
   const field = useRef<HTMLTextAreaElement>(null);
+  // Set when a send was made from the focused field: the thread may be laid out anew, and the keyboard goes back in.
+  const keepFocus = useRef(false);
   const root = useRef<HTMLDivElement>(null);
 
   const other = people?.find((person) => person.id !== me?.id);
@@ -100,8 +102,21 @@ export default function Thread({ itemId, writeAsk, readOnly, className }: Thread
     return () => window.clearTimeout(timer);
   }, [lit]);
 
+  const empty = comments.length === 0;
+  // The first message (or the last one deleted) swaps the thread's layout and the field is made anew: its focus is
+  // lost when the old one leaves, which is only known once the new layout has been committed, not in a frame.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: `empty` is the trigger: it flips when the layout is swapped.
+  useLayoutEffect(() => {
+    if (!keepFocus.current || !isDesktop) return;
+    keepFocus.current = false;
+    if (!document.activeElement || document.activeElement === document.body) {
+      field.current?.focus({ preventScroll: true });
+    }
+  }, [empty, isDesktop]);
+
   function send() {
     if (!me) return;
+    keepFocus.current = isDesktop && document.activeElement === field.current;
     if (sendComment(queryClient, itemId, me.id, draft)) {
       setSheetOpen(false);
       // The new message is in view: it is what you did.
@@ -116,7 +131,6 @@ export default function Thread({ itemId, writeAsk, readOnly, className }: Thread
     }
   }
 
-  const empty = comments.length === 0;
   const headingId = `thread-${itemId}`;
   const writing = isDesktop ? (
     <Composer
