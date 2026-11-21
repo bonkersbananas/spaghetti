@@ -859,7 +859,36 @@ const SHELF_PHOTOS = [
   { file: "model-3.jpg", color: "#3f6b55" },
 ];
 
-async function sharedShelf(page: Page) {
+/** More little things for the shelf, so the idea holds eleven models as Carl Oscar's does. */
+const SPOON_REST = {
+  name: "spoon-rest.stl",
+  bytes: boxesStl([
+    { at: [0, 0, 0], size: [70, 30, 3] },
+    { at: [0, 0, 3], size: [70, 3, 6] },
+    { at: [0, 27, 3], size: [70, 3, 6] },
+  ]),
+};
+const LID_STAND = {
+  name: "lid-stand.stl",
+  bytes: boxesStl([
+    { at: [0, 0, 0], size: [50, 40, 4] },
+    { at: [8, 4, 4], size: [4, 32, 36] },
+    { at: [38, 4, 4], size: [4, 32, 36] },
+  ]),
+};
+const MEASURE = {
+  name: "pasta-measure.stl",
+  bytes: boxesStl([
+    { at: [0, 0, 0], size: [60, 20, 4] },
+    { at: [0, 0, 4], size: [40, 20, 4] },
+    { at: [0, 0, 8], size: [20, 20, 4] },
+  ]),
+};
+/** The shelf's five, for the 3D view's shots; Carl Oscar's case, eleven, for the page's. */
+const SHELF_MODELS = [FUSILLI, RACK, BINS, HOTDOG, BRACKET];
+const SHELF_ALL = [...SHELF_MODELS, TWO_TONE, PLAQUE, MANY_BINS, SPOON_REST, LID_STAND, MEASURE];
+
+async function sharedShelf(page: Page, models = SHELF_MODELS) {
   const origin = new URL(page.url() || "http://127.0.0.1").origin;
   const headers = { Origin: origin };
   await page.request.post("/api/session", { data: { username: "alex", password: "spaghetti-al-dente" }, headers });
@@ -882,21 +911,29 @@ async function sharedShelf(page: Page) {
     if (!uploaded.ok()) throw new Error(`Uploading ${photo.file} failed: ${uploaded.status()}`);
   }
   await openIdea(page, id);
-  const models = [FUSILLI, RACK, BINS, HOTDOG, BRACKET];
-  await page.getByTestId("idea-file-input").setInputFiles(
-    models.map((model) => ({
+  const kept = async () => {
+    const { item } = await (await page.request.get(`/api/items/${id}`)).json();
+    return (item?.files ?? []) as { hasThumb: boolean; slice?: { status: string } | null }[];
+  };
+  // One at a time, each once the server has its row: dropped together, they would be listed in the order their
+  // uploads happened to finish, and so differently at each width.
+  for (const [index, model] of models.entries()) {
+    await page.getByTestId("idea-file-input").setInputFiles({
       name: model.name,
       mimeType: model.name.endsWith(".3mf") ? "model/3mf" : "model/stl",
       buffer: Buffer.from(model.bytes),
-    })),
-  );
+    });
+    for (let tries = 0; (await kept()).length <= index; tries++) {
+      if (tries > 240) throw new Error(`${model.name} never reached the server`);
+      await page.waitForTimeout(250);
+    }
+  }
   // Each is sliced here, one at a time, and its slice and picture saved: wait for the server to have them all.
   for (let tries = 0; ; tries++) {
-    const { item } = await (await page.request.get(`/api/items/${id}`)).json();
-    const files: { hasThumb: boolean; slice?: { status: string } | null }[] = item?.files ?? [];
+    const files = await kept();
     if (files.length === models.length && files.every((file) => file.hasThumb && file.slice?.status === "sliced"))
       break;
-    if (tries > 600) throw new Error("The shelf's models never all reached the server sliced");
+    if (tries > 900) throw new Error("The shelf's models never all reached the server sliced");
     await page.waitForTimeout(500);
   }
   const token = await guestShare(page, "items", id);
@@ -2082,13 +2119,36 @@ export const shots: Shot[] = [
     cleanup: unshareBinsTwist,
   },
   {
-    // Carl Oscar's kind of idea (decision 0077): photos, then five models as the app's cards, each plate opening its
-    // 3D view; one with parts in the air, a project's plate 1 of 3, one in its own colours.
+    // Carl Oscar's case (decision 0077): photos, then eleven models as the app's cards, each opening its 3D view; one
+    // with parts in the air, a project's plate 1 of 3, models in their own colours, one in four filaments.
     name: "shared-models",
     path: "/sign-in",
     signedOut: true,
     fullPage: true,
-    prepare: sharedShelf,
+    prepare: (page) => sharedShelf(page, SHELF_ALL),
+    cleanup: async (page) => {
+      await unshareAll(page);
+      await asAlex(page, () => removeModelItems(page));
+    },
+  },
+  {
+    // The same eleven on a computer's screen, scrolled to about the eighth: the photos stay in view beside them.
+    name: "shared-models-scrolled",
+    path: "/sign-in",
+    signedOut: true,
+    width: 1440,
+    why: "the photos stay beside the models only on a computer",
+    prepare: async (page) => {
+      await sharedShelf(page, SHELF_ALL);
+      await page
+        .locator(".gp-file")
+        .nth(7)
+        .evaluate((card) => {
+          const box = card.getBoundingClientRect();
+          window.scrollBy(0, box.top + box.height / 2 - window.innerHeight / 2);
+        });
+      await page.waitForTimeout(300);
+    },
     cleanup: async (page) => {
       await unshareAll(page);
       await asAlex(page, () => removeModelItems(page));
