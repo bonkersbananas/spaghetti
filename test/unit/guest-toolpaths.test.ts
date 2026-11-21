@@ -76,7 +76,11 @@ function listedOften(zip: Uint8Array, name: string, times: number, as = name): U
     at += length;
   }
   const directory = new Uint8Array(records.reduce((total, record) => total + record.length, 0));
-  records.reduce((offset, record) => (directory.set(record, offset), offset + record.length), 0);
+  let offset = 0;
+  for (const record of records) {
+    directory.set(record, offset);
+    offset += record.length;
+  }
   const tail = zip.slice(end);
   const eocd = new DataView(tail.buffer);
   eocd.setUint16(8, records.length, true);
@@ -177,7 +181,9 @@ describe("a plate's toolpaths for a guest", () => {
       expect(reads.length).toBeLessThan(5);
     }
     // The same name written another way (a backslash, a leading slash) is the same entry.
-    expect((await repack(listedOften(file, "Metadata/plate_1.gcode", 2, "\\Metadata\\plate_1.gcode"), 1)).out).toBeNull();
+    expect(
+      (await repack(listedOften(file, "Metadata/plate_1.gcode", 2, "\\Metadata\\plate_1.gcode"), 1)).out,
+    ).toBeNull();
   });
 
   it("has nothing for bytes that aren't a zip, or a zip with no G-code", async () => {
