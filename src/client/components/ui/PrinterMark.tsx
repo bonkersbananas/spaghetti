@@ -7,10 +7,10 @@ const sizes = { xs: "size-6", sm: "size-7", md: "size-9", lg: "size-12" } as con
 
 /**
  * The printer, where a person would be named for what it did (decision 0076): a print the printer bridge recorded is
- * the printer's, never whoever paired the bridge. A rounded square, as an agent is (a circle is a person here), on the
- * warm `well` with the printer glyph (`printer-mark` in tokens.css: no script but this), the size of the avatar it
- * stands in for. Once someone says who started the print, that person's avatar takes its place, with the printer as
- * its small mark (`Avatar printer`). Not part of the avatar's module, which every screen loads: the cards that show a
+ * the printer's, never whoever paired the bridge. A rounded square, as an agent is (a circle is a person here), on a
+ * layer of ink (as a row's glyph tile) with the printer glyph (`printer-mark` in tokens.css: no script but this), the
+ * size of the avatar it stands in for. Once someone says who started the print, that person's avatar takes its place,
+ * with the printer as its small mark (`Avatar printer`). Not part of the avatar's module, which every screen loads: the cards that show a
  * print from the printer load this with their other printer parts (`builds/print-place-lazy.ts`).
  */
 export function PrinterMark({

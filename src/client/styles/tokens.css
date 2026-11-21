@@ -648,7 +648,7 @@
  * The printer's mark and glyph (decision 0076), drawn in CSS rather than with the icon component, so the avatar every
  * screen loads doesn't carry an icon's six weights in its script. `printer-glyph`: Phosphor's Printer (fill) as a mask in
  * the current color (the printer's small mark on the avatar of whoever started a print). `printer-mark`: PrinterMark,
- * a rounded square on the warm `well` with the glyph in `ink-soft`, about 60 % of it as a face's initials are.
+ * a rounded square on a layer of ink with the glyph in `ink-soft`, about 60 % of it as a face's initials are.
  */
 @utility printer-glyph {
   background-color: currentColor;
@@ -664,7 +664,8 @@
   display: inline-block;
   flex-shrink: 0;
   border-radius: var(--radius-mark);
-  background-color: var(--color-well);
+  /* A layer of ink, as a row's glyph tile is: it lifts off cream in both themes (the dark well would read as a hole). */
+  background-color: color-mix(in oklab, var(--color-ink) 7%, transparent);
   color: var(--color-ink-soft);
   &::after {
     content: "";
