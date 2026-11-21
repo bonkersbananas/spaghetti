@@ -678,7 +678,7 @@ async function searchWith(
           sql: `SELECT c.id, c.item_id, c.author_id, c.via, c.created_at, snippet(search, 4, ?, ?, '…', 16) AS snippet FROM search
             JOIN comments AS c ON c.id = search.ref_id
             JOIN items AS i ON i.id = c.item_id
-            WHERE search MATCH ? AND search.kind = 'comment' AND c.deleted_at IS NULL AND i.deleted_at IS NULL${f.person ? " AND (i.created_by = ? OR c.author_id = ?)" : ""}${commentSpan.sql}
+            WHERE search MATCH ? AND search.kind = 'comment' AND c.deleted_at IS NULL AND i.deleted_at IS NULL${f.person ? ` AND (${itemCreditedSql("i")} = ? OR c.author_id = ?)` : ""}${commentSpan.sql}
             ORDER BY ${RANK}, c.created_at DESC LIMIT ${LIMIT.items * 2}`,
           params: [
             SNIPPET_OPEN,

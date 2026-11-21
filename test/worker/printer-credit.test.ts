@@ -96,6 +96,24 @@ describe("a print from the printer", () => {
     expect((await journal()).find((one) => one.attemptId === mine.id)).toMatchObject({ by: carlId });
   });
 
+  it("isn't found as the pairing person's by what was said about it", async () => {
+    // Marie says something on the build the printer made: searching Carl Oscar's finds it only as hers.
+    const { ownId } = await printerPrints();
+    const said = await request(`/api/items/${ownId}/comments`, {
+      method: "POST",
+      cookie: marie,
+      json: { id: uuid(), body: "The marzipan clips snapped at the hinge" },
+    });
+    expect(said.status).toBe(201);
+    const search = async (query: string) =>
+      (await (await request(`/api/search?${query}`, { cookie: carl })).json<SearchResponse>()).builds.map(
+        (hit) => hit.item.id,
+      );
+    expect(await search("q=marzipan")).toContain(ownId);
+    expect(await search(`q=marzipan&person=${marieId}`)).toContain(ownId);
+    expect(await search(`q=marzipan&person=${carlId}`)).not.toContain(ownId);
+  });
+
   it("is the printer's in what Claude reads of the build, too", async () => {
     const { ownId } = await printerPrints();
     const item = await itemOf(ownId);
