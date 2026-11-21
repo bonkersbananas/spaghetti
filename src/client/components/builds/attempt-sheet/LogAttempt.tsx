@@ -78,6 +78,11 @@ export function LogAttempt({
   const [recipe, setRecipe] = useState<AppliedRecipe | null>(null);
   const [usedMatch, setUsedMatch] = useState<{ id: string; before: AttemptSettings } | null>(null);
   const [dirty, setDirty] = useState(!!kept);
+  // Something the person did in this sheet (not a restore, not a slice attaching by itself): only that is kept, so a
+  // visit to the page never renews a draft's age.
+  const [touched, setTouched] = useState(false);
+  // The attempt count this draft is for: an attempt logged elsewhere makes it stale for good (it is not written again).
+  const draftFor = useRef(item.attempts.length);
   const store = useMemo(() => attemptPhotoStore(item.id), [item.id]);
   const {
     photos,
@@ -92,7 +97,10 @@ export function LogAttempt({
   });
   const camera = useFilePicker({
     camera: true,
-    onFiles: addFiles,
+    onFiles: (files) => {
+      setTouched(true);
+      return addFiles(files);
+    },
   });
   const openCamera = () => {
     cameraOpening(item.id);
@@ -107,7 +115,13 @@ export function LogAttempt({
   useEffect(() => {
     if (photos.length && photos.every((photo) => photo.processed)) cameraArrived(item.id);
   }, [photos, item.id]);
-  const library = useFilePicker({ multiple: true, onFiles: addFiles });
+  const library = useFilePicker({
+    multiple: true,
+    onFiles: (files) => {
+      setTouched(true);
+      return addFiles(files);
+    },
+  });
   const outcomeCounts = useOutcomeCounts();
   const slicer = useSlicerFile({
     open,
@@ -129,14 +143,14 @@ export function LogAttempt({
   // are not either: they go back to what carried over.
   const attached = !!slicer.state;
   useEffect(() => {
-    if (dirty || photos.length)
+    if (touched && item.attempts.length === draftFor.current)
       keepAttemptDraft(
         item.id,
         attached ? { ...draft, settings: carryOver(previous?.settings) } : draft,
         when,
-        item.attempts.length,
+        draftFor.current,
       );
-  }, [dirty, photos.length, draft, when, attached, item.id, item.attempts.length, previous?.settings]);
+  }, [touched, photos.length, draft, when, attached, item.id, item.attempts.length, previous?.settings]);
   // The first attempt prints from the idea's slice: with exactly one, it is attached as the sheet opens (taking it
   // off, or picking another, is the person's choice and stays). With several there is a plain choice in the well.
   const only = previous
@@ -179,6 +193,7 @@ export function LogAttempt({
   const change = (next: Partial<Omit<AttemptDraft, "photos">>) => {
     setDraft((current) => ({ ...current, ...next }));
     setDirty(true);
+    setTouched(true);
   };
 
   function save(outcome: Outcome | null) {
@@ -194,6 +209,8 @@ export function LogAttempt({
     dropAttemptDraft(item.id);
     setRestorable(false);
     setDirty(false);
+    setTouched(false);
+    draftFor.current = item.attempts.length + 1;
     setWhen(null);
     setRecipe(null);
     setUsedMatch(null);
@@ -354,6 +371,7 @@ export function LogAttempt({
               onChange={(time) => {
                 setWhen(time);
                 setDirty(true);
+                setTouched(true);
               }}
             />
           }
@@ -374,7 +392,10 @@ export function LogAttempt({
                     alt={`Attempt photo ${index + 1}`}
                     color={photo.processed?.color}
                     busy={!photo.processed}
-                    onRemove={() => removeDraftPhoto(photo.id)}
+                    onRemove={() => {
+                      setTouched(true);
+                      removeDraftPhoto(photo.id);
+                    }}
                   />
                 ))}
                 {hasCamera && <AddPhotoTile size="md" icon={CameraIcon} label="Take photo" onClick={openCamera} />}

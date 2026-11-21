@@ -188,3 +188,14 @@ test("a photo that can't be opened and has no type can be tried again @phone", a
   // It was tried (and failed, again, in plain view), not silently ignored.
   await expect(page.getByText("Couldn't open that photo")).toHaveCount(2);
 });
+
+test("visiting the build page does not renew a kept draft's age @phone", async ({ page }) => {
+  const id = await aBuild(page);
+  await page.goto(`/builds/${id}`);
+  await keepDraft(page, id, { attempts: 0, ageMs: 5 * 60 * 60 * 1000 });
+  await page.reload();
+  await expect(page.getByRole("dialog", { name: "Attempt 1" })).toBeVisible();
+  await expect(page.getByRole("textbox", { name: "Note" })).toHaveValue("From an old draft");
+  const savedAt = await page.evaluate((key) => JSON.parse(localStorage.getItem(key) ?? "{}").savedAt, draftKey(id));
+  expect(Date.now() - savedAt).toBeGreaterThan(4.9 * 60 * 60 * 1000);
+});
