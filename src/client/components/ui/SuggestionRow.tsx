@@ -1,15 +1,16 @@
 import type { ReactNode } from "react";
 import { cn } from "@/lib/cn";
 import type { Icon } from "./icons";
+import { KeepNames } from "./KeepNames";
 import { Photo } from "./Photo";
 
-interface OfferRowProps {
+interface SuggestionRowProps {
   /** The thing offered, picture first: a photo's thumbnail, or a slicer's plate (`contain`, whole on its ground). */
   photo?: { src: string; color?: string; fit?: "cover" | "contain" } | null;
   /** With no picture: a glyph tile in a quiet ink wash. */
   glyph?: Icon;
   title: string;
-  /** Why it is offered, in a line or two of `text-small` ("Same file as ring.3mf"). */
+  /** Why it is offered, in a line or two of `text-small` ("Same file as ring.3mf"); file names in it stay whole. */
   why?: ReactNode;
   onSelect: () => void;
   disabled?: boolean;
@@ -21,7 +22,15 @@ interface OfferRowProps {
  * offer wears (`OfferChip`, a suggested outcome), with no fill, so it never reads as something already chosen. The
  * printer's "Which build is this?" offers its best guesses this way. 56 px tall at least, a faint wash on hover.
  */
-export function OfferRow({ photo, glyph: GlyphIcon, title, why, onSelect, disabled, className }: OfferRowProps) {
+export function SuggestionRow({
+  photo,
+  glyph: GlyphIcon,
+  title,
+  why,
+  onSelect,
+  disabled,
+  className,
+}: SuggestionRowProps) {
   return (
     <button
       type="button"
@@ -51,7 +60,11 @@ export function OfferRow({ photo, glyph: GlyphIcon, title, why, onSelect, disabl
       )}
       <span className="min-w-0 flex-1">
         <span className="text-body text-ink block truncate font-semibold">{title}</span>
-        {why && <span className="text-small text-ink-faint line-clamp-2 block break-words">{why}</span>}
+        {why && (
+          <span className="text-small text-ink-faint line-clamp-2 block break-words">
+            {typeof why === "string" ? <KeepNames text={why} /> : why}
+          </span>
+        )}
       </span>
     </button>
   );

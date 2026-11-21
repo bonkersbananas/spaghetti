@@ -8,7 +8,7 @@ import type {
   Photo as ApiPhoto,
   Person,
 } from "../shared/api.ts";
-import { byPrintTime, describeChanges } from "../shared/attempts.ts";
+import { byPrintTime, changesSince } from "../shared/attempts.ts";
 import type { Coach } from "../shared/coach.ts";
 import type { PhotoRead } from "../shared/photo-read.ts";
 import type { Reaction } from "../shared/reactions.ts";
@@ -133,7 +133,7 @@ export function toApiAttempt(
     successNotes: attempt.successNotes,
     settings: attempt.settings,
     parts: attempt.parts,
-    changes: previous ? describeChanges(previous.settings, attempt.settings) : [],
+    changes: previous ? changesSince(previous.settings, attempt) : [],
     file: file ? toApiFile(file) : null,
     createdBy: attempt.createdBy,
     createdVia: attempt.createdVia,

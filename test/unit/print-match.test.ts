@@ -193,4 +193,13 @@ describe("other signals", () => {
     const placement = placePrint(scorePrint({ name: "ring", startedAt: START }, many));
     expect(placement.kind === "ask" && placement.suggestions).toHaveLength(3);
   });
+
+  it("puts builds in progress before ideas, then the one started last, when they are as likely", () => {
+    const file = (id: string) => [{ id, name: "planter-v2.gcode.3mf" }];
+    const older = build({ id: "a-older", startedAt: START - 5 * 24 * 60 * MINUTE, files: file("older") });
+    const newer = build({ id: "b-newer", startedAt: START - 2 * 24 * 60 * MINUTE, files: file("newer") });
+    const idea = build({ id: "0-idea", stage: "idea", startedAt: null, attempts: 0, files: file("idea") });
+    const scored = scorePrint({ name: "planter-v2(2)", startedAt: START }, [idea, older, newer]);
+    expect(scored.map((one) => one.itemId)).toEqual(["b-newer", "a-older", "0-idea"]);
+  });
 });

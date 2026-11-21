@@ -3,6 +3,7 @@ import {
   type AttemptSettings,
   byPrintTime,
   carryOver,
+  changesSince,
   describeChanges,
   diffSettings,
   outcomeWords,
@@ -65,6 +66,25 @@ describe("describeChanges", () => {
     ]);
     // AMS slots aren't a change in how it was printed.
     expect(texts({ filaments: [{ ...pla, amsSlot: "A1" }] }, { filaments: [{ ...pla, amsSlot: "B2" }] })).toEqual([]);
+  });
+});
+
+describe("changesSince", () => {
+  const before: AttemptSettings = { bedType: "Textured PEI Plate", layerHeight: 0.2, infillDensity: 15, brim: true };
+
+  it("says a person's attempt took a setting away", () => {
+    expect(changesSince(before, { settings: { layerHeight: 0.2 }, createdVia: null }).map((c) => c.text)).toEqual([
+      "no plate set",
+      "no infill",
+      "no brim",
+    ]);
+  });
+
+  it("takes what the printer left out as unknown, and still says what it changed", () => {
+    expect(changesSince(before, { settings: {}, createdVia: "bridge" })).toEqual([]);
+    expect(changesSince(before, { settings: { layerHeight: 0.16 }, createdVia: "bridge" }).map((c) => c.text)).toEqual([
+      "layers 0.20 → 0.16 mm",
+    ]);
   });
 });
 

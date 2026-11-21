@@ -13,7 +13,8 @@ import {
   PrinterIcon,
   SearchIcon,
 } from "@/components/ui/icons";
-import { OfferRow } from "@/components/ui/OfferRow";
+import { KeepNames } from "@/components/ui/KeepNames";
+import { SuggestionRow } from "@/components/ui/SuggestionRow";
 import { WhyLine } from "@/components/ui/WhyLine";
 import { type AttemptView, type ItemView, useBuilds, useIdeas } from "@/lib/items";
 import { suggestionsQuery, useMoveAttempt } from "@/lib/print-moves";
@@ -63,7 +64,7 @@ export default function PrintPlace({ item, attempt, where, className }: PrintPla
   } else if (print?.reasons.length) {
     content = (
       <WhyLine icon={PrinterIcon} action={readOnly ? undefined : { label: "Not this build?", onClick: openSheet }}>
-        From the printer: {lowerFirst(whyWords(print.reasons, { brief: where === "card" }))}
+        From the printer: <KeepNames text={lowerFirst(whyWords(print.reasons, { brief: where === "card" }))} />
       </WhyLine>
     );
   } else if (where === "entry" && attempt.moved) {
@@ -153,7 +154,7 @@ interface WhichBuildQuestionProps {
   /** The builds it may belong to, best first, each with why. */
   offers: Array<{
     id: string;
-    photo: ComponentProps<typeof OfferRow>["photo"];
+    photo: ComponentProps<typeof SuggestionRow>["photo"];
     glyph: Icon;
     title: string;
     why: string;
@@ -182,7 +183,7 @@ export function WhichBuildQuestion({ name, offers, onMore, onKeep, disabled }: W
       </div>
       <div className="flex flex-col gap-2">
         {offers.map((offer) => (
-          <OfferRow
+          <SuggestionRow
             key={offer.id}
             photo={offer.photo}
             glyph={offer.glyph}

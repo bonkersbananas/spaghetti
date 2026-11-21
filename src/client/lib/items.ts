@@ -11,7 +11,7 @@ import type {
   PhotoResponse,
   UnscrapRequest,
 } from "@shared/api";
-import { byPrintTime, describeChanges, mergeNote, unionTags } from "@shared/attempts";
+import { byPrintTime, changesSince, mergeNote, unionTags } from "@shared/attempts";
 import { type InfiniteData, type QueryClient, queryOptions, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useRef, useState } from "react";
 import { toast } from "@/components/ui/Toast";
@@ -178,7 +178,7 @@ export function viewAttempts(
       ...attempt,
       // A copy saved before parts existed has none.
       parts: attempt.parts ?? [],
-      changes: before ? describeChanges(before.settings, attempt.settings) : [],
+      changes: before ? changesSince(before.settings, attempt) : [],
       file: waiting ? { ...fromPendingFile(waiting), replaces: attempt.file } : attempt.file,
       number: index + 1,
       pending: pendingIds.has(attempt.id),

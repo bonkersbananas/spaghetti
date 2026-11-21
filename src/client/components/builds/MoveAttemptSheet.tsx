@@ -4,10 +4,10 @@ import { useMemo, useState } from "react";
 import { TextField } from "@/components/ui/Field";
 import { BuildsIcon, IdeasIcon, PlusIcon, SearchIcon } from "@/components/ui/icons";
 import { MetaList } from "@/components/ui/MetaList";
-import { OfferRow } from "@/components/ui/OfferRow";
 import { Overline } from "@/components/ui/Overline";
 import { PickRow } from "@/components/ui/PickRow";
 import { Sheet } from "@/components/ui/Sheet";
+import { SuggestionRow } from "@/components/ui/SuggestionRow";
 import { findPrinting } from "@/lib/builds";
 import { type AttemptView, type ItemView, useBuilds, useIdeas } from "@/lib/items";
 import { type MoveTarget, suggestionsQuery, useMoveAttempt } from "@/lib/print-moves";
@@ -132,7 +132,7 @@ export function MoveAttemptSheet({ open, onOpenChange, item, attempt }: MoveAtte
             <Overline className="mb-2">{suggested.length === 1 ? "Most likely" : "Most likely first"}</Overline>
             <div className="mb-5 flex flex-col gap-2">
               {suggested.map(({ build, reasons }) => (
-                <OfferRow
+                <SuggestionRow
                   key={build.id}
                   photo={pictureOf(build)}
                   glyph={build.stage === "idea" ? IdeasIcon : BuildsIcon}

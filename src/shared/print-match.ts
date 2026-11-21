@@ -286,16 +286,23 @@ export function scoreCandidate(print: PrintFacts, candidate: MatchCandidate): Sc
   return { itemId: candidate.id, score, reasons };
 }
 
-/** Every candidate with something going for it, best first (ties: the one with fewer attempts, then by id). */
+/**
+ * Every candidate with something going for it, best first. Ties: a build in progress before an idea, then the one
+ * started last, then the one with fewer attempts, then by id (so the order never changes between two looks).
+ */
 export function scorePrint(print: PrintFacts, candidates: readonly MatchCandidate[]): ScoredCandidate[] {
-  const attempts = new Map(candidates.map((candidate) => [candidate.id, candidate.attempts]));
+  const byId = new Map(candidates.map((candidate) => [candidate.id, candidate]));
+  const building = (id: string) => (byId.get(id)?.stage === "building" ? 1 : 0);
+  const started = (id: string) => byId.get(id)?.startedAt ?? 0;
   return candidates
     .map((candidate) => scoreCandidate(print, candidate))
     .filter((scored) => scored.score > 0)
     .sort(
       (a, b) =>
         b.score - a.score ||
-        (attempts.get(a.itemId) ?? 0) - (attempts.get(b.itemId) ?? 0) ||
+        building(b.itemId) - building(a.itemId) ||
+        started(b.itemId) - started(a.itemId) ||
+        (byId.get(a.itemId)?.attempts ?? 0) - (byId.get(b.itemId)?.attempts ?? 0) ||
         a.itemId.localeCompare(b.itemId),
     );
 }

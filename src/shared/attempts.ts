@@ -510,6 +510,22 @@ export function describeChanges(before: AttemptSettings, after: AttemptSettings)
   return diffSettings(before, after).flatMap((row) => row.changes);
 }
 
+/**
+ * What changed since the attempt before, as the chips on an attempt say it. An attempt the printer bridge (or another
+ * agent) filed says only what it knew, which is nothing at all when it couldn't read the file: a setting it left out
+ * is unknown, not taken away, which matters once the print is moved next to attempts that said more (decision 0076).
+ */
+export function changesSince(
+  before: AttemptSettings,
+  attempt: { settings: AttemptSettings; createdVia: string | null },
+): SettingChange[] {
+  if (!attempt.createdVia) return describeChanges(before, attempt.settings);
+  const said = Object.fromEntries(
+    Object.entries(before).filter(([key]) => attempt.settings[key as keyof AttemptSettings] !== undefined),
+  ) as AttemptSettings;
+  return describeChanges(said, attempt.settings);
+}
+
 function supportChange(before: AttemptSettings, after: AttemptSettings): SettingChange | null {
   const a = before.supportEnabled ? (before.supportType ?? "normal") : null;
   const b = after.supportEnabled ? (after.supportType ?? "normal") : null;

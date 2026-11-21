@@ -1,6 +1,7 @@
 import { WhichBuildQuestion } from "@/components/builds/PrintPlace";
 import { BuildsIcon, IdeasIcon, MoveIntoIcon, PrinterIcon } from "@/components/ui/icons";
-import { OfferRow } from "@/components/ui/OfferRow";
+import { KeepNames } from "@/components/ui/KeepNames";
+import { SuggestionRow } from "@/components/ui/SuggestionRow";
 import { WhyLine } from "@/components/ui/WhyLine";
 import { Label, Panel, Section } from "./shared";
 
@@ -46,7 +47,8 @@ export function PrintsSection() {
             <Label>Why line: why it is here, and one way to change it</Label>
             <div className="flex flex-col gap-3">
               <WhyLine icon={PrinterIcon} action={{ label: "Not this build?", onClick: nothing }}>
-                From the printer: same file as UOBF-fit-test-ring.3mf, opened in Bambu Studio just before it began.
+                From the printer:{" "}
+                <KeepNames text="same file as UOBF-fit-test-ring.3mf, opened in Bambu Studio just before it began." />
               </WhyLine>
               <WhyLine icon={PrinterIcon} action={{ label: "Put it in a build", onClick: nothing }}>
                 From the printer: a build of its own, as nothing else fits <q>cable-clip-v3</q>.
@@ -58,8 +60,8 @@ export function PrintsSection() {
             </div>
           </div>
           <div>
-            <Label>Offer row: a suggestion a tap takes</Label>
-            <OfferRow
+            <Label>Suggestion row: a guess a tap takes (file names stay whole)</Label>
+            <SuggestionRow
               glyph={BuildsIcon}
               title="UÖBF glass markers"
               why="Same file as UOBF-fit-test-ring.3mf."
