@@ -38,28 +38,24 @@ describe("the installer's pieces", () => {
     expect(call("asset_for Darwin ppc 0").status).not.toBe(0);
   });
 
-  it("finds the newest bridge release among other releases", () => {
-    const releases = JSON.stringify([
-      { tag_name: "v3.0.0" },
-      { tag_name: "bridge-v1.2.0" },
-      { tag_name: "bridge-v1.1.0" },
-    ]);
-    expect(call("latest_tag", {}).status).toBe(0);
-    const result = spawnSync("sh", ["-c", `SPAGHETTI_INSTALL_SOURCE_ONLY=1 . '${script}'; latest_tag`], {
-      input: releases,
+  it("finds the highest bridge version by number, not by position or spelling", () => {
+    const latest = (input: string) =>
+      spawnSync("sh", ["-c", `SPAGHETTI_INSTALL_SOURCE_ONLY=1 . '${script}'; latest_tag`], {
+        input,
+        encoding: "utf8",
+      }).stdout.trim();
+    const refs = (...tags: string[]) =>
+      JSON.stringify(tags.map((tag) => ({ ref: `refs/tags/${tag}`, object: { type: "commit" } })));
+    expect(latest(refs("bridge-v0.1.9", "bridge-v0.1.10", "bridge-v0.1.2"))).toBe("bridge-v0.1.10");
+    expect(latest(refs("bridge-v0.9.0", "bridge-v0.10.0", "bridge-v1.0.0-rc.1"))).toBe("bridge-v0.10.0");
+    expect(latest(refs("bridge-v1.0.0-rc.1"))).toBe("");
+    expect(latest(JSON.stringify([{ ref: "refs/tags/bridge-v2.0.0" }], null, 2))).toBe("bridge-v2.0.0");
+    expect(latest("[]")).toBe("");
+    const all = spawnSync("sh", ["-c", `SPAGHETTI_INSTALL_SOURCE_ONLY=1 . '${script}'; bridge_tags`], {
+      input: refs("bridge-v0.1.9", "bridge-v0.1.10", "bridge-v0.1.2"),
       encoding: "utf8",
-    });
-    expect(result.stdout.trim()).toBe("bridge-v1.2.0");
-    const pretty = spawnSync("sh", ["-c", `SPAGHETTI_INSTALL_SOURCE_ONLY=1 . '${script}'; latest_tag`], {
-      input: '{\n  "tag_name": "bridge-v2.0.0-rc.1",\n}',
-      encoding: "utf8",
-    });
-    expect(pretty.stdout.trim()).toBe("bridge-v2.0.0-rc.1");
-    const none = spawnSync("sh", ["-c", `SPAGHETTI_INSTALL_SOURCE_ONLY=1 . '${script}'; latest_tag`], {
-      input: '[{"tag_name":"v1"}]',
-      encoding: "utf8",
-    });
-    expect(none.stdout.trim()).toBe("");
+    }).stdout;
+    expect(all.trim().split("\n")).toEqual(["bridge-v0.1.10", "bridge-v0.1.9", "bridge-v0.1.2"]);
   });
 });
 
@@ -78,7 +74,7 @@ describe("the whole script, with a stand-in for the network and the Mac", () => 
   afterEach(() => rmSync(dir, { recursive: true, force: true }));
 
   /** A "release": the program is a shell script that records what `setup` was given. */
-  function release(options: { corrupt?: boolean } = {}) {
+  function release(options: { corrupt?: boolean; unpublished?: boolean } = {}) {
     const program = `#!/bin/sh\nif [ "$1" = version ]; then echo 1.2.0; exit 0; fi\nprintf '%s\\n' "$@" > "${join(dir, "setup-args.txt")}"\n`;
     const gz = gzipSync(Buffer.from(program));
     const sums = `${createHash("sha256")
@@ -86,14 +82,23 @@ describe("the whole script, with a stand-in for the network and the Mac", () => 
       .digest("hex")}  spaghetti-bridge-darwin-arm64.gz\n`;
     writeFileSync(join(dir, "asset.gz"), gz);
     writeFileSync(join(dir, "SHA256SUMS"), sums);
-    writeFileSync(join(dir, "releases.json"), JSON.stringify([{ tag_name: "bridge-v1.2.0" }]));
+    // The tags API lists every bridge tag, oldest name first, however many slicer releases came after.
+    writeFileSync(
+      join(dir, "releases.json"),
+      JSON.stringify(
+        ["bridge-v1.1.0", "bridge-v1.2.0", ...(options.unpublished ? ["bridge-v1.3.0"] : [])].map((tag) => ({
+          ref: `refs/tags/${tag}`,
+        })),
+      ),
+    );
     // curl serves those files by URL and records what was asked; uname says Darwin on Apple silicon.
     const curl = `#!/bin/sh
 out=""; url=""
 while [ $# -gt 0 ]; do case "$1" in -o) out="$2"; shift 2;; -*) shift;; *) url="$1"; shift;; esac; done
 echo "$url" >> "${join(dir, "urls.txt")}"
 case "$url" in
-  *api.github.com*releases*) cp "${join(dir, "releases.json")}" "$out";;
+  *api.github.com*matching-refs/tags/bridge-v) cp "${join(dir, "releases.json")}" "$out";;
+  *bridge-v1.3.0/*) exit 22;;
   *SHA256SUMS) cp "${join(dir, "SHA256SUMS")}" "$out";;
   *spaghetti-bridge-darwin-arm64.gz) cp "${join(dir, "asset.gz")}" "$out";;
   *) exit 22;;
@@ -139,9 +144,18 @@ esac
     release();
     const result = run(["ABCD-EFGH"]);
     expect(result.status).toBe(0);
-    expect(readFileSync(join(dir, "urls.txt"), "utf8")).toContain(
-      "releases/download/bridge-v1.2.0/spaghetti-bridge-darwin-arm64.gz",
-    );
+    const urls = readFileSync(join(dir, "urls.txt"), "utf8");
+    expect(urls).toContain("releases/download/bridge-v1.2.0/spaghetti-bridge-darwin-arm64.gz");
+    // One request to GitHub's API, and not the paged releases list that slicer releases push the bridge off.
+    expect(urls.match(/api\.github\.com/g)).toHaveLength(1);
+    expect(urls).not.toContain("/releases?");
+  });
+
+  it("skips a newer tag whose release isn't published yet", () => {
+    release({ unpublished: true });
+    const result = run(["ABCD-EFGH"]);
+    expect(result.status).toBe(0);
+    expect(readFileSync(join(dir, "urls.txt"), "utf8")).toContain("releases/download/bridge-v1.2.0/spaghetti-bridge");
   });
 
   it("throws away a download that doesn't match its checksum and installs nothing", () => {
