@@ -67,8 +67,7 @@ export function reslicingNotice(
 ): { text: string; fraction: number | null; percent?: boolean } | undefined {
   if (!job) return undefined;
   if (job.status === "waiting") return { text: "Waiting to slice it again…", fraction: null };
-  if (job.status === "slicing")
-    return { text: "Slicing it again… these toolpaths are the last slice's", fraction: job.fraction, percent: true };
+  if (job.status === "slicing") return { text: "Slicing it again…", fraction: job.fraction, percent: true };
   if (job.status === "sliced" && job.outcome?.ok) return { text: "Saving the new slice…", fraction: null };
   return undefined;
 }
