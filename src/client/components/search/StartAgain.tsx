@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/Button";
 import { PlayIcon } from "@/components/ui/icons";
 import { toast } from "@/components/ui/Toast";
 import { api } from "@/lib/api";
+import { dropAttemptDraft } from "@/lib/attempt-draft";
 import { logAttempt } from "@/lib/builds";
 import { itemKeys } from "@/lib/items";
 import { outbox } from "@/lib/outbox";
@@ -40,6 +41,7 @@ export function StartAgain({
       onClick={() => {
         if (!me) return;
         onStart?.();
+        dropAttemptDraft(hit.item.id);
         const id = logAttempt(
           hit.item,
           {

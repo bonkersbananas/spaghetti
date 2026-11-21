@@ -2,7 +2,7 @@ import type { AttemptFile } from "@shared/api";
 import { type AttemptSettings, carryOver, type Outcome } from "@shared/attempts";
 import { partsOnPlate } from "@shared/parts";
 import { useSuspenseQuery } from "@tanstack/react-query";
-import { lazy, Suspense, useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { type AppliedRecipe, RecipePicker } from "@/components/recipes/RecipePicker";
 import { Button } from "@/components/ui/Button";
 import { CameraIcon, ImageIcon, PlusIcon } from "@/components/ui/icons";
@@ -11,6 +11,7 @@ import { AddPhotoTile, PhotoThumb, useFilePicker } from "@/components/ui/PhotoTi
 import { Sheet } from "@/components/ui/Sheet";
 import { toast } from "@/components/ui/Toast";
 import {
+  attemptPhotoStore,
   cameraArrived,
   cameraOpening,
   cameraWasUp,
@@ -69,11 +70,20 @@ export function LogAttempt({
     parts: [],
   });
   // A draft kept on the device (the page loaded again while the camera was up, or the app was closed) comes back.
-  const [draft, setDraft] = useState(() => keptAttemptDraft(item.id) ?? blank());
-  const [when, setWhen] = useState<number | null>(null);
+  // Only a recent one, and only while no attempt was logged since (lib/attempt-draft).
+  const [kept] = useState(() => keptAttemptDraft(item.id, item.attempts.length));
+  const [restorable, setRestorable] = useState(!!kept);
+  const [draft, setDraft] = useState(() => kept?.draft ?? blank());
+  const [when, setWhen] = useState<number | null>(kept?.when ?? null);
   const [recipe, setRecipe] = useState<AppliedRecipe | null>(null);
   const [usedMatch, setUsedMatch] = useState<{ id: string; before: AttemptSettings } | null>(null);
-  const [dirty, setDirty] = useState(() => !!keptAttemptDraft(item.id));
+  const [dirty, setDirty] = useState(!!kept);
+  // Something the person did in this sheet (not a restore, not a slice attaching by itself): only that is kept, so a
+  // visit to the page never renews a draft's age.
+  const [touched, setTouched] = useState(false);
+  // The attempt count this draft is for: an attempt logged elsewhere makes it stale for good (it is not written again).
+  const draftFor = useRef(item.attempts.length);
+  const store = useMemo(() => attemptPhotoStore(item.id), [item.id]);
   const {
     photos,
     addFiles,
@@ -81,13 +91,15 @@ export function LogAttempt({
     clear,
   } = useDraftPhotos({
     keep: true,
-    scope: item.id,
+    store,
+    // Not decoded again on every visit to the build: only while the sheet is open, where a failure shows.
+    restore: open && restorable,
   });
   const camera = useFilePicker({
     camera: true,
     onFiles: (files) => {
-      cameraArrived(item.id);
-      addFiles(files);
+      setTouched(true);
+      return addFiles(files);
     },
   });
   const openCamera = () => {
@@ -99,15 +111,23 @@ export function LogAttempt({
   useEffect(() => {
     if (cameraWasUp(item.id)) onOpenChange(true);
   }, []);
+  // The camera's mark stays until the photo is kept and decoded: a page killed in between opens the sheet again.
   useEffect(() => {
-    if (dirty) keepAttemptDraft(item.id, draft);
-  }, [dirty, draft, item.id]);
-  const library = useFilePicker({ multiple: true, onFiles: addFiles });
+    if (photos.length && photos.every((photo) => photo.processed)) cameraArrived(item.id);
+  }, [photos, item.id]);
+  const library = useFilePicker({
+    multiple: true,
+    onFiles: (files) => {
+      setTouched(true);
+      return addFiles(files);
+    },
+  });
   const outcomeCounts = useOutcomeCounts();
   const slicer = useSlicerFile({
     open,
     settings: draft.settings,
-    onSettings: (settings) => change({ settings }),
+    // Not a change of the person's: a slice that attached by itself must not make a draft out of an untouched sheet.
+    onSettings: (settings) => setDraft((current) => ({ ...current, settings })),
     // A plate from a file: its parts are what's on it (unless someone already said).
     onObjects: (objects) => {
       const found = partsOnPlate(objects, item.parts);
@@ -119,6 +139,18 @@ export function LogAttempt({
     incomingFile,
   });
 
+  // What is kept for a page that loads again. The file the slicer holds is not kept, so settings that came from it
+  // are not either: they go back to what carried over.
+  const attached = !!slicer.state;
+  useEffect(() => {
+    if (touched && item.attempts.length === draftFor.current)
+      keepAttemptDraft(
+        item.id,
+        attached ? { ...draft, settings: carryOver(previous?.settings) } : draft,
+        when,
+        draftFor.current,
+      );
+  }, [touched, draft, when, attached, item.id, item.attempts.length, previous?.settings]);
   // The first attempt prints from the idea's slice: with exactly one, it is attached as the sheet opens (taking it
   // off, or picking another, is the person's choice and stays). With several there is a plain choice in the well.
   const only = previous
@@ -161,6 +193,7 @@ export function LogAttempt({
   const change = (next: Partial<Omit<AttemptDraft, "photos">>) => {
     setDraft((current) => ({ ...current, ...next }));
     setDirty(true);
+    setTouched(true);
   };
 
   function save(outcome: Outcome | null) {
@@ -174,7 +207,10 @@ export function LogAttempt({
     slicer.clear();
     clear();
     dropAttemptDraft(item.id);
+    setRestorable(false);
     setDirty(false);
+    setTouched(false);
+    draftFor.current = item.attempts.length + 1;
     setWhen(null);
     setRecipe(null);
     setUsedMatch(null);
@@ -335,6 +371,7 @@ export function LogAttempt({
               onChange={(time) => {
                 setWhen(time);
                 setDirty(true);
+                setTouched(true);
               }}
             />
           }
@@ -355,7 +392,10 @@ export function LogAttempt({
                     alt={`Attempt photo ${index + 1}`}
                     color={photo.processed?.color}
                     busy={!photo.processed}
-                    onRemove={() => removeDraftPhoto(photo.id)}
+                    onRemove={() => {
+                      setTouched(true);
+                      removeDraftPhoto(photo.id);
+                    }}
                   />
                 ))}
                 {hasCamera && <AddPhotoTile size="md" icon={CameraIcon} label="Take photo" onClick={openCamera} />}
