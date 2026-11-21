@@ -38,9 +38,14 @@ asset_for() {
   esac
 }
 
-# latest_tag: reads a GitHub releases list on stdin and prints the newest bridge-v… tag (the list is newest first).
+# latest_tag: reads GitHub's list of the repository's bridge-v… tags (git/matching-refs/tags/bridge-v, one request, and
+# slicer releases can't push it off a page) on stdin and prints the highest plain x.y.z one: by number, so
+# bridge-v0.1.10 beats bridge-v0.1.9. Pre-release tags (bridge-v1.0.0-rc.1) are left out.
 latest_tag() {
-  grep -o '"tag_name": *"bridge-v[^"]*"' | head -n 1 | sed 's/.*"\(bridge-v[^"]*\)"$/\1/'
+  grep -o '"ref": *"refs/tags/bridge-v[0-9][0-9]*\.[0-9][0-9]*\.[0-9][0-9]*"' |
+    sed 's/.*refs\/tags\/\(bridge-v[^"]*\)"$/\1/' |
+    awk '{ v = substr($0, 9); split(v, p, "."); k = p[1] * 1000000000000 + p[2] * 1000000 + p[3]; if (k > best) { best = k; tag = $0 } }
+      END { if (tag != "") print tag }'
 }
 
 # sha256 FILE: its SHA-256, with whichever tool this system has.
@@ -107,8 +112,8 @@ main() {
 
   if [ -z "$tag" ]; then
     say "Looking for the latest bridge…"
-    curl -fsSL "https://api.github.com/repos/$REPO/releases?per_page=30" -o "$work/releases.json" || fail "Couldn't reach GitHub. Are you online?"
-    tag=$(latest_tag <"$work/releases.json")
+    curl -fsSL "https://api.github.com/repos/$REPO/git/matching-refs/tags/bridge-v" -o "$work/tags.json" || fail "Couldn't reach GitHub. Are you online?"
+    tag=$(latest_tag <"$work/tags.json")
     [ -n "$tag" ] || fail "No bridge release was found yet."
   fi
   version="${tag#bridge-v}"
