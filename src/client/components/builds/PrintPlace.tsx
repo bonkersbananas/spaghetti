@@ -17,7 +17,7 @@ import { useReadOnly } from "@/lib/read-only";
 import { itemName } from "@/lib/recent";
 import { useIsDesktop } from "@/lib/use-media-query";
 import { useWho } from "@/lib/who";
-import { pictureOf } from "./BuildPick";
+import { picturesApart } from "./BuildPick";
 
 const MoveAttemptSheet = lazy(() => import("./MoveAttemptSheet").then((m) => ({ default: m.MoveAttemptSheet })));
 
@@ -136,6 +136,10 @@ function WhichBuild({ item, attempt, onMore, readOnly }: WhichBuildProps) {
   // The build is named after the job until someone renames it: then the card's title says the name already.
   const said = !!printName && printName.trim().toLowerCase() === item.title?.trim().toLowerCase();
   const { shared, lines, names } = offerLines(offers);
+  const pictures = picturesApart(
+    offers.map((offer) => offer.build),
+    !!shared,
+  );
   return (
     <WhichBuildQuestion
       name={said ? null : printName}
@@ -144,7 +148,7 @@ function WhichBuild({ item, attempt, onMore, readOnly }: WhichBuildProps) {
       loading={isPending}
       offers={offers.map(({ build }, index) => ({
         id: build.id,
-        photo: pictureOf(build),
+        photo: pictures[index],
         glyph: build.stage === "idea" ? IdeasIcon : BuildsIcon,
         title: itemName(build, build.stage === "idea" ? "idea" : "build"),
         line: lines[index] ?? "",
@@ -216,7 +220,16 @@ export function WhichBuildQuestion({
         )}
       </div>
       <div className="flex flex-col">
-        {loading && <Skeleton className="my-1 h-12 w-full rounded-lg" />}
+        {loading && (
+          // A row's room, shaped like one: its picture and two lines.
+          <div aria-hidden className="flex min-h-14 items-center gap-3 py-2">
+            <Skeleton className="size-10 shrink-0 rounded-md md:size-11" />
+            <div className="flex flex-1 flex-col gap-1.5">
+              <Skeleton className="h-4 w-2/5 rounded-sm" />
+              <Skeleton className="h-3 w-1/4 rounded-sm" />
+            </div>
+          </div>
+        )}
         {offers.map((offer) => (
           <PickRow
             key={offer.id}

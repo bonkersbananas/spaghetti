@@ -29,6 +29,18 @@ export function pictureOf(build: ItemView) {
   return coverPhoto(coverOf(build), "") ?? null;
 }
 
+/**
+ * The pictures of builds offered side by side for one print. When they all keep the same file (`sameFile`), each
+ * would show that file's plate, one render twice: those show their glyph (build or idea) instead, which tells them
+ * apart. A photo of a real print stays.
+ */
+export function picturesApart(builds: readonly ItemView[], sameFile: boolean) {
+  return builds.map((build) => {
+    const picture = pictureOf(build);
+    return sameFile && picture?.fit === "contain" ? null : picture;
+  });
+}
+
 /** "30 min left", "Done by now" or "On the bed": the progress sentence kept short. */
 export function useLeft(attempt: AttemptView | undefined): string | null {
   const progress = usePrintProgress(attempt?.id, attempt?.printedAt ?? 0, attempt?.settings.estimatedMinutes);

@@ -14,7 +14,7 @@ import { type AttemptView, type ItemView, useBuilds, useIdeas } from "@/lib/item
 import { type MoveTarget, offerLines, suggestionsQuery, useMoveAttempt } from "@/lib/print-moves";
 import { itemName } from "@/lib/recent";
 import { useIsDesktop } from "@/lib/use-media-query";
-import { BuildMeta, pictureOf } from "./BuildPick";
+import { BuildMeta, pictureOf, picturesApart } from "./BuildPick";
 
 interface MoveAttemptSheetProps {
   open: boolean;
@@ -99,6 +99,10 @@ export function MoveAttemptSheet({ open, onOpenChange, item, attempt, withoutGue
 
   const empty = !suggested.length && !active.length && !finished.length;
   const { shared, lines, names } = offerLines(suggested);
+  const pictures = picturesApart(
+    suggested.map((one) => one.build),
+    !!shared,
+  );
 
   return (
     <Sheet
@@ -142,7 +146,7 @@ export function MoveAttemptSheet({ open, onOpenChange, item, attempt, withoutGue
               {suggested.map(({ build }, index) => (
                 <PickRow
                   key={build.id}
-                  photo={pictureOf(build)}
+                  photo={pictures[index]}
                   glyph={{ icon: build.stage === "idea" ? IdeasIcon : BuildsIcon }}
                   title={nameOf(build)}
                   mark={build.stage === "idea" ? <Chip>Idea</Chip> : undefined}
