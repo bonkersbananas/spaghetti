@@ -8068,7 +8068,7 @@ shots.push(
           .waitFor();
         // The whole question in view on a phone, above the action bar.
         await page
-          .getByRole("button", { name: "It's new" })
+          .getByRole("button", { name: "Its own build" })
           .first()
           .evaluate((node) => node.scrollIntoView({ block: "center" }));
         await page.waitForTimeout(400);
@@ -8076,26 +8076,63 @@ shots.push(
       cleanup: removeFiledPrints,
     },
     {
-      // "Another build": the guesses with why, the builds in progress, done and shelved, search, and "It's new".
+      // "Another build": the builds in progress (the card's guesses left out, it shows them), search on desktop, "Its
+      // own build", then done and shelved.
       name: "which-build-sheet",
       path: "/builds",
       prepare: async (page) => {
         const { ownId } = await printToAskAbout(page);
         await page.goto(`/builds/${ownId}`);
         await page.getByRole("button", { name: "Another build" }).first().click();
-        await page.getByRole("dialog", { name: "Which build is this?" }).getByText("Most likely").waitFor();
+        await page.getByRole("dialog", { name: "Which build is this?" }).getByText("In progress").waitFor();
         await page.waitForTimeout(500);
       },
       cleanup: removeFiledPrints,
     },
     {
-      // Nothing fits: no question, one quiet line with a way to put it in a build anyway.
+      // The same sheet on a phone, scrolled to its end: "Its own build" and the done and shelved builds, a step quieter.
+      name: "which-build-sheet-end",
+      path: "/builds",
+      width: 390,
+      why: "the phone's sheet scrolls; the desktop's shows the same in which-build-sheet",
+      prepare: async (page) => {
+        const { ownId } = await printToAskAbout(page);
+        await page.goto(`/builds/${ownId}`);
+        await page.getByRole("button", { name: "Another build" }).first().click();
+        const sheet = page.getByRole("dialog", { name: "Which build is this?" });
+        await sheet.getByText("In progress").waitFor();
+        await page.waitForTimeout(500);
+        await sheet
+          .getByRole("button")
+          .last()
+          .evaluate((node) => node.scrollIntoView({ block: "end" }));
+        await page.waitForTimeout(400);
+      },
+      cleanup: removeFiledPrints,
+    },
+    {
+      // While the guesses are on their way: the question and its buttons at once, a row's room kept for them.
+      name: "builds-which-build-loading",
+      path: "/builds",
+      prepare: async (page) => {
+        await page.route("**/api/attempts/*/suggestions", () => {
+          // Held: the guesses never arrive while the shot is taken.
+        });
+        const { ownId } = await printToAskAbout(page);
+        await onlyOnTheBed(page, [ownId]);
+        await page.getByRole("heading", { name: "Which build is this?" }).first().waitFor();
+        await page.waitForTimeout(400);
+      },
+      cleanup: removeFiledPrints,
+    },
+    {
+      // Nothing fits: no question, one quiet line with a way to move it anyway.
       name: "builds-which-build-none",
       path: "/builds",
       prepare: async (page) => {
         const { ownId } = await bridgeFiles(page, "cable-clip-v3");
         await onlyOnTheBed(page, [ownId]);
-        await page.getByRole("button", { name: "Put it in a build" }).first().waitFor();
+        await page.getByRole("button", { name: "Move it" }).first().waitFor();
         await page.waitForTimeout(400);
       },
       cleanup: removeFiledPrints,
@@ -8155,9 +8192,54 @@ shots.push(
         await sheet.getByText("In progress").waitFor();
         await page.waitForTimeout(500);
         await sheet
-          .getByRole("button", { name: /^A new build/ })
+          .getByRole("button", { name: /^Its own build/ })
           .evaluate((node) => node.scrollIntoView({ block: "center" }));
         await page.waitForTimeout(400);
+      },
+    },
+    {
+      // "Not this build?" on a matched print: the builds in progress, then "Its own build", which brings back the build
+      // the printer made (scrolled to it on a phone).
+      name: "not-this-build-sheet",
+      path: "/builds",
+      prepare: async (page) => {
+        const boat = await buildAboutToPrint(page, "Bath boat", "bath-boat.gcode.3mf", { bytes: tugboatFile() });
+        await bridgeFiles(page, "bath-boat(2)");
+        await page.goto(`/builds/${boat}`);
+        await page.getByRole("button", { name: "Not this build?" }).first().click();
+        const sheet = page.getByRole("dialog", { name: "Move attempt 1" });
+        await sheet.getByText("In progress").waitFor();
+        await page.waitForTimeout(500);
+        await sheet
+          .getByRole("button", { name: /^Its own build/ })
+          .evaluate((node) => node.scrollIntoView({ block: "center" }));
+        await page.waitForTimeout(400);
+      },
+      cleanup: removeFiledPrints,
+    },
+    {
+      // The moment after a move: the toast says where it went, with View and Undo.
+      name: "build-moved-toast",
+      path: "/builds",
+      prepare: async (page) => {
+        const boat = await buildAboutToPrint(page, "Bath boat", "bath-boat.gcode.3mf", { bytes: tugboatFile() });
+        await bridgeFiles(page, "bath-boat(2)");
+        await page.goto(`/builds/${boat}`);
+        await page.getByRole("button", { name: "Not this build?" }).first().click();
+        const sheet = page.getByRole("dialog", { name: "Move attempt 1" });
+        await sheet.getByRole("button", { name: /^Paddle steamer/ }).click();
+        await page.getByText("Moved to Paddle steamer").waitFor();
+        await sheet.waitFor({ state: "hidden" });
+        await page.waitForTimeout(600);
+      },
+      cleanup: async (page) => {
+        const headers = { Origin: new URL(page.url()).origin };
+        const { item } = (await (await page.request.get(`/api/items/${SEED_BUILD_IDS.paddleSteamer}`)).json()) as {
+          item: { attempts: Array<{ id: string; outcome: string | null }> };
+        };
+        for (const attempt of item.attempts.filter((one) => one.outcome === null))
+          await page.request.delete(`/api/attempts/${attempt.id}`, { headers });
+        await removeFiledPrints(page);
       },
     },
     {
