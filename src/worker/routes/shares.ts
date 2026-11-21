@@ -7,8 +7,11 @@ import type { AppEnv } from "../env.ts";
 import { apiError } from "../http.ts";
 import { hashShareToken, liveTarget, newShareToken, toApiShare } from "../shares.ts";
 
-/** The path's plural, as the app's own addresses say it. */
-const KINDS: Record<string, ShareKind> = { items: "item", twists: "twist" };
+/** The path's plural, as the app's own addresses say it (a Map, so "constructor" and the like aren't kinds). */
+const KINDS = new Map<string, ShareKind>([
+  ["items", "item"],
+  ["twists", "twist"],
+]);
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /**
@@ -28,7 +31,7 @@ export const shareRoutes = new Hono<AppEnv>()
    * end with one link). A link stopped earlier stays stopped: a new one gets a new token.
    */
   .put("/:kind/:id", async (c) => {
-    const kind = KINDS[c.req.param("kind")];
+    const kind = KINDS.get(c.req.param("kind"));
     const targetId = c.req.param("id");
     if (!kind || !UUID.test(targetId)) return apiError(c, 404, "not_found", "That isn't here any more.");
     const db = c.var.db;

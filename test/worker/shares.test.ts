@@ -170,6 +170,9 @@ describe("making and stopping a link", () => {
     expect((await request(`/api/shares/twists/${uuid()}`, { method: "PUT", cookie })).status).toBe(404);
     expect((await request(`/api/shares/spools/${uuid()}`, { method: "PUT", cookie })).status).toBe(404);
     const item = await createItem({ title: "Gone" });
+    // An object's own inherited names aren't kinds either.
+    for (const kind of ["constructor", "__proto__", "toString", "hasOwnProperty"])
+      expect((await request(`/api/shares/${kind}/${item.id}`, { method: "PUT", cookie })).status).toBe(404);
     await request(`/api/items/${item.id}`, { method: "DELETE", cookie });
     expect((await request(`/api/shares/items/${item.id}`, { method: "PUT", cookie })).status).toBe(404);
   });
