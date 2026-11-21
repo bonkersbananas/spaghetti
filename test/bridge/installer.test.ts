@@ -59,6 +59,42 @@ describe("the installer's pieces", () => {
   });
 });
 
+describe("the terminal the questions are asked on", () => {
+  const withTty = (ttyScript: string) => {
+    const dir = mkdtempSync(join(tmpdir(), "tty-"));
+    writeFileSync(join(dir, "tty"), `#!/bin/sh\n${ttyScript}\n`);
+    chmodSync(join(dir, "tty"), 0o755);
+    const result = spawnSync("sh", ["-c", `SPAGHETTI_INSTALL_SOURCE_ONLY=1 . '${script}'; terminal_device`], {
+      encoding: "utf8",
+      env: { ...process.env, PATH: `${dir}:${process.env.PATH}` },
+    });
+    rmSync(dir, { recursive: true, force: true });
+    return result;
+  };
+
+  it("is the terminal's real device (from tty), never /dev/tty", () => {
+    const result = withTty("echo /dev/null");
+    expect(result.status).toBe(0);
+    expect(result.stdout.trim()).toBe("/dev/null");
+  });
+
+  it("is nothing when there is no terminal, so the script falls back", () => {
+    const result = withTty("echo 'not a tty'; exit 1");
+    expect(result.status).not.toBe(0);
+    expect(result.stdout).toBe("");
+  });
+
+  it("braces a variable before the ellipsis, which some shells read as part of its name", () => {
+    expect(readFileSync(script, "utf8")).not.toMatch(/\$[a-z_]+…/);
+  });
+
+  it("hands setup the device, and falls back to /dev/tty only without one", () => {
+    const text = readFileSync(script, "utf8");
+    expect(text).toContain('<"$tty_device"');
+    expect(text.indexOf('<"$tty_device"')).toBeLessThan(text.indexOf("</dev/tty"));
+  });
+});
+
 describe("the whole script, with a stand-in for the network and the Mac", () => {
   let dir: string;
   let home: string;

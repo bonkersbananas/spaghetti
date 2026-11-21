@@ -15,6 +15,20 @@ const say = (line: string) => console.log(line);
 
 function realEnv(interactive: boolean): SetupEnv {
   const rl = interactive ? createInterface({ input: process.stdin, output: process.stdout }) : null;
+  // A stream that fails (kqueue refusing a tty on macOS) must not crash or hang the questions: they reject instead.
+  let broken: Error | null = null;
+  let onBroken: (error: Error) => void = () => {};
+  const failed = new Promise<never>((_, reject) => {
+    onBroken = (error) => {
+      broken ??= error;
+      reject(error);
+    };
+  });
+  failed.catch(() => {});
+  if (rl) {
+    rl.on("error", onBroken);
+    process.stdin.on("error", onBroken);
+  }
   return {
     home: homedir(),
     uid: process.getuid?.() ?? 501,
@@ -23,7 +37,12 @@ function realEnv(interactive: boolean): SetupEnv {
       const result = spawnSync(command, args, { encoding: "utf8" });
       return { ok: result.status === 0, output: `${result.stdout ?? ""}${result.stderr ?? ""}` };
     },
-    ask: rl ? async (question, fallback) => rl.question(`${question}${fallback ? ` [${fallback}]` : ""}: `) : null,
+    ask: rl
+      ? async (question, fallback) => {
+          if (broken) throw broken;
+          return Promise.race([rl.question(`${question}${fallback ? ` [${fallback}]` : ""}: `), failed]);
+        }
+      : null,
     say,
     discover: () => discoverPrinters(6_000),
     serialOf: (host) => serialFromCertificate(host),
