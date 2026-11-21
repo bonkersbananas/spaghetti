@@ -11,6 +11,7 @@ import { CameraIcon, ImageIcon, PlusIcon, TrashIcon } from "@/components/ui/icon
 import { AddPhotoTile, PhotoThumb, useFilePicker } from "@/components/ui/PhotoTiles";
 import { SaveStatus } from "@/components/ui/SaveStatus";
 import { deleteAttempt, queueFinish, saveAttemptChanges } from "@/lib/builds";
+import { useHasCamera } from "@/lib/has-camera";
 import { type AttemptView, addPhotosToItem, type ItemView, removePhoto } from "@/lib/items";
 import { photoSrc } from "@/lib/previews";
 import { useReadOnly } from "@/lib/read-only";
@@ -50,6 +51,7 @@ export function EditAttempt({
 }) {
   const queryClient = useQueryClient();
   const isDesktop = useIsDesktop();
+  const hasCamera = useHasCamera();
   const offline = useReadOnly(attempt.pending);
   const printing = attempt.outcome === null;
   // Offline, a print still printing can be finished (it is sent later); anything else saved is only for reading.
@@ -280,7 +282,7 @@ export function EditAttempt({
                 onRemove={offline && !photo.upload ? undefined : () => removePhoto(queryClient, photo)}
               />
             ))}
-            {!isDesktop && <AddPhotoTile size="md" icon={CameraIcon} label="Take photo" onClick={camera.open} />}
+            {hasCamera && <AddPhotoTile size="md" icon={CameraIcon} label="Take photo" onClick={camera.open} />}
             <AddPhotoTile
               size="md"
               icon={isDesktop ? PlusIcon : ImageIcon}

@@ -118,9 +118,19 @@ function CaptureButton() {
         hidden
         data-testid="tabbar-camera-input"
         onChange={(event) => {
-          const files = Array.from(event.target.files ?? []);
-          event.target.value = "";
-          if (files.length) openWith({ files });
+          // Its own small chunk: the tab bar is on every first load, a camera photo is not.
+          const input = event.target;
+          void import("@/lib/picked")
+            .then(({ takePicked }) => takePicked(input))
+            .catch(() => {
+              // The chunk couldn't load (offline, or replaced by a deploy): take the photo as it is rather than lose it.
+              const files = Array.from(input.files ?? []);
+              input.value = "";
+              return files;
+            })
+            .then((files) => {
+              if (files.length) openWith({ files });
+            });
         }}
       />
     </>

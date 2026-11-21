@@ -1,5 +1,6 @@
 import { type ComponentPropsWithRef, forwardRef, useRef } from "react";
 import { cn } from "@/lib/cn";
+import { takePicked } from "@/lib/picked";
 import { ConfirmRemove } from "./ConfirmRemove";
 import { CloseIcon, type Icon } from "./icons";
 import { Photo } from "./Photo";
@@ -150,9 +151,9 @@ export function useFilePicker({ camera, multiple, onFiles, accept = "image/*", t
       hidden
       data-testid={testId ?? (camera ? "camera-input" : "photo-input")}
       onChange={(event) => {
-        const files = Array.from(event.target.files ?? []);
-        event.target.value = "";
-        if (files.length) onFiles(files);
+        void takePicked(event.target).then((files) => {
+          if (files.length) onFiles(files);
+        });
       }}
     />
   );
