@@ -87,6 +87,7 @@ const files: PrinterFiles = {
 const camera: Camera = { grab: async () => JPEG };
 
 /** A bridge listening to the fake printer, as `pnpm bridge` wires it. */
+const logged: string[] = [];
 function runBridge(options: { camera?: Camera | null } = {}) {
   const bridge = new Bridge({
     api: app.api,
@@ -99,6 +100,7 @@ function runBridge(options: { camera?: Camera | null } = {}) {
     maxBackoffMs: 20,
     amsDelayMs: 10,
     statusEveryMs: 60_000,
+    log: (line) => logged.push(line),
   });
   bridges.push(bridge);
   const link = connectToPrinter({
@@ -275,6 +277,24 @@ describe("a print, start to end", () => {
     await until(() => [...app.items.values()][0]?.attempts[0]?.endedAt != null, "the end");
     expect(app.photos).toHaveLength(0);
     expect(app.files.size).toBe(0);
+  });
+});
+
+describe("when the camera keeps failing", () => {
+  it("logs why, and shows a problem after two prints without a photo", async () => {
+    runBridge({ camera: { grab: async () => null } });
+    await until(() => printer.published.length > 0, "the status request");
+    for (const n of [1, 2]) {
+      await printer.replay(fullPrint);
+      await until(() => logged.filter((l) => /No camera photo/.test(l)).length >= n, `miss ${n}`);
+    }
+    await until(
+      () =>
+        (app.statuses as Array<{ problems?: Array<{ code: string }> }>).some((s) =>
+          s.problems?.some((p) => p.code === "camera"),
+        ),
+      "the camera problem",
+    );
   });
 });
 

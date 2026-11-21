@@ -16860,7 +16860,8 @@
                             "refused",
                             "wrong-access-code",
                             "silent",
-                            "certificate"
+                            "certificate",
+                            "camera"
                           ]
                         },
                         "message": {

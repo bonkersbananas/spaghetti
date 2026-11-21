@@ -194,12 +194,38 @@ export class Bridge {
     this.kick();
     void this.sendStatus();
     if (!this.deps.camera) return;
-    const frame = await this.deps.camera.grab().catch(() => null);
+    const frame = await this.deps.camera.grab().catch((error) => {
+      this.log(`The camera failed: ${error instanceof Error ? error.message : String(error)}`);
+      return null;
+    });
     if (frame) {
+      const recovered = this.cameraMisses >= 2;
+      this.cameraMisses = 0;
+      if (recovered) void this.sendStatus();
+      this.log(`Took a camera frame (${Math.round(frame.length / 1024)} kB) for "${job.name}".`);
       const photo: JobPayload = { type: "photo", job, takenAt: this.deps.now() };
       this.deps.queue.add(photo as unknown as QueuedJob, frame);
       this.kick();
+    } else {
+      this.cameraMisses += 1;
+      this.log(`No camera photo for "${job.name}" (${this.cameraMisses} in a row; the lines above say why).`);
+      if (this.cameraMisses >= 2) void this.sendStatus();
     }
+  }
+
+  /** How many prints in a row ended without a camera frame; two make a problem the Printer page shows. */
+  private cameraMisses = 0;
+
+  private allProblems(): BridgeProblem[] {
+    const problems = this.deps.problems?.() ?? [];
+    if (this.cameraMisses < 2) return problems;
+    return [
+      ...problems,
+      {
+        code: "camera",
+        message: `The last ${this.cameraMisses} prints ended without a camera photo. Is LAN Only Liveview on, and is ffmpeg installed (brew install ffmpeg)? The reason is in the bridge's log.`,
+      },
+    ];
   }
 
   private scheduleAms() {
@@ -240,7 +266,7 @@ export class Bridge {
       ...this.printerStatus(),
       ...(this.deps.version ? { version: this.deps.version } : {}),
       ...(this.deps.platform ? { platform: this.deps.platform } : {}),
-      ...(this.deps.problems ? { problems: this.deps.problems() } : {}),
+      ...(this.deps.problems || this.cameraMisses >= 2 ? { problems: this.allProblems() } : {}),
     };
   }
 

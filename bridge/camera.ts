@@ -4,6 +4,8 @@
  * no photo.
  */
 import { spawn } from "node:child_process";
+import { accessSync, constants } from "node:fs";
+import { delimiter, join } from "node:path";
 import tls from "node:tls";
 import { type CertPin, fingerprintOf, probeFingerprint } from "./pin.ts";
 
@@ -25,20 +27,45 @@ export interface CameraOptions {
   pin?: CertPin;
 }
 
+/** Where Homebrew and MacPorts put ffmpeg, which a login item's small PATH may not list. */
+const EXTRA_FOLDERS = ["/opt/homebrew/bin", "/usr/local/bin", "/opt/local/bin"];
+
+/** The ffmpeg to run: the one given if it has a path; else the first on the PATH or in the usual folders; else the name. */
+export function findFfmpeg(given: string | undefined, pathEnv = process.env.PATH ?? ""): string {
+  const name = given ?? "ffmpeg";
+  if (name.includes("/")) return name;
+  for (const folder of [...pathEnv.split(delimiter), ...EXTRA_FOLDERS]) {
+    if (!folder) continue;
+    try {
+      accessSync(join(folder, name), constants.X_OK);
+      return join(folder, name);
+    } catch {}
+  }
+  return name;
+}
+
 export function ffmpegCamera(options: CameraOptions): Camera {
-  let warned = false;
+  const why = (reason: string) => options.log?.(`No camera frame from the RTSPS stream: ${reason}`);
   return {
     async grab() {
       // ffmpeg can't pin a fingerprint, so the certificate is read and checked first (a separate handshake that
       // sends nothing); a service that answers differently the second time isn't caught. Documented in docs/bridge.md.
       if (options.pin && !options.url) {
         const seen = await probeFingerprint(options.host, 322).catch(() => null);
-        if (!seen || options.pin.check("camera", seen)) return null;
+        if (!seen) {
+          why("couldn't connect to the camera port (322). Is LAN Only Liveview on?");
+          return null;
+        }
+        if (options.pin.check("camera", seen)) {
+          why("the camera's certificate isn't the one the bridge trusts.");
+          return null;
+        }
       }
       const url =
         options.url ?? `rtsps://bblp:${encodeURIComponent(options.accessCode)}@${options.host}:322/streaming/live/1`;
       return new Promise((resolve) => {
         const chunks: Buffer[] = [];
+        let errors = "";
         let settled = false;
         const finish = (frame: Uint8Array | null) => {
           if (settled) return;
@@ -48,7 +75,7 @@ export function ffmpegCamera(options: CameraOptions): Camera {
           resolve(frame);
         };
         const child = spawn(
-          options.ffmpeg ?? "ffmpeg",
+          findFfmpeg(options.ffmpeg),
           [
             "-loglevel",
             "error",
@@ -68,18 +95,33 @@ export function ffmpegCamera(options: CameraOptions): Camera {
             "mjpeg",
             "pipe:1",
           ],
-          { stdio: ["ignore", "pipe", "ignore"] },
+          { stdio: ["ignore", "pipe", "pipe"] },
         );
-        const timer = setTimeout(() => finish(null), options.timeoutMs ?? 20_000);
+        const timer = setTimeout(() => {
+          why(`no picture within ${(options.timeoutMs ?? 20_000) / 1000} seconds.`);
+          finish(null);
+        }, options.timeoutMs ?? 20_000);
         child.stdout.on("data", (chunk: Buffer) => chunks.push(chunk));
-        child.on("error", () => {
-          if (!warned) options.log?.("ffmpeg isn't installed, so the RTSPS camera stream can't be read.");
-          warned = true;
+        // ffmpeg's own words, with the access code left out, say why a stream failed.
+        child.stderr.on("data", (chunk: Buffer) => {
+          errors = `${errors}${chunk}`.slice(-600);
+        });
+        child.on("error", (error) => {
+          why(
+            (error as NodeJS.ErrnoException).code === "ENOENT"
+              ? "ffmpeg isn't installed (or isn't where the bridge looks: /opt/homebrew/bin, /usr/local/bin)."
+              : `ffmpeg couldn't start (${error.message}).`,
+          );
           finish(null);
         });
-        child.on("close", () => {
+        child.on("close", (code) => {
           const frame = Buffer.concat(chunks);
-          finish(frame.length > 1000 && frame[0] === 0xff && frame[1] === 0xd8 ? new Uint8Array(frame) : null);
+          const good = frame.length > 1000 && frame[0] === 0xff && frame[1] === 0xd8;
+          if (!good && !settled) {
+            const said = errors.split(options.accessCode).join("…").trim().split("\n").pop() ?? "";
+            why(`ffmpeg ended (exit ${code}) without a picture${said ? `: ${said}` : "."}`);
+          }
+          finish(good ? new Uint8Array(frame) : null);
         });
       });
     },
@@ -113,7 +155,10 @@ export function jpegStreamCamera(options: Omit<CameraOptions, "ffmpeg" | "url"> 
           },
         );
         const timer = setTimeout(() => finish(null), options.timeoutMs ?? 15_000);
-        socket.on("error", () => finish(null));
+        socket.on("error", (error) => {
+          options.log?.(`No camera frame from the picture stream (port 6000): ${error.message}`);
+          finish(null);
+        });
         socket.on("close", () => finish(null));
         socket.on("data", (chunk: Buffer) => {
           buffer = Buffer.concat([buffer, chunk]);
