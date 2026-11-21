@@ -294,17 +294,22 @@ function Settings({ settings, filaments }: { settings: GuestSetting[]; filaments
   );
 }
 
-/** Short pieces on one line, as the app's MetaList: "About 21 min · 3.3 g each · Sliced by Spaghetti". */
+/**
+ * Short pieces on one line, as the app's MetaList ("About 21 min · 3.3 g each · Sliced by Spaghetti"), that wraps
+ * cleanly: each piece carries its dot in a gutter the row hangs into, so a dot never begins or ends a line.
+ */
 function Pieces({ pieces, class: className }: { pieces: string[]; class: string }) {
   if (!pieces.length) return null;
   return (
-    <p class={className}>
-      {pieces.map((piece, index) => (
-        <>
-          {index > 0 && <span aria-hidden="true"> · </span>}
-          <span class="gp-piece">{piece}</span>
-        </>
-      ))}
+    <p class={`gp-pieces ${className}`}>
+      <span class="gp-pieces-row">
+        {pieces.map((piece, index) => (
+          <span class="gp-piece">
+            {index > 0 && <span class="gp-sr">, </span>}
+            {piece}
+          </span>
+        ))}
+      </span>
     </p>
   );
 }
@@ -421,23 +426,25 @@ function FileCard({ token, file }: { token: string; file: GuestFile }) {
   );
 }
 
-/** The files kept with the thing: its models, each a card whose plate opens the 3D view. */
+/**
+ * The files kept with the thing: its models, each a card whose plate opens the 3D view. In the column of words, as the
+ * app's idea page has them under the note: on a computer they scroll beside the photos, which stay in view.
+ */
 function Files({ token, files }: { token: string; files: GuestFile[] }) {
   if (!files.length) return null;
   const viewable = files.some((file) => file.view);
   return (
-    <section class="gp-files" aria-labelledby="gp-files">
-      <div class="gp-section-head">
-        <h2 class="gp-section-title" id="gp-files">
-          {files.length === 1 ? "The model" : "The models"}
-        </h2>
-        {viewable && (
-          <p class="gp-section-hint">
-            {files.length === 1 ? "Tap its plate" : "Tap a plate"} to see how it prints, layer by layer.
-          </p>
-        )}
-      </div>
-      <ul class={`gp-file-list ${files.length === 1 ? "gp-file-list--one" : ""}`}>
+    <section class="gp-block gp-files" aria-labelledby="gp-files">
+      <h2 class="gp-block-title" id="gp-files">
+        {files.length === 1 ? "The model" : `The models`}
+        {files.length > 1 && <span class="gp-count"> {files.length}</span>}
+      </h2>
+      {viewable && (
+        <p class="gp-files-hint">
+          {files.length === 1 ? "Tap its plate" : "Tap a plate"} to see how it prints, layer by layer.
+        </p>
+      )}
+      <ul class="gp-file-list">
         {files.map((file) => (
           <FileCard token={token} file={file} />
         ))}
@@ -612,8 +619,8 @@ function Changes({ changes }: { changes: GuestChange[] }) {
 
 const OVERLINE: Record<GuestView["kind"], string> = { idea: "An idea", build: "A build", twist: "A twist on a model" };
 
-/** The words beside (or under) the photos: what it is, its note, the model, and for a build how it went. */
-function Story({ view, noteShown }: { view: GuestView; noteShown: boolean }) {
+/** The words beside (or under) the photos: what it is, its note, the model, for a build how it went, and its files. */
+function Story({ view, token, noteShown }: { view: GuestView; token: string; noteShown: boolean }) {
   const dates =
     view.kind === "idea"
       ? `Noted ${guestDate(view.capturedAt)}`
@@ -656,6 +663,7 @@ function Story({ view, noteShown }: { view: GuestView; noteShown: boolean }) {
           <Settings settings={view.recipe.settings} filaments={view.recipe.filaments} />
         </section>
       )}
+      <Files token={token} files={view.files} />
     </div>
   );
 }
@@ -691,9 +699,8 @@ export function GuestBody({ view, token }: { view: GuestView; token: string }) {
       <main class={`gp-page gp-page--${view.kind} ${gallery.length || noteLeads ? "" : "gp-page--no-photos"}`} id="top">
         <article class="gp-article">
           {noteLeads ? <NoteCard text={view.note} model={view.model} /> : <Gallery token={token} shown={gallery} />}
-          <Story view={view} noteShown={noteLeads} />
+          <Story view={view} token={token} noteShown={noteLeads} />
         </article>
-        <Files token={token} files={view.files} />
         {attempts.length > 0 && (
           <section class="gp-attempts" aria-labelledby="gp-attempts">
             <h2 class="gp-section-title" id="gp-attempts">

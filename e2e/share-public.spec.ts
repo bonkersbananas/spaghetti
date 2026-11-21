@@ -1,9 +1,12 @@
 import { expect, type Page, test } from "@playwright/test";
+import { readThreeMf, settingsFromFile } from "../src/shared/threemf/index.ts";
+import { TUGBOAT_FILE_NAME, tugboatFile } from "./fixtures/gcode-tugboat";
 import { clearIdeas, signIn } from "./helpers";
 
 /**
  * Public links (decision 0075): one of the two people makes a public link to an idea, someone who isn't signed in
- * opens it and can only look, and stopping it ends the link at once, with Undo bringing the same one back.
+ * opens it and can only look, and stopping it ends the link at once, with Undo bringing the same one back. A guest
+ * sees its models and opens their 3D view, from the page's own build, without any file to keep (decision 0077).
  */
 
 const TITLE = "Paddle steamer for the bath";
@@ -72,8 +75,8 @@ test("a public link shows the idea read-only to a guest, and stopping it ends th
   await expect(guest.getByRole("heading", { level: 1, name: TITLE })).toBeVisible();
   const photo = guest.locator(".gp-strip img").first();
   await expect(photo).toBeVisible();
-  // Only to look at: nothing to press that changes anything, and no app around it.
-  await expect(guest.locator("button, input, textarea, select, form, script")).toHaveCount(0);
+  // Only to look at: nothing to press that changes anything (no model, so not even a 3D view), and no app around it.
+  await expect(guest.locator("body :is(button, input, textarea, select, form, script)")).toHaveCount(0);
   await expect(guest.getByRole("navigation")).toHaveCount(0);
   // The photo came through the link, resized in the browser: no EXIF (the camera's file had some).
   const src = (await photo.getAttribute("src")) as string;
@@ -108,5 +111,73 @@ test("a public link shows the idea read-only to a guest, and stopping it ends th
   expect(shares.map((share: { token: string }) => url.endsWith(`/s/${share.token}`))).toEqual([true]);
   await expect.poll(async () => (await guest.goto(url))?.status()).toBe(200);
   await expect(guest.getByRole("heading", { level: 1, name: TITLE })).toBeVisible();
+  await guestContext.close();
+});
+
+test("a guest opens a model's 3D view from the shared page, and gets no file to keep", {
+  tag: "@phone",
+}, async ({ page, browser, baseURL }) => {
+  test.setTimeout(90_000); // the viewer reads 317 layers in a worker, slow on a shared runner
+  await signIn(page);
+  const origin = new URL(page.url()).origin;
+  const id = crypto.randomUUID();
+  await page.request.post("/api/items", { headers: { Origin: origin }, data: { id, title: TITLE } });
+  // The tugboat's sliced file, kept with the idea as the app keeps one dropped on it.
+  const bytes = tugboatFile();
+  const read = readThreeMf(bytes);
+  const thumb = read.plates[0]?.thumbnail?.bytes as Uint8Array;
+  const fileId = crypto.randomUUID();
+  const kept = await page.request.put(`/api/items/${id}/files/${fileId}`, {
+    headers: { Origin: origin },
+    multipart: {
+      name: TUGBOAT_FILE_NAME,
+      size: String(bytes.length),
+      plate: "1",
+      plateCount: "1",
+      slicer: "BambuStudio 02.01.00.00",
+      prefill: JSON.stringify(settingsFromFile(read, 1)),
+      file: { name: TUGBOAT_FILE_NAME, mimeType: "application/octet-stream", buffer: Buffer.from(bytes) },
+      thumb: { name: "plate_1.png", mimeType: "image/png", buffer: Buffer.from(thumb) },
+    },
+  });
+  expect(kept.ok()).toBe(true);
+  const made = await page.request.put(`/api/shares/items/${id}`, { headers: { Origin: origin } });
+  const { share } = await made.json();
+
+  const guestContext = await browser.newContext({ baseURL });
+  const guest = await guestContext.newPage();
+  // Anything the page's policy refuses would show here (a script, a worker or a fetch from the wrong place).
+  const refused: string[] = [];
+  guest.on("console", (message) => {
+    if (/Content Security Policy|Refused to/i.test(message.text())) refused.push(message.text());
+  });
+  const asked: string[] = [];
+  guest.on("request", (request) => asked.push(new URL(request.url()).pathname));
+  await guest.goto(`/s/${share.token}`);
+  const card = guest.locator(".gp-file");
+  await expect(card).toContainText(TUGBOAT_FILE_NAME);
+  await expect(card.locator("img")).toBeVisible();
+  // Nothing of the viewer comes with the page.
+  expect(asked.some((path) => /viewer-|toolpath|three/.test(path))).toBe(false);
+
+  await guest.getByRole("button", { name: `See ${TUGBOAT_FILE_NAME} in 3D` }).click();
+  const dialog = guest.getByRole("dialog", { name: "3D view" });
+  await expect(dialog).toBeVisible();
+  await expect(dialog.locator("[data-viewer=ready]")).toBeVisible({ timeout: 60_000 });
+  await expect(dialog.getByRole("slider")).toBeVisible();
+  // The view read the plate's toolpaths through the link; nothing under /api, and no file offered to keep.
+  expect(asked).toContain(`/s/${share.token}/files/${fileId}/toolpaths`);
+  expect(asked.filter((path) => path.startsWith("/api/"))).toEqual([]);
+  await expect(guest.locator("a[download], a[href*='/files/']")).toHaveCount(0);
+  expect(refused).toEqual([]);
+
+  // Escape closes it, back to the plate.
+  await guest.keyboard.press("Escape");
+  await expect(dialog).toHaveCount(0);
+  await expect(guest.getByRole("button", { name: `See ${TUGBOAT_FILE_NAME} in 3D` })).toBeFocused();
+
+  // The toolpaths' address opened as a page is no file: the same 404 as anything else.
+  const opened = await guest.goto(`/s/${share.token}/files/${fileId}/toolpaths`);
+  expect(opened?.status()).toBe(404);
   await guestContext.close();
 });
