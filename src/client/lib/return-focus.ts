@@ -29,8 +29,13 @@ export function useReturnFocus(open: boolean, inherit = false) {
   }
   wasOpen.current = open;
   return (event: Event) => {
-    const target = opener.current;
+    let target = opener.current;
     opener.current = null;
+    // The sidebar's account button is swapped for the real one once its menu's code arrives (Sidebar.tsx): if that
+    // happened while the sheet was open, the button it was opened from is gone and its replacement takes focus.
+    if (target && !target.isConnected && target.hasAttribute("data-account-button")) {
+      target = document.querySelector<HTMLElement>("[data-account-button]");
+    }
     if (!target?.isConnected) return;
     // Another sheet opened as this one closed (an action that opens the next step): leave focus there.
     if (document.activeElement?.closest("[role=dialog]")) return;

@@ -155,7 +155,11 @@ test("what is typed while the search screen is still loading lands in the search
   await expect(plus(page)).toBeVisible();
   holding = true;
   await page.getByRole("link", { name: "Search" }).click();
-  expect(await page.evaluate(() => document.activeElement?.hasAttribute("data-keyboard-proxy"))).toBe(true);
+  // Focus is on the stand-in, or, if the screen's code was already in (a preload landed before `holding`), the
+  // screen drew at once and has already handed focus to its own box. Either way it is on an editable element.
+  expect(await page.evaluate(() => (document.activeElement as HTMLElement | null)?.matches("input, textarea"))).toBe(
+    true,
+  );
   await page.keyboard.type("PE");
   release();
   const box = page.getByRole("searchbox", { name: "Search" }).or(page.getByRole("textbox", { name: "Search" }));
