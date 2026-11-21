@@ -390,24 +390,27 @@ function FileCard({ token, file }: { token: string; file: GuestFile }) {
   return (
     <li class="gp-file">
       <Plate token={token} file={file} />
-      <div class="gp-file-words">
-        {lead ? (
-          <>
-            <Pieces pieces={file.lead} class="gp-file-lead" />
-            <p class="gp-file-name">{file.name}</p>
-          </>
-        ) : (
-          <p class="gp-file-lead gp-file-lead--name">{file.name}</p>
-        )}
-        <Pieces pieces={file.meta} class="gp-file-meta" />
-      </div>
-      {(file.cautions.length > 0 || file.settings.length > 0 || file.filaments.length > 0) && (
-        <div class="gp-file-more">
-          <Cautions cautions={file.cautions} />
-          <Pieces pieces={file.settings} class="gp-file-settings" />
-          <Filaments filaments={file.filaments} />
+      {/* One column beside the plate on a computer, as the app's FileCard; on a phone its lines run across the card. */}
+      <div class="gp-file-text">
+        <div class="gp-file-words">
+          {lead ? (
+            <>
+              <Pieces pieces={file.lead} class="gp-file-lead" />
+              <p class="gp-file-name">{file.name}</p>
+            </>
+          ) : (
+            <p class="gp-file-lead gp-file-lead--name">{file.name}</p>
+          )}
+          <Pieces pieces={file.meta} class="gp-file-meta" />
         </div>
-      )}
+        {(file.cautions.length > 0 || file.settings.length > 0 || file.filaments.length > 0) && (
+          <div class="gp-file-more">
+            <Cautions cautions={file.cautions} />
+            <Pieces pieces={file.settings} class="gp-file-settings" />
+            <Filaments filaments={file.filaments} />
+          </div>
+        )}
+      </div>
     </li>
   );
 }

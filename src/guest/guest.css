@@ -949,6 +949,11 @@ html:has(.gp-lightbox:target) {
   height: 5.5rem;
 }
 
+/* On a phone the words sit beside the plate and the rest runs across the card under both. */
+.gp-file-text {
+  display: contents;
+}
+
 .gp-file-words {
   grid-area: words;
   display: flex;
@@ -1206,8 +1211,23 @@ html:has(.gp-lightbox:target) {
     height: 6rem;
   }
 
+  /*
+   * As the app's FileCard on a computer: everything in one column beside the plate, its cautions, settings and
+   * colours under the name, so the card is no taller than it needs and nothing sits alone under the plate.
+   */
   .gp-file {
+    grid-template-areas: "plate text";
+    align-items: start;
     padding: 0.875rem;
+  }
+
+  .gp-file-text {
+    grid-area: text;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    align-self: center;
+    min-width: 0;
   }
 }
 
