@@ -8,7 +8,7 @@ An optional, read-only program that listens to the X2D over your home network an
 - **Local.** It talks to the printer on your network and to Spaghetti with an agent token. It never uses Bambu's cloud or a Bambu account ([decision 0003](decisions/0003-no-bambu-dependency.md)).
 - What it does is shown as "via Printer bridge", like any agent's work.
 
-Everything below about the X2D that we could not check against a real one is marked **[uncertain]**, as in [printer.md](printer.md). This was built from the community's documentation of Bambu's local protocols and tested against a fake printer; the first run on a real X2D is the real test, so read the log.
+Everything below about the X2D that we could not check against a real one is marked **[uncertain]**, as in [printer.md](printer.md). This was built from the community's documentation of Bambu's local protocols and tested against a fake printer; the first run on a real X2D (Nov 21, 2026, cloud mode) confirmed the channels listed under "What we couldn't confirm", so read the log for the rest.
 
 ## On a Mac (the easy way)
 
@@ -71,10 +71,10 @@ The printer serves its local channels (MQTT for its reports, FTPS for its files,
 
 | Channel | In cloud mode | What we know, and from where |
 | --- | --- | --- |
-| Reports (MQTT, 8883) | Yes, likely | Bambu's announcement of its authorization firmware (Jan 16, 2025; X1 first, the same on later models) restricts commands (starting prints, motion, heating, fans, AMS, calibration) and says "MQTT status push for tools like HomeAssistant" stays unaffected. ha-bambulab connects to cloud-mode printers locally ("cloud connected: sensors work, controls blocked") and lists the X2D; an H2D in cloud mode reported its status over local MQTT in its issue 1378 (Jun to Aug 2025). Not tried on an X2D by any source we found. |
-| `pushall` answered | **[uncertain]** | It is a status request, not a control, but third parties say the X2D and H2D want signed MQTT for commands, and none says whether `pushall` counts. The bridge doesn't depend on it: if the printer answers with an error, or drops the connection right after it twice in a row, the bridge stops asking and pieces the state together from the reports (the X series sends its whole state in each one). |
-| Files (FTPS, 990) | Yes, likely, with a USB drive | A cloud-mode H2D owner read the print's `.3mf` from `/` once Store Sent Files on External Storage was on (ha-bambulab issue 1378, Aug 2025). On the H2 family FTPS sees only the external storage: the internal storage's `/cache` and `/model` answer 550 (bambuddy issue 2910, H2C, Aug to Oct 2026). The X2D's external storage is a USB drive (8 GB of internal eMMC besides). |
-| Camera (RTSPS, 322) | Yes, with LAN Only Liveview on | ha-bambulab: on the H2D, H2S, H3C and X2D "enable LAN Only Liveview … LAN mode itself is not required"; SimplyPrint says the same for the X1 and H2D. |
+| Reports (MQTT, 8883) | Yes (confirmed on an X2D in cloud mode, Nov 21, 2026) | Bambu's announcement of its authorization firmware (Jan 16, 2025; X1 first, the same on later models) restricts commands (starting prints, motion, heating, fans, AMS, calibration) and says "MQTT status push for tools like HomeAssistant" stays unaffected. ha-bambulab connects to cloud-mode printers locally ("cloud connected: sensors work, controls blocked") and lists the X2D; an H2D in cloud mode reported its status over local MQTT in its issue 1378 (Jun to Aug 2025). Not tried on an X2D by any source we found. |
+| `pushall` answered | **Confirmed** (X2D, cloud mode, Nov 21, 2026: it answered with the whole state, not refused) | It is a status request, not a control, but third parties say the X2D and H2D want signed MQTT for commands, and none says whether `pushall` counts. The bridge doesn't depend on it: if the printer answers with an error, or drops the connection right after it twice in a row, the bridge stops asking and pieces the state together from the reports (the X series sends its whole state in each one). |
+| Files (FTPS, 990) | Login confirmed (X2D, cloud mode, Nov 21, 2026); files not yet, as no USB drive was in; likely with one | A cloud-mode H2D owner read the print's `.3mf` from `/` once Store Sent Files on External Storage was on (ha-bambulab issue 1378, Aug 2025). On the H2 family FTPS sees only the external storage: the internal storage's `/cache` and `/model` answer 550 (bambuddy issue 2910, H2C, Aug to Oct 2026). The X2D's external storage is a USB drive (8 GB of internal eMMC besides). |
+| Camera (RTSPS, 322) | Yes, with LAN Only Liveview on (confirmed on an X2D in cloud mode, Nov 21, 2026, through ffmpeg) | ha-bambulab: on the H2D, H2S, H3C and X2D "enable LAN Only Liveview … LAN mode itself is not required"; SimplyPrint says the same for the X1 and H2D. |
 
 **Without files** (no USB drive, or Store Sent Files on External Storage off) the bridge still logs each print, its progress and end, and a camera photo, but the attempt gets no slicer file from the printer: no plate picture, filament and grams, settings or 3D view from it. Drop the `.gcode.3mf` into Spaghetti to add them by hand.
 
@@ -185,10 +185,12 @@ The bridge then fetches the print's `.gcode.3mf` from the printer's USB drive or
 
 ## What we couldn't confirm for the X2D [uncertain]
 
+**Confirmed on a real X2D in cloud mode (LAN Only off, Developer mode off, LAN Only Liveview on), Nov 21, 2026**, by `spaghetti-bridge check`: the printer link (MQTT 8883 with the access code), reports, the `pushall` status request (answered with the whole state, not refused), FTPS login on 990 (no files seen: no USB drive was in) and the camera (RTSPS 322 through ffmpeg). Still open: what FTPS lists with a USB drive in, and the items below that the check doesn't touch.
+
 - Whether the X2D uses the same MQTT report fields as the X1 and P1 families (`gcode_state`, `mc_percent`, `layer_num`, `ams`…), and whether its dual-nozzle setup adds fields the bridge ignores.
-- Whether the X2D in cloud mode sends reports over local MQTT, answers `pushall` (or refuses it, and how), and serves FTPS; and the menu names. Its first `spaghetti-bridge check` says.
+- The menu names on the X2D. (Reports, `pushall` and the FTPS login are confirmed, see above.)
 - The FTPS folders for prints on the X2D's USB drive, and that port 990 and the user `bblp` are the same.
-- The camera: RTSPS on port 322 with LAN Only Liveview on and the path `/streaming/live/1`, and the `-tls_verify 0` flag needed for its self-signed certificate.
+- Nothing more about the camera: RTSPS on 322 with LAN Only Liveview on works through ffmpeg.
 - The AMS numbering on the X2D (units 0 to 3 as A to D; single-spool units such as the AMS HT are ignored for now) and the external spool as `vt_tray`.
 - The HMS codes for the AI's spaghetti detection (`0C00_0300_0002_0001` in the community list) and the error code for a user cancel.
 - The report fixtures in `test/bridge/fixtures.ts` were written by hand to the community-documented format, not recorded from a printer. When you have a real capture, add it there.
