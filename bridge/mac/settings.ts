@@ -43,7 +43,7 @@ export function problemWithSettings(input: {
     return "The serial number is 15 letters and digits (on the printer's screen and its sticker).";
   }
   if (!input.accessCode || !/^[0-9A-Za-z]{6,16}$/.test(input.accessCode)) {
-    return "The access code is 8 letters and digits (on the printer's screen, with LAN Only mode).";
+    return "The access code is 8 letters and digits (on the printer's screen, under LAN Only mode; the mode itself can stay off).";
   }
   return null;
 }

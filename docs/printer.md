@@ -126,7 +126,7 @@ What it can't know:
 
 Not proposed for now. For awareness:
 
-- **LAN Only mode / Developer mode.** The printer can be switched to local operation, which the slicer connects to by IP and access code. Orca Slicer supports this. **Needs:** the printer on the same network, its IP, serial number and the access code. **Risks:** the user gives up the cloud features they may like (Handy app, remote monitoring); the access code is a secret; and the X2D is new, so firmware may change this behavior **[uncertain]**.
+- **LAN Only mode / Developer mode.** The printer can be switched to local operation, which the slicer connects to by IP and access code. Orca Slicer supports this. **Needs:** the printer on the same network, its IP, serial number and the access code. **Risks:** the user gives up the cloud features they may like (Handy app, remote monitoring); the access code is a secret; and the X2D is new, so firmware may change this behavior **[uncertain]**. The printer bridge doesn't need this mode: it reads the local channels in cloud mode ([decision 0074](decisions/0074-the-bridge-listens-in-cloud-mode.md), [bridge.md](bridge.md#1-choose-the-printers-mode)).
 - **MQTT** (TLS, on the printer) pushes status JSON (temperatures, progress, AMS tray info, errors) and accepts commands. **Risks:** commands can start, stop or heat the printer, so a bug can damage a print or hardware. The message schema is community-documented and shifts between firmware versions.
 - **FTP** (implicit TLS) gives access to the SD card (uploaded `.3mf` files, timelapses). **Risks:** same credentials; a write could overwrite files.
 - **Camera.** An RTSP/stream or image stream on the LAN. **Risks:** hold a live connection, credentials, and a private view of the home.

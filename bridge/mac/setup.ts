@@ -9,7 +9,7 @@ import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 import type { BridgeProblem, PairResponse } from "../../src/shared/bridge.ts";
 import type { FoundPrinter } from "../discover.ts";
-import type { CheckResult } from "./check.ts";
+import { type CheckResult, describeCheck } from "./check.ts";
 import { PairingError } from "./pair.ts";
 import { LABEL, type MacPaths, macPaths } from "./paths.ts";
 import { launchAgentPlist } from "./plist.ts";
@@ -64,7 +64,13 @@ export interface SetupEnv {
   say: (line: string) => void;
   discover: () => Promise<FoundPrinter[]>;
   serialOf: (host: string) => Promise<string | null>;
-  check: (settings: { host: string; serial: string; accessCode: string; dataDir: string }) => Promise<CheckResult>;
+  check: (settings: {
+    host: string;
+    serial: string;
+    accessCode: string;
+    dataDir: string;
+    camera?: "on" | "off";
+  }) => Promise<CheckResult>;
   pair: (appUrl: string, code: string) => Promise<PairResponse>;
   /** Asks the app whether the bridge has checked in since `since` (epoch ms). */
   heardFromBridge: (appUrl: string, token: string, since: number) => Promise<boolean>;
@@ -137,7 +143,10 @@ export async function runSetup(args: SetupArgs, env: SetupEnv): Promise<void> {
     const fromCertificate = await env.serialOf(printerHost).catch(() => null);
     serial = await ask("The printer's serial number (on its screen and sticker)", fromCertificate ?? undefined);
   }
-  if (!accessCode) accessCode = await ask("The printer's access code (on its screen, with LAN Only mode)");
+  if (!accessCode)
+    accessCode = await ask(
+      "The printer's access code (on its screen, under LAN Only mode; the mode itself can stay off)",
+    );
   const wrong = problemWithSettings({ printerHost, serial, accessCode });
   if (wrong) {
     throw new SetupStop(
@@ -148,17 +157,19 @@ export async function runSetup(args: SetupArgs, env: SetupEnv): Promise<void> {
   }
   // 3. Can it be reached from here? Asked now, in Terminal, so that a problem is found while someone is looking.
   if (!args.noCheck) {
-    say(`Checking that the printer answers at ${printerHost}…`);
+    say(`Checking what the printer shares at ${printerHost} (up to half a minute)…`);
     mkdirSync(paths.dataDir, { recursive: true });
     const result = await env.check({
       host: printerHost as string,
       serial: serial as string,
       accessCode: accessCode as string,
       dataDir: paths.dataDir,
+      camera: args.camera ?? saved.camera,
     });
-    if (result.ok) say("  ✓ The printer answered.");
+    for (const line of describeCheck(result)) say(`  ${plain(line)}`);
+    if (result.ok) say("  The printer answered: the bridge can follow its prints.");
     else {
-      say(`  ✗ ${plain(result.problem.message)}`);
+      say("  The bridge can't follow the printer yet (the first lines say why).");
       const goOn = env.ask
         ? (await env.ask("Install it anyway? It will keep trying. (y/N)", "n")).trim().toLowerCase()
         : "n";

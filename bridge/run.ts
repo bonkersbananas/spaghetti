@@ -74,11 +74,13 @@ export function run(argv: readonly string[] = process.argv.slice(2)): void {
   let failures = 0;
   let lastLooked = 0;
   let connectedAt = 0;
+  let heardSinceConnecting = false;
   const link = connectToPrinter({
     url: () => (config.mqttUrlGiven ? config.mqttUrl : `mqtts://${printer.host}:8883`),
     serial: config.serial,
     accessCode: config.accessCode,
     onReport: (payload) => {
+      heardSinceConnecting = true;
       bridge.onReport(payload);
       health.set("silent", null);
     },
@@ -87,9 +89,11 @@ export function run(argv: readonly string[] = process.argv.slice(2)): void {
       if (connected) {
         failures = 0;
         connectedAt = Date.now();
+        heardSinceConnecting = false;
         health.set("link", null);
       } else connectedAt = 0;
     },
+    onPushallRefused: () => bridge.listenOnly(),
     onError: (error) => {
       failures++;
       health.set("link", explainLinkError(error, { host: printer.host, platform: process.platform }));
@@ -124,10 +128,17 @@ export function run(argv: readonly string[] = process.argv.slice(2)): void {
     link.restart();
   }
 
-  // Connected but the printer says nothing: LAN Only mode or Developer mode is likely off.
+  // Connected a minute and still no whole state: if the printer sends reports, piece the state together from them
+  // (pushall wasn't answered); if it says nothing at all, say so.
   const quietTimer = setInterval(() => {
     if (connectedAt && !bridge.state.complete && Date.now() - connectedAt > SILENT_AFTER_MS) {
-      health.set("silent", silentProblem());
+      if (heardSinceConnecting) {
+        if (bridge.listening) return;
+        log(
+          "The printer sends reports but hasn't answered the status request (pushall); piecing its state together from them.",
+        );
+        bridge.listenOnly();
+      } else health.set("silent", silentProblem());
     }
   }, 15_000);
   quietTimer.unref?.();

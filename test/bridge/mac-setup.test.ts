@@ -37,7 +37,7 @@ function env(overrides: Partial<SetupEnv> = {}): SetupEnv {
     say: (line) => said.push(line),
     discover: async () => [],
     serialOf: async () => null,
-    check: async () => ({ ok: true }),
+    check: async () => ({ ok: true, lines: [] }),
     pair: async (appUrl, code) => {
       paired.push([appUrl, code]);
       return { token: "spg_secret_token", agentId: "a1", appUrl, scopes: ["read", "attempts", "printer"] };
@@ -182,7 +182,13 @@ describe("setup", () => {
           "--access-code",
           given.accessCode,
         ]),
-        env({ check: async () => ({ ok: false, problem }) }),
+        env({
+          check: async () => ({
+            ok: false,
+            problem,
+            lines: [{ channel: "login", status: "no", text: `Printer link (MQTT, port 8883): ${problem.message}` }],
+          }),
+        }),
       ),
     ).rejects.toThrow(SetupStop);
     expect(said.join("\n")).toContain("allow Local Network");

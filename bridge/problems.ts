@@ -60,7 +60,7 @@ export function explainLinkError(error: unknown, context: ProblemContext): Bridg
   if (code === "ECONNREFUSED") {
     return {
       code: "refused",
-      message: `The printer at ${context.host} refused the connection. LAN Only mode may be off on the printer (and on some firmware Developer mode is needed too).`,
+      message: `The printer at ${context.host} refused the connection on its status port (8883). Check that this address is the printer's. If it is, its firmware keeps that port closed in this mode: the fallback is LAN Only mode with Developer mode (see the bridge guide for what that costs).`,
     };
   }
   if (
@@ -82,7 +82,7 @@ export function explainLinkError(error: unknown, context: ProblemContext): Bridg
 export const silentProblem = (): BridgeProblem => ({
   code: "silent",
   message:
-    "The printer is connected but isn't telling the bridge anything. Check that LAN Only mode is on, and try Developer mode on the printer if it has one.",
+    "The printer is connected but isn't telling the bridge anything. Check the serial number (it names what the bridge listens to). If it is right, this firmware may not report to local programs in this mode: the fallback is LAN Only mode with Developer mode (see the bridge guide for what that costs).",
 });
 
 /** What is wrong right now, by where it came from, so a source clears its own problem when it heals. */
