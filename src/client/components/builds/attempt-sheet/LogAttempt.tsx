@@ -150,7 +150,7 @@ export function LogAttempt({
         when,
         draftFor.current,
       );
-  }, [touched, photos.length, draft, when, attached, item.id, item.attempts.length, previous?.settings]);
+  }, [touched, draft, when, attached, item.id, item.attempts.length, previous?.settings]);
   // The first attempt prints from the idea's slice: with exactly one, it is attached as the sheet opens (taking it
   // off, or picking another, is the person's choice and stays). With several there is a plain choice in the well.
   const only = previous

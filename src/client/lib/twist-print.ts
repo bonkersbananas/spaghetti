@@ -8,6 +8,7 @@ import { applyFileSettings } from "@shared/threemf/prefill.ts";
 import { formatDuration } from "@shared/time.ts";
 import type { QueryClient } from "@tanstack/react-query";
 import { toast } from "@/components/ui/Toast";
+import { dropAttemptDraft } from "./attempt-draft";
 import { createBuild, logAttempt } from "./builds";
 import { spoolsQuery } from "./pantry-queries";
 
@@ -61,6 +62,7 @@ async function attachModel(
     // What the model's slice said, as the attempt sheet lays it over a first attempt (no stand-in filament claimed).
     const own = carryOver(undefined);
     const settings = applyFileSettings(own, keepOwnFilaments(own, linkSpools(model.prefill, spools).settings));
+    dropAttemptDraft(itemId);
     const attemptId = logAttempt(
       { id: itemId },
       {

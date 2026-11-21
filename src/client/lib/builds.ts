@@ -26,7 +26,6 @@ import { type QueryClient, queryOptions, useQuery } from "@tanstack/react-query"
 import { useMemo } from "react";
 import { toast } from "@/components/ui/Toast";
 import { ApiError, api } from "./api";
-import { dropAttemptDraft } from "./attempt-draft";
 import type { DraftPhoto } from "./capture";
 import {
   type AttemptView,
@@ -210,8 +209,6 @@ export interface AttemptDraft {
 export function logAttempt(item: Pick<ItemView, "id">, draft: AttemptDraft, createdBy: string): string {
   const id = crypto.randomUUID();
   const now = Date.now();
-  // Whatever logged it, a draft kept for the next attempt of this build is no longer one.
-  dropAttemptDraft(item.id);
   void outbox.add({
     itemId: item.id,
     attempts: [
