@@ -24,7 +24,9 @@ test("crawlers get the idea's tags and its picture, and a deleted idea is generi
     headers,
     data: { id, title: 'Tugboat & "bath" toy', note: "Floats upright." },
   });
-  const buffer = readFileSync("e2e/fixtures/tugboat.jpg");
+  // As a browser sends it: resized, with nothing of the camera's left (a cover still carrying EXIF isn't sent,
+  // decision 0075; test/worker/previews.test.ts).
+  const buffer = readFileSync("e2e/fixtures/model-1.jpg");
   await page.request.put(`/api/items/${id}/photos/${crypto.randomUUID()}`, {
     headers,
     multipart: {
