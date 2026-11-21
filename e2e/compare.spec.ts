@@ -151,9 +151,13 @@ test("the first attempt has nothing to compare with", async ({ page }) => {
   const { id, ids } = await buildWithThreeAttempts(page);
   await page.goto(`/builds/${id}`);
   await expect(page.getByRole("textbox", { name: "Title" })).toHaveValue("Cable chain");
-  await expect(
-    page.locator(`[data-attempt-id="${ids[0]}"]`).getByRole("button", { name: /Options for attempt/ }),
-  ).toHaveCount(0);
+  // Its "…" offers moving it to another build (decision 0076), and no Compare.
+  await page
+    .locator(`[data-attempt-id="${ids[0]}"]`)
+    .getByRole("button", { name: /Options for attempt/ })
+    .click();
+  await expect(page.getByRole("button", { name: "Move to another build" })).toBeVisible();
+  await expect(page.getByRole("button", { name: /^Compare/ })).toHaveCount(0);
 });
 
 test("on a laptop What changed is in the first screen of the compare sheet, photos and all", async ({
