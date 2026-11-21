@@ -22,12 +22,11 @@ import {
 } from "../../shared/model-mark.ts";
 import { printablesTitleFromLink } from "../../shared/model-name.ts";
 import { attemptPartsLabel, partProgress, progressLabel } from "../../shared/parts.ts";
-import { perPiece, sizePiece, sliceLead } from "../../shared/slicing/card.ts";
+import { perPiece, sliceLead } from "../../shared/slicing/card.ts";
 import { originalFilamentColours, printedFilamentNames } from "../../shared/slicing/colours.ts";
 import { slicingOfSlice } from "../../shared/slicing/model.ts";
 import { filamentWords, slicingSummary } from "../../shared/slicing/settings.ts";
 import { readSize } from "../../shared/slicing/size.ts";
-import { slicedBy } from "../../shared/slicing/slicers.ts";
 import { problemSentence, standInSentence } from "../../shared/slicing/words.ts";
 import { showsSettings } from "../../shared/story-settings.ts";
 import { formatDuration } from "../../shared/time.ts";
@@ -108,7 +107,7 @@ export interface GuestFile {
   thumb: boolean;
   /** "About 1 h 26 min", "13.2 g": what the card leads with once it is sliced (with "× 4" for copies). */
   lead: string[];
-  /** "About 21 min · 3.3 g each", "29.96 × 11.5 × 11.35 mm", "Sliced by Spaghetti"; or "Plate 2 of 3". */
+  /** "About 21 min · 3.3 g each", "30 × 12 × 11 mm"; or "Plate 2 of 3". Never who sliced it (the page's foot says it). */
   meta: string[];
   /** "Plate 1 of 3 · Standard · Everyday strength · No supports": what it is sliced with, as the card's row says it. */
   settings: string[];
@@ -250,12 +249,15 @@ function slicingFilament(filament: { material: string; colorHex?: string; colorN
   } satisfies GuestFilament;
 }
 
-/** "Sliced in Bambu Studio": a slicer's own file says which made it ("BambuStudio 02.01.00.00", "OrcaSlicer 2.3.0"). */
-function slicerLine(slicer: string | null): string {
-  if (!slicer) return "";
-  if (/^bambu ?studio/i.test(slicer)) return "Sliced in Bambu Studio";
-  if (/^orca ?slicer/i.test(slicer)) return "Sliced in OrcaSlicer";
-  return "";
+/**
+ * "35 × 35 × 21 mm" (each, with copies): what one copy measures, to the millimetre (a tenth of one under 10 mm). The
+ * app's card gives the slicer's hundredths, for printing; a friend wants to know how big it is.
+ */
+function roughSize(slice: { size?: unknown; copies?: number }): string {
+  const size = readSize(slice.size);
+  if (!size) return "";
+  const mm = (n: number) => String(n < 10 ? Math.round(n * 10) / 10 : Math.round(n));
+  return `${size.map(mm).join(" × ")} mm${slice.copies && slice.copies > 1 ? " each" : ""}`;
 }
 
 /** The colours of a list, each checked: null for none, so the viewer falls back as the app's does. */
@@ -263,8 +265,8 @@ const colours = (list: readonly (string | null | undefined)[] | undefined) =>
   list?.length ? list.map((value) => color(value)) : undefined;
 
 /**
- * A kept file as a guest's card shows it: a sliced model as the app's card says it (its figures, its size, who sliced
- * it, the settings row's words, its cautions), a slicer's own file by what it said. `fallback` is an attempt's own
+ * A kept file as a guest's card shows it: a sliced model as the app's card says it (its figures, its size to the
+ * millimetre, the settings row's words, its cautions), a slicer's own file by what it said. `fallback` is an attempt's own
  * filaments' colours, for a file that doesn't colour its filaments. Nothing else of the row: no settings people chose
  * and haven't sliced with, no slice it replaced, no address of the file.
  */
@@ -289,7 +291,8 @@ export function guestFile(file: AttemptFile, fallback?: readonly (string | null 
     return {
       ...base,
       lead: sliceLead(file.prefill, slice.copies),
-      meta: [perPiece(file.prefill, slice.copies), sizePiece(slice), slicedBy(slice)].filter(Boolean),
+      // Who sliced it isn't said: "Sliced by Spaghetti" on every card means nothing to a friend.
+      meta: [perPiece(file.prefill, slice.copies), roughSize(slice)].filter(Boolean),
       // As the card's row: which plate of a project first, then the rest of what it is sliced with. The filaments
       // are their own line (`filaments`), each with its colour, where the row names only the first.
       settings: [
@@ -329,9 +332,7 @@ export function guestFile(file: AttemptFile, fallback?: readonly (string | null 
   return {
     ...base,
     lead: sliceLead(prefill),
-    meta: [file.plateCount > 1 ? `Plate ${file.plate} of ${file.plateCount}` : "", slicerLine(file.slicer)].filter(
-      Boolean,
-    ),
+    meta: file.plateCount > 1 ? [`Plate ${file.plate} of ${file.plateCount}`] : [],
     settings: [],
     filaments: (prefill.filaments ?? []).map(filamentOf),
     cautions: [],

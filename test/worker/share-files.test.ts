@@ -183,19 +183,21 @@ describe("a shared thing's models", () => {
     const fileId = await addModel(item.id);
     const made = await share("items", item.id);
     const { html } = await guest(`/s/${made.token}`);
-    // The card says what the app's says: the print, its size, who sliced it, what with, and its caution.
+    // The card says what the app's says: the print, its size (to the millimetre), what with, and its caution.
     for (const words of [
       "The model",
       "fusilli-knob.stl",
       "About 1 h 26 min",
       "13.2 g",
-      "29.96 × 11.5 × 11.35 mm",
-      "Sliced by Spaghetti",
+      "30 × 12 × 11 mm",
       "Parts of it float in the air.",
       "No supports",
     ]) {
       expect(html, words).toContain(words);
     }
+    // Not who sliced it: the page's foot already says Spaghetti, and a friend doesn't need it on every card.
+    expect(html).not.toContain("Sliced by");
+    expect(html).not.toContain("29.96 ×");
     // Its picture and toolpaths through the token; no address of the file under /api, nothing to download.
     expect(html).toContain(`/s/${made.token}/files/${fileId}/thumb`);
     expect(html).toContain(`/s/${made.token}/files/${fileId}/toolpaths`);
