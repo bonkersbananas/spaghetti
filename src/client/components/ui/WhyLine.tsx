@@ -6,16 +6,17 @@ interface WhyLineProps {
   /** The small glyph that says who did it: the printer for a print it placed, the move arrow for a move. */
   icon: Icon;
   children: ReactNode;
-  /** At most one quiet way to change it, at the line's end ("Not this build?"). */
+  /** At most one quiet way to change it, the line's last sentence ("Not this build?"). */
   action?: { label: string; onClick: () => void; disabled?: boolean };
   className?: string;
 }
 
 /**
  * Why something is where it is, in one quiet line: a 14 px glyph, `text-small` words in `ink-faint`, and at most one
- * quiet action after them. A print the printer bridge put in a build says its reason this way ("Same file as
- * ring.3mf · Not this build?"), and an attempt moved from another build says where from, as `ClaudeLine` does for
- * what Claude says unasked. It wraps under its glyph; the action never breaks inside.
+ * quiet action after them, as the next sentence ("Same file as ring.3mf. Not this build?"), so no separator can begin
+ * or end a line. A print the printer bridge put in a build says its reason this way, and an attempt moved from another
+ * build says where from, as `ClaudeLine` does for what Claude says unasked. It wraps under its glyph; the action never
+ * breaks inside.
  */
 export function WhyLine({ icon: Glyph, children, action, className }: WhyLineProps) {
   return (
@@ -26,7 +27,6 @@ export function WhyLine({ icon: Glyph, children, action, className }: WhyLinePro
         {action && (
           <>
             {" "}
-            <span aria-hidden>·</span>{" "}
             <button
               type="button"
               onClick={action.onClick}

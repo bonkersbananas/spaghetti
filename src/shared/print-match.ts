@@ -323,9 +323,10 @@ const sentWords = (how: SendHow) => (how === "studio" ? "opened in Bambu Studio"
 
 /**
  * Why a print was put in a build, or is suggested for it, in one sentence: the strongest reason and the one after
- * it. "Same file as UOBF-fit-test-ring.3mf, opened in Bambu Studio a minute before it began."
+ * it. "Same file as UOBF-fit-test-ring.3mf, opened in Bambu Studio a minute before it began." `brief` keeps to the
+ * strongest (a card's line); a file's name is never capitalised.
  */
-export function whyWords(reasons: readonly MatchReason[]): string {
+export function whyWords(reasons: readonly MatchReason[], { brief = false }: { brief?: boolean } = {}): string {
   const [first, second] = reasons;
   if (!first) return "";
   const lead = phrase(first, true);
@@ -334,7 +335,7 @@ export function whyWords(reasons: readonly MatchReason[]): string {
     return `${lead}, ${sentWords(second.how)} ${before(second.minutes)}.`;
   }
   // A matching estimate or a fresh start only backs up a name: said alone, they add nothing a person can check.
-  if (!second || second.kind === "estimate" || second.kind === "fresh") return `${lead}.`;
+  if (brief || !second || second.kind === "estimate" || second.kind === "fresh") return `${lead}.`;
   return `${lead}; ${phrase(second, false)}.`;
 }
 
@@ -361,26 +362,26 @@ export function whyLabel(reasons: readonly MatchReason[]): string {
   }
 }
 
+/** One reason in words, leading the sentence or following it; a file's name is never capitalised. */
 function phrase(reason: MatchReason, lead: boolean): string {
-  const text = (() => {
-    switch (reason.kind) {
-      case "marker":
-        return `the file is ${reason.file}, sliced here`;
-      case "file":
-        return reason.attempt ? `same file as attempt ${reason.attempt}` : `same file as ${reason.file}`;
-      case "like-file":
-        return `a file named much like it, ${reason.file}`;
-      case "title":
-        return "the build has its name";
-      case "words":
-        return "the build is named much like it";
-      case "sent":
-        return `${reason.file} was ${sentWords(reason.how)} ${before(reason.minutes)}`;
-      case "estimate":
-        return `the same estimate as ${reason.file}`;
-      case "fresh":
-        return lead ? "started just before, with nothing printed yet" : "nothing printed in it yet";
-    }
-  })();
-  return lead ? text.charAt(0).toUpperCase() + text.slice(1) : text;
+  switch (reason.kind) {
+    case "marker":
+      return `${lead ? "The" : "the"} file is ${reason.file}, sliced here`;
+    case "file":
+      return `${lead ? "Same" : "same"} file as ${reason.attempt ? `attempt ${reason.attempt} (${reason.file})` : reason.file}`;
+    case "like-file":
+      return `${lead ? "A" : "a"} file named much like it, ${reason.file}`;
+    case "title":
+      return `${lead ? "The" : "the"} build has its name`;
+    case "words":
+      return `${lead ? "The" : "the"} build is named much like it`;
+    case "sent":
+      return lead
+        ? `${reason.how === "studio" ? "Opened in Bambu Studio" : "Downloaded"} ${before(reason.minutes)}: ${reason.file}`
+        : `${reason.file} was ${sentWords(reason.how)} ${before(reason.minutes)}`;
+    case "estimate":
+      return `${lead ? "The" : "the"} same estimate as ${reason.file}`;
+    case "fresh":
+      return lead ? "Started just before, with nothing printed yet" : "nothing printed in it yet";
+  }
 }

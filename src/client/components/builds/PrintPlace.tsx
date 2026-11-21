@@ -2,12 +2,19 @@ import type { AttemptMoved } from "@shared/api";
 import { whyWords } from "@shared/print-match";
 import { inlineTime } from "@shared/time";
 import { useQuery } from "@tanstack/react-query";
-import { lazy, Suspense, useId, useState } from "react";
+import { type ComponentProps, lazy, Suspense, useId, useState } from "react";
 import { Button } from "@/components/ui/Button";
-import { BuildsIcon, IdeasIcon, MoveIntoIcon, PlusIcon, PrinterIcon, SearchIcon } from "@/components/ui/icons";
+import {
+  BuildsIcon,
+  type Icon,
+  IdeasIcon,
+  MoveIntoIcon,
+  PlusIcon,
+  PrinterIcon,
+  SearchIcon,
+} from "@/components/ui/icons";
 import { OfferRow } from "@/components/ui/OfferRow";
 import { WhyLine } from "@/components/ui/WhyLine";
-import { cn } from "@/lib/cn";
 import { type AttemptView, type ItemView, useBuilds, useIdeas } from "@/lib/items";
 import { suggestionsQuery, useMoveAttempt } from "@/lib/print-moves";
 import { peopleQuery } from "@/lib/queries";
@@ -30,8 +37,8 @@ interface PrintPlaceProps {
   className?: string;
 }
 
-/** "Same file as ring.3mf." → "same file as ring.3mf", to follow "From the printer:" before an action. */
-const lowerFirst = (text: string) => text.charAt(0).toLowerCase() + text.slice(1).replace(/\.$/, "");
+/** "Same file as ring.3mf." → "same file as ring.3mf.", to follow "From the printer:". */
+const lowerFirst = (text: string) => text.charAt(0).toLowerCase() + text.slice(1);
 
 /**
  * Where a print the printer bridge filed is, and why (decision 0076). A print in a build of its own asks "Which build
@@ -56,7 +63,7 @@ export default function PrintPlace({ item, attempt, where, className }: PrintPla
   } else if (print?.reasons.length) {
     content = (
       <WhyLine icon={PrinterIcon} action={readOnly ? undefined : { label: "Not this build?", onClick: openSheet }}>
-        From the printer: {lowerFirst(whyWords(print.reasons))}
+        From the printer: {lowerFirst(whyWords(print.reasons, { brief: where === "card" }))}
       </WhyLine>
     );
   } else if (where === "entry" && attempt.moved) {
@@ -103,7 +110,6 @@ interface WhichBuildProps {
  * fits: one quiet line says so, with a way to put it in a build anyway.
  */
 function WhichBuild({ item, attempt, onMore, readOnly }: WhichBuildProps) {
-  const headingId = useId();
   const { data: suggestions, isPending } = useQuery(suggestionsQuery(attempt.id));
   const { items: builds } = useBuilds();
   const { items: ideas } = useIdeas();
@@ -119,10 +125,48 @@ function WhichBuild({ item, attempt, onMore, readOnly }: WhichBuildProps) {
   if (!offers.length) {
     return (
       <WhyLine icon={PrinterIcon} action={readOnly ? undefined : { label: "Put it in a build", onClick: onMore }}>
-        From the printer: a build of its own, nothing else fits {name ? <q>{name}</q> : "it"}
+        From the printer: a build of its own, as nothing else fits {name ? <q>{name}</q> : "it"}.
       </WhyLine>
     );
   }
+  return (
+    <WhichBuildQuestion
+      name={name}
+      offers={offers.map(({ build, reasons }) => ({
+        id: build.id,
+        photo: pictureOf(build),
+        glyph: build.stage === "idea" ? IdeasIcon : BuildsIcon,
+        title: itemName(build, build.stage === "idea" ? "idea" : "build"),
+        why: whyWords(reasons),
+        onSelect: () => moves.move({ item: build }),
+      }))}
+      onMore={onMore}
+      onKeep={() => moves.keep()}
+      disabled={readOnly}
+    />
+  );
+}
+
+interface WhichBuildQuestionProps {
+  /** The job's name as the printer said it. */
+  name?: string | null;
+  /** The builds it may belong to, best first, each with why. */
+  offers: Array<{
+    id: string;
+    photo: ComponentProps<typeof OfferRow>["photo"];
+    glyph: Icon;
+    title: string;
+    why: string;
+    onSelect: () => void;
+  }>;
+  onMore: () => void;
+  onKeep: () => void;
+  disabled?: boolean;
+}
+
+/** The question as it reads (the styleguide shows it with sample builds). */
+export function WhichBuildQuestion({ name, offers, onMore, onKeep, disabled }: WhichBuildQuestionProps) {
+  const headingId = useId();
   return (
     <section aria-labelledby={headingId} className="flex flex-col gap-2.5">
       <div className="flex flex-col gap-0.5">
@@ -137,23 +181,23 @@ function WhichBuild({ item, attempt, onMore, readOnly }: WhichBuildProps) {
         )}
       </div>
       <div className="flex flex-col gap-2">
-        {offers.map(({ build, reasons }) => (
+        {offers.map((offer) => (
           <OfferRow
-            key={build.id}
-            photo={pictureOf(build)}
-            glyph={build.stage === "idea" ? IdeasIcon : BuildsIcon}
-            title={itemName(build, build.stage === "idea" ? "idea" : "build")}
-            why={whyWords(reasons)}
-            disabled={readOnly}
-            onSelect={() => moves.move({ item: build })}
+            key={offer.id}
+            photo={offer.photo}
+            glyph={offer.glyph}
+            title={offer.title}
+            why={offer.why}
+            disabled={disabled}
+            onSelect={offer.onSelect}
           />
         ))}
       </div>
-      <div className={cn("-mx-2 flex flex-wrap items-center gap-x-1")}>
-        <Button variant="quiet" size="sm" icon={SearchIcon} disabled={readOnly} onClick={onMore}>
+      <div className="-mx-2 flex flex-wrap items-center gap-x-1">
+        <Button variant="quiet" size="sm" icon={SearchIcon} disabled={disabled} onClick={onMore}>
           Another build
         </Button>
-        <Button variant="quiet" size="sm" icon={PlusIcon} disabled={readOnly} onClick={() => moves.keep()}>
+        <Button variant="quiet" size="sm" icon={PlusIcon} disabled={disabled} onClick={onKeep}>
           It's new
         </Button>
       </div>

@@ -84,6 +84,13 @@ describe("Carl Oscar's fit-test ring", () => {
     expect(whyLabel(scored[0]?.reasons ?? [])).toBe("Same file");
   });
 
+  it("says the strongest reason alone on a card, and two on the build's own page", () => {
+    const bracket = build({ id: "bracket", title: "bracket", files: [{ id: "b", name: "bracket.3mf" }] });
+    const [best] = scorePrint({ name: "bracket", startedAt: START }, [bracket]);
+    expect(whyWords(best?.reasons ?? [])).toBe("Same file as bracket.3mf; the build has its name.");
+    expect(whyWords(best?.reasons ?? [], { brief: true })).toBe("Same file as bracket.3mf.");
+  });
+
   it("asks when the build was started yesterday: a name alone is a suggestion, not a match", () => {
     const older = { ...glassMarkers, startedAt: START - 26 * 60 * MINUTE };
     const scored = scorePrint(ring, [tugboat, older, hooks]);
@@ -108,7 +115,7 @@ describe("names", () => {
   it("knows an attempt's file and says which attempt printed it", () => {
     const scored = scorePrint({ name: "tugboat_v3", startedAt: START }, workshop);
     expect(scored[0]).toMatchObject({ itemId: "tug", reasons: [{ kind: "file", attempt: 2 }] });
-    expect(whyWords(scored[0]?.reasons ?? [])).toBe("Same file as attempt 2.");
+    expect(whyWords(scored[0]?.reasons ?? [])).toBe("Same file as attempt 2 (tugboat_v3.gcode.3mf).");
   });
 
   it("drops the plate from a job's name", () => {
@@ -160,7 +167,7 @@ describe("other signals", () => {
     expect(scorePrint(print, [day])[0]?.score).toBe(10);
     expect(scorePrint(print, [later])).toEqual([]);
     expect(whyWords(scorePrint(print, [soon])[0]?.reasons ?? [])).toBe(
-      "Tugboat_v3.gcode.3mf was downloaded 10 min before it began.",
+      "Downloaded 10 min before it began: tugboat_v3.gcode.3mf.",
     );
   });
 

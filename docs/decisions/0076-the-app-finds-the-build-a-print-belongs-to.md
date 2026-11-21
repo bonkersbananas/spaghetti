@@ -1,0 +1,21 @@
+# 0076. The app finds the build a print belongs to, says why, and one tap moves it
+
+Status: Accepted (Carl Oscar asked for it on Nov 21, 2026, after the bridge filed his fit-test ring as a new build)
+
+**Decision:** the printer bridge no longer decides which build a print belongs to: it files each print in a build of its own (named after the job), and the Worker places it. A pure matcher (`shared/print-match.ts`) scores the ideas and builds in progress on what a person could check:
+
+- the same file by name, kept with the build or printed in one of its attempts: 60 points. Names are compared without path, extension (`.gcode.3mf`, `.3mf`, `.gcode`, `.stl`), copy suffix ("(2)", " (1)", " copy"), `_plate_N`, accents (UÖBF is uobf), case or separators. A copy's trailing number ("ring-2") is 50, a name sharing most words 25.
+- the build's title is the job's name: 45 (most words alike: 20).
+- one of its files downloaded (`POST /api/files/:id/downloads`, from any download link) or opened in Bambu Studio (kept when the link is made) before the print began: 45 within 30 minutes, 25 within 3 hours, 10 within a day. Kept a month (`file_downloads`).
+- the printer's estimate within 10 % of a file's (bridges from 0.2 send it): 15.
+- a build started in the 2 hours before, with nothing printed yet: 10, only on top of something else.
+
+A build with 70 points or more and 30 ahead of the next takes the print, and the printer's build goes (merged: `items.merged_into`, its address answers 308 to the other, so the bridge still finds its print). Otherwise the print stays in its own build, which asks "Which build is this?" (`print_jobs.asking`) with the best three (25 points or more) as offers, until someone answers. The reasons are kept (`print_jobs.reasons`) and said in one line ("From the printer: same file as UOBF-fit-test-ring.3mf · Not this build?").
+
+Any attempt can move to another build, an idea (which becomes a build) or a new build (`POST /api/attempts/:id/move`), with its photos, note, outcome, settings, file and Claude's notes; a printer's build left with nothing goes with it, which is how a printer's build is merged into the right one. "A new build" for a matched print brings back the printer's own build. One Undo (`/unmove`) puts everything back, the question too. The moved attempt says where it came from (`attempt_moves`). Moving and answering are people's: the bridge's token only files its own print.
+
+**Why:** the bridge's own rule (the same name as the latest attempt's file) missed Carl Oscar's print twice over: the ring was a file kept with the build, not an attempt's, and Bambu Studio saved its second download as "UOBF-fit-test-ring(2)". The app knows far more than the bridge (kept files, downloads, which build was just started), and a matcher in the Worker improves without a bridge release. Scores and reasons stay simple enough to say in a sentence, so a guess is never a mystery; when two builds fit about as well, asking is cheaper than a wrong guess.
+
+**Consequences:** his case scores 70 (same file, a build started 27 seconds before) and goes straight in; with the Bambu Studio open recorded it is 115. Bridges before 0.2 send only the job's name (as the build's title) and are matched on that; the server takes their attempt into the matched build and keeps their later calls working (the merged build's 308, a photo sent to the build an attempt left lands with the attempt). Bridge 0.2 sends `print` (name, plate's G-code file, estimate) with the attempt, follows the print to where the app put it and ends it by its attempt alone; it needs a release. The printer's builds filed in the 30 days before this ask the question once (the migration's backfill).
+
+**Not done:** a mark inside Spaghetti's own sliced files (an exact match when the bridge has the file): the API and matcher take a `fileId`, but writing it means threading the file's id through the slicing worker, and whether Bambu Studio keeps custom metadata when it sends a file to the printer is unconfirmed. Merging builds that have several attempts of their own (comments, files, parts) is not offered: moving their attempts one at a time does it. Done and shelved builds are never matched automatically; they are in the sheet.
