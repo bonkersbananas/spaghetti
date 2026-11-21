@@ -1,5 +1,6 @@
 import { fileUrl } from "@shared/api";
 import { originalFilamentColours, printedFilamentNames } from "@shared/slicing/colours.ts";
+import { viewerPlate } from "@shared/slicing/files.ts";
 import { type ComponentType, type ReactNode, useEffect, useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { CubeIcon } from "@/components/ui/icons";
@@ -7,6 +8,7 @@ import { Sheet } from "@/components/ui/Sheet";
 import { tooBigForPhone } from "@/lib/big-upload";
 import { cn } from "@/lib/cn";
 import type { AttemptFileView } from "@/lib/items";
+import { type SliceJob, useSliceJob } from "@/lib/slicing/jobs";
 
 /** The viewer's code (three.js and the scene) loads on first use, or when a finger comes near the control. */
 const importViewer = () => import("./PrintViewer");
@@ -57,6 +59,18 @@ export function canView3d(file: AttemptFileView | undefined): file is AttemptFil
   if (tooBigForPhone(file.kind === "model" ? (file.slice?.bytes ?? 0) : file.size)) return false;
   if (file.kind === "model") return file.slice?.status === "sliced";
   return /\.gcode\.3mf$/i.test(file.name) || file.prefill.estimatedMinutes !== undefined;
+}
+
+/** What the view says over a model's slice while this device slices it again, until the new one is saved. */
+export function reslicingNotice(
+  job: SliceJob | undefined,
+): { text: string; fraction: number | null; percent?: boolean } | undefined {
+  if (!job) return undefined;
+  if (job.status === "waiting") return { text: "Waiting to slice it again…", fraction: null };
+  if (job.status === "slicing")
+    return { text: "Slicing it again… these toolpaths are the last slice's", fraction: job.fraction, percent: true };
+  if (job.status === "sliced" && job.outcome?.ok) return { text: "Saving the new slice…", fraction: null };
+  return undefined;
 }
 
 /** The attempt a file belongs to while it prints: what the viewer needs to follow it. */
@@ -144,6 +158,10 @@ export function ViewerSheet({
   fallbackColors?: (string | null | undefined)[];
   printing?: PrintingAttempt;
 }) {
+  const model = file.kind === "model";
+  const job = useSliceJob(file.id);
+  // A new slice saved while the view is open is read afresh: the viewer is for that slice.
+  const version = model && file.slice?.status === "sliced" ? file.slice.at : 0;
   return (
     <Sheet
       open={open}
@@ -154,13 +172,16 @@ export function ViewerSheet({
       fill
     >
       <LoadedViewer
+        key={`${file.id}:${version}`}
         originalColors={
           file.kind === "model" && file.slice?.colours ? originalFilamentColours(file.slice.colours) : undefined
         }
         names={file.kind === "model" && file.slice?.colours ? printedFilamentNames(file.slice.colours) : undefined}
         url={fileUrl(file.id, file.kind === "model" ? "sliced" : "file")}
         fileId={file.id}
-        plate={file.plate}
+        plate={viewerPlate(file)}
+        ownSlice={model}
+        notice={model ? reslicingNotice(job) : undefined}
         copies={file.kind === "model" ? file.slice?.copies : undefined}
         size={file.kind === "model" ? file.slice?.size : undefined}
         fallbackColors={fallbackColors}

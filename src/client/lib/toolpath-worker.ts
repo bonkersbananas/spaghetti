@@ -1,5 +1,5 @@
 /// <reference lib="webworker" />
-import { type Layer, readToolpaths, type Toolpaths, toolpathBuffers } from "@shared/gcode";
+import { type Layer, readToolpaths, ToolpathError, type Toolpaths, toolpathBuffers } from "@shared/gcode";
 
 /**
  * Reads a slicer file's G-code off the main thread: fetches it, streams it through the reader and posts the layers
@@ -14,6 +14,8 @@ export interface ToolpathRequest {
   maxSegments?: number;
   /** How many copies of the plate's objects the file has, for the size of one. */
   copies?: number;
+  /** The file is a slice Spaghetti made of a model: a missing G-code means slicing it again, not another file. */
+  ownSlice?: boolean;
 }
 
 export type ToolpathMessage =
@@ -73,6 +75,13 @@ self.onmessage = async (event: MessageEvent<ToolpathRequest | "cancel">) => {
     post({ type: "done", paths: { ...rest, layerCount: paths.stats.layers } });
   } catch (error) {
     if ((error as Error).name === "AbortError") return;
+    if (request.ownSlice && error instanceof ToolpathError && error.code === "noGcode") {
+      post({
+        type: "error",
+        message: "Its slice came out without toolpaths. Slice it again from its settings to see it here.",
+      });
+      return;
+    }
     post({ type: "error", message: (error as Error).message || "Could not read the file." });
   }
 };
