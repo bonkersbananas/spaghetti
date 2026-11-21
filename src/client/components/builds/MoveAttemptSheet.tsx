@@ -98,10 +98,10 @@ export function MoveAttemptSheet({ open, onOpenChange, item, attempt, withoutGue
   );
 
   const empty = !suggested.length && !active.length && !finished.length;
-  const { shared, lines, names } = offerLines(suggested);
+  const { shared, sameFile, lines, names } = offerLines(suggested);
   const pictures = picturesApart(
     suggested.map((one) => one.build),
-    !!shared,
+    sameFile,
   );
 
   return (

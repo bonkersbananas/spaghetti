@@ -135,10 +135,10 @@ function WhichBuild({ item, attempt, onMore, readOnly }: WhichBuildProps) {
   }
   // The build is named after the job until someone renames it: then the card's title says the name already.
   const said = !!printName && printName.trim().toLowerCase() === item.title?.trim().toLowerCase();
-  const { shared, lines, names } = offerLines(offers);
+  const { shared, sameFile, lines, names } = offerLines(offers);
   const pictures = picturesApart(
     offers.map((offer) => offer.build),
-    !!shared,
+    sameFile,
   );
   return (
     <WhichBuildQuestion

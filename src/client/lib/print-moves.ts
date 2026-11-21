@@ -37,12 +37,16 @@ function apart(build: ItemView): string {
  */
 export function offerLines(offers: ReadonlyArray<{ build: ItemView; reasons: MatchReason[] }>): {
   shared: string | null;
+  /** They all lead with the same file, so its plate would be the same picture on every row. */
+  sameFile: boolean;
   lines: string[];
   names: string[];
 } {
   const shared = sharedWords(offers);
+  const fileFirst = (reasons: MatchReason[]) => reasons[0]?.kind === "file" || reasons[0]?.kind === "marker";
   return {
     shared,
+    sameFile: !!shared && offers.every((offer) => fileFirst(offer.reasons)),
     lines: offers.map(({ build, reasons }) => (shared ? apart(build) : rowWords(reasons))),
     names: offers.flatMap(({ reasons }) => namesIn(reasons)),
   };
