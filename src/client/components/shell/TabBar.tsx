@@ -120,10 +120,17 @@ function CaptureButton() {
         onChange={(event) => {
           // Its own small chunk: the tab bar is on every first load, a camera photo is not.
           const input = event.target;
-          void import("@/lib/picked").then(async ({ takePicked }) => {
-            const files = await takePicked(input);
-            if (files.length) openWith({ files });
-          });
+          void import("@/lib/picked")
+            .then(({ takePicked }) => takePicked(input))
+            .catch(() => {
+              // The chunk couldn't load (offline, or replaced by a deploy): take the photo as it is rather than lose it.
+              const files = Array.from(input.files ?? []);
+              input.value = "";
+              return files;
+            })
+            .then((files) => {
+              if (files.length) openWith({ files });
+            });
         }}
       />
     </>
