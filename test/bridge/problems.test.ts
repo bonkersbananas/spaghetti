@@ -180,3 +180,36 @@ describe("a camera frame without ffmpeg", () => {
     ).toBeNull();
   });
 });
+
+describe("finding ffmpeg", () => {
+  it("keeps a path it is given, and finds ffmpeg on the PATH, else falls back to the name", async () => {
+    const { findFfmpeg } = await import("../../bridge/camera.ts");
+    const { mkdtempSync, writeFileSync, chmodSync, rmSync } = await import("node:fs");
+    const { tmpdir } = await import("node:os");
+    const { join } = await import("node:path");
+    const dir = mkdtempSync(join(tmpdir(), "ff-"));
+    try {
+      writeFileSync(join(dir, "ffmpeg"), "#!/bin/sh\n");
+      chmodSync(join(dir, "ffmpeg"), 0o755);
+      expect(findFfmpeg("/x/ffmpeg", "")).toBe("/x/ffmpeg");
+      expect(findFfmpeg(undefined, `/nowhere:${dir}`)).toBe(join(dir, "ffmpeg"));
+      expect(findFfmpeg("nonexistent-tool", "/nowhere")).toBe("nonexistent-tool");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("says why when ffmpeg can't be run", async () => {
+    const { ffmpegCamera } = await import("../../bridge/camera.ts");
+    const lines: string[] = [];
+    const frame = await ffmpegCamera({
+      host: "127.0.0.1",
+      accessCode: "x",
+      ffmpeg: "/nonexistent/ffmpeg",
+      url: "rtsps://127.0.0.1:1/x",
+      log: (line) => lines.push(line),
+    }).grab();
+    expect(frame).toBeNull();
+    expect(lines.join("\n")).toMatch(/No camera frame from the RTSPS stream: ffmpeg isn't installed/);
+  });
+});
