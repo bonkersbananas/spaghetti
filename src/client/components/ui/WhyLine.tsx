@@ -20,7 +20,7 @@ interface WhyLineProps {
  */
 export function WhyLine({ icon: Glyph, children, action, className }: WhyLineProps) {
   return (
-    <p className={cn("text-small text-ink-faint flex items-start gap-1.5", className)}>
+    <p className={cn("text-small text-ink-faint flex items-start gap-1.5 text-pretty", className)}>
       <Glyph size={14} aria-hidden className="mt-0.5 shrink-0 md:mt-px" />
       <span className="min-w-0">
         {children}

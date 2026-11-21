@@ -65,7 +65,7 @@ interface AttemptEntryProps {
 // Claude's ideas for the next try load after the build page: they only exist for a failed attempt.
 const CoachNote = lazy(() => import("./Coach").then((m) => ({ default: m.CoachNote })));
 // Which build a print the printer filed belongs to, and where an attempt was moved from (decision 0076).
-const PrintPlace = lazy(() => import("./PrintPlace"));
+const PrintPlace = lazy(() => import("./print-place-lazy").then((entry) => entry.loadPrintPlace()));
 
 /**
  * One attempt in a build's story: how it went, what was tried differently

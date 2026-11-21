@@ -15,7 +15,7 @@ import { boxesStl, boxStl, fusilliStl, glassesStl } from "../e2e/fixtures/model-
 import { SLICER_FILE_NAME, slicerFile } from "../e2e/fixtures/slicer-file.ts";
 import { readThreeMf, settingsFromFile } from "../src/shared/threemf/index.ts";
 import { SEED_AGENTS } from "./seed/agents.ts";
-import { SEED_BUILD_IDS } from "./seed/builds.ts";
+import { SEED_BUILD_IDS, seedBridge } from "./seed/builds.ts";
 import { commentId } from "./seed/comments.ts";
 import { SEED_IDS } from "./seed/ideas.ts";
 import { SEED_NOW } from "./seed/index.ts";
@@ -1830,6 +1830,11 @@ async function bridgeToken(page: Page): Promise<string> {
     data: { name: "Printer bridge", scopes: ["read", "attempts", "printer"] },
   });
   const { token } = (await made.json()) as { token: string };
+  // The bridge says it is there, as a real one does: only its agent's prints are matched (decision 0076).
+  await page.request.put("/api/printer/bridge", {
+    headers: { Origin: origin, Authorization: `Bearer ${token}` },
+    data: {},
+  });
   bridgeTokens.set(origin, token);
   return token;
 }
@@ -1900,9 +1905,15 @@ async function buildAboutToPrint(
 
 async function removeFiledPrints(page: Page) {
   await page.unrouteAll({ behavior: "ignoreErrors" });
-  const headers = { Origin: new URL(page.url()).origin };
+  const origin = new URL(page.url()).origin;
+  const headers = { Origin: origin };
   for (const id of filedAttempts.splice(0)) await page.request.delete(`/api/attempts/${id}`, { headers });
   for (const id of filedPrints.splice(0)) await page.request.delete(`/api/items/${id}`, { headers });
+  // The shot's bridge goes (its token with it), and the seed's report comes back for the shots after.
+  if (bridgeTokens.delete(origin)) {
+    await page.request.delete("/api/printer/bridge", { headers });
+    await seedBridge(page.request, origin);
+  }
 }
 
 /**

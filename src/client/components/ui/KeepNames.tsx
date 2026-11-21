@@ -4,14 +4,19 @@ const FILE_NAME = /[^\s()“”"]+\.(?:gcode\.3mf|3mf|gcode|bgcode|stl|step|stp|
 /** Longer than this, a name may break like any word, or it would run past a phone's line. */
 const LONGEST = 36;
 
+const literally = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
 /**
- * Running text with each file name kept whole on one line: "Same file as bath-boat.gcode.3mf" never breaks after
- * "bath-", which reads as two names. A name too long for a phone's line still breaks where it must.
+ * Running text with each name in it kept whole on one line: the `names` given (a file's name as people see it,
+ * "bath-boat"), and any file name with its slicer's ending. "it printed bath-boat" never breaks after "bath-", which
+ * reads as two names. A name too long for a phone's line still breaks where it must.
  */
-export function KeepNames({ text }: { text: string }) {
+export function KeepNames({ text, names = [] }: { text: string; names?: readonly string[] }) {
+  const kept = names.filter((name) => name && name.length <= LONGEST).map(literally);
+  const pattern = new RegExp([FILE_NAME.source, ...kept].join("|"), "gi");
   const parts: React.ReactNode[] = [];
   let last = 0;
-  for (const match of text.matchAll(FILE_NAME)) {
+  for (const match of text.matchAll(pattern)) {
     const name = match[0];
     if (name.length > LONGEST) continue;
     parts.push(

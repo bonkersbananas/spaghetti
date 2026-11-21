@@ -30,7 +30,7 @@ import { OutcomeChip, OutcomePicker } from "./Outcome";
 import { PhotoReadNote } from "./PhotoReadNote";
 
 // Which build a print the printer filed belongs to (decision 0076): its code comes only with such a print.
-const PrintPlace = lazy(() => import("./PrintPlace"));
+const PrintPlace = lazy(() => import("./print-place-lazy").then((entry) => entry.loadPrintPlace()));
 
 interface PrintingCardProps {
   item: ItemView;

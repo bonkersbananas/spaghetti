@@ -10,12 +10,17 @@ import { clearIdeas, signIn } from "./helpers.ts";
 
 const origin = (page: Page) => new URL(page.url()).origin;
 const tokens: string[] = [];
+let hadBridge = false;
 
 test.beforeEach(async ({ page }) => {
   await signIn(page);
+  hadBridge = !!(await (await page.request.get("/api/printer")).json()).bridge;
 });
 test.afterEach(async ({ page }) => {
   await clearIdeas(page);
+  // The test's bridge goes again where there was none.
+  if (tokens.length && !hadBridge)
+    await page.request.delete("/api/printer/bridge", { headers: { Origin: origin(page) } });
   // Leave no working token behind.
   const { agents } = await (await page.request.get("/api/agents")).json();
   for (const agent of agents)
@@ -33,6 +38,12 @@ async function bridgeToken(page: Page) {
   expect(made.ok()).toBe(true);
   const { token } = await made.json();
   tokens.push(token);
+  // The bridge says it is there, as a real one does: only its agent's prints are matched (decision 0076).
+  const told = await page.request.put("/api/printer/bridge", {
+    headers: { Origin: origin(page), Authorization: `Bearer ${token}` },
+    data: {},
+  });
+  expect(told.ok()).toBe(true);
   return token as string;
 }
 
@@ -107,11 +118,12 @@ test("the printer asks which build a print is, a tap puts it there, and Undo ask
   const entry = page.locator(`[data-attempt-id="${attemptId}"]`);
   const question = entry.getByRole("region", { name: "Which build is this?" });
   await expect(question).toBeVisible();
-  // The card's title is the printer's name already; each offer says what tells it from the other.
+  // The card's title is the printer's name already; what both guesses share is said once, and each row says what
+  // sets it apart.
   await expect(question.getByText("The printer calls it")).toHaveCount(0);
-  await expect(question.getByText(/^Same file as planter-v2\.gcode\.3mf\. Started/)).toHaveCount(2);
-  await expect(question.getByRole("button", { name: /^Balcony planters/ })).toBeVisible();
-  await question.getByRole("button", { name: /^Herb planter Same file as planter-v2\.gcode\.3mf/ }).click();
+  await expect(question.getByText("Both print planter-v2.")).toBeVisible();
+  await expect(question.getByRole("button", { name: /^Balcony planters Started/ })).toBeVisible();
+  await question.getByRole("button", { name: /^Herb planter Started/ }).click();
 
   // The printer's build went with it, and the page follows the print into the herb planter.
   await expect(page.getByText("Moved to Herb planter")).toBeVisible();
@@ -136,6 +148,7 @@ test("the printer asks which build a print is, a tap puts it there, and Undo ask
 
 test("a print the app placed says why, and “Not this build?” moves it with one tap", { tag: "@phone" }, async ({
   page,
+  isMobile,
 }) => {
   // Only one build keeps the ring's file, and it was started just before: the print goes straight in.
   const glass = await buildKeeping(page, "UÖBF glass markers", "UOBF-fit-test-ring.3mf");
@@ -147,10 +160,19 @@ test("a print the app placed says why, and “Not this build?” moves it with o
   const { ownId, attemptId, itemId } = await bridgeFiles(page, "UOBF-fit-test-ring(2)");
   expect(itemId).toBe(glass);
 
-  await page.goto(`/builds/${glass}`);
+  // The printer's build went into the glass markers: its address leads there, and the page takes the real one.
+  await page.goto(`/builds/${ownId}`);
+  await expect(page).toHaveURL(new RegExp(`/builds/${glass}`));
+  await expect(page.getByRole("textbox", { name: "Title" })).toHaveValue("UÖBF glass markers");
   const entry = page.locator(`[data-attempt-id="${attemptId}"]`);
-  await expect(entry.getByText("From the printer: same file as UOBF-fit-test-ring.3mf.")).toBeVisible();
-  await entry.getByRole("button", { name: "Not this build?" }).click();
+  await expect(entry.getByText("Filed here: it printed UOBF-fit-test-ring, this build's file.")).toBeVisible();
+  const notThis = entry.getByRole("button", { name: "Not this build?" });
+  if (isMobile) {
+    // Words in a sentence, with a thumb's target all the same.
+    const target = await notThis.evaluate((node) => getComputedStyle(node, "::after").height);
+    expect(Number.parseFloat(target)).toBeGreaterThanOrEqual(44);
+  }
+  await notThis.click();
 
   const sheet = page.getByRole("dialog", { name: "Move attempt 1" });
   await expect(sheet.getByText("The printer calls it UOBF-fit-test-ring(2).", { exact: false })).toBeVisible();
@@ -173,5 +195,5 @@ test("a print the app placed says why, and “Not this build?” moves it with o
       itemId: glass,
       asking: false,
     });
-  await expect(entry.getByText("From the printer: same file as UOBF-fit-test-ring.3mf.")).toBeVisible();
+  await expect(entry.getByText("Filed here: it printed UOBF-fit-test-ring, this build's file.")).toBeVisible();
 });

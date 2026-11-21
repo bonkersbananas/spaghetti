@@ -333,66 +333,104 @@ function before(minutes: number): string {
 const sentWords = (how: SendHow) => (how === "studio" ? "opened in Bambu Studio" : "downloaded");
 
 /**
- * Why a print was put in a build, or is suggested for it, in one sentence: the strongest reason and the one after
- * it. "Same file as UOBF-fit-test-ring.3mf, opened in Bambu Studio a minute before it began." `brief` keeps to the
- * strongest (a card's line); a file's name is never capitalised.
+ * A file's name as people see it: no folder and no slicer's ending, its own spelling kept. "UOBF-fit-test-ring.3mf"
+ * is "UOBF-fit-test-ring", "/cache/bath-boat.gcode.3mf" is "bath-boat".
  */
-export function whyWords(reasons: readonly MatchReason[], { brief = false }: { brief?: boolean } = {}): string {
-  const [first, second] = reasons;
-  if (!first) return "";
-  const lead = phrase(first, true);
-  // Two reasons about one file are one thought: "Same file as X, downloaded 2 min before".
-  if (second?.kind === "sent" && (first.kind === "file" || first.kind === "marker") && second.file === first.file) {
-    return `${lead}, ${sentWords(second.how)} ${before(second.minutes)}.`;
-  }
-  // A matching estimate or a fresh start only backs up a name: said alone, they add nothing a person can check.
-  if (brief || !second || second.kind === "estimate" || second.kind === "fresh") return `${lead}.`;
-  return `${lead}; ${phrase(second, false)}.`;
+export function shownName(name: string): string {
+  const last = name.split(/[\\/]/).pop() ?? name;
+  return last.replace(/\.(gcode\.3mf|3mf|gcode|bgcode|stl|step|stp|obj)$/i, "").trim() || last;
 }
 
-/** The short label of a suggestion's strongest reason, for a chip: "Same file", "Opened in Bambu Studio". */
-export function whyLabel(reasons: readonly MatchReason[]): string {
+/** The file names a reason names, as people see them (for keeping each whole on a line). */
+export function namesIn(reasons: readonly MatchReason[]): string[] {
+  return reasons.flatMap((reason) => ("file" in reason ? [shownName(reason.file)] : []));
+}
+
+/**
+ * Why the app filed a print in the build it is in, as one sentence: "Filed here: it printed bath-boat, this build's
+ * file." The strongest reason, and with it when that same file was taken away just before ("…, opened in Bambu Studio
+ * just before it began."). A matching estimate or a fresh start only backs a name up, so they are never said alone.
+ */
+export function filedWords(reasons: readonly MatchReason[]): string {
+  const [first, second] = reasons;
+  if (!first) return "";
+  let lead: string;
+  switch (first.kind) {
+    case "marker":
+      lead = `it printed ${shownName(first.file)}, sliced here for this build`;
+      break;
+    case "file":
+      lead = first.attempt
+        ? `it printed ${shownName(first.file)}, as attempt ${first.attempt} did`
+        : `it printed ${shownName(first.file)}, this build's file`;
+      break;
+    case "like-file":
+      lead = `its file is named much like ${shownName(first.file)}, this build's`;
+      break;
+    case "title":
+      lead = "it has this build's name";
+      break;
+    case "words":
+      lead = "its name is much like this build's";
+      break;
+    case "sent":
+      lead = `${shownName(first.file)} was ${sentWords(first.how)} ${before(first.minutes)}`;
+      break;
+    case "estimate":
+      lead = `it takes as long as ${shownName(first.file)}`;
+      break;
+    case "fresh":
+      lead = "this build was started just before";
+      break;
+  }
+  if (second?.kind === "sent" && (first.kind === "file" || first.kind === "marker") && second.file === first.file) {
+    lead += `, ${sentWords(second.how)} ${before(second.minutes)}`;
+  }
+  return `Filed here: ${lead}.`;
+}
+
+/** Why a build is offered for a print, in a few words for its row: "Same file: planter-v2", "Same name". */
+export function rowWords(reasons: readonly MatchReason[]): string {
   const first = reasons[0];
   if (!first) return "";
   switch (first.kind) {
     case "marker":
+      return `Sliced here: ${shownName(first.file)}`;
     case "file":
-      return "Same file";
+      return first.attempt
+        ? `Attempt ${first.attempt} printed ${shownName(first.file)}`
+        : `Same file: ${shownName(first.file)}`;
     case "like-file":
-      return "A file named like it";
+      return `A file named like it: ${shownName(first.file)}`;
     case "title":
       return "Same name";
     case "words":
-      return "A name like it";
+      return "A name much like it";
     case "sent":
-      return first.how === "studio" ? "Opened in Bambu Studio" : "Downloaded";
+      return `${first.how === "studio" ? "Opened in Bambu Studio" : "Downloaded"} ${before(first.minutes)}`;
     case "estimate":
-      return "Same estimate";
+      return `As long as ${shownName(first.file)}`;
     case "fresh":
-      return "Just started";
+      return "Started just before";
   }
 }
 
-/** One reason in words, leading the sentence or following it; a file's name is never capitalised. */
-function phrase(reason: MatchReason, lead: boolean): string {
-  switch (reason.kind) {
-    case "marker":
-      return `${lead ? "The" : "the"} file is ${reason.file}, sliced here`;
-    case "file":
-      return `${lead ? "Same" : "same"} file as ${reason.attempt ? `attempt ${reason.attempt} (${reason.file})` : reason.file}`;
-    case "like-file":
-      return `${lead ? "A" : "a"} file named much like it, ${reason.file}`;
-    case "title":
-      return `${lead ? "The" : "the"} build is named after it`;
-    case "words":
-      return `${lead ? "The" : "the"} build is named much like it`;
-    case "sent":
-      return lead
-        ? `${reason.how === "studio" ? "Opened in Bambu Studio" : "Downloaded"} ${before(reason.minutes)}: ${reason.file}`
-        : `${reason.file} was ${sentWords(reason.how)} ${before(reason.minutes)}`;
-    case "estimate":
-      return `${lead ? "The" : "the"} same estimate as ${reason.file}`;
-    case "fresh":
-      return lead ? "Started just before, with nothing printed yet" : "nothing printed in it yet";
-  }
+/**
+ * What every offered build has going for it, said once over all of them ("Both print planter-v2.", "All three have
+ * its name."), so each row can say what sets it apart; null when their strongest reasons differ.
+ */
+export function sharedWords(offers: ReadonlyArray<{ reasons: readonly MatchReason[] }>): string | null {
+  if (offers.length < 2) return null;
+  const firsts = offers.map((offer) => offer.reasons[0]);
+  const who = offers.length === 2 ? "Both" : offers.length === 3 ? "All three" : `All ${offers.length}`;
+  const head = firsts[0];
+  if (!head) return null;
+  const fileOf = (reason: MatchReason | undefined) =>
+    reason && (reason.kind === "file" || reason.kind === "marker") ? shownName(reason.file).toLowerCase() : null;
+  const file = fileOf(head);
+  if (file && firsts.every((reason) => fileOf(reason) === file)) return `${who} print ${shownName(firstFile(head))}.`;
+  if (firsts.every((reason) => reason?.kind === "title")) return `${who} have its name.`;
+  return null;
 }
+
+const firstFile = (reason: MatchReason) => ("file" in reason ? reason.file : "");

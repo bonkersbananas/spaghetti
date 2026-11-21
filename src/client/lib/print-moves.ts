@@ -4,7 +4,7 @@
  * caches change at once; the server follows, and a failure puts everything back. One toast undoes a move.
  */
 import type { Item, MoveAttemptResponse, PrintSuggestionsResponse } from "@shared/api";
-import { type MatchReason, whyWords } from "@shared/print-match";
+import { type MatchReason, namesIn, rowWords, sharedWords } from "@shared/print-match";
 import { inlineTime } from "@shared/time";
 import { type QueryClient, queryOptions, useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useParams } from "@tanstack/react-router";
@@ -23,24 +23,29 @@ export function suggestionsQuery(attemptId: string) {
   });
 }
 
-/** What tells one offered build from another: an idea, or when the build was started and how far it got. */
+/** What tells one offered build from another: when it was saved or started, and how far it got. */
 function apart(build: ItemView): string {
-  if (build.stage === "idea") return `An idea, saved ${inlineTime(build.createdAt)}.`;
+  if (build.stage === "idea") return `Saved ${inlineTime(build.createdAt)}`;
   const tries = build.attempts.length;
   const started = `Started ${inlineTime(build.startedAt ?? build.createdAt)}`;
-  return tries ? `${started}, ${tries} ${tries === 1 ? "attempt" : "attempts"}.` : `${started}.`;
+  return tries ? `${started} · ${tries} ${tries === 1 ? "attempt" : "attempts"}` : started;
 }
 
 /**
- * Why each build is offered, in the matcher's words; when two offers would say the same ("Same file as
- * planter-v2.gcode.3mf." twice, the commonest reason to ask), each adds what tells it apart.
+ * The guesses for a print, as they read: what they all have in common said once ("Both print planter-v2."), and for
+ * each a line of what sets it apart; when their reasons differ, each line is its own reason ("Same file: ring").
  */
-export function offerWhys(offers: ReadonlyArray<{ build: ItemView; reasons: MatchReason[] }>): string[] {
-  const whys = offers.map((offer) => whyWords(offer.reasons));
-  return offers.map(({ build }, index) => {
-    const why = whys[index] ?? "";
-    return whys.indexOf(why) === whys.lastIndexOf(why) ? why : `${why} ${apart(build)}`;
-  });
+export function offerLines(offers: ReadonlyArray<{ build: ItemView; reasons: MatchReason[] }>): {
+  shared: string | null;
+  lines: string[];
+  names: string[];
+} {
+  const shared = sharedWords(offers);
+  return {
+    shared,
+    lines: offers.map(({ build, reasons }) => (shared ? apart(build) : rowWords(reasons))),
+    names: offers.flatMap(({ reasons }) => namesIn(reasons)),
+  };
 }
 
 /** Where an attempt goes: a build (or idea) there is, or a new build. */
@@ -178,7 +183,7 @@ export function moveAttempt(queryClient: QueryClient, { attempt, from, to, go, o
   );
 
   const name =
-    "item" in to ? itemName(to.item, to.item.stage === "idea" ? "idea" : "build") : newTitle || "a new build";
+    "item" in to ? itemName(to.item, to.item.stage === "idea" ? "idea" : "build") : newTitle || "its own build";
   toast.undo(`Moved to ${name}`, {
     description: fromGoes ? `Attempt ${attempt.number}'s build went with it` : undefined,
     view: { label: "View", onClick: () => go(targetId, attempt.id) },
@@ -207,7 +212,7 @@ function setAsking(queryClient: QueryClient, itemId: string, attemptId: string, 
   }));
 }
 
-/** "It's a new build": the print stays where it is and the question goes, with an Undo that asks again. */
+/** "Its own build": the print stays in the build the printer made for it and the question goes; Undo asks again. */
 export function keepAsNew(queryClient: QueryClient, item: ItemView, attempt: AttemptView): boolean {
   if (!canEdit(attempt.pending)) return false;
   const send = (asking: boolean) =>
@@ -217,7 +222,7 @@ export function keepAsNew(queryClient: QueryClient, item: ItemView, attempt: Att
     });
   setAsking(queryClient, item.id, attempt.id, false);
   const sent = send(false);
-  toast.undo("Kept as a new build", {
+  toast.undo("Kept in its own build", {
     description: itemName(item, "build"),
     onUndo: async () => {
       await sent;
