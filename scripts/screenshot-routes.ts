@@ -1977,6 +1977,27 @@ export const shots: Shot[] = [
       await unshareAll(page);
     },
   },
+  {
+    // A photo opened large over the shared page (a :target view, no script).
+    name: "shared-photo-open",
+    path: "/sign-in",
+    signedOut: true,
+    prepare: async (page) => {
+      await openShared("items", SEED_BUILD_IDS.tugboat)(page);
+      await page.locator(".gp-attempt-photos a").first().click();
+      await page.locator(".gp-lightbox:target img").waitFor();
+    },
+    cleanup: unshareAll,
+  },
+  {
+    // An idea with no photo: the words lead, in one column.
+    name: "shared-note",
+    path: "/sign-in",
+    signedOut: true,
+    fullPage: true,
+    prepare: openShared("items", "5eed0000-0000-4000-8000-000000000011"),
+    cleanup: unshareAll,
+  },
   // A link that was stopped, or never was: one calm sentence, the same for every reason.
   { name: "shared-gone", path: "/s/AAAAAAAAAAAAAAAAAAAAAAAA", signedOut: true },
   { name: "link-code", path: "/link", signedOut: true, beforeShot: settle },

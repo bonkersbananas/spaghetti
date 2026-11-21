@@ -44,14 +44,14 @@ function Choice({
         <span
           className={cn(
             "grid size-10 shrink-0 place-items-center rounded-full",
-            tone === "basil" ? "bg-basil-soft text-basil-ink" : "bg-paper text-ink-soft",
+            tone === "basil" ? "bg-basil-soft text-basil-ink" : "bg-ink/4 text-ink-soft",
           )}
         >
           <IconComponent size={20} weight={tone === "basil" ? "fill" : "regular"} aria-hidden />
         </span>
         <span className="min-w-0 flex-1 pt-0.5">
-          <span className="text-body text-ink block font-semibold">{title}</span>
-          <span className="text-small text-ink-faint block">{meta}</span>
+          <span className="text-body text-ink block font-semibold text-balance">{title}</span>
+          <span className="text-small text-ink-faint block text-pretty">{meta}</span>
         </span>
         {action && <span className="shrink-0 pt-0.5">{action}</span>}
       </div>
@@ -76,7 +76,7 @@ export function ShareChoices({
   onPublic,
   onStop,
 }: ShareChoicesProps) {
-  const send = canShare ? { icon: ShareIcon, label: "Share" } : { icon: CopyIcon, label: "Copy" };
+  const send = canShare ? ShareIcon : CopyIcon;
   return (
     <div className="divide-hairline flex flex-col divide-y">
       <Choice
@@ -84,7 +84,7 @@ export function ShareChoices({
         title="Only the two of you"
         meta="Opens it here in Spaghetti, signed in."
         action={
-          <Button variant="secondary" size="sm" icon={send.icon} onClick={onPrivate}>
+          <Button variant="secondary" size="sm" icon={send} onClick={onPrivate}>
             {canShare ? "Share" : "Copy link"}
           </Button>
         }
@@ -94,19 +94,28 @@ export function ShareChoices({
           icon={PublicIcon}
           tone="basil"
           title="Anyone with the link can look"
-          meta={[since, "nothing can be changed"].filter(Boolean).join(" · ")}
+          meta={[since, "they can look, not change"].filter(Boolean).join(" · ")}
+          action={
+            readOnly ? undefined : (
+              <Button variant="danger" size="sm" onClick={onStop}>
+                Stop sharing
+              </Button>
+            )
+          }
         >
-          <div className="bg-ink/4 flex items-center gap-2 rounded-md py-1.5 pr-1.5 pl-3">
+          <div className="bg-ink/4 flex min-h-11 items-center gap-2 rounded-md py-1.5 pr-1.5 pl-3">
             <span className="text-small text-ink-soft min-w-0 flex-1 truncate" title={publicUrl}>
               {publicUrl.replace(/^https?:\/\//, "")}
             </span>
-            <Button variant="secondary" size="sm" icon={send.icon} onClick={onPublic}>
-              {send.label}
-            </Button>
+            {!canShare && (
+              <Button variant="secondary" size="sm" icon={CopyIcon} onClick={onPublic}>
+                Copy
+              </Button>
+            )}
           </div>
-          {!readOnly && (
-            <Button variant="danger" size="sm" className="self-start" onClick={onStop}>
-              Stop sharing
+          {canShare && (
+            <Button variant="primary" icon={ShareIcon} fullWidth onClick={onPublic}>
+              Share the link
             </Button>
           )}
         </Choice>
@@ -114,7 +123,7 @@ export function ShareChoices({
         <Choice
           icon={PublicIcon}
           title="Anyone with the link"
-          meta="A page to look at: the photos, the notes and how it printed. No one can change anything there."
+          meta="A read-only page: the photos, the notes and how it printed."
           action={
             <Button variant="secondary" size="sm" loading={state === "making"} disabled={readOnly} onClick={onMake}>
               {state === "making" ? "Making…" : "Make a link"}

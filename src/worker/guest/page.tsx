@@ -2,6 +2,8 @@
 import type { Child } from "hono/jsx";
 import { checkLinkUrl } from "../../shared/link-safety.ts";
 import { findLinks, linkWords, shortUrl } from "../../shared/links.ts";
+import { sameModel } from "../../shared/model-mark.ts";
+import { colorTone } from "../../shared/spools.ts";
 import { GUEST_ICONS, type GuestIconName } from "./icons.ts";
 import {
   type GuestAttempt,
@@ -37,8 +39,14 @@ function Icon({ name, class: className }: { name: GuestIconName; class?: string 
   );
 }
 
+/** What a link in a note says: the model's own title for the model's page, else the words of its address. */
+function linkText(url: string, model?: GuestModel | null) {
+  if (model?.title && sameModel(url, model.url)) return model.title;
+  return linkWords(url)?.words ?? shortUrl(url);
+}
+
 /** Text with its http(s) links made links (anything else stays text), and its line breaks kept. */
-function Linked({ text }: { text: string }) {
+function Linked({ text, model }: { text: string; model?: GuestModel | null }) {
   const parts: Child[] = [];
   let at = 0;
   for (const { url, start, end } of findLinks(text)) {
@@ -46,8 +54,8 @@ function Linked({ text }: { text: string }) {
     if (!safe || (safe.protocol !== "https:" && safe.protocol !== "http:")) continue;
     if (start > at) parts.push(text.slice(at, start));
     parts.push(
-      <a class="gp-link" href={safe.href} {...OUT}>
-        {shortUrl(url)}
+      <a class="gp-link" href={safe.href} title={shortUrl(url)} {...OUT}>
+        {linkText(url, model)}
       </a>,
     );
     at = end;
@@ -69,7 +77,7 @@ function Linked({ text }: { text: string }) {
 }
 
 /** A note as paragraphs (a blank line between them). */
-function Note({ text, class: className }: { text: string; class?: string }) {
+function Note({ text, model, class: className }: { text: string; model?: GuestModel | null; class?: string }) {
   const paragraphs = text
     .split(/\n\s*\n/)
     .map((paragraph) => paragraph.trim())
@@ -79,7 +87,7 @@ function Note({ text, class: className }: { text: string; class?: string }) {
     <div class={`gp-note ${className ?? ""}`}>
       {paragraphs.map((paragraph) => (
         <p>
-          <Linked text={paragraph} />
+          <Linked text={paragraph} model={model} />
         </p>
       ))}
     </div>
@@ -234,11 +242,13 @@ function ModelCard({ model }: { model: GuestModel }) {
   );
 }
 
+/** A filament's colour; a light one gets a firmer rim so it never reads as an empty ring. None without a colour. */
 function Swatch({ color }: { color: string | null }) {
+  if (!color) return null;
   return (
     <span
-      class={`gp-swatch ${color ? "" : "gp-swatch--none"}`}
-      style={color ? `background-color:${color}` : undefined}
+      class={`gp-swatch ${colorTone(color) === "light" ? "gp-swatch--light" : ""}`}
+      style={`background-color:${color}`}
       aria-hidden="true"
     />
   );
@@ -324,7 +334,7 @@ function Attempt({
         <span class="gp-attempt-date">{guestDate(attempt.printedAt)}</span>
       </div>
       {attempt.photos.length > 0 && (
-        <ul class="gp-attempt-photos">
+        <ul class={`gp-attempt-photos ${attempt.photos.length % 2 ? "gp-attempt-photos--odd" : ""}`}>
           {attempt.photos.map((photo, index) => (
             <li>
               <Zoomable photo={photo} alt={alt(index)} anchors={anchors}>
@@ -402,7 +412,7 @@ function Story({ view }: { view: GuestView }) {
       </p>
       <h1 class="gp-title">{view.title}</h1>
       {dates && <p class="gp-dates">{dates}</p>}
-      <Note text={view.note} />
+      <Note text={view.note} model={view.model} />
       {view.model && <ModelCard model={view.model} />}
       {view.kind === "build" && (
         <section class="gp-summary" aria-label="How it went">
