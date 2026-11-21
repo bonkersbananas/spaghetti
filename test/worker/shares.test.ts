@@ -445,7 +445,7 @@ describe("a build's story", () => {
     expect(html).toContain("Lifted at the corners");
     expect(html).toContain("Warping");
     expect(html).toContain("Bambu Lab X2D");
-    expect(html).toContain("0.20 mm");
+    expect(html).toContain("0.20\u00a0mm");
     expect(html).toContain("Textured PEI");
     expect(html).toContain("Tree");
     expect(html).toContain("Jade white");

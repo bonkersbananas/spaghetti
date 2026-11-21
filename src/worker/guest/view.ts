@@ -15,6 +15,7 @@ import { checkLinkUrl } from "../../shared/link-safety.ts";
 import { modelMarkOf, modelOf, modelPlace, sameModel, withoutModelLines } from "../../shared/model-mark.ts";
 import { showsSettings } from "../../shared/story-settings.ts";
 import { formatDuration } from "../../shared/time.ts";
+import { keepUnits } from "../../shared/typography.ts";
 import { changeName } from "../../shared/twists.ts";
 import { WORKSPACE_TIME_ZONE } from "../../shared/week.ts";
 import type { Db } from "../db/index.ts";
@@ -164,8 +165,12 @@ function filamentOf(filament: NonNullable<AttemptSettings["filaments"]>[number])
   return { name, color: color(filament.colorHex) };
 }
 
-/** The settings someone else would print it with, labelled the way a person says them. */
+/** The settings someone else would print it with, labelled the way a person says them; a number keeps its unit. */
 export function guestSettings(settings: AttemptSettings): GuestSetting[] {
+  return settingRows(settings).map((row) => ({ label: row.label, value: keepUnits(row.value) }));
+}
+
+function settingRows(settings: AttemptSettings): GuestSetting[] {
   const rows: GuestSetting[] = [{ label: "Printer", value: "Bambu Lab X2D" }];
   if (settings.nozzleDiameter !== undefined || settings.nozzle === "auxiliary") {
     const size = settings.nozzleDiameter !== undefined ? `${settings.nozzleDiameter} mm` : "";
@@ -207,7 +212,7 @@ function guestResults(settings: AttemptSettings): string[] {
   if (settings.weightGrams !== undefined) results.push(`${settings.weightGrams} g of filament`);
   if (settings.failedAtPercent !== undefined) results.push(`Failed at ${settings.failedAtPercent}%`);
   if (settings.failedAtLayer !== undefined) results.push(`Failed at layer ${settings.failedAtLayer}`);
-  return results;
+  return results.map(keepUnits);
 }
 
 /** The model's page, from the note's first model link or the draft's page, with what the draft read of it. */
@@ -259,7 +264,7 @@ export function itemView(item: Item, custom: { failure: TagDefinition[]; success
       printedAt: attempt.printedAt,
       note: attempt.note.trim(),
       photos: onlyPhotos(shown.filter((photo) => photo.attemptId === attempt.id).map(guestPhoto)),
-      changes: index === 0 ? [] : attempt.changes.map((change) => change.text),
+      changes: index === 0 ? [] : attempt.changes.map((change) => keepUnits(change.text)),
       wentWrong: attempt.failureTags.map((slug) => tagLabel("failure", slug, custom.failure)),
       wentWell: attempt.successNotes.map((slug) => tagLabel("success", slug, custom.success)),
       settings: showsSettings({ number, outcome: attempt.outcome, changes: attempt.changes })
