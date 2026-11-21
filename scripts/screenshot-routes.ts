@@ -8276,8 +8276,90 @@ shots.push(
         await removeFiledPrints(page);
       },
     },
+    {
+      // A print from the printer on the bed, nobody named: the printer's mark and "From the printer", never the avatar
+      // of whoever paired the bridge.
+      name: "builds-from-printer",
+      path: "/builds",
+      prepare: async (page) => {
+        const { ownId } = await bridgeFiles(page, "cable-clip-v3");
+        await onlyOnTheBed(page, [ownId]);
+        await page.getByRole("button", { name: "From the printer. Say who started it" }).first().waitFor();
+        await page.waitForTimeout(400);
+      },
+      cleanup: removeFiledPrints,
+    },
+    {
+      // The same card once someone said Sam started it: his avatar, with the printer as its small mark.
+      name: "builds-started-by",
+      path: "/builds",
+      prepare: async (page) => {
+        const { ownId, attemptId } = await bridgeFiles(page, "cable-clip-v3");
+        await startedBy(page, attemptId, "sam");
+        await onlyOnTheBed(page, [ownId]);
+        await page
+          .getByRole("button", { name: /· from the printer\. Change who started it$/ })
+          .first()
+          .waitFor();
+        await page.waitForTimeout(400);
+      },
+      cleanup: removeFiledPrints,
+    },
+    {
+      // The printer's build: the attempt's header names the printer, and the build's own line says the printer made it.
+      name: "build-from-printer",
+      path: "/builds",
+      prepare: async (page) => {
+        const { ownId } = await bridgeFiles(page, "cable-clip-v3");
+        await page.goto(`/builds/${ownId}`);
+        await page.getByText(/^Made by the printer/).waitFor();
+        // The header and the build's own line in view on a phone, above the action bar.
+        await page.getByText(/^Made by the printer/).evaluate((node) => node.scrollIntoView({ block: "center" }));
+        await page.waitForTimeout(400);
+      },
+      cleanup: removeFiledPrints,
+    },
+    {
+      // "Who started it?": the two of you (you first), a sheet on phones and a popover from the line on desktop.
+      name: "who-started-picker",
+      path: "/builds",
+      prepare: async (page) => {
+        const { ownId } = await bridgeFiles(page, "cable-clip-v3");
+        await page.goto(`/builds/${ownId}`);
+        await page.getByRole("button", { name: "From the printer. Say who started it" }).first().click();
+        await page.getByRole("dialog", { name: "Who started it?" }).getByRole("button", { name: "You" }).waitFor();
+        await page.waitForTimeout(500);
+      },
+      cleanup: removeFiledPrints,
+    },
+    {
+      // A tap on Sam: the header says "Sam Okafor · from the printer", and the toast has Undo.
+      name: "build-started-by",
+      path: "/builds",
+      prepare: async (page) => {
+        const { ownId } = await bridgeFiles(page, "cable-clip-v3");
+        await page.goto(`/builds/${ownId}`);
+        await page.getByRole("button", { name: "From the printer. Say who started it" }).first().click();
+        const picker = page.getByRole("dialog", { name: "Who started it?" });
+        await picker.getByRole("button", { name: "Sam Okafor" }).click();
+        await page.getByText("Started by Sam Okafor").waitFor();
+        await picker.waitFor({ state: "hidden" });
+        await page.waitForTimeout(600);
+      },
+      cleanup: removeFiledPrints,
+    },
   ] as Shot[]),
 );
+
+/** Says, as a person does, who started a print the printer recorded (`username` one of the seed's people). */
+async function startedBy(page: Page, attemptId: string, username: string) {
+  const headers = { Origin: new URL(page.url()).origin };
+  const { people } = (await (await page.request.get("/api/people")).json()) as {
+    people: Array<{ id: string; username: string }>;
+  };
+  const person = people.find((one) => one.username === username);
+  await page.request.put(`/api/attempts/${attemptId}/started-by`, { headers, data: { startedBy: person?.id ?? null } });
+}
 
 // Last: the queued finish stays offline and unsent, so nothing after it would work.
 shots.push(

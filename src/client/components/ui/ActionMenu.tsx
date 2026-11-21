@@ -29,6 +29,8 @@ interface ActionMenuProps {
   inSheet?: boolean;
   /** The title as a quiet line atop the popover too, where its rows alone don't say what they pick ("Who started it?"). */
   titled?: boolean;
+  /** Which edge of the anchor the popover lines up with: "end" for one at the end of its row. */
+  align?: "start" | "end";
   children: ReactNode;
 }
 
@@ -46,6 +48,7 @@ export function ActionMenu({
   returnFocus,
   inSheet,
   titled,
+  align = "start",
   children,
 }: ActionMenuProps) {
   const isDesktop = useIsDesktop();
@@ -72,7 +75,7 @@ export function ActionMenu({
       <PopoverPanel
         label={title}
         side="bottom"
-        align="start"
+        align={align}
         size="compact"
         className="p-1.5"
         onCloseAutoFocus={(event) => {

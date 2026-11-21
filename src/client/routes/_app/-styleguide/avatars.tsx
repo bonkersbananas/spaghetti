@@ -1,5 +1,5 @@
 import type { Person } from "@shared/api";
-import { AgentAvatar, Avatar, AvatarStack, ViaText } from "@/components/ui/Avatar";
+import { AgentAvatar, Avatar, AvatarStack, PrinterMark, ViaText } from "@/components/ui/Avatar";
 import { Panel, people, Section } from "./shared";
 
 /** A stand-in portrait: a data URL, so the specimen needs no server. */
@@ -69,6 +69,33 @@ export function AvatarSection() {
           <AgentAvatar name="Home assistant" owner={people[1] as Person} size="sm" />
           <p className="text-small text-ink-faint">
             An agent itself: a rounded square in its owner's color, its own letter.
+          </p>
+        </div>
+      </Panel>
+      <Panel className="mt-4 flex flex-col gap-5">
+        <div className="flex flex-wrap items-end gap-x-8 gap-y-4">
+          {(["xs", "sm", "md", "lg"] as const).map((size) => (
+            <div key={size} className="flex flex-col items-center gap-2">
+              <div className="flex items-center gap-3">
+                <PrinterMark size={size} />
+                <Avatar person={people[1] as Person} size={size} printer />
+              </div>
+              <span className="text-caption text-ink-faint">{size}: the printer, then Sam's print from it</span>
+            </div>
+          ))}
+        </div>
+        <div className="text-small flex flex-wrap items-center gap-x-8 gap-y-3">
+          <span className="flex items-center gap-2">
+            <span className="text-ink-faint">From the printer</span>
+            <PrinterMark size="xs" decorative />
+          </span>
+          <span className="flex items-center gap-2">
+            <span className="text-ink-faint">Sam · from the printer</span>
+            <Avatar person={people[1] as Person} size="xs" printer decorative />
+          </span>
+          <p className="text-ink-faint">
+            A print the printer recorded is the printer's, never whoever paired the bridge, until someone says who
+            started it (a tap on the line).
           </p>
         </div>
       </Panel>

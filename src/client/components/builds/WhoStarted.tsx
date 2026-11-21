@@ -37,6 +37,7 @@ export default function WhoStarted({ open, onOpenChange, anchor, itemId, attempt
       anchor={anchor}
       returnFocus={anchor}
       titled
+      align="end"
     >
       {ordered.map((person) => {
         const name = who(person) ?? person.name;

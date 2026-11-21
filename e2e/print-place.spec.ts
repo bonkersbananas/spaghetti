@@ -197,3 +197,45 @@ test("a print the app placed says why, and “Not this build?” moves it with o
     });
   await expect(entry.getByText("Filed here: it printed UOBF-fit-test-ring, this build's file.")).toBeVisible();
 });
+
+test("a print from the printer names nobody until someone says who started it, with Undo", { tag: "@phone" }, async ({
+  page,
+}) => {
+  // Two builds keep its file, so the printer asks which: who started it is never a second question beside that.
+  await buildKeeping(page, "Desk cable clips", "cable-clip-v3.gcode.3mf");
+  await buildKeeping(page, "Cable clips for the shelf", "cable-clip-v3.gcode.3mf");
+  // Alex paired the bridge (its token is Alex's), but the print is the printer's: nobody is named for it.
+  const { ownId, attemptId } = await bridgeFiles(page, "cable-clip-v3(2)");
+  await page.goto(`/builds/${ownId}`);
+  const entry = page.locator(`[data-attempt-id="${attemptId}"]`);
+  const nobody = entry.getByRole("button", { name: "From the printer. Say who started it" });
+  await expect(nobody).toBeVisible();
+  await expect(entry.getByRole("img", { name: /Alex Rivera/ })).toHaveCount(0);
+  // The build the printer made says so too, and the question stays the only question on it.
+  await expect(page.getByText(/^Made by the printer/)).toBeVisible();
+  await expect(page.getByRole("region", { name: "Which build is this?" })).toBeVisible();
+
+  const startedBy = async () =>
+    (await (await page.request.get(`/api/items/${ownId}`)).json()).item.attempts[0].startedBy as string | null;
+
+  await nobody.click();
+  const picker = page.getByRole("dialog", { name: "Who started it?" });
+  await picker.getByRole("button", { name: "Sam Okafor" }).click();
+  await expect(picker).toBeHidden();
+  await expect(page.getByText("Started by Sam Okafor")).toBeVisible();
+  const sam = entry.getByRole("button", { name: "Sam Okafor · from the printer. Change who started it" });
+  await expect(sam).toBeVisible();
+  await expect.poll(startedBy).not.toBeNull();
+
+  // Undo: the printer's again.
+  await page.getByRole("button", { name: "Undo" }).click();
+  await expect(nobody).toBeVisible();
+  await expect.poll(startedBy).toBeNull();
+
+  // Naming yourself, after a reload: it holds.
+  await nobody.click();
+  await picker.getByRole("button", { name: "You" }).click();
+  await expect(page.getByText("Started by you")).toBeVisible();
+  await page.reload();
+  await expect(entry.getByRole("button", { name: "You · from the printer. Change who started it" })).toBeVisible();
+});
