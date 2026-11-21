@@ -1,5 +1,6 @@
 import { fileUrl } from "@shared/api";
 import type { AttemptSettings } from "@shared/attempts";
+import { gramsWords, perPiece, sizePiece, sliceLead } from "@shared/slicing/card.ts";
 import { isStlName, slicedName } from "@shared/slicing/files.ts";
 import { materialMismatch } from "@shared/slicing/material.ts";
 import { changeWords, modelSlicing, slicingAhead, slicingOfSlice } from "@shared/slicing/model.ts";
@@ -13,7 +14,6 @@ import {
   slicingSummary,
   withNozzle,
 } from "@shared/slicing/settings.ts";
-import { readSize, sizeWords } from "@shared/slicing/size.ts";
 import { nameParts, slicedBy } from "@shared/slicing/slicers.ts";
 import type { FileSlice, SliceOptions } from "@shared/slicing/types.ts";
 import {
@@ -179,40 +179,10 @@ export function remedy(slice: FileSlice, phone: boolean): { label: string; chang
   return null;
 }
 
-/** "About 36 min · 10.6 g": what a sliced model's card leads with. */
-export function sliceLead(
-  prefill: Pick<AttemptSettings, "estimatedMinutes" | "weightGrams"> | undefined,
-  copies?: number,
-): string[] {
-  return [
-    copies && copies > 1 ? `× ${copies}` : "",
-    prefill?.estimatedMinutes !== undefined ? `About ${formatMinutes(prefill.estimatedMinutes)}` : "",
-    prefill?.weightGrams !== undefined ? grams(prefill.weightGrams) : "",
-  ].filter(Boolean);
-}
+/** The card's words are shared with the shared page's (worker/guest): one place says them. */
+export { perPiece, sizePiece, sliceLead };
 
-/** "About 21 min · 28 g each": what one of the copies takes, a plate's figures over how many there are. */
-export function perPiece(
-  prefill: Pick<AttemptSettings, "estimatedMinutes" | "weightGrams"> | undefined,
-  copies?: number,
-): string {
-  if (!copies || copies < 2) return "";
-  return [
-    prefill?.estimatedMinutes !== undefined ? `About ${formatMinutes(prefill.estimatedMinutes / copies)}` : "",
-    prefill?.weightGrams !== undefined ? grams(Math.round((prefill.weightGrams / copies) * 10) / 10) : "",
-  ]
-    .filter(Boolean)
-    .join(" · ")
-    .concat(prefill?.estimatedMinutes !== undefined || prefill?.weightGrams !== undefined ? " each" : "");
-}
-
-/** "29.96 × 11.5 × 11.35 mm" (each, with copies): what one copy measures, width × depth × height. */
-export function sizePiece(slice: Pick<FileSlice, "size" | "copies">): string {
-  const size = readSize(slice.size);
-  return size ? `${sizeWords(size)}${slice.copies && slice.copies > 1 ? " each" : ""}` : "";
-}
-
-const grams = (value: number) => `${value.toLocaleString("en", { maximumFractionDigits: 1 })} g`;
+const grams = gramsWords;
 
 /** "1 h 12 min → 48 min", "14 g → 11 g": a change's figures, where both slices have them. */
 export function changeFigures(change: SliceChange): Change[] {

@@ -6,8 +6,9 @@
  * by anything other than the app, may carry all of it. So a guest gets `stripPhotoMetadata`'s copy, and only once
  * `hasPhotoMetadata` finds nothing left in it.
  *
- * Both read the container, never the pixels: JPEG marker segments, WebP's RIFF chunks. Anything they can't read as one
- * of the two counts as carrying metadata. `hasPhotoMetadata` also looks for an EXIF header or an XMP packet anywhere in
+ * Both read the container, never the pixels: JPEG marker segments, WebP's RIFF chunks, PNG's chunks (a plate's
+ * picture, decision 0077: a slicer may write its own text chunks). Anything they can't read as one of the three counts
+ * as carrying metadata. `hasPhotoMetadata` also looks for an EXIF header or an XMP packet anywhere in
  * the file, so data tucked after the image (past JPEG's end marker) is found too.
  */
 
@@ -77,8 +78,54 @@ function webpMetadata(bytes: Uint8Array): boolean {
   return false;
 }
 
+const PNG_SIGNATURE = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
 /**
- * `strict` (the default, the shared page): anything that isn't a JPEG or WebP it can read counts as carrying
+ * PNG: the chunks that draw the picture (header, palette, data, end, transparency) and those that say how its colours
+ * are meant (gamma, chromaticities, sRGB, the colour profile, significant bits, pixel size). Anything else (text,
+ * compressed or international text, EXIF, the time, a program's own) isn't served.
+ */
+const PNG_KEPT = new Set(["IHDR", "PLTE", "IDAT", "IEND", "tRNS", "gAMA", "cHRM", "sRGB", "iCCP", "sBIT", "pHYs"]);
+
+const isPng = (bytes: Uint8Array) => startsWith(bytes, 0, PNG_SIGNATURE);
+
+/** A PNG's chunks, in order, up to IEND; null when they don't add up. */
+function pngChunks(bytes: Uint8Array): { name: string; start: number; end: number }[] | null {
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  const chunks: { name: string; start: number; end: number }[] = [];
+  let at = PNG_SIGNATURE.length;
+  while (at + 12 <= bytes.length) {
+    const size = view.getUint32(at);
+    const end = at + 12 + size;
+    if (end > bytes.length) return null;
+    const name = String.fromCharCode(...bytes.subarray(at + 4, at + 8));
+    chunks.push({ name, start: at, end });
+    if (name === "IEND") return chunks;
+    at = end;
+  }
+  return null;
+}
+
+/**
+ * PNG: any chunk but the kept ones; and, `strict`, chunks that don't add up to a whole PNG or anything after IEND.
+ */
+function pngMetadata(bytes: Uint8Array, strict: boolean): boolean {
+  const chunks = pngChunks(bytes);
+  if (!chunks || (chunks.at(-1)?.end ?? 0) !== bytes.length) return strict;
+  return chunks.some((chunk) => !PNG_KEPT.has(chunk.name));
+}
+
+/** PNG: the signature and the kept chunks, byte for byte (their CRCs with them), up to IEND. Null when it isn't whole. */
+function stripPng(bytes: Uint8Array): Uint8Array | null {
+  const chunks = pngChunks(bytes);
+  if (!chunks) return null;
+  return join([
+    bytes.subarray(0, PNG_SIGNATURE.length),
+    ...chunks.filter((chunk) => PNG_KEPT.has(chunk.name)).map((chunk) => bytes.subarray(chunk.start, chunk.end)),
+  ]);
+}
+
+/**
+ * `strict` (the default, the shared page): anything that isn't a JPEG, WebP or PNG it can read counts as carrying
  * metadata. Without it (link previews, decision 0064, whose stored test pictures are a few bytes) only metadata it
  * finds counts.
  */
@@ -87,7 +134,8 @@ export function hasPhotoMetadata(bytes: Uint8Array, { strict = true }: { strict?
   if (bytes[0] === 0xff && bytes[1] === 0xd8) return jpegMetadata(bytes);
   const riff = String.fromCharCode(...bytes.subarray(0, 4));
   if (riff === "RIFF") return webpMetadata(bytes);
-  // Not a JPEG or a WebP: nothing the app stores as a photo, so nothing to serve.
+  if (isPng(bytes)) return pngMetadata(bytes, strict);
+  // Not a JPEG, WebP or PNG: nothing the app stores as a picture, so nothing to serve.
   return strict;
 }
 
@@ -195,11 +243,12 @@ function stripWebp(bytes: Uint8Array): Uint8Array | null {
 }
 
 /**
- * A copy of a JPEG or WebP without its EXIF, XMP, IPTC or comments; the image data is the same bytes. Null when the
- * bytes aren't a JPEG or WebP it can read whole. Run `hasPhotoMetadata` on what it returns before serving it.
+ * A copy of a JPEG, WebP or PNG without its EXIF, XMP, IPTC, text or comments; the image data is the same bytes. Null
+ * when the bytes aren't a JPEG, WebP or PNG it can read whole. Run `hasPhotoMetadata` on what it returns before serving it.
  */
 export function stripPhotoMetadata(bytes: Uint8Array): Uint8Array | null {
   if (bytes[0] === 0xff && bytes[1] === 0xd8) return stripJpeg(bytes);
   if (String.fromCharCode(...bytes.subarray(0, 4)) === "RIFF") return stripWebp(bytes);
+  if (isPng(bytes)) return stripPng(bytes);
   return null;
 }

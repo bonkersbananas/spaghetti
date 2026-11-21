@@ -1,5 +1,5 @@
-import { and, eq, isNull } from "drizzle-orm";
-import type { Item } from "../../shared/api.ts";
+import { and, desc, eq, isNull } from "drizzle-orm";
+import type { AttemptFile, Item } from "../../shared/api.ts";
 import {
   type AttemptSettings,
   OUTCOME_LABELS,
@@ -21,13 +21,22 @@ import {
   withoutModelLines,
 } from "../../shared/model-mark.ts";
 import { printablesTitleFromLink } from "../../shared/model-name.ts";
+import { attemptPartsLabel, partProgress, progressLabel } from "../../shared/parts.ts";
+import { perPiece, sizePiece, sliceLead } from "../../shared/slicing/card.ts";
+import { originalFilamentColours, printedFilamentNames } from "../../shared/slicing/colours.ts";
+import { slicingOfSlice } from "../../shared/slicing/model.ts";
+import { filamentWords, slicingSummary } from "../../shared/slicing/settings.ts";
+import { readSize } from "../../shared/slicing/size.ts";
+import { slicedBy } from "../../shared/slicing/slicers.ts";
+import { problemSentence, standInSentence } from "../../shared/slicing/words.ts";
 import { showsSettings } from "../../shared/story-settings.ts";
 import { formatDuration } from "../../shared/time.ts";
 import { changeName } from "../../shared/twists.ts";
 import { keepUnits } from "../../shared/typography.ts";
 import { WORKSPACE_TIME_ZONE } from "../../shared/week.ts";
 import type { Db } from "../db/index.ts";
-import { items, linkPreviews, photos, recipes, tags, twists } from "../db/schema.ts";
+import { items, linkPreviews, photos, recipes, tags, twistFiles, twists } from "../db/schema.ts";
+import { toApiFile } from "../http.ts";
 import { loadItem } from "../routes/items.ts";
 
 /**
@@ -35,6 +44,8 @@ import { loadItem } from "../routes/items.ts";
  * from what the Worker loaded: nothing of the API's own shapes reaches the page, so a field added to items later
  * stays private until someone adds it here on purpose. No people (names, emails, who made what), no comments or
  * reactions, no Up next, wishlists or "for whom", nothing Claude wrote about it, no files to download, no other thing.
+ * Files show as their cards (decision 0077): what the print takes and how it is sliced, the plate's picture and, for
+ * the 3D view, only the plate's toolpaths, never the file itself.
  */
 
 export interface GuestPhoto {
@@ -69,6 +80,51 @@ export interface GuestFilament {
   color: string | null;
 }
 
+/** What the 3D view needs to draw a file's plate (the app's PrintViewer props), besides where its toolpaths are. */
+export interface GuestView3d {
+  /** The plate, from 1: which plate's G-code the toolpaths are. */
+  plate: number;
+  /** How many copies of the plate's objects the slice has, and what one measures (mm), for the size it shows. */
+  copies?: number;
+  size?: [number, number, number];
+  /** Colours for filaments the file doesn't colour (an attempt's own filaments), by the slicer's order. */
+  fallbackColors?: (string | null)[];
+  /** A model with colours of its own: each filament's colour in the model, and what printed it ("Orange PLA"). */
+  originalColors?: (string | null)[];
+  names?: (string | null)[];
+  /** The sliced file's size in bytes: a phone doesn't draw one over the app's line (lib/big-upload.ts). */
+  bytes: number;
+}
+
+/**
+ * A file as its card shows it (the app's FileCard and ModelCard, read-only): what the print takes, how it is sliced,
+ * its plate's picture, and whether the plate can be seen in 3D. Never the file: no link to its bytes, no download.
+ */
+export interface GuestFile {
+  /** Its picture (`/s/<token>/files/<id>/thumb`) and the plate's toolpaths (`…/toolpaths`) are fetched by it. */
+  id: string;
+  /** "fusilli-knob.stl": shown as written, escaped like any text. */
+  name: string;
+  thumb: boolean;
+  /** "About 1 h 26 min", "13.2 g": what the card leads with once it is sliced (with "× 4" for copies). */
+  lead: string[];
+  /** "About 21 min · 3.3 g each", "29.96 × 11.5 × 11.35 mm", "Sliced by Spaghetti"; or "Plate 2 of 3". */
+  meta: string[];
+  /** "Standard · Everyday strength · No supports · PLA Basic jade white": what it is sliced with, as the card's row. */
+  settings: string[];
+  filaments: GuestFilament[];
+  /** "Parts of it float in the air.", or why it couldn't be sliced: said as the card's cautions say them. */
+  cautions: string[];
+  view: GuestView3d | null;
+}
+
+export interface GuestPart {
+  name: string;
+  /** "1 of 2", "done". */
+  progress: string;
+  done: boolean;
+}
+
 export interface GuestAttempt {
   number: number;
   /** Null while it prints (or waits for its answer). */
@@ -86,6 +142,10 @@ export interface GuestAttempt {
   filaments: GuestFilament[];
   /** "Took 2 h 10 min", "38 g", "Failed at 40%". */
   results: string[];
+  /** "Hull half ×2, Deck": the parts it printed. */
+  printed: string | null;
+  /** The file it was printed from, with its 3D view. */
+  file: GuestFile | null;
 }
 
 interface GuestBase {
@@ -96,6 +156,8 @@ interface GuestBase {
   /** The one picture link previews use. */
   cover: GuestPhoto | null;
   model: GuestModel | null;
+  /** The files kept with it (an idea's or build's models and slicer files; a twist's model), oldest first. */
+  files: GuestFile[];
 }
 
 export interface GuestIdea extends GuestBase {
@@ -114,6 +176,8 @@ export interface GuestBuild extends GuestBase {
   summary: string;
   /** "About 6 h 22 min", "At least 130 g". */
   totals: string[];
+  /** What it is made of, and how far each part is. */
+  parts: GuestPart[];
 }
 
 export interface GuestChange {
@@ -174,6 +238,102 @@ function filamentOf(filament: NonNullable<AttemptSettings["filaments"]>[number])
   const what = filament.profile?.trim() || [filament.brand, filament.type].filter(Boolean).join(" ");
   const name = [what, filament.colorName].filter(Boolean).join(", ") || "Filament";
   return { name, color: color(filament.colorHex) };
+}
+
+/** "PLA Basic jade white", with a capital: a filament a model is sliced with. */
+function slicingFilament(filament: { material: string; colorHex?: string; colorName?: string; finish?: string }) {
+  const words = filamentWords(filament);
+  return {
+    name: words.charAt(0).toUpperCase() + words.slice(1),
+    color: color(filament.colorHex),
+  } satisfies GuestFilament;
+}
+
+/** "Sliced in Bambu Studio": a slicer's own file says which made it ("BambuStudio 02.01.00.00", "OrcaSlicer 2.3.0"). */
+function slicerLine(slicer: string | null): string {
+  if (!slicer) return "";
+  if (/^bambu ?studio/i.test(slicer)) return "Sliced in Bambu Studio";
+  if (/^orca ?slicer/i.test(slicer)) return "Sliced in OrcaSlicer";
+  return "";
+}
+
+/** The colours of a list, each checked: null for none, so the viewer falls back as the app's does. */
+const colours = (list: readonly (string | null | undefined)[] | undefined) =>
+  list?.length ? list.map((value) => color(value)) : undefined;
+
+/**
+ * A kept file as a guest's card shows it: a sliced model as the app's card says it (its figures, its size, who sliced
+ * it, the settings row's words, its cautions), a slicer's own file by what it said. `fallback` is an attempt's own
+ * filaments' colours, for a file that doesn't colour its filaments. Nothing else of the row: no settings people chose
+ * and haven't sliced with, no slice it replaced, no address of the file.
+ */
+export function guestFile(file: AttemptFile, fallback?: readonly (string | null | undefined)[]): GuestFile {
+  const base = { id: file.id, name: file.name, thumb: file.hasThumb };
+  if (file.kind === "model") {
+    const slice = file.slice;
+    if (slice?.status !== "sliced") {
+      return {
+        ...base,
+        lead: [],
+        meta: slice ? [] : ["Not sliced yet"],
+        settings: [],
+        filaments: [],
+        cautions: slice ? [problemSentence(slice)] : [],
+        view: null,
+      };
+    }
+    const slicing = slicingOfSlice(slice);
+    const plate = slice.plate;
+    const size = readSize(slice.size);
+    return {
+      ...base,
+      lead: sliceLead(file.prefill, slice.copies),
+      meta: [perPiece(file.prefill, slice.copies), sizePiece(slice), slicedBy(slice)].filter(Boolean),
+      // As the card's row: which plate of a project first, then the rest of what it is sliced with.
+      settings: plate
+        ? [
+            `Plate ${plate.index} of ${plate.count}`,
+            ...slicingSummary(slicing).filter((piece) => !/^Plate \d/.test(piece)),
+          ]
+        : slicingSummary(slicing),
+      filaments: slicing.filaments.map(slicingFilament),
+      cautions: [
+        slice.cautions?.includes("floating") ? "Parts of it float in the air." : "",
+        standInSentence(slicing) ?? "",
+      ].filter(Boolean),
+      view:
+        file.stored && slice.bytes !== 0
+          ? {
+              plate: file.plate,
+              ...(slice.copies && slice.copies > 1 ? { copies: slice.copies } : {}),
+              ...(size ? { size } : {}),
+              ...(slice.colours?.length
+                ? {
+                    originalColors: originalFilamentColours(slice.colours).map((value) => color(value)),
+                    names: printedFilamentNames(slice.colours).map((name) => name ?? null),
+                  }
+                : {}),
+              ...(colours(fallback) ? { fallbackColors: colours(fallback) } : {}),
+              bytes: slice.bytes ?? file.size,
+            }
+          : null,
+    };
+  }
+  const prefill = file.prefill;
+  const viewable = file.stored && (/\.gcode\.3mf$/i.test(file.name) || prefill.estimatedMinutes !== undefined);
+  return {
+    ...base,
+    lead: sliceLead(prefill),
+    meta: [file.plateCount > 1 ? `Plate ${file.plate} of ${file.plateCount}` : "", slicerLine(file.slicer)].filter(
+      Boolean,
+    ),
+    settings: [],
+    filaments: (prefill.filaments ?? []).map(filamentOf),
+    cautions: [],
+    view: viewable
+      ? { plate: file.plate, ...(colours(fallback) ? { fallbackColors: colours(fallback) } : {}), bytes: file.size }
+      : null,
+  };
 }
 
 /** The settings someone else would print it with, labelled the way a person says them; a number keeps its unit. */
@@ -261,6 +421,7 @@ export function itemView(item: Item, custom: { failure: TagDefinition[]; success
     photos: lead,
     cover: lead[0] ?? null,
     model,
+    files: (item.files ?? []).map((file) => guestFile(file)),
   };
   if (item.stage === "idea") return { kind: "idea", ...base, capturedAt: item.createdAt };
 
@@ -288,6 +449,13 @@ export function itemView(item: Item, custom: { failure: TagDefinition[]; success
         : [],
       filaments: (attempt.settings.filaments ?? []).map(filamentOf),
       results: guestResults(attempt.settings),
+      printed: attemptPartsLabel(attempt, item.parts),
+      file: attempt.file
+        ? guestFile(
+            attempt.file,
+            (attempt.settings.filaments ?? []).map((filament) => filament.colorHex),
+          )
+        : null,
     };
   });
   const summary = summarizeBuild(item.attempts);
@@ -309,6 +477,11 @@ export function itemView(item: Item, custom: { failure: TagDefinition[]; success
       ? `${count} ${count === 1 ? "attempt" : "attempts"}${summary.words ? `: ${summary.words}` : ""}`
       : "No attempts yet",
     totals,
+    parts: partProgress(item.parts, item.attempts).map((progress) => ({
+      name: progress.part.name,
+      progress: progressLabel(progress),
+      done: progress.done,
+    })),
   };
 }
 
@@ -345,7 +518,7 @@ export async function loadTwistView(db: Db, id: string): Promise<GuestTwist | nu
     .where(and(eq(twists.id, id), isNull(twists.deletedAt)))
     .get();
   if (!twist) return null;
-  const [photo, recipe] = await Promise.all([
+  const [photo, recipe, model] = await Promise.all([
     twist.sourcePhotoId
       ? db
           .select({
@@ -367,6 +540,13 @@ export async function loadTwistView(db: Db, id: string): Promise<GuestTwist | nu
           .where(and(eq(recipes.id, twist.recipeId), isNull(recipes.deletedAt)))
           .get()
       : undefined,
+    // Its model (the newest, as the twist page shows it).
+    db
+      .select()
+      .from(twistFiles)
+      .where(and(eq(twistFiles.twistId, twist.id), isNull(twistFiles.deletedAt)))
+      .orderBy(desc(twistFiles.createdAt))
+      .get(),
   ]);
   const lead = photo ? guestPhoto(photo) : null;
   const sourceUrl = safeUrl(twist.sourceUrl);
@@ -391,6 +571,7 @@ export async function loadTwistView(db: Db, id: string): Promise<GuestTwist | nu
           license: twist.license?.trim() || null,
         }
       : null,
+    files: model ? [guestFile(toApiFile(model))] : [],
     changes: twist.changes.map((change) => ({
       name: changeName(change),
       value: change.value.trim(),
@@ -405,6 +586,14 @@ export async function loadTwistView(db: Db, id: string): Promise<GuestTwist | nu
         }
       : null,
   });
+}
+
+/** The ids of the files whose cards the page shows: a guest may fetch their pictures and toolpaths, nothing else. */
+export function fileIdsOf(view: GuestView): Map<string, GuestFile> {
+  const files = new Map(view.files.map((file) => [file.id, file]));
+  if (view.kind === "build")
+    for (const attempt of view.attempts) if (attempt.file) files.set(attempt.file.id, attempt.file);
+  return files;
 }
 
 /** The ids of the photos a guest of this view may fetch: exactly the ones on its page. */
