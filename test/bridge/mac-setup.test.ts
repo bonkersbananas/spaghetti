@@ -169,6 +169,22 @@ describe("setup", () => {
     expect(launchctl).toEqual([]);
   });
 
+  it("when the keyboard can't be read, stops with the command to run in Terminal; the pairing is kept", async () => {
+    const asked = async () => {
+      throw new Error("EINVAL: invalid argument, kqueue");
+    };
+    await expect(
+      runSetup(
+        parseSetupArgs(["ABCD-EFGH", "--ip", "192.168.1.50", "--serial", "00M09A000000000"]),
+        env({ ask: asked }),
+      ),
+    ).rejects.toThrow(
+      /Couldn't read what you type.*no new code.*setup --ip '192\.168\.1\.50' --serial '00M09A000000000' --access-code <access-code>/,
+    );
+    expect(readSettings(macPaths(home).config)).toMatchObject({ token: "spg_secret_token" });
+    expect(existsSync(macPaths(home).plist)).toBe(false);
+  });
+
   it("changes nothing when the printer can't be reached and nobody says to go on", async () => {
     const problem = { code: "local-network" as const, message: "Can't reach the printer: allow Local Network." };
     await expect(

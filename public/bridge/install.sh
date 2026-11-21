@@ -53,6 +53,17 @@ latest_tag() {
   bridge_tags | head -n 1
 }
 
+# terminal_device: the real device of the terminal this runs in (/dev/ttys003), found through stdout or stderr, which
+# `curl | sh` leaves alone. Nothing when there is none. The program is handed this, not /dev/tty: on a Mac, kqueue
+# (what the program's runtime reads the keyboard with) refuses /dev/tty itself with EINVAL, but takes the real device.
+terminal_device() {
+  for fd in 2 1; do
+    if [ "$fd" = 2 ]; then dev=$(tty <&2 2>/dev/null); else dev=$(tty <&1 2>/dev/null); fi || continue
+    case "$dev" in /dev/*) [ -r "$dev" ] && { echo "$dev"; return 0; } ;; esac
+  done
+  return 1
+}
+
 # sha256 FILE: its SHA-256, with whichever tool this system has.
 sha256() {
   if command -v shasum >/dev/null 2>&1; then
@@ -132,7 +143,7 @@ main() {
   name="spaghetti-bridge-$asset.gz"
   base="https://github.com/$REPO/releases/download/$tag"
 
-  say "Downloading the Spaghetti bridge $version for $asset…"
+  say "Downloading the Spaghetti bridge $version for ${asset}…"
   curl -fSL --progress-bar "$base/$name" -o "$work/$name" || fail "Couldn't download $name from $base."
   curl -fsSL "$base/SHA256SUMS" -o "$work/SHA256SUMS" || fail "Couldn't download the checksums."
   checksum_ok "$work/$name" "$work/SHA256SUMS" "$name" || fail "The download doesn't match its checksum, so it was thrown away. Try again; if it keeps happening, tell whoever runs your Spaghetti."
@@ -155,8 +166,12 @@ main() {
 
   rm -rf "$work"
   # The questions need the keyboard, and the keyboard isn't this script's input when it is piped from curl.
-  if [ -r /dev/tty ] && [ -t 1 ]; then
-    exec "$bin/spaghetti-bridge" setup "$@" </dev/tty
+  if [ -t 1 ] || [ -t 2 ]; then
+    if tty_device=$(terminal_device); then
+      exec "$bin/spaghetti-bridge" setup "$@" <"$tty_device"
+    elif [ -r /dev/tty ]; then
+      exec "$bin/spaghetti-bridge" setup "$@" </dev/tty
+    fi
   fi
   exec "$bin/spaghetti-bridge" setup "$@"
 }

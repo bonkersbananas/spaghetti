@@ -132,9 +132,28 @@ export async function runSetup(args: SetupArgs, env: SetupEnv): Promise<void> {
       serial ??= one.serial;
     } else say("  Didn't hear it announce itself. That's fine, you can type its address.");
   }
+  // If the keyboard can't be read (a broken input stream), go on as if there were no terminal: stop with the command to
+  // run in Terminal. The pairing is already saved, so it needs no new code.
+  const askEnv = async (question: string, fallback?: string): Promise<string> => {
+    try {
+      return await (env.ask as NonNullable<SetupEnv["ask"]>)(question, fallback);
+    } catch {
+      const quote = (text: string) => `'${text.replace(/'/g, "'\\''")}'`;
+      const given = [
+        ["--ip", printerHost],
+        ["--serial", serial],
+        ["--access-code", accessCode],
+      ] as const;
+      const parts = given.map(([flag, value]) => (value ? `${flag} ${quote(value)}` : `${flag} <${flag.slice(2)}>`));
+      if (args.camera) parts.push(`--camera ${args.camera}`);
+      throw new SetupStop(
+        `Couldn't read what you type here. The pairing is saved, so no new code is needed: run this in Terminal: ${quote(paths.binary)} setup ${parts.join(" ")}`,
+      );
+    }
+  };
   const ask = async (question: string, fallback?: string) => {
     if (!env.ask) return fallback ?? "";
-    return (await env.ask(question, fallback)).trim() || fallback || "";
+    return (await askEnv(question, fallback)).trim() || fallback || "";
   };
   if (!printerHost) {
     printerHost = await ask("The printer's IP address (on its screen, with the Wi-Fi settings, e.g. 192.168.1.50)");
@@ -171,7 +190,7 @@ export async function runSetup(args: SetupArgs, env: SetupEnv): Promise<void> {
     else {
       say("  The bridge can't follow the printer yet (the first lines say why).");
       const goOn = env.ask
-        ? (await env.ask("Install it anyway? It will keep trying. (y/N)", "n")).trim().toLowerCase()
+        ? (await askEnv("Install it anyway? It will keep trying. (y/N)", "n")).trim().toLowerCase()
         : "n";
       if (!goOn.startsWith("y")) {
         throw new SetupStop(
