@@ -196,6 +196,7 @@ export async function printFactsOf(db: Db, attempt: Attempt): Promise<PrintFacts
 
 /** The build a merged one went into, following a chain (a print moved twice): null when it wasn't merged. */
 export async function mergedTarget(db: Db, itemId: string): Promise<string | null> {
+  const seen = new Set([itemId]);
   let id = itemId;
   for (let hop = 0; hop < 5; hop++) {
     const row = await db
@@ -203,10 +204,42 @@ export async function mergedTarget(db: Db, itemId: string): Promise<string | nul
       .from(items)
       .where(eq(items.id, id))
       .get();
-    if (!row?.mergedInto || !row.deletedAt) return hop ? id : null;
+    // A live build at the end of the chain; a missing one, or one deleted for good reasons of its own, is a dead end.
+    if (!row) return null;
+    if (!row.deletedAt) return hop ? id : null;
+    if (!row.mergedInto || seen.has(row.mergedInto)) return null;
+    seen.add(row.mergedInto);
     id = row.mergedInto;
   }
-  return id;
+  return null;
+}
+
+/**
+ * Where the print the printer bridge (`via`) filed in its own build `itemId` is now: the attempt and the build it is
+ * in, wherever the app or someone moved it since. Released bridges (0.1.3, 0.1.4) keep calling their own build: they
+ * end a print by looking for its attempt there, send its photo there and retry its start there.
+ */
+export async function printNowIn(
+  db: Db,
+  itemId: string,
+  via: string | null,
+): Promise<{ attemptId: string; itemId: string } | null> {
+  if (!via) return null;
+  const row = await db
+    .select({ attemptId: attempts.id, itemId: attempts.itemId })
+    .from(printJobs)
+    .innerJoin(attempts, eq(attempts.id, printJobs.attemptId))
+    .innerJoin(items, eq(items.id, attempts.itemId))
+    .where(
+      and(
+        sql`coalesce(${printJobs.ownItemId}, ${printJobs.itemId}) = ${itemId}`,
+        eq(attempts.createdVia, via),
+        isNull(attempts.deletedAt),
+        isNull(items.deletedAt),
+      ),
+    )
+    .get();
+  return row ?? null;
 }
 
 /** What each attempt says about its print and its last move (`Attempt.print`, `Attempt.moved`). */
@@ -245,6 +278,7 @@ export async function printViews(
             reasons: here && job.placed === "matched" ? job.reasons : [],
             asking: here && job.asking,
             ownItemId: ownBuildOf(job),
+            ownTitle: job.ownTitle,
           }
         : null,
       moved:
@@ -310,8 +344,8 @@ export async function fileThePrint(
   printedAt: number,
   now: Date,
 ) {
-  if (!via) return null;
-  if (!print && !(await isBridgeAgent(db, via))) return null;
+  // Only the printer bridge's own print: another agent sending print facts files its attempt where it says.
+  if (!via || !(await isBridgeAgent(db, via))) return null;
   if (!(await isFreshPrinterBuild(db, item, via, now.getTime()))) return null;
   const facts: PrintFacts = {
     name: print?.name ?? item.title,
@@ -357,16 +391,27 @@ export async function fileThePrint(
                 reasons: placement.best.reasons,
                 itemId: target.id,
                 ownItemId: item.id,
+                ownTitle: item.title,
                 asking: false,
-                // The attempt's insert starts an idea it matched: "Not this build?" makes it an idea again.
+                // The attempt's insert starts an idea it matched: "Not this build?" makes it an idea again, in its
+                // place in Up next.
                 startedIdea: target.stage === "idea",
+                ideaUpNext: target.stage === "idea" ? target.upNext : null,
               })
               .onConflictDoNothing(),
           ]
         : [
             db
               .insert(printJobs)
-              .values({ ...job, attemptId, placed: "new", reasons: [], itemId: item.id, asking: true })
+              .values({
+                ...job,
+                attemptId,
+                placed: "new",
+                reasons: [],
+                itemId: item.id,
+                ownTitle: item.title,
+                asking: true,
+              })
               .onConflictDoNothing(),
           ],
   };

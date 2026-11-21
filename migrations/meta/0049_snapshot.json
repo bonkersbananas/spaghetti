@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "fbb0dace-3cb1-4347-baf4-296364408184",
+  "id": "9fcc4149-a93a-4b3a-ac8e-7cf1029b3225",
   "prevId": "f708847a-820d-4b0b-94d6-7b8e8eeb4c62",
   "tables": {
     "agent_tokens": {
@@ -523,6 +523,13 @@
           "type": "integer",
           "primaryKey": false,
           "notNull": true,
+          "autoincrement": false
+        },
+        "to_up_next": {
+          "name": "to_up_next",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
           "autoincrement": false
         }
       },
@@ -2987,6 +2994,13 @@
           "notNull": false,
           "autoincrement": false
         },
+        "own_title": {
+          "name": "own_title",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
         "asking": {
           "name": "asking",
           "type": "integer",
@@ -3002,6 +3016,13 @@
           "notNull": true,
           "autoincrement": false,
           "default": false
+        },
+        "idea_up_next": {
+          "name": "idea_up_next",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
         },
         "created_at": {
           "name": "created_at",

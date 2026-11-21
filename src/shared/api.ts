@@ -156,6 +156,8 @@ export interface AttemptPrint {
    * back rather than making another.
    */
   ownItemId: string;
+  /** That build's title when the printer filed the print: renamed since, it is someone's and stays with a move. */
+  ownTitle: string | null;
 }
 
 /** An attempt moved from another build (decision 0076): "Moved here from UOBF-fit-test-ring(2) by Carl Oscar". */

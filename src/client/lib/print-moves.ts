@@ -47,13 +47,20 @@ export function offerWhys(offers: ReadonlyArray<{ build: ItemView; reasons: Matc
 export type MoveTarget = { item: ItemView } | { newBuild: { title: string | null } };
 
 /**
- * Whether the build an attempt leaves goes with it, as the server decides: the printer's (an agent's) with nothing
- * else in it. Comments and reactions the server checks too; a build with them stays, which the answer corrects.
+ * Whether the build an attempt leaves goes with it, as the server decides: the build the printer made for this very
+ * print, still with the printer's title and nothing else in it or given to it. Comments, reactions and live links the
+ * server checks too; a build with them stays, which the answer corrects.
  */
 function goesWith(from: ItemView, attempt: AttemptView): boolean {
+  const print = attempt.print;
   return (
-    !!from.createdVia &&
+    !!print &&
+    print.ownItemId === from.id &&
+    from.title === print.ownTitle &&
     !from.note.trim() &&
+    !from.forWhom &&
+    !from.twistId &&
+    !from.parts.length &&
     !from.files?.length &&
     !from.reactions?.length &&
     from.attempts.every((other) => other.id === attempt.id) &&

@@ -407,6 +407,189 @@ describe("moving an attempt to another build", () => {
   });
 });
 
+describe("a released bridge (0.1.3, 0.1.4) after its print moved", () => {
+  /** What bridge 0.1.4 does at a print's end: GET its own build (following redirects) and look for its attempt. */
+  const bridgeFinds = async (ownId: string, attemptId: string) => {
+    const response = await asBridge(`/api/items/${ownId}`);
+    if (!response.ok) return null;
+    const { item } = await response.json<ItemResponse>();
+    return item.attempts.some((one) => one.id === attemptId) ? item.id : null;
+  };
+
+  it("finds a matched print someone moved on, and its retried start is the same attempt", async () => {
+    await glassMarkers();
+    const tugboat = await build("Tugboat");
+    const { ownId, attemptId } = await bridgePrints("UOBF-fit-test-ring(2)");
+    expect((await move(attemptId, { targetId: tugboat })).status).toBe(200);
+
+    expect(await bridgeFinds(ownId, attemptId)).toBe(tugboat);
+    const again = await asBridge(`/api/items/${ownId}/attempts`, { method: "POST", json: { id: attemptId } });
+    expect(again.status).toBe(201);
+    expect((await again.json<AttemptResponse>()).attempt.itemId).toBe(tugboat);
+  });
+
+  it("finds a print moved out of its own build that stays (someone wrote in it), and sends its photo there", async () => {
+    const tugboat = await build("Tugboat");
+    const { ownId, attemptId } = await bridgePrints("cable-clip-v3");
+    await request(`/api/items/${ownId}`, { method: "PATCH", cookie, json: { note: "Print two more" } });
+    const moved = await (await move(attemptId, { targetId: tugboat })).json<MoveAttemptResponse>();
+    expect(moved.from?.id).toBe(ownId);
+
+    expect(await bridgeFinds(ownId, attemptId)).toBe(tugboat);
+    // A person opening the build sees the build, not the print's new place.
+    expect((await request(`/api/items/${ownId}`, { cookie, redirect: "manual" })).status).toBe(200);
+    const again = await asBridge(`/api/items/${ownId}/attempts`, { method: "POST", json: { id: attemptId } });
+    expect(again.status).toBe(201);
+
+    const photoId = uuid();
+    const form = new FormData();
+    form.set("width", "1920");
+    form.set("height", "1080");
+    form.set("color", "#a9a095");
+    form.set("attemptId", attemptId);
+    form.set("large", new File([new Uint8Array([0xff, 0xd8, 1])], "frame.jpg", { type: "image/jpeg" }));
+    form.set("thumb", new File([new Uint8Array([0xff, 0xd8, 1])], "frame.jpg", { type: "image/jpeg" }));
+    expect((await asBridge(`/api/items/${ownId}/photos/${photoId}`, { method: "PUT", body: form })).status).toBe(201);
+    expect((await itemOf(tugboat)).photos.map((photo) => photo.id)).toContain(photoId);
+  });
+});
+
+describe("what a move may remove", () => {
+  it("never removes a build another agent made, even one with only a title", async () => {
+    const made = await request("/api/agents", {
+      method: "POST",
+      json: { name: "Claude", scopes: ["read", "capture", "attempts"] },
+      cookie,
+    });
+    const claude = (await made.json<NewTokenResponse>()).token;
+    const boat = uuid();
+    await request("/api/items", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${claude}`, Origin: "http://claude.test" },
+      json: { id: boat, title: "Bath boat", stage: "building" },
+    });
+    const attemptId = uuid();
+    await request(`/api/items/${boat}/attempts`, { method: "POST", cookie, json: { id: attemptId } });
+    const tugboat = await build("Tugboat");
+
+    const moved = await (await move(attemptId, { targetId: tugboat })).json<MoveAttemptResponse>();
+    expect(moved.from).toMatchObject({ id: boat, title: "Bath boat" });
+    expect((await request(`/api/items/${boat}`, { cookie, redirect: "manual" })).status).toBe(200);
+  });
+
+  it.each([
+    [
+      "renamed",
+      (id: string) => request(`/api/items/${id}`, { method: "PATCH", cookie, json: { title: "Cable clips" } }),
+    ],
+    [
+      "for someone",
+      (id: string) => request(`/api/items/${id}`, { method: "PATCH", cookie, json: { forWhom: "Mila" } }),
+    ],
+    [
+      "with parts",
+      (id: string) =>
+        request(`/api/items/${id}/parts`, {
+          method: "PUT",
+          cookie,
+          json: { parts: [{ id: uuid(), name: "Clip", quantity: 4 }] },
+        }),
+    ],
+    ["shared", (id: string) => request(`/api/shares/items/${id}`, { method: "PUT", cookie })],
+  ])("keeps the printer's own build when it was %s", async (_what, fillIn) => {
+    const tugboat = await build("Tugboat");
+    const { ownId, attemptId } = await bridgePrints("cable-clip-v3");
+    expect((await fillIn(ownId)).ok).toBe(true);
+    const moved = await (await move(attemptId, { targetId: tugboat })).json<MoveAttemptResponse>();
+    expect(moved.from?.id).toBe(ownId);
+  });
+});
+
+describe("two moves at once", () => {
+  it("keeps the attempt and its photos together: one move wins, the other is refused", async () => {
+    const a = await build("Herb planter");
+    const b = await build("Balcony planters");
+    const { ownId, attemptId } = await bridgePrints("cable-clip-v3");
+    await request(`/api/items/${ownId}`, { method: "PATCH", cookie, json: { note: "Keep this one" } });
+    const photoId = uuid();
+    await uploadPhoto(ownId, photoId, cookie, { attemptId });
+
+    const [one, two] = await Promise.all([move(attemptId, { targetId: a }), move(attemptId, { targetId: b })]);
+    expect([one.status, two.status].sort()).toEqual([200, 409]);
+    const won = one.status === 200 ? a : b;
+    const there = await itemOf(won);
+    expect(there.attempts.map((attempt) => attempt.id)).toEqual([attemptId]);
+    expect(there.photos.map((photo) => photo.id)).toEqual([photoId]);
+    const moves = await env.DB.prepare("SELECT count(*) AS n FROM attempt_moves WHERE attempt_id = ?")
+      .bind(attemptId)
+      .first<{ n: number }>();
+    expect(moves?.n).toBe(1);
+  });
+
+  it("never merges two builds into each other when their prints cross", async () => {
+    const first = await bridgePrints("cable-clip-v3");
+    const second = await bridgePrints("cable-chain-link");
+    const [one, two] = await Promise.all([
+      move(first.attemptId, { targetId: second.ownId }),
+      move(second.attemptId, { targetId: first.ownId }),
+    ]);
+    expect([one.status, two.status].sort()).toEqual([200, 409]);
+    const live = await (await request("/api/items?stage=building", { cookie })).json<{ items: Item[] }>();
+    expect(live.items).toHaveLength(1);
+  });
+
+  it("answers a cycle of merged builds with 404, not a redirect loop", async () => {
+    const p = await build("P");
+    const q = await build("Q");
+    await env.DB.batch([
+      env.DB.prepare("UPDATE items SET deleted_at = 1, merged_into = ? WHERE id = ?").bind(q, p),
+      env.DB.prepare("UPDATE items SET deleted_at = 1, merged_into = ? WHERE id = ?").bind(p, q),
+    ]);
+    expect((await request(`/api/items/${p}`, { cookie, redirect: "manual" })).status).toBe(404);
+  });
+});
+
+describe("smaller things", () => {
+  it("matches only for the printer bridge: another agent's print facts change nothing", async () => {
+    await glassMarkers();
+    const made = await request("/api/agents", {
+      method: "POST",
+      json: { name: "Claude", scopes: ["read", "capture", "attempts"] },
+      cookie,
+    });
+    const claude = (await made.json<NewTokenResponse>()).token;
+    const headers = { Authorization: `Bearer ${claude}`, Origin: "http://claude.test" };
+    const own = uuid();
+    await request("/api/items", { method: "POST", headers, json: { id: own, title: "Ring", stage: "building" } });
+    const response = await request(`/api/items/${own}/attempts`, {
+      method: "POST",
+      headers,
+      json: { id: uuid(), print: { name: "UOBF-fit-test-ring(2)" } },
+    });
+    expect((await response.json<AttemptResponse>()).attempt.itemId).toBe(own);
+  });
+
+  it("gives an idea its place in Up next back when the print it started leaves it, and when a move is undone", async () => {
+    const idea = await build("Planter v2", "idea");
+    await keepFile(idea, "planter-v2.gcode.3mf");
+    await request(`/api/items/${idea}`, { method: "PATCH", cookie, json: { upNext: true } });
+    const place = (await itemOf(idea)).upNext;
+    expect(place).not.toBeNull();
+    const tugboat = await build("Tugboat");
+    const { attemptId } = await bridgePrints("planter-v2(2)");
+    expect((await itemOf(idea)).upNext).toBeNull();
+
+    const out = await (await move(attemptId, { targetId: tugboat })).json<MoveAttemptResponse>();
+    expect(out.from).toMatchObject({ id: idea, stage: "idea", upNext: place });
+
+    // Moved into it by hand and undone: its place again.
+    await move(attemptId, { targetId: idea });
+    expect((await itemOf(idea)).upNext).toBeNull();
+    await request(`/api/attempts/${attemptId}/unmove`, { method: "POST", cookie });
+    expect((await itemOf(idea)).upNext).toBe(place);
+  });
+});
+
 describe("who may", () => {
   it("lets the bridge's token file its own print and read suggestions, but not move or answer for people", async () => {
     const glass = await glassMarkers();

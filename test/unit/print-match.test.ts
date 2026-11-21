@@ -147,6 +147,15 @@ describe("names", () => {
     expect(placePrint([])).toEqual({ kind: "none" });
   });
 
+  it.each(["Untitled 2", "Model 3", "Part 2", "untitled"])(
+    "makes nothing of %s, a copy of a name that says nothing",
+    (name) => {
+      const plain = build({ id: "plain", title: "Desk", files: [{ id: "u", name: "Untitled.3mf" }] });
+      const numbered = build({ id: "numbered", title: "Shelf", files: [{ id: "u2", name: "Model 2.3mf" }] });
+      expect(scorePrint({ name, startedAt: START }, [plain, numbered])).toEqual([]);
+    },
+  );
+
   it("starts a build of its own for a print nothing knows", () => {
     expect(placePrint(scorePrint({ name: "cable-clip", startedAt: START }, workshop))).toEqual({ kind: "none" });
   });

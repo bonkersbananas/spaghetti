@@ -73,6 +73,7 @@ import {
   deleteItem,
   discardIfUntouched,
   type ItemView,
+  itemQuery,
   scrapBuild,
   useItem,
   useItemFields,
@@ -127,7 +128,16 @@ function BuildDetail() {
     if (!isIdea || window.location.pathname !== `/builds/${buildId}`) return;
     void navigate({ to: "/ideas/$ideaId", params: { ideaId: buildId }, replace: true });
   }, [isIdea, buildId, navigate]);
-  if (item && !isIdea) return <Build key={item.id} item={item} />;
+  // A printer's build that went into the build its print belongs to answers with that build (decision 0076): the
+  // page moves to its real address, and the copy kept under the old one goes, so nothing edits it there.
+  const queryClient = useQueryClient();
+  const moved = !!item && item.id !== buildId;
+  useEffect(() => {
+    if (!moved || !item) return;
+    queryClient.removeQueries({ queryKey: itemQuery(buildId).queryKey, exact: true });
+    void navigate({ to: "/builds/$buildId", params: { buildId: item.id }, search: (prev) => prev, replace: true });
+  }, [moved, item, buildId, navigate, queryClient]);
+  if (item && !isIdea && !moved) return <Build key={item.id} item={item} />;
   return (
     <>
       <h1 className="sr-only">Build</h1>

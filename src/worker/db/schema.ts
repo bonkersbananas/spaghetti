@@ -849,9 +849,13 @@ export const printJobs = sqliteTable("print_jobs", {
   itemId: text("item_id").notNull(),
   /** The build the bridge made for it, when it was matched into another (merged away, and brought back by "a new build"). */
   ownItemId: text("own_item_id"),
+  /** The printer's build's title when the print was filed: a title changed since is someone's, and keeps the build. */
+  ownTitle: text("own_title"),
   asking: integer("asking", { mode: "boolean" }).notNull().default(false),
   /** The match started an idea as a build: moving the print out makes it an idea again, if nothing else was printed. */
   startedIdea: integer("started_idea", { mode: "boolean" }).notNull().default(false),
+  /** That idea's place in Up next before the match started it, given back when it is an idea again. */
+  ideaUpNext: integer("idea_up_next"),
   createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
   /** When someone answered: picked a build, moved it or kept it as a new build. */
   settledAt: integer("settled_at", { mode: "timestamp_ms" }),
@@ -890,6 +894,8 @@ export const attemptMoves = sqliteTable(
       .references(() => users.id),
     movedVia: text("moved_via"),
     movedAt: integer("moved_at", { mode: "timestamp_ms" }).notNull(),
+    /** The idea's place in Up next before the move started it, given back by the undo. */
+    toUpNext: integer("to_up_next"),
   },
   (table) => [index("attempt_moves_attempt_idx").on(table.attemptId, table.movedAt)],
 );

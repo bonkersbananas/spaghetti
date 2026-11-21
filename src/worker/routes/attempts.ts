@@ -22,7 +22,7 @@ import { type Attempt, attemptFiles, attempts, coachRuns, items } from "../db/sc
 import type { AppEnv } from "../env.ts";
 import { apiError, toApiAttempts } from "../http.ts";
 import { readsByAttempt, toApiPhotoRead } from "../photo-read/run.ts";
-import { fileThePrint, mergedTarget, printViews } from "../prints.ts";
+import { fileThePrint, mergedTarget, printNowIn, printViews } from "../prints.ts";
 import { stageDates } from "./items.ts";
 
 const id = z.uuid();
@@ -201,8 +201,14 @@ export const itemAttemptRoutes = new Hono<AppEnv>().post("/:id/attempts", async 
 
   const existing = await db.select().from(attempts).where(eq(attempts.id, body.id)).get();
   if (existing) {
-    // A retry after the print went into the build it matched: the same attempt, where it is now (decision 0076).
-    if (existing.itemId !== itemId && (await mergedTarget(db, itemId)) !== existing.itemId) {
+    // A retry after the print went into the build it matched, or someone moved it since: the same attempt, where it
+    // is now (decision 0076).
+    const home = existing.itemId === itemId ? null : await printNowIn(db, itemId, c.var.via);
+    if (
+      existing.itemId !== itemId &&
+      home?.attemptId !== existing.id &&
+      (await mergedTarget(db, itemId)) !== existing.itemId
+    ) {
       return apiError(c, 409, "conflict", "That attempt belongs to something else.");
     }
     if (existing.deletedAt) return apiError(c, 409, "deleted", "That attempt was deleted.");

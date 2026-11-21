@@ -144,6 +144,9 @@ export function printKey(name: string | null | undefined): string {
 /** "uobf fit test ring 2" → "uobf fit test ring": a trailing small number some browsers add to a copy ("ring-2"). */
 const withoutCopyNumber = (key: string) => key.replace(/ (\d{1,2})$/, "");
 
+/** A name that says nothing about the thing: "Untitled", "Model", "Part 2" (a copy of one is no better). */
+const meaningless = (key: string) => MEANINGLESS.has(key) || MEANINGLESS.has(withoutCopyNumber(key));
+
 /** How many of the words two keys have in common, over all their words (0–1). */
 function overlap(a: string, b: string): number {
   const left = new Set(a.split(" ").filter(Boolean));
@@ -199,7 +202,7 @@ const reasonWeight = (reason: MatchReason): number => {
 /** One candidate's score and reasons for this print. */
 export function scoreCandidate(print: PrintFacts, candidate: MatchCandidate): ScoredCandidate {
   const key = printKey(print.name);
-  const named = !MEANINGLESS.has(key);
+  const named = !meaningless(key);
   const reasons: MatchReason[] = [];
   let score = 0;
 
@@ -215,6 +218,7 @@ export function scoreCandidate(print: PrintFacts, candidate: MatchCandidate): Sc
     const rank = { same: 3, variant: 2, like: 1 } as const;
     for (const file of candidate.files) {
       const fileKey = printKey(file.name);
+      if (meaningless(fileKey)) continue;
       const how = sameName(key, fileKey) ?? (alike(key, fileKey, 0.75) ? "like" : null);
       // A file kept with the build counts before an attempt's, and a later attempt before an earlier one.
       if (how && (!best || rank[how] > rank[best.how])) best = { file, how };
@@ -234,7 +238,7 @@ export function scoreCandidate(print: PrintFacts, candidate: MatchCandidate): Sc
 
   if (named) {
     const titleKey = printKey(candidate.title);
-    if (titleKey && !MEANINGLESS.has(titleKey)) {
+    if (titleKey && !meaningless(titleKey)) {
       if (sameName(key, titleKey)) {
         reasons.push({ kind: "title" });
         score += POINTS.title;

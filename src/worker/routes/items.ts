@@ -45,7 +45,7 @@ import type { AppEnv } from "../env.ts";
 import { apiError, toApiFile, toApiItem, toApiPhoto } from "../http.ts";
 import { photoReadsEnabled, readsByAttempt, runRead, startRead, toApiPhotoRead } from "../photo-read/run.ts";
 import { photoKey, photoOwner } from "../photos.ts";
-import { mergedTarget, printViews, withPrintViews } from "../prints.ts";
+import { mergedTarget, printNowIn, printViews, withPrintViews } from "../prints.ts";
 import { type TitleJobView, titleAfterSave, titleJobs } from "../title/run.ts";
 import { reactionsFor } from "./reactions.ts";
 
@@ -354,7 +354,7 @@ export async function loadItem(db: Db, itemId: string) {
  * printer's build that went into another with its print (decision 0076). Null otherwise: a photo for some other
  * build's attempt is still refused.
  */
-async function attemptHome(db: Db, attemptId: string, sentTo: string): Promise<string | null> {
+async function attemptHome(db: Db, attemptId: string, sentTo: string, via: string | null): Promise<string | null> {
   const row = await db
     .select({ itemId: attempts.itemId })
     .from(attempts)
@@ -362,15 +362,16 @@ async function attemptHome(db: Db, attemptId: string, sentTo: string): Promise<s
     .where(and(eq(attempts.id, attemptId), isNull(attempts.deletedAt), isNull(items.deletedAt)))
     .get();
   if (!row || row.itemId === sentTo) return null;
-  const [left, merged] = await Promise.all([
+  const [left, merged, own] = await Promise.all([
     db
       .select({ id: attemptMoves.id })
       .from(attemptMoves)
       .where(and(eq(attemptMoves.attemptId, attemptId), eq(attemptMoves.fromItemId, sentTo)))
       .get(),
     mergedTarget(db, sentTo),
+    printNowIn(db, sentTo, via),
   ]);
-  return left || merged ? row.itemId : null;
+  return left || merged || own?.attemptId === attemptId ? row.itemId : null;
 }
 
 /** The queue column for a requested change: the end of the queue is worked out by the database. */
@@ -503,7 +504,12 @@ export const itemRoutes = new Hono<AppEnv>()
   })
 
   .get("/:id", async (c) => {
-    const item = await loadItem(c.var.db, c.req.param("id"));
+    const id = c.req.param("id");
+    // The printer bridge asking for its own build after its print moved on (decision 0076): released bridges look
+    // for the print's attempt there to end it, so they are led to the build it is in now. People see the build.
+    const now = await printNowIn(c.var.db, id, c.var.via);
+    if (now && now.itemId !== id) return c.redirect(`/api/items/${encodeURIComponent(now.itemId)}`, 308);
+    const item = await loadItem(c.var.db, id);
     if (!item) {
       // A printer's build that went into another with its print (decision 0076): its address leads there, so the
       // bridge that made it (and a notification about it) still finds the print.
@@ -968,7 +974,9 @@ export const itemRoutes = new Hono<AppEnv>()
     // A photo of an attempt goes where the attempt is: it may have moved to another build since the photo was
     // taken (a person's outbox, the printer bridge's camera frame; decision 0076).
     const movedTo =
-      fields.success && fields.data.attemptId ? await attemptHome(c.var.db, fields.data.attemptId, itemId) : null;
+      fields.success && fields.data.attemptId
+        ? await attemptHome(c.var.db, fields.data.attemptId, itemId, c.var.via)
+        : null;
     if (movedTo) itemId = movedTo;
 
     const item = await c.var.db

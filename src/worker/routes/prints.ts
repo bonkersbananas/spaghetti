@@ -4,7 +4,7 @@
  * "it's a new build" to the printer's question. Moving and answering are people's: the printer bridge's token only
  * files its own print (POST /api/items/:id/attempts), and no scope lists these writes.
  */
-import { and, eq, isNull, max, sql } from "drizzle-orm";
+import { and, eq, isNull, max, type SQL, sql } from "drizzle-orm";
 import type { BatchItem } from "drizzle-orm/batch";
 import { Hono } from "hono";
 import { z } from "zod";
@@ -19,11 +19,13 @@ import {
   comments,
   itemFiles,
   items,
+  parts,
   photoReads,
   photos,
   printJobs,
   reactions,
   recipes,
+  shares,
 } from "../db/schema.ts";
 import type { AppEnv } from "../env.ts";
 import { apiError } from "../http.ts";
@@ -55,17 +57,28 @@ function findLive(db: Db, attemptId: string) {
 }
 
 /**
- * Whether a build goes with the print that leaves it: one the printer made (an agent's), with nothing else in it. That
- * is merging it into the build the print goes to.
+ * Whether a build goes with the print that leaves it: the build the printer made for this very print (its
+ * print_jobs row says so), still as the printer left it: its title, nothing else in it and nothing anyone gave it.
+ * That is merging it into the build the print goes to. Any other build stays, whoever made it.
  */
-async function leftEmpty(db: Db, item: typeof items.$inferSelect, attemptId: string): Promise<boolean> {
-  return !!item.createdVia && (await bare(db, item, attemptId));
+async function printerBuildGoes(
+  db: Db,
+  item: typeof items.$inferSelect,
+  attemptId: string,
+  job: typeof printJobs.$inferSelect | undefined,
+): Promise<boolean> {
+  if (!job || ownBuildOf(job) !== item.id) return false;
+  if (job.ownTitle === null || item.title !== job.ownTitle) return false;
+  return bare(db, item, attemptId);
 }
 
-/** Nothing in a build but this attempt: no other attempt, photo, file, note, comment or reaction of its own. */
+/**
+ * Nothing in a build but this attempt: no other attempt, photo, file, part, note, comment, reaction or live link,
+ * and nobody it is for and no twist it comes from.
+ */
 async function bare(db: Db, item: typeof items.$inferSelect, attemptId: string): Promise<boolean> {
-  if (item.note.trim()) return false;
-  const [attempt, photo, file, said, reacted] = await Promise.all([
+  if (item.note.trim() || item.forWhom || item.twistId) return false;
+  const found = await Promise.all([
     db
       .select({ id: attempts.id })
       .from(attempts)
@@ -87,24 +100,46 @@ async function bare(db: Db, item: typeof items.$inferSelect, attemptId: string):
       .from(itemFiles)
       .where(and(eq(itemFiles.itemId, item.id), isNull(itemFiles.deletedAt)))
       .get(),
+    db.select({ id: parts.id }).from(parts).where(eq(parts.itemId, item.id)).get(),
     db
       .select({ id: comments.id })
       .from(comments)
       .where(and(eq(comments.itemId, item.id), isNull(comments.deletedAt)))
       .get(),
     db.select({ id: reactions.targetId }).from(reactions).where(eq(reactions.itemId, item.id)).get(),
+    db
+      .select({ id: shares.id })
+      .from(shares)
+      .where(and(eq(shares.kind, "item"), eq(shares.targetId, item.id), isNull(shares.revokedAt)))
+      .get(),
   ]);
-  return !attempt && !photo && !file && !said && !reacted;
+  return found.every((row) => !row);
 }
 
 /** The statements that carry an attempt's own rows (its photos' reads, Claude's ideas, a recipe's source) along. */
-function followers(db: Db, attemptId: string, itemId: string) {
+function followers(db: Db, attemptId: string, itemId: string, guard: SQL) {
   return [
-    db.update(photoReads).set({ itemId }).where(eq(photoReads.attemptId, attemptId)),
-    db.update(coachRuns).set({ itemId }).where(eq(coachRuns.attemptId, attemptId)),
-    db.update(recipes).set({ sourceItemId: itemId }).where(eq(recipes.sourceAttemptId, attemptId)),
+    db
+      .update(photoReads)
+      .set({ itemId })
+      .where(and(eq(photoReads.attemptId, attemptId), guard)),
+    db
+      .update(coachRuns)
+      .set({ itemId })
+      .where(and(eq(coachRuns.attemptId, attemptId), guard)),
+    db
+      .update(recipes)
+      .set({ sourceItemId: itemId })
+      .where(and(eq(recipes.sourceAttemptId, attemptId), guard)),
   ];
 }
+
+/** "This attempt is in that build now": the guard of every statement after a move's (or an undo's) own. */
+const attemptIn = (attemptId: string, itemId: string) =>
+  sql`EXISTS (SELECT 1 FROM attempts WHERE id = ${attemptId} AND item_id = ${itemId} AND deleted_at IS NULL)`;
+const moveRow = (moveId: string) => sql`EXISTS (SELECT 1 FROM attempt_moves WHERE id = ${moveId})`;
+const nothingPrintedIn = (itemId: string) =>
+  sql`NOT EXISTS (SELECT 1 FROM attempts WHERE item_id = ${itemId} AND deleted_at IS NULL)`;
 
 export const attemptPrintRoutes = new Hono<AppEnv>()
   /** The builds and ideas a print (or any attempt) may belong to, best first, with why. */
@@ -122,9 +157,13 @@ export const attemptPrintRoutes = new Hono<AppEnv>()
   /**
    * Moves an attempt to another build or idea (an idea becomes a build by it), or to a new build: its photos keep
    * their order after the target's own, its note, outcome, tags, settings, file and Claude's notes go with it, and
-   * the parts it counted (the other build's) are kept for the undo. A printer's build left with nothing goes too,
-   * merged into the target. "A new build" for a print the app matched brings back the printer's own build instead
-   * of making another. Moving it where it already is changes nothing (a retry).
+   * the parts it counted (the other build's) are kept for the undo. The build the printer made for the print goes
+   * too when nothing else is in it, merged into the target. "A new build" for a print the app matched brings back the
+   * printer's own build instead of making another. Moving it where it already is changes nothing (a retry).
+   *
+   * One batch, claimed by its first statement: the move's row goes in only while the attempt is still where this
+   * request found it and the target is as it was, and every later statement runs only if that row is there. Two moves
+   * at once: one wins whole, the other changes nothing and is refused.
    */
   .post("/:id/move", async (c) => {
     const parsed = moveAttempt.safeParse(await c.req.json().catch(() => null));
@@ -158,14 +197,15 @@ export const attemptPrintRoutes = new Hono<AppEnv>()
 
     const now = new Date();
     const actor = c.var.actor;
-    const [moving, last, empty, other] = await Promise.all([
+    const moveId = crypto.randomUUID();
+    const [moving, last, goes, other] = await Promise.all([
       db.select({ id: photos.id, position: photos.position }).from(photos).where(eq(photos.attemptId, attempt.id)),
       db
         .select({ value: max(photos.position) })
         .from(photos)
         .where(eq(photos.itemId, wantedId))
         .get(),
-      leftEmpty(db, source, attempt.id),
+      printerBuildGoes(db, source, attempt.id, job),
       db
         .select({ id: attempts.id })
         .from(attempts)
@@ -173,14 +213,24 @@ export const attemptPrintRoutes = new Hono<AppEnv>()
         .get(),
     ]);
     const base = (last?.value ?? -1) + 1;
-    const startsIt = existing?.stage === "idea";
-    // An idea the app started by matching this print into it is an idea again once the print leaves, if nothing else
-    // was printed in it (the undo starts it again: an attempt in an idea makes it a build).
+    const startsIt = !made && existing?.stage === "idea";
+    // An idea the app started by matching this print into it is an idea again once the print leaves, in its place in
+    // Up next, if nothing else was printed in it (the undo starts it again: an attempt in an idea makes it a build).
     const unstarts = !!job?.startedIdea && job.itemId === source.id && source.stage === "building" && !other;
-    const goes = empty && !unstarts;
+    const removes = goes && !unstarts;
 
+    // The claim: the attempt is still in the build this request found it in, which is still there, and the target is
+    // as this request saw it (a build or idea still there, a new id still free, the printer's build still merged).
+    const target =
+      made === "new"
+        ? sql`EXISTS (SELECT 1 FROM items WHERE id = ${wantedId} AND created_at = ${now.getTime()} AND created_by = ${c.var.user.id})`
+        : made === "restored"
+          ? sql`EXISTS (SELECT 1 FROM items WHERE id = ${wantedId} AND deleted_at IS NOT NULL AND merged_into IS NOT NULL)`
+          : sql`EXISTS (SELECT 1 FROM items WHERE id = ${wantedId} AND deleted_at IS NULL AND stage = ${existing?.stage ?? ""})`;
+    const claimed = moveRow(moveId);
     const statements: BatchItem<"sqlite">[] = [];
     if (made === "new") {
+      // Made first, so the claim can see it is this request's; taken away again at the end if the claim failed.
       statements.push(
         db
           .insert(items)
@@ -195,11 +245,32 @@ export const attemptPrintRoutes = new Hono<AppEnv>()
             updatedAt: now,
           })
           .onConflictDoNothing(),
+      );
+    }
+    // The move's row, in attempt_moves' column order (id … moved_at, to_up_next).
+    statements.push(
+      db.insert(attemptMoves).select(sql`SELECT ${moveId}, ${attempt.id}, ${source.id}, ${wantedId}, ${source.title},
+          ${removes ? 1 : 0}, ${startsIt ? 1 : 0}, ${made ? 1 : 0}, ${JSON.stringify(moving)},
+          ${JSON.stringify(attempt.parts)}, ${job ? (job.asking ? 1 : 0) : null}, ${c.var.user.id}, ${c.var.via},
+          ${now.getTime()}, ${startsIt ? (existing?.upNext ?? null) : null}
+        WHERE ${attemptIn(attempt.id, source.id)}
+          AND EXISTS (SELECT 1 FROM items WHERE id = ${source.id} AND deleted_at IS NULL)
+          AND ${target}`),
+    );
+    if (made === "new") {
+      statements.push(
+        db
+          .update(items)
+          .set({ updatedAt: now })
+          .where(and(eq(items.id, wantedId), claimed)),
         recordChange(db, { entity: "item", id: wantedId, itemId: wantedId, action: "created", actor }),
       );
     } else if (made === "restored") {
       statements.push(
-        db.update(items).set({ deletedAt: null, mergedInto: null, updatedAt: now }).where(eq(items.id, wantedId)),
+        db
+          .update(items)
+          .set({ deletedAt: null, mergedInto: null, updatedAt: now })
+          .where(and(eq(items.id, wantedId), claimed)),
         recordChange(db, { entity: "item", id: wantedId, itemId: wantedId, action: "restored", actor }),
       );
     }
@@ -207,79 +278,82 @@ export const attemptPrintRoutes = new Hono<AppEnv>()
       db
         .update(attempts)
         .set({ itemId: wantedId, parts: [], updatedAt: now })
-        .where(and(eq(attempts.id, attempt.id), eq(attempts.itemId, source.id))),
+        .where(and(eq(attempts.id, attempt.id), eq(attempts.itemId, source.id), claimed)),
       recordChange(db, { entity: "attempt", id: attempt.id, itemId: wantedId, action: "updated", actor }),
       ...moving.map((photo, index) =>
         db
           .update(photos)
           .set({ itemId: wantedId, position: base + index })
-          .where(and(eq(photos.id, photo.id), eq(photos.attemptId, attempt.id))),
+          .where(and(eq(photos.id, photo.id), eq(photos.attemptId, attempt.id), claimed)),
       ),
-      ...followers(db, attempt.id, wantedId),
+      ...followers(db, attempt.id, wantedId, claimed),
       db
         .update(items)
         .set({
           ...(existing && startsIt ? { ...stageDates(existing, "building", now), upNext: null } : {}),
           updatedAt: now,
         })
-        .where(eq(items.id, wantedId)),
+        .where(and(eq(items.id, wantedId), claimed)),
       recordChange(db, { entity: "item", id: wantedId, itemId: wantedId, action: "updated", actor }),
     );
-    if (goes) {
+    if (removes) {
       statements.push(
         db
           .update(items)
           .set({ deletedAt: now, mergedInto: wantedId })
-          .where(and(eq(items.id, source.id), isNull(items.deletedAt))),
+          .where(and(eq(items.id, source.id), isNull(items.deletedAt), claimed, nothingPrintedIn(source.id))),
         recordChange(db, { entity: "item", id: source.id, itemId: source.id, action: "deleted", actor }),
       );
     } else {
       statements.push(
         db
           .update(items)
-          .set({ ...(unstarts ? { stage: "idea" as const, startedAt: null, finishedAt: null } : {}), updatedAt: now })
-          .where(eq(items.id, source.id)),
+          .set({ updatedAt: now })
+          .where(and(eq(items.id, source.id), claimed)),
         recordChange(db, { entity: "item", id: source.id, itemId: source.id, action: "updated", actor }),
       );
+      if (unstarts) {
+        statements.push(
+          db
+            .update(items)
+            .set({ stage: "idea", startedAt: null, finishedAt: null, upNext: job?.ideaUpNext ?? null })
+            .where(and(eq(items.id, source.id), eq(items.stage, "building"), claimed, nothingPrintedIn(source.id))),
+        );
+      }
     }
-    statements.push(
-      db.insert(attemptMoves).values({
-        id: crypto.randomUUID(),
-        attemptId: attempt.id,
-        fromItemId: source.id,
-        toItemId: wantedId,
-        fromTitle: source.title,
-        fromRemoved: goes,
-        toStarted: startsIt,
-        toMade: made !== null,
-        photos: moving,
-        parts: attempt.parts,
-        wasAsking: job ? job.asking : null,
-        movedBy: c.var.user.id,
-        movedVia: c.var.via,
-        movedAt: now,
-      }),
-    );
     if (job) {
       statements.push(
         db
           .update(printJobs)
           .set({ asking: false, settledAt: now, settledBy: c.var.user.id })
-          .where(eq(printJobs.attemptId, attempt.id)),
+          .where(and(eq(printJobs.attemptId, attempt.id), claimed)),
+      );
+    }
+    if (made === "new") {
+      statements.push(
+        db
+          .delete(items)
+          .where(
+            and(eq(items.id, wantedId), eq(items.createdAt, now), sql`NOT ${claimed}`, nothingPrintedIn(wantedId)),
+          ),
       );
     }
     await db.batch(statements as Batch);
 
+    if (!(await db.select({ id: attemptMoves.id }).from(attemptMoves).where(eq(attemptMoves.id, moveId)).get())) {
+      return apiError(c, 409, "moved_since", "It moved meanwhile, or its build changed. Look again.");
+    }
     const moved = await db.select().from(attempts).where(eq(attempts.id, attempt.id)).get();
-    const [to, from] = await Promise.all([loadItem(db, wantedId), goes ? null : loadItem(db, source.id)]);
+    const [to, from] = await Promise.all([loadItem(db, wantedId), loadItem(db, source.id)]);
     if (!moved || !to) return apiError(c, 404, "not_found", notFound);
     return c.json<MoveAttemptResponse>({ attempt: await loadAttempt(db, moved), from, to });
   })
 
   /**
    * The undo of the last move: the attempt goes back with its photos in their places and the parts it counted there;
-   * a build that went with it comes back, an idea it started is an idea again, a build made for it goes again, and
-   * the printer's question is asked again if it was. Refused once the attempt has moved on since.
+   * a build that went with it comes back, an idea it started is an idea again (in its place in Up next), a build made
+   * for it goes again if nobody put anything in it, and the printer's question is asked again if it was. Refused once
+   * the attempt has moved on since. Guarded like the move: two undos at once undo it once.
    */
   .post("/:id/unmove", async (c) => {
     const db = c.var.db;
@@ -296,10 +370,19 @@ export const attemptPrintRoutes = new Hono<AppEnv>()
     const now = new Date();
     const actor = c.var.actor;
     const toId = move.toItemId;
+    const made = move.toMade ? await db.select().from(items).where(eq(items.id, toId)).get() : undefined;
+    const goesAgain = !!made && (await bare(db, made, attempt.id));
+    // Before the attempt goes back: the move is still the last, and the attempt still where it put it.
+    const pending = sql`${moveRow(move.id)} AND ${attemptIn(attempt.id, toId)}`;
+    // After: it is back.
+    const back = sql`${moveRow(move.id)} AND ${attemptIn(attempt.id, from.id)}`;
     const statements: BatchItem<"sqlite">[] = [];
     if (move.fromRemoved && from.deletedAt) {
       statements.push(
-        db.update(items).set({ deletedAt: null, mergedInto: null, updatedAt: now }).where(eq(items.id, from.id)),
+        db
+          .update(items)
+          .set({ deletedAt: null, mergedInto: null, updatedAt: now })
+          .where(and(eq(items.id, from.id), pending)),
         recordChange(db, { entity: "item", id: from.id, itemId: from.id, action: "restored", actor }),
       );
     }
@@ -307,16 +390,19 @@ export const attemptPrintRoutes = new Hono<AppEnv>()
       db
         .update(attempts)
         .set({ itemId: from.id, parts: move.parts, updatedAt: now })
-        .where(and(eq(attempts.id, attempt.id), eq(attempts.itemId, toId))),
+        .where(and(eq(attempts.id, attempt.id), eq(attempts.itemId, toId), moveRow(move.id))),
       recordChange(db, { entity: "attempt", id: attempt.id, itemId: from.id, action: "updated", actor }),
-      db.update(photos).set({ itemId: from.id }).where(eq(photos.attemptId, attempt.id)),
+      db
+        .update(photos)
+        .set({ itemId: from.id })
+        .where(and(eq(photos.attemptId, attempt.id), back)),
       ...move.photos.map((photo) =>
         db
           .update(photos)
           .set({ position: photo.position })
-          .where(and(eq(photos.id, photo.id), eq(photos.attemptId, attempt.id))),
+          .where(and(eq(photos.id, photo.id), eq(photos.attemptId, attempt.id), back)),
       ),
-      ...followers(db, attempt.id, from.id),
+      ...followers(db, attempt.id, from.id, back),
       db
         .update(items)
         .set({
@@ -324,50 +410,53 @@ export const attemptPrintRoutes = new Hono<AppEnv>()
           ...(from.stage === "idea" ? { ...stageDates(from, "building", now), upNext: null } : {}),
           updatedAt: now,
         })
-        .where(eq(items.id, from.id)),
+        .where(and(eq(items.id, from.id), back)),
     );
-    const emptyNow = sql`NOT EXISTS (SELECT 1 FROM attempts WHERE item_id = ${toId} AND deleted_at IS NULL)`;
-    const made = move.toMade ? await db.select().from(items).where(eq(items.id, toId)).get() : undefined;
-    // A build made (or brought back) for it goes again, if nothing else went into it since: no other attempt, and no
-    // note, photo, file, comment or reaction someone gave it meanwhile, which would stay.
-    if (made && (await bare(db, made, attempt.id))) {
+    if (goesAgain) {
+      // A build made (or brought back) for it goes again, if nothing else went into it since.
       statements.push(
         db
           .update(items)
           .set({ deletedAt: now, mergedInto: from.id })
-          .where(and(eq(items.id, toId), isNull(items.deletedAt), emptyNow)),
+          .where(and(eq(items.id, toId), isNull(items.deletedAt), back, nothingPrintedIn(toId))),
         recordChange(db, { entity: "item", id: toId, itemId: toId, action: "deleted", actor }),
       );
     } else {
       if (move.toStarted) {
-        // An idea it started is an idea again, if nothing else was printed in it since.
+        // An idea it started is an idea again, in its place in Up next, if nothing else was printed in it since.
         statements.push(
           db
             .update(items)
-            .set({ stage: "idea", startedAt: null, finishedAt: null })
-            .where(and(eq(items.id, toId), eq(items.stage, "building"), emptyNow)),
+            .set({ stage: "idea", startedAt: null, finishedAt: null, upNext: move.toUpNext })
+            .where(and(eq(items.id, toId), eq(items.stage, "building"), back, nothingPrintedIn(toId))),
         );
       }
       statements.push(
-        db.update(items).set({ updatedAt: now }).where(eq(items.id, toId)),
+        db
+          .update(items)
+          .set({ updatedAt: now })
+          .where(and(eq(items.id, toId), back)),
         recordChange(db, { entity: "item", id: toId, itemId: toId, action: "updated", actor }),
       );
     }
-    statements.push(db.delete(attemptMoves).where(eq(attemptMoves.id, move.id)));
     if (move.wasAsking !== null) {
       statements.push(
         db
           .update(printJobs)
           .set(move.wasAsking ? { asking: true, settledAt: null, settledBy: null } : { asking: false })
-          .where(eq(printJobs.attemptId, attempt.id)),
+          .where(and(eq(printJobs.attemptId, attempt.id), back)),
       );
     }
+    statements.push(db.delete(attemptMoves).where(and(eq(attemptMoves.id, move.id), attemptIn(attempt.id, from.id))));
     await db.batch(statements as Batch);
 
-    const back = await db.select().from(attempts).where(eq(attempts.id, attempt.id)).get();
+    const after = await db.select().from(attempts).where(eq(attempts.id, attempt.id)).get();
+    if (!after || after.itemId !== from.id) {
+      return apiError(c, 409, "moved_since", "It has moved since. Move it from where it is now.");
+    }
     const [to, left] = await Promise.all([loadItem(db, from.id), loadItem(db, toId)]);
-    if (!back || !to) return apiError(c, 404, "not_found", notFound);
-    return c.json<MoveAttemptResponse>({ attempt: await loadAttempt(db, back), from: left, to });
+    if (!to) return apiError(c, 404, "not_found", notFound);
+    return c.json<MoveAttemptResponse>({ attempt: await loadAttempt(db, after), from: left, to });
   })
 
   /** Answers the printer's "which build is this?" with "a new one" (`asking: false`), or asks again (the undo). */
