@@ -55,6 +55,7 @@ function openSheet(opener: HTMLButtonElement, plate: Plate) {
   const close = element("button", "gp-viewer-close");
   close.type = "button";
   close.setAttribute("aria-label", "Close");
+  close.title = "Close (Esc)";
   close.innerHTML = `<svg class="gp-icon" viewBox="0 0 256 256" aria-hidden="true" focusable="false"><path d="${CLOSE_PATH}"/></svg>`;
   head.append(words, close);
   // Focus waits here while the code loads, and moves on to the viewer's stage.

@@ -110,8 +110,9 @@ export interface GuestFile {
   lead: string[];
   /** "About 21 min · 3.3 g each", "29.96 × 11.5 × 11.35 mm", "Sliced by Spaghetti"; or "Plate 2 of 3". */
   meta: string[];
-  /** "Standard · Everyday strength · No supports · PLA Basic jade white": what it is sliced with, as the card's row. */
+  /** "Plate 1 of 3 · Standard · Everyday strength · No supports": what it is sliced with, as the card's row says it. */
   settings: string[];
+  /** What prints it ("PLA Basic jade white"), each with its colour. */
   filaments: GuestFilament[];
   /** "Parts of it float in the air.", or why it couldn't be sliced: said as the card's cautions say them. */
   cautions: string[];
@@ -289,13 +290,17 @@ export function guestFile(file: AttemptFile, fallback?: readonly (string | null 
       ...base,
       lead: sliceLead(file.prefill, slice.copies),
       meta: [perPiece(file.prefill, slice.copies), sizePiece(slice), slicedBy(slice)].filter(Boolean),
-      // As the card's row: which plate of a project first, then the rest of what it is sliced with.
-      settings: plate
-        ? [
-            `Plate ${plate.index} of ${plate.count}`,
-            ...slicingSummary(slicing).filter((piece) => !/^Plate \d/.test(piece)),
-          ]
-        : slicingSummary(slicing),
+      // As the card's row: which plate of a project first, then the rest of what it is sliced with. The filaments
+      // are their own line (`filaments`), each with its colour, where the row names only the first.
+      settings: [
+        ...(plate ? [`Plate ${plate.index} of ${plate.count}`] : []),
+        ...slicingSummary(slicing).filter(
+          (piece) =>
+            !/^Plate \d/.test(piece) &&
+            !/^\+\d+ more$/.test(piece) &&
+            !slicing.filaments.some((filament) => filamentWords(filament) === piece),
+        ),
+      ],
       filaments: slicing.filaments.map(slicingFilament),
       cautions: [
         slice.cautions?.includes("floating") ? "Parts of it float in the air." : "",

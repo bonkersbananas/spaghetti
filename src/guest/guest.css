@@ -1025,37 +1025,17 @@ html:has(.gp-lightbox:target) {
   color: var(--sg-ink-ghost);
 }
 
-/* What it is sliced with, as the app's settings row says it: on a quiet tint, the filaments' colours first. */
+/* What it is sliced with, in the settings row's words: quiet text here, where nothing opens. */
 .gp-file-settings {
-  display: flex;
-  align-items: flex-start;
-  gap: 0.5rem;
-  padding: 0.5rem 0.75rem;
-  border-radius: var(--gp-radius-md);
-  background: color-mix(in srgb, var(--sg-ink) 4%, transparent);
   font-size: var(--sg-text-small);
   line-height: var(--sg-text-small-lh);
   color: var(--sg-ink-soft);
 }
 
-.gp-file-settings-words {
-  flex: 1;
-}
-
-/* A long piece ("PLA Basic sunflower yellow") wraps inside rather than being cut at the row's edge. */
-.gp-file-settings-words .gp-piece {
-  white-space: normal;
-}
-
-.gp-file-swatches {
-  display: flex;
-  flex: none;
-  align-items: center;
-  height: var(--sg-text-small-lh);
-}
-
-.gp-file-swatches .gp-swatch + .gp-swatch {
-  margin-left: -0.25rem;
+/* What prints it: each filament's colour before its name, so a light one reads as the colour of those words. */
+.gp-file .gp-filaments {
+  font-weight: 500;
+  color: var(--sg-ink-soft);
 }
 
 /* A caution, as the app's: advice in semolina with its circled mark, never an alarm. */
@@ -1082,7 +1062,7 @@ html:has(.gp-lightbox:target) {
   padding: 0.375rem;
   border: 0;
   border-radius: var(--gp-radius-md);
-  background: var(--sg-render-tile);
+  background: var(--sg-render);
   box-shadow: var(--sg-shadow-well);
   color: var(--sg-ink-faint);
   font: inherit;
@@ -1092,6 +1072,15 @@ html:has(.gp-lightbox:target) {
   width: 100%;
   height: 100%;
   object-fit: contain;
+  filter: var(--sg-render-shadow);
+}
+
+/* A small plate (an attempt's, 56 px): the tile's deeper ground and firmer edge, so a white model isn't a pale outline. */
+.gp-plate--small {
+  background: var(--sg-render-tile);
+}
+
+.gp-plate--small .gp-plate-img {
   filter: var(--sg-render-shadow-tile);
 }
 
@@ -1219,6 +1208,210 @@ html:has(.gp-lightbox:target) {
 
   .gp-file {
     padding: 0.875rem;
+  }
+}
+
+/*
+ * The 3D view's sheet (src/guest/island.ts opens it; the viewer inside is the app's own PrintViewer): as the app's
+ * Sheet shows it, a bottom sheet nearly the screen's height on a phone, a large panel over the dimmed page on a
+ * computer. It is here, with the page, so it opens at once while the viewer's code is still on its way.
+ */
+html.gp-viewing {
+  overflow: hidden;
+}
+
+.gp-viewer {
+  position: fixed;
+  inset: auto 0 0;
+  width: 100%;
+  max-width: none;
+  height: calc(100svh - max(2.5rem, env(safe-area-inset-top)));
+  max-height: none;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--sg-ink);
+  overflow: visible;
+}
+
+.gp-viewer::backdrop {
+  background: color-mix(in srgb, var(--sg-ink) 40%, transparent);
+  animation: gp-fade-in var(--sg-duration-base) var(--sg-ease-out);
+}
+
+.gp-viewer-sheet {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+  border-radius: var(--gp-radius-xl) var(--gp-radius-xl) 0 0;
+  background: var(--sg-lifted);
+  box-shadow: var(--sg-shadow-float);
+  animation: gp-sheet-up var(--sg-duration-slow) var(--sg-ease-out);
+}
+
+.gp-viewer-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 1rem;
+  padding: 1.25rem 0.75rem 0.875rem 1.25rem;
+}
+
+.gp-viewer-words {
+  flex: 1;
+  min-width: 0;
+}
+
+.gp-viewer-title {
+  font-size: var(--sg-text-title);
+  line-height: var(--sg-text-title-lh);
+  letter-spacing: -0.01em;
+}
+
+.gp-viewer-name {
+  overflow: hidden;
+  font-size: var(--sg-text-small);
+  line-height: var(--sg-text-small-lh);
+  color: var(--sg-ink-faint);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.gp-viewer-close {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 2.75rem;
+  height: 2.75rem;
+  margin-top: -0.375rem;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--sg-ink-soft);
+  font-size: 1.25rem;
+  cursor: pointer;
+}
+
+.gp-viewer-close:focus-visible,
+.gp-viewer-again:focus-visible {
+  outline: none;
+  box-shadow: var(--gp-ring);
+}
+
+/* The viewer fills the rest; its own stage (the app's) paints the studio light. */
+.gp-viewer-stage {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  outline: none;
+  background: radial-gradient(ellipse 80% 70% at 50% 38%, var(--sg-stage), var(--sg-paper-deep) 82%);
+}
+
+.gp-viewer-stage > * {
+  flex: 1;
+  min-height: 0;
+}
+
+/* While the viewer's code comes: a breathing dot where the print will stand, never a spinner. */
+.gp-viewer-wait {
+  flex: none;
+  align-self: center;
+  width: 0.75rem;
+  height: 0.75rem;
+  margin: auto;
+  border-radius: 999px;
+  background: var(--sg-semolina);
+  animation: gp-breathe 1.8s ease-in-out infinite;
+}
+
+.gp-viewer-note {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.875rem;
+  padding: 2rem;
+  text-align: center;
+  color: var(--sg-ink-soft);
+}
+
+.gp-viewer-note p {
+  max-width: 20rem;
+}
+
+.gp-viewer-again {
+  height: 2.75rem;
+  padding: 0 1.25rem;
+  border: 0;
+  border-radius: 999px;
+  background: var(--sg-cream);
+  box-shadow: var(--sg-shadow-soft);
+  color: var(--sg-ink);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+@keyframes gp-sheet-up {
+  from {
+    transform: translateY(100%);
+  }
+}
+
+@keyframes gp-pop-in {
+  from {
+    opacity: 0;
+    transform: translateY(0.5rem) scale(0.98);
+  }
+}
+
+@keyframes gp-fade-in {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes gp-breathe {
+  50% {
+    opacity: 0.45;
+    transform: scale(0.88);
+  }
+}
+
+@media (min-width: 48rem) {
+  .gp-viewer {
+    inset: 0;
+    width: min(72rem, calc(100vw - 6rem));
+    height: min(52rem, calc(100svh - 6rem));
+    margin: auto;
+  }
+
+  .gp-viewer-sheet {
+    border-radius: var(--gp-radius-xl);
+    animation: gp-pop-in var(--sg-duration-base) var(--sg-ease-out);
+  }
+
+  .gp-viewer-head {
+    padding: 1.5rem 1rem 1rem 1.75rem;
+  }
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .gp-viewer-close:hover {
+    background: color-mix(in srgb, var(--sg-ink) 6%, transparent);
+    color: var(--sg-ink);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .gp-viewer::backdrop,
+  .gp-viewer-sheet,
+  .gp-viewer-wait {
+    animation: none;
   }
 }
 

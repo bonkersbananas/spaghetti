@@ -381,12 +381,12 @@ function Cautions({ cautions }: { cautions: string[] }) {
 
 /**
  * A model or slicer file as the app's card shows it, read-only: the plate (which opens the 3D view), what the print
- * takes ("About 1 h 26 min · 13.2 g") over the file's name, its size and who sliced it, its cautions, and what it is
- * sliced with, as the settings row says it, with the filaments' colours. No download, no "Open in Bambu Studio".
+ * takes ("About 1 h 26 min · 13.2 g") over the file's name, its size and who sliced it, its cautions, what it is
+ * sliced with in the settings row's words, and its filaments, each with its colour. No download, no "Open in Bambu
+ * Studio".
  */
 function FileCard({ token, file }: { token: string; file: GuestFile }) {
   const lead = file.lead.length > 0;
-  const swatches = file.filaments.filter((filament) => filament.color);
   return (
     <li class="gp-file">
       <Plate token={token} file={file} />
@@ -401,25 +401,11 @@ function FileCard({ token, file }: { token: string; file: GuestFile }) {
         )}
         <Pieces pieces={file.meta} class="gp-file-meta" />
       </div>
-      {(file.cautions.length > 0 || file.settings.length > 0 || swatches.length > 0) && (
+      {(file.cautions.length > 0 || file.settings.length > 0 || file.filaments.length > 0) && (
         <div class="gp-file-more">
           <Cautions cautions={file.cautions} />
-          {(file.settings.length > 0 || swatches.length > 0) && (
-            <div class="gp-file-settings">
-              {swatches.length > 0 && (
-                <span class="gp-file-swatches" role="img" aria-label={file.filaments.map((f) => f.name).join(", ")}>
-                  {swatches.map((filament) => (
-                    <Swatch color={filament.color} />
-                  ))}
-                </span>
-              )}
-              {file.settings.length > 0 ? (
-                <Pieces pieces={file.settings} class="gp-file-settings-words" />
-              ) : (
-                <Pieces pieces={file.filaments.map((f) => f.name)} class="gp-file-settings-words" />
-              )}
-            </div>
-          )}
+          <Pieces pieces={file.settings} class="gp-file-settings" />
+          <Filaments filaments={file.filaments} />
         </div>
       )}
     </li>

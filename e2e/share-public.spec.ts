@@ -165,6 +165,11 @@ test("a guest opens a model's 3D view from the shared page, and gets no file to 
   await expect(dialog).toBeVisible();
   await expect(dialog.locator("[data-viewer=ready]")).toBeVisible({ timeout: 60_000 });
   await expect(dialog.getByRole("slider")).toBeVisible();
+  // The sheet is styled (guest.css): its stage fills it, so the print has room to be drawn.
+  const viewport = guest.viewportSize() as { width: number; height: number };
+  const canvas = (await dialog.locator("canvas").boundingBox()) as { width: number; height: number };
+  expect(canvas.height).toBeGreaterThan(viewport.height * 0.4);
+  expect(canvas.width).toBeGreaterThan(viewport.width * 0.5);
   // The view read the plate's toolpaths through the link; nothing under /api, and no file offered to keep.
   expect(asked).toContain(`/s/${share.token}/files/${fileId}/toolpaths`);
   expect(asked.filter((path) => path.startsWith("/api/"))).toEqual([]);
