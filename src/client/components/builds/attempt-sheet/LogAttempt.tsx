@@ -20,11 +20,12 @@ import {
 } from "@/lib/attempt-draft";
 import { type AttemptDraft, logAttempt } from "@/lib/builds";
 import { useDraftPhotos } from "@/lib/capture";
+import { useHasCamera } from "@/lib/has-camera";
 import type { ItemView } from "@/lib/items";
 import { photoSrc } from "@/lib/previews";
 import { sessionQuery } from "@/lib/queries";
 import { queueSlicerFile } from "@/lib/slicer-files";
-import { useHasCamera, useIsDesktop } from "@/lib/use-media-query";
+import { useIsDesktop } from "@/lib/use-media-query";
 import { offerLine, useWhatWorked, WhatWorkedSuggestion } from "../WhatWorkedSuggestion";
 import { AttemptFields } from "./AttemptFields";
 import { useOutcomeCounts } from "./PlateParts";

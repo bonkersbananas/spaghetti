@@ -5,8 +5,8 @@ import { useRef } from "react";
 import { Button } from "@/components/ui/Button";
 import { CameraIcon, FinishIcon } from "@/components/ui/icons";
 import { Kbd } from "@/components/ui/Kbd";
-import { takePicked } from "@/components/ui/PhotoTiles";
 import { cn } from "@/lib/cn";
+import { takePicked } from "@/lib/picked";
 import { OutcomePicker } from "./Outcome";
 import { PhotoReadNote } from "./PhotoReadNote";
 

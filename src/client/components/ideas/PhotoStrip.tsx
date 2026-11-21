@@ -6,11 +6,12 @@ import { CameraIcon, ImageIcon, MakeCoverIcon, PlusIcon, TrashIcon } from "@/com
 import { PhotoMenuDot } from "@/components/ui/PhotoMenuDot";
 import { AddPhotoTile, PhotoThumb, useFilePicker } from "@/components/ui/PhotoTiles";
 import { cn } from "@/lib/cn";
+import { useHasCamera } from "@/lib/has-camera";
 import { addPhotosToItem, type PhotoView, removePhoto, reorderPhotos } from "@/lib/items";
 import { useLongPress } from "@/lib/long-press";
 import { photoSrc } from "@/lib/previews";
 import { useReadOnly } from "@/lib/read-only";
-import { useAfterPaint, useHasCamera, useIsDesktop } from "@/lib/use-media-query";
+import { useAfterPaint, useIsDesktop } from "@/lib/use-media-query";
 
 /** A photo held or dragged by the finger stands up from the strip; let go, it settles back. */
 const LIFTED = { scale: 1.06, zIndex: 10 };

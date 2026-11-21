@@ -11,13 +11,14 @@ import { CameraIcon, ImageIcon, PlusIcon, TrashIcon } from "@/components/ui/icon
 import { AddPhotoTile, PhotoThumb, useFilePicker } from "@/components/ui/PhotoTiles";
 import { SaveStatus } from "@/components/ui/SaveStatus";
 import { deleteAttempt, queueFinish, saveAttemptChanges } from "@/lib/builds";
+import { useHasCamera } from "@/lib/has-camera";
 import { type AttemptView, addPhotosToItem, type ItemView, removePhoto } from "@/lib/items";
 import { photoSrc } from "@/lib/previews";
 import { useReadOnly } from "@/lib/read-only";
 import { canBeRecipe } from "@/lib/recipes";
 import { queueSlicerFile, removeSlicerFile } from "@/lib/slicer-files";
 import { useLiveFields } from "@/lib/use-autosave";
-import { useHasCamera, useIsDesktop } from "@/lib/use-media-query";
+import { useIsDesktop } from "@/lib/use-media-query";
 import { EstimateLine, elapsedIfPlausible } from "../Estimate";
 import { PhotoReadNote } from "../PhotoReadNote";
 import { SavedFileCard } from "../SlicerFile";

@@ -1,7 +1,6 @@
 import { Link } from "@tanstack/react-router";
 import { useRef, useState } from "react";
 import { CameraIcon, PlusIcon } from "@/components/ui/icons";
-import { takePicked } from "@/components/ui/PhotoTiles";
 import { UnreadDot } from "@/components/ui/UnreadDot";
 import { useCapture } from "@/lib/capture";
 import { holdKeyboard } from "@/lib/keyboard-proxy";
@@ -119,7 +118,10 @@ function CaptureButton() {
         hidden
         data-testid="tabbar-camera-input"
         onChange={(event) => {
-          void takePicked(event.target).then((files) => {
+          // Its own small chunk: the tab bar is on every first load, a camera photo is not.
+          const input = event.target;
+          void import("@/lib/picked").then(async ({ takePicked }) => {
+            const files = await takePicked(input);
             if (files.length) openWith({ files });
           });
         }}

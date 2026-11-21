@@ -14,10 +14,11 @@ import { Sheet } from "@/components/ui/Sheet";
 import { toast } from "@/components/ui/Toast";
 import { printingAttempts, usePrintingNow } from "@/lib/builds";
 import { type CaptureTarget, useCapture } from "@/lib/capture";
+import { useHasCamera } from "@/lib/has-camera";
 import { useBuilds } from "@/lib/items";
 import { keyboardProxy, releaseKeyboard } from "@/lib/keyboard-proxy";
 import { photoSrc } from "@/lib/previews";
-import { useHasCamera, useIsDesktop } from "@/lib/use-media-query";
+import { useIsDesktop } from "@/lib/use-media-query";
 
 /** Only a print that went wrong asks what, so the tags load then. */
 const FailureTags = lazy(() => import("@/components/builds/FailureTags"));

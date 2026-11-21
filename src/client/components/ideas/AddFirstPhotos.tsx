@@ -2,8 +2,9 @@ import { Button } from "@/components/ui/Button";
 import { CameraIcon, ImageIcon } from "@/components/ui/icons";
 import { AddPhotoTile, useFilePicker } from "@/components/ui/PhotoTiles";
 import { cn } from "@/lib/cn";
+import { useHasCamera } from "@/lib/has-camera";
 import { addPhotosToItem } from "@/lib/items";
-import { useHasCamera, useIsDesktop } from "@/lib/use-media-query";
+import { useIsDesktop } from "@/lib/use-media-query";
 
 /**
  * An idea or build with no photos yet: one tap to give it its first ones. `small` under a plate picture that stands
