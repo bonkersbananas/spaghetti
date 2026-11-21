@@ -6,6 +6,7 @@ import { CameraIcon, ImageIcon, MakeCoverIcon, PlusIcon, TrashIcon } from "@/com
 import { PhotoMenuDot } from "@/components/ui/PhotoMenuDot";
 import { AddPhotoTile, PhotoThumb, useFilePicker } from "@/components/ui/PhotoTiles";
 import { cn } from "@/lib/cn";
+import { useHasCamera } from "@/lib/has-camera";
 import { addPhotosToItem, type PhotoView, removePhoto, reorderPhotos } from "@/lib/items";
 import { useLongPress } from "@/lib/long-press";
 import { photoSrc } from "@/lib/previews";
@@ -35,6 +36,7 @@ interface PhotoStripProps {
 export function PhotoStrip({ itemId, photos, selectedId, onSelect, fixedCover }: PhotoStripProps) {
   const queryClient = useQueryClient();
   const isDesktop = useIsDesktop();
+  const hasCamera = useHasCamera();
   // Saved photos can't be moved or removed without a connection; adding more waits in the outbox.
   const offline = useReadOnly();
   const camera = useFilePicker({ camera: true, onFiles: (files) => addPhotosToItem(itemId, files) });
@@ -252,7 +254,7 @@ export function PhotoStrip({ itemId, photos, selectedId, onSelect, fixedCover }:
           })}
         </ul>
       )}
-      {!isDesktop && <AddPhotoTile size="sm" icon={CameraIcon} label="Take a photo" onClick={camera.open} />}
+      {hasCamera && <AddPhotoTile size="sm" icon={CameraIcon} label="Take a photo" onClick={camera.open} />}
       <AddPhotoTile size="sm" icon={isDesktop ? PlusIcon : ImageIcon} label="Add photos" onClick={library.open} />
       {menu && (
         <PhotoMenu
