@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
 import { Button, IconButton } from "./Button";
-import { TrashIcon } from "./icons";
+import { type Icon, TrashIcon } from "./icons";
 
 interface ConfirmDeleteProps {
   /** Whether the question is showing: the page owns it, so a key can ask too. */
@@ -16,6 +16,12 @@ interface ConfirmDeleteProps {
   /** The trash can's hover text, with its key. */
   title?: string;
   ariaKeyshortcuts?: string;
+  /** Instead of the trash can, for an action that isn't a delete ("Back to Ideas"). */
+  icon?: Icon;
+  /** The question, when "{verb} this {what}?" doesn't fit: "Back to Ideas?". */
+  question?: string;
+  /** What else goes with it, said beside the question: "Its 2 attempts go with it". */
+  detail?: string;
 }
 
 /**
@@ -32,6 +38,9 @@ export function ConfirmDelete({
   disabled,
   title,
   ariaKeyshortcuts,
+  icon = TrashIcon,
+  question,
+  detail,
 }: ConfirmDeleteProps) {
   const root = useRef<HTMLSpanElement>(null);
   const confirm = useRef<HTMLButtonElement>(null);
@@ -83,9 +92,9 @@ export function ConfirmDelete({
   if (!asking) {
     return (
       <IconButton
-        icon={TrashIcon}
-        label={`${verb} ${what}`}
-        title={title ?? `${verb} ${what}`}
+        icon={icon}
+        label={question ? verb : `${verb} ${what}`}
+        title={title ?? (question ? verb : `${verb} ${what}`)}
         ref={trash}
         onClick={() => onAskingChange(true)}
         disabled={disabled}
@@ -95,9 +104,10 @@ export function ConfirmDelete({
   }
   return (
     <span ref={root} className="flex items-center gap-1.5">
-      <span className="text-small text-ink font-semibold">
-        {verb} this {what}?
+      <span className={`text-small text-ink font-semibold ${detail ? "max-sm:sr-only" : ""}`}>
+        {question ?? `${verb} this ${what}?`}
       </span>
+      {detail && <span className="text-small text-ink-soft max-sm:min-w-0 max-sm:leading-tight">{detail}</span>}
       <Button ref={keep} size="sm" variant="quiet" onClick={() => onAskingChange(false)}>
         Keep
       </Button>
@@ -105,7 +115,7 @@ export function ConfirmDelete({
         ref={confirm}
         size="sm"
         variant="primary"
-        icon={TrashIcon}
+        icon={icon}
         onClick={() => {
           confirmed.current = true;
           onAskingChange(false);

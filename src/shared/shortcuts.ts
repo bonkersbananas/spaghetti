@@ -123,7 +123,7 @@ export const SHORTCUTS = define([
   {
     id: "buildDelete",
     group: "build",
-    label: "Delete the attempt, or the build (asks first)",
+    label: "Delete the attempt, or the build (asks first; a build that began as an idea goes back to Ideas)",
     keys: ["mod+backspace", "mod+delete"],
   },
 
