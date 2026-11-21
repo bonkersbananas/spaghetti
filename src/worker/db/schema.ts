@@ -10,6 +10,7 @@ import type { LabelField } from "../../shared/label-read.ts";
 import type { ModelSiteId } from "../../shared/model-links.ts";
 import type { AttemptPart } from "../../shared/parts.ts";
 import type { PersonColor } from "../../shared/people.ts";
+import type { MatchReason, SendHow } from "../../shared/print-match.ts";
 import type { PriceSuggestion, ShoppingPrices } from "../../shared/prisjakt.ts";
 import type { ShareKind } from "../../shared/shares.ts";
 import type { SlicingSettings } from "../../shared/slicing/settings.ts";
@@ -203,6 +204,12 @@ export const items = sqliteTable(
     forWhom: text("for_whom"),
     /** The twist this build prints (decision 0043). Not a foreign key: the twist may go, and the link goes quiet. */
     twistId: text("twist_id"),
+    /**
+     * The build this one went into (decision 0076): set on a printer's build that a moved print left empty, which
+     * goes with it (deleted). Its address then leads to that build (GET /api/items/:id answers 308), so the bridge
+     * that made it still finds its print.
+     */
+    mergedInto: text("merged_into"),
   },
   (table) => [index("items_stage_created_idx").on(table.stage, table.createdAt)],
 );
@@ -816,6 +823,94 @@ export const itemFiles = sqliteTable(
     deletedAt: integer("deleted_at", { mode: "timestamp_ms" }),
   },
   (table) => [index("item_files_item_idx").on(table.itemId)],
+);
+
+/**
+ * A print the printer bridge filed (decision 0076): what the printer called it, and how the app placed it. `matched`:
+ * straight into the build that fitted, with the reasons why; `new`: a build of its own, `asking` "which build is
+ * this?" while some builds might be it, until someone answers (picks one, moves it, or says it is new). One row per
+ * attempt; `itemId` is the build it was placed in, so the reasons are shown only while it is still there.
+ */
+export const printJobs = sqliteTable("print_jobs", {
+  attemptId: text("attempt_id")
+    .primaryKey()
+    .references(() => attempts.id, { onDelete: "cascade" }),
+  /** The job's name as the printer said it ("UOBF-fit-test-ring(2)"). */
+  name: text("name"),
+  /** "Metadata/plate_1.gcode" and the like; the plate comes from it. */
+  gcodeFile: text("gcode_file"),
+  plate: integer("plate"),
+  /** The printer's own estimate at the start, when the bridge sent it. */
+  estimateMinutes: integer("estimate_minutes"),
+  /** The Spaghetti file the print's .gcode.3mf says it was sliced from, when the bridge could read the file. */
+  fileId: text("file_id"),
+  placed: text("placed").$type<"matched" | "new">().notNull(),
+  reasons: text("reasons", { mode: "json" }).$type<MatchReason[]>().notNull().default(sql`'[]'`),
+  itemId: text("item_id").notNull(),
+  /** The build the bridge made for it, when it was matched into another (merged away, and brought back by "a new build"). */
+  ownItemId: text("own_item_id"),
+  asking: integer("asking", { mode: "boolean" }).notNull().default(false),
+  createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
+  /** When someone answered: picked a build, moved it or kept it as a new build. */
+  settledAt: integer("settled_at", { mode: "timestamp_ms" }),
+  settledBy: text("settled_by"),
+});
+
+export type PrintJobRow = typeof printJobs.$inferSelect;
+
+/**
+ * An attempt moved from one build to another (decision 0076): who moved it, from where (the build's name then, which
+ * may be gone), and what the undo needs (the photos' places, the parts it counted, whether the build it left went
+ * with it, whether it was still asking which build it was). The newest row of an attempt is the line its card shows.
+ */
+export const attemptMoves = sqliteTable(
+  "attempt_moves",
+  {
+    id: text("id").primaryKey(),
+    attemptId: text("attempt_id")
+      .notNull()
+      .references(() => attempts.id, { onDelete: "cascade" }),
+    fromItemId: text("from_item_id").notNull(),
+    toItemId: text("to_item_id").notNull(),
+    fromTitle: text("from_title"),
+    /** The build it left had nothing else, was the printer's, and went with it (merged into the other). */
+    fromRemoved: integer("from_removed", { mode: "boolean" }).notNull().default(false),
+    /** The build it went to was an idea and became a build by it. */
+    toStarted: integer("to_started", { mode: "boolean" }).notNull().default(false),
+    /** The build it went to was made (or brought back) for it: a new build, which goes again with the undo. */
+    toMade: integer("to_made", { mode: "boolean" }).notNull().default(false),
+    photos: text("photos", { mode: "json" }).$type<Array<{ id: string; position: number }>>().notNull().default([]),
+    parts: text("parts", { mode: "json" }).$type<AttemptPart[]>().notNull().default([]),
+    /** The print's question before the move, for the undo: null for an attempt the printer didn't file. */
+    wasAsking: integer("was_asking", { mode: "boolean" }),
+    movedBy: text("moved_by")
+      .notNull()
+      .references(() => users.id),
+    movedVia: text("moved_via"),
+    movedAt: integer("moved_at", { mode: "timestamp_ms" }).notNull(),
+  },
+  (table) => [index("attempt_moves_attempt_idx").on(table.attemptId, table.movedAt)],
+);
+
+export type AttemptMoveRow = typeof attemptMoves.$inferSelect;
+
+/**
+ * A file someone took away to print (decision 0076): a download from a build or idea, or Bambu Studio fetching it
+ * through "Open in Bambu Studio". What the matcher reads as "downloaded 3 min before the print began"; kept a month.
+ */
+export const fileDownloads = sqliteTable(
+  "file_downloads",
+  {
+    id: text("id").primaryKey(),
+    fileId: text("file_id").notNull(),
+    itemId: text("item_id").notNull(),
+    how: text("how").$type<SendHow>().notNull(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    at: integer("at", { mode: "timestamp_ms" }).notNull(),
+  },
+  (table) => [index("file_downloads_item_at_idx").on(table.itemId, table.at)],
 );
 
 /**

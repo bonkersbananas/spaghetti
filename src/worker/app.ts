@@ -30,6 +30,7 @@ import { oauthRoutes } from "./routes/oauth.ts";
 import { peopleRoutes } from "./routes/people.ts";
 import { photoRoutes } from "./routes/photos.ts";
 import { printerRoutes } from "./routes/printer.ts";
+import { attemptPrintRoutes } from "./routes/prints.ts";
 import { pushRoutes } from "./routes/push.ts";
 import { commentReactionRoutes, itemReactionRoutes, reactionUseRoutes } from "./routes/reactions.ts";
 import { recipeRoutes } from "./routes/recipes.ts";
@@ -151,6 +152,7 @@ export const app = new Hono<AppEnv>()
   .route("/reactions", reactionUseRoutes)
   .route("/attempts", attemptRoutes)
   .route("/attempts", attemptFileRoutes)
+  .route("/attempts", attemptPrintRoutes)
   .route("/files", fileRoutes)
   .route("/uploads", uploadRoutes)
   .route("/spools", spoolRoutes)

@@ -8,6 +8,7 @@ import type { LabelField, LabelRead } from "./label-read.ts";
 import type { AttemptPart, Part } from "./parts.ts";
 import type { PersonColor } from "./people.ts";
 import type { PhotoRead } from "./photo-read.ts";
+import type { MatchReason } from "./print-match.ts";
 import type { PriceSuggestion, ShoppingPrices, SuggestState } from "./prisjakt.ts";
 import type { Reaction } from "./reactions.ts";
 import type { SlicingDefaults, SlicingSettings } from "./slicing/settings.ts";
@@ -131,6 +132,74 @@ export interface Attempt {
   finishedVia: string | null;
   createdAt: number;
   updatedAt: number;
+  /**
+   * How the printer bridge placed it, when the bridge filed it (decision 0076). Absent in a copy saved by an older
+   * version.
+   */
+  print?: AttemptPrint | null;
+  /** The last time someone moved it here from another build; absent or null when it never moved. */
+  moved?: AttemptMoved | null;
+}
+
+/** A print the printer bridge filed, and how the app placed it (decision 0076). */
+export interface AttemptPrint {
+  /** The job's name as the printer said it ("UOBF-fit-test-ring(2)"). */
+  name: string | null;
+  /** "matched": put in a build because it fitted; "new": a build of its own. */
+  placed: "matched" | "new";
+  /** Why it was put in the build it is in: empty once someone moved it, and for a build of its own. */
+  reasons: MatchReason[];
+  /** A build of its own that still asks "which build is this?", until someone answers. */
+  asking: boolean;
+  /**
+   * The build the printer made for it: its own, or (matched) the one it would have had, which "a new build" brings
+   * back rather than making another.
+   */
+  ownItemId: string;
+}
+
+/** An attempt moved from another build (decision 0076): "Moved here from UOBF-fit-test-ring(2) by Carl Oscar". */
+export interface AttemptMoved {
+  fromItemId: string;
+  /** The build's name when it left; that build may be gone. */
+  fromTitle: string | null;
+  by: string;
+  via: string | null;
+  at: number;
+}
+
+/** POST /api/attempts/:id/move: into another build or idea (`targetId`), or into a new build (`newBuild`). */
+export interface MoveAttemptRequest {
+  targetId?: string;
+  newBuild?: { id: string; title?: string | null };
+}
+
+/** POST /api/attempts/:id/move and /unmove: the attempt where it is now, and both builds as they are. */
+export interface MoveAttemptResponse {
+  attempt: Attempt;
+  /** The build it left; null when that went with it (a printer's build left empty). */
+  from: Item | null;
+  to: Item;
+}
+
+/** GET /api/attempts/:id/suggestions: the builds and ideas it may belong to, best first, with why. */
+export interface PrintSuggestionsResponse {
+  suggestions: Array<{ itemId: string; score: number; reasons: MatchReason[] }>;
+}
+
+/** PUT /api/attempts/:id/print: answer the printer's "which build is this?" with "a new one" (or take it back). */
+export interface UpdatePrintRequest {
+  asking: boolean;
+}
+
+/** What the printer bridge says about a print it files with its attempt (decision 0076; bridges from 0.2). */
+export interface PrintFactsRequest {
+  name?: string | null;
+  gcodeFile?: string | null;
+  plate?: number | null;
+  estimateMinutes?: number | null;
+  /** The Spaghetti file the print's .gcode.3mf says it was sliced from, when the bridge read the file. */
+  fileId?: string | null;
 }
 
 /**
@@ -414,6 +483,8 @@ export interface CreateAttemptRequest {
   settings?: AttemptSettings;
   /** What it printed of the build's parts, with good pieces counted. */
   parts?: AttemptPart[];
+  /** The printer bridge's: what the printer said about the print, so the app can place it (decision 0076). */
+  print?: PrintFactsRequest;
 }
 
 /** PATCH /api/attempts/:id. `settings` replaces the whole object. */

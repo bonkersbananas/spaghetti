@@ -23,6 +23,7 @@ import type { Db } from "../db/index.ts";
 import {
   type Attempt,
   attemptFiles,
+  attemptMoves,
   attempts,
   comments,
   ITEM_STAGES,
@@ -44,6 +45,7 @@ import type { AppEnv } from "../env.ts";
 import { apiError, toApiFile, toApiItem, toApiPhoto } from "../http.ts";
 import { photoReadsEnabled, readsByAttempt, runRead, startRead, toApiPhotoRead } from "../photo-read/run.ts";
 import { photoKey, photoOwner } from "../photos.ts";
+import { mergedTarget, printViews, withPrintViews } from "../prints.ts";
 import { type TitleJobView, titleAfterSave, titleJobs } from "../title/run.ts";
 import { reactionsFor } from "./reactions.ts";
 
@@ -267,7 +269,7 @@ export async function loadItems(db: Db, where: ReturnType<typeof and>) {
     )
   ).flat();
   const twistIds = [...new Set(rows.flatMap((row) => (row.twistId ? [row.twistId] : [])))];
-  const [itemFileSlices, coaches, reactionsByItem, twistPicture, jobs] = await Promise.all([
+  const [itemFileSlices, coaches, reactionsByItem, twistPicture, jobs, prints] = await Promise.all([
     Promise.all(
       slices.map((ids) =>
         db
@@ -289,6 +291,8 @@ export async function loadItems(db: Db, where: ReturnType<typeof and>) {
       db,
       rows.flatMap((row) => (row.title || row.stage === "idea" ? [row.id] : [])),
     ),
+    // How the printer bridge placed its prints, and who moved an attempt here (decision 0076).
+    printViews(db, attemptSlices.flat()),
   ]);
   const reads = new Map<string, PhotoRead>();
   for (const [attemptId, rows] of await readsByAttempt(db, [...liveAttempts])) {
@@ -321,6 +325,7 @@ export async function loadItems(db: Db, where: ReturnType<typeof and>) {
     );
     return {
       ...item,
+      attempts: withPrintViews(item.attempts, prints),
       twistModel: picture?.model ?? null,
       twistPhoto: picture?.photo ?? null,
       // Claude's while the title still says what it wrote: a person's edit makes it theirs.
@@ -342,6 +347,30 @@ function titleJobView(title: string | null, job: TitleJobView | undefined): Titl
 export async function loadItem(db: Db, itemId: string) {
   const [item] = await loadItems(db, and(eq(items.id, itemId), isNull(items.deletedAt)));
   return item ?? null;
+}
+
+/**
+ * The build a photo of an attempt goes to when it was sent to one the attempt has left: moved from it, or the
+ * printer's build that went into another with its print (decision 0076). Null otherwise: a photo for some other
+ * build's attempt is still refused.
+ */
+async function attemptHome(db: Db, attemptId: string, sentTo: string): Promise<string | null> {
+  const row = await db
+    .select({ itemId: attempts.itemId })
+    .from(attempts)
+    .innerJoin(items, eq(items.id, attempts.itemId))
+    .where(and(eq(attempts.id, attemptId), isNull(attempts.deletedAt), isNull(items.deletedAt)))
+    .get();
+  if (!row || row.itemId === sentTo) return null;
+  const [left, merged] = await Promise.all([
+    db
+      .select({ id: attemptMoves.id })
+      .from(attemptMoves)
+      .where(and(eq(attemptMoves.attemptId, attemptId), eq(attemptMoves.fromItemId, sentTo)))
+      .get(),
+    mergedTarget(db, sentTo),
+  ]);
+  return left || merged ? row.itemId : null;
 }
 
 /** The queue column for a requested change: the end of the queue is worked out by the database. */
@@ -468,7 +497,13 @@ export const itemRoutes = new Hono<AppEnv>()
 
   .get("/:id", async (c) => {
     const item = await loadItem(c.var.db, c.req.param("id"));
-    if (!item) return apiError(c, 404, "not_found", notFound);
+    if (!item) {
+      // A printer's build that went into another with its print (decision 0076): its address leads there, so the
+      // bridge that made it (and a notification about it) still finds the print.
+      const merged = await mergedTarget(c.var.db, c.req.param("id"));
+      if (merged) return c.redirect(`/api/items/${encodeURIComponent(merged)}`, 308);
+      return apiError(c, 404, "not_found", notFound);
+    }
     return c.json<ItemResponse>({ item });
   })
 
@@ -915,11 +950,19 @@ export const itemRoutes = new Hono<AppEnv>()
    * picks the photo's id, so a retried upload replaces the same objects.
    */
   .put("/:id/photos/:photoId", async (c) => {
-    const itemId = c.req.param("id");
+    let itemId = c.req.param("id");
     const photoId = c.req.param("photoId");
     if (!id.safeParse(photoId).success) return apiError(c, 400, "invalid", "That photo id isn't valid.");
     const length = Number(c.req.header("content-length") ?? 0);
     if (length > 2 * MAX_PHOTO_BYTES) return apiError(c, 413, "too_large", "That photo is too large.");
+
+    const form = await c.req.formData().catch(() => null);
+    const fields = photoFields.safeParse(form ? Object.fromEntries(form) : null);
+    // A photo of an attempt goes where the attempt is: it may have moved to another build since the photo was
+    // taken (a person's outbox, the printer bridge's camera frame; decision 0076).
+    const movedTo =
+      fields.success && fields.data.attemptId ? await attemptHome(c.var.db, fields.data.attemptId, itemId) : null;
+    if (movedTo) itemId = movedTo;
 
     const item = await c.var.db
       .select({ id: items.id })
@@ -928,8 +971,6 @@ export const itemRoutes = new Hono<AppEnv>()
       .get();
     if (!item) return apiError(c, 404, "not_found", notFound);
 
-    const form = await c.req.formData().catch(() => null);
-    const fields = photoFields.safeParse(form ? Object.fromEntries(form) : null);
     const large = form?.get("large");
     const thumb = form?.get("thumb");
     if (!fields.success || !(large instanceof File) || !(thumb instanceof File)) {

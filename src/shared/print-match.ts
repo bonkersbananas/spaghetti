@@ -220,7 +220,11 @@ export function scoreCandidate(print: PrintFacts, candidate: MatchCandidate): Sc
       if (how && (!best || rank[how] > rank[best.how])) best = { file, how };
     }
     if (best?.how === "same" || best?.how === "variant") {
-      reasons.push({ kind: "file", file: best.file.name, ...(best.file.attempt ? { attempt: best.file.attempt } : {}) });
+      reasons.push({
+        kind: "file",
+        file: best.file.name,
+        ...(best.file.attempt ? { attempt: best.file.attempt } : {}),
+      });
       score += best.how === "same" ? POINTS.file : POINTS.fileVariant;
     } else if (best?.how === "like") {
       reasons.push({ kind: "like-file", file: best.file.name });
@@ -242,9 +246,7 @@ export function scoreCandidate(print: PrintFacts, candidate: MatchCandidate): Sc
   }
 
   // The latest of its files taken away before the print began (a minute's leeway for the two clocks).
-  const sent = candidate.sends
-    .filter((send) => send.at <= print.startedAt + MINUTE)
-    .sort((a, b) => b.at - a.at)[0];
+  const sent = candidate.sends.filter((send) => send.at <= print.startedAt + MINUTE).sort((a, b) => b.at - a.at)[0];
   const sentFile = sent && candidate.files.find((file) => file.id === sent.fileId);
   if (sent && sentFile) {
     const minutes = Math.max(0, Math.round((print.startedAt - sent.at) / MINUTE));
@@ -259,8 +261,7 @@ export function scoreCandidate(print: PrintFacts, candidate: MatchCandidate): Sc
   if (estimate && estimate > 0) {
     const close = candidate.files.find(
       (file) =>
-        file.estimatedMinutes &&
-        Math.abs(file.estimatedMinutes - estimate) <= Math.max(2, file.estimatedMinutes * 0.1),
+        file.estimatedMinutes && Math.abs(file.estimatedMinutes - estimate) <= Math.max(2, file.estimatedMinutes * 0.1),
     );
     if (close?.estimatedMinutes) {
       reasons.push({ kind: "estimate", file: close.name, minutes: close.estimatedMinutes });
@@ -302,7 +303,8 @@ export function scorePrint(print: PrintFacts, candidates: readonly MatchCandidat
 /** One build well ahead is a match; a few with something going for them are suggestions; else nothing. */
 export function placePrint(scored: readonly ScoredCandidate[]): Placement {
   const [best, next] = scored;
-  if (best && best.score >= MATCH_SCORE && best.score - (next?.score ?? 0) >= MATCH_LEAD) return { kind: "match", best };
+  if (best && best.score >= MATCH_SCORE && best.score - (next?.score ?? 0) >= MATCH_LEAD)
+    return { kind: "match", best };
   const suggestions = scored.filter((candidate) => candidate.score >= SUGGEST_SCORE).slice(0, MAX_SUGGESTIONS);
   return suggestions.length ? { kind: "ask", suggestions } : { kind: "none" };
 }

@@ -22,6 +22,7 @@ import { type Attempt, attemptFiles, attempts, coachRuns, items } from "../db/sc
 import type { AppEnv } from "../env.ts";
 import { apiError, toApiAttempts } from "../http.ts";
 import { readsByAttempt, toApiPhotoRead } from "../photo-read/run.ts";
+import { fileThePrint, mergedTarget, printViews } from "../prints.ts";
 import { stageDates } from "./items.ts";
 
 const id = z.uuid();
@@ -91,6 +92,15 @@ const outcome = z.enum(OUTCOMES).nullable();
 const printedAt = z.number().int().positive();
 const note = z.string().max(20_000);
 
+/** What the printer bridge says about a print it files (decision 0076). */
+const printFacts = z.object({
+  name: z.string().trim().max(300).nullable().optional(),
+  gcodeFile: z.string().trim().max(300).nullable().optional(),
+  plate: z.number().int().min(1).max(64).nullable().optional(),
+  estimateMinutes: between(0, 100_000).nullable().optional(),
+  fileId: z.uuid().nullable().optional(),
+});
+
 const createAttempt = z.object({
   id,
   outcome: outcome.optional(),
@@ -100,6 +110,7 @@ const createAttempt = z.object({
   successNotes: slugs.optional(),
   settings: settings.optional(),
   parts: attemptParts.optional(),
+  print: printFacts.optional(),
 });
 
 const updateAttempt = z.object({
@@ -159,7 +170,8 @@ export async function loadAttempt(db: Db, attempt: Attempt) {
   );
   const found = all.find((row) => row.id === attempt.id);
   if (!found) throw new Error("The attempt went missing.");
-  return found;
+  const view = (await printViews(db, [attempt])).get(attempt.id);
+  return { ...found, print: view?.print ?? null, moved: view?.moved ?? null };
 }
 
 /** An attempt that isn't deleted, of an item that isn't. */
@@ -189,7 +201,10 @@ export const itemAttemptRoutes = new Hono<AppEnv>().post("/:id/attempts", async 
 
   const existing = await db.select().from(attempts).where(eq(attempts.id, body.id)).get();
   if (existing) {
-    if (existing.itemId !== itemId) return apiError(c, 409, "conflict", "That attempt belongs to something else.");
+    // A retry after the print went into the build it matched: the same attempt, where it is now (decision 0076).
+    if (existing.itemId !== itemId && (await mergedTarget(db, itemId)) !== existing.itemId) {
+      return apiError(c, 409, "conflict", "That attempt belongs to something else.");
+    }
     if (existing.deletedAt) return apiError(c, 409, "deleted", "That attempt was deleted.");
     return c.json<AttemptResponse>({ attempt: await loadAttempt(db, existing) }, 201);
   }
@@ -203,11 +218,14 @@ export const itemAttemptRoutes = new Hono<AppEnv>().post("/:id/attempts", async 
 
   const now = new Date();
   const printed = notFuture(body.printedAt ?? now.getTime(), now);
+  // The printer bridge filing a print in the build it just made: it may belong to another one (decision 0076).
+  const filing = await fileThePrint(db, c.var.via, item, body.print, printed.getTime(), now);
+  const target = filing?.target ?? item;
   let attemptSettings = body.settings;
   if (!attemptSettings) {
     // "Same as last time": start from the attempt printed just before this one.
     const before = byPrintTime(
-      (await liveAttempts(db, itemId))
+      (await liveAttempts(db, target.id))
         .filter((row) => row.printedAt <= printed)
         .map((row) => ({ row, id: row.id, printedAt: row.printedAt.getTime(), createdAt: row.createdAt.getTime() })),
     ).at(-1);
@@ -220,7 +238,7 @@ export const itemAttemptRoutes = new Hono<AppEnv>().post("/:id/attempts", async 
       .insert(attempts)
       .values({
         id: body.id,
-        itemId,
+        itemId: target.id,
         outcome: outcomeValue,
         printedAt: printed,
         finishedAt: outcomeValue ? now : null,
@@ -239,16 +257,20 @@ export const itemAttemptRoutes = new Hono<AppEnv>().post("/:id/attempts", async 
       })
       .onConflictDoNothing()
       .returning(),
-    recordChange(db, { entity: "attempt", id: body.id, itemId, action: "created", actor: c.var.actor }),
+    recordChange(db, { entity: "attempt", id: body.id, itemId: target.id, action: "created", actor: c.var.actor }),
     // Logging an attempt on an idea makes it a build: only if this request's insert landed.
     db
       .update(items)
-      .set({ ...(item.stage === "idea" ? stageDates(item, "building", now) : {}), updatedAt: now })
-      .where(and(eq(items.id, itemId), afterChange)),
+      .set({
+        ...(target.stage === "idea" ? { ...stageDates(target, "building", now), upNext: null } : {}),
+        updatedAt: now,
+      })
+      .where(and(eq(items.id, target.id), afterChange)),
+    ...(filing?.statements(body.id, c.var.actor) ?? []),
   ]);
   // A retry that raced the first request finds its attempt there.
   const attempt = inserted ?? (await db.select().from(attempts).where(eq(attempts.id, body.id)).get());
-  if (!attempt || attempt.itemId !== itemId) {
+  if (!attempt || attempt.itemId !== target.id) {
     return apiError(c, 409, "conflict", "That attempt belongs to something else.");
   }
   // Logged already as Partly or Spaghetti: Claude thinks about the next try.

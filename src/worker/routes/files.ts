@@ -11,6 +11,7 @@ import {
   ONE_REQUEST_FILE_BYTES,
 } from "../../shared/api.ts";
 import { type OpenLinkResponse, openName } from "../../shared/open-link.ts";
+import type { SendHow } from "../../shared/print-match.ts";
 import { cleanFileName, isStlName, slicedName } from "../../shared/slicing/files.ts";
 import { SLICER_IDS } from "../../shared/slicing/settings.ts";
 import type { PreviousSlice } from "../../shared/slicing/types.ts";
@@ -19,6 +20,7 @@ import {
   type AttemptFileRow,
   attemptFiles,
   attempts,
+  fileDownloads,
   type ItemFileRow,
   itemFiles,
   items,
@@ -762,6 +764,21 @@ export async function liveFile(
   return undefined;
 }
 
+/** Keeps that a person took a live file of an idea or build away to print. False when there is no such file. */
+async function keepDownload(c: { var: AppEnv["Variables"] }, id: string, how: SendHow): Promise<boolean> {
+  const found = await liveFile(c, id);
+  if (!found || found.table === "twist") return false;
+  await c.var.db.insert(fileDownloads).values({
+    id: crypto.randomUUID(),
+    fileId: id,
+    itemId: found.itemId,
+    how,
+    userId: c.var.user.id,
+    at: new Date(),
+  });
+  return true;
+}
+
 /** The table a found file is in. */
 function tableOf(table: FileTable) {
   return table === "attempt" ? attemptFiles : table === "item" ? itemFiles : twistFiles;
@@ -821,9 +838,21 @@ export const fileRoutes = new Hono<AppEnv>()
     const part = asked.data.part ?? "sliced";
     const found = await openable(c, id, part);
     if (!found) return apiError(c, 404, "not_found", "There is no .3mf of that file to open.");
+    // Bambu Studio fetches it next: the strongest sign of which build the next print belongs to (decision 0076).
+    await keepDownload(c, id, "studio");
     const { token, expiresAt } = await signOpenLink(c.env, id, part);
     const url = `${new URL(c.req.url).origin}/open/${token}/${openName(cleanFileName(found.name))}`;
     return c.json<OpenLinkResponse>({ url, name: cleanFileName(found.name), expiresAt });
+  })
+  /**
+   * A person downloaded the file (or a model's sliced file) to print it: kept a month, for which build the next print
+   * belongs to (decision 0076). People only; a twist's model belongs to no build and isn't kept.
+   */
+  .post("/:id/downloads", async (c) => {
+    const id = c.req.param("id");
+    if (!z.uuid().safeParse(id).success) return apiError(c, 400, "invalid", "That file's id isn't valid.");
+    if (!(await keepDownload(c, id, "download"))) return apiError(c, 404, "not_found", "That file isn't here.");
+    return c.body(null, 204);
   })
   .get("/:id/:part?", async (c) => {
     const part = c.req.param("part") ?? "file";

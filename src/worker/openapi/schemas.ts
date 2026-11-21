@@ -151,6 +151,22 @@ export const Attempt = z
     finishedVia: id.nullable(),
     createdAt: epoch,
     updatedAt: epoch,
+    print: z
+      .object({
+        name: z.string().nullable().describe("The job's name as the printer said it."),
+        placed: z.enum(["matched", "new"]),
+        reasons: z.array(z.looseObject({})).describe("Why it was put in the build it is in."),
+        asking: z.boolean().describe('Still asks "which build is this?"'),
+        ownItemId: id.describe("The build the printer made for it."),
+      })
+      .nullable()
+      .optional()
+      .describe("How the printer bridge placed a print it filed (decision 0076)."),
+    moved: z
+      .object({ fromItemId: id, fromTitle: z.string().nullable(), by: id, via: id.nullable(), at: epoch })
+      .nullable()
+      .optional()
+      .describe("The last time someone moved it here from another build."),
   })
   .meta({ id: "Attempt" });
 

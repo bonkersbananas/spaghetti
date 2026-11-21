@@ -25,6 +25,7 @@ import {
 import { journalQuery, summaryQuery } from "../routes/journal.ts";
 import { decision } from "../routes/oauth.ts";
 import { bridgeSchema, setSlot, setupSchema } from "../routes/printer.ts";
+import { moveAttempt, updatePrint } from "../routes/prints.ts";
 import { pushChange, pushTarget, subscribe } from "../routes/push.ts";
 import { createRecipe, recipeQuery, updateRecipe } from "../routes/recipes.ts";
 import { scoutKeepBody } from "../routes/scout.ts";
@@ -662,6 +663,34 @@ export const operations: Record<string, Operation> = {
     body: z.object({ dismissed: z.boolean() }),
     response: one("attempt", Attempt),
   },
+  "GET /attempts/:id/suggestions": {
+    summary:
+      "The ideas and builds in progress a print (or any attempt) may belong to, best first, each with its score and the reasons a person can check: the same file, a file downloaded or opened in Bambu Studio just before, the same estimate (decision 0076).",
+    response: z.object({
+      suggestions: z.array(z.object({ itemId: z.uuid(), score: z.number(), reasons: z.array(z.looseObject({})) })),
+    }),
+    errors: { 404: notFound("attempt") },
+  },
+  "POST /attempts/:id/move": {
+    summary:
+      "Moves an attempt to another build or idea (`targetId`), or into a new build (`newBuild`), with its photos, note, outcome, settings and file; a printer's build left with nothing goes with it. Safe to repeat. People only.",
+    body: moveAttempt,
+    response: z.object({ attempt: Attempt, from: Item.nullable(), to: Item }),
+    errors: { 404: notFound("attempt or build") },
+  },
+  "POST /attempts/:id/unmove": {
+    summary:
+      "Undoes the attempt's last move: it goes back with its photos, and what went or came with it is put back. People only.",
+    response: z.object({ attempt: Attempt, from: Item.nullable(), to: Item }),
+    errors: { 404: notFound("attempt or build"), 409: "moved_since: it has moved again since." },
+  },
+  "PUT /attempts/:id/print": {
+    summary:
+      'Answers the printer\'s "which build is this?" for a print in a build of its own: `asking: false` keeps it as a new build, `true` asks again (the undo). People only.',
+    body: updatePrint,
+    response: one("attempt", Attempt),
+    errors: { 404: notFound("attempt") },
+  },
   "DELETE /attempts/:id": { summary: "Deletes an attempt (it can be restored).", response: "empty", status: 204 },
   "POST /attempts/:id/restore": { summary: "Restores a deleted attempt.", response: one("attempt", Attempt) },
   "PUT /attempts/:id/file": {
@@ -739,6 +768,13 @@ export const operations: Record<string, Operation> = {
       404: "not_found: there is no .3mf of that file to open.",
       503: "open_unavailable: the Worker has no key.",
     },
+  },
+  "POST /files/:id/downloads": {
+    summary:
+      "Keeps that a person downloaded a file of an idea or build to print it, for a month: which build the next print belongs to (decision 0076). People only.",
+    response: "empty",
+    status: 204,
+    errors: { 404: "not_found: that file isn't here." },
   },
   "PUT /files/:id/sliced": {
     summary:
