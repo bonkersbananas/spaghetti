@@ -201,7 +201,10 @@ describe("a shared thing's models", () => {
     // Its picture and toolpaths through the token; no address of the file under /api, nothing to download.
     expect(html).toContain(`/s/${made.token}/files/${fileId}/thumb`);
     expect(html).toContain(`/s/${made.token}/files/${fileId}/toolpaths`);
-    expect(html).toContain(`aria-label="See fusilli-knob.stl in 3D"`);
+    // The whole card opens the 3D view: a button with the card's own first lines, named by them.
+    expect(html).toMatch(
+      /<button type="button" class="gp-open" data-view3d="[^"]+" aria-haspopup="dialog">.*fusilli-knob\.stl.*, in 3D<\/span><\/button>/,
+    );
     expect(html).not.toContain("/api/");
     expect(html).not.toMatch(/\bdownload\b/i);
     expect(html).not.toContain("Bambu Studio");

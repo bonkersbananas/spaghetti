@@ -160,7 +160,12 @@ test("a guest opens a model's 3D view from the shared page, and gets no file to 
   // Nothing of the viewer comes with the page.
   expect(asked.some((path) => /viewer-|toolpath|three/.test(path))).toBe(false);
 
-  await guest.getByRole("button", { name: `See ${TUGBOAT_FILE_NAME} in 3D` }).click();
+  // The whole card opens it: a tap on its plate, not only on its words. The button is named by what the card says.
+  const opens = card.getByRole("button", {
+    name: new RegExp(`^About .*, ${TUGBOAT_FILE_NAME.replace(/\./g, "\\.")}, in 3D$`),
+  });
+  await expect(opens).toHaveAttribute("aria-haspopup", "dialog");
+  await card.click({ position: { x: 24, y: 24 } });
   const dialog = guest.getByRole("dialog", { name: "3D view" });
   await expect(dialog).toBeVisible();
   await expect(dialog.locator("[data-viewer=ready]")).toBeVisible({ timeout: 60_000 });
@@ -179,7 +184,7 @@ test("a guest opens a model's 3D view from the shared page, and gets no file to 
   // Escape closes it, back to the plate.
   await guest.keyboard.press("Escape");
   await expect(dialog).toHaveCount(0);
-  await expect(guest.getByRole("button", { name: `See ${TUGBOAT_FILE_NAME} in 3D` })).toBeFocused();
+  await expect(opens).toBeFocused();
 
   // The toolpaths' address opened as a page is no file: the same 404 as anything else.
   const opened = await guest.goto(`/s/${share.token}/files/${fileId}/toolpaths`);

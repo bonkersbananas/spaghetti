@@ -930,6 +930,7 @@ html:has(.gp-lightbox:target) {
 }
 
 .gp-file {
+  position: relative;
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
   grid-template-areas:
@@ -974,6 +975,59 @@ html:has(.gp-lightbox:target) {
   display: none;
 }
 
+/*
+ * What opens the 3D view: the card's first lines as a button, whose ::after covers the whole card (or the attempt's
+ * row), so a tap anywhere on it opens the view; the card itself shows the hover, the press and the focus ring.
+ */
+.gp-open,
+.gp-file-heading {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.125rem;
+  min-width: 0;
+}
+
+.gp-open {
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.gp-open > *,
+.gp-file-heading > * {
+  max-width: 100%;
+}
+
+.gp-open::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: var(--gp-radius-lg);
+}
+
+.gp-open:focus-visible {
+  outline: none;
+}
+
+.gp-open:focus-visible::after {
+  box-shadow: var(--gp-ring);
+}
+
+.gp-file--3d,
+.gp-attempt-file--3d {
+  transition:
+    transform var(--sg-duration-instant) var(--sg-ease-out),
+    box-shadow var(--sg-duration-fast) var(--sg-ease-out),
+    background-color var(--sg-duration-fast) var(--sg-ease-out);
+}
+
 /* "About 1 h 26 min · 13.2 g": the print first, as the app's card leads once a model is sliced. */
 .gp-file-lead {
   font-weight: 600;
@@ -983,6 +1037,7 @@ html:has(.gp-lightbox:target) {
 .gp-file-lead--name,
 .gp-file-name,
 .gp-attempt-file-name {
+  display: block;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1093,19 +1148,6 @@ html:has(.gp-lightbox:target) {
   font-size: 1.5rem;
 }
 
-.gp-plate--3d {
-  cursor: pointer;
-  -webkit-tap-highlight-color: transparent;
-  transition:
-    transform var(--sg-duration-instant) var(--sg-ease-out),
-    box-shadow var(--sg-duration-fast) var(--sg-ease-out);
-}
-
-.gp-plate--3d:focus-visible {
-  outline: none;
-  box-shadow: var(--gp-ring);
-}
-
 /* The 3D view's cue: a quiet pill on the picture's corner, as the app's ThreeDButton has it. */
 .gp-3d {
   position: absolute;
@@ -1129,12 +1171,33 @@ html:has(.gp-lightbox:target) {
   font-size: 0.75rem;
 }
 
-/* An attempt's file, small as on the app's story card: the plate with only the cube, the name and who sliced it. */
+/*
+ * An attempt's file, small as on the app's story card: the plate with only the cube and the file's name. One that
+ * opens in 3D is a row of its own on the paper, "See how it prints" under the name, all of it the button.
+ */
 .gp-attempt-file {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 0.75rem;
   min-width: 0;
+}
+
+.gp-attempt-file--3d {
+  padding: 0.5rem 0.875rem 0.5rem 0.5rem;
+  border-radius: var(--gp-radius-md);
+  background: var(--sg-paper);
+}
+
+.gp-attempt-file--3d .gp-open::after {
+  border-radius: var(--gp-radius-md);
+}
+
+.gp-attempt-file-cta {
+  font-size: var(--sg-text-small);
+  line-height: var(--sg-text-small-lh);
+  font-weight: 600;
+  color: var(--sg-basil-ink);
 }
 
 .gp-plate--small {
@@ -1567,7 +1630,16 @@ html.gp-viewing {
     box-shadow: var(--sg-shadow-raised);
   }
 
-  .gp-plate--3d:hover .gp-3d {
+  .gp-file--3d:hover {
+    box-shadow: var(--sg-shadow-raised);
+  }
+
+  .gp-attempt-file--3d:hover {
+    background: var(--sg-paper-deep);
+  }
+
+  .gp-file--3d:hover .gp-3d,
+  .gp-attempt-file--3d:hover .gp-3d {
     background: var(--sg-veil-strong);
   }
 
@@ -1583,8 +1655,13 @@ html.gp-viewing {
 @media (pointer: fine) {
   .gp-model:active,
   .gp-zoom:active,
-  .gp-plate--3d:active {
+  .gp-attempt-file--3d:active {
     transform: scale(0.98);
+  }
+
+  /* A whole card gives a little less, as the app's cards do. */
+  .gp-file--3d:active {
+    transform: scale(0.99);
   }
 }
 
@@ -1592,7 +1669,8 @@ html.gp-viewing {
 @media (pointer: coarse) {
   .gp-model:active,
   .gp-zoom:active,
-  .gp-plate--3d:active {
+  .gp-file--3d:active,
+  .gp-attempt-file--3d:active {
     opacity: 0.8;
     transition: opacity 0s 70ms;
   }
@@ -1601,13 +1679,15 @@ html.gp-viewing {
 @media (prefers-reduced-motion: reduce) {
   .gp-zoom,
   .gp-model,
-  .gp-plate--3d {
+  .gp-file--3d,
+  .gp-attempt-file--3d {
     transition: none;
   }
 
   .gp-model:active,
   .gp-zoom:active,
-  .gp-plate--3d:active {
+  .gp-file--3d:active,
+  .gp-attempt-file--3d:active {
     transform: none;
   }
 }

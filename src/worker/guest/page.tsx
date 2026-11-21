@@ -298,20 +298,21 @@ function Settings({ settings, filaments }: { settings: GuestSetting[]; filaments
  * Short pieces on one line, as the app's MetaList ("About 21 min · 3.3 g each · Sliced by Spaghetti"), that wraps
  * cleanly: each piece carries its dot in a gutter the row hangs into, so a dot never begins or ends a line.
  */
-function Pieces({ pieces, class: className }: { pieces: string[]; class: string }) {
+function Pieces({ pieces, class: className, inline }: { pieces: string[]; class: string; inline?: boolean }) {
   if (!pieces.length) return null;
-  return (
-    <p class={`gp-pieces ${className}`}>
-      <span class="gp-pieces-row">
-        {pieces.map((piece, index) => (
-          <span class="gp-piece">
-            {index > 0 && <span class="gp-sr">, </span>}
-            {piece}
-          </span>
-        ))}
-      </span>
-    </p>
+  const row = (
+    <span class="gp-pieces-row">
+      {pieces.map((piece, index) => (
+        <span class="gp-piece">
+          {index > 0 && <span class="gp-sr">, </span>}
+          {piece}
+        </span>
+      ))}
+    </span>
   );
+  // Inside a button (a card's lead), where only phrasing content may go.
+  if (inline) return <span class={`gp-pieces ${className}`}>{row}</span>;
+  return <p class={`gp-pieces ${className}`}>{row}</p>;
 }
 
 /**
@@ -330,36 +331,42 @@ function viewData(token: string, file: GuestFile) {
 }
 
 /**
- * A file's plate picture on the render ground, as the app's PlateThumb. Where the plate can be seen in 3D, the whole
- * picture is the button that opens it (as the app's ThreeDButton), with a quiet "3D" pill on its corner.
+ * A file's plate picture on the render ground, as the app's PlateThumb. Where the plate can be seen in 3D it carries a
+ * quiet "3D" pill on its corner (the app's ThreeDButton); the card or row around it is what opens the view.
  */
 function Plate({ token, file, compact }: { token: string; file: GuestFile; compact?: boolean }) {
-  const picture = file.thumb ? (
-    <img
-      class="gp-plate-img"
-      src={fileUrl(token, file.id, "thumb")}
-      alt={file.view ? "" : `${file.name}, its plate`}
-      loading="lazy"
-      decoding="async"
-    />
-  ) : (
-    <Icon name="file" class="gp-plate-none" />
-  );
-  const data = viewData(token, file);
-  if (!data) return <span class={`gp-plate ${compact ? "gp-plate--small" : ""}`}>{picture}</span>;
   return (
-    <button
-      type="button"
-      class={`gp-plate gp-plate--3d ${compact ? "gp-plate--small" : ""}`}
-      data-view3d={data}
-      aria-label={`See ${file.name} in 3D`}
-      aria-haspopup="dialog"
-    >
-      {picture}
-      <span class="gp-3d" aria-hidden="true">
-        <Icon name="cube" />
-        {!compact && "3D"}
-      </span>
+    <span class={`gp-plate ${file.view ? "gp-plate--3d" : ""} ${compact ? "gp-plate--small" : ""}`}>
+      {file.thumb ? (
+        <img
+          class="gp-plate-img"
+          src={fileUrl(token, file.id, "thumb")}
+          alt={file.view ? "" : `${file.name}, its plate`}
+          loading="lazy"
+          decoding="async"
+        />
+      ) : (
+        <Icon name="file" class="gp-plate-none" />
+      )}
+      {file.view && (
+        <span class="gp-3d" aria-hidden="true">
+          <Icon name="cube" />
+          {!compact && "3D"}
+        </span>
+      )}
+    </span>
+  );
+}
+
+/**
+ * What opens a plate's 3D view: a button holding the card's own first lines, named by what they say, whose tap area
+ * covers the whole card or row (its ::after), so anywhere on it opens the view, as an app card opens.
+ */
+function Opens({ token, file, children }: { token: string; file: GuestFile; children: Child }) {
+  return (
+    <button type="button" class="gp-open" data-view3d={viewData(token, file)} aria-haspopup="dialog">
+      {children}
+      <span class="gp-sr">, in 3D</span>
     </button>
   );
 }
@@ -380,26 +387,33 @@ function Cautions({ cautions }: { cautions: string[] }) {
 }
 
 /**
- * A model or slicer file as the app's card shows it, read-only: the plate (which opens the 3D view), what the print
- * takes ("About 1 h 26 min · 13.2 g") over the file's name, its size and who sliced it, its cautions, what it is
- * sliced with in the settings row's words, and its filaments, each with its colour. No download, no "Open in Bambu
- * Studio".
+ * A model or slicer file as the app's card shows it, read-only: the plate, what the print takes ("About 1 h 26 min ·
+ * 13.2 g") over the file's name and its size, its cautions, what it is sliced with in the settings row's words, and
+ * its filaments, each with its colour. The whole card opens the 3D view. No download, no "Open in Bambu Studio".
  */
 function FileCard({ token, file }: { token: string; file: GuestFile }) {
-  const lead = file.lead.length > 0;
+  const heading =
+    file.lead.length > 0 ? (
+      <>
+        <Pieces pieces={file.lead} class="gp-file-lead" inline />
+        <span class="gp-sr">, </span>
+        <span class="gp-file-name">{file.name}</span>
+      </>
+    ) : (
+      <span class="gp-file-lead gp-file-lead--name">{file.name}</span>
+    );
   return (
-    <li class="gp-file">
+    <li class={`gp-file ${file.view ? "gp-file--3d" : ""}`}>
       <Plate token={token} file={file} />
       {/* One column beside the plate on a computer, as the app's FileCard; on a phone its lines run across the card. */}
       <div class="gp-file-text">
         <div class="gp-file-words">
-          {lead ? (
-            <>
-              <Pieces pieces={file.lead} class="gp-file-lead" />
-              <p class="gp-file-name">{file.name}</p>
-            </>
+          {file.view ? (
+            <Opens token={token} file={file}>
+              {heading}
+            </Opens>
           ) : (
-            <p class="gp-file-lead gp-file-lead--name">{file.name}</p>
+            <p class="gp-file-heading">{heading}</p>
           )}
           <Pieces pieces={file.meta} class="gp-file-meta" />
         </div>
@@ -442,14 +456,28 @@ function Files({ token, files }: { token: string; files: GuestFile[] }) {
   );
 }
 
-/** An attempt's file on its card, small as the app's story card has it: the plate, the file's name and who sliced it. */
+/**
+ * An attempt's file on its card, small as the app's story card has it: the plate and the file's name. Where it can be
+ * seen in 3D, the whole row is the button, and says so: "See how it prints".
+ */
 function AttemptFile({ token, file }: { token: string; file: GuestFile }) {
+  const name = <span class="gp-attempt-file-name">{file.name}</span>;
   return (
-    <div class="gp-attempt-file">
+    <div class={`gp-attempt-file ${file.view ? "gp-attempt-file--3d" : ""}`}>
       <Plate token={token} file={file} compact />
       <div class="gp-file-words">
-        <p class="gp-attempt-file-name">{file.name}</p>
-        <Pieces pieces={file.meta.filter((piece) => !/ each$/.test(piece))} class="gp-file-meta" />
+        {file.view ? (
+          <Opens token={token} file={file}>
+            {name}
+            <span class="gp-sr">, </span>
+            <span class="gp-attempt-file-cta">See how it prints</span>
+          </Opens>
+        ) : (
+          <>
+            <p class="gp-file-heading">{name}</p>
+            <Pieces pieces={file.meta.filter((piece) => !/ each$/.test(piece))} class="gp-file-meta" />
+          </>
+        )}
         <Cautions cautions={file.cautions} />
       </div>
     </div>

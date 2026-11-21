@@ -2101,7 +2101,7 @@ export const shots: Shot[] = [
     signedOut: true,
     prepare: async (page) => {
       await sharedShelf(page);
-      await openSharedViewer(page, "See fusilli-knob.stl in 3D");
+      await openSharedViewer(page, /fusilli-knob\.stl, in 3D$/);
     },
     cleanup: async (page) => {
       await unshareAll(page);
@@ -2115,7 +2115,7 @@ export const shots: Shot[] = [
     signedOut: true,
     prepare: async (page) => {
       await openShared("items", SEED_BUILD_IDS.tugboat)(page);
-      await openSharedViewer(page, "See tugboat.gcode.3mf in 3D");
+      await openSharedViewer(page, /^tugboat\.gcode\.3mf, See how it prints/);
     },
     cleanup: unshareAll,
   },
