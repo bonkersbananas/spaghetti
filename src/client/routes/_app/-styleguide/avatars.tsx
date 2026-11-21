@@ -1,5 +1,6 @@
 import type { Person } from "@shared/api";
-import { AgentAvatar, Avatar, AvatarStack, PrinterMark, ViaText } from "@/components/ui/Avatar";
+import { AgentAvatar, Avatar, AvatarStack, ViaText } from "@/components/ui/Avatar";
+import { PrinterByline, PrinterMark } from "@/components/ui/PrinterMark";
 import { Panel, people, Section } from "./shared";
 
 /** A stand-in portrait: a data URL, so the specimen needs no server. */
@@ -85,14 +86,8 @@ export function AvatarSection() {
           ))}
         </div>
         <div className="text-small flex flex-wrap items-center gap-x-8 gap-y-3">
-          <span className="flex items-center gap-2">
-            <span className="text-ink-faint">From the printer</span>
-            <PrinterMark size="xs" decorative />
-          </span>
-          <span className="flex items-center gap-2">
-            <span className="text-ink-faint">Sam · from the printer</span>
-            <Avatar person={people[1] as Person} size="xs" printer decorative />
-          </span>
+          <PrinterByline words="always" />
+          <PrinterByline person={people[1] as Person} words="always" />
           <p className="text-ink-faint">
             A print the printer recorded is the printer's, never whoever paired the bridge, until someone says who
             started it (a tap on the line).

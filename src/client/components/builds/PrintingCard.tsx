@@ -28,10 +28,10 @@ import { useIsDesktop } from "@/lib/use-media-query";
 import { OffTheBed } from "./OffTheBed";
 import { OutcomeChip, OutcomePicker } from "./Outcome";
 import { PhotoReadNote } from "./PhotoReadNote";
-import { PrinterBy } from "./PrinterBy";
 
 // Which build a print the printer filed belongs to (decision 0076): its code comes only with such a print.
 const PrintPlace = lazy(() => import("./print-place-lazy").then((entry) => entry.loadPrintPlace()));
+const PrinterBy = lazy(() => import("./print-place-lazy").then((entry) => entry.loadPrinterBy()));
 
 interface PrintingCardProps {
   item: ItemView;
@@ -298,13 +298,16 @@ export function PrintingCard({
             </h3>
             {attempt.fromPrinter ? (
               // The printer's, not whoever paired the bridge; a tap says who started it (decision 0076).
-              <span className="text-small mt-1.5 flex shrink-0 items-center">
-                <PrinterBy
-                  attempt={attempt}
-                  itemId={item.id}
-                  readOnly={readOnly}
-                  className="pointer-events-auto z-10"
-                />
+              <span className="text-small mt-1.5 flex min-h-6 shrink-0 items-center">
+                <Suspense fallback={null}>
+                  <PrinterBy
+                    attempt={attempt}
+                    person={person}
+                    itemId={item.id}
+                    readOnly={readOnly}
+                    className="pointer-events-auto z-10"
+                  />
+                </Suspense>
               </span>
             ) : (
               person && (

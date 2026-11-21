@@ -34,7 +34,7 @@ import { SaveRecipeSheet } from "@/components/recipes/SaveRecipe";
 import { DetailBar } from "@/components/shell/DetailBar";
 import { ActionBar } from "@/components/ui/ActionBar";
 import { ActionMenuItem, MoreMenu } from "@/components/ui/ActionMenu";
-import { Avatar, PrinterMark, ViaText } from "@/components/ui/Avatar";
+import { Avatar, ViaText } from "@/components/ui/Avatar";
 import { Button, IconButton } from "@/components/ui/Button";
 import { Chip } from "@/components/ui/Chip";
 import { ConfirmDelete } from "@/components/ui/ConfirmDelete";
@@ -58,6 +58,7 @@ import {
 import { NoteField } from "@/components/ui/NoteField";
 import { NoteLinks } from "@/components/ui/NoteLinks";
 import { Overline } from "@/components/ui/Overline";
+import { PrinterMark } from "@/components/ui/PrinterMark";
 import { PullToGo } from "@/components/ui/PullToGo";
 import { SaveStatus } from "@/components/ui/SaveStatus";
 import { Section } from "@/components/ui/Section";

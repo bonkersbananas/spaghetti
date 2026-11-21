@@ -1,4 +1,5 @@
 import type { JournalEntry as Entry, Item, Person } from "@shared/api";
+import { creditedTo } from "@shared/attempts";
 import {
   dayLabel,
   groupJournal,
@@ -405,9 +406,11 @@ function Group({
           const item = items.get(entry.itemId);
           if (!item) return null;
           // Who started or finished a build isn't recorded: only attempts and ideas show a person.
-          // A print from the printer names nobody until someone says who started it (decision 0076).
-          const person =
-            (entry.kind === "attempt" || entry.kind === "idea") && entry.by ? people.get(entry.by) : undefined;
+          // A print from the printer names nobody until someone says who started it (decision 0076): read from the
+          // attempt, so a name said on this device shows at once.
+          const attempt = entry.kind === "attempt" ? item.attempts.find((one) => one.id === entry.attemptId) : null;
+          const by = attempt ? creditedTo(attempt) : entry.kind === "idea" ? entry.by : null;
+          const person = by ? people.get(by) : undefined;
           return (
             <li key={entry.key} className="list-none">
               <JournalEntry

@@ -1,7 +1,8 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { RefObject } from "react";
 import { ActionMenu, ActionMenuItem } from "@/components/ui/ActionMenu";
-import { Avatar, PrinterMark } from "@/components/ui/Avatar";
+import { Avatar } from "@/components/ui/Avatar";
+import { PrinterMark } from "@/components/ui/PrinterMark";
 import { peopleQuery, sessionQuery } from "@/lib/queries";
 import { sayWhoStarted } from "@/lib/started-by";
 import { useWho } from "@/lib/who";

@@ -21,7 +21,6 @@ import { EstimateLine } from "./Estimate";
 import { NotEnoughNote } from "./NotEnoughNote";
 import { OffTheBed } from "./OffTheBed";
 import { OutcomeChip, outcomeDots } from "./Outcome";
-import { PrinterBy } from "./PrinterBy";
 import { SettingsLine } from "./SettingsLine";
 import { SavedFileCard } from "./SlicerFile";
 import { filamentLabel, summarizeResults, summarizeSettings } from "./settings";
@@ -67,6 +66,7 @@ interface AttemptEntryProps {
 const CoachNote = lazy(() => import("./Coach").then((m) => ({ default: m.CoachNote })));
 // Which build a print the printer filed belongs to, and where an attempt was moved from (decision 0076).
 const PrintPlace = lazy(() => import("./print-place-lazy").then((entry) => entry.loadPrintPlace()));
+const PrinterBy = lazy(() => import("./print-place-lazy").then((entry) => entry.loadPrinterBy()));
 
 /**
  * One attempt in a build's story: how it went, what was tried differently
@@ -168,12 +168,15 @@ export const AttemptEntry = forwardRef<HTMLLIElement, AttemptEntryProps>(functio
                   </time>
                   {attempt.fromPrinter ? (
                     // The printer's, not whoever paired the bridge; a tap says who started it (decision 0076).
-                    <PrinterBy
-                      attempt={attempt}
-                      itemId={item?.id}
-                      readOnly={readOnly}
-                      className="pointer-events-auto z-10"
-                    />
+                    <Suspense fallback={<span className="size-6" />}>
+                      <PrinterBy
+                        attempt={attempt}
+                        person={person}
+                        itemId={item?.id}
+                        readOnly={readOnly}
+                        className="pointer-events-auto z-10"
+                      />
+                    </Suspense>
                   ) : (
                     person && <Avatar person={person} size="xs" via={via} />
                   )}

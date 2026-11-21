@@ -5,7 +5,7 @@ import { cn } from "@/lib/cn";
 import { heroClick } from "@/lib/hero";
 import { scrollBehavior } from "@/lib/motion";
 import { type Cover, fileThumbSrc, photoSrc } from "@/lib/previews";
-import { Avatar, PrinterMark } from "./Avatar";
+import { Avatar } from "./Avatar";
 import { CommentIcon, ImageIcon, SlicerFileIcon } from "./icons";
 import { NoteFace } from "./NoteFace";
 import { Photo } from "./Photo";
@@ -239,7 +239,10 @@ export function Card({
             {person ? (
               <Avatar person={person} size="xs" via={printer ? undefined : via} printer={printer} />
             ) : (
-              printer && <PrinterMark size="xs" />
+              // The printer's mark (ui/PrinterMark.tsx), drawn in CSS here: the card is on every first load.
+              printer && (
+                <span role="img" aria-label="The printer" title="The printer" className="printer-mark size-6" />
+              )
             )}
           </div>
         )}

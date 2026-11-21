@@ -237,5 +237,7 @@ test("a print from the printer names nobody until someone says who started it, w
   await picker.getByRole("button", { name: "You" }).click();
   await expect(page.getByText("Started by you")).toBeVisible();
   await page.reload();
-  await expect(entry.getByRole("button", { name: "You · from the printer. Change who started it" })).toBeVisible();
+  await expect(
+    entry.getByRole("button", { name: "Alex Rivera · from the printer. Change who started it" }),
+  ).toBeVisible();
 });

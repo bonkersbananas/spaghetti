@@ -3,7 +3,7 @@ import { type PersonColor, withoutOwner } from "@shared/people";
 import { useState } from "react";
 import { cn } from "@/lib/cn";
 import { initials } from "@/lib/initials";
-import { AgentIcon, PrinterIcon } from "./icons";
+import { AgentIcon } from "./icons";
 
 const colors: Record<PersonColor, string> = {
   tomato: "bg-person-tomato",
@@ -89,7 +89,6 @@ export function Avatar({
     </span>
   );
   if (!marked) return face;
-  const Glyph = printer ? PrinterIcon : AgentIcon;
   return (
     <span className={cn("relative inline-flex shrink-0", className)}>
       {face}
@@ -100,44 +99,15 @@ export function Avatar({
           marks[size].className,
         )}
       >
-        <Glyph size={marks[size].glyph} weight="fill" />
+        {printer ? (
+          <span className="printer-glyph" style={{ width: marks[size].glyph, height: marks[size].glyph }} />
+        ) : (
+          <AgentIcon size={marks[size].glyph} weight="fill" />
+        )}
       </span>
     </span>
   );
 }
-
-/**
- * The printer, where a person would be named for what it did (decision 0076): a print the printer bridge recorded is
- * the printer's, never whoever paired the bridge. A rounded square, as an agent is (a circle is a person here), on the
- * warm `well` with the printer glyph, the size of the avatar it stands in for. Once someone says who started the
- * print, that person's avatar takes its place, with the printer as its small mark (`Avatar printer`).
- */
-export function PrinterMark({
-  size = "md",
-  decorative = false,
-  className,
-}: {
-  size?: keyof typeof sizes;
-  /** Beside the words "From the printer" already: hidden from screen readers. */
-  decorative?: boolean;
-  className?: string;
-}) {
-  return (
-    <span
-      {...(decorative ? { "aria-hidden": true } : { role: "img", "aria-label": "The printer", title: "The printer" })}
-      className={cn(
-        "bg-well text-ink-soft rounded-mark inline-flex shrink-0 items-center justify-center",
-        sizes[size],
-        className,
-      )}
-    >
-      <PrinterIcon size={printerGlyphs[size]} weight="fill" aria-hidden />
-    </span>
-  );
-}
-
-/** The printer glyph in its mark, per size: about 60 % of it, as a face's initials are. */
-const printerGlyphs = { xs: 14, sm: 16, md: 20, lg: 26 } as const;
 
 /**
  * The picture over the initials: the initials stay underneath while it loads, if it fails and offline, so nothing
