@@ -2737,10 +2737,10 @@ export const shots: Shot[] = [
     name: "build-scrapped",
     path: `/builds/${SEED_BUILD_IDS.headphoneStand}`,
     prepare: async (page) => {
-      // Two steps (decision 0062): the trash can asks "Scrap this build?" in place, then "Scrap" does it.
-      await page.getByRole("button", { name: "Scrap build" }).click();
-      await page.getByRole("button", { name: "Scrap", exact: true }).click();
-      await page.getByText("Build scrapped").waitFor();
+      // Two steps (decision 0062): "Back to Ideas" asks in place, then "Back to Ideas" does it.
+      await page.getByRole("button", { name: "Back to Ideas" }).click();
+      await page.getByRole("button", { name: "Back to Ideas", exact: true }).click();
+      await page.getByText("Back in Ideas", { exact: true }).waitFor();
       await page.getByRole("heading", { level: 1, name: "Ideas" }).waitFor();
       await page.waitForTimeout(500);
     },
@@ -3059,8 +3059,8 @@ export const shots: Shot[] = [
     name: "build-delete-confirm",
     path: `/builds/${SEED_BUILD_IDS.tugboat}`,
     prepare: async (page) => {
-      await page.getByRole("button", { name: /^(Delete|Scrap) build$/ }).click();
-      await page.getByRole("button", { name: /^(Delete|Scrap)$/ }).waitFor();
+      await page.getByRole("button", { name: /^(Delete build|Back to Ideas)$/ }).click();
+      await page.getByRole("button", { name: /^(Delete|Back to Ideas)$/ }).waitFor();
       await page.evaluate(() => {
         for (const animation of document.getAnimations()) animation.finish();
       });
