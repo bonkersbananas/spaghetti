@@ -163,7 +163,10 @@ export async function plateToolpaths(source: RangedSource, plate: number): Promi
     const name = nameOf(entry);
     return name === gcode || KEPT.has(name);
   });
-  if (!kept.some((entry) => nameOf(entry) === gcode)) return null;
+  // A slicer writes each of these once. A directory that lists one twice (or 5,000 times, each a range read and a
+  // copy in the answer) isn't a slicer's file: nothing, rather than a guest's one request costing thousands of reads.
+  const names = kept.map(nameOf);
+  if (names.filter((name) => name === gcode).length !== 1 || new Set(names).size !== names.length) return null;
   // The viewer's unzip reads stored and deflated entries, unencrypted (bit 0), and nothing past 4 GB.
   if (
     kept.some(

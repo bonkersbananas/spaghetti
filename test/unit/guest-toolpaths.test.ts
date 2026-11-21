@@ -46,6 +46,49 @@ async function repack(bytes: Uint8Array, plate: number) {
   return { out, reads };
 }
 
+/**
+ * A crafted zip: its central directory lists `name`'s record `times` times over (the copies named `as`, if given),
+ * every copy pointing at the same data, as a hostile upload could.
+ */
+function listedOften(zip: Uint8Array, name: string, times: number, as = name): Uint8Array {
+  const data = new DataView(zip.buffer, zip.byteOffset, zip.byteLength);
+  const end = zip.length - 22;
+  const count = data.getUint16(end + 10, true);
+  const start = data.getUint32(end + 16, true);
+  const records: Uint8Array[] = [];
+  let at = start;
+  for (let i = 0; i < count; i++) {
+    const length = 46 + data.getUint16(at + 28, true) + data.getUint16(at + 30, true) + data.getUint16(at + 32, true);
+    const record = zip.slice(at, at + length);
+    records.push(record);
+    if (new TextDecoder().decode(record.subarray(46, 46 + data.getUint16(at + 28, true))) === name) {
+      const copy = strToU8(as);
+      for (let n = 1; n < times; n++) {
+        const renamed = new Uint8Array(46 + copy.length);
+        renamed.set(record.subarray(0, 46));
+        new DataView(renamed.buffer).setUint16(28, copy.length, true);
+        new DataView(renamed.buffer).setUint16(30, 0, true);
+        new DataView(renamed.buffer).setUint16(32, 0, true);
+        renamed.set(copy, 46);
+        records.push(renamed);
+      }
+    }
+    at += length;
+  }
+  const directory = new Uint8Array(records.reduce((total, record) => total + record.length, 0));
+  records.reduce((offset, record) => (directory.set(record, offset), offset + record.length), 0);
+  const tail = zip.slice(end);
+  const eocd = new DataView(tail.buffer);
+  eocd.setUint16(8, records.length, true);
+  eocd.setUint16(10, records.length, true);
+  eocd.setUint32(12, directory.length, true);
+  const out = new Uint8Array(start + directory.length + tail.length);
+  out.set(zip.subarray(0, start));
+  out.set(directory, start);
+  out.set(tail, start + directory.length);
+  return out;
+}
+
 const read = (bytes: Uint8Array, plate: number) =>
   readToolpaths(new Blob([new Uint8Array(bytes)]), { plate, keepLayers: true, maxSegments: 2_000_000 });
 
@@ -121,6 +164,20 @@ describe("a plate's toolpaths for a guest", () => {
     expect(new TextDecoder().decode(files["Metadata/slice_info.config"])).toBe("<config/>");
     expect(files["3D/3dmodel.model"]).toBeUndefined();
     expect(new TextDecoder().decode(out as Uint8Array)).not.toContain("secret mesh");
+  });
+
+  it("has nothing for a directory that lists an entry more than once, and reads only a few ranges to find out", async () => {
+    const file = zipSync({
+      "Metadata/plate_1.gcode": strToU8("; HEADER_BLOCK_START\n; HEADER_BLOCK_END\nG28\n"),
+      "Metadata/slice_info.config": strToU8("<config/>"),
+    });
+    for (const name of ["Metadata/plate_1.gcode", "Metadata/slice_info.config"]) {
+      const { out, reads } = await repack(listedOften(file, name, 5000), 1);
+      expect(out).toBeNull();
+      expect(reads.length).toBeLessThan(5);
+    }
+    // The same name written another way (a backslash, a leading slash) is the same entry.
+    expect((await repack(listedOften(file, "Metadata/plate_1.gcode", 2, "\\Metadata\\plate_1.gcode"), 1)).out).toBeNull();
   });
 
   it("has nothing for bytes that aren't a zip, or a zip with no G-code", async () => {
