@@ -9360,6 +9360,120 @@
         "x-scopes": "person"
       }
     },
+    "/api/attempts/{id}/started-by": {
+      "put": {
+        "operationId": "putAttemptsByIdStartedBy",
+        "summary": "Says who started a print the printer recorded (decision 0076): one of the people's ids, or null for nobody (the undo). Until someone says, the print is the printer's, not that of whoever paired the bridge. People only.",
+        "description": "Only a signed-in person, never an agent token.",
+        "tags": [
+          "attempts"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "startedBy": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 64
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  }
+                },
+                "required": [
+                  "startedBy"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Done.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "attempt": {
+                      "$ref": "#/components/schemas/Attempt"
+                    }
+                  },
+                  "required": [
+                    "attempt"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "invalid: not one of the people.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "signed_out or invalid_token: no credentials, or a token that is unknown or revoked.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "not_found: no such attempt.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "not_from_printer: only a print from the printer is started by someone who didn't log it.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "x-scopes": "person"
+      }
+    },
     "/api/attempts/{id}/restore": {
       "post": {
         "operationId": "postAttemptsByIdRestore",
@@ -18828,6 +18942,10 @@
               }
             ],
             "description": "Set for an app connected by OAuth (its short-lived tokens are not listed)."
+          },
+          "printer": {
+            "description": "The printer bridge's agent: what it records is the printer's, not its owner's (decision 0076).",
+            "type": "boolean"
           }
         },
         "required": [
@@ -19221,6 +19339,22 @@
             ]
           },
           "finishedVia": {
+            "anyOf": [
+              {
+                "type": "string",
+                "description": "A UUID."
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "fromPrinter": {
+            "description": "The printer bridge recorded it: the printer's print, not that of `createdBy`, who paired the bridge (decision 0076).",
+            "type": "boolean"
+          },
+          "startedBy": {
+            "description": "Who started a print from the printer, as a person said afterwards; null until then.",
             "anyOf": [
               {
                 "type": "string",
@@ -20916,6 +21050,10 @@
               }
             ],
             "description": "The agent it was captured through."
+          },
+          "fromPrinter": {
+            "description": "A build the printer made for a print (decision 0076).",
+            "type": "boolean"
           },
           "createdAt": {
             "type": "integer",

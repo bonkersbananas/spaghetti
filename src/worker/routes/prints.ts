@@ -1,8 +1,9 @@
 /**
  * /api/attempts/:id/…: which build a print belongs to (decision 0076). The builds and ideas it may belong to, moving
- * it to another build (or a new one) with its photos, note, outcome and settings, the undo of that, and the answer
- * "it's a new build" to the printer's question. Moving and answering are people's: the printer bridge's token only
- * files its own print (POST /api/items/:id/attempts), and no scope lists these writes.
+ * it to another build (or a new one) with its photos, note, outcome and settings, the undo of that, the answer "it's
+ * a new build" to the printer's question, and who started a print the printer recorded. Moving and answering are
+ * people's: the printer bridge's token only files its own print (POST /api/items/:id/attempts), and no scope lists
+ * these writes.
  */
 import { and, eq, isNull, max, type SQL, sql } from "drizzle-orm";
 import type { BatchItem } from "drizzle-orm/batch";
@@ -26,10 +27,11 @@ import {
   reactions,
   recipes,
   shares,
+  users,
 } from "../db/schema.ts";
 import type { AppEnv } from "../env.ts";
 import { apiError } from "../http.ts";
-import { latestMove, ownBuildOf, printFactsOf, suggestFor } from "../prints.ts";
+import { latestMove, ownBuildOf, printerAgents, printFactsOf, suggestFor } from "../prints.ts";
 import { loadAttempt } from "./attempts.ts";
 import { loadItem, stageDates } from "./items.ts";
 
@@ -41,6 +43,8 @@ const moveAttempt = z
   .refine((body) => !!body.targetId !== !!body.newBuild, "Either a build or a new one.");
 
 const updatePrint = z.object({ asking: z.boolean() });
+
+const updateStartedBy = z.object({ startedBy: z.string().min(1).max(64).nullable() });
 
 const notFound = "That attempt isn't here any more.";
 
@@ -497,7 +501,43 @@ export const attemptPrintRoutes = new Hono<AppEnv>()
       if (!job) return apiError(c, 404, "not_found", "The printer didn't file that print.");
     }
     return c.json<AttemptResponse>({ attempt: await loadAttempt(db, attempt) });
+  })
+
+  /**
+   * Who started a print from the printer, as a person says afterwards (decision 0076): one of the two of you, or
+   * nobody again (Undo). The printer doesn't know, and pairing the bridge didn't start it, so until someone says, the
+   * print is the printer's. People only: the bridge's token can't say, and an attempt someone logged is theirs.
+   */
+  .put("/:id/started-by", async (c) => {
+    const parsed = updateStartedBy.safeParse(await c.req.json().catch(() => null));
+    if (!parsed.success) return apiError(c, 400, "invalid", "Say who started it, or nobody.");
+    const db = c.var.db;
+    const found = await findLive(db, c.req.param("id"));
+    if (!found) return apiError(c, 404, "not_found", notFound);
+    const { attempt } = found;
+    const who = parsed.data.startedBy;
+    if (who && !(await db.select({ id: users.id }).from(users).where(eq(users.id, who)).get())) {
+      return apiError(c, 400, "invalid", "That isn't one of you.");
+    }
+    if (!attempt.createdVia || !(await printerAgents(db)).has(attempt.createdVia)) {
+      return apiError(c, 409, "not_from_printer", "Only a print from the printer can say who started it.");
+    }
+    const now = new Date();
+    await db.batch([
+      db
+        .update(attempts)
+        .set({ startedBy: who, updatedAt: now })
+        .where(and(eq(attempts.id, attempt.id), isNull(attempts.deletedAt))),
+      recordChange(db, {
+        entity: "attempt",
+        id: attempt.id,
+        itemId: attempt.itemId,
+        action: "updated",
+        actor: c.var.actor,
+      }),
+    ]);
+    return c.json<AttemptResponse>({ attempt: await loadAttempt(db, { ...attempt, startedBy: who, updatedAt: now }) });
   });
 
 /** For the OpenAPI document (worker/openapi). */
-export { moveAttempt, updatePrint };
+export { moveAttempt, updatePrint, updateStartedBy };

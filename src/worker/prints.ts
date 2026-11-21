@@ -19,6 +19,7 @@ import { recordChange } from "./changes.ts";
 import type { Db } from "./db/index.ts";
 import {
   type Attempt,
+  agents,
   attemptFiles,
   attemptMoves,
   attempts,
@@ -41,6 +42,26 @@ export const DOWNLOADS_KEPT_MS = 30 * 24 * 60 * MINUTE;
 
 const chunks = <T>(list: T[], size = 90): T[][] =>
   Array.from({ length: Math.ceil(list.length / size) }, (_, i) => list.slice(i * size, (i + 1) * size));
+
+/** The printer bridge's agents (`agents.printer`): what they recorded is the printer's, not their owner's. */
+export async function printerAgents(db: Db): Promise<Set<string>> {
+  const rows = await db.select({ id: agents.id }).from(agents).where(eq(agents.printer, true));
+  return new Set(rows.map((row) => row.id));
+}
+
+/** SQL: whether the agent in `column` is the printer's. */
+export const printerViaSql = (column: string) => `${column} IN (SELECT id FROM agents WHERE printer = 1)`;
+
+/**
+ * SQL: the person the attempt row `a` is credited to (shared/attempts.ts `creditedTo`): who logged it, or for a print
+ * from the printer whoever a person said started it, else NULL.
+ */
+export const creditedSql = (a: string) =>
+  `COALESCE(${a}.started_by, CASE WHEN ${printerViaSql(`${a}.created_via`)} THEN NULL ELSE ${a}.created_by END)`;
+
+/** SQL: the person the item row `i` is credited to: who captured it, and nobody for a build the printer made. */
+export const itemCreditedSql = (i: string) =>
+  `CASE WHEN ${printerViaSql(`${i}.created_via`)} THEN NULL ELSE ${i}.created_by END`;
 
 /** Whether this agent is the printer bridge's (the one whose token last said the bridge was there). */
 export async function isBridgeAgent(db: Db, via: string): Promise<boolean> {
@@ -245,12 +266,13 @@ export async function printNowIn(
 /** What each attempt says about its print and its last move (`Attempt.print`, `Attempt.moved`). */
 export async function printViews(
   db: Db,
-  rows: ReadonlyArray<Pick<Attempt, "id" | "itemId">>,
-): Promise<Map<string, { print: AttemptPrint | null; moved: AttemptMoved | null }>> {
-  const views = new Map<string, { print: AttemptPrint | null; moved: AttemptMoved | null }>();
+  rows: ReadonlyArray<Pick<Attempt, "id" | "itemId" | "createdVia">>,
+): Promise<Map<string, PrintView>> {
+  const views = new Map<string, PrintView>();
   if (!rows.length) return views;
   const ids = rows.map((row) => row.id);
-  const [jobs, moves] = await Promise.all([
+  const [printer, jobs, moves] = await Promise.all([
+    printerAgents(db),
     Promise.all(chunks(ids).map((slice) => db.select().from(printJobs).where(inArray(printJobs.attemptId, slice)))),
     Promise.all(
       chunks(ids).map((slice) =>
@@ -271,6 +293,7 @@ export async function printViews(
     // The reasons and the question hold only while it is in the build the printer put it in.
     const here = job?.itemId === row.itemId;
     views.set(row.id, {
+      fromPrinter: !!row.createdVia && printer.has(row.createdVia),
       print: job
         ? {
             name: job.name,
@@ -299,13 +322,21 @@ export async function printViews(
 /** The printer's own build for a print: where a new one was placed, or (matched) the one it made and merged away. */
 export const ownBuildOf = (job: { ownItemId: string | null; itemId: string }) => job.ownItemId ?? job.itemId;
 
-/** Adds `print` and `moved` to attempts on their way out. */
+/** What an attempt says on its way out about the printer: whether it is the printer's, how it was placed, its move. */
+export interface PrintView {
+  fromPrinter: boolean;
+  print: AttemptPrint | null;
+  moved: AttemptMoved | null;
+}
+
+/** Adds `fromPrinter`, `print` and `moved` to attempts on their way out. */
 export function withPrintViews<T extends { id: string }>(
   list: T[],
-  views: Awaited<ReturnType<typeof printViews>>,
-): Array<T & { print: AttemptPrint | null; moved: AttemptMoved | null }> {
+  views: Map<string, PrintView>,
+): Array<T & PrintView> {
   return list.map((attempt) => ({
     ...attempt,
+    fromPrinter: views.get(attempt.id)?.fromPrinter ?? false,
     print: views.get(attempt.id)?.print ?? null,
     moved: views.get(attempt.id)?.moved ?? null,
   }));

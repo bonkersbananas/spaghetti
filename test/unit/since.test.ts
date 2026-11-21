@@ -63,6 +63,25 @@ describe("catchUp", () => {
     expect(result?.lines.map((line) => line.itemId)).toEqual(["q"]);
   });
 
+  it("leaves out a print from the printer nobody has said they started, whoever paired the bridge", () => {
+    const fromPrinter = (id: string, startedBy: string | null) =>
+      ({ id, outcome: null, createdBy: "me", fromPrinter: true, startedBy, finishedBy: null }) as never;
+    const prints = new Map([
+      ["p", { ...item("p", "cable-clip-v3", "building"), attempts: [fromPrinter("a-p", null)] }],
+      ["q", { ...item("q", "bath-boat", "building"), attempts: [fromPrinter("a-q", "sam")] }],
+    ] as [string, Item][]);
+    // The journal names nobody for the first (by: null), and Sam for the one he said he started.
+    const printed = [
+      { ...entry("attempt", "p", at(14), "", "a-p"), by: null },
+      entry("attempt", "q", at(14), "sam", "a-q"),
+    ];
+    const mine = catchUp(printed, prints, { me: "me", from: at(10), name: "Sam" });
+    expect(mine?.lines.map((line) => line.itemId)).toEqual(["q"]);
+    expect(mine?.sentence).toBe("Sam started 1 print.");
+    // And for Sam: neither is news of the other person.
+    expect(catchUp(printed, prints, { me: "sam", from: at(10), name: "Me" })).toBeNull();
+  });
+
   it("shows each thing once, with its latest news", () => {
     const hook = {
       ...item("h", "Hook", "building"),

@@ -7,6 +7,7 @@ import { fullTime } from "@shared/time";
 import { Link } from "@tanstack/react-router";
 import { forwardRef, type ReactNode, useState } from "react";
 import { OutcomeChip, outcomeIcons } from "@/components/builds/Outcome";
+import { PrinterBy } from "@/components/builds/PrinterBy";
 import { SettingsLine } from "@/components/builds/SettingsLine";
 import { summarizeSettings } from "@/components/builds/settings";
 import { Avatar, ViaText } from "@/components/ui/Avatar";
@@ -117,7 +118,13 @@ const AttemptCard = forwardRef<HTMLAnchorElement, JournalEntryProps>(function At
               <SlicerFileIcon size={12} weight="fill" aria-hidden />
               From the model
             </span>
-            <Meta at={attempt.printedAt} time={time} person={person} via={via} />
+            <Meta
+              at={attempt.printedAt}
+              time={time}
+              person={person}
+              via={via}
+              printer={attempt.fromPrinter ? attempt : undefined}
+            />
           </div>
           <div className="relative col-start-1 row-start-2 size-24 overflow-hidden rounded-md md:col-span-2 md:row-span-2 md:row-start-1 md:aspect-4/3 md:h-auto md:w-full">
             {/* A render, not a photo: the whole plate on the well, not cropped to fill. */}
@@ -176,7 +183,13 @@ const AttemptCard = forwardRef<HTMLAnchorElement, JournalEntryProps>(function At
           {!picture && (
             <div className="flex items-center gap-2">
               <OutcomeChip outcome={attempt.outcome} offTheBed={offBed} />
-              <Meta at={attempt.printedAt} time={time} person={person} via={via} />
+              <Meta
+                at={attempt.printedAt}
+                time={time}
+                person={person}
+                via={via}
+                printer={attempt.fromPrinter ? attempt : undefined}
+              />
             </div>
           )}
           <div className="flex items-baseline gap-2">
@@ -254,12 +267,15 @@ function Meta({
   time,
   person,
   via,
+  printer,
   className,
 }: {
   at: number;
   time: string;
   person?: Person;
   via?: string;
+  /** A print from the printer: the printer's mark, or whoever someone said started it (decision 0076). */
+  printer?: { id: string; startedBy?: string | null };
   className?: string;
 }) {
   return (
@@ -269,11 +285,11 @@ function Meta({
         className,
       )}
     >
-      <ViaText name={via} person={person?.name} className="hidden md:inline" />
+      {!printer && <ViaText name={via} person={person?.name} className="hidden md:inline" />}
       <time dateTime={new Date(at).toISOString()} title={fullTime(at)}>
         {time}
       </time>
-      {person && <Avatar person={person} size="xs" via={via} />}
+      {printer ? <PrinterBy attempt={printer} /> : person && <Avatar person={person} size="xs" via={via} />}
     </span>
   );
 }
@@ -458,8 +474,14 @@ const AttemptRow = forwardRef<HTMLAnchorElement, JournalEntryProps>(function Att
           attemptId={attempt.id}
         />
       )}
-      <ViaText name={via} person={person?.name} className="text-small hidden md:inline" />
-      {person && <Avatar person={person} size="xs" via={via} className="shrink-0" />}
+      {attempt.fromPrinter ? (
+        <PrinterBy attempt={attempt} className="text-small" />
+      ) : (
+        <>
+          <ViaText name={via} person={person?.name} className="text-small hidden md:inline" />
+          {person && <Avatar person={person} size="xs" via={via} className="shrink-0" />}
+        </>
+      )}
     </Link>
   );
 });

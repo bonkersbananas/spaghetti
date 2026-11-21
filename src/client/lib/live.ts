@@ -173,8 +173,10 @@ function sayAboutScreen(queryClient: QueryClient, screen: LiveScreen, changes: C
   // "Sam logged an attempt", or for an agent, quietly: "Logged an attempt via Claude for Alex".
   const said = (change: Change, did: string) => {
     if (change.actor.kind !== "agent") return `${who(change)} ${did}`;
-    const name = agents?.find((agent) => agent.id === change.actor.id)?.name;
-    return name ? `${did.charAt(0).toUpperCase()}${did.slice(1)} via ${name}` : `An agent ${did}`;
+    const agent = agents?.find((one) => one.id === change.actor.id);
+    // The printer bridge's work is the printer's, not its owner's (decision 0076).
+    if (agent?.printer) return `The printer ${did}`;
+    return agent ? `${did.charAt(0).toUpperCase()}${did.slice(1)} via ${agent.name}` : `An agent ${did}`;
   };
 
   if (open.kind === "pantry") {

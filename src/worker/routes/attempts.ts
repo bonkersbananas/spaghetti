@@ -171,7 +171,7 @@ export async function loadAttempt(db: Db, attempt: Attempt) {
   const found = all.find((row) => row.id === attempt.id);
   if (!found) throw new Error("The attempt went missing.");
   const view = (await printViews(db, [attempt])).get(attempt.id);
-  return { ...found, print: view?.print ?? null, moved: view?.moved ?? null };
+  return { ...found, fromPrinter: view?.fromPrinter ?? false, print: view?.print ?? null, moved: view?.moved ?? null };
 }
 
 /** An attempt that isn't deleted, of an item that isn't. */

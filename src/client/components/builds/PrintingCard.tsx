@@ -1,5 +1,5 @@
 import type { Person } from "@shared/api";
-import type { Outcome } from "@shared/attempts";
+import { creditedTo, type Outcome } from "@shared/attempts";
 import { attemptPartsLabel } from "@shared/parts";
 import { isOffTheBed } from "@shared/print-progress";
 import { Link, useNavigate } from "@tanstack/react-router";
@@ -28,6 +28,7 @@ import { useIsDesktop } from "@/lib/use-media-query";
 import { OffTheBed } from "./OffTheBed";
 import { OutcomeChip, OutcomePicker } from "./Outcome";
 import { PhotoReadNote } from "./PhotoReadNote";
+import { PrinterBy } from "./PrinterBy";
 
 // Which build a print the printer filed belongs to (decision 0076): its code comes only with such a print.
 const PrintPlace = lazy(() => import("./print-place-lazy").then((entry) => entry.loadPrintPlace()));
@@ -295,11 +296,23 @@ export function PrintingCard({
             >
               {name.text}
             </h3>
-            {person && (
-              <span className="mt-1.5 flex shrink-0 items-center gap-2">
-                <ViaText name={via} person={person?.name} className="hidden md:inline" />
-                <Avatar person={person} size="xs" via={via} />
+            {attempt.fromPrinter ? (
+              // The printer's, not whoever paired the bridge; a tap says who started it (decision 0076).
+              <span className="text-small mt-1.5 flex shrink-0 items-center">
+                <PrinterBy
+                  attempt={attempt}
+                  itemId={item.id}
+                  readOnly={readOnly}
+                  className="pointer-events-auto z-10"
+                />
               </span>
+            ) : (
+              person && (
+                <span className="mt-1.5 flex shrink-0 items-center gap-2">
+                  <ViaText name={via} person={person?.name} className="hidden md:inline" />
+                  <Avatar person={person} size="xs" via={via} />
+                </span>
+              )
             )}
           </div>
           <div
@@ -473,7 +486,7 @@ export function BedCards({ prints, people, via, spread = false, unread, classNam
     unread: unread?.(item.id),
     item,
     attempt,
-    person: people.get(attempt.createdBy),
+    person: people.get(creditedTo(attempt) ?? ""),
     via: via(attempt.createdVia),
   });
   return (

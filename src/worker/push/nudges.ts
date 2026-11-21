@@ -1,4 +1,5 @@
 import { and, eq, gt, inArray, isNull } from "drizzle-orm";
+import { creditedTo } from "../../shared/attempts.ts";
 import {
   dueNudge,
   isQuietHour,
@@ -11,6 +12,7 @@ import { sinceWords } from "../../shared/upkeep.ts";
 import { getDb } from "../db/index.ts";
 import { attempts, items, pushNudges, pushSubscriptions, upkeepTasks, users } from "../db/schema.ts";
 import { readsByAttempt, toApiPhotoRead } from "../photo-read/run.ts";
+import { printerAgents } from "../prints.ts";
 import { loadUpkeep } from "../routes/upkeep.ts";
 import { importVapidKey, type PushResult, sendPush } from "./webpush.ts";
 
@@ -54,7 +56,7 @@ export async function pushTo(
  * Sends the "how did it go?" nudges that are due (cron, every few minutes). An open attempt is due when the
  * bridge saw it come off the bed, or its slicer estimate plus ten minutes has passed. Each attempt is nudged
  * at most once per person: the person who started it, and whoever asked in settings to hear about the other
- * person's prints. Quiet hours (22:00 to 07:00 in the device's time zone) wait; a nudge that has waited past
+ * person's prints; a print from the printer that nobody has said they started, both of you. Quiet hours (22:00 to 07:00 in the device's time zone) wait; a nudge that has waited past
  * the window, or whose attempt got an outcome meanwhile, is never sent.
  */
 export async function sendNudges(env: Env, now = Date.now(), deliver: typeof pushTo = pushTo) {
@@ -106,14 +108,22 @@ export async function sendNudges(env: Env, now = Date.now(), deliver: typeof pus
   );
   const done = new Set(already.map((n) => `${n.attemptId}:${n.userId}`));
 
+  const printer = await printerAgents(db);
   let sent = 0;
   for (const { attempt, title, kind } of due) {
-    const own = attempt.createdBy;
-    const recipients = new Set(subscriptions.filter((s) => s.userId === own || s.alsoOthers).map((s) => s.userId));
+    // Whose print it is (decision 0076). A print from the printer that nobody has said they started is everyone's:
+    // each of you hears of it as of your own, and no name is put to it (pairing the bridge didn't start it).
+    const own = creditedTo({
+      createdBy: attempt.createdBy,
+      startedBy: attempt.startedBy,
+      fromPrinter: !!attempt.createdVia && printer.has(attempt.createdVia),
+    });
+    const isOwn = (userId: string) => own === null || userId === own;
+    const recipients = new Set(subscriptions.filter((s) => isOwn(s.userId) || s.alsoOthers).map((s) => s.userId));
     for (const userId of recipients) {
       if (done.has(`${attempt.id}:${userId}`)) continue;
       // Their devices: all of them for their own print, only those that asked for the other person's.
-      const devices = subscriptions.filter((s) => s.userId === userId && (userId === own || s.alsoOthers));
+      const devices = subscriptions.filter((s) => s.userId === userId && (isOwn(userId) || s.alsoOthers));
       const awake = devices.filter((s) => !isQuietHour(s.timeZone, now));
       if (!awake.length) continue; // Waits for the morning.
       // Claimed before sending, so two overlapping runs can't both send it.
@@ -126,7 +136,7 @@ export async function sendNudges(env: Env, now = Date.now(), deliver: typeof pus
       const read = toApiPhotoRead(reads.get(attempt.id) ?? []);
       const suggestion =
         read?.status === "read" && read.outcome ? { outcome: read.outcome, reason: read.reason } : null;
-      const message = nudgeMessage(kind, attempt, title, userId === own ? undefined : names.get(own), suggestion);
+      const message = nudgeMessage(kind, attempt, title, isOwn(userId) ? undefined : names.get(own ?? ""), suggestion);
       let delivered = 0;
       for (const device of awake) {
         if ((await deliver(env, vapid, device, message)) === "sent") delivered++;

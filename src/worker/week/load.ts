@@ -1,5 +1,5 @@
 import { and, asc, desc, eq, gte, inArray, isNotNull, isNull, lt, sql } from "drizzle-orm";
-import type { Outcome } from "../../shared/attempts.ts";
+import { creditedTo, type Outcome } from "../../shared/attempts.ts";
 import { isRunningLow } from "../../shared/ledger.ts";
 import { spoolName } from "../../shared/spools.ts";
 import {
@@ -18,6 +18,7 @@ import {
 import { type Db, getDb } from "../db/index.ts";
 import { attempts, comments, items, photos, spools, weeks } from "../db/schema.ts";
 import { gramsFor } from "../ledger.ts";
+import { printerAgents } from "../prints.ts";
 import { toApiSpool } from "../routes/spools.ts";
 import { loadUpkeep } from "../routes/upkeep.ts";
 
@@ -62,6 +63,8 @@ export async function loadWeek(env: Env, monday: string, now = Date.now(), db: D
       printedAt: attempts.printedAt,
       settings: attempts.settings,
       createdBy: attempts.createdBy,
+      createdVia: attempts.createdVia,
+      startedBy: attempts.startedBy,
       title: items.title,
     })
     .from(attempts)
@@ -116,16 +119,21 @@ export async function loadWeek(env: Env, monday: string, now = Date.now(), db: D
     }
   }
 
-  const prints: WeekPrint[] = rows.map((row) => ({
-    attemptId: row.id,
-    itemId: row.itemId,
-    title: row.title,
-    attempt: numbering.get(row.id) ?? 1,
-    outcome: row.outcome,
-    at: row.printedAt.getTime(),
-    by: row.createdBy,
-    photo: finalPhoto.get(row.id) ?? null,
-  }));
+  const printer = await printerAgents(db);
+  const prints: WeekPrint[] = rows.map((row) => {
+    const fromPrinter = !!row.createdVia && printer.has(row.createdVia);
+    return {
+      attemptId: row.id,
+      itemId: row.itemId,
+      title: row.title,
+      attempt: numbering.get(row.id) ?? 1,
+      outcome: row.outcome,
+      at: row.printedAt.getTime(),
+      by: creditedTo({ createdBy: row.createdBy, startedBy: row.startedBy, fromPrinter }),
+      fromPrinter,
+      photo: finalPhoto.get(row.id) ?? null,
+    };
+  });
   const made = prints
     .filter((print) => print.outcome)
     .sort(

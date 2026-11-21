@@ -3,7 +3,7 @@ import { type PersonColor, withoutOwner } from "@shared/people";
 import { useState } from "react";
 import { cn } from "@/lib/cn";
 import { initials } from "@/lib/initials";
-import { AgentIcon } from "./icons";
+import { AgentIcon, PrinterIcon } from "./icons";
 
 const colors: Record<PersonColor, string> = {
   tomato: "bg-person-tomato",
@@ -32,6 +32,11 @@ interface AvatarProps {
   decorative?: boolean;
   /** The agent this was done through ("Claude for Alex"): the person's avatar gets a small agent mark. */
   via?: string;
+  /**
+   * A print from the printer that this person started (decision 0076): the small mark is the printer's glyph, and
+   * the name reads "Marie, from the printer".
+   */
+  printer?: boolean;
   className?: string;
 }
 
@@ -54,8 +59,17 @@ const marks = {
  * so it is still their face, at every size; a small agent mark sits in its lower right corner, cut out of the
  * circle, and the name reads "Alex, via Claude for Alex".
  */
-export function Avatar({ person, size = "md", ringed = false, decorative = false, via, className }: AvatarProps) {
-  const label = via ? `${person.name}, via ${via}` : person.name;
+export function Avatar({
+  person,
+  size = "md",
+  ringed = false,
+  decorative = false,
+  via,
+  printer = false,
+  className,
+}: AvatarProps) {
+  const marked = printer || !!via;
+  const label = printer ? `${person.name}, from the printer` : via ? `${person.name}, via ${via}` : person.name;
   const face = (
     <span
       {...(decorative ? { "aria-hidden": true } : { role: "img", "aria-label": label, title: label })}
@@ -65,16 +79,17 @@ export function Avatar({ person, size = "md", ringed = false, decorative = false
         sizes[size],
         ringed && "ring-paper ring-2",
         // Small, two letters fill the circle: nudged a pixel up and left, they keep clear of the mark's cutout.
-        via && marks[size].cut,
-        via && (size === "xs" || size === "sm") && "pr-0.5 pb-0.5",
-        !via && className,
+        marked && marks[size].cut,
+        marked && (size === "xs" || size === "sm") && "pr-0.5 pb-0.5",
+        !marked && className,
       )}
     >
       {initials(person.name)}
       {person.photoUrl && <Picture key={person.photoUrl} url={person.photoUrl} />}
     </span>
   );
-  if (!via) return face;
+  if (!marked) return face;
+  const Glyph = printer ? PrinterIcon : AgentIcon;
   return (
     <span className={cn("relative inline-flex shrink-0", className)}>
       {face}
@@ -85,11 +100,44 @@ export function Avatar({ person, size = "md", ringed = false, decorative = false
           marks[size].className,
         )}
       >
-        <AgentIcon size={marks[size].glyph} weight="fill" />
+        <Glyph size={marks[size].glyph} weight="fill" />
       </span>
     </span>
   );
 }
+
+/**
+ * The printer, where a person would be named for what it did (decision 0076): a print the printer bridge recorded is
+ * the printer's, never whoever paired the bridge. A rounded square, as an agent is (a circle is a person here), on the
+ * warm `well` with the printer glyph, the size of the avatar it stands in for. Once someone says who started the
+ * print, that person's avatar takes its place, with the printer as its small mark (`Avatar printer`).
+ */
+export function PrinterMark({
+  size = "md",
+  decorative = false,
+  className,
+}: {
+  size?: keyof typeof sizes;
+  /** Beside the words "From the printer" already: hidden from screen readers. */
+  decorative?: boolean;
+  className?: string;
+}) {
+  return (
+    <span
+      {...(decorative ? { "aria-hidden": true } : { role: "img", "aria-label": "The printer", title: "The printer" })}
+      className={cn(
+        "bg-well text-ink-soft rounded-mark inline-flex shrink-0 items-center justify-center",
+        sizes[size],
+        className,
+      )}
+    >
+      <PrinterIcon size={printerGlyphs[size]} weight="fill" aria-hidden />
+    </span>
+  );
+}
+
+/** The printer glyph in its mark, per size: about 60 % of it, as a face's initials are. */
+const printerGlyphs = { xs: 14, sm: 16, md: 20, lg: 26 } as const;
 
 /**
  * The picture over the initials: the initials stay underneath while it loads, if it fails and offline, so nothing

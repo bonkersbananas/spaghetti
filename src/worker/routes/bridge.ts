@@ -145,15 +145,21 @@ export const bridgePairRoutes = new Hono<AppEnv>().post("/pair", async (c) => {
   const agentId = existing?.id ?? crypto.randomUUID();
   const issued = await issue(agentId, [...BRIDGE_SCOPES]);
   const writes: BatchItem<"sqlite">[] = [];
+  // The agent is the printer (decision 0076): its prints are the printer's, not this person's.
   if (existing) {
     writes.push(
       db
         .update(agentTokens)
         .set({ revokedAt: now })
         .where(and(eq(agentTokens.agentId, agentId), isNull(agentTokens.revokedAt))),
+      db.update(agents).set({ printer: true }).where(eq(agents.id, agentId)),
     );
   } else
-    writes.push(db.insert(agents).values({ id: agentId, name: BRIDGE_AGENT_NAME, ownerId: owner.id, createdAt: now }));
+    writes.push(
+      db
+        .insert(agents)
+        .values({ id: agentId, name: BRIDGE_AGENT_NAME, ownerId: owner.id, createdAt: now, printer: true }),
+    );
   writes.push(
     db.insert(agentTokens).values(issued.row),
     db.update(bridgePairings).set({ agentId }).where(eq(bridgePairings.id, claimed.id)),

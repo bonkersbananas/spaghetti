@@ -149,6 +149,16 @@ export const Attempt = z
     createdVia: id.nullable().describe("The agent it was logged through."),
     finishedBy: id.nullable(),
     finishedVia: id.nullable(),
+    fromPrinter: z
+      .boolean()
+      .optional()
+      .describe(
+        "The printer bridge recorded it: the printer's print, not that of `createdBy`, who paired the bridge (decision 0076).",
+      ),
+    startedBy: id
+      .nullable()
+      .optional()
+      .describe("Who started a print from the printer, as a person said afterwards; null until then."),
     createdAt: epoch,
     updatedAt: epoch,
     print: z
@@ -182,6 +192,7 @@ export const Item = z
     note: z.string(),
     createdBy: id,
     createdVia: id.nullable().describe("The agent it was captured through."),
+    fromPrinter: z.boolean().optional().describe("A build the printer made for a print (decision 0076)."),
     createdAt: epoch,
     updatedAt: epoch,
     startedAt: epoch.nullable(),
@@ -315,6 +326,10 @@ export const Agent = z
       })
       .nullable()
       .describe("Set for an app connected by OAuth (its short-lived tokens are not listed)."),
+    printer: z
+      .boolean()
+      .optional()
+      .describe("The printer bridge's agent: what it records is the printer's, not its owner's (decision 0076)."),
   })
   .meta({ id: "Agent", description: "Tokens are listed only for their owner." });
 

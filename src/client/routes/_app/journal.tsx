@@ -405,7 +405,9 @@ function Group({
           const item = items.get(entry.itemId);
           if (!item) return null;
           // Who started or finished a build isn't recorded: only attempts and ideas show a person.
-          const person = entry.kind === "attempt" || entry.kind === "idea" ? people.get(entry.by) : undefined;
+          // A print from the printer names nobody until someone says who started it (decision 0076).
+          const person =
+            (entry.kind === "attempt" || entry.kind === "idea") && entry.by ? people.get(entry.by) : undefined;
           return (
             <li key={entry.key} className="list-none">
               <JournalEntry

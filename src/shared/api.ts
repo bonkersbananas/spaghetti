@@ -130,6 +130,13 @@ export interface Attempt {
   finishedBy: string | null;
   /** The agent that finished it, if any. */
   finishedVia: string | null;
+  /**
+   * The printer bridge recorded it: the printer's print, not the person who paired the bridge (`createdBy`), so no
+   * person is named for it until someone says who started it (decision 0076). Absent in a copy saved by an older version.
+   */
+  fromPrinter?: boolean;
+  /** Who started a print from the printer, as a person said afterwards; null until then, and for everything else. */
+  startedBy?: string | null;
   createdAt: number;
   updatedAt: number;
   /**
@@ -320,6 +327,8 @@ export interface Item {
   createdBy: string;
   /** The agent it was captured through ("via Claude for Alex"), if any; `createdBy` is then its owner. */
   createdVia: string | null;
+  /** A build the printer made for a print (decision 0076): the printer's, not the person who paired the bridge. */
+  fromPrinter?: boolean;
   createdAt: number;
   updatedAt: number;
   /** When it became a build. */
@@ -566,8 +575,11 @@ export interface JournalEntry {
   attemptId: string | null;
   /** When it happened, epoch ms. */
   at: number;
-  /** Who logged the attempt or captured the item. */
-  by: string;
+  /**
+   * Who logged the attempt or captured the item; for a print from the printer, whoever a person said started it, and
+   * null until then (decision 0076). Null for a build the printer made, too.
+   */
+  by: string | null;
   /** The agent it was made through, if any. */
   via: string | null;
 }

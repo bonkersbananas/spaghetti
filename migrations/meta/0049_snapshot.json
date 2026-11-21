@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "9fcc4149-a93a-4b3a-ac8e-7cf1029b3225",
+  "id": "1008fe4d-9b25-432b-9c22-c33e1c20b483",
   "prevId": "f708847a-820d-4b0b-94d6-7b8e8eeb4c62",
   "tables": {
     "agent_tokens": {
@@ -143,6 +143,14 @@
           "primaryKey": false,
           "notNull": false,
           "autoincrement": false
+        },
+        "printer": {
+          "name": "printer",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": false
         }
       },
       "indexes": {
@@ -695,6 +703,13 @@
           "notNull": false,
           "autoincrement": false
         },
+        "started_by": {
+          "name": "started_by",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
         "created_at": {
           "name": "created_at",
           "type": "integer",
@@ -768,6 +783,19 @@
           "tableTo": "users",
           "columnsFrom": [
             "finished_by"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "attempts_started_by_users_id_fk": {
+          "name": "attempts_started_by_users_id_fk",
+          "tableFrom": "attempts",
+          "tableTo": "users",
+          "columnsFrom": [
+            "started_by"
           ],
           "columnsTo": [
             "id"

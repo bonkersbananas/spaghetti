@@ -251,6 +251,11 @@ export const attempts = sqliteTable(
     /** The agent it was made / finished through, if any. */
     createdVia: text("created_via"),
     finishedVia: text("finished_via"),
+    /**
+     * Who started a print the printer recorded, as a person said afterwards (decision 0076). A print from the printer
+     * is the printer's, not whoever paired the bridge (`createdBy`): until someone says who started it, it is nobody's.
+     */
+    startedBy: text("started_by").references(() => users.id),
     createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
     updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull(),
     deletedAt: integer("deleted_at", { mode: "timestamp_ms" }),
@@ -1005,6 +1010,11 @@ export const agents = sqliteTable(
     createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
     /** Set for an agent that is an app connected by OAuth ("Claude"): its tokens are short-lived and renewed. */
     oauthClientId: text("oauth_client_id"),
+    /**
+     * The printer bridge's agent: what it records is the printer's, not its owner's (decision 0076). Set when a
+     * bridge pairs or first reports as it, and kept after it disconnects, so its old prints stay the printer's.
+     */
+    printer: integer("printer", { mode: "boolean" }).notNull().default(false),
   },
   (table) => [index("agents_owner_idx").on(table.ownerId)],
 );

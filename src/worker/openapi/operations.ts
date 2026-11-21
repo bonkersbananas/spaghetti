@@ -25,7 +25,7 @@ import {
 import { journalQuery, summaryQuery } from "../routes/journal.ts";
 import { decision } from "../routes/oauth.ts";
 import { bridgeSchema, setSlot, setupSchema } from "../routes/printer.ts";
-import { moveAttempt, updatePrint } from "../routes/prints.ts";
+import { moveAttempt, updatePrint, updateStartedBy } from "../routes/prints.ts";
 import { pushChange, pushTarget, subscribe } from "../routes/push.ts";
 import { createRecipe, recipeQuery, updateRecipe } from "../routes/recipes.ts";
 import { scoutKeepBody } from "../routes/scout.ts";
@@ -693,6 +693,17 @@ export const operations: Record<string, Operation> = {
     body: updatePrint,
     response: one("attempt", Attempt),
     errors: { 404: notFound("attempt") },
+  },
+  "PUT /attempts/:id/started-by": {
+    summary:
+      "Says who started a print the printer recorded (decision 0076): one of the people's ids, or null for nobody (the undo). Until someone says, the print is the printer's, not that of whoever paired the bridge. People only.",
+    body: updateStartedBy,
+    response: one("attempt", Attempt),
+    errors: {
+      400: "invalid: not one of the people.",
+      404: notFound("attempt"),
+      409: "not_from_printer: only a print from the printer is started by someone who didn't log it.",
+    },
   },
   "DELETE /attempts/:id": { summary: "Deletes an attempt (it can be restored).", response: "empty", status: 204 },
   "POST /attempts/:id/restore": { summary: "Restores a deleted attempt.", response: one("attempt", Attempt) },

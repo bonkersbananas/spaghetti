@@ -56,6 +56,8 @@ export interface AgentInfo {
   tokens: AgentTokenInfo[];
   /** Set for an agent connected by OAuth; its short-lived tokens are not listed, it is disconnected as a whole. */
   connection: AgentConnection | null;
+  /** The printer bridge's agent: what it records is the printer's, not its owner's (decision 0076). */
+  printer?: boolean;
 }
 
 export interface AgentsResponse {

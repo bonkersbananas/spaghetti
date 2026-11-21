@@ -62,6 +62,7 @@ import {
 import type { AppEnv } from "../env.ts";
 import { apiError, toApiPhoto } from "../http.ts";
 import { gramsFor } from "../ledger.ts";
+import { creditedSql, itemCreditedSql, printerAgents } from "../prints.ts";
 import { liveRecipes } from "./recipes.ts";
 import { toApiSpool } from "./spools.ts";
 import { liveTwists } from "./twists.ts";
@@ -127,7 +128,8 @@ export function attemptFilters(f: {
     params.push(f.tag, f.tag);
   }
   if (f.person) {
-    sql += " AND a.created_by = ?";
+    // Theirs as the app shows it: a print from the printer is whoever a person said started it (decision 0076).
+    sql += ` AND ${creditedSql("a")} = ?`;
     params.push(f.person);
   }
   return { sql, params };
@@ -182,10 +184,11 @@ export async function attemptHits(db: Db, ids: string[]): Promise<AttemptHit[]> 
   if (!ids.length) return [];
   const rows = await db.select().from(attempts).where(inArray(attempts.id, ids));
   const itemIds = unique(rows.map((row) => row.itemId));
-  const [itemRows, siblings, partRows] = await Promise.all([
+  const [itemRows, siblings, partRows, printer] = await Promise.all([
     db.select().from(items).where(inArray(items.id, itemIds)),
     liveAttempts(db, itemIds),
     db.select().from(parts).where(inArray(parts.itemId, itemIds)),
+    printerAgents(db),
   ]);
   const itemPhotos = await livePhotos(db, itemIds, new Set(siblings.map((row) => row.id)));
   const byId = new Map(rows.map((row) => [row.id, row]));
@@ -225,6 +228,8 @@ export async function attemptHits(db: Db, ids: string[]): Promise<AttemptHit[]> 
           createdVia: attempt.createdVia,
           finishedBy: attempt.finishedBy,
           finishedVia: attempt.finishedVia,
+          fromPrinter: !!attempt.createdVia && printer.has(attempt.createdVia),
+          startedBy: attempt.startedBy,
           createdAt: attempt.createdAt.getTime(),
           updatedAt: attempt.updatedAt.getTime(),
         },
@@ -655,7 +660,7 @@ async function searchWith(
       : all<{ id: string; snippet: string | null }>(env, {
           sql: `SELECT i.id, snippet(search, 4, ?, ?, '…', 16) AS snippet FROM search
             JOIN items AS i ON i.id = search.ref_id
-            WHERE search MATCH ? AND search.kind = 'item' AND i.deleted_at IS NULL${f.person ? " AND i.created_by = ?" : ""}${itemSpan.sql}
+            WHERE search MATCH ? AND search.kind = 'item' AND i.deleted_at IS NULL${f.person ? ` AND ${itemCreditedSql("i")} = ?` : ""}${itemSpan.sql}
             ORDER BY ${RANK}, i.created_at DESC LIMIT ${LIMIT.items * 2}`,
           params: [SNIPPET_OPEN, SNIPPET_CLOSE, match, ...(f.person ? [f.person] : []), ...itemSpan.params],
         }),

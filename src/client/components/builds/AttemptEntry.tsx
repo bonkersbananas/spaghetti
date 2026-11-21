@@ -21,6 +21,7 @@ import { EstimateLine } from "./Estimate";
 import { NotEnoughNote } from "./NotEnoughNote";
 import { OffTheBed } from "./OffTheBed";
 import { OutcomeChip, outcomeDots } from "./Outcome";
+import { PrinterBy } from "./PrinterBy";
 import { SettingsLine } from "./SettingsLine";
 import { SavedFileCard } from "./SlicerFile";
 import { filamentLabel, summarizeResults, summarizeSettings } from "./settings";
@@ -157,7 +158,7 @@ export const AttemptEntry = forwardRef<HTMLLIElement, AttemptEntryProps>(functio
                 </h3>
                 {/* Wide screens: the time sits on the line. Phones have no room for it beside the avatar and the menu: it goes under. */}
                 <span className="text-small text-ink-faint ml-auto flex min-w-0 items-center gap-2 whitespace-nowrap">
-                  <ViaText name={via} person={person?.name} className="hidden md:inline" />
+                  {!attempt.fromPrinter && <ViaText name={via} person={person?.name} className="hidden md:inline" />}
                   <time
                     dateTime={new Date(attempt.printedAt).toISOString()}
                     title={fullTime(attempt.printedAt)}
@@ -165,7 +166,17 @@ export const AttemptEntry = forwardRef<HTMLLIElement, AttemptEntryProps>(functio
                   >
                     {relativeTime(attempt.printedAt)}
                   </time>
-                  {person && <Avatar person={person} size="xs" via={via} />}
+                  {attempt.fromPrinter ? (
+                    // The printer's, not whoever paired the bridge; a tap says who started it (decision 0076).
+                    <PrinterBy
+                      attempt={attempt}
+                      itemId={item?.id}
+                      readOnly={readOnly}
+                      className="pointer-events-auto z-10"
+                    />
+                  ) : (
+                    person && <Avatar person={person} size="xs" via={via} />
+                  )}
                 </span>
                 {/* Above the open button, so it works. */}
                 <span className="pointer-events-auto relative z-10 -my-1.5 flex shrink-0">

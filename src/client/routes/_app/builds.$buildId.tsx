@@ -1,5 +1,5 @@
 import type { Recipe } from "@shared/api";
-import { type Outcome, tagLabel } from "@shared/attempts";
+import { creditedTo, type Outcome, tagLabel } from "@shared/attempts";
 import { beganAsIdea } from "@shared/deleted";
 import { modelOf } from "@shared/model-mark";
 import { attemptPartsLabel } from "@shared/parts";
@@ -34,7 +34,7 @@ import { SaveRecipeSheet } from "@/components/recipes/SaveRecipe";
 import { DetailBar } from "@/components/shell/DetailBar";
 import { ActionBar } from "@/components/ui/ActionBar";
 import { ActionMenuItem, MoreMenu } from "@/components/ui/ActionMenu";
-import { Avatar, ViaText } from "@/components/ui/Avatar";
+import { Avatar, PrinterMark, ViaText } from "@/components/ui/Avatar";
 import { Button, IconButton } from "@/components/ui/Button";
 import { Chip } from "@/components/ui/Chip";
 import { ConfirmDelete } from "@/components/ui/ConfirmDelete";
@@ -794,7 +794,7 @@ function Build({ item }: { item: ItemView }) {
                           photos={item.photos.filter((photo) => photo.attemptId === attempt.id)}
                           onPhotos={readOnly ? undefined : (files) => addPhotosToItem(item.id, files, attempt.id)}
                           readOnly={readOnly || attempt.pending}
-                          person={byId.get(attempt.createdBy)}
+                          person={byId.get(creditedTo(attempt) ?? "")}
                           via={via(attempt.createdVia)}
                           selected={attempt.id === selected}
                           first={index === 0}
@@ -837,10 +837,17 @@ function Build({ item }: { item: ItemView }) {
                 )}
                 <div className="text-small text-ink-faint mt-1 flex items-center gap-3 pl-0.5">
                   <span className="bg-ink/10 flex size-3 items-center justify-center rounded-full" aria-hidden />
-                  {creator && <Avatar person={creator} size="xs" via={madeVia} />}
+                  {item.fromPrinter ? (
+                    <PrinterMark size="xs" decorative />
+                  ) : (
+                    creator && <Avatar person={creator} size="xs" via={madeVia} />
+                  )}
                   {fromIdea && <IdeasIcon size={16} className="-mr-1.5 shrink-0" aria-hidden />}
                   <p>
-                    {fromIdea ? (
+                    {item.fromPrinter ? (
+                      // The printer made it for a print, not whoever paired the bridge (decision 0076).
+                      "Made by the printer "
+                    ) : fromIdea ? (
                       <>
                         {creator ? `${who(creator)} captured` : "Captured"} as an idea {inlineTime(item.createdAt)}
                         {madeVia && (
@@ -859,7 +866,7 @@ function Build({ item }: { item: ItemView }) {
                     <time dateTime={new Date(started).toISOString()} title={fullTime(started)}>
                       {inlineTime(started)}
                     </time>
-                    {!fromIdea && madeVia && (
+                    {!fromIdea && !item.fromPrinter && madeVia && (
                       <>
                         {" "}
                         <ViaText name={madeVia} person={creator?.name} />

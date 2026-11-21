@@ -45,7 +45,7 @@ import type { AppEnv } from "../env.ts";
 import { apiError, toApiFile, toApiItem, toApiPhoto } from "../http.ts";
 import { photoReadsEnabled, readsByAttempt, runRead, startRead, toApiPhotoRead } from "../photo-read/run.ts";
 import { photoKey, photoOwner } from "../photos.ts";
-import { mergedTarget, printNowIn, printViews, withPrintViews } from "../prints.ts";
+import { mergedTarget, printerAgents, printNowIn, printViews, withPrintViews } from "../prints.ts";
 import { type TitleJobView, titleAfterSave, titleJobs } from "../title/run.ts";
 import { reactionsFor } from "./reactions.ts";
 
@@ -269,7 +269,7 @@ export async function loadItems(db: Db, where: ReturnType<typeof and>) {
     )
   ).flat();
   const twistIds = [...new Set(rows.flatMap((row) => (row.twistId ? [row.twistId] : [])))];
-  const [itemFileSlices, coaches, reactionsByItem, twistPicture, jobs, prints] = await Promise.all([
+  const [itemFileSlices, coaches, reactionsByItem, twistPicture, jobs, prints, printer] = await Promise.all([
     Promise.all(
       slices.map((ids) =>
         db
@@ -293,6 +293,7 @@ export async function loadItems(db: Db, where: ReturnType<typeof and>) {
     ),
     // How the printer bridge placed its prints, and who moved an attempt here (decision 0076).
     printViews(db, attemptSlices.flat()),
+    printerAgents(db),
   ]);
   const reads = new Map<string, PhotoRead>();
   for (const [attemptId, rows] of await readsByAttempt(db, [...liveAttempts])) {
@@ -325,6 +326,7 @@ export async function loadItems(db: Db, where: ReturnType<typeof and>) {
     );
     return {
       ...item,
+      fromPrinter: !!row.createdVia && printer.has(row.createdVia),
       attempts: withPrintViews(item.attempts, prints),
       twistModel: picture?.model ?? null,
       twistPhoto: picture?.photo ?? null,

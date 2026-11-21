@@ -51,7 +51,14 @@ CREATE TABLE `print_jobs` (
 	FOREIGN KEY (`attempt_id`) REFERENCES `attempts`(`id`) ON UPDATE no action ON DELETE cascade
 );
 --> statement-breakpoint
+ALTER TABLE `agents` ADD `printer` integer DEFAULT false NOT NULL;--> statement-breakpoint
+ALTER TABLE `attempts` ADD `started_by` text REFERENCES users(id);--> statement-breakpoint
 ALTER TABLE `items` ADD `merged_into` text;--> statement-breakpoint
+-- The printer bridge's agents are the printer (decision 0076): what they recorded is the printer's, not whoever
+-- paired the bridge. Every agent a pairing made, and the one the bridge last reported as.
+UPDATE `agents` SET `printer` = 1
+WHERE `id` IN (SELECT `agent_id` FROM `bridge_pairings` WHERE `agent_id` IS NOT NULL)
+	OR `id` IN (SELECT `agent_id` FROM `bridge` WHERE `agent_id` IS NOT NULL);--> statement-breakpoint
 -- The prints the printer bridge filed in a build of its own before the app could match them (decision 0076): their
 -- builds ask "which build is this?" from now on. Only a printer's build with just that print, from the last 30 days.
 INSERT OR IGNORE INTO `print_jobs` (`attempt_id`, `name`, `placed`, `reasons`, `item_id`, `own_title`, `asking`, `created_at`)

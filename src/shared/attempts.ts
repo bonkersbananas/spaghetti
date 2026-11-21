@@ -658,3 +658,16 @@ export function summarizeBuild(attempts: readonly SummarizableAttempt[]): BuildS
     filaments,
   };
 }
+
+/**
+ * The person an attempt is credited to (decision 0076): whoever logged it, or for a print from the printer whoever a
+ * person said started it, and nobody until then. The printer bridge's prints are never the owner's: pairing the
+ * bridge doesn't start anyone's prints.
+ */
+export function creditedTo(attempt: {
+  createdBy: string;
+  fromPrinter?: boolean;
+  startedBy?: string | null;
+}): string | null {
+  return attempt.fromPrinter ? (attempt.startedBy ?? null) : attempt.createdBy;
+}

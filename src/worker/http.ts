@@ -139,6 +139,7 @@ export function toApiAttempt(
     createdVia: attempt.createdVia,
     finishedBy: attempt.finishedBy,
     finishedVia: attempt.finishedVia,
+    startedBy: attempt.startedBy,
     createdAt: attempt.createdAt.getTime(),
     updatedAt: attempt.updatedAt.getTime(),
   };
