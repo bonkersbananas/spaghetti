@@ -4,7 +4,6 @@ import { captureNote, captureTitle, MAX_CAPTURE_PHOTOS } from "@shared/capture";
 import { useQueryClient } from "@tanstack/react-query";
 import { createContext, type ReactNode, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "@/components/ui/Toast";
-import { keptAttemptPhotos } from "./attempt-draft";
 import { queueFinish, saveAttemptChanges } from "./builds";
 import { isOnline } from "./connection";
 import { openStore } from "./idb";
@@ -123,29 +122,25 @@ export function imageFiles(files: Iterable<File>): File[] {
  * Photos picked for something not saved yet (a capture, an attempt): shown
  * at once from the device and resized in the background while you type.
  */
+export interface PhotoStore {
+  put: (photo: DraftPhoto) => Promise<void>;
+  delete: (id: string) => Promise<void>;
+  all: () => Promise<DraftPhoto[]>;
+  clear: () => Promise<void>;
+}
+
 export function useDraftPhotos({
   keep = false,
-  scope,
+  store,
   restore = true,
 }: {
   keep?: boolean;
-  scope?: string;
+  /** Where they are kept when not the capture sheet's own (the attempt sheet's, lib/attempt-draft). */
+  store?: PhotoStore;
   /** Whether photos kept by an earlier visit come back (an attempt's only while its sheet is open and its draft is fresh). */
   restore?: boolean;
 } = {}) {
-  // With a scope (a build's id) the photos live in the attempt sheet's own store, and only that build's come back.
-  const kept = useMemo(() => {
-    if (!scope) return keptPhotos;
-    const all = () => keptAttemptPhotos.all().then((found) => found.filter((photo) => photo.scope === scope));
-    return {
-      put: (photo: DraftPhoto) => keptAttemptPhotos.put({ ...photo, scope }),
-      delete: (id: string) => keptAttemptPhotos.delete(id),
-      all,
-      clear: async () => {
-        for (const photo of await all()) await keptAttemptPhotos.delete(photo.id);
-      },
-    };
-  }, [scope]);
+  const kept = store ?? keptPhotos;
   const [photos, setPhotos] = useState<DraftPhoto[]>([]);
   const photosRef = useRef(photos);
   photosRef.current = photos;

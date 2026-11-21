@@ -1,5 +1,5 @@
 import type { AttemptDraft } from "./builds";
-import type { DraftPhoto } from "./capture";
+import type { DraftPhoto, PhotoStore } from "./capture";
 import { openStore } from "./idb";
 
 /**
@@ -12,6 +12,18 @@ type KeptDraft = { draft: StoredDraft; when: number | null; savedAt: number; att
 
 /** The attempt sheet's photos, apart from the capture sheet's and each marked with the build they are for. */
 export const keptAttemptPhotos = openStore<DraftPhoto & { scope: string }>("spaghetti-attempt", "photos", "id");
+/** A build's own place among them: only its photos come back, and clearing leaves the others. */
+export function attemptPhotoStore(scope: string): PhotoStore {
+  const all = () => keptAttemptPhotos.all().then((found) => found.filter((photo) => photo.scope === scope));
+  return {
+    put: (photo) => keptAttemptPhotos.put({ ...photo, scope }),
+    delete: (id) => keptAttemptPhotos.delete(id),
+    all,
+    clear: async () => {
+      for (const photo of await all()) await keptAttemptPhotos.delete(photo.id);
+    },
+  };
+}
 /** A draft is for the next hours, not the next days: older than this it is dropped, not restored. */
 const DRAFT_FRESH_MS = 6 * 60 * 60 * 1000;
 

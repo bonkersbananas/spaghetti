@@ -2,7 +2,7 @@ import type { AttemptFile } from "@shared/api";
 import { type AttemptSettings, carryOver, type Outcome } from "@shared/attempts";
 import { partsOnPlate } from "@shared/parts";
 import { useSuspenseQuery } from "@tanstack/react-query";
-import { lazy, Suspense, useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { type AppliedRecipe, RecipePicker } from "@/components/recipes/RecipePicker";
 import { Button } from "@/components/ui/Button";
 import { CameraIcon, ImageIcon, PlusIcon } from "@/components/ui/icons";
@@ -11,6 +11,7 @@ import { AddPhotoTile, PhotoThumb, useFilePicker } from "@/components/ui/PhotoTi
 import { Sheet } from "@/components/ui/Sheet";
 import { toast } from "@/components/ui/Toast";
 import {
+  attemptPhotoStore,
   cameraArrived,
   cameraOpening,
   cameraWasUp,
@@ -77,6 +78,7 @@ export function LogAttempt({
   const [recipe, setRecipe] = useState<AppliedRecipe | null>(null);
   const [usedMatch, setUsedMatch] = useState<{ id: string; before: AttemptSettings } | null>(null);
   const [dirty, setDirty] = useState(!!kept);
+  const store = useMemo(() => attemptPhotoStore(item.id), [item.id]);
   const {
     photos,
     addFiles,
@@ -84,7 +86,7 @@ export function LogAttempt({
     clear,
   } = useDraftPhotos({
     keep: true,
-    scope: item.id,
+    store,
     // Not decoded again on every visit to the build: only while the sheet is open, where a failure shows.
     restore: open && restorable,
   });
