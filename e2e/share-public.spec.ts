@@ -133,7 +133,8 @@ test("a guest opens a model's 3D view from the shared page, and gets no file to 
       name: TUGBOAT_FILE_NAME,
       size: String(bytes.length),
       plate: "1",
-      plateCount: "1",
+      // Plate 1 of a project of two, so the card has a meta line ("Plate 1 of 2") after its button.
+      plateCount: "2",
       slicer: "BambuStudio 02.01.00.00",
       prefill: JSON.stringify(settingsFromFile(read, 1)),
       file: { name: TUGBOAT_FILE_NAME, mimeType: "application/octet-stream", buffer: Buffer.from(bytes) },
@@ -144,7 +145,15 @@ test("a guest opens a model's 3D view from the shared page, and gets no file to 
   const made = await page.request.put(`/api/shares/items/${id}`, { headers: { Origin: origin } });
   const { share } = await made.json();
 
-  const guestContext = await browser.newContext({ baseURL });
+  // The guest's browser is the project's own device: a phone gets the phone's sheet.
+  const device = test.info().project.use;
+  const isMobile = Boolean(device.isMobile);
+  const guestContext = await browser.newContext({
+    baseURL,
+    viewport: device.viewport,
+    isMobile,
+    hasTouch: device.hasTouch,
+  });
   const guest = await guestContext.newPage();
   // Anything the page's policy refuses would show here (a script, a worker or a fetch from the wrong place).
   const refused: string[] = [];
@@ -162,9 +171,22 @@ test("a guest opens a model's 3D view from the shared page, and gets no file to 
 
   // The whole card opens it: a tap on its plate, not only on its words. The button is named by what the card says.
   const opens = card.getByRole("button", {
-    name: new RegExp(`^About .*, ${TUGBOAT_FILE_NAME.replace(/\./g, "\\.")}, in 3D$`),
+    name: new RegExp(`^About .*, ${TUGBOAT_FILE_NAME.replace(/\./g, "\\.")}\\s*, in 3D$`),
   });
   await expect(opens).toHaveAttribute("aria-haspopup", "dialog");
+  // Every line on the card is part of it: a tap on any of its words or pieces lands on the button, not on the words.
+  await card.scrollIntoViewIfNeeded();
+  const missed = await card.evaluate((li) =>
+    Array.from(li.querySelectorAll<HTMLElement>(".gp-piece, .gp-file-name, .gp-caution, .gp-filaments li, .gp-plate"))
+      .filter((part) => {
+        const box = part.getBoundingClientRect();
+        if (!box.width || !box.height) return false;
+        const hit = document.elementFromPoint(box.x + box.width / 2, box.y + box.height / 2);
+        return !hit?.closest("button.gp-open");
+      })
+      .map((part) => part.className || part.textContent),
+  );
+  expect(missed).toEqual([]);
   await card.click({ position: { x: 24, y: 24 } });
   const dialog = guest.getByRole("dialog", { name: "3D view" });
   await expect(dialog).toBeVisible();
@@ -185,6 +207,29 @@ test("a guest opens a model's 3D view from the shared page, and gets no file to 
   await guest.keyboard.press("Escape");
   await expect(dialog).toHaveCount(0);
   await expect(opens).toBeFocused();
+
+  if (isMobile) {
+    // On a phone it is a bottom sheet, with a strip of the dimmed page above it, and a pull on its handle closes it.
+    await card.click({ position: { x: 24, y: 24 } });
+    await expect(dialog.locator("[data-viewer=ready]")).toBeVisible({ timeout: 60_000 });
+    const sheet = (await dialog.locator(".gp-viewer-sheet").boundingBox()) as { y: number };
+    expect(sheet.y).toBeGreaterThan(viewport.height * 0.12);
+    const handle = (await dialog.locator(".gp-viewer-handle").boundingBox()) as { x: number; y: number };
+    // A short pull springs back.
+    await guest.mouse.move(handle.x + 20, handle.y + 3);
+    await guest.mouse.down();
+    await guest.mouse.move(handle.x + 20, handle.y + 60, { steps: 10 });
+    await guest.waitForTimeout(100);
+    await guest.mouse.up();
+    await guest.waitForTimeout(400);
+    await expect(dialog).toBeVisible();
+    // A long one closes it.
+    await guest.mouse.move(handle.x + 20, handle.y + 3);
+    await guest.mouse.down();
+    await guest.mouse.move(handle.x + 20, handle.y + 400, { steps: 12 });
+    await guest.mouse.up();
+    await expect(dialog).toHaveCount(0);
+  }
 
   // The toolpaths' address opened as a page is no file: the same 404 as anything else.
   const opened = await guest.goto(`/s/${share.token}/files/${fileId}/toolpaths`);

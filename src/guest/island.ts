@@ -19,6 +19,9 @@ const loadViewer = () => {
 
 const PHONE_FILE_BYTES = 100 * 1024 * 1024;
 const coarse = () => matchMedia("(pointer: coarse)").matches;
+/** The sheet's phone layout (guest.css: under 48rem), where it is a bottom sheet a finger can pull down. */
+const phoneLayout = () => matchMedia("(max-width: 47.99rem)").matches;
+const calm = () => matchMedia("(prefers-reduced-motion: reduce)").matches;
 
 const CLOSE_PATH =
   "M208.49,191.51a12,12,0,0,1-17,17L128,145,64.49,208.49a12,12,0,0,1-17-17L111,128,47.51,64.49a12,12,0,0,1,17-17L128,111l63.51-63.52a12,12,0,0,1,17,17L145,128Z";
@@ -39,12 +42,61 @@ interface Plate {
   bytes: number;
 }
 
+/**
+ * A bottom sheet a finger pulls down, as the app's sheet (vaul): its handle and head follow the finger, and it closes
+ * past a quarter of its height or on a flick down, else springs back. Only there: on the stage below, a drag turns
+ * the print.
+ */
+function pullDown(sheet: HTMLElement, grip: HTMLElement, dismiss: () => void) {
+  let start: { y: number; id: number } | null = null;
+  let last = { y: 0, t: 0 };
+  let speed = 0;
+  const reset = () => {
+    start = null;
+    sheet.style.transition = "";
+  };
+  grip.addEventListener("pointerdown", (event) => {
+    if (!phoneLayout() || event.button !== 0 || (event.target as Element).closest("button")) return;
+    // No text selection or native drag from here, which would cancel the pointer at its first move.
+    event.preventDefault();
+    start = { y: event.clientY, id: event.pointerId };
+    last = { y: event.clientY, t: event.timeStamp };
+    speed = 0;
+    grip.setPointerCapture(event.pointerId);
+    sheet.style.transition = "none";
+  });
+  grip.addEventListener("pointermove", (event) => {
+    if (!start || event.pointerId !== start.id) return;
+    const down = Math.max(0, event.clientY - start.y);
+    sheet.style.transform = down ? `translateY(${down}px)` : "";
+    const elapsed = event.timeStamp - last.t;
+    if (elapsed > 0) speed = (event.clientY - last.y) / elapsed;
+    last = { y: event.clientY, t: event.timeStamp };
+  });
+  grip.addEventListener("pointerup", (event) => {
+    if (!start || event.pointerId !== start.id) return;
+    const down = Math.max(0, event.clientY - start.y);
+    reset();
+    if (down > sheet.offsetHeight / 4 || (speed > 0.5 && down > 16)) dismiss();
+    else sheet.style.transform = "";
+  });
+  grip.addEventListener("pointercancel", (event) => {
+    if (!start || event.pointerId !== start.id) return;
+    reset();
+    sheet.style.transform = "";
+  });
+}
+
 /** The sheet: a modal dialog, a bottom sheet on a phone and a large panel on a computer, as the app's 3D view. */
 function openSheet(opener: HTMLButtonElement, plate: Plate) {
   const dialog = element("dialog", "gp-viewer");
   dialog.setAttribute("aria-labelledby", "gp-viewer-title");
   dialog.setAttribute("aria-describedby", "gp-viewer-name");
   const sheet = element("div", "gp-viewer-sheet");
+  // The handle and the head are what a finger pulls the sheet down by, on a phone.
+  const grip = element("div", "gp-viewer-grip");
+  const handle = element("span", "gp-viewer-handle");
+  handle.setAttribute("aria-hidden", "true");
   const head = element("div", "gp-viewer-head");
   const words = element("div", "gp-viewer-words");
   const title = element("h2", "gp-viewer-title", "3D view");
@@ -58,11 +110,12 @@ function openSheet(opener: HTMLButtonElement, plate: Plate) {
   close.title = "Close (Esc)";
   close.innerHTML = `<svg class="gp-icon" viewBox="0 0 256 256" aria-hidden="true" focusable="false"><path d="${CLOSE_PATH}"/></svg>`;
   head.append(words, close);
+  grip.append(handle, head);
   // Focus waits here while the code loads, and moves on to the viewer's stage.
   const stage = element("div", "gp-viewer-stage gv-root");
   stage.tabIndex = -1;
   stage.append(element("span", "gp-viewer-wait"));
-  sheet.append(head, stage);
+  sheet.append(grip, stage);
   dialog.append(sheet);
   document.body.append(dialog);
 
@@ -77,12 +130,29 @@ function openSheet(opener: HTMLButtonElement, plate: Plate) {
     document.documentElement.classList.remove("gp-viewing");
     opener.focus({ preventScroll: true });
   };
-  close.addEventListener("click", shut);
+  // On a phone the sheet goes back down before it is gone, and the page brightens with it.
+  const dismiss = () => {
+    if (closed) return;
+    if (!phoneLayout() || calm()) {
+      shut();
+      return;
+    }
+    dialog.classList.add("gp-viewer--closing");
+    sheet.style.transform = "translateY(100%)";
+    sheet.addEventListener("transitionend", shut, { once: true });
+    setTimeout(shut, 400);
+  };
+  close.addEventListener("click", dismiss);
   dialog.addEventListener("close", shut);
-  // A tap on the dimmed page around the panel closes it, as the app's dialog does.
-  dialog.addEventListener("click", (event) => {
-    if (event.target === dialog) shut();
+  dialog.addEventListener("cancel", (event) => {
+    event.preventDefault();
+    dismiss();
   });
+  // A tap on the dimmed page around the sheet or panel closes it, as the app's do.
+  dialog.addEventListener("click", (event) => {
+    if (event.target === dialog) dismiss();
+  });
+  pullDown(sheet, grip, dismiss);
 
   document.documentElement.classList.add("gp-viewing");
   dialog.showModal();
