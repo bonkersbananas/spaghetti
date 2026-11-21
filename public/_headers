@@ -14,6 +14,10 @@
 /assets/landing/*
   Cache-Control: public, max-age=31536000, immutable
 
+# The shared page's styles (guest.html, src/guest; decision 0075): hashed names too.
+/assets/guest/*
+  Cache-Control: public, max-age=31536000, immutable
+
 # The picture a shared link to spaghetti.day shows (pnpm landing:shots makes it).
 /og.jpg
   Cache-Control: public, max-age=86400

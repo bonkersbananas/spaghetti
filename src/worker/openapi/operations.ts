@@ -107,6 +107,14 @@ const emojiUse = z.object({
   recent: z.array(z.string()).describe("The ones you gave last, newest first."),
 });
 const reactionsAnswer = z.object({ reactions: z.array(Reaction) });
+const shareSchema = z.object({
+  id: z.string(),
+  kind: z.enum(["item", "twist"]),
+  targetId: z.string(),
+  token: z.string().describe("The link's secret: the page is /s/<token>."),
+  createdBy: z.string(),
+  createdAt: z.number().int(),
+});
 
 export const operations: Record<string, Operation> = {
   "GET /health": { summary: "Says the Worker is up.", response: z.object({ ok: z.literal(true) }), public: true },
@@ -904,6 +912,30 @@ export const operations: Record<string, Operation> = {
   },
   "DELETE /twists/:id": { summary: "Deletes a twist (it can be restored).", response: "empty", status: 204 },
   "POST /twists/:id/restore": { summary: "Restores a deleted twist.", response: one("twist", z.looseObject({})) },
+
+  // Public links (decision 0075): people only.
+  "GET /shares": {
+    summary: "Every live public link: which idea, build or twist, its token (the link's secret) and who made it.",
+    response: list("shares", shareSchema),
+  },
+  "PUT /shares/:kind/:id": {
+    summary:
+      "Makes the public link of an idea or build (`items`) or a twist (`twists`): a read-only page at /s/<token> anyone with the link can open. Answers with the live link it already has, if any.",
+    response: one("share", shareSchema),
+    status: 201,
+    errors: { 404: notFound("idea, build or twist") },
+  },
+  "DELETE /shares/:id": {
+    summary: "Stops a public link at once (its Undo is /restore).",
+    response: "empty",
+    status: 204,
+    errors: { 404: notFound("link") },
+  },
+  "POST /shares/:id/restore": {
+    summary: "Brings a stopped public link back, the same address as before.",
+    response: one("share", shareSchema),
+    errors: { 404: notFound("link"), 409: "shared_again: the thing has a newer link since." },
+  },
 
   // The shopping list.
   "GET /shopping-items": {

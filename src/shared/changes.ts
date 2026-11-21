@@ -25,10 +25,11 @@ export const PUBLIC_CHANGE_ENTITIES = [
   "scout",
 ] as const;
 /**
- * Changes about how people sign in (a sign-in link used, an invite made, a passkey added). They show in the app's
- * own feed, but never to an agent's token and never in a webhook: those are the people's alone (decision 0026).
+ * Changes about how people sign in (a sign-in link used, an invite made, a passkey added) and about public links
+ * (a link made, stopped or brought back, decision 0075). They show in the app's own feed, but never to an agent's
+ * token and never in a webhook: those are the people's alone (decision 0026).
  */
-export const PRIVATE_CHANGE_ENTITIES = ["signin", "invite", "passkey"] as const;
+export const PRIVATE_CHANGE_ENTITIES = ["signin", "invite", "passkey", "share"] as const;
 /** What kind of thing changed. */
 export const CHANGE_ENTITIES = [...PUBLIC_CHANGE_ENTITIES, ...PRIVATE_CHANGE_ENTITIES] as const;
 export type ChangeEntity = (typeof CHANGE_ENTITIES)[number];
