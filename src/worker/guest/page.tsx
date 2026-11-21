@@ -443,8 +443,10 @@ function Files({ token, files }: { token: string; files: GuestFile[] }) {
         {files.length > 1 && <span class="gp-count"> {files.length}</span>}
       </h2>
       {viewable && (
+        // What a tap gives: the print in 3D. Not "layer by layer": it opens on the finished print (it builds itself up
+        // only the first time on a device), and its play button is a quiet one in the corner.
         <p class="gp-files-hint">
-          {files.length === 1 ? "Tap its plate" : "Tap a plate"} to see how it prints, layer by layer.
+          {files.length === 1 ? "Tap the model" : "Tap a model"} to see it in 3D, as it will print.
         </p>
       )}
       <ul class="gp-file-list">
