@@ -41,6 +41,7 @@ CREATE TABLE `print_jobs` (
 	`item_id` text NOT NULL,
 	`own_item_id` text,
 	`asking` integer DEFAULT false NOT NULL,
+	`started_idea` integer DEFAULT false NOT NULL,
 	`created_at` integer NOT NULL,
 	`settled_at` integer,
 	`settled_by` text,

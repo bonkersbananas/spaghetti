@@ -358,6 +358,8 @@ export async function fileThePrint(
                 itemId: target.id,
                 ownItemId: item.id,
                 asking: false,
+                // The attempt's insert starts an idea it matched: "Not this build?" makes it an idea again.
+                startedIdea: target.stage === "idea",
               })
               .onConflictDoNothing(),
           ]

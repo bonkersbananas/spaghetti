@@ -850,6 +850,8 @@ export const printJobs = sqliteTable("print_jobs", {
   /** The build the bridge made for it, when it was matched into another (merged away, and brought back by "a new build"). */
   ownItemId: text("own_item_id"),
   asking: integer("asking", { mode: "boolean" }).notNull().default(false),
+  /** The match started an idea as a build: moving the print out makes it an idea again, if nothing else was printed. */
+  startedIdea: integer("started_idea", { mode: "boolean" }).notNull().default(false),
   createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
   /** When someone answered: picked a build, moved it or kept it as a new build. */
   settledAt: integer("settled_at", { mode: "timestamp_ms" }),

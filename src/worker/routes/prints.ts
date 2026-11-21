@@ -153,7 +153,7 @@ export const attemptPrintRoutes = new Hono<AppEnv>()
 
     const now = new Date();
     const actor = c.var.actor;
-    const [moving, last, goes] = await Promise.all([
+    const [moving, last, empty, other] = await Promise.all([
       db.select({ id: photos.id, position: photos.position }).from(photos).where(eq(photos.attemptId, attempt.id)),
       db
         .select({ value: max(photos.position) })
@@ -161,9 +161,18 @@ export const attemptPrintRoutes = new Hono<AppEnv>()
         .where(eq(photos.itemId, wantedId))
         .get(),
       leftEmpty(db, source, attempt.id),
+      db
+        .select({ id: attempts.id })
+        .from(attempts)
+        .where(and(eq(attempts.itemId, source.id), isNull(attempts.deletedAt), sql`${attempts.id} <> ${attempt.id}`))
+        .get(),
     ]);
     const base = (last?.value ?? -1) + 1;
     const startsIt = existing?.stage === "idea";
+    // An idea the app started by matching this print into it is an idea again once the print leaves, if nothing else
+    // was printed in it (the undo starts it again: an attempt in an idea makes it a build).
+    const unstarts = !!job?.startedIdea && job.itemId === source.id && source.stage === "building" && !other;
+    const goes = empty && !unstarts;
 
     const statements: BatchItem<"sqlite">[] = [];
     if (made === "new") {
@@ -221,7 +230,10 @@ export const attemptPrintRoutes = new Hono<AppEnv>()
       );
     } else {
       statements.push(
-        db.update(items).set({ updatedAt: now }).where(eq(items.id, source.id)),
+        db
+          .update(items)
+          .set({ ...(unstarts ? { stage: "idea" as const, startedAt: null, finishedAt: null } : {}), updatedAt: now })
+          .where(eq(items.id, source.id)),
         recordChange(db, { entity: "item", id: source.id, itemId: source.id, action: "updated", actor }),
       );
     }
@@ -300,7 +312,14 @@ export const attemptPrintRoutes = new Hono<AppEnv>()
           .where(and(eq(photos.id, photo.id), eq(photos.attemptId, attempt.id))),
       ),
       ...followers(db, attempt.id, from.id),
-      db.update(items).set({ updatedAt: now }).where(eq(items.id, from.id)),
+      db
+        .update(items)
+        .set({
+          // An idea the move made an idea again is a build again with its print back.
+          ...(from.stage === "idea" ? { ...stageDates(from, "building", now), upNext: null } : {}),
+          updatedAt: now,
+        })
+        .where(eq(items.id, from.id)),
     );
     const emptyNow = sql`NOT EXISTS (SELECT 1 FROM attempts WHERE item_id = ${toId} AND deleted_at IS NULL)`;
     if (move.toMade) {

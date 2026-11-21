@@ -332,6 +332,37 @@ describe("moving an attempt to another build", () => {
     expect(gone.headers.get("Location")).toBe(`/api/items/${tugboat}`);
   });
 
+  it("makes an idea the print started an idea again when it isn't that, and starts it again with the undo", async () => {
+    const idea = await build("Planter v2", "idea");
+    await keepFile(idea, "planter-v2.gcode.3mf");
+    const tugboat = await build("Tugboat");
+    const { attemptId, attempt } = await bridgePrints("planter-v2(2)");
+    expect(attempt.itemId).toBe(idea);
+    expect((await itemOf(idea)).stage).toBe("building");
+
+    // "Not this build?": the idea is an idea again, with its file, and nothing about it lost.
+    const moved = await (await move(attemptId, { targetId: tugboat })).json<MoveAttemptResponse>();
+    expect(moved.from).toMatchObject({ id: idea, stage: "idea", startedAt: null, attempts: [] });
+    expect(moved.from?.files?.map((file) => file.name)).toEqual(["planter-v2.gcode.3mf"]);
+
+    const undone = await (
+      await request(`/api/attempts/${attemptId}/unmove`, { method: "POST", cookie })
+    ).json<MoveAttemptResponse>();
+    expect(undone.to).toMatchObject({ id: idea, stage: "building" });
+    expect(undone.to.attempts.map((one) => one.id)).toEqual([attemptId]);
+  });
+
+  it("leaves a build the print started as it is when something else was printed in it since", async () => {
+    const idea = await build("Planter v2", "idea");
+    await keepFile(idea, "planter-v2.gcode.3mf");
+    const tugboat = await build("Tugboat");
+    const { attemptId } = await bridgePrints("planter-v2(2)");
+    await request(`/api/items/${idea}/attempts`, { method: "POST", cookie, json: { id: uuid() } });
+
+    const moved = await (await move(attemptId, { targetId: tugboat })).json<MoveAttemptResponse>();
+    expect(moved.from).toMatchObject({ id: idea, stage: "building" });
+  });
+
   it("puts a photo that was still on its way to the old build with the attempt where it is now", async () => {
     const tugboat = await build("Tugboat");
     const smaller = await build("Tugboat, smaller");
