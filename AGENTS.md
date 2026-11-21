@@ -62,6 +62,7 @@ src/
     lib/offline.ts, connection.ts   service worker registration, "is the server reachable"
     styles/app.css        base styles, keyframes, third-party restyling
   landing/                the landing page's stylesheet, script and pictures (landing.html is its page; docs/landing.md)
+  guest/                  guest.css: the shared page's stylesheet on the tokens (guest.html is its template, filled by worker/guest)
   sw/sw.js                the service worker (precaches the shell; built into /sw.js by scripts/vite-service-worker.ts)
   worker/                 the Worker
     index.ts              entry: exports the Hono app
@@ -76,6 +77,7 @@ src/
     webhooks/             secrets.ts (AES-GCM at rest, HMAC signing), deliver.ts (fan-out from the change feed, sending, retries; run by the 5-minute cron)
     db/schema.ts          Drizzle schema: users, sessions, items, photos, attempts, tags, spools, ams_slots, printer, attempt_files
     push/                 web push: webpush.ts (VAPID + aes128gcm on WebCrypto), nudges.ts (the cron's "how did it go?" rules)
+    guest/                the shared page at /s/<token> (decision 0075): index.tsx (the routes: page, photos, the signed-in redirect, headers), view.ts (the allow-list of what a guest sees), page.tsx (hono/jsx, escaped, no script), icons.ts; shares.ts (tokens, lookup by hash) and routes/shares.ts (/api/shares, people only)
     open-link.ts, routes/open.ts  signed links for "Open in Bambu Studio": HMAC token (key from WEBHOOK_SECRET_KEY), POST /api/files/:id/open-link, and the cookie-less GET /open/<token>/<name> (decision 0058; client side lib/open-in-studio.ts, components/builds/OpenInStudio.tsx)
     photos.ts             R2 keys (photos and slicer files) and the daily purge (scheduled handler in index.ts)
   shared/                 code both sides use (API types, the change feed (changes.ts), attempts and tags, spools and printer checks, journal grouping, search terms, keyboard shortcut registry, password hashing, person colors, EXIF, links, model-mark (which ideas have a model: ui/ModelMark.tsx shows it; which model a link names, so it shows once: decision 0069), times)
@@ -259,6 +261,11 @@ Never edit a migration that has been merged; add a new one.
 
 - Reactions are any emoji ([0042](docs/decisions/0042-reactions-are-any-emoji.md), which replaced the curated six of 0038): `shared/reactions.ts` has the rules (`isEmoji`: exactly one RGI emoji, at most 40 units; summarize, toggle, `quickEmoji`, the six defaults). `reactions` table, keyed by `(target_id, user_id, kind)` where `kind` is the emoji and the target an item or a comment; routes in `worker/routes/reactions.ts` (`PUT`/`DELETE /api/items/:id/reactions/:emoji` and `/api/comments/:id/reactions/:emoji`, URL-encoded, idempotent, person-only; `GET /api/reactions/used` for the quick row), recorded in the change feed as an `updated` item or comment. `Item.reactions` comes from `loadItems`, `Comment.reactions` from the thread's GET.
 - The client writes through `reactTo` in `lib/reactions.ts` (optimistic; only the latest answer replaces the cache): `reactToItem` patches the item caches, `reactToComment` (lib/comments.ts) the thread; `useEmojiUse` feeds the quick row. UI: `ui/Message.tsx` (`ReactionPills`, `ReactionPicker` = the quick row, `AddReactionButton`; in the styleguide's Conversation section), `ui/EmojiPicker.tsx` (the full picker on Frimousse, lazy: loaded when the quick row shows; its data is `public/emoji/en/*.json` from `node scripts/emoji-data.ts`, fetched from our origin only when "more" opens), `ui/ReactionGlance.tsx` (the line of emoji on Ideas and Builds cards, in the first load: keep it tiny), `components/reactions/ItemReactions.tsx` (on the idea and build pages, loaded with the thread's chunk through `ItemReactions` in `comments/CommentThread.tsx`, so no new lazy import joins the preload map), and the comment menu in `comments/EditableBubble.tsx`.
+
+### Sharing out
+
+- A public link (decision 0075): `shares` (one live per thing, `token` kept to copy again, looked up by `token_hash`, `revoked_at` for Stop and its Undo), `/api/shares` (people only: `PERSON_ONLY_READS` in `auth/scopes.ts`, private `share` changes). The guest page is `worker/guest/` outside Hono, answered first for `/s/*` (`run_worker_first`, and the service worker leaves it alone); it renders `guest.html` with HTMLRewriter. Anything a guest sees goes through `guest/view.ts`: add a field there on purpose, never pass an API shape through. Photos are served only when `hasPhotoMetadata` (`shared/photo-metadata.ts`) finds no EXIF, XMP or IPTC in the stored bytes, and never `needs_resize` ones.
+- The client is `ui/ShareLinkButton.tsx` (in the detail pages' chunks: `lib/share-query.ts` for the globe) and the lazy `components/share/SharePanel.tsx` (`ui/ShareChoices.tsx`, `lib/shares.ts`). Tests: `test/worker/shares.test.ts` (access control, metadata, escaping), `test/unit/photo-metadata.test.ts`, `e2e/share-public.spec.ts`; shots `shared-*` and `share-panel*`.
 
 ### Sharing in
 

@@ -1,3 +1,4 @@
+import { dateFormat } from "@shared/date-format";
 import type { ShareKind } from "@shared/shares";
 import { useQueryClient } from "@tanstack/react-query";
 import { type RefObject, useState } from "react";
@@ -22,8 +23,7 @@ interface SharePanelProps {
   anchor: RefObject<HTMLButtonElement | null>;
 }
 
-const since = (time: number) =>
-  `Since ${new Date(time).toLocaleDateString(undefined, { day: "numeric", month: "short" })}`;
+const since = (time: number) => `Since ${dateFormat({ day: "numeric", month: "short" }).format(time)}`;
 
 /**
  * The share button's panel (lazy, decision 0075): a popover under the button on desktop, a sheet on phones, with the

@@ -238,6 +238,10 @@ The devices that get "how did it go?" push notifications. A token is refused the
 
 A notification's buttons call the ordinary `POST /api/attempts/:id/finish`, with the person's session cookie.
 
+## Public links (people only)
+
+`GET /api/shares` lists the live public links (decision 0075), `PUT /api/shares/items/:id` or `/twists/:id` makes one (or answers with the live one, so it is safe to repeat), `DELETE /api/shares/:id` stops it at once and `POST /api/shares/:id/restore` brings the same link back. A link's page is `/s/<token>`, read-only and outside `/api`. Agent tokens reach none of this (even `read`), and `share` changes are left out of a token's feed and webhooks, like signing in.
+
 ## The OpenAPI document
 
 `GET /api/openapi.json` is the API as OpenAPI 3.1. It is made from the code each time it is asked for, never written by hand: request bodies and queries are the zod schemas the routes validate with, the scopes come from the table in `src/worker/auth/scopes.ts`, and every route has a one-line summary, its scopes and its error shapes (`{ "error": { "code", "message" } }`) in `src/worker/openapi/operations.ts`. A test fails when a route exists that the document doesn't describe, and the document is checked against the OpenAPI 3.1 schema.
