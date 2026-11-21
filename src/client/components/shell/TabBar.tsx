@@ -1,6 +1,7 @@
 import { Link } from "@tanstack/react-router";
 import { useRef, useState } from "react";
 import { CameraIcon, PlusIcon } from "@/components/ui/icons";
+import { takePicked } from "@/components/ui/PhotoTiles";
 import { UnreadDot } from "@/components/ui/UnreadDot";
 import { useCapture } from "@/lib/capture";
 import { holdKeyboard } from "@/lib/keyboard-proxy";
@@ -118,9 +119,9 @@ function CaptureButton() {
         hidden
         data-testid="tabbar-camera-input"
         onChange={(event) => {
-          const files = Array.from(event.target.files ?? []);
-          event.target.value = "";
-          if (files.length) openWith({ files });
+          void takePicked(event.target).then((files) => {
+            if (files.length) openWith({ files });
+          });
         }}
       />
     </>

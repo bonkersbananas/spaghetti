@@ -12,6 +12,7 @@ import { UnreadBadge } from "@/components/ui/Card";
 import { CoverPicture } from "@/components/ui/CoverPicture";
 import { BuildsIcon, CameraIcon } from "@/components/ui/icons";
 import { MetaList } from "@/components/ui/MetaList";
+import { takePicked } from "@/components/ui/PhotoTiles";
 import { PrintProgress } from "@/components/ui/PrintProgress";
 import { Swatch } from "@/components/ui/Swatch";
 import { useCapture } from "@/lib/capture";
@@ -22,7 +23,7 @@ import { duration, ease } from "@/lib/motion";
 import { coverOf } from "@/lib/previews";
 import { usePrintProgress } from "@/lib/print-progress";
 import { useReadOnly } from "@/lib/read-only";
-import { useIsDesktop } from "@/lib/use-media-query";
+import { useHasCamera, useIsDesktop } from "@/lib/use-media-query";
 import { OffTheBed } from "./OffTheBed";
 import { OutcomeChip, OutcomePicker } from "./Outcome";
 import { PhotoReadNote } from "./PhotoReadNote";
@@ -137,6 +138,7 @@ export function PrintingCard({
   // Each time a compact card becomes the big one on a phone (or back), its content is swapped and fades in; from
   // md both layouts are the same row, so nothing is swapped there, and a change of breakpoint never remounts it.
   const isDesktop = useIsDesktop();
+  const hasCamera = useHasCamera();
   const swaps = useRef(0);
   const lastCompact = useRef(compact);
   if (lastCompact.current !== compact) {
@@ -371,7 +373,7 @@ export function PrintingCard({
                         label="Snap this print"
                         variant="secondary"
                         size="sm"
-                        onClick={() => (isDesktop ? snapPrint(aim) : camera.current?.click())}
+                        onClick={() => (hasCamera ? camera.current?.click() : snapPrint(aim))}
                       />
                     )}
                     {!due && (
@@ -388,9 +390,9 @@ export function PrintingCard({
                     hidden
                     data-testid="snap-camera-input"
                     onChange={(event) => {
-                      const files = Array.from(event.target.files ?? []);
-                      event.target.value = "";
-                      if (files.length) snapPrint(aim, files);
+                      void takePicked(event.target).then((files) => {
+                        if (files.length) snapPrint(aim, files);
+                      });
                     }}
                   />
                 </div>

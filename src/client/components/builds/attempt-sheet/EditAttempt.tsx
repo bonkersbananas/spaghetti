@@ -17,7 +17,7 @@ import { useReadOnly } from "@/lib/read-only";
 import { canBeRecipe } from "@/lib/recipes";
 import { queueSlicerFile, removeSlicerFile } from "@/lib/slicer-files";
 import { useLiveFields } from "@/lib/use-autosave";
-import { useIsDesktop } from "@/lib/use-media-query";
+import { useHasCamera, useIsDesktop } from "@/lib/use-media-query";
 import { EstimateLine, elapsedIfPlausible } from "../Estimate";
 import { PhotoReadNote } from "../PhotoReadNote";
 import { SavedFileCard } from "../SlicerFile";
@@ -50,6 +50,7 @@ export function EditAttempt({
 }) {
   const queryClient = useQueryClient();
   const isDesktop = useIsDesktop();
+  const hasCamera = useHasCamera();
   const offline = useReadOnly(attempt.pending);
   const printing = attempt.outcome === null;
   // Offline, a print still printing can be finished (it is sent later); anything else saved is only for reading.
@@ -280,7 +281,7 @@ export function EditAttempt({
                 onRemove={offline && !photo.upload ? undefined : () => removePhoto(queryClient, photo)}
               />
             ))}
-            {!isDesktop && <AddPhotoTile size="md" icon={CameraIcon} label="Take photo" onClick={camera.open} />}
+            {hasCamera && <AddPhotoTile size="md" icon={CameraIcon} label="Take photo" onClick={camera.open} />}
             <AddPhotoTile
               size="md"
               icon={isDesktop ? PlusIcon : ImageIcon}

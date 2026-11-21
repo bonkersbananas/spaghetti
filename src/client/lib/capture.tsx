@@ -101,6 +101,8 @@ const CaptureContext = createContext<CaptureContextValue | null>(null);
 const DRAFT_KEY = "spaghetti:capture-draft";
 /** The capture sheet's photos, kept on the device (their own database) until the capture is saved. */
 const keptPhotos = openStore<DraftPhoto>("spaghetti-capture", "photos", "id");
+/** The attempt sheet's photos, apart from the capture sheet's and each marked with the build they are for. */
+const keptAttemptPhotos = openStore<DraftPhoto & { scope: string }>("spaghetti-attempt", "photos", "id");
 const FIRST_KEY = "spaghetti:first-idea";
 
 function storedDraft(): string {
@@ -113,8 +115,10 @@ function storedDraft(): string {
 
 /** Only images; a browser may hand us other files from a drop. */
 export function imageFiles(files: Iterable<File>): File[] {
+  // A file with no type and no known extension is let in too: a camera's photo may come with neither, and
+  // the resize says plainly if it isn't a picture.
   return Array.from(files).filter(
-    (file) => file.type.startsWith("image/") || /\.(hei[cf]|jpe?g|png|webp)$/i.test(file.name),
+    (file) => file.type.startsWith("image/") || !file.type || /\.(hei[cf]|jpe?g|png|webp)$/i.test(file.name),
   );
 }
 
@@ -122,11 +126,25 @@ export function imageFiles(files: Iterable<File>): File[] {
  * Photos picked for something not saved yet (a capture, an attempt): shown
  * at once from the device and resized in the background while you type.
  */
-export function useDraftPhotos({ keep = false } = {}) {
+export function useDraftPhotos({ keep = false, scope }: { keep?: boolean; scope?: string } = {}) {
+  // With a scope (a build's id) the photos live in the attempt sheet's own store, and only that build's come back.
+  const kept = useMemo(() => {
+    if (!scope) return keptPhotos;
+    const all = () => keptAttemptPhotos.all().then((found) => found.filter((photo) => photo.scope === scope));
+    return {
+      put: (photo: DraftPhoto) => keptAttemptPhotos.put({ ...photo, scope }),
+      delete: (id: string) => keptAttemptPhotos.delete(id),
+      all,
+      clear: async () => {
+        for (const photo of await all()) await keptAttemptPhotos.delete(photo.id);
+      },
+    };
+  }, [scope]);
   const [photos, setPhotos] = useState<DraftPhoto[]>([]);
   const photosRef = useRef(photos);
   photosRef.current = photos;
 
+  const addAgain = useRef<(files: Iterable<File>) => void>(() => undefined);
   const resize = useCallback(
     (photo: DraftPhoto) => {
       processPhoto(photo.file).then(
@@ -136,15 +154,20 @@ export function useDraftPhotos({ keep = false } = {}) {
         },
         (error) => {
           setPhotos((current) => current.filter((p) => p.id !== photo.id));
-          if (keep) void keptPhotos.delete(photo.id).catch(() => undefined);
-          toast.error(
+          if (keep) void kept.delete(photo.id).catch(() => undefined);
+          // Never gone without a word, and one tap from another try with the same file.
+          toast.action(
             "Couldn't open that photo",
+            {
+              label: "Try again",
+              onClick: () => addAgain.current([new File([photo.file], "photo", { type: photo.file.type })]),
+            },
             error instanceof UnreadablePhotoError ? error.message : "Try another one.",
           );
         },
       );
     },
-    [keep],
+    [keep, kept],
   );
 
   const addFiles = useCallback(
@@ -154,21 +177,23 @@ export function useDraftPhotos({ keep = false } = {}) {
       for (const photo of added) setPreview(photo.id, photo.file, photo.file);
       setPhotos((current) => [...current, ...added]);
       // Kept on the device until saved: a page that is killed in the background (a phone, an app switch) brings them back.
-      if (keep) for (const photo of added) void keptPhotos.put(photo).catch(() => undefined);
+      if (keep) for (const photo of added) void kept.put(photo).catch(() => undefined);
       for (const photo of added) resize(photo);
     },
-    [keep, resize],
+    [keep, resize, kept],
   );
+
+  addAgain.current = addFiles;
 
   // Photos kept by an earlier visit (the page was closed or killed before they were saved).
   useEffect(() => {
     if (!keep) return;
     let gone = false;
-    keptPhotos
+    kept
       .all()
-      .then((kept) => {
+      .then((found) => {
         const known = new Set(photosRef.current.map((photo) => photo.id));
-        const back = kept.filter((photo) => !known.has(photo.id));
+        const back = found.filter((photo) => !known.has(photo.id));
         if (gone || !back.length) return;
         for (const photo of back) setPreview(photo.id, photo.file, photo.file);
         setPhotos((current) => [...back, ...current]);
@@ -178,20 +203,20 @@ export function useDraftPhotos({ keep = false } = {}) {
     return () => {
       gone = true;
     };
-  }, [keep, resize]);
+  }, [keep, resize, kept]);
 
   const removePhoto = useCallback(
     (id: string) => {
       setPhotos((current) => current.filter((photo) => photo.id !== id));
-      if (keep) void keptPhotos.delete(id).catch(() => undefined);
+      if (keep) void kept.delete(id).catch(() => undefined);
     },
-    [keep],
+    [keep, kept],
   );
 
   const clear = useCallback(() => {
     setPhotos([]);
-    if (keep) void keptPhotos.clear().catch(() => undefined);
-  }, [keep]);
+    if (keep) void kept.clear().catch(() => undefined);
+  }, [keep, kept]);
   return { photos, photosRef, addFiles, removePhoto, clear };
 }
 

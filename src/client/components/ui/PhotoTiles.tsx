@@ -4,6 +4,7 @@ import { ConfirmRemove } from "./ConfirmRemove";
 import { CloseIcon, type Icon } from "./icons";
 import { Photo } from "./Photo";
 import { ProgressRing } from "./ProgressRing";
+import { toast } from "./Toast";
 
 interface AddPhotoTileProps extends Omit<ComponentPropsWithRef<"button">, "children"> {
   icon: Icon;
@@ -137,6 +138,29 @@ interface FilePickerOptions {
   testId?: string;
 }
 
+/**
+ * What an input picked, read into memory before the input is cleared. A camera's photo on iOS is backed by a temporary
+ * file that goes with the input's value, and a photo read after `value = ""` may come out empty or unreadable. Also
+ * never a silent loss: a file that can't be read says so.
+ */
+export async function takePicked(input: HTMLInputElement): Promise<File[]> {
+  const picked = Array.from(input.files ?? []);
+  try {
+    const files = await Promise.all(
+      picked.map(
+        async (file) =>
+          new File([await file.arrayBuffer()], file.name, { type: file.type, lastModified: file.lastModified }),
+      ),
+    );
+    input.value = "";
+    return files;
+  } catch {
+    input.value = "";
+    toast.error("Couldn't read that photo", "Take it again, or add it from the library.");
+    return [];
+  }
+}
+
 /** A hidden file input and a function to open it. */
 export function useFilePicker({ camera, multiple, onFiles, accept = "image/*", testId }: FilePickerOptions) {
   const inputRef = useRef<HTMLInputElement>(null);
@@ -150,9 +174,9 @@ export function useFilePicker({ camera, multiple, onFiles, accept = "image/*", t
       hidden
       data-testid={testId ?? (camera ? "camera-input" : "photo-input")}
       onChange={(event) => {
-        const files = Array.from(event.target.files ?? []);
-        event.target.value = "";
-        if (files.length) onFiles(files);
+        void takePicked(event.target).then((files) => {
+          if (files.length) onFiles(files);
+        });
       }}
     />
   );

@@ -5,6 +5,7 @@ import { useRef } from "react";
 import { Button } from "@/components/ui/Button";
 import { CameraIcon, FinishIcon } from "@/components/ui/icons";
 import { Kbd } from "@/components/ui/Kbd";
+import { takePicked } from "@/components/ui/PhotoTiles";
 import { cn } from "@/lib/cn";
 import { OutcomePicker } from "./Outcome";
 import { PhotoReadNote } from "./PhotoReadNote";
@@ -75,9 +76,9 @@ export function OffTheBed({
               hidden
               data-testid="camera-input"
               onChange={(event) => {
-                const files = Array.from(event.target.files ?? []);
-                event.target.value = "";
-                if (files.length) onPhotos(files);
+                void takePicked(event.target).then((files) => {
+                  if (files.length) onPhotos(files);
+                });
               }}
             />
           </>

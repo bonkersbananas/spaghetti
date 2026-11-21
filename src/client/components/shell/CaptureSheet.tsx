@@ -17,7 +17,7 @@ import { type CaptureTarget, useCapture } from "@/lib/capture";
 import { useBuilds } from "@/lib/items";
 import { keyboardProxy, releaseKeyboard } from "@/lib/keyboard-proxy";
 import { photoSrc } from "@/lib/previews";
-import { useIsDesktop } from "@/lib/use-media-query";
+import { useHasCamera, useIsDesktop } from "@/lib/use-media-query";
 
 /** Only a print that went wrong asks what, so the tags load then. */
 const FailureTags = lazy(() => import("@/components/builds/FailureTags"));
@@ -92,6 +92,7 @@ export function CaptureSheet() {
     setPrintDraft,
   } = useCapture();
   const isDesktop = useIsDesktop();
+  const hasCamera = useHasCamera();
   const navigate = useNavigate();
   const pathname = useLocation({ select: (location) => location.pathname });
   const camera = useFilePicker({ camera: true, onFiles: addFiles });
@@ -347,7 +348,7 @@ export function CaptureSheet() {
                 onRemove={() => removePhoto(photo.id)}
               />
             ))}
-            {!isDesktop && <AddPhotoTile size="md" icon={CameraIcon} label="Camera" onClick={camera.open} />}
+            {hasCamera && <AddPhotoTile size="md" icon={CameraIcon} label="Camera" onClick={camera.open} />}
             <AddPhotoTile
               size="md"
               icon={isDesktop ? PlusIcon : ImageIcon}

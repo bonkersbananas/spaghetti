@@ -10,13 +10,21 @@ import { Kbd } from "@/components/ui/Kbd";
 import { AddPhotoTile, PhotoThumb, useFilePicker } from "@/components/ui/PhotoTiles";
 import { Sheet } from "@/components/ui/Sheet";
 import { toast } from "@/components/ui/Toast";
+import {
+  cameraArrived,
+  cameraOpening,
+  cameraWasUp,
+  dropAttemptDraft,
+  keepAttemptDraft,
+  keptAttemptDraft,
+} from "@/lib/attempt-draft";
 import { type AttemptDraft, logAttempt } from "@/lib/builds";
 import { useDraftPhotos } from "@/lib/capture";
 import type { ItemView } from "@/lib/items";
 import { photoSrc } from "@/lib/previews";
 import { sessionQuery } from "@/lib/queries";
 import { queueSlicerFile } from "@/lib/slicer-files";
-import { useIsDesktop } from "@/lib/use-media-query";
+import { useHasCamera, useIsDesktop } from "@/lib/use-media-query";
 import { offerLine, useWhatWorked, WhatWorkedSuggestion } from "../WhatWorkedSuggestion";
 import { AttemptFields } from "./AttemptFields";
 import { useOutcomeCounts } from "./PlateParts";
@@ -47,6 +55,7 @@ export function LogAttempt({
   incomingFile?: { file: File; key: number } | null;
 }) {
   const isDesktop = useIsDesktop();
+  const hasCamera = useHasCamera();
   const { data: user } = useSuspenseQuery(sessionQuery);
   const previous = item.attempts.at(-1);
   const blank = (): Omit<AttemptDraft, "photos"> => ({
@@ -58,13 +67,40 @@ export function LogAttempt({
     settings: carryOver(previous?.settings),
     parts: [],
   });
-  const [draft, setDraft] = useState(blank);
+  // A draft kept on the device (the page loaded again while the camera was up, or the app was closed) comes back.
+  const [draft, setDraft] = useState(() => keptAttemptDraft(item.id) ?? blank());
   const [when, setWhen] = useState<number | null>(null);
   const [recipe, setRecipe] = useState<AppliedRecipe | null>(null);
   const [usedMatch, setUsedMatch] = useState<{ id: string; before: AttemptSettings } | null>(null);
-  const [dirty, setDirty] = useState(false);
-  const { photos, addFiles, removePhoto: removeDraftPhoto, clear } = useDraftPhotos();
-  const camera = useFilePicker({ camera: true, onFiles: addFiles });
+  const [dirty, setDirty] = useState(() => !!keptAttemptDraft(item.id));
+  const {
+    photos,
+    addFiles,
+    removePhoto: removeDraftPhoto,
+    clear,
+  } = useDraftPhotos({
+    keep: true,
+    scope: item.id,
+  });
+  const camera = useFilePicker({
+    camera: true,
+    onFiles: (files) => {
+      cameraArrived(item.id);
+      addFiles(files);
+    },
+  });
+  const openCamera = () => {
+    cameraOpening(item.id);
+    camera.open();
+  };
+  // The page loaded again while the camera was up: the sheet opens again with the draft.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: once, as the sheet mounts.
+  useEffect(() => {
+    if (cameraWasUp(item.id)) onOpenChange(true);
+  }, []);
+  useEffect(() => {
+    if (dirty) keepAttemptDraft(item.id, draft);
+  }, [dirty, draft, item.id]);
   const library = useFilePicker({ multiple: true, onFiles: addFiles });
   const outcomeCounts = useOutcomeCounts();
   const slicer = useSlicerFile({
@@ -136,6 +172,7 @@ export function LogAttempt({
     }
     slicer.clear();
     clear();
+    dropAttemptDraft(item.id);
     setDirty(false);
     setWhen(null);
     setRecipe(null);
@@ -305,7 +342,7 @@ export function LogAttempt({
               // One-handed at the printer: two wide, short tiles across the sheet, easy to hit with a thumb, and the
               // note comes sooner than under the old pair of squares.
               <div className="grid grid-cols-2 gap-2.5">
-                <AddPhotoTile size="row" icon={CameraIcon} label="Take photo" onClick={camera.open} />
+                <AddPhotoTile size="row" icon={CameraIcon} label="Take photo" onClick={openCamera} />
                 <AddPhotoTile size="row" icon={ImageIcon} label="Library" onClick={library.open} />
               </div>
             ) : (
@@ -320,7 +357,7 @@ export function LogAttempt({
                     onRemove={() => removeDraftPhoto(photo.id)}
                   />
                 ))}
-                {!isDesktop && <AddPhotoTile size="md" icon={CameraIcon} label="Take photo" onClick={camera.open} />}
+                {hasCamera && <AddPhotoTile size="md" icon={CameraIcon} label="Take photo" onClick={openCamera} />}
                 <AddPhotoTile
                   size="md"
                   icon={isDesktop ? PlusIcon : ImageIcon}
