@@ -31,7 +31,7 @@ export async function looksLikeModel(file: File, only?: "stl"): Promise<boolean>
     const head = new Uint8Array(await file.slice(0, 84).arrayBuffer());
     if (head.length === 84) {
       const triangles = new DataView(head.buffer).getUint32(80, true);
-      if (84 + triangles * 50 === file.size) return true;
+      if (84 + triangles * 50 <= file.size) return true;
     }
     const text = new TextDecoder().decode(head.subarray(0, 16)).replace(/^﻿/, "");
     return /^\s*solid/i.test(text);

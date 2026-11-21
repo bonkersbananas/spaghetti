@@ -22,7 +22,6 @@ import { SegmentedControl } from "@/components/ui/SegmentedControl";
 import { Sheet } from "@/components/ui/Sheet";
 import { toast } from "@/components/ui/Toast";
 import { modelAccept } from "@/lib/model-pick";
-import { takeModels } from "@/lib/take-models";
 import { MeshPreview } from "./MeshPreview";
 
 /** What the sheet hands back when the adapted file is made: the changes, in the twist's words. */
@@ -203,7 +202,7 @@ export default function AdaptSheet({
           hidden
           data-testid="adapt-file-input"
           onChange={(event) => {
-            void takeModels([...(event.target.files ?? [])].slice(0, 1), (file) => void choose(file), "stl");
+            void choose(event.target.files?.[0]);
             event.target.value = "";
           }}
         />
