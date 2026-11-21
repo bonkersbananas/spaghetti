@@ -1,6 +1,6 @@
 import { and, eq, isNull } from "drizzle-orm";
 import { bestPhoto } from "../shared/cover.ts";
-import { hasPhotoMetadata } from "../shared/photo-metadata.ts";
+import { hasPhotoMetadata, stripPhotoMetadata } from "../shared/photo-metadata.ts";
 import { getDb } from "./db/index.ts";
 import { attempts, items, photos, twists } from "./db/schema.ts";
 import { setPageHeaders } from "./page-headers.ts";
@@ -209,7 +209,9 @@ export async function previewImage(request: Request, env: Env): Promise<Response
   if (!object) return missing();
   // An original waiting for a browser to resize it may still carry where it was taken (decision 0075): not sent.
   if (object.customMetadata?.provisional) return missing();
-  const bytes = new Uint8Array(await object.arrayBuffer());
+  // Sent without EXIF, XMP or IPTC; what isn't a JPEG or WebP it can read goes as it is, unless metadata shows in it.
+  const stored = new Uint8Array(await object.arrayBuffer());
+  const bytes = stripPhotoMetadata(stored) ?? stored;
   if (hasPhotoMetadata(bytes, { strict: false })) return missing();
   const headers = new Headers({
     "Content-Type": object.httpMetadata?.contentType ?? preview.contentType ?? "image/jpeg",

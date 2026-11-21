@@ -1,12 +1,14 @@
 /**
- * Whether a stored photo's bytes carry metadata a stranger shouldn't get (decision 0075): EXIF (with GPS, the camera,
- * the time), XMP (which can repeat all of that) or IPTC. Photos a browser resized are re-encoded from a canvas, which
- * writes none of it; a photo stored as it came (an agent's or the printer bridge's, `needs_resize`), or one sent by
- * anything other than the app, may carry all of it. The guest page serves a photo only when this finds nothing.
+ * Metadata a stranger shouldn't get from a stored photo (decision 0075): EXIF (with GPS, the camera, the time), XMP
+ * (which can repeat all of that) or IPTC. A browser's canvas re-encode isn't free of it: Safari (iPhone and Mac), which
+ * can't encode WebP, writes JPEGs with an APP1 Exif block (colour space, pixel size) and an APP13 Photoshop block (an
+ * empty IPTC record), and a photo stored as it came (an agent's or the printer bridge's, `needs_resize`), or one sent
+ * by anything other than the app, may carry all of it. So a guest gets `stripPhotoMetadata`'s copy, and only once
+ * `hasPhotoMetadata` finds nothing left in it.
  *
- * It reads the container, never the pixels: JPEG marker segments up to the image data, WebP's RIFF chunks. Anything
- * it can't read as one of the two counts as carrying metadata. A last pass looks for an EXIF header or an XMP packet
- * anywhere in the file, so data tucked after the image (past JPEG's end marker) is found too.
+ * Both read the container, never the pixels: JPEG marker segments, WebP's RIFF chunks. Anything they can't read as one
+ * of the two counts as carrying metadata. `hasPhotoMetadata` also looks for an EXIF header or an XMP packet anywhere in
+ * the file, so data tucked after the image (past JPEG's end marker) is found too.
  */
 
 const EXIF_HEADER = [0x45, 0x78, 0x69, 0x66, 0x00, 0x00]; // "Exif\0\0"
@@ -87,4 +89,117 @@ export function hasPhotoMetadata(bytes: Uint8Array, { strict = true }: { strict?
   if (riff === "RIFF") return webpMetadata(bytes);
   // Not a JPEG or a WebP: nothing the app stores as a photo, so nothing to serve.
   return strict;
+}
+
+const ICC_PROFILE = Array.from("ICC_PROFILE\0", (char) => char.charCodeAt(0));
+
+function startsWith(bytes: Uint8Array, at: number, prefix: readonly number[]): boolean {
+  for (let i = 0; i < prefix.length; i++) if (bytes[at + i] !== prefix[i]) return false;
+  return true;
+}
+
+function join(parts: Uint8Array[]): Uint8Array {
+  const out = new Uint8Array(parts.reduce((total, part) => total + part.byteLength, 0));
+  let at = 0;
+  for (const part of parts) {
+    out.set(part, at);
+    at += part.byteLength;
+  }
+  return out;
+}
+
+/**
+ * JPEG: SOI, APP0 (JFIF), APP2's colour profile, APP14 (Adobe's colour transform) and every segment that isn't an
+ * application's or a comment (tables, frame, scans and their entropy-coded data) are copied byte for byte; APP1 (EXIF,
+ * XMP), APP13 (IPTC), any other APPn, APP2 that isn't a colour profile (MPF, whose offsets would point past the end)
+ * and COM are dropped, and nothing after EOI is kept. Null when it isn't a whole JPEG.
+ */
+function stripJpeg(bytes: Uint8Array): Uint8Array | null {
+  const parts: Uint8Array[] = [bytes.subarray(0, 2)];
+  let at = 2;
+  while (at + 2 <= bytes.length) {
+    if (bytes[at] !== 0xff) return null;
+    const marker = bytes[at + 1] as number;
+    if (marker === 0xff) {
+      at += 1;
+      continue;
+    }
+    if (marker === 0xd9) {
+      parts.push(bytes.subarray(at, at + 2));
+      return join(parts);
+    }
+    if (marker === 0xd8 || marker === 0x00) return null;
+    if (marker === 0x01 || (marker >= 0xd0 && marker <= 0xd7)) {
+      parts.push(bytes.subarray(at, at + 2));
+      at += 2;
+      continue;
+    }
+    if (at + 4 > bytes.length) return null;
+    const length = ((bytes[at + 2] as number) << 8) | (bytes[at + 3] as number);
+    const end = at + 2 + length;
+    if (length < 2 || end > bytes.length) return null;
+    const app = marker >= 0xe0 && marker <= 0xef;
+    const kept =
+      (!app && marker !== 0xfe) ||
+      marker === 0xe0 ||
+      marker === 0xee ||
+      (marker === 0xe2 && startsWith(bytes, at + 4, ICC_PROFILE));
+    if (kept) parts.push(bytes.subarray(at, end));
+    at = end;
+    if (marker !== 0xda) continue;
+    // The scan's entropy-coded data runs to the next marker that isn't a stuffed byte (FF 00) or a restart (FF Dn).
+    let next = at;
+    for (;;) {
+      next = bytes.indexOf(0xff, next);
+      if (next === -1 || next + 1 >= bytes.length) return null;
+      const after = bytes[next + 1] as number;
+      if (after === 0x00 || (after >= 0xd0 && after <= 0xd7)) next += 2;
+      else if (after === 0xff) next += 1;
+      else break;
+    }
+    parts.push(bytes.subarray(at, next));
+    at = next;
+  }
+  return null;
+}
+
+/** WebP: drops the "EXIF" and "XMP " chunks, clears VP8X's flags for them, and sets the RIFF size to what is left. */
+function stripWebp(bytes: Uint8Array): Uint8Array | null {
+  if (bytes.length < 12) return null;
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  const fourCC = (at: number) => String.fromCharCode(...bytes.subarray(at, at + 4));
+  if (fourCC(8) !== "WEBP") return null;
+  const end = 8 + view.getUint32(4, true);
+  if (end > bytes.length || end < 12) return null;
+  const parts: Uint8Array[] = [new Uint8Array(12)];
+  let at = 12;
+  while (at < end) {
+    if (at + 8 > end) return null;
+    const name = fourCC(at);
+    const size = view.getUint32(at + 4, true);
+    if (at + 8 + size > end) return null;
+    if (name !== "EXIF" && name !== "XMP ") {
+      // A copy, padded to an even length (an odd chunk at the very end may lack its pad byte).
+      const chunk = new Uint8Array(8 + size + (size % 2));
+      chunk.set(bytes.subarray(at, at + 8 + size));
+      // VP8X's flags: bit 3 EXIF, bit 2 XMP.
+      if (name === "VP8X" && size >= 1) chunk[8] = (chunk[8] as number) & ~0b1100;
+      parts.push(chunk);
+    }
+    at += 8 + size + (size % 2);
+  }
+  const out = join(parts);
+  out.set(bytes.subarray(0, 12));
+  new DataView(out.buffer).setUint32(4, out.length - 8, true);
+  return out;
+}
+
+/**
+ * A copy of a JPEG or WebP without its EXIF, XMP, IPTC or comments; the image data is the same bytes. Null when the
+ * bytes aren't a JPEG or WebP it can read whole. Run `hasPhotoMetadata` on what it returns before serving it.
+ */
+export function stripPhotoMetadata(bytes: Uint8Array): Uint8Array | null {
+  if (bytes[0] === 0xff && bytes[1] === 0xd8) return stripJpeg(bytes);
+  if (String.fromCharCode(...bytes.subarray(0, 4)) === "RIFF") return stripWebp(bytes);
+  return null;
 }

@@ -1,7 +1,7 @@
 /** @jsxImportSource hono/jsx */
 import { and, eq, isNull, or } from "drizzle-orm";
 import { PHOTO_VARIANTS, type PhotoVariant } from "../../shared/api.ts";
-import { hasPhotoMetadata } from "../../shared/photo-metadata.ts";
+import { hasPhotoMetadata, stripPhotoMetadata } from "../../shared/photo-metadata.ts";
 import { sharePath } from "../../shared/shares.ts";
 import { signedInUserId } from "../auth/session.ts";
 import { type Db, getDb } from "../db/index.ts";
@@ -232,10 +232,11 @@ async function photo(request: Request, env: Env, token: string, photoId: string,
   if (object.customMetadata?.provisional) return notFound(request.method);
   const type = object.httpMetadata?.contentType ?? row.contentType;
   if (!SERVED_TYPES.has(type)) return notFound(request.method);
-  const bytes = new Uint8Array(await object.arrayBuffer());
-  // What is stored is checked, not what should be: a photo with EXIF, XMP or IPTC (a place, a camera) isn't served.
-  if (hasPhotoMetadata(bytes)) {
-    console.warn("shared photo withheld: it carries metadata", row.id);
+  // A guest gets a copy without EXIF, XMP or IPTC (a place, a camera, a time): Safari's own JPEGs carry an Exif block.
+  // What is served is checked again, not what should be: a photo it can't read, or that still carries some, isn't.
+  const bytes = stripPhotoMetadata(new Uint8Array(await object.arrayBuffer()));
+  if (!bytes || hasPhotoMetadata(bytes)) {
+    console.warn("shared photo withheld: its metadata couldn't be stripped", row.id);
     return notFound(request.method);
   }
   return new Response(request.method === "HEAD" ? null : bytes, {
