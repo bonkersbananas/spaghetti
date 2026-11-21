@@ -1,0 +1,64 @@
+import { OUTCOME_LABELS, type Outcome } from "@shared/attempts";
+import type { ReactNode } from "react";
+import { coverPhoto } from "@/components/ui/Card";
+import { MetaList } from "@/components/ui/MetaList";
+import { cn } from "@/lib/cn";
+import type { AttemptView, ItemView } from "@/lib/items";
+import { coverOf } from "@/lib/previews";
+import { usePrintProgress } from "@/lib/print-progress";
+
+/**
+ * A build as one row to pick, in "Add to a build" and "Which build is this?": its cover small, then how it stands
+ * ("On the bed · 30 min left", "Partly · 3 attempts").
+ */
+export const inks: Record<Outcome | "printing", string> = {
+  success: "text-basil-ink",
+  partial: "text-semolina-ink",
+  failed: "text-tomato-ink",
+  printing: "text-semolina-ink",
+};
+export const tiles: Record<Outcome | "printing", string> = {
+  success: "bg-basil-soft text-basil-ink",
+  partial: "bg-semolina-soft text-semolina-ink",
+  failed: "bg-tomato-soft text-tomato-ink",
+  printing: "bg-semolina-soft text-semolina-ink",
+};
+
+/** The build's cover (`coverOf`), as small as a pick row's picture. Null: the glyph tile stands in for a note. */
+export function pictureOf(build: ItemView) {
+  return coverPhoto(coverOf(build), "") ?? null;
+}
+
+/** "30 min left", "Done by now" or "On the bed": the progress sentence kept short. */
+export function useLeft(attempt: AttemptView | undefined): string | null {
+  const progress = usePrintProgress(attempt?.id, attempt?.printedAt ?? 0, attempt?.settings.estimatedMinutes);
+  if (!attempt) return null;
+  if (progress.state === "due") return "Done by now";
+  if (progress.state === "unknown") return null;
+  return (progress.label.split(" · ").at(-1) ?? progress.label).replace(/^[Aa]bout /, "");
+}
+
+export function BuildMeta({ build, printing }: { build: ItemView; printing?: AttemptView }) {
+  const left = useLeft(printing);
+  const last = build.attempts.at(-1);
+  const count = build.attempts.length;
+  const pieces: ReactNode[] = [];
+  if (printing) {
+    pieces.push(
+      <span key="bed" className="text-semolina-ink font-semibold">
+        On the bed
+      </span>,
+    );
+    if (left) pieces.push(<span key="left">{left}</span>);
+  } else if (last?.outcome) {
+    pieces.push(
+      <span key="outcome" className={cn("font-semibold", inks[last.outcome])}>
+        {OUTCOME_LABELS[last.outcome]}
+      </span>,
+    );
+  }
+  pieces.push(
+    <span key="count">{count ? `${count} ${count === 1 ? "attempt" : "attempts"}` : "No attempts yet"}</span>,
+  );
+  return <MetaList>{pieces}</MetaList>;
+}

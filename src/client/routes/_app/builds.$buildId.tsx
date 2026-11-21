@@ -9,7 +9,7 @@ import { fullTime, inlineTime } from "@shared/time";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { AnimatePresence } from "motion/react";
-import { useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { AttemptEntry } from "@/components/builds/AttemptEntry";
 import { AttemptSheet } from "@/components/builds/AttemptSheet";
 import { BuildSummary } from "@/components/builds/BuildSummary";
@@ -94,6 +94,11 @@ import { useWho } from "@/lib/who";
 /** A build with more attempts than this shows only its newest few, with a line that unfolds the rest. */
 const FOLD_AFTER = 5;
 const SHOWN_ATTEMPTS = 3;
+
+// "Move to another build" (decision 0076): loaded with the first tap on it.
+const MoveAttemptSheet = lazy(() =>
+  import("@/components/builds/MoveAttemptSheet").then((m) => ({ default: m.MoveAttemptSheet })),
+);
 
 export const Route = createFileRoute("/_app/builds/$buildId")({
   validateSearch: (search: Record<string, unknown>): { new?: boolean; attempt?: string; finish?: string } => ({
@@ -458,6 +463,14 @@ function Build({ item }: { item: ItemView }) {
   const tried = item.attempts.filter((attempt) => attempt.outcome !== null).length;
   const closest = worked ? undefined : [...item.attempts].reverse().find((attempt) => attempt.outcome === "partial");
   const [savingRecipe, setSavingRecipe] = useState<RecipeSourceAttempt | null>(null);
+  // "Move to another build" from an attempt's "…" (decision 0076): the sheet's code comes with the first tap.
+  const [movingId, setMovingId] = useState<string | null>(null);
+  const [movingOpen, setMovingOpen] = useState(false);
+  const movingAttempt = movingId ? item.attempts.find((attempt) => attempt.id === movingId) : undefined;
+  const setMoving = (attemptId: string) => {
+    setMovingId(attemptId);
+    setMovingOpen(true);
+  };
   const [openRecipe, setOpenRecipe] = useState<string | null>(null);
   // The sheets are closed on arrival: they mount once the page has painted (sooner if one is asked for at once).
   const afterPaint = useAfterPaint();
@@ -789,6 +802,8 @@ function Build({ item }: { item: ItemView }) {
                               ? () => setSavingRecipe(recipeSource(attempt) ?? null)
                               : undefined
                           }
+                          item={item}
+                          onMove={readOnly || attempt.pending ? undefined : () => setMoving(attempt.id)}
                         />
                       ))}
                     </AnimatePresence>
@@ -912,6 +927,11 @@ function Build({ item }: { item: ItemView }) {
               }}
             />
             <SaveRecipeSheet source={savingRecipe} onOpenChange={(open) => !open && setSavingRecipe(null)} />
+            {movingAttempt && (
+              <Suspense fallback={null}>
+                <MoveAttemptSheet open={movingOpen} onOpenChange={setMovingOpen} item={item} attempt={movingAttempt} />
+              </Suspense>
+            )}
             <RecipeSheet recipeId={openRecipe} onOpenChange={(open) => !open && setOpenRecipe(null)} />
           </>
         )}

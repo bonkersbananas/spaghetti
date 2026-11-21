@@ -92,19 +92,27 @@ function Shell() {
   const dragging = useGlobalCapture();
   // Sends captures still waiting from this visit or an earlier one.
   useEffect(() => connectOutbox(queryClient), [queryClient]);
-  // Keeps this device's clock for "Since Thursday" once the app is idle (its code is out of the first load); stops with the shell.
+  // Keeps this device's clock for "Since Thursday" once the app is idle (its code is out of the first load), and the
+  // files downloaded to print (which build a print belongs to, decision 0076); stops with the shell.
   useEffect(() => {
-    let stop: (() => void) | undefined;
+    const stops: Array<() => void> = [];
+    const stop = () => {
+      for (const one of stops) one();
+    };
     let off = false;
-    const start = () =>
+    const start = () => {
       void import("@/lib/since").then((since) => {
-        if (!off) stop = since.followActivity();
+        if (!off) stops.push(since.followActivity());
       });
+      void import("@/lib/downloads").then((downloads) => {
+        if (!off) stops.push(downloads.followDownloads());
+      });
+    };
     const idle = "requestIdleCallback" in window;
     const id = idle ? requestIdleCallback(start, { timeout: 4000 }) : window.setTimeout(start, 1500);
     return () => {
       off = true;
-      stop?.();
+      stop();
       if (idle) cancelIdleCallback(id);
       else clearTimeout(id);
     };

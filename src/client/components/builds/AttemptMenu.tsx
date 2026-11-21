@@ -1,6 +1,6 @@
 import { type ReactNode, useState } from "react";
 import { IconButton } from "@/components/ui/Button";
-import { CompareIcon, MoreIcon, RecipeIcon } from "@/components/ui/icons";
+import { CompareIcon, MoreIcon, MoveIntoIcon, RecipeIcon } from "@/components/ui/icons";
 import { Popover, PopoverClose } from "@/components/ui/Popover";
 import { Sheet } from "@/components/ui/Sheet";
 import { useIsDesktop } from "@/lib/use-media-query";
@@ -11,6 +11,8 @@ interface AttemptMenuProps {
   onCompare?: () => void;
   /** An attempt that worked and isn't a recipe yet. */
   onSaveRecipe?: () => void;
+  /** Move it to another build (decision 0076). */
+  onMove?: () => void;
   /** Whether the attempt differs from the one before it ("Compare") or not ("Compare with attempt 2"). */
   changed: boolean;
 }
@@ -19,15 +21,16 @@ const row =
   "text-body text-ink hover:bg-ink/5 focus-visible:bg-ink/5 flex min-h-12 w-full items-center gap-3 rounded-md px-3 text-left outline-none md:min-h-11";
 
 /**
- * The attempt card's "…": the quiet extras (compare with the attempt before, keep it as a recipe) behind one button,
- * so the card itself keeps to how it went, the picture and the note. A popover on desktop, a sheet on phones.
+ * The attempt card's "…": the quiet extras (compare with the attempt before, keep it as a recipe, move it to another
+ * build) behind one button, so the card itself keeps to how it went, the picture and the note. A popover on desktop, a
+ * sheet on phones.
  */
-export function AttemptMenu({ number, onCompare, onSaveRecipe, changed }: AttemptMenuProps) {
+export function AttemptMenu({ number, onCompare, onSaveRecipe, onMove, changed }: AttemptMenuProps) {
   const isDesktop = useIsDesktop();
   const [open, setOpen] = useState(false);
   // Mounted with the first tap, so a long story doesn't carry a closed sheet per attempt.
   const [asked, setAsked] = useState(false);
-  if (!onCompare && !onSaveRecipe) return null;
+  if (!onCompare && !onSaveRecipe && !onMove) return null;
   const label = `Options for attempt ${number}`;
   const rows = (close?: () => void) => (
     <div className="flex flex-col">
@@ -41,6 +44,12 @@ export function AttemptMenu({ number, onCompare, onSaveRecipe, changed }: Attemp
         <Row onSelect={onSaveRecipe} close={close}>
           <RecipeIcon size={20} aria-hidden />
           Save as recipe
+        </Row>
+      )}
+      {onMove && (
+        <Row onSelect={onMove} close={close}>
+          <MoveIntoIcon size={20} aria-hidden />
+          Move to another build
         </Row>
       )}
     </div>
