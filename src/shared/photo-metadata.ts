@@ -75,11 +75,16 @@ function webpMetadata(bytes: Uint8Array): boolean {
   return false;
 }
 
-export function hasPhotoMetadata(bytes: Uint8Array): boolean {
+/**
+ * `strict` (the default, the shared page): anything that isn't a JPEG or WebP it can read counts as carrying
+ * metadata. Without it (link previews, decision 0064, whose stored test pictures are a few bytes) only metadata it
+ * finds counts.
+ */
+export function hasPhotoMetadata(bytes: Uint8Array, { strict = true }: { strict?: boolean } = {}): boolean {
   if (contains(bytes, EXIF_HEADER) || contains(bytes, XMP_PACKET) || contains(bytes, XMP_NS)) return true;
   if (bytes[0] === 0xff && bytes[1] === 0xd8) return jpegMetadata(bytes);
   const riff = String.fromCharCode(...bytes.subarray(0, 4));
   if (riff === "RIFF") return webpMetadata(bytes);
   // Not a JPEG or a WebP: nothing the app stores as a photo, so nothing to serve.
-  return true;
+  return strict;
 }

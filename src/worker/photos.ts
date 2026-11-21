@@ -12,6 +12,7 @@ import {
   items,
   photos,
   recipes,
+  shares,
   shoppingItems,
   spools,
   twistFiles,
@@ -169,6 +170,16 @@ export async function purgeDeleted(env: Env, now = Date.now()) {
   await db.delete(recipes).where(and(isNotNull(recipes.deletedAt), lt(recipes.deletedAt, cutoff)));
   await db.delete(twists).where(and(isNotNull(twists.deletedAt), lt(twists.deletedAt, cutoff)));
   await db.delete(comments).where(and(isNotNull(comments.deletedAt), lt(comments.deletedAt, cutoff)));
+  // Public links (decision 0075): a stopped one is kept a month for its Undo, and any goes with its thing.
+  await db
+    .delete(shares)
+    .where(
+      or(
+        and(isNotNull(shares.revokedAt), lt(shares.revokedAt, cutoff)),
+        and(eq(shares.kind, "item"), sql`${shares.targetId} NOT IN (SELECT id FROM items)`),
+        and(eq(shares.kind, "twist"), sql`${shares.targetId} NOT IN (SELECT id FROM twists)`),
+      ),
+    );
   // Their pictures first (R2 goes first, like the rest), so a cut-short purge leaves rows the next run finishes.
   const goneShopping = await db
     .select({ id: shoppingItems.id })

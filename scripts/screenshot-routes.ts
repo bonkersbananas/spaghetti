@@ -19,6 +19,7 @@ import { commentId } from "./seed/comments.ts";
 import { SEED_IDS } from "./seed/ideas.ts";
 import { SEED_NOW } from "./seed/index.ts";
 import { SEED_SPOOL_IDS } from "./seed/pantry.ts";
+import { SEED_RECIPE_IDS } from "./seed/recipes.ts";
 import { gridfinityBin } from "./seed/stl-bin.ts";
 import { SEED_TWIST_IDS } from "./seed/twists.ts";
 
@@ -188,6 +189,53 @@ async function guestInvite(page: Page) {
   await page.context().clearCookies();
   return String(made.url).split("#")[1] ?? "";
 }
+
+/**
+ * A public link to one seeded thing (decision 0075), made as Alex and opened as a guest: signs in through the API,
+ * makes the link, and leaves the browser signed out again (a signed-in browser is sent on to the app's own page).
+ */
+async function guestShare(page: Page, kind: "items" | "twists", id: string) {
+  const origin = new URL(page.url() || "http://127.0.0.1").origin;
+  await page.request.post("/api/session", {
+    data: { username: "alex", password: "spaghetti-al-dente" },
+    headers: { Origin: origin },
+  });
+  const made = await page.request.put(`/api/shares/${kind}/${id}`, { headers: { Origin: origin } });
+  if (!made.ok()) throw new Error(`Sharing ${kind}/${id} failed: ${made.status()}`);
+  const { share } = (await made.json()) as { share: { token: string } };
+  await page.context().clearCookies();
+  return share.token;
+}
+
+/** Does something as Alex through the API, and leaves the browser signed out again. */
+async function asAlex(page: Page, act: (origin: string) => Promise<unknown>) {
+  const origin = new URL(page.url() || "http://127.0.0.1").origin;
+  await page.request.post("/api/session", {
+    data: { username: "alex", password: "spaghetti-al-dente" },
+    headers: { Origin: origin },
+  });
+  await act(origin);
+  await page.context().clearCookies();
+}
+
+/** Stops every public link, so the shots after this one show nothing shared (signed out again if it was). */
+async function unshareAll(page: Page) {
+  const signedIn = (await page.request.get("/api/session")).ok();
+  const run = async (origin: string) => {
+    const listed = await page.request.get("/api/shares");
+    const { shares } = (await listed.json()) as { shares: { id: string }[] };
+    for (const share of shares) await page.request.delete(`/api/shares/${share.id}`, { headers: { Origin: origin } });
+  };
+  if (signedIn) await run(new URL(page.url()).origin);
+  else await asAlex(page, run);
+}
+
+/** Opens a guest's page for a seeded thing and waits for its photos. */
+const openShared = (kind: "items" | "twists", id: string) => async (page: Page) => {
+  const token = await guestShare(page, kind, id);
+  await page.goto(`/s/${token}`);
+  await page.locator("h1").first().waitFor();
+};
 
 /** Lets the entrance animation of a signed-out page finish: a shot taken mid-fade is blank. */
 const settle = async (page: Page) => {
@@ -1888,6 +1936,49 @@ async function addToSlot(page: Page, empty: string[], slot: string, options: { o
 
 export const shots: Shot[] = [
   { name: "sign-in", path: "/sign-in", signedOut: true },
+  // A public link as a guest sees it (decision 0075): no app around it, photos first, read-only.
+  {
+    name: "shared-idea",
+    path: "/sign-in",
+    signedOut: true,
+    fullPage: true,
+    prepare: openShared("items", SEED_IDS.deskTidy),
+  },
+  {
+    name: "shared-build",
+    path: "/sign-in",
+    signedOut: true,
+    fullPage: true,
+    prepare: openShared("items", SEED_BUILD_IDS.tugboat),
+    cleanup: unshareAll,
+  },
+  {
+    // The bins' twist, with the PETG recipe as how we print it (only for this shot: cleanup takes it off again).
+    name: "shared-twist",
+    path: "/sign-in",
+    signedOut: true,
+    fullPage: true,
+    prepare: async (page) => {
+      await asAlex(page, (origin) =>
+        page.request.patch(`/api/twists/${SEED_TWIST_IDS.bins}`, {
+          data: { recipeId: SEED_RECIPE_IDS.petg },
+          headers: { Origin: origin },
+        }),
+      );
+      await openShared("twists", SEED_TWIST_IDS.bins)(page);
+    },
+    cleanup: async (page) => {
+      await asAlex(page, (origin) =>
+        page.request.patch(`/api/twists/${SEED_TWIST_IDS.bins}`, {
+          data: { recipeId: null },
+          headers: { Origin: origin },
+        }),
+      );
+      await unshareAll(page);
+    },
+  },
+  // A link that was stopped, or never was: one calm sentence, the same for every reason.
+  { name: "shared-gone", path: "/s/AAAAAAAAAAAAAAAAAAAAAAAA", signedOut: true },
   { name: "link-code", path: "/link", signedOut: true, beforeShot: settle },
   {
     // An invite link opened by someone who isn't signed in: the form, filled in a little.
@@ -2237,6 +2328,32 @@ export const shots: Shot[] = [
       });
     },
     cleanup: restoreDeskTidy,
+  },
+  {
+    // The share button's panel with a public link on (decision 0075): a popover on desktop, a sheet on phones.
+    name: "share-panel",
+    path: `/ideas/${SEED_IDS.deskTidy}`,
+    prepare: async (page) => {
+      const origin = new URL(page.url()).origin;
+      await page.request.put(`/api/shares/items/${SEED_IDS.deskTidy}`, { headers: { Origin: origin } });
+      await page.reload();
+      await page.getByRole("textbox", { name: "Title" }).waitFor();
+      await page.getByRole("button", { name: "Share idea (anyone with the link can look)" }).click();
+      await page.getByText("Anyone with the link can look").waitFor();
+      await page.waitForTimeout(400);
+    },
+    cleanup: unshareAll,
+  },
+  {
+    // Not shared yet: the private link and the offer of a public one.
+    name: "share-panel-off",
+    path: `/ideas/${SEED_IDS.deskTidy}`,
+    prepare: async (page) => {
+      await page.getByRole("textbox", { name: "Title" }).waitFor();
+      await page.getByRole("button", { name: "Share idea", exact: true }).click();
+      await page.getByRole("button", { name: "Make a link" }).waitFor();
+      await page.waitForTimeout(400);
+    },
   },
   {
     name: "idea-long-text",

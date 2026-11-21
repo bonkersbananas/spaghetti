@@ -18,7 +18,7 @@ import { formatDuration } from "../../shared/time.ts";
 import { changeName } from "../../shared/twists.ts";
 import { WORKSPACE_TIME_ZONE } from "../../shared/week.ts";
 import type { Db } from "../db/index.ts";
-import { items, photos, recipes, tags, twists } from "../db/schema.ts";
+import { items, linkPreviews, photos, recipes, tags, twists } from "../db/schema.ts";
 import { loadItem } from "../routes/items.ts";
 
 /**
@@ -300,7 +300,20 @@ export async function loadItemView(db: Db, id: string): Promise<GuestView | null
   if (!item) return null;
   const pick = (kind: "failure" | "success") =>
     custom.filter((tag) => tag.kind === kind).map((tag) => ({ slug: tag.slug, label: tag.label }) as TagDefinition);
-  return itemView(item, { failure: pick("failure"), success: pick("success") });
+  const view = itemView(item, { failure: pick("failure"), success: pick("success") });
+  return withPageTitle(db, view);
+}
+
+/** A model's card without a title from a draft takes the page's own title, as the idea page's card does (link previews). */
+async function withPageTitle<V extends GuestView>(db: Db, view: V): Promise<V> {
+  if (!view.model || view.model.title) return view;
+  const row = await db
+    .select({ title: linkPreviews.title })
+    .from(linkPreviews)
+    .where(and(eq(linkPreviews.url, view.model.url), eq(linkPreviews.failed, false)))
+    .get();
+  const title = row?.title?.trim();
+  return title ? { ...view, model: { ...view.model, title } } : view;
 }
 
 /** A twist, as a guest sees it: its source, what we changed and how we print it. */
@@ -339,7 +352,7 @@ export async function loadTwistView(db: Db, id: string): Promise<GuestTwist | nu
   const mark = sourceUrl ? modelMarkOf(sourceUrl) : null;
   let host: string | null = null;
   if (sourceUrl) host = new URL(sourceUrl).hostname.replace(/^www\./, "");
-  return {
+  return withPageTitle(db, {
     kind: "twist",
     title: twist.name.trim() || "A twist",
     note: twist.note.trim(),
@@ -367,7 +380,7 @@ export async function loadTwistView(db: Db, id: string): Promise<GuestTwist | nu
           filaments: (recipe.settings.filaments ?? []).map(filamentOf),
         }
       : null,
-  };
+  });
 }
 
 /** The ids of the photos a guest of this view may fetch: exactly the ones on its page. */

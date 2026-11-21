@@ -347,7 +347,7 @@ const Idea = memo(function Idea({ item }: { item: ItemView }) {
         <h1 className="sr-only">{title.trim() || "Untitled idea"}</h1>
         <DetailBar back={back} title={title.trim() || "Untitled idea"}>
           {!deleting && <SaveStatus state={saveState} className="mr-2" />}
-          {!deleting && <ShareLinkButton title={title.trim()} />}
+          {!deleting && <ShareLinkButton kind="item" id={item.id} title={title.trim()} what="idea" />}
           <ConfirmDelete
             asking={deleting}
             onAskingChange={setDeleting}

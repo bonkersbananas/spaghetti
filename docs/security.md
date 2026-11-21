@@ -4,7 +4,7 @@ Spaghetti is private to two people. Nothing of the workspace (ideas, builds, pho
 
 ## What anyone can reach
 
-The Worker answers six kinds of address (`src/worker/index.ts`). Everything else is a static file of the build.
+The Worker answers seven kinds of address (`src/worker/index.ts`). Everything else is a static file of the build.
 
 | Address | Public? | Why |
 | --- | --- | --- |
@@ -13,6 +13,7 @@ The Worker answers six kinds of address (`src/worker/index.ts`). Everything else
 | Static files (`/assets/*`, icons, `/sw.js`, `/bridge/install.sh`) | yes | The build: code, styles, fonts, pictures. No data, names, emails or keys (checked by searching the build). |
 | `/api/*` | **no**, except the list below | Needs a session cookie or an agent token (`requireAuth` in `app.ts`). |
 | `/open/<signed link>/<name>` | yes, with a valid signature | Bambu Studio's own download of one file for ten minutes ([0058](decisions/0058-open-in-bambu-studio-by-a-signed-link.md)): HMAC-signed, one file, read-only; every failure is a 404. |
+| `/s/<token>`, `/s/<token>/photos/<id>/<thumb\|large>` | yes, with a live link | A public link to one idea, build or twist ([0075](decisions/0075-a-public-link-shows-one-thing-read-only.md)), below. |
 | `/mcp` | **no** | A `POST` needs an agent token; `GET` and `DELETE` are a 405. |
 | `/oauth/*`, `/.well-known/oauth-*` | yes | The OAuth protocol for MCP clients (below). |
 | `POST /api/share` | yes | The share target's fallback when no service worker took it: it only redirects to `/share` with the words. |
@@ -23,6 +24,17 @@ The `/api` routes that answer without credentials, each on purpose (the list in 
 - Signing in: `POST /api/session` (password), `POST /api/session/passkey/options` and `POST /api/session/passkey`, `POST /api/session/link` (a link or code made on a signed-in device). `DELETE /api/session` signs out.
 - Joining by invite: `POST /api/join/peek`, `/api/join/options`, `/api/join`, each only with the invite's token.
 - `POST /api/bridge/pair`: the printer bridge trades a pairing code for its token.
+
+## Public links
+
+The one way anything of the workspace reaches someone who isn't signed in, on purpose and one thing at a time ([0075](decisions/0075-a-public-link-shows-one-thing-read-only.md)):
+
+- **Made by people only.** `/api/shares` (make, list, stop, bring back) is person-only: no agent scope reaches it, and its changes are private to the people's own feed (never an agent's or a webhook). Nothing is shared by default.
+- **A capability.** The token is 144 random bits; links are looked up by its SHA-256 (`worker/shares.ts`), a malformed one without any lookup. One live link per thing. Stopping it (`revoked_at`) or deleting the thing ends it on the next request; an unknown, stopped or deleted link all get the same 404 page.
+- **One thing, read-only.** `worker/guest/` answers GET and HEAD only (anything else is a 405) and writes nothing. The page is built field by field from an allow-list (`guest/view.ts`): no people, comments, reactions, Up next, wishlists, "for", Claude's words, files or other things. The token opens nothing under `/api` (it isn't a session or an agent token).
+- **Photos.** Only the thing's own live photos (not a deleted attempt's; a twist only its lead photo), and only when the stored bytes carry no EXIF, XMP or IPTC (`shared/photo-metadata.ts`): a photo stored as it came (`needs_resize`, from an agent or the bridge) may hold a GPS position, so it is neither listed nor served. `Cache-Control: private, max-age=300`: no shared cache keeps one past its link.
+- **The page.** hono/jsx escapes every text and attribute; only http(s) addresses become links (`rel="noopener noreferrer nofollow ugc"`). Headers: `Content-Security-Policy: default-src 'none'; img-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'` (no script at all; inline styles carry a photo's placeholder colour and a filament's swatch, both checked as `#rrggbb`), `X-Robots-Tag: noindex, nofollow, noarchive, noimageindex`, `Referrer-Policy: no-referrer` (so the token never leaves in a Referer), `X-Frame-Options: DENY`, `Cache-Control: private, no-store`. Someone signed in (a session checked in D1, not just the cookie's presence) is sent to the thing's page in the app.
+- **Tested** in `test/worker/shares.test.ts`: another thing's photo through a valid token, stopped and deleted links, every other method, the token against `/api`, agent tokens, photos with EXIF or stored as they came, and HTML, quote and `javascript:` payloads in every field a person or a model page writes (titles, notes, attempt notes and tags, twist words, the draft's model title, designer and licence), the preview tags included.
 
 ## How a request proves who it is
 

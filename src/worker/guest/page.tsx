@@ -1,7 +1,7 @@
 /** @jsxImportSource hono/jsx */
 import type { Child } from "hono/jsx";
 import { checkLinkUrl } from "../../shared/link-safety.ts";
-import { findLinks, shortUrl } from "../../shared/links.ts";
+import { findLinks, linkWords, shortUrl } from "../../shared/links.ts";
 import { GUEST_ICONS, type GuestIconName } from "./icons.ts";
 import {
   type GuestAttempt,
@@ -194,7 +194,7 @@ function Gallery({
   const alt = (index: number) => (photos.length > 1 ? `${title}, photo ${index + 1} of ${photos.length}` : title);
   return (
     <section
-      class={`gp-gallery gp-gallery--${shape(lead)} ${photos.length > 1 ? "gp-gallery--many" : ""}`}
+      class={`gp-gallery gp-gallery--${shape(lead)} ${rest.length ? `gp-gallery--many gp-gallery--rest-${Math.min(rest.length, 3)}` : ""}`}
       aria-label="Photos"
     >
       <ul class="gp-strip">
@@ -226,7 +226,7 @@ function ModelCard({ model }: { model: GuestModel }) {
       </span>
       <span class="gp-model-words">
         <span class="gp-overline gp-overline--basil">Model on {model.place}</span>
-        <span class="gp-model-title">{model.title ?? shortUrl(model.url)}</span>
+        <span class="gp-model-title">{model.title ?? linkWords(model.url)?.words ?? shortUrl(model.url)}</span>
         {byline && <span class="gp-model-by">{byline}</span>}
       </span>
       <Icon name="out" class="gp-model-out" />

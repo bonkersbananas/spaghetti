@@ -85,7 +85,7 @@ export function ButtonSection() {
           <IconButton icon={Icons.CloseIcon} label="Close" />
           <IconButton icon={Icons.CameraIcon} label="Take photo" variant="secondary" />
           <IconButton icon={Icons.PlusIcon} label="New idea" variant="primary" size="lg" />
-          <ShareLinkButton title="Desk tidy-up" />
+          <ShareLinkButton kind="item" id="5eed0000-0000-4000-8000-000000000006" title="Desk tidy-up" what="idea" />
           <span className="text-small text-ink-faint hidden items-center gap-2 md:flex">
             Keyboard hints: <Kbd keys={["G", "I"]} /> <Kbd keys={["/"]} />
           </span>
