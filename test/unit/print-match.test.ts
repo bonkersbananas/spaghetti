@@ -148,7 +148,10 @@ describe("names", () => {
 describe("other signals", () => {
   it("counts a download hours before for less than one minutes before", () => {
     const soon = { ...tugboat, sends: [{ fileId: "tug-file", at: START - 10 * MINUTE, how: "download" as const }] };
-    const hours = { ...tugboat, sends: [{ fileId: "tug-file", at: START - 2 * 60 * MINUTE, how: "download" as const }] };
+    const hours = {
+      ...tugboat,
+      sends: [{ fileId: "tug-file", at: START - 2 * 60 * MINUTE, how: "download" as const }],
+    };
     const day = { ...tugboat, sends: [{ fileId: "tug-file", at: START - 20 * 60 * MINUTE, how: "download" as const }] };
     const later = { ...tugboat, sends: [{ fileId: "tug-file", at: START + 30 * MINUTE, how: "download" as const }] };
     const print = { name: "something else", startedAt: START };
@@ -177,7 +180,9 @@ describe("other signals", () => {
   });
 
   it("offers at most three suggestions", () => {
-    const many = ["a", "b", "c", "d"].map((id) => build({ id, title: `Ring ${id}`, files: [{ id, name: "ring.3mf" }] }));
+    const many = ["a", "b", "c", "d"].map((id) =>
+      build({ id, title: `Ring ${id}`, files: [{ id, name: "ring.3mf" }] }),
+    );
     const placement = placePrint(scorePrint({ name: "ring", startedAt: START }, many));
     expect(placement.kind === "ask" && placement.suggestions).toHaveLength(3);
   });

@@ -1,16 +1,5 @@
 import { createHash } from "node:crypto";
 
-/** The same name for a file as the printer and the app say it: no extension, case or spacing. */
-export function fileKey(name: string): string {
-  return name
-    .replace(/^.*[\\/]/, "")
-    .replace(/\.(gcode\.)?3mf$/i, "")
-    .replace(/\.gcode$/i, "")
-    .replace(/[\s_]+/g, " ")
-    .trim()
-    .toLowerCase();
-}
-
 /** A build's title from a print's name: "bracket_v2.gcode.3mf" → "bracket v2". Null when nothing is left (titles are optional). */
 export function titleFromJob(name: string): string | null {
   const cleaned = name

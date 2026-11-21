@@ -500,6 +500,8 @@ export interface UpdateAttemptRequest {
   settings?: AttemptSettings;
   /** What it printed of the build's parts (replaces the list). */
   parts?: AttemptPart[];
+  /** Change some settings and leave the rest as the server has them. */
+  settingsMerge?: { set?: AttemptSettings; unset?: Array<keyof AttemptSettings> };
 }
 
 export interface AttemptResponse {
