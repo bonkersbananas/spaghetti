@@ -11,6 +11,7 @@ import type { ModelSiteId } from "../../shared/model-links.ts";
 import type { AttemptPart } from "../../shared/parts.ts";
 import type { PersonColor } from "../../shared/people.ts";
 import type { PriceSuggestion, ShoppingPrices } from "../../shared/prisjakt.ts";
+import type { ShareKind } from "../../shared/shares.ts";
 import type { SlicingSettings } from "../../shared/slicing/settings.ts";
 import type { FileKind, FileSlice, PreviousSlice } from "../../shared/slicing/types.ts";
 import type { PrinterSetup, Remaining } from "../../shared/spools.ts";
@@ -369,6 +370,34 @@ export const twists = sqliteTable("twists", {
   deletedAt: integer("deleted_at", { mode: "timestamp_ms" }),
 });
 export type TwistRow = typeof twists.$inferSelect;
+
+/**
+ * Public links (decision 0075): one idea, build or twist that anyone with the link can look at, read-only, without
+ * signing in. `kind` says which table `targetId` is in ("item" for ideas and builds, "twist"). The token is the
+ * link's secret (shared/shares.ts): it is kept so either person can copy the link again, and looked up only by its
+ * SHA-256, so the time a lookup takes says nothing about it. Stopping sets `revokedAt`; its Undo clears it again.
+ * At most one live link per thing.
+ */
+export const shares = sqliteTable(
+  "shares",
+  {
+    id: text("id").primaryKey(),
+    kind: text("kind").$type<ShareKind>().notNull(),
+    targetId: text("target_id").notNull(),
+    token: text("token").notNull(),
+    tokenHash: text("token_hash").notNull().unique(),
+    createdBy: text("created_by")
+      .notNull()
+      .references(() => users.id),
+    createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
+    revokedAt: integer("revoked_at", { mode: "timestamp_ms" }),
+  },
+  (table) => [
+    index("shares_target_idx").on(table.kind, table.targetId),
+    uniqueIndex("shares_live_target_idx").on(table.kind, table.targetId).where(sql`${table.revokedAt} is null`),
+  ],
+);
+export type ShareRow = typeof shares.$inferSelect;
 
 /**
  * Failure tags and success notes people added to the built-in ones. The slug

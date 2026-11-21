@@ -18,6 +18,7 @@
       "/og/*",
       "/api/*",
       "/open/*",
+      "/s/*",
       "/mcp",
       "/oauth/*",
       "/.well-known/*"

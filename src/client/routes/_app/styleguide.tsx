@@ -30,6 +30,7 @@ import { PhotoSection } from "./-styleguide/photos";
 import { RecipesSection } from "./-styleguide/recipes";
 import { ScoutSectionGuide } from "./-styleguide/scout";
 import { SearchSection } from "./-styleguide/search";
+import { SharingSection } from "./-styleguide/sharing";
 import { SheetSection } from "./-styleguide/sheets";
 import { SigningInSection } from "./-styleguide/signing-in";
 import { SkeletonSection } from "./-styleguide/skeletons";
@@ -89,6 +90,7 @@ const toc = [
   ["error", "Error screen"],
   ["skeletons", "Skeletons"],
   ["signing-in", "Signing in"],
+  ["sharing", "Sharing"],
   ["layer-slider", "Layer slider"],
   ["command-block", "Command block"],
   ["steps", "Steps"],
@@ -155,6 +157,7 @@ function Styleguide() {
           <StepsSection />
           <CommandBlockSection />
           <SigningInSection />
+          <SharingSection />
         </div>
       </div>
     </>

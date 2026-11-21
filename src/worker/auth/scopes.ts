@@ -68,10 +68,11 @@ const rules: Array<[method: string, path: RegExp, needs: Needs]> = [
 
 /**
  * Reading is `read`, except the session, account (passkeys, sign-in links, invites, devices) and agent management, which tokens never see, and link
- * previews: the Worker would fetch any public page for whoever asks, so only a signed-in person may.
+ * previews: the Worker would fetch any public page for whoever asks, so only a signed-in person may. Public links
+ * (`shares`, decision 0075) are the people's too: their tokens open a page to anyone.
  */
 const PERSON_ONLY_READS =
-  /^\/(session|account|join|agents|oauth|webhooks|links|push|features|deleted|reactions|comments\/unread)(\/|$)/;
+  /^\/(session|account|join|agents|oauth|webhooks|links|push|features|deleted|reactions|comments\/unread|shares)(\/|$)/;
 
 /** `path` is relative to /api. */
 export function needsFor(method: string, path: string): Needs {

@@ -126,6 +126,9 @@ export function refresh(queryClient: QueryClient, changes: Change[]) {
       case "passkey":
         roots.add("passkeys");
         break;
+      case "share":
+        roots.add("shares");
+        break;
     }
     // A comment shows in its thread and on cards, not in the item itself.
     if (change.itemId && change.entity !== "spool" && change.entity !== "comment") details.add(change.itemId);

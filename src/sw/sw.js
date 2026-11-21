@@ -29,8 +29,9 @@ const SHELL_URL = "/";
 // an app route such as /today gets index.html on Cloudflare only as a navigation (the assets' single-page fallback),
 // which a fetch from here is not; it would reach the Worker's 404.
 const SHELL_SOURCE = "/?shell";
-// The landing page and what it loads are for visitors: the network's, never the app shell.
-const LANDING = /^\/(?:landing$|assets\/landing\/)/;
+// The landing page, a shared link's page (/s/<token>, decision 0075) and what they load are for visitors: the
+// network's, never the app shell. The Worker sends someone signed in from a shared link to the thing's own page.
+const LANDING = /^\/(?:landing$|assets\/landing\/|guest$|assets\/guest\/|s\/)/;
 // How long "/" waits for the network to say which page it is before the app opens from the cache.
 const HOME_TIMEOUT_MS = 3000;
 const MAX_PHOTOS = 400;

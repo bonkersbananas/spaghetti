@@ -121,6 +121,28 @@ describe("the image", () => {
     expect((await request(`/og/ideas/${id}.jpg`)).status).toBe(404);
   });
 
+  it("never sends a cover that carries EXIF, or an original waiting to be resized", async () => {
+    const id = await idea({ title: "From the camera" });
+    const photoId = crypto.randomUUID();
+    await uploadPhoto(id, photoId, cookie);
+    const exif = new Uint8Array([
+      0xff,
+      0xd8,
+      0xff,
+      0xe1,
+      0x00,
+      0x10,
+      ...Array.from("Exif\0\0MM\0*GPS", (c) => c.charCodeAt(0)),
+    ]);
+    await env.PHOTOS.put(`photos/${photoId}/large`, exif, { httpMetadata: { contentType: "image/jpeg" } });
+    expect((await request(`/og/ideas/${id}.jpg`)).status).toBe(404);
+    await env.PHOTOS.put(`photos/${photoId}/large`, new Uint8Array([1, 2, 3, 4]), {
+      httpMetadata: { contentType: "image/webp" },
+      customMetadata: { provisional: "1" },
+    });
+    expect((await request(`/og/ideas/${id}.jpg`)).status).toBe(404);
+  });
+
   it("uses the thumbnail when the large photo is over a megabyte", async () => {
     const id = await idea({ title: "Big" });
     const photoId = crypto.randomUUID();

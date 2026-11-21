@@ -1,44 +1,63 @@
+import type { ShareKind } from "@shared/shares";
+import { forwardRef, lazy, Suspense, useRef, useState } from "react";
 import { IconButton } from "@/components/ui/Button";
-import { ShareIcon } from "@/components/ui/icons";
-import { toast } from "@/components/ui/Toast";
-import { useIsDesktop } from "@/lib/use-media-query";
+import { type Icon, type IconProps, PublicIcon, ShareIcon } from "@/components/ui/icons";
+import { useShareOf } from "@/lib/share-query";
 
-/** The page's own address on the app's origin, without a photo or tab picked in the query. */
-const pageLink = () => `${window.location.origin}${window.location.pathname}`;
+const SharePanel = lazy(() => import("@/components/share/SharePanel"));
 
-async function share(title: string, canShare: boolean) {
-  const url = pageLink();
-  if (canShare && typeof navigator.share === "function") {
-    try {
-      await navigator.share({ title: title || "Spaghetti", url });
-      return;
-    } catch (error) {
-      // Closing the share sheet is not an error; anything else falls back to copying.
-      if (error instanceof DOMException && error.name === "AbortError") return;
-    }
-  }
-  try {
-    await navigator.clipboard.writeText(url);
-    toast.success("Link copied", "Only the two of you can open it.");
-  } catch {
-    toast.error("Couldn't copy the link", "Try again in a moment.");
-  }
+/** The globe the button shows while a public link is live: basil, filled, so "shared" reads at a glance. */
+const SharedIcon = forwardRef<SVGSVGElement, IconProps>(function SharedIcon(props, ref) {
+  return <PublicIcon ref={ref} {...props} weight="fill" className="text-basil-ink" />;
+}) as Icon;
+
+interface ShareLinkButtonProps {
+  kind: ShareKind;
+  id: string;
+  title?: string;
+  /** "idea", "build", "twist". */
+  what: string;
 }
 
 /**
- * The share button in a detail page's bar (idea, build, twist), always the same place: before the delete button.
- * Phones open the system share sheet (it matters most in the installed app, which has no address bar); computers
- * copy the link and say so in a toast. The link opens the page for the two people signed in, nothing is public.
+ * The share button in a detail page's bar (idea, build, twist), always the same place: before the delete button. It
+ * opens the ways to share (decision 0075): the private link, for the two people, and a public one anyone with the
+ * link can look at. While a public link is live the button is a basil globe, so the page says it is shared.
  */
-export function ShareLinkButton({ title }: { title?: string }) {
-  const isDesktop = useIsDesktop();
-  const canShare = !isDesktop && typeof navigator !== "undefined" && "share" in navigator;
+export function ShareLinkButton({ kind, id, title, what }: ShareLinkButtonProps) {
+  const share = useShareOf(kind, id);
+  const button = useRef<HTMLButtonElement>(null);
+  const [open, setOpen] = useState(false);
+  // The panel's code arrives with the first tap (or a hover that hints at one), and stays.
+  const [asked, setAsked] = useState(false);
+  const label = share ? `Share ${what} (anyone with the link can look)` : `Share ${what}`;
   return (
-    <IconButton
-      icon={ShareIcon}
-      label={canShare ? "Share link" : "Copy link"}
-      title={canShare ? "Share link" : "Copy link"}
-      onClick={() => void share(title ?? "", canShare)}
-    />
+    <>
+      <IconButton
+        ref={button}
+        icon={share ? SharedIcon : ShareIcon}
+        label={label}
+        aria-haspopup="dialog"
+        aria-expanded={open}
+        onPointerEnter={() => setAsked(true)}
+        onClick={() => {
+          setAsked(true);
+          setOpen((was) => !was);
+        }}
+      />
+      {asked && (
+        <Suspense fallback={null}>
+          <SharePanel
+            open={open}
+            onOpenChange={setOpen}
+            kind={kind}
+            targetId={id}
+            title={title ?? ""}
+            what={what}
+            anchor={button}
+          />
+        </Suspense>
+      )}
+    </>
   );
 }

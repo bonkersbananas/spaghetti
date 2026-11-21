@@ -78,6 +78,22 @@ export async function readSession(c: Context, db: Db): Promise<User | null> {
   return row.user;
 }
 
+/**
+ * Whether a raw Cookie header holds a live session, for the few pages answered outside Hono (a shared link's page,
+ * decision 0075). Only reads: it never renews or sets the cookie.
+ */
+export async function signedInUserId(db: Db, cookieHeader: string | null): Promise<string | null> {
+  const match = new RegExp(`(?:^|;\\s*)${SESSION_COOKIE}=([^;]+)`).exec(cookieHeader ?? "");
+  const token = match?.[1];
+  if (!token) return null;
+  const row = await db
+    .select({ userId: sessions.userId, expiresAt: sessions.expiresAt })
+    .from(sessions)
+    .where(eq(sessions.id, await hashToken(token)))
+    .get();
+  return row && row.expiresAt.getTime() > Date.now() ? row.userId : null;
+}
+
 /** The id of this request's own session (what the cookie hashes to), or null without a cookie. */
 export async function currentSessionId(c: Context): Promise<string | null> {
   const token = getCookie(c, SESSION_COOKIE);

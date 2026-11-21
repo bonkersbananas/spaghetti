@@ -100,6 +100,9 @@
       "name": "session"
     },
     {
+      "name": "shares"
+    },
+    {
       "name": "shopping-items"
     },
     {
@@ -13908,6 +13911,367 @@
         "x-scopes": "person"
       }
     },
+    "/api/shares": {
+      "get": {
+        "operationId": "getShares",
+        "summary": "Every live public link: which idea, build or twist, its token (the link's secret) and who made it.",
+        "description": "Only a signed-in person, never an agent token.",
+        "tags": [
+          "shares"
+        ],
+        "responses": {
+          "200": {
+            "description": "Done.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "shares": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "kind": {
+                            "type": "string",
+                            "enum": [
+                              "item",
+                              "twist"
+                            ]
+                          },
+                          "targetId": {
+                            "type": "string"
+                          },
+                          "token": {
+                            "type": "string",
+                            "description": "The link's secret: the page is /s/<token>."
+                          },
+                          "createdBy": {
+                            "type": "string"
+                          },
+                          "createdAt": {
+                            "type": "integer",
+                            "minimum": -9007199254740991,
+                            "maximum": 9007199254740991
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "kind",
+                          "targetId",
+                          "token",
+                          "createdBy",
+                          "createdAt"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "shares"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "signed_out or invalid_token: no credentials, or a token that is unknown or revoked.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "x-scopes": "person"
+      }
+    },
+    "/api/shares/{kind}/{id}": {
+      "put": {
+        "operationId": "putSharesByKindById",
+        "summary": "Makes the public link of an idea or build (`items`) or a twist (`twists`): a read-only page at /s/<token> anyone with the link can open. Answers with the live link it already has, if any.",
+        "description": "Only a signed-in person, never an agent token.",
+        "tags": [
+          "shares"
+        ],
+        "parameters": [
+          {
+            "name": "kind",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Done.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "share": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "kind": {
+                          "type": "string",
+                          "enum": [
+                            "item",
+                            "twist"
+                          ]
+                        },
+                        "targetId": {
+                          "type": "string"
+                        },
+                        "token": {
+                          "type": "string",
+                          "description": "The link's secret: the page is /s/<token>."
+                        },
+                        "createdBy": {
+                          "type": "string"
+                        },
+                        "createdAt": {
+                          "type": "integer",
+                          "minimum": -9007199254740991,
+                          "maximum": 9007199254740991
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "kind",
+                        "targetId",
+                        "token",
+                        "createdBy",
+                        "createdAt"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "share"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "signed_out or invalid_token: no credentials, or a token that is unknown or revoked.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "not_found: no such idea, build or twist.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "x-scopes": "person"
+      }
+    },
+    "/api/shares/{id}": {
+      "delete": {
+        "operationId": "deleteSharesById",
+        "summary": "Stops a public link at once (its Undo is /restore).",
+        "description": "Only a signed-in person, never an agent token.",
+        "tags": [
+          "shares"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Done; nothing comes back."
+          },
+          "401": {
+            "description": "signed_out or invalid_token: no credentials, or a token that is unknown or revoked.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "not_found: no such link.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "x-scopes": "person"
+      }
+    },
+    "/api/shares/{id}/restore": {
+      "post": {
+        "operationId": "postSharesByIdRestore",
+        "summary": "Brings a stopped public link back, the same address as before.",
+        "description": "Only a signed-in person, never an agent token.",
+        "tags": [
+          "shares"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Done.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "share": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "kind": {
+                          "type": "string",
+                          "enum": [
+                            "item",
+                            "twist"
+                          ]
+                        },
+                        "targetId": {
+                          "type": "string"
+                        },
+                        "token": {
+                          "type": "string",
+                          "description": "The link's secret: the page is /s/<token>."
+                        },
+                        "createdBy": {
+                          "type": "string"
+                        },
+                        "createdAt": {
+                          "type": "integer",
+                          "minimum": -9007199254740991,
+                          "maximum": 9007199254740991
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "kind",
+                        "targetId",
+                        "token",
+                        "createdBy",
+                        "createdAt"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "share"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "signed_out or invalid_token: no credentials, or a token that is unknown or revoked.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "not_found: no such link.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "shared_again: the thing has a newer link since.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "x-scopes": "person"
+      }
+    },
     "/api/shopping-items": {
       "get": {
         "operationId": "getShoppingItems",
@@ -19586,7 +19950,8 @@
               "scout",
               "signin",
               "invite",
-              "passkey"
+              "passkey",
+              "share"
             ]
           },
           "id": {
@@ -19731,7 +20096,8 @@
               "scout",
               "signin",
               "invite",
-              "passkey"
+              "passkey",
+              "share"
             ]
           },
           "action": {

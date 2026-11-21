@@ -73,6 +73,19 @@
           }
         }
       }
+    },
+    {
+      "includes": ["src/worker/**/*.tsx"],
+      "linter": {
+        "rules": {
+          "correctness": {
+            "useJsxKeyInIterable": "off"
+          },
+          "suspicious": {
+            "noArrayIndexKey": "off"
+          }
+        }
+      }
     }
   ],
   "assist": {

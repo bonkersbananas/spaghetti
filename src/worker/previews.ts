@@ -1,5 +1,6 @@
 import { and, eq, isNull } from "drizzle-orm";
 import { bestPhoto } from "../shared/cover.ts";
+import { hasPhotoMetadata } from "../shared/photo-metadata.ts";
 import { getDb } from "./db/index.ts";
 import { attempts, items, photos, twists } from "./db/schema.ts";
 import { setPageHeaders } from "./page-headers.ts";
@@ -206,12 +207,16 @@ export async function previewImage(request: Request, env: Env): Promise<Response
   const variant = large && large.size <= MAX_IMAGE_BYTES ? "large" : "thumb";
   const object = await env.PHOTOS.get(photoKey(preview.photoId, variant));
   if (!object) return missing();
+  // An original waiting for a browser to resize it may still carry where it was taken (decision 0075): not sent.
+  if (object.customMetadata?.provisional) return missing();
+  const bytes = new Uint8Array(await object.arrayBuffer());
+  if (hasPhotoMetadata(bytes, { strict: false })) return missing();
   const headers = new Headers({
     "Content-Type": object.httpMetadata?.contentType ?? preview.contentType ?? "image/jpeg",
-    "Content-Length": String(object.size),
+    "Content-Length": String(bytes.byteLength),
     // The cover can change under the same address (the page's ?p= names it), so an hour, not a year.
     "Cache-Control": "public, max-age=3600",
     "X-Content-Type-Options": "nosniff",
   });
-  return new Response(request.method === "HEAD" ? null : object.body, { headers });
+  return new Response(request.method === "HEAD" ? null : bytes, { headers });
 }

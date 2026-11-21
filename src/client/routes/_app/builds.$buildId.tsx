@@ -553,7 +553,7 @@ function Build({ item }: { item: ItemView }) {
             )
           )}
           {!deleting && closeMenu}
-          {!deleting && <ShareLinkButton title={title.trim()} />}
+          {!deleting && <ShareLinkButton kind="item" id={item.id} title={title.trim()} what="build" />}
           <ConfirmDelete
             asking={deleting}
             onAskingChange={setDeleting}

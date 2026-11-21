@@ -2,6 +2,7 @@ import { app } from "./app.ts";
 import { resumeCoaches } from "./coach/run.ts";
 import { getDb } from "./db/index.ts";
 import { resumeDrafts } from "./draft/run.ts";
+import { guestRoute } from "./guest/index.tsx";
 import { home } from "./home.ts";
 import { resumeLabelReads } from "./label-read/run.ts";
 import { mcpRoutes } from "./mcp/index.ts";
@@ -53,6 +54,8 @@ export default {
       return oauthEndpoints.fetch(request, env, ctx);
     }
     if (pathname.startsWith("/open/")) return openRoutes.fetch(request, env, ctx);
+    // A shared idea, build or twist, for someone who isn't signed in (decision 0075).
+    if (pathname.startsWith("/s/")) return guestRoute(request, env);
     if (pathname === "/api/share" && request.method === "POST") return shareFallback(request);
     if (!pathname.startsWith("/api/") && (request.method === "GET" || request.method === "HEAD")) {
       return spa(request, env);

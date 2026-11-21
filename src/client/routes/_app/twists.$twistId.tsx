@@ -174,7 +174,7 @@ function TwistBody({ twist }: { twist: Twist }) {
         <h1 className="sr-only">{value.name || "Twist"}</h1>
         <DetailBar back={back} title={value.name || "Twist"}>
           <SaveStatus state={saveState} className="mr-2" />
-          <ShareLinkButton title={value.name} />
+          <ShareLinkButton kind="twist" id={twist.id} title={value.name} what="twist" />
           <IconButton icon={TrashIcon} label="Delete twist" onClick={remove} disabled={readOnly} />
           {isDesktop && (
             <div className="ml-2 flex flex-col items-end gap-1.5">
