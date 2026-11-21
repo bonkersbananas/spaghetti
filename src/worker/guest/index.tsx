@@ -11,7 +11,7 @@ import { photoKey } from "../photos.ts";
 import { cut } from "../previews.ts";
 import { liveTarget, shareByToken } from "../shares.ts";
 import { GuestBody, NotSharedBody, photoUrl } from "./page.tsx";
-import { type GuestView, loadItemView, loadTwistView } from "./view.ts";
+import { type GuestView, loadItemView, loadTwistView, photoIdsOf } from "./view.ts";
 
 /**
  * /s/<token>: a shared idea, build or twist for someone who isn't signed in (decision 0075), and its photos at
@@ -220,7 +220,11 @@ async function photo(request: Request, env: Env, token: string, photoId: string,
   const db = getDb(env.DB);
   const share = await shareByToken(db, token);
   if (!share || share.revokedAt) return notFound(request.method);
-  const row = await photoOfShare(db, share, photoId.toLowerCase());
+  const id = photoId.toLowerCase();
+  // Only a photo the page itself shows (the same allow-list), and only while it is the thing's own, live photo.
+  const view = await viewOf(db, share);
+  if (!view || !photoIdsOf(view).has(id)) return notFound(request.method);
+  const row = await photoOfShare(db, share, id);
   if (!row) return notFound(request.method);
   const object = await env.PHOTOS.get(photoKey(row.id, variant as PhotoVariant));
   if (!object) return notFound(request.method);

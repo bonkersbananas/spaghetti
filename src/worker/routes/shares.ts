@@ -39,7 +39,8 @@ export const shareRoutes = new Hono<AppEnv>()
     const id = crypto.randomUUID();
     const token = newShareToken();
     await db.batch([
-      // The partial unique index (one live link per thing) makes a second insert do nothing.
+      // The partial unique index (one live link per thing) makes a second insert do nothing, and then recordChange,
+      // which writes only when the statement before it changed a row (changes() > 0), records nothing either.
       db
         .insert(shares)
         .values({
@@ -67,6 +68,7 @@ export const shareRoutes = new Hono<AppEnv>()
   .delete("/:id", async (c) => {
     const shareId = c.req.param("id");
     const db = c.var.db;
+    // An unknown or already stopped link updates nothing, so no change is recorded for it.
     await db.batch([
       db
         .update(shares)

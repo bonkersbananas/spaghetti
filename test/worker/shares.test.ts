@@ -165,6 +165,27 @@ describe("making and stopping a link", () => {
     expect(bytes.length * 8).toBeGreaterThanOrEqual(128);
   });
 
+  it("records a change only for a link really made, stopped or brought back", async () => {
+    const feed = async () =>
+      (
+        await env.DB.prepare("SELECT action FROM changes WHERE entity = 'share' ORDER BY seq").all<{ action: string }>()
+      ).results.map((row) => row.action);
+    const item = await createItem({ title: "Hook" });
+    const made = await share("items", item.id);
+    // Asked again, the live link answers: the insert did nothing, so nothing is recorded.
+    await share("items", item.id);
+    expect(await feed()).toEqual(["created"]);
+    // An unknown id is a 404 with no change; a link already stopped stops once.
+    expect((await request(`/api/shares/${uuid()}`, { method: "DELETE", cookie })).status).toBe(404);
+    expect((await request(`/api/shares/${made.id}`, { method: "DELETE", cookie })).status).toBe(204);
+    expect((await request(`/api/shares/${made.id}`, { method: "DELETE", cookie })).status).toBe(204);
+    expect(await feed()).toEqual(["created", "deleted"]);
+    expect((await request(`/api/shares/${made.id}/restore`, { method: "POST", cookie })).status).toBe(200);
+    expect((await request(`/api/shares/${made.id}/restore`, { method: "POST", cookie })).status).toBe(200);
+    expect((await request(`/api/shares/${uuid()}/restore`, { method: "POST", cookie })).status).toBe(404);
+    expect(await feed()).toEqual(["created", "deleted", "restored"]);
+  });
+
   it("can't share what isn't there", async () => {
     expect((await request(`/api/shares/items/${uuid()}`, { method: "PUT", cookie })).status).toBe(404);
     expect((await request(`/api/shares/twists/${uuid()}`, { method: "PUT", cookie })).status).toBe(404);
@@ -369,6 +390,22 @@ describe("photos through a link", () => {
     // Stopping the link stops its photos with it.
     await request(`/api/shares/${made.id}`, { method: "DELETE", cookie });
     expect((await fetchPhoto(own)).status).toBe(404);
+  });
+
+  it("serves only the photos its page shows: an idea back from building keeps its attempts' photos to itself", async () => {
+    const item = await createItem({ title: "Tugboat" });
+    const own = await addPhoto(item.id);
+    const attemptId = await addAttempt(item.id, { outcome: "failed" });
+    const ofAttempt = await addPhoto(item.id, { attemptId });
+    // Back to Ideas, its own photo the cover: the idea's page shows no attempts, so none of their photos.
+    await env.DB.prepare("UPDATE items SET stage = 'idea', cover_photo_id = ? WHERE id = ?").bind(own, item.id).run();
+    const made = await share("items", item.id);
+    const { html } = await guest(`/s/${made.token}`);
+    expect(html).toContain(own);
+    expect(html).not.toContain(ofAttempt);
+    expect((await guest(`/s/${made.token}/photos/${own}/large`)).response.status).toBe(200);
+    for (const variant of ["large", "thumb"])
+      expect((await guest(`/s/${made.token}/photos/${ofAttempt}/${variant}`)).response.status).toBe(404);
   });
 
   it("never serves a photo that carries EXIF or XMP, whatever its row says", async () => {
