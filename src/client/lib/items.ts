@@ -811,12 +811,12 @@ export function scrapBuild(queryClient: QueryClient, item: ItemView) {
     void queryClient.invalidateQueries({ queryKey: itemKeys.all });
   });
   scrapped.catch(() => {
-    toast.error("Couldn't scrap that build", "It's back where it was.");
+    toast.error("Couldn't move that build back to Ideas", "It's back where it was.");
     if (before) insertCachedItem(queryClient, before);
     void queryClient.invalidateQueries({ queryKey: itemKeys.all });
   });
 
-  toast.undo("Build scrapped", {
+  toast.undo("Back in Ideas", {
     description: `${name} is back in Ideas`,
     onUndo: async () => {
       try {

@@ -449,6 +449,30 @@ async function closeDialog(page: Page) {
   await page.getByRole("dialog").waitFor({ state: "detached" });
 }
 
+/** A build that began as an idea (captured, then started), with this many attempts, opened on its page; removed by cleanup. */
+let BACK_TO_IDEAS_BUILD = "";
+async function buildFromIdea(page: Page, attempts: number) {
+  const headers = { Origin: new URL(page.url()).origin };
+  BACK_TO_IDEAS_BUILD = crypto.randomUUID();
+  await page.request.post("/api/items", {
+    headers,
+    data: { id: BACK_TO_IDEAS_BUILD, title: "Spice rack label clips", note: "Snap-on clips for the jars" },
+  });
+  await page.waitForTimeout(100);
+  await page.request.patch(`/api/items/${BACK_TO_IDEAS_BUILD}`, { headers, data: { stage: "building" } });
+  for (let n = 0; n < attempts; n++) {
+    await page.request.post(`/api/items/${BACK_TO_IDEAS_BUILD}/attempts`, {
+      headers,
+      data: { id: crypto.randomUUID(), outcome: n === 0 ? "partial" : null },
+    });
+  }
+  await page.goto(`/builds/${BACK_TO_IDEAS_BUILD}`);
+  await page.getByRole("button", { name: "Back to Ideas" }).waitFor();
+}
+async function removeBuildFromIdea(page: Page) {
+  await page.request.delete(`/api/items/${BACK_TO_IDEAS_BUILD}`, { headers: { Origin: new URL(page.url()).origin } });
+}
+
 /** The build the "no attempts yet" shot makes, and removes again. */
 const NO_ATTEMPTS_BUILD = "5eed0000-0000-4000-8000-0000000b0b01";
 
@@ -2713,10 +2737,10 @@ export const shots: Shot[] = [
     name: "build-scrapped",
     path: `/builds/${SEED_BUILD_IDS.headphoneStand}`,
     prepare: async (page) => {
-      // Two steps (decision 0062): the trash can asks "Scrap this build?" in place, then "Scrap" does it.
-      await page.getByRole("button", { name: "Scrap build" }).click();
-      await page.getByRole("button", { name: "Scrap", exact: true }).click();
-      await page.getByText("Build scrapped").waitFor();
+      // Two steps (decision 0062): "Back to Ideas" asks in place, then "Back to Ideas" does it.
+      await page.getByRole("button", { name: "Back to Ideas" }).click();
+      await page.getByRole("button", { name: "Back to Ideas", exact: true }).click();
+      await page.getByText("Back in Ideas", { exact: true }).waitFor();
       await page.getByRole("heading", { level: 1, name: "Ideas" }).waitFor();
       await page.waitForTimeout(500);
     },
@@ -3035,8 +3059,8 @@ export const shots: Shot[] = [
     name: "build-delete-confirm",
     path: `/builds/${SEED_BUILD_IDS.tugboat}`,
     prepare: async (page) => {
-      await page.getByRole("button", { name: /^(Delete|Scrap) build$/ }).click();
-      await page.getByRole("button", { name: /^(Delete|Scrap)$/ }).waitFor();
+      await page.getByRole("button", { name: /^(Delete build|Back to Ideas)$/ }).click();
+      await page.getByRole("button", { name: /^(Delete|Back to Ideas)$/ }).waitFor();
       await page.evaluate(() => {
         for (const animation of document.getAnimations()) animation.finish();
       });
@@ -4858,6 +4882,25 @@ export const shots: Shot[] = [
   },
   // A shelved build: its chip, then when and after how many attempts; no For offer.
   { name: "build-shelved", path: `/builds/${SEED_IDS.planter}` },
+  // A build that began as an idea: its header says "Back to Ideas", and the question names what goes with it.
+  ...[0, 2].flatMap((attempts) => [
+    {
+      name: `build-back-to-ideas-${attempts}`,
+      path: "/builds",
+      prepare: (page: Page) => buildFromIdea(page, attempts),
+      cleanup: removeBuildFromIdea,
+    },
+    {
+      name: `build-back-to-ideas-asking-${attempts}`,
+      path: "/builds",
+      prepare: async (page: Page) => {
+        await buildFromIdea(page, attempts);
+        await page.getByRole("button", { name: "Back to Ideas" }).click();
+        await page.getByText("Back to Ideas?").waitFor();
+      },
+      cleanup: removeBuildFromIdea,
+    },
+  ]),
   { name: "journal", path: "/journal" },
   // Work done through an agent among the rest (scripts/seed/agents.ts): the person's own avatar, with the agent's mark.
   {

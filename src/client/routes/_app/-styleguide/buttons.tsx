@@ -15,6 +15,23 @@ function ConfirmDeleteDemo() {
   );
 }
 
+function BackToIdeasDemo() {
+  const [asking, setAsking] = useState(false);
+  return (
+    <ConfirmDelete
+      asking={asking}
+      onAskingChange={setAsking}
+      onConfirm={() => toast.message("Back in Ideas")}
+      what="build"
+      verb="Back to Ideas"
+      question="Back to Ideas?"
+      detail="Its 2 attempts go with it"
+      labelled
+      icon={Icons.IdeasIcon}
+    />
+  );
+}
+
 export function ButtonSection() {
   return (
     <Section
@@ -44,6 +61,10 @@ export function ButtonSection() {
         <div className="flex flex-col items-start gap-2">
           <Label>Delete an idea or build: asks first, in place</Label>
           <ConfirmDeleteDemo />
+        </div>
+        <div className="flex flex-col items-start gap-2">
+          <Label>A build that began as an idea goes back to Ideas: says so, and what goes with it</Label>
+          <BackToIdeasDemo />
         </div>
         <div className="flex flex-wrap items-center gap-3">
           <Button variant="primary" size="sm">

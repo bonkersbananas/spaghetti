@@ -326,6 +326,7 @@ function Build({ item }: { item: ItemView }) {
   );
   // A build that began as an idea goes back to Ideas when it is removed; any other is deleted.
   const scrapsToIdea = !item.pending && beganAsIdea(item);
+  const attemptCount = item.attempts.length;
   const [deleting, setDeleting] = useState(false);
   function remove() {
     if (!canEdit(item.pending)) return;
@@ -399,6 +400,14 @@ function Build({ item }: { item: ItemView }) {
             run: () => canEdit(item.pending) && reopenBuild(queryClient, item),
           },
         ]),
+    {
+      id: "remove",
+      label: scrapsToIdea ? "Back to Ideas" : "Delete build",
+      icon: scrapsToIdea ? IdeasIcon : TrashIcon,
+      shortcut: "buildDelete" as const,
+      keywords: scrapsToIdea ? "scrap idea undo mistake return" : "remove trash",
+      run: () => canEdit(item.pending) && setDeleting(true),
+    },
     {
       id: "comment",
       label: "Say something about this build",
@@ -529,7 +538,7 @@ function Build({ item }: { item: ItemView }) {
     <PullToGo back={back} title={title.trim() || "Untitled build"}>
       <article className="pb-6">
         <h1 className="sr-only">{title.trim() || "Untitled build"}</h1>
-        <DetailBar back={back} title={title.trim() || "Untitled build"}>
+        <DetailBar back={back} title={title.trim() || "Untitled build"} hideBackOnPhone={deleting}>
           {!deleting && <SaveStatus state={saveState} className="mr-2" />}
           {deleting || closeMenu ? null : isDesktop ? (
             <span className="mr-2 flex items-center gap-2">{stageActions}</span>
@@ -550,7 +559,15 @@ function Build({ item }: { item: ItemView }) {
             onAskingChange={setDeleting}
             onConfirm={remove}
             what="build"
-            verb={scrapsToIdea ? "Scrap" : "Delete"}
+            verb={scrapsToIdea ? "Back to Ideas" : "Delete"}
+            question={scrapsToIdea ? "Back to Ideas?" : undefined}
+            labelled={scrapsToIdea}
+            icon={scrapsToIdea ? IdeasIcon : undefined}
+            detail={
+              scrapsToIdea && attemptCount > 0
+                ? `Its ${attemptCount === 1 ? "attempt goes" : `${attemptCount} attempts go`} with it`
+                : undefined
+            }
             disabled={readOnly}
             ariaKeyshortcuts={ariaShortcuts("buildDelete")}
           />

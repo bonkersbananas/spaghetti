@@ -90,7 +90,7 @@ test("undoing Start building takes the open build back to its idea's page", asyn
   await expect(page.getByRole("button", { name: "Start building" })).toBeVisible();
 });
 
-test("scrapping a build that began as an idea sends it back to Ideas, and Undo brings the build back", async ({
+test("a build that began as an idea goes back to Ideas from its header, and Undo brings the build back", async ({
   page,
 }) => {
   const id = await makeIdea(page, "Flexi hummingbird");
@@ -110,10 +110,11 @@ test("scrapping a build that began as an idea sends it back to Ideas, and Undo b
   });
   await page.goto(`/builds/${id}`);
   await expect(page.getByRole("textbox", { name: "Title" })).toHaveValue("Flexi hummingbird");
-  await page.getByRole("button", { name: "Scrap build" }).click();
-  await page.getByRole("button", { name: "Scrap", exact: true }).click();
+  await page.getByRole("button", { name: "Back to Ideas" }).click();
+  await expect(page.getByText("Its attempt goes with it")).toBeVisible();
+  await page.getByRole("button", { name: "Back to Ideas", exact: true }).click();
   tapped.resolve();
-  await expect(page.getByText("Build scrapped")).toBeVisible();
+  await expect(page.getByText("Back in Ideas", { exact: true })).toBeVisible();
   await expect(page.getByText("Flexi hummingbird is back in Ideas")).toBeVisible();
   await expect.poll(async () => (await getItem(page, id)).stage).toBe("idea");
   expect((await getItem(page, id)).attempts).toHaveLength(0);
@@ -135,6 +136,7 @@ test("a build made from scratch is deleted as before", async ({ page }) => {
   });
   await page.goto(`/builds/${id}`);
   await expect(page.getByRole("textbox", { name: "Title" })).toHaveValue("From scratch");
+  await expect(page.getByRole("button", { name: "Back to Ideas" })).toHaveCount(0);
   await page.getByRole("button", { name: "Delete build" }).click();
   await page.getByRole("button", { name: "Delete", exact: true }).click();
   await expect(page.getByText("Build deleted")).toBeVisible();
