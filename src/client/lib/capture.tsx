@@ -115,10 +115,8 @@ function storedDraft(): string {
 
 /** Only images; a browser may hand us other files from a drop. */
 export function imageFiles(files: Iterable<File>): File[] {
-  // A file with no type and no known extension is let in too: a camera's photo may come with neither, and
-  // the resize says plainly if it isn't a picture.
   return Array.from(files).filter(
-    (file) => file.type.startsWith("image/") || !file.type || /\.(hei[cf]|jpe?g|png|webp)$/i.test(file.name),
+    (file) => file.type.startsWith("image/") || /\.(hei[cf]|jpe?g|png|webp)$/i.test(file.name),
   );
 }
 

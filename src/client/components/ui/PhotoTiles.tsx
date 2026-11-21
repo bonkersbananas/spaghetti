@@ -144,21 +144,30 @@ interface FilePickerOptions {
  * never a silent loss: a file that can't be read says so.
  */
 export async function takePicked(input: HTMLInputElement): Promise<File[]> {
-  const picked = Array.from(input.files ?? []);
-  try {
-    const files = await Promise.all(
-      picked.map(
-        async (file) =>
-          new File([await file.arrayBuffer()], file.name, { type: file.type, lastModified: file.lastModified }),
-      ),
-    );
-    input.value = "";
-    return files;
-  } catch {
-    input.value = "";
-    toast.error("Couldn't read that photo", "Take it again, or add it from the library.");
-    return [];
+  const files: File[] = [];
+  let failed = 0;
+  // One at a time: a pick of many full-size photos must not sit in memory twice over, all at once.
+  for (const file of Array.from(input.files ?? [])) {
+    try {
+      // The input only offers photos: one that comes with no type and no extension (it happens) is a JPEG.
+      const named = !file.type && !/\.\w+$/.test(file.name);
+      files.push(
+        new File([await file.arrayBuffer()], named ? `${file.name || "photo"}.jpg` : file.name, {
+          type: file.type || (named ? "image/jpeg" : ""),
+          lastModified: file.lastModified,
+        }),
+      );
+    } catch {
+      failed++;
+    }
   }
+  input.value = "";
+  if (failed)
+    toast.error(
+      failed === 1 ? "Couldn't read a photo" : `Couldn't read ${failed} photos`,
+      "Take it again, or add it from the library.",
+    );
+  return files;
 }
 
 /** A hidden file input and a function to open it. */
