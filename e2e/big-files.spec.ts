@@ -82,7 +82,9 @@ test("a big file that loses the network says it didn't finish, and one tap sends
   try {
     const size = 40 * 1024 * 1024;
     const file = join(dir, "knot.stl");
-    writeFileSync(file, randomBytes(size));
+    const bytes = randomBytes(size);
+    bytes.fill(0, 0, 84); // a binary STL header with no triangles claimed beyond the file
+    writeFileSync(file, bytes);
     await page.route("**/slicer/*/engine-st.wasm", (route) => route.abort());
     let down = true;
     await page.route(/\/api\/uploads\/[^/]+\/file\/[^/]+\/\d+$/, (route) =>
@@ -121,6 +123,7 @@ test("a big model logged with an attempt goes through the outbox in parts and is
   try {
     const size = 40 * 1024 * 1024;
     const bytes = randomBytes(size);
+    bytes.fill(0, 0, 84);
     const file = join(dir, "gear.stl");
     writeFileSync(file, bytes);
     await page.route("**/slicer/*/engine-st.wasm", (route) => route.abort());

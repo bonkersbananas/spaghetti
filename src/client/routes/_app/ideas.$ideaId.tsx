@@ -39,6 +39,7 @@ import { announceDraft } from "@/lib/drafts";
 import { ariaShortcuts, shortcutCaps, useHotkeys } from "@/lib/hotkeys";
 import { addItemFile } from "@/lib/item-files";
 import { deleteItem, type ItemView, useIdeas, useItem, useItemFields } from "@/lib/items";
+import { modelAccept } from "@/lib/model-pick";
 import { scrollBehavior } from "@/lib/motion";
 import { whyNotMove } from "@/lib/move";
 import { useBackTo } from "@/lib/origin";
@@ -50,8 +51,9 @@ import { peopleQuery, sessionQuery } from "@/lib/queries";
 import { canEdit, useKeepEditing, useReadOnly } from "@/lib/read-only";
 import { itemName, useRememberItem } from "@/lib/recent";
 import { recipesQuery } from "@/lib/recipes-query";
-import { SLICER_ACCEPT, useSlicerDropTarget } from "@/lib/slicer-drop";
+import { useSlicerDropTarget } from "@/lib/slicer-drop";
 import { useStickyColumn } from "@/lib/sticky-column";
+import { takeModels } from "@/lib/take-models";
 import { makeTwist, suggestedTwistName, useTwists } from "@/lib/twists";
 import { setUpNext, splitQueue } from "@/lib/up-next";
 import { useAfterPaint, useIsDesktop } from "@/lib/use-media-query";
@@ -454,12 +456,12 @@ const Idea = memo(function Idea({ item }: { item: ItemView }) {
             <input
               ref={filePicker}
               type="file"
-              accept={SLICER_ACCEPT}
+              accept={modelAccept()}
               multiple
               hidden
               data-testid="idea-file-input"
               onChange={(event) => {
-                for (const file of event.target.files ?? []) keepFile(file);
+                void takeModels([...(event.target.files ?? [])], keepFile);
                 event.target.value = "";
               }}
             />
