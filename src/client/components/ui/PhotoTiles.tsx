@@ -151,9 +151,17 @@ export function useFilePicker({ camera, multiple, onFiles, accept = "image/*", t
       hidden
       data-testid={testId ?? (camera ? "camera-input" : "photo-input")}
       onChange={(event) => {
-        void takePicked(event.target).then((files) => {
-          if (files.length) onFiles(files);
-        });
+        // A camera's photo is read into memory before the input clears (lib/picked.ts). Library picks and models
+        // (up to 250 MB) are taken as they are: a copy would hold a model twice.
+        if (camera) {
+          void takePicked(event.target).then((files) => {
+            if (files.length) onFiles(files);
+          });
+          return;
+        }
+        const files = Array.from(event.target.files ?? []);
+        event.target.value = "";
+        if (files.length) onFiles(files);
       }}
     />
   );

@@ -69,11 +69,14 @@ export function LogAttempt({
     parts: [],
   });
   // A draft kept on the device (the page loaded again while the camera was up, or the app was closed) comes back.
-  const [draft, setDraft] = useState(() => keptAttemptDraft(item.id) ?? blank());
-  const [when, setWhen] = useState<number | null>(null);
+  // Only a recent one, and only while no attempt was logged since (lib/attempt-draft).
+  const [kept] = useState(() => keptAttemptDraft(item.id, item.attempts.length));
+  const [restorable, setRestorable] = useState(!!kept);
+  const [draft, setDraft] = useState(() => kept?.draft ?? blank());
+  const [when, setWhen] = useState<number | null>(kept?.when ?? null);
   const [recipe, setRecipe] = useState<AppliedRecipe | null>(null);
   const [usedMatch, setUsedMatch] = useState<{ id: string; before: AttemptSettings } | null>(null);
-  const [dirty, setDirty] = useState(() => !!keptAttemptDraft(item.id));
+  const [dirty, setDirty] = useState(!!kept);
   const {
     photos,
     addFiles,
@@ -82,13 +85,12 @@ export function LogAttempt({
   } = useDraftPhotos({
     keep: true,
     scope: item.id,
+    // Not decoded again on every visit to the build: only while the sheet is open, where a failure shows.
+    restore: open && restorable,
   });
   const camera = useFilePicker({
     camera: true,
-    onFiles: (files) => {
-      cameraArrived(item.id);
-      addFiles(files);
-    },
+    onFiles: addFiles,
   });
   const openCamera = () => {
     cameraOpening(item.id);
@@ -99,15 +101,17 @@ export function LogAttempt({
   useEffect(() => {
     if (cameraWasUp(item.id)) onOpenChange(true);
   }, []);
+  // The camera's mark stays until the photo is kept and decoded: a page killed in between opens the sheet again.
   useEffect(() => {
-    if (dirty) keepAttemptDraft(item.id, draft);
-  }, [dirty, draft, item.id]);
+    if (photos.length && photos.every((photo) => photo.processed)) cameraArrived(item.id);
+  }, [photos, item.id]);
   const library = useFilePicker({ multiple: true, onFiles: addFiles });
   const outcomeCounts = useOutcomeCounts();
   const slicer = useSlicerFile({
     open,
     settings: draft.settings,
-    onSettings: (settings) => change({ settings }),
+    // Not a change of the person's: a slice that attached by itself must not make a draft out of an untouched sheet.
+    onSettings: (settings) => setDraft((current) => ({ ...current, settings })),
     // A plate from a file: its parts are what's on it (unless someone already said).
     onObjects: (objects) => {
       const found = partsOnPlate(objects, item.parts);
@@ -119,6 +123,18 @@ export function LogAttempt({
     incomingFile,
   });
 
+  // What is kept for a page that loads again. The file the slicer holds is not kept, so settings that came from it
+  // are not either: they go back to what carried over.
+  const attached = !!slicer.state;
+  useEffect(() => {
+    if (dirty || photos.length)
+      keepAttemptDraft(
+        item.id,
+        attached ? { ...draft, settings: carryOver(previous?.settings) } : draft,
+        when,
+        item.attempts.length,
+      );
+  }, [dirty, photos.length, draft, when, attached, item.id, item.attempts.length, previous?.settings]);
   // The first attempt prints from the idea's slice: with exactly one, it is attached as the sheet opens (taking it
   // off, or picking another, is the person's choice and stays). With several there is a plain choice in the well.
   const only = previous
@@ -174,6 +190,7 @@ export function LogAttempt({
     slicer.clear();
     clear();
     dropAttemptDraft(item.id);
+    setRestorable(false);
     setDirty(false);
     setWhen(null);
     setRecipe(null);

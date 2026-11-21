@@ -111,3 +111,80 @@ test("a photo the browser can't open says so, and can be tried again @phone", as
   await expect(page.getByRole("button", { name: "Try again" })).toBeVisible();
   await expect(sheet.getByRole("img", { name: "Attempt photo 1" })).toHaveCount(0);
 });
+
+const draftKey = (id: string) => `spaghetti:attempt-draft:${id}`;
+const cameraKey = (id: string) => `spaghetti:attempt-camera:${id}`;
+
+function keepDraft(page: Page, id: string, kept: { attempts: number; ageMs: number }) {
+  return page.evaluate(
+    ([id, kept, draftKey, cameraKey]) => {
+      const draft = {
+        outcome: "failed",
+        printedAt: Date.now(),
+        note: "From an old draft",
+        failureTags: [],
+        successNotes: [],
+        settings: {},
+        parts: [],
+      };
+      localStorage.setItem(
+        draftKey,
+        JSON.stringify({ draft, when: null, savedAt: Date.now() - kept.ageMs, attempts: kept.attempts }),
+      );
+      localStorage.setItem(cameraKey, String(Date.now()));
+    },
+    [id, kept, draftKey(id), cameraKey(id)] as const,
+  );
+}
+
+test("opening and closing the sheet keeps no draft @phone", async ({ page }) => {
+  const id = await aBuild(page);
+  await page.goto(`/builds/${id}`);
+  await page.getByRole("button", { name: "Log attempt" }).click();
+  const sheet = page.getByRole("dialog", { name: "Attempt 1" });
+  await expect(sheet).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(sheet).toBeHidden();
+  expect(await page.evaluate((key) => localStorage.getItem(key), draftKey(id))).toBeNull();
+});
+
+test("a draft older than the attempts logged since, or than a few hours, is not brought back @phone", async ({
+  page,
+}) => {
+  const id = await aBuild(page);
+  await page.goto(`/builds/${id}`);
+  // The build has one attempt now (logged from the other phone, say): a draft kept for attempt 1 is stale.
+  await page.request.post(`/api/items/${id}/attempts`, {
+    headers: { Origin: origin(page) },
+    data: { id: crypto.randomUUID(), outcome: "success", printedAt: Date.now(), note: "", createdAt: Date.now() },
+  });
+  await keepDraft(page, id, { attempts: 0, ageMs: 1000 });
+  await page.reload();
+  await expect(page.getByRole("textbox", { name: "Title" })).toHaveValue("Cable chain");
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await page.getByRole("button", { name: "Log another try" }).click();
+  const sheet = page.getByRole("dialog", { name: "Attempt 2" });
+  await expect(sheet.getByRole("textbox", { name: "Note" })).toHaveValue("");
+
+  // And one that is right in every way but old.
+  await page.keyboard.press("Escape");
+  await keepDraft(page, id, { attempts: 1, ageMs: 7 * 60 * 60 * 1000 });
+  await page.reload();
+  await expect(page.getByRole("textbox", { name: "Title" })).toHaveValue("Cable chain");
+  await page.getByRole("button", { name: "Log another try" }).click();
+  await expect(page.getByRole("dialog", { name: "Attempt 2" }).getByRole("textbox", { name: "Note" })).toHaveValue("");
+});
+
+test("a photo that can't be opened and has no type can be tried again @phone", async ({ page }) => {
+  const id = await aBuild(page);
+  await page.goto(`/builds/${id}`);
+  await page.getByRole("button", { name: "Log attempt" }).click();
+  const sheet = page.getByRole("dialog", { name: "Attempt 1" });
+  await sheet
+    .getByTestId("camera-input")
+    .setInputFiles({ name: "IMG_0003.HEIC", mimeType: "", buffer: Buffer.from("x") });
+  await expect(page.getByText("Couldn't open that photo")).toBeVisible();
+  await page.getByRole("button", { name: "Try again" }).click();
+  // It was tried (and failed, again, in plain view), not silently ignored.
+  await expect(page.getByText("Couldn't open that photo")).toHaveCount(2);
+});

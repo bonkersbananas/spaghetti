@@ -4,6 +4,7 @@ import { captureNote, captureTitle, MAX_CAPTURE_PHOTOS } from "@shared/capture";
 import { useQueryClient } from "@tanstack/react-query";
 import { createContext, type ReactNode, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "@/components/ui/Toast";
+import { keptAttemptPhotos } from "./attempt-draft";
 import { queueFinish, saveAttemptChanges } from "./builds";
 import { isOnline } from "./connection";
 import { openStore } from "./idb";
@@ -101,8 +102,6 @@ const CaptureContext = createContext<CaptureContextValue | null>(null);
 const DRAFT_KEY = "spaghetti:capture-draft";
 /** The capture sheet's photos, kept on the device (their own database) until the capture is saved. */
 const keptPhotos = openStore<DraftPhoto>("spaghetti-capture", "photos", "id");
-/** The attempt sheet's photos, apart from the capture sheet's and each marked with the build they are for. */
-const keptAttemptPhotos = openStore<DraftPhoto & { scope: string }>("spaghetti-attempt", "photos", "id");
 const FIRST_KEY = "spaghetti:first-idea";
 
 function storedDraft(): string {
@@ -124,7 +123,16 @@ export function imageFiles(files: Iterable<File>): File[] {
  * Photos picked for something not saved yet (a capture, an attempt): shown
  * at once from the device and resized in the background while you type.
  */
-export function useDraftPhotos({ keep = false, scope }: { keep?: boolean; scope?: string } = {}) {
+export function useDraftPhotos({
+  keep = false,
+  scope,
+  restore = true,
+}: {
+  keep?: boolean;
+  scope?: string;
+  /** Whether photos kept by an earlier visit come back (an attempt's only while its sheet is open and its draft is fresh). */
+  restore?: boolean;
+} = {}) {
   // With a scope (a build's id) the photos live in the attempt sheet's own store, and only that build's come back.
   const kept = useMemo(() => {
     if (!scope) return keptPhotos;
@@ -142,7 +150,9 @@ export function useDraftPhotos({ keep = false, scope }: { keep?: boolean; scope?
   const photosRef = useRef(photos);
   photosRef.current = photos;
 
-  const addAgain = useRef<(files: Iterable<File>) => void>(() => undefined);
+  // Each clear() starts a new round: a restore that was asked before it must not put its photos back.
+  const round = useRef(0);
+  const addAgain = useRef<(files: Iterable<File>, trusted?: boolean) => Promise<void>>(async () => undefined);
   const resize = useCallback(
     (photo: DraftPhoto) => {
       processPhoto(photo.file).then(
@@ -158,7 +168,16 @@ export function useDraftPhotos({ keep = false, scope }: { keep?: boolean; scope?
             "Couldn't open that photo",
             {
               label: "Try again",
-              onClick: () => addAgain.current([new File([photo.file], "photo", { type: photo.file.type })]),
+              // The same file, as it was named: one that came with no type (HEIC) still gets its try.
+              onClick: () =>
+                void addAgain.current(
+                  [
+                    new File([photo.file], photo.file instanceof File ? photo.file.name : "photo", {
+                      type: photo.file.type,
+                    }),
+                  ],
+                  true,
+                ),
             },
             error instanceof UnreadablePhotoError ? error.message : "Try another one.",
           );
@@ -169,13 +188,17 @@ export function useDraftPhotos({ keep = false, scope }: { keep?: boolean; scope?
   );
 
   const addFiles = useCallback(
-    (files: Iterable<File>) => {
-      const added = imageFiles(files).map((file) => ({ id: crypto.randomUUID(), file }));
+    async (files: Iterable<File>, trusted = false) => {
+      const added = (trusted ? Array.from(files) : imageFiles(files)).map((file) => ({
+        id: crypto.randomUUID(),
+        file,
+      }));
       if (!added.length) return;
       for (const photo of added) setPreview(photo.id, photo.file, photo.file);
       setPhotos((current) => [...current, ...added]);
-      // Kept on the device until saved: a page that is killed in the background (a phone, an app switch) brings them back.
-      if (keep) for (const photo of added) void kept.put(photo).catch(() => undefined);
+      // Kept on the device until saved: a page that is killed in the background (a phone, an app switch) brings them
+      // back. Resizing (a 48 MP decode that can kill the page) starts only once they are safely kept.
+      if (keep) await Promise.all(added.map((photo) => kept.put(photo).catch(() => undefined)));
       for (const photo of added) resize(photo);
     },
     [keep, resize, kept],
@@ -185,11 +208,13 @@ export function useDraftPhotos({ keep = false, scope }: { keep?: boolean; scope?
 
   // Photos kept by an earlier visit (the page was closed or killed before they were saved).
   useEffect(() => {
-    if (!keep) return;
+    if (!keep || !restore) return;
     let gone = false;
+    const asked = round.current;
     kept
       .all()
       .then((found) => {
+        if (asked !== round.current) return;
         const known = new Set(photosRef.current.map((photo) => photo.id));
         const back = found.filter((photo) => !known.has(photo.id));
         if (gone || !back.length) return;
@@ -201,7 +226,7 @@ export function useDraftPhotos({ keep = false, scope }: { keep?: boolean; scope?
     return () => {
       gone = true;
     };
-  }, [keep, resize, kept]);
+  }, [keep, restore, resize, kept]);
 
   const removePhoto = useCallback(
     (id: string) => {
@@ -212,6 +237,7 @@ export function useDraftPhotos({ keep = false, scope }: { keep?: boolean; scope?
   );
 
   const clear = useCallback(() => {
+    round.current++;
     setPhotos([]);
     if (keep) void kept.clear().catch(() => undefined);
   }, [keep, kept]);
