@@ -20,6 +20,8 @@ interface ConfirmDeleteProps {
   icon?: Icon;
   /** The question, when "{verb} this {what}?" doesn't fit: "Back to Ideas?". */
   question?: string;
+  /** Shows the verb beside the icon when idle (a quiet button), for an action people must find by its words. */
+  labelled?: boolean;
   /** What else goes with it, said beside the question: "Its 2 attempts go with it". */
   detail?: string;
 }
@@ -41,6 +43,7 @@ export function ConfirmDelete({
   icon = TrashIcon,
   question,
   detail,
+  labelled,
 }: ConfirmDeleteProps) {
   const root = useRef<HTMLSpanElement>(null);
   const confirm = useRef<HTMLButtonElement>(null);
@@ -89,6 +92,21 @@ export function ConfirmDelete({
     };
   }, [asking]);
 
+  if (!asking && labelled) {
+    return (
+      <Button
+        ref={trash}
+        variant="quiet"
+        icon={icon}
+        title={title ?? verb}
+        onClick={() => onAskingChange(true)}
+        disabled={disabled}
+        aria-keyshortcuts={ariaKeyshortcuts}
+      >
+        {question ? verb : `${verb} ${what}`}
+      </Button>
+    );
+  }
   if (!asking) {
     return (
       <IconButton

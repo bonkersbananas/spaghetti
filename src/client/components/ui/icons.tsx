@@ -8,7 +8,6 @@
  */
 export {
   Archive as ShelveIcon,
-  ArrowBendUpLeft as BackToIdeasIcon,
   ArrowCounterClockwise as UndoIcon,
   ArrowDown as MoveDownIcon,
   ArrowElbowDownRight as MoveIntoIcon,

@@ -26,7 +26,8 @@ function BackToIdeasDemo() {
       verb="Back to Ideas"
       question="Back to Ideas?"
       detail="Its 2 attempts go with it"
-      icon={Icons.BackToIdeasIcon}
+      labelled
+      icon={Icons.IdeasIcon}
     />
   );
 }

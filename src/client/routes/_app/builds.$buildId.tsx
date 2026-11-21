@@ -42,7 +42,6 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { TextArea } from "@/components/ui/Field";
 import {
   ArrowRightIcon,
-  BackToIdeasIcon,
   CheckIcon,
   CommentIcon,
   CompareIcon,
@@ -404,7 +403,7 @@ function Build({ item }: { item: ItemView }) {
     {
       id: "remove",
       label: scrapsToIdea ? "Back to Ideas" : "Delete build",
-      icon: scrapsToIdea ? BackToIdeasIcon : TrashIcon,
+      icon: scrapsToIdea ? IdeasIcon : TrashIcon,
       shortcut: "buildDelete" as const,
       keywords: scrapsToIdea ? "scrap idea undo mistake return" : "remove trash",
       run: () => canEdit(item.pending) && setDeleting(true),
@@ -539,7 +538,7 @@ function Build({ item }: { item: ItemView }) {
     <PullToGo back={back} title={title.trim() || "Untitled build"}>
       <article className="pb-6">
         <h1 className="sr-only">{title.trim() || "Untitled build"}</h1>
-        <DetailBar back={back} title={title.trim() || "Untitled build"}>
+        <DetailBar back={back} title={title.trim() || "Untitled build"} hideBackOnPhone={deleting}>
           {!deleting && <SaveStatus state={saveState} className="mr-2" />}
           {deleting || closeMenu ? null : isDesktop ? (
             <span className="mr-2 flex items-center gap-2">{stageActions}</span>
@@ -562,7 +561,8 @@ function Build({ item }: { item: ItemView }) {
             what="build"
             verb={scrapsToIdea ? "Back to Ideas" : "Delete"}
             question={scrapsToIdea ? "Back to Ideas?" : undefined}
-            icon={scrapsToIdea ? BackToIdeasIcon : undefined}
+            labelled={scrapsToIdea}
+            icon={scrapsToIdea ? IdeasIcon : undefined}
             detail={
               scrapsToIdea && attemptCount > 0
                 ? `Its ${attemptCount === 1 ? "attempt goes" : `${attemptCount} attempts go`} with it`
