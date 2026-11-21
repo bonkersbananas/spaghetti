@@ -379,7 +379,7 @@ function phrase(reason: MatchReason, lead: boolean): string {
     case "like-file":
       return `${lead ? "A" : "a"} file named much like it, ${reason.file}`;
     case "title":
-      return `${lead ? "The" : "the"} build has its name`;
+      return `${lead ? "The" : "the"} build is named after it`;
     case "words":
       return `${lead ? "The" : "the"} build is named much like it`;
     case "sent":

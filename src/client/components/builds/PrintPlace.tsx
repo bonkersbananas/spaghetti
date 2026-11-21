@@ -13,11 +13,12 @@ import {
   PrinterIcon,
   SearchIcon,
 } from "@/components/ui/icons";
-import { KeepNames } from "@/components/ui/KeepNames";
+import { KeepNames, KeptName } from "@/components/ui/KeepNames";
+import { Skeleton } from "@/components/ui/Skeleton";
 import { SuggestionRow } from "@/components/ui/SuggestionRow";
 import { WhyLine } from "@/components/ui/WhyLine";
 import { type AttemptView, type ItemView, useBuilds, useIdeas } from "@/lib/items";
-import { suggestionsQuery, useMoveAttempt } from "@/lib/print-moves";
+import { offerWhys, suggestionsQuery, useMoveAttempt } from "@/lib/print-moves";
 import { peopleQuery } from "@/lib/queries";
 import { useReadOnly } from "@/lib/read-only";
 import { itemName } from "@/lib/recent";
@@ -91,8 +92,7 @@ function MovedLine({ moved }: { moved: AttemptMoved }) {
   const by = who(person);
   return (
     <WhyLine icon={MoveIntoIcon}>
-      Moved here from{" "}
-      <span className="text-ink-soft font-medium break-words">{moved.fromTitle || "another build"}</span>
+      Moved here from <KeptName>{moved.fromTitle || "another build"}</KeptName>
       {by ? ` by ${by === "You" ? "you" : by}` : ""}, {inlineTime(moved.at)}
     </WhyLine>
   );
@@ -115,30 +115,41 @@ function WhichBuild({ item, attempt, onMore, readOnly }: WhichBuildProps) {
   const { items: builds } = useBuilds();
   const { items: ideas } = useIdeas();
   const moves = useMoveAttempt(item, attempt);
-  if (isPending) return null;
   const byId = new Map([...builds, ...ideas].map((one) => [one.id, one]));
   const offers = (suggestions ?? []).flatMap((one) => {
     const build = byId.get(one.itemId);
     return build && build.id !== item.id && !build.pending ? [{ build, reasons: one.reasons }] : [];
   });
-  const name = attempt.print?.name;
+  const whys = offerWhys(offers);
+  // The build is named after the job until someone renames it: the card's title says the name already.
+  const said = !!attempt.print?.name && attempt.print.name.trim().toLowerCase() === item.title?.trim().toLowerCase();
+  const name = said ? null : attempt.print?.name;
 
-  if (!offers.length) {
+  if (!isPending && !offers.length) {
     return (
       <WhyLine icon={PrinterIcon} action={readOnly ? undefined : { label: "Put it in a build", onClick: onMore }}>
-        From the printer: a build of its own, as nothing else fits {name ? <q>{name}</q> : "it"}.
+        From the printer:{" "}
+        {name ? (
+          <>
+            nothing else fits <KeptName>{name}</KeptName>
+          </>
+        ) : (
+          "nothing else fits it"
+        )}
+        , so it has a build of its own.
       </WhyLine>
     );
   }
   return (
     <WhichBuildQuestion
       name={name}
-      offers={offers.map(({ build, reasons }) => ({
+      loading={isPending}
+      offers={offers.map(({ build }, index) => ({
         id: build.id,
         photo: pictureOf(build),
         glyph: build.stage === "idea" ? IdeasIcon : BuildsIcon,
         title: itemName(build, build.stage === "idea" ? "idea" : "build"),
-        why: whyWords(reasons),
+        why: whys[index] ?? "",
         onSelect: () => moves.move({ item: build }),
       }))}
       onMore={onMore}
@@ -149,8 +160,10 @@ function WhichBuild({ item, attempt, onMore, readOnly }: WhichBuildProps) {
 }
 
 interface WhichBuildQuestionProps {
-  /** The job's name as the printer said it. */
+  /** The job's name as the printer said it, when the card's title doesn't say it already. */
   name?: string | null;
+  /** The guesses are on their way: a row's room is kept for them, so the card doesn't jump. */
+  loading?: boolean;
   /** The builds it may belong to, best first, each with why. */
   offers: Array<{
     id: string;
@@ -166,7 +179,7 @@ interface WhichBuildQuestionProps {
 }
 
 /** The question as it reads (the styleguide shows it with sample builds). */
-export function WhichBuildQuestion({ name, offers, onMore, onKeep, disabled }: WhichBuildQuestionProps) {
+export function WhichBuildQuestion({ name, loading, offers, onMore, onKeep, disabled }: WhichBuildQuestionProps) {
   const headingId = useId();
   return (
     <section aria-labelledby={headingId} className="flex flex-col gap-2.5">
@@ -177,11 +190,12 @@ export function WhichBuildQuestion({ name, offers, onMore, onKeep, disabled }: W
         </h4>
         {name && (
           <p className="text-small text-ink-faint pl-6.5">
-            The printer calls it <span className="text-ink-soft font-medium break-words">{name}</span>.
+            The printer calls it <KeptName>{name}</KeptName>.
           </p>
         )}
       </div>
       <div className="flex flex-col gap-2">
+        {loading && <Skeleton className="h-14 w-full rounded-lg" />}
         {offers.map((offer) => (
           <SuggestionRow
             key={offer.id}
@@ -194,7 +208,7 @@ export function WhichBuildQuestion({ name, offers, onMore, onKeep, disabled }: W
           />
         ))}
       </div>
-      <div className="-mx-2 flex flex-wrap items-center gap-x-1">
+      <div className="-mx-3 flex flex-wrap items-center gap-x-1">
         <Button variant="quiet" size="sm" icon={SearchIcon} disabled={disabled} onClick={onMore}>
           Another build
         </Button>

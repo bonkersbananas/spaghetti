@@ -87,7 +87,7 @@ describe("Carl Oscar's fit-test ring", () => {
   it("says the strongest reason alone on a card, and two on the build's own page", () => {
     const bracket = build({ id: "bracket", title: "bracket", files: [{ id: "b", name: "bracket.3mf" }] });
     const [best] = scorePrint({ name: "bracket", startedAt: START }, [bracket]);
-    expect(whyWords(best?.reasons ?? [])).toBe("Same file as bracket.3mf; the build has its name.");
+    expect(whyWords(best?.reasons ?? [])).toBe("Same file as bracket.3mf; the build is named after it.");
     expect(whyWords(best?.reasons ?? [], { brief: true })).toBe("Same file as bracket.3mf.");
   });
 
@@ -131,7 +131,7 @@ describe("names", () => {
     const benchy = build({ id: "benchy", title: "3DBenchy" });
     const [best] = scorePrint({ name: "3DBenchy", startedAt: START }, [benchy]);
     expect(best).toMatchObject({ itemId: "benchy", reasons: [{ kind: "title" }] });
-    expect(whyWords(best?.reasons ?? [])).toBe("The build has its name.");
+    expect(whyWords(best?.reasons ?? [])).toBe("The build is named after it.");
   });
 
   it("finds a file named much like it, but only suggests it", () => {

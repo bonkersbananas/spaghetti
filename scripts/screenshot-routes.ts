@@ -1867,7 +1867,11 @@ async function buildAboutToPrint(
   page: Page,
   title: string,
   fileName: string,
-  { startedAgo = 40 * 60_000, stage = "building" }: { startedAgo?: number; stage?: "building" | "idea" } = {},
+  {
+    startedAgo = 40 * 60_000,
+    stage = "building",
+    bytes = slicerFile(),
+  }: { startedAgo?: number; stage?: "building" | "idea"; bytes?: Uint8Array } = {},
 ) {
   const headers = { Origin: new URL(page.url()).origin };
   const id = crypto.randomUUID();
@@ -1876,7 +1880,6 @@ async function buildAboutToPrint(
     headers,
     data: { id, title, stage, createdAt: SEED_NOW - startedAgo },
   });
-  const bytes = slicerFile();
   const read = readThreeMf(bytes);
   const thumb = read.plates[0]?.thumbnail?.bytes;
   await page.request.put(`/api/items/${id}/files/${crypto.randomUUID()}`, {
@@ -8048,7 +8051,15 @@ shots.push(
       prepare: async (page) => {
         const { ownId } = await printToAskAbout(page);
         await page.goto(`/builds/${ownId}`);
-        await page.getByRole("heading", { name: "Which build is this?" }).first().waitFor();
+        await page
+          .getByRole("button", { name: /^Herb planter/ })
+          .first()
+          .waitFor();
+        // The whole question in view on a phone, above the action bar.
+        await page
+          .getByRole("button", { name: "It's new" })
+          .first()
+          .evaluate((node) => node.scrollIntoView({ block: "center" }));
         await page.waitForTimeout(400);
       },
       cleanup: removeFiledPrints,
@@ -8083,7 +8094,7 @@ shots.push(
       name: "builds-matched",
       path: "/builds",
       prepare: async (page) => {
-        const boat = await buildAboutToPrint(page, "Bath boat", "bath-boat.gcode.3mf");
+        const boat = await buildAboutToPrint(page, "Bath boat", "bath-boat.gcode.3mf", { bytes: tugboatFile() });
         await bridgeFiles(page, "bath-boat(2)");
         await onlyOnTheBed(page, [boat]);
         await page.getByRole("button", { name: "Not this build?" }).first().waitFor();
@@ -8095,10 +8106,15 @@ shots.push(
       name: "build-matched",
       path: "/builds",
       prepare: async (page) => {
-        const boat = await buildAboutToPrint(page, "Bath boat", "bath-boat.gcode.3mf");
+        const boat = await buildAboutToPrint(page, "Bath boat", "bath-boat.gcode.3mf", { bytes: tugboatFile() });
         await bridgeFiles(page, "bath-boat(2)");
         await page.goto(`/builds/${boat}`);
         await page.getByRole("button", { name: "Not this build?" }).first().waitFor();
+        // The attempt and its line in view on a phone (below the build's picture and note).
+        await page
+          .getByRole("button", { name: "Not this build?" })
+          .first()
+          .evaluate((node) => node.scrollIntoView({ block: "center" }));
         await page.waitForTimeout(400);
       },
       cleanup: removeFiledPrints,
@@ -8115,11 +8131,30 @@ shots.push(
       },
     },
     {
+      // Further down the same sheet on a phone: a new build comes right after the builds in progress, before the
+      // done and shelved ones, within the thumb's reach.
+      name: "move-attempt-sheet-new",
+      path: `/builds/${SEED_IDS.desiccantHook}`,
+      width: 390,
+      why: "the phone's sheet scrolls; the desktop's shows it whole in move-attempt-sheet",
+      prepare: async (page) => {
+        await page.getByRole("button", { name: "Options for attempt 2" }).click();
+        await page.getByRole("button", { name: "Move to another build" }).click();
+        const sheet = page.getByRole("dialog", { name: "Move attempt 2" });
+        await sheet.getByText("In progress").waitFor();
+        await page.waitForTimeout(500);
+        await sheet
+          .getByRole("button", { name: /^A new build/ })
+          .evaluate((node) => node.scrollIntoView({ block: "center" }));
+        await page.waitForTimeout(400);
+      },
+    },
+    {
       // Not this build: moved to the paddle steamer, the toast says so with View and Undo, and the attempt says from where.
       name: "build-moved",
       path: "/builds",
       prepare: async (page) => {
-        const boat = await buildAboutToPrint(page, "Bath boat", "bath-boat.gcode.3mf");
+        const boat = await buildAboutToPrint(page, "Bath boat", "bath-boat.gcode.3mf", { bytes: tugboatFile() });
         await bridgeFiles(page, "bath-boat(2)");
         await page.goto(`/builds/${boat}`);
         await page.getByRole("button", { name: "Not this build?" }).first().click();

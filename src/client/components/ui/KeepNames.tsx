@@ -25,3 +25,21 @@ export function KeepNames({ text }: { text: string }) {
   parts.push(text.slice(last));
   return <>{parts}</>;
 }
+
+/**
+ * A name the printer or a person gave (a print's job name, a build's title) set in running text: `ink-soft` medium,
+ * no quotes, and whole on one line when it is short enough ("cable-clip-v3" never breaks after "cable-clip-").
+ */
+export function KeptName({ children }: { children: string }) {
+  return (
+    <span
+      className={
+        children.length > LONGEST
+          ? "text-ink-soft font-medium break-words"
+          : "text-ink-soft font-medium whitespace-nowrap"
+      }
+    >
+      {children}
+    </span>
+  );
+}

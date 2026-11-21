@@ -4,6 +4,8 @@
  * caches change at once; the server follows, and a failure puts everything back. One toast undoes a move.
  */
 import type { Item, MoveAttemptResponse, PrintSuggestionsResponse } from "@shared/api";
+import { type MatchReason, whyWords } from "@shared/print-match";
+import { inlineTime } from "@shared/time";
 import { type QueryClient, queryOptions, useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useParams } from "@tanstack/react-router";
 import { toast } from "@/components/ui/Toast";
@@ -18,6 +20,26 @@ export function suggestionsQuery(attemptId: string) {
     queryKey: ["print-suggestions", attemptId],
     queryFn: async () => (await api<PrintSuggestionsResponse>(`/attempts/${attemptId}/suggestions`)).suggestions,
     staleTime: 60_000,
+  });
+}
+
+/** What tells one offered build from another: an idea, or when the build was started and how far it got. */
+function apart(build: ItemView): string {
+  if (build.stage === "idea") return `An idea, saved ${inlineTime(build.createdAt)}.`;
+  const tries = build.attempts.length;
+  const started = `Started ${inlineTime(build.startedAt ?? build.createdAt)}`;
+  return tries ? `${started}, ${tries} ${tries === 1 ? "attempt" : "attempts"}.` : `${started}.`;
+}
+
+/**
+ * Why each build is offered, in the matcher's words; when two offers would say the same ("Same file as
+ * planter-v2.gcode.3mf." twice, the commonest reason to ask), each adds what tells it apart.
+ */
+export function offerWhys(offers: ReadonlyArray<{ build: ItemView; reasons: MatchReason[] }>): string[] {
+  const whys = offers.map((offer) => whyWords(offer.reasons));
+  return offers.map(({ build }, index) => {
+    const why = whys[index] ?? "";
+    return whys.indexOf(why) === whys.lastIndexOf(why) ? why : `${why} ${apart(build)}`;
   });
 }
 

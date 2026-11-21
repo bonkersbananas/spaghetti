@@ -1,8 +1,9 @@
-import { whyWords } from "@shared/print-match";
+import { relativeTime } from "@shared/time";
 import { useQuery } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import { TextField } from "@/components/ui/Field";
 import { BuildsIcon, IdeasIcon, PlusIcon, SearchIcon } from "@/components/ui/icons";
+import { KeptName } from "@/components/ui/KeepNames";
 import { MetaList } from "@/components/ui/MetaList";
 import { Overline } from "@/components/ui/Overline";
 import { PickRow } from "@/components/ui/PickRow";
@@ -10,7 +11,7 @@ import { Sheet } from "@/components/ui/Sheet";
 import { SuggestionRow } from "@/components/ui/SuggestionRow";
 import { findPrinting } from "@/lib/builds";
 import { type AttemptView, type ItemView, useBuilds, useIdeas } from "@/lib/items";
-import { type MoveTarget, suggestionsQuery, useMoveAttempt } from "@/lib/print-moves";
+import { type MoveTarget, offerWhys, suggestionsQuery, useMoveAttempt } from "@/lib/print-moves";
 import { itemName } from "@/lib/recent";
 import { useIsDesktop } from "@/lib/use-media-query";
 import { BuildMeta, pictureOf } from "./BuildPick";
@@ -31,8 +32,9 @@ const nameOf = (build: ItemView) => itemName(build, build.stage === "idea" ? "id
 /**
  * "Which build is this?" (the printer's question for a print it filed in a build of its own) and "Move attempt N"
  * (any attempt, any time): the builds the app thinks it belongs to first, each with why, as offers a tap takes; then
- * the builds in progress, the one on the bed first; then done and shelved, a step quieter; last, a new build (for the
- * printer's question: "It's a new build"). Search narrows all of it. A tap moves at once; the toast offers Undo.
+ * the builds in progress, the one on the bed first; then a new build (for the printer's question: "It's a new
+ * build"), within a thumb's reach; last, done and shelved, a step quieter. Search (on desktop, as "Add to a build…")
+ * narrows all of it. A tap moves at once; the toast offers Undo.
  */
 export function MoveAttemptSheet({ open, onOpenChange, item, attempt }: MoveAttemptSheetProps) {
   const isDesktop = useIsDesktop();
@@ -91,14 +93,14 @@ export function MoveAttemptSheet({ open, onOpenChange, item, attempt }: MoveAtte
 
   const description = print?.name ? (
     <>
-      The printer calls it <span className="text-ink-soft font-medium break-words">{print.name}</span>. Its photos, note
-      and outcome go with it.
+      The printer calls it <KeptName>{print.name}</KeptName>. Its photos, note and outcome go with it.
     </>
   ) : (
     "Its photos, note and outcome go with it. You can undo it."
   );
 
   const empty = !suggested.length && !active.length && !finished.length;
+  const whys = offerWhys(suggested);
 
   return (
     <Sheet
@@ -108,36 +110,39 @@ export function MoveAttemptSheet({ open, onOpenChange, item, attempt }: MoveAtte
       description={description}
       tall
     >
-      <TextField
-        aria-label="Search builds"
-        placeholder="Search builds"
-        type="search"
-        icon={SearchIcon}
-        size="sm"
-        autoFocus={isDesktop}
-        value={search}
-        onChange={(event) => setSearch(event.target.value)}
-        onKeyDown={(event) => {
-          const first = suggested[0]?.build ?? active[0] ?? finished[0];
-          if (event.key === "Enter" && first) {
-            event.preventDefault();
-            moveTo({ item: first });
-          }
-        }}
-        className="mb-4"
-      />
+      {/* Searchable on desktop, as "Add to a build…" is; a phone scrolls a list the thumb can reach. */}
+      {isDesktop && (
+        <TextField
+          aria-label="Search builds"
+          placeholder="Search builds"
+          type="search"
+          icon={SearchIcon}
+          size="sm"
+          autoFocus
+          value={search}
+          onChange={(event) => setSearch(event.target.value)}
+          onKeyDown={(event) => {
+            const first = suggested[0]?.build ?? active[0] ?? finished[0];
+            if (event.key === "Enter" && first) {
+              event.preventDefault();
+              moveTo({ item: first });
+            }
+          }}
+          className="mb-4"
+        />
+      )}
       <div className="flex flex-col">
         {suggested.length > 0 && (
           <>
             <Overline className="mb-2">{suggested.length === 1 ? "Most likely" : "Most likely first"}</Overline>
             <div className="mb-5 flex flex-col gap-2">
-              {suggested.map(({ build, reasons }) => (
+              {suggested.map(({ build }, index) => (
                 <SuggestionRow
                   key={build.id}
                   photo={pictureOf(build)}
                   glyph={build.stage === "idea" ? IdeasIcon : BuildsIcon}
                   title={nameOf(build)}
-                  why={whyWords(reasons)}
+                  why={whys[index]}
                   onSelect={() => moveTo({ item: build })}
                 />
               ))}
@@ -156,28 +161,6 @@ export function MoveAttemptSheet({ open, onOpenChange, item, attempt }: MoveAtte
                 glyph={{ icon: BuildsIcon }}
                 title={nameOf(build)}
                 meta={<BuildMeta build={build} printing={onBed?.item.id === build.id ? onBed.attempt : undefined} />}
-                onSelect={() => moveTo({ item: build })}
-              />
-            ))}
-          </>
-        )}
-        {finished.length > 0 && (
-          <>
-            <Overline className="mt-5 mb-1" count={finished.length}>
-              Done and shelved
-            </Overline>
-            {finished.map((build) => (
-              <PickRow
-                key={build.id}
-                quiet
-                photo={pictureOf(build)}
-                glyph={{ icon: BuildsIcon }}
-                title={nameOf(build)}
-                meta={
-                  <MetaList>
-                    <span>{build.stage === "done" ? "Done" : "Shelved"}</span>
-                  </MetaList>
-                }
                 onSelect={() => moveTo({ item: build })}
               />
             ))}
@@ -203,6 +186,29 @@ export function MoveAttemptSheet({ open, onOpenChange, item, attempt }: MoveAtte
             }
             onSelect={() => moveTo({ newBuild: { title: ownElsewhere ? null : titleOf(attempt.file?.name) } })}
           />
+        )}
+        {finished.length > 0 && (
+          <>
+            <Overline className="mt-5 mb-1" count={finished.length}>
+              Done and shelved
+            </Overline>
+            {finished.map((build) => (
+              <PickRow
+                key={build.id}
+                quiet
+                photo={pictureOf(build)}
+                glyph={{ icon: BuildsIcon }}
+                title={nameOf(build)}
+                meta={
+                  <MetaList>
+                    <span>{build.stage === "done" ? "Done" : "Shelved"}</span>
+                    <span>{relativeTime(build.finishedAt ?? build.updatedAt)}</span>
+                  </MetaList>
+                }
+                onSelect={() => moveTo({ item: build })}
+              />
+            ))}
+          </>
         )}
       </div>
     </Sheet>

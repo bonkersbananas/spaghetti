@@ -107,7 +107,9 @@ test("the printer asks which build a print is, a tap puts it there, and Undo ask
   const entry = page.locator(`[data-attempt-id="${attemptId}"]`);
   const question = entry.getByRole("region", { name: "Which build is this?" });
   await expect(question).toBeVisible();
-  await expect(question.getByText("The printer calls it planter-v2(2).")).toBeVisible();
+  // The card's title is the printer's name already; each offer says what tells it from the other.
+  await expect(question.getByText("The printer calls it")).toHaveCount(0);
+  await expect(question.getByText(/^Same file as planter-v2\.gcode\.3mf\. Started/)).toHaveCount(2);
   await expect(question.getByRole("button", { name: /^Balcony planters/ })).toBeVisible();
   await question.getByRole("button", { name: /^Herb planter Same file as planter-v2\.gcode\.3mf/ }).click();
 
