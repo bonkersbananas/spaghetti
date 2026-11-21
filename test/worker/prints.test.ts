@@ -148,7 +148,14 @@ describe("a print the bridge files", () => {
     const item = await itemOf(glass.id);
     expect(item.photos.find((photo) => photo.id === photoId)).toMatchObject({ itemId: glass.id, attemptId });
 
-    // A retry of the bridge's attempt, after the move, is the same attempt where it is now.
+    // A retry of the whole start (the answer to the attempt lost on the way) finds the build it went into, then the
+    // same attempt where it is now.
+    const remade = await asBridge("/api/items", {
+      method: "POST",
+      json: { id: ownId, title: "UOBF-fit-test-ring(2)", stage: "building" },
+    });
+    expect(remade.status).toBe(200);
+    expect((await remade.json<ItemResponse>()).item.id).toBe(glass.id);
     const again = await asBridge(`/api/items/${ownId}/attempts`, { method: "POST", json: { id: attemptId } });
     expect(again.status).toBe(201);
     expect((await again.json<AttemptResponse>()).attempt.itemId).toBe(glass.id);
@@ -361,6 +368,22 @@ describe("moving an attempt to another build", () => {
 
     const moved = await (await move(attemptId, { targetId: tugboat })).json<MoveAttemptResponse>();
     expect(moved.from).toMatchObject({ id: idea, stage: "building" });
+  });
+
+  it("keeps a build made for the attempt when someone wrote in it since, and undoes the move all the same", async () => {
+    const tugboat = await build("Tugboat");
+    const attemptId = uuid();
+    await request(`/api/items/${tugboat}/attempts`, { method: "POST", cookie, json: { id: attemptId } });
+    const fresh = uuid();
+    await move(attemptId, { newBuild: { id: fresh, title: "Tugboat, smaller" } });
+    await request(`/api/items/${fresh}`, { method: "PATCH", cookie, json: { note: "Scale it to 80 %" } });
+
+    const undone = await (
+      await request(`/api/attempts/${attemptId}/unmove`, { method: "POST", cookie })
+    ).json<MoveAttemptResponse>();
+    expect(undone.to.attempts.map((one) => one.id)).toEqual([attemptId]);
+    expect(undone.from).toMatchObject({ id: fresh, note: "Scale it to 80 %", attempts: [] });
+    expect((await request(`/api/items/${fresh}`, { cookie, redirect: "manual" })).status).toBe(200);
   });
 
   it("puts a photo that was still on its way to the old build with the attempt where it is now", async () => {

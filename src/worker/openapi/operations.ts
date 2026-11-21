@@ -448,6 +448,9 @@ export const operations: Record<string, Operation> = {
     body: createItem,
     response: one("item", Item),
     status: 201,
+    errors: { 409: "deleted: that id was deleted." },
+    description:
+      "A printer's build that went into the build its print belongs to (decision 0076) answers a retry with that build, status 200.",
   },
   "PUT /items/up-next/order": {
     summary: "Sets the order of the Up next queue.",

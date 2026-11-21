@@ -55,11 +55,16 @@ function findLive(db: Db, attemptId: string) {
 }
 
 /**
- * Whether a build goes with the print that leaves it: one the printer made (an agent's), with nothing else in it, no
- * attempt, photo, file, note, comment or reaction of its own. That is merging it into the build the print goes to.
+ * Whether a build goes with the print that leaves it: one the printer made (an agent's), with nothing else in it. That
+ * is merging it into the build the print goes to.
  */
 async function leftEmpty(db: Db, item: typeof items.$inferSelect, attemptId: string): Promise<boolean> {
-  if (!item.createdVia || item.note.trim()) return false;
+  return !!item.createdVia && (await bare(db, item, attemptId));
+}
+
+/** Nothing in a build but this attempt: no other attempt, photo, file, note, comment or reaction of its own. */
+async function bare(db: Db, item: typeof items.$inferSelect, attemptId: string): Promise<boolean> {
+  if (item.note.trim()) return false;
   const [attempt, photo, file, said, reacted] = await Promise.all([
     db
       .select({ id: attempts.id })
@@ -322,8 +327,10 @@ export const attemptPrintRoutes = new Hono<AppEnv>()
         .where(eq(items.id, from.id)),
     );
     const emptyNow = sql`NOT EXISTS (SELECT 1 FROM attempts WHERE item_id = ${toId} AND deleted_at IS NULL)`;
-    if (move.toMade) {
-      // A build made (or brought back) for it goes again, if nothing else went into it since.
+    const made = move.toMade ? await db.select().from(items).where(eq(items.id, toId)).get() : undefined;
+    // A build made (or brought back) for it goes again, if nothing else went into it since: no other attempt, and no
+    // note, photo, file, comment or reaction someone gave it meanwhile, which would stay.
+    if (made && (await bare(db, made, attempt.id))) {
       statements.push(
         db
           .update(items)

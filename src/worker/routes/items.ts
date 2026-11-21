@@ -453,7 +453,14 @@ export const itemRoutes = new Hono<AppEnv>()
     // An idea saved without a title gets one from Claude once it has something to read (decision 0070).
     if (stage === "idea" && !itemTitle?.trim()) await titleAfterSave(c, itemId, parsed.data.photos ?? 0);
     const item = await loadItem(c.var.db, itemId);
-    if (!item) return apiError(c, 409, "deleted", "That was deleted.");
+    if (!item) {
+      // The printer's build, merged into the build its print belongs to (decision 0076): a bridge retrying its print
+      // (the answer to its attempt lost on the way) finds that build and goes on to the attempt, which is there too.
+      const merged = await mergedTarget(c.var.db, itemId);
+      const into = merged ? await loadItem(c.var.db, merged) : null;
+      if (into) return c.json<ItemResponse>({ item: into }, 200);
+      return apiError(c, 409, "deleted", "That was deleted.");
+    }
     return c.json<ItemResponse>({ item }, 201);
   })
 

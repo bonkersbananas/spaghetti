@@ -4303,7 +4303,7 @@
       "post": {
         "operationId": "postItems",
         "summary": "Adds an idea, or a build from scratch; the client picks the id, so a retry is safe.",
-        "description": "Needs the \"capture\" or \"attempts\" scope. A route may narrow this by what the body asks for; see docs/api.md.",
+        "description": "A printer's build that went into the build its print belongs to (decision 0076) answers a retry with that build, status 200. Needs the \"capture\" or \"attempts\" scope. A route may narrow this by what the body asks for; see docs/api.md.",
         "tags": [
           "items"
         ],
@@ -4406,6 +4406,16 @@
           },
           "403": {
             "description": "missing_scope or person_only: the token lacks the scope, or only a signed-in person may.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "deleted: that id was deleted.",
             "content": {
               "application/json": {
                 "schema": {
