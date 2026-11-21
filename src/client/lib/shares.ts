@@ -48,27 +48,33 @@ export async function makePublic(queryClient: QueryClient, kind: ShareKind, targ
 /** Stops a link at once; the toast's Undo brings back the same address. */
 export function stopSharing(queryClient: QueryClient, share: Share) {
   drop(queryClient, share.id);
-  const stopped = api(`/shares/${share.id}`, { method: "DELETE" }).catch(() => {
-    put(queryClient, share);
-    toast.error("Couldn't stop sharing", "The link still works. Try again in a moment.");
-    throw new Error("not stopped");
-  });
+  // True once the server has stopped it; a failure puts the link back and says so.
+  const stopped = api(`/shares/${share.id}`, { method: "DELETE" }).then(
+    () => true,
+    () => {
+      put(queryClient, share);
+      toast.error("Couldn't stop sharing", "The link still works. Try again in a moment.");
+      return false;
+    },
+  );
   toast.undo("Stopped sharing", {
     description: "The link shows nothing now.",
     onUndo: () => {
       put(queryClient, share);
-      void stopped
-        .then(() => api<ShareResponse>(`/shares/${share.id}/restore`, { method: "POST" }))
-        .then(({ share: back }) => put(queryClient, back))
-        .catch((error: unknown) => {
-          if (error instanceof Error && error.message === "not stopped") return;
+      void stopped.then(async (done) => {
+        if (!done) return;
+        try {
+          const { share: back } = await api<ShareResponse>(`/shares/${share.id}/restore`, { method: "POST" });
+          put(queryClient, back);
+        } catch (error) {
           drop(queryClient, share.id);
           void queryClient.invalidateQueries({ queryKey: sharesQuery.queryKey });
           toast.error(
             "Couldn't bring the link back",
             error instanceof ApiError && error.status === 409 ? error.message : "Try again in a moment.",
           );
-        });
+        }
+      });
     },
   });
 }
