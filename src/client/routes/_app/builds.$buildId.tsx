@@ -832,7 +832,7 @@ function Build({ item }: { item: ItemView }) {
                     done.
                   </EmptyState>
                 ) : (
-                  <SectionBoundary name="The attempts" resetKey={story}>
+                  <SectionBoundary name="The attempts" resetKey={item.attempts}>
                     <ol aria-label="Attempts, newest first" className="flex flex-col">
                       <AnimatePresence initial={false}>
                         {shownStory.map((attempt, index) => (
