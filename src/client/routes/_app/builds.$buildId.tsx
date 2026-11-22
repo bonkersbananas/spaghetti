@@ -16,6 +16,7 @@ import { BuildSummary } from "@/components/builds/BuildSummary";
 import { BuildTitleLine } from "@/components/builds/BuildTitleLine";
 import { type ComparePair, CompareSheet } from "@/components/builds/CompareSheet";
 import { OpenOnlyFile, onlyOpenable } from "@/components/builds/OpenInStudio";
+import { outcomeIcons, outcomeTones } from "@/components/builds/Outcome";
 import { AddPartsButton, PartsSection } from "@/components/builds/parts/PartsSection";
 import { SettingsLine } from "@/components/builds/SettingsLine";
 import { filamentLabel, summarizeSettings } from "@/components/builds/settings";
@@ -65,7 +66,7 @@ import { Section } from "@/components/ui/Section";
 import { ShareLinkButton } from "@/components/ui/ShareLinkButton";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { useVia } from "@/lib/agents";
-import { deleteAttempt, finishBuild, heroPhoto, reopenBuild, shelveBuild, useTagOptions } from "@/lib/builds";
+import { deleteAttempt, finishBuild, heroPhoto, reopenBuild, setCover, shelveBuild, useTagOptions } from "@/lib/builds";
 import { useCaptureHere } from "@/lib/capture";
 import { ariaShortcuts, shortcutCaps, useHotkeys } from "@/lib/hotkeys";
 import {
@@ -213,16 +214,26 @@ function Build({ item }: { item: ItemView }) {
   // Photos: the best one leads, then the build's own (from the idea, or added here).
   const hero = heroPhoto(item);
   const own = item.photos.filter((photo) => !photo.attemptId);
-  const gallery = hero && !own.some((photo) => photo.id === hero.id) ? [hero, ...own] : own;
+  // Then every attempt's, newest attempt first, whoever saved them: adding a photo never hides another.
+  const attemptPhotos = [...item.attempts]
+    .reverse()
+    .flatMap((attempt) =>
+      item.photos
+        .filter((photo) => photo.attemptId === attempt.id)
+        .map((photo) => ({ photo, attempt: attempt.number })),
+    );
+  const gallery = [...own, ...attemptPhotos.map((entry) => entry.photo)];
   // Without a photo, the cover rule's next step: the newest plate picture (coverOf in lib/previews.ts).
   const cover = coverOf(item);
   const plate = cover.kind === "plate" ? cover.file : undefined;
   const [editingParts, setEditingParts] = useState(false);
-  const [photoId, setPhotoId] = useState(gallery[0]?.id);
+  const [photoId, setPhotoId] = useState((hero ?? gallery[0])?.id);
   const photoIndex = Math.max(
     0,
     gallery.findIndex((photo) => photo.id === photoId),
   );
+  const shownPhoto = gallery[photoIndex];
+  const shownAttempt = shownPhoto?.attemptId ? item.attempts.find((a) => a.id === shownPhoto.attemptId) : undefined;
   const selectPhoto = (index: number) => {
     const photo = gallery[Math.max(0, Math.min(gallery.length - 1, index))];
     if (photo) setPhotoId(photo.id);
@@ -610,6 +621,18 @@ function Build({ item }: { item: ItemView }) {
                   className="-mx-5 md:mx-0"
                   capOnPhone={item.attempts.length > 0}
                 />
+                {shownAttempt && !(item.stage === "done" && shownPhoto?.id === hero?.id) && (
+                  // Whose photo it is, where "Final print" sits: the attempt's name with how it went (and the printer's mark when it took the print).
+                  <Chip
+                    tone={shownAttempt.outcome ? outcomeTones[shownAttempt.outcome] : "neutral"}
+                    icon={shownAttempt.outcome ? outcomeIcons[shownAttempt.outcome] : undefined}
+                    onPhoto
+                    className="shadow-soft absolute top-3 left-3"
+                  >
+                    {shownAttempt.fromPrinter && <PrinterMark size="xs" decorative />}
+                    Attempt {shownAttempt.number}
+                  </Chip>
+                )}
                 {item.stage === "done" && hero && gallery[photoIndex]?.id === hero.id && (
                   <Chip tone="basil" icon={FinishIcon} className="shadow-soft absolute top-3 left-3">
                     Final print
@@ -618,14 +641,18 @@ function Build({ item }: { item: ItemView }) {
               </div>
             ) : null}
             {gallery.length > 0 && (
-              // Only the build's own photos are here (an attempt's belong to their attempt, removed in its sheet), and a
-              // finished build's cover is its final photo, not the first.
+              // The build's own photos (they reorder), then its attempts' (marked with their number), and a finished build's
+              // cover is its final photo, not the first.
               <PhotoStrip
                 itemId={item.id}
                 photos={own}
+                attemptPhotos={attemptPhotos}
+                onCoverAttemptPhoto={(id) => setCover(queryClient, item.id, id)}
                 selectedId={gallery[photoIndex]?.id}
                 onSelect={setPhotoId}
-                fixedCover={!!item.coverPhotoId}
+                fixedCover={item.stage === "done" && !!item.coverPhotoId}
+                coverId={item.coverPhotoId}
+                onClearCover={() => setCover(queryClient, item.id, null)}
               />
             )}
             {gallery.length === 0 &&
