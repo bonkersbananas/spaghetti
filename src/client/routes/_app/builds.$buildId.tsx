@@ -16,6 +16,7 @@ import { BuildSummary } from "@/components/builds/BuildSummary";
 import { BuildTitleLine } from "@/components/builds/BuildTitleLine";
 import { type ComparePair, CompareSheet } from "@/components/builds/CompareSheet";
 import { OpenOnlyFile, onlyOpenable } from "@/components/builds/OpenInStudio";
+import { outcomeIcons, outcomeTones } from "@/components/builds/Outcome";
 import { AddPartsButton, PartsSection } from "@/components/builds/parts/PartsSection";
 import { SettingsLine } from "@/components/builds/SettingsLine";
 import { filamentLabel, summarizeSettings } from "@/components/builds/settings";
@@ -231,6 +232,8 @@ function Build({ item }: { item: ItemView }) {
     0,
     gallery.findIndex((photo) => photo.id === photoId),
   );
+  const shownPhoto = gallery[photoIndex];
+  const shownAttempt = shownPhoto?.attemptId ? item.attempts.find((a) => a.id === shownPhoto.attemptId) : undefined;
   const selectPhoto = (index: number) => {
     const photo = gallery[Math.max(0, Math.min(gallery.length - 1, index))];
     if (photo) setPhotoId(photo.id);
@@ -618,6 +621,18 @@ function Build({ item }: { item: ItemView }) {
                   className="-mx-5 md:mx-0"
                   capOnPhone={item.attempts.length > 0}
                 />
+                {shownAttempt && !(item.stage === "done" && shownPhoto?.id === hero?.id) && (
+                  // Whose photo it is, where "Final print" sits: the attempt's name with how it went (and the printer's mark when it took the print).
+                  <Chip
+                    tone={shownAttempt.outcome ? outcomeTones[shownAttempt.outcome] : "neutral"}
+                    icon={shownAttempt.outcome ? outcomeIcons[shownAttempt.outcome] : undefined}
+                    onPhoto
+                    className="shadow-soft absolute top-3 left-3"
+                  >
+                    {shownAttempt.fromPrinter && <PrinterMark size="xs" decorative />}
+                    Attempt {shownAttempt.number}
+                  </Chip>
+                )}
                 {item.stage === "done" && hero && gallery[photoIndex]?.id === hero.id && (
                   <Chip tone="basil" icon={FinishIcon} className="shadow-soft absolute top-3 left-3">
                     Final print
@@ -636,9 +651,7 @@ function Build({ item }: { item: ItemView }) {
                 selectedId={gallery[photoIndex]?.id}
                 onSelect={setPhotoId}
                 fixedCover={item.stage === "done" && !!item.coverPhotoId}
-                coverIsAttemptPhoto={
-                  attemptPhotos.some((e) => e.photo.id === item.coverPhotoId) ? item.coverPhotoId : null
-                }
+                coverId={item.coverPhotoId}
                 onClearCover={() => setCover(queryClient, item.id, null)}
               />
             )}

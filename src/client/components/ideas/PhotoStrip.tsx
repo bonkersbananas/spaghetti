@@ -31,8 +31,8 @@ interface PhotoStripProps {
   attemptPhotos?: { photo: PhotoView; attempt: number }[];
   /** Makes an attempt's photo the build's cover (an own photo is moved first instead). */
   onCoverAttemptPhoto?: (photoId: string) => void;
-  /** The cover is one of the attempts' photos (`coverPhotoId`): making an own photo the cover takes it back. */
-  coverIsAttemptPhoto?: string | null;
+  /** The photo set as the cover (`coverPhotoId`); without one the first own photo leads. Making another the cover replaces it. */
+  coverId?: string | null;
   onClearCover?: () => void;
 }
 
@@ -51,7 +51,7 @@ export function PhotoStrip({
   fixedCover,
   attemptPhotos = [],
   onCoverAttemptPhoto,
-  coverIsAttemptPhoto,
+  coverId,
   onClearCover,
 }: PhotoStripProps) {
   const queryClient = useQueryClient();
@@ -96,8 +96,10 @@ export function PhotoStrip({
         !offline &&
         !photo.upload &&
         (attemptOf.has(id)
-          ? !!onCoverAttemptPhoto && id !== coverIsAttemptPhoto
-          : order.indexOf(id) > 0 || !!coverIsAttemptPhoto),
+          ? !!onCoverAttemptPhoto && id !== coverId
+          : coverId
+            ? id !== coverId
+            : order.indexOf(id) > 0),
       remove: !offline || !!photo.upload,
     };
   };
@@ -199,8 +201,8 @@ export function PhotoStrip({
         }}
         aria-label={
           attempt
-            ? `Photo ${index + 1}, attempt ${attempt}${id === coverIsAttemptPhoto ? ", the cover" : ""}`
-            : `Photo ${index + 1}${index === 0 && !fixedCover && !coverIsAttemptPhoto ? ", the cover" : ""}`
+            ? `Photo from attempt ${attempt}${id === coverId && !fixedCover ? ", the cover" : ""}`
+            : `Photo ${index + 1}${(coverId ? id === coverId : index === 0) && !fixedCover ? ", the cover" : ""}`
         }
         aria-current={selected || undefined}
         aria-haspopup={selected && actionable ? "dialog" : undefined}
@@ -221,15 +223,6 @@ export function PhotoStrip({
           color={photo.color || undefined}
           busy={!!photo.upload}
         />
-        {attempt && (
-          // Whose it is: the attempt's number, quietly, on the corner (the menu's dot has the other one).
-          <span
-            aria-hidden
-            className="bg-veil text-on-veil text-caption absolute top-1 left-1 rounded-full px-1.5 leading-5 font-semibold tabular-nums backdrop-blur-md"
-          >
-            #{attempt}
-          </span>
-        )}
       </button>
     );
     if (!actionable) return button;
@@ -302,7 +295,8 @@ export function PhotoStrip({
         </ul>
       )}
       {attemptPhotos.length > 0 && (
-        <ul className="flex shrink-0 gap-2.5" aria-label="Attempts' photos">
+        // Set a little apart, behind a hairline: they are the attempts', not the build's own.
+        <ul className="border-ink/10 ml-1 flex shrink-0 gap-2.5 border-l pl-3.5" aria-label="Attempts' photos">
           {attemptPhotos.map(({ photo }, index) => (
             <li key={photo.id} className="group/thumb relative shrink-0 list-none">
               {thumb(photo.id, photos.length + index, photo)}
@@ -324,7 +318,7 @@ export function PhotoStrip({
               onCoverAttemptPhoto?.(menu.id);
               return;
             }
-            if (coverIsAttemptPhoto) onClearCover?.();
+            if (coverId) onClearCover?.();
             const next = [menu.id, ...order.filter((id) => id !== menu.id)];
             setOrder(next);
             commit(next);
