@@ -25,7 +25,12 @@ export interface PrintViewerProps {
   url: string;
   /** Names the file for the "built up once" memory. */
   fileId: string;
+  /** The plate whose G-code to read, in the file's own numbering: a model's slice has one plate, 1. */
   plate: number;
+  /** The file is a model's slice that Spaghetti made, not one someone added. */
+  ownSlice?: boolean;
+  /** Said over the view while a new slice of it is under way (its toolpaths replace these when it is saved). */
+  notice?: { text: string; fraction: number | null; percent?: boolean };
   /** How many copies of the plate's objects the slice has, and what one prints (kept with the slice), for the size shown. */
   copies?: number;
   size?: Size;
@@ -61,6 +66,8 @@ export default function PrintViewer({
   url,
   fileId,
   plate,
+  ownSlice,
+  notice,
   copies,
   size,
   fallbackColors,
@@ -159,7 +166,7 @@ export default function PrintViewer({
       }
     };
     const stop = loadToolpaths(
-      { url, plate, copies, fallbackColors: fallbackColors?.map((c) => c ?? null) },
+      { url, plate, copies, ownSlice, fallbackColors: fallbackColors?.map((c) => c ?? null) },
       {
         onLayers,
         onProgress: setProgress,
@@ -372,12 +379,28 @@ export default function PrintViewer({
           aria-hidden
           className="group-focus-visible:ring-ink/20 pointer-events-none absolute inset-0 group-focus-visible:ring-2 group-focus-visible:ring-inset"
         />
-        {state === "loading" && (
-          <div className="bg-cream/90 shadow-soft text-small text-ink-soft absolute bottom-3 left-3 flex items-center gap-2 rounded-full py-1.5 pr-3.5 pl-3">
-            <ProgressRing value={progress > 0 ? progress : null} className="size-4" />
-            <span className="tabular">
-              {progress > 0 ? `Reading the file… ${Math.round(progress * 100)}%` : "Opening the file…"}
-            </span>
+        {(state === "loading" || notice) && (
+          <div className="pointer-events-none absolute bottom-3 left-3 flex flex-col items-start gap-2 pr-14">
+            {notice && (
+              <div className="bg-cream/90 shadow-soft text-small text-ink flex items-center gap-2 rounded-full py-1.5 pr-3.5 pl-3">
+                <ProgressRing value={notice.fraction} className="size-4" />
+                {/* The words are read out as they change; the percent only shows. */}
+                <span role="status">{notice.text}</span>
+                {notice.percent && notice.fraction !== null && (
+                  <span aria-hidden className="tabular text-ink-soft -ml-1">
+                    {Math.round(notice.fraction * 100)}%
+                  </span>
+                )}
+              </div>
+            )}
+            {state === "loading" && (
+              <div className="bg-cream/90 shadow-soft text-small text-ink-soft flex items-center gap-2 rounded-full py-1.5 pr-3.5 pl-3">
+                <ProgressRing value={progress > 0 ? progress : null} className="size-4" />
+                <span className="tabular">
+                  {progress > 0 ? `Reading the file… ${Math.round(progress * 100)}%` : "Opening the file…"}
+                </span>
+              </div>
+            )}
           </div>
         )}
         {state === "error" && (

@@ -845,6 +845,162 @@ async function removeTwistModels(page: Page) {
   modelTwists.splice(0);
 }
 
+/**
+ * The shared page's models (decision 0077), Carl Oscar's kind of idea: a few photos and five models sliced in the
+ * browser (one with parts in the air, a project of three plates, one in its own colours), shared, and opened by a
+ * guest. Leaves the browser signed out on the guest's page.
+ */
+const SHELF_IDEA = {
+  title: "Pasta shelf helpers",
+  note: "Little things for the pasta shelf: a knob for the jar, a rack to dry tagliatelle on, bins for the small shapes and a bracket to hold it all. One plate a weekend.",
+};
+const SHELF_PHOTOS = [
+  { file: "model-2.jpg", color: "#c9b79a" },
+  { file: "model-1.jpg", color: "#8a7458" },
+  { file: "model-3.jpg", color: "#3f6b55" },
+];
+
+/** More little things for the shelf, so the idea holds eleven models as Carl Oscar's does. */
+const SPOON_REST = {
+  name: "spoon-rest.stl",
+  bytes: boxesStl([
+    { at: [0, 0, 0], size: [70, 30, 3] },
+    { at: [0, 0, 3], size: [70, 3, 6] },
+    { at: [0, 27, 3], size: [70, 3, 6] },
+  ]),
+};
+const LID_STAND = {
+  name: "lid-stand.stl",
+  bytes: boxesStl([
+    { at: [0, 0, 0], size: [50, 40, 4] },
+    { at: [8, 4, 4], size: [4, 32, 36] },
+    { at: [38, 4, 4], size: [4, 32, 36] },
+  ]),
+};
+const MEASURE = {
+  name: "pasta-measure.stl",
+  bytes: boxesStl([
+    { at: [0, 0, 0], size: [60, 20, 4] },
+    { at: [0, 0, 4], size: [40, 20, 4] },
+    { at: [0, 0, 8], size: [20, 20, 4] },
+  ]),
+};
+/** The shelf's five, for the 3D view's shots; Carl Oscar's case, eleven, for the page's. */
+const SHELF_MODELS = [FUSILLI, RACK, BINS, HOTDOG, BRACKET];
+const SHELF_ALL = [...SHELF_MODELS, TWO_TONE, PLAQUE, MANY_BINS, SPOON_REST, LID_STAND, MEASURE];
+
+async function sharedShelf(page: Page, models = SHELF_MODELS) {
+  const origin = new URL(page.url() || "http://127.0.0.1").origin;
+  const headers = { Origin: origin };
+  await page.request.post("/api/session", { data: { username: "alex", password: "spaghetti-al-dente" }, headers });
+  const id = crypto.randomUUID();
+  modelItems.push(id);
+  await page.request.post("/api/items", { headers, data: { id, ...SHELF_IDEA } });
+  for (const [position, photo] of SHELF_PHOTOS.entries()) {
+    const bytes = readFileSync(join(import.meta.dirname, "../e2e/fixtures", photo.file));
+    const uploaded = await page.request.put(`/api/items/${id}/photos/${crypto.randomUUID()}`, {
+      headers,
+      multipart: {
+        width: "1200",
+        height: "900",
+        color: photo.color,
+        position: String(position),
+        large: { name: "large.jpg", mimeType: "image/jpeg", buffer: bytes },
+        thumb: { name: "thumb.jpg", mimeType: "image/jpeg", buffer: bytes },
+      },
+    });
+    if (!uploaded.ok()) throw new Error(`Uploading ${photo.file} failed: ${uploaded.status()}`);
+  }
+  await openIdea(page, id);
+  const kept = async () => {
+    const { item } = await (await page.request.get(`/api/items/${id}`)).json();
+    return (item?.files ?? []) as { hasThumb: boolean; slice?: { status: string } | null }[];
+  };
+  // One at a time, each once the server has its row: dropped together, they would be listed in the order their
+  // uploads happened to finish, and so differently at each width.
+  for (const [index, model] of models.entries()) {
+    await page.getByTestId("idea-file-input").setInputFiles({
+      name: model.name,
+      mimeType: model.name.endsWith(".3mf") ? "model/3mf" : "model/stl",
+      buffer: Buffer.from(model.bytes),
+    });
+    for (let tries = 0; (await kept()).length <= index; tries++) {
+      if (tries > 240) throw new Error(`${model.name} never reached the server`);
+      await page.waitForTimeout(250);
+    }
+  }
+  // Each is sliced here, one at a time, and its slice and picture saved: wait for the server to have them all.
+  for (let tries = 0; ; tries++) {
+    const files = await kept();
+    if (files.length === models.length && files.every((file) => file.hasThumb && file.slice?.status === "sliced"))
+      break;
+    if (tries > 900) throw new Error("The shelf's models never all reached the server sliced");
+    await page.waitForTimeout(500);
+  }
+  const token = await guestShare(page, "items", id);
+  await page.goto(`/s/${token}`);
+  await page.locator("h1").first().waitFor();
+  await page
+    .locator(".gp-file")
+    .nth(models.length - 1)
+    .waitFor();
+}
+
+/** Opens the shared page's 3D view of the plate whose picture says this, and waits for the print to be drawn. */
+async function openSharedViewer(page: Page, name: string | RegExp) {
+  await page.getByRole("button", { name }).first().click();
+  const dialog = page.getByRole("dialog", { name: "3D view" });
+  await dialog.locator("[data-viewer=ready]").waitFor({ timeout: 60_000 });
+  await page.waitForTimeout(400);
+}
+
+/** The bins twist keeps the Gridfinity bin, scaled to 84 % for the 42 mm grid, as its model; shared afterwards. */
+async function binsTwistWithModel(page: Page) {
+  const origin = new URL(page.url() || "http://127.0.0.1").origin;
+  await page.request.post("/api/session", {
+    data: { username: "alex", password: "spaghetti-al-dente" },
+    headers: { Origin: origin },
+  });
+  await page.request.patch(`/api/twists/${SEED_TWIST_IDS.bins}`, {
+    data: { recipeId: SEED_RECIPE_IDS.petg },
+    headers: { Origin: origin },
+  });
+  await page.goto(`/twists/${SEED_TWIST_IDS.bins}`);
+  await page.getByRole("button", { name: "Adapt an STL" }).click();
+  const sheet = page.getByRole("dialog", { name: "Adapt an STL" });
+  await sheet.getByTestId("adapt-file-input").setInputFiles({
+    name: "gridfinity-bin-2x1.stl",
+    mimeType: "model/stl",
+    buffer: gridfinityBin(),
+  });
+  await sheet.getByRole("textbox", { name: "Scale" }).fill("84");
+  await sheet.getByRole("button", { name: "Keep with the twist" }).click();
+  await sheet.waitFor({ state: "hidden" });
+  for (let tries = 0; ; tries++) {
+    const { twist } = await (await page.request.get(`/api/twists/${SEED_TWIST_IDS.bins}`)).json();
+    if (twist?.model?.hasThumb && twist.model.slice?.status === "sliced") break;
+    if (tries > 240) throw new Error("The bins twist's model never reached the server sliced");
+    await page.waitForTimeout(500);
+  }
+  await openShared("twists", SEED_TWIST_IDS.bins)(page);
+}
+
+async function unshareBinsTwist(page: Page) {
+  await asAlex(page, async (origin) => {
+    const { twist } = await (await page.request.get(`/api/twists/${SEED_TWIST_IDS.bins}`)).json();
+    if (twist?.model) {
+      await page.request.delete(`/api/twists/${SEED_TWIST_IDS.bins}/file/${twist.model.id}`, {
+        headers: { Origin: origin },
+      });
+    }
+    await page.request.patch(`/api/twists/${SEED_TWIST_IDS.bins}`, {
+      data: { recipeId: null },
+      headers: { Origin: origin },
+    });
+  });
+  await unshareAll(page);
+}
+
 const BEFORE_MAIN = !!process.env.SG_BEFORE;
 
 /** Every read of an item answers with a drafted model page that names this material (the stand-in has no page to read). */
@@ -2074,29 +2230,130 @@ export const shots: Shot[] = [
     cleanup: unshareAll,
   },
   {
-    // The bins' twist, with the PETG recipe as how we print it (only for this shot: cleanup takes it off again).
+    // The bins' twist, with the PETG recipe as how we print it and the bin it keeps as its model, sliced (only for
+    // this shot: cleanup takes both off again).
     name: "shared-twist",
     path: "/sign-in",
     signedOut: true,
     fullPage: true,
+    prepare: binsTwistWithModel,
+    cleanup: unshareBinsTwist,
+  },
+  {
+    // Carl Oscar's case (decision 0077): photos, then eleven models as the app's cards, each opening its 3D view; one
+    // with parts in the air, a project's plate 1 of 3, models in their own colours, one in four filaments.
+    name: "shared-models",
+    path: "/sign-in",
+    signedOut: true,
+    fullPage: true,
+    prepare: (page) => sharedShelf(page, SHELF_ALL),
+    cleanup: async (page) => {
+      await unshareAll(page);
+      await asAlex(page, () => removeModelItems(page));
+    },
+  },
+  {
+    // The same eleven on a computer's screen, scrolled to about the eighth: the photos stay in view beside them.
+    name: "shared-models-scrolled",
+    path: "/sign-in",
+    signedOut: true,
+    width: 1440,
+    why: "the photos stay beside the models only on a computer",
     prepare: async (page) => {
-      await asAlex(page, (origin) =>
-        page.request.patch(`/api/twists/${SEED_TWIST_IDS.bins}`, {
-          data: { recipeId: SEED_RECIPE_IDS.petg },
-          headers: { Origin: origin },
-        }),
-      );
-      await openShared("twists", SEED_TWIST_IDS.bins)(page);
+      await sharedShelf(page, SHELF_ALL);
+      await page
+        .locator(".gp-file")
+        .nth(7)
+        .evaluate((card) => {
+          const box = card.getBoundingClientRect();
+          window.scrollBy(0, box.top + box.height / 2 - window.innerHeight / 2);
+        });
+      await page.waitForTimeout(300);
     },
     cleanup: async (page) => {
-      await asAlex(page, (origin) =>
-        page.request.patch(`/api/twists/${SEED_TWIST_IDS.bins}`, {
-          data: { recipeId: null },
-          headers: { Origin: origin },
-        }),
-      );
       await unshareAll(page);
+      await asAlex(page, () => removeModelItems(page));
     },
+  },
+  {
+    // A guest taps the knob's plate: the app's own 3D view of how it prints, in a sheet over the page.
+    name: "shared-models-3d",
+    path: "/sign-in",
+    signedOut: true,
+    prepare: async (page) => {
+      await sharedShelf(page);
+      await openSharedViewer(page, /fusilli-knob\.stl\s*, in 3D$/);
+    },
+    cleanup: async (page) => {
+      await unshareAll(page);
+      await asAlex(page, () => removeModelItems(page));
+    },
+  },
+  {
+    // A build's attempt, its plate opened in 3D from the shared page: the tugboat's sliced file, every layer.
+    name: "shared-build-3d",
+    path: "/sign-in",
+    signedOut: true,
+    prepare: async (page) => {
+      await openShared("items", SEED_BUILD_IDS.tugboat)(page);
+      await openSharedViewer(page, /^tugboat\.gcode\.3mf\s*, See how it prints/);
+    },
+    cleanup: unshareAll,
+  },
+  {
+    // A keyboard reaches the twist's model card: the focus ring goes round the whole card, which is its button.
+    name: "shared-twist-focus",
+    path: "/sign-in",
+    signedOut: true,
+    width: 1440,
+    why: "a keyboard's focus ring; a phone has none",
+    prepare: async (page) => {
+      await binsTwistWithModel(page);
+      const card = page.locator(".gp-file .gp-open").first();
+      await card.focus();
+      await page.keyboard.press("Shift+Tab");
+      await page.keyboard.press("Tab");
+      await card.evaluate((button) => button.closest(".gp-file")?.scrollIntoView({ block: "center" }));
+      await page.waitForTimeout(300);
+    },
+    cleanup: unshareBinsTwist,
+  },
+  {
+    // The sheet opens at once while the viewer's code is on its way: a breathing dot where the print will stand.
+    name: "shared-build-3d-loading",
+    path: "/sign-in",
+    signedOut: true,
+    prepare: async (page) => {
+      await openShared("items", SEED_BUILD_IDS.tugboat)(page);
+      // The viewer's code never comes (the built page's chunk, or the dev server's module).
+      await page.route(/\/(assets\/guest\/viewer-[\w-]+\.js|src\/guest\/viewer\.tsx)(\?.*)?$/, () => undefined);
+      await page
+        .getByRole("button", { name: /^tugboat\.gcode\.3mf\s*, See how it prints/ })
+        .first()
+        .click();
+      await page.locator(".gp-viewer-wait").waitFor();
+      await page.waitForTimeout(400);
+    },
+    cleanup: unshareAll,
+  },
+  {
+    // Offline: the viewer's code can't load, so the sheet says so, with a way to try again.
+    name: "shared-build-3d-offline",
+    path: "/sign-in",
+    signedOut: true,
+    prepare: async (page) => {
+      await openShared("items", SEED_BUILD_IDS.tugboat)(page);
+      await page.route(/\/(assets\/guest\/viewer-[\w-]+\.js|src\/guest\/viewer\.tsx)(\?.*)?$/, (route) =>
+        route.abort(),
+      );
+      await page
+        .getByRole("button", { name: /^tugboat\.gcode\.3mf\s*, See how it prints/ })
+        .first()
+        .click();
+      await page.getByRole("button", { name: "Try again" }).waitFor();
+      await page.waitForTimeout(300);
+    },
+    cleanup: unshareAll,
   },
   {
     // A photo opened large over the shared page (a :target view, no script).

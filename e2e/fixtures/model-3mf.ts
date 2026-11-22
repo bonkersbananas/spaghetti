@@ -371,10 +371,11 @@ const PLATE_PICTURE = Uint8Array.from(
 /**
  * A MakerWorld-style Bambu project of stackable bins in three heights, a plate each (120, 96 and 57.6 mm), laid out
  * on Bambu's plate grid (1.2 bed sizes apart: plate 2 at x + 307.2, plate 3 at y - 307.2) with the project's own
- * pictures. Every bin is 70 mm square and stands where its plate's middle is.
+ * pictures. Every bin is 70 mm square and stands where its plate's middle is. `tall` gives other heights (low ones
+ * slice quicker).
  */
-export function platesProject(count = 3): Uint8Array {
-  const heights = [120, 96, 57.6, 80, 40, 108, 70].slice(0, count);
+export function platesProject(count = 3, tall: number[] = [120, 96, 57.6, 80, 40, 108, 70]): Uint8Array {
+  const heights = tall.slice(0, count);
   // Bambu's grid: round(sqrt(plates)) columns (one more if that fell short), 1.2 beds apart, rows going down.
   const root = Math.sqrt(count);
   const columns = Math.max(1, root > Math.round(root) ? Math.round(root) + 1 : Math.round(root));

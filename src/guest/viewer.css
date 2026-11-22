@@ -1,0 +1,61 @@
+/*
+ * The shared page's 3D view (decision 0077): the app's tokens and the Tailwind utilities the app's PrintViewer and the
+ * pieces it is built from use, nothing else. No preflight for the whole page (guest.css is the page's own); the
+ * viewer's corner of it (.gv-root, the sheet's stage) gets the few resets the app's components expect.
+ */
+@layer theme, base, utilities;
+@import "tailwindcss/theme.css" layer(theme);
+@import "tailwindcss/utilities.css" layer(utilities) source(none);
+@import "../client/styles/tokens.css";
+@import "../client/styles/viewer.css";
+
+@source "../client/components/viewer";
+@source "../client/components/ui/Button.tsx";
+@source "../client/components/ui/Chip.tsx";
+@source "../client/components/ui/Kbd.tsx";
+@source "../client/components/ui/LayerSlider.tsx";
+@source "../client/components/ui/ProgressRing.tsx";
+@source "../client/components/ui/PulseDot.tsx";
+@source "../client/components/ui/SegmentedControl.tsx";
+@source "../client/components/ui/Swatch.tsx";
+
+/* Hover is for a real mouse or trackpad, as in the app (app.css). */
+@custom-variant hover {
+  @media (hover: hover) and (pointer: fine) {
+    &:hover {
+      @slot;
+    }
+  }
+}
+
+@layer base {
+  .gv-root,
+  .gv-root *,
+  .gv-root ::before,
+  .gv-root ::after {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+    border: 0 solid;
+  }
+
+  .gv-root button,
+  .gv-root input {
+    font: inherit;
+    letter-spacing: inherit;
+    color: inherit;
+    background-color: transparent;
+    border-radius: 0;
+    appearance: none;
+  }
+
+  .gv-root button {
+    cursor: pointer;
+  }
+
+  .gv-root svg,
+  .gv-root canvas {
+    display: block;
+    vertical-align: middle;
+  }
+}

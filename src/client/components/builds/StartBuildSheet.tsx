@@ -17,9 +17,11 @@ import { PickTile } from "@/components/ui/RankRow";
 import { Sheet } from "@/components/ui/Sheet";
 import { startBuild } from "@/lib/builds";
 import { type ItemView, useIdeas } from "@/lib/items";
+import { modelAccept } from "@/lib/model-pick";
 import { itemName } from "@/lib/recent";
-import { isSlicerFile, SLICER_ACCEPT, useSlicerDropTarget } from "@/lib/slicer-drop";
+import { isSlicerFile, useSlicerDropTarget } from "@/lib/slicer-drop";
 import { startBuildFrom } from "@/lib/start-build";
+import { takeModels } from "@/lib/take-models";
 import { useIsDesktop } from "@/lib/use-media-query";
 
 interface StartBuildSheetProps {
@@ -132,9 +134,9 @@ export function StartBuildSheet({ open, onOpenChange, onFromScratch }: StartBuil
   }
 
   const filePicker = useFilePicker({
-    accept: SLICER_ACCEPT,
+    accept: modelAccept(),
     testId: "build-file-input",
-    onFiles: (files) => files[0] && withFile(files[0]),
+    onFiles: (files) => void takeModels(files.slice(0, 1), withFile),
   });
   // A model dropped anywhere while the sheet is open starts the build.
   useSlicerDropTarget((file) => withFile(file), open);

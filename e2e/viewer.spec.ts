@@ -195,7 +195,7 @@ test("a file with no G-code says so instead of drawing nothing", async ({ page }
   });
   await page.goto(`/builds/${itemId}`);
   await page.getByRole("button", { name: `See ${TUGBOAT_FILE_NAME} in 3D` }).click();
-  await expect(page.getByRole("dialog", { name: "3D view" }).getByText(/no G-code|Could not read/)).toBeVisible({
+  await expect(page.getByRole("dialog", { name: "3D view" }).getByText(/no toolpaths|Could not read/)).toBeVisible({
     timeout: 20_000,
   });
 });

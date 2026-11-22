@@ -355,7 +355,7 @@ describe("readToolpaths", () => {
   it("says so for a file with no G-code", async () => {
     const { zipSync, strToU8 } = await import("fflate");
     const project = zipSync({ "3D/3dmodel.model": strToU8("<model/>") });
-    await expect(readToolpaths(new Blob([project as BlobPart]))).rejects.toThrow(/no G-code/);
+    await expect(readToolpaths(new Blob([project as BlobPart]))).rejects.toThrow(/no toolpaths yet/);
     await expect(readToolpaths(new Blob(["not a zip"]))).rejects.toThrow();
   });
 });
