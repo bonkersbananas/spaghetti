@@ -838,16 +838,19 @@ html:has(.gp-lightbox:target) {
     inset 0 0 0 1px color-mix(in srgb, var(--sg-ink) 15%, transparent);
 }
 
-/* A light filament on a light panel: SpoolDisc's firmer rim, and a little more shade and light to round it. */
+/*
+ * A light filament on a light panel: no highlight would show, so the far side gets real shade and the bead a small
+ * drop onto the card, which round it into a ball; a quieter rim than a radio button's ring.
+ */
 .gp-swatch--light {
   background-image: radial-gradient(
-    circle at 32% 26%,
-    color-mix(in srgb, var(--sg-cream) 60%, transparent),
-    transparent 55%
+    circle at 35% 30%,
+    transparent 45%,
+    color-mix(in srgb, var(--sg-ink) 24%, transparent) 100%
   );
   box-shadow:
-    inset -1px -1.5px 2.5px color-mix(in srgb, var(--sg-ink) 22%, transparent),
-    inset 0 0 0 1px color-mix(in srgb, var(--sg-ink) 30%, transparent);
+    0 1px 1.5px color-mix(in srgb, var(--sg-ink) 15%, transparent),
+    inset 0 0 0 1px color-mix(in srgb, var(--sg-ink) 18%, transparent);
 }
 
 .gp-dl {
@@ -1110,11 +1113,11 @@ html:has(.gp-lightbox:target) {
   color: var(--sg-ink-ghost);
 }
 
-/* What it is sliced with, in the settings row's words: quiet text here, where nothing opens. */
+/* What it is sliced with, in the settings row's words: as quiet as the name and size above it. */
 .gp-file-settings {
   font-size: var(--sg-text-small);
   line-height: var(--sg-text-small-lh);
-  color: var(--sg-ink-soft);
+  color: var(--sg-ink-faint);
 }
 
 /* What prints it: each filament's colour before its name, so a light one reads as the colour of those words. */
@@ -1322,7 +1325,6 @@ html:has(.gp-lightbox:target) {
   .gp-attempt-file--3d {
     align-self: flex-start;
     width: fit-content;
-    min-width: min(100%, 18rem);
     max-width: 100%;
   }
 }
@@ -1353,7 +1355,7 @@ html.gp-viewing {
 }
 
 .gp-viewer::backdrop {
-  background: color-mix(in srgb, var(--sg-ink) 40%, transparent);
+  background: var(--sg-scrim);
   animation: gp-fade-in var(--sg-duration-base) var(--sg-ease-out);
 }
 
