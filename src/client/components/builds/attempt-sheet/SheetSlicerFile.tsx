@@ -273,7 +273,7 @@ export function SlicerFileSection({
   ideaFiles = [],
   onUseIdeaFile,
 }: {
-  /** Files kept with the idea: offered to the first attempt, one tap each. */
+  /** Files kept with the idea: offered to every attempt, one tap each. */
   ideaFiles?: AttemptFile[];
   onUseIdeaFile?: (file: AttemptFile) => void;
   state: SlicerState | null;
