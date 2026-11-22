@@ -1,5 +1,5 @@
 import type { AttemptMoved } from "@shared/api";
-import { filedWords, namesIn } from "@shared/print-match";
+import { filedWords, namesIn, readableTitle } from "@shared/print-match";
 import { inlineTime } from "@shared/time";
 import { useQuery } from "@tanstack/react-query";
 import { type ComponentProps, lazy, Suspense, useId, useState } from "react";
@@ -133,8 +133,13 @@ function WhichBuild({ item, attempt, onMore, readOnly }: WhichBuildProps) {
       </WhyLine>
     );
   }
-  // The build is named after the job until someone renames it: then the card's title says the name already.
-  const said = !!printName && printName.trim().toLowerCase() === item.title?.trim().toLowerCase();
+  // The build is named after the job until someone renames it: then the card's title says the name already, as the
+  // printer said it or as the bridge titled it ("UOBF fit test ring" for "UOBF-fit-test-ring(2)").
+  const title = item.title?.trim().toLowerCase();
+  const said =
+    !!printName &&
+    !!title &&
+    (printName.trim().toLowerCase() === title || readableTitle(printName)?.toLowerCase() === title);
   const { shared, sameFile, lines, names } = offerLines(offers);
   const pictures = picturesApart(
     offers.map((offer) => offer.build),

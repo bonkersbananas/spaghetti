@@ -341,6 +341,24 @@ export function shownName(name: string): string {
   return last.replace(/\.(gcode\.3mf|3mf|gcode|bgcode|stl|step|stp|obj)$/i, "").trim() || last;
 }
 
+/**
+ * A build's title from a print's name, as a person would write it, for the build the printer makes: no folder, no
+ * slicer's ending and no copy number Bambu Studio adds ("(2)"), hyphens and underscores as spaces, the first letter a
+ * capital and every other letter as it was. "UOBF-fit-test-ring(2)" is "UOBF fit test ring",
+ * "spaghetti-mascot-tomato-40mm-v2(2)" is "Spaghetti mascot tomato 40mm v2". Only a number in parentheses at the end
+ * is a copy: "Smiley Box (print in place)" stays as it is. Null when nothing is left (titles are optional). Only the
+ * title: the print is matched on its name as the printer said it (`printKey`).
+ */
+export function readableTitle(name: string): string | null {
+  const last = name.split(/[\\/]/).pop() ?? name;
+  const words = last
+    .replace(/\.(gcode\.3mf|3mf|gcode|bgcode|stl|step|stp|obj)$/i, "")
+    .replace(/(\s*\(\d+\))+\s*$/, "")
+    .replace(/[-_\s]+/g, " ")
+    .trim();
+  return words ? words.charAt(0).toLocaleUpperCase() + words.slice(1) : null;
+}
+
 /** The file names a reason names, as people see them (for keeping each whole on a line). */
 export function namesIn(reasons: readonly MatchReason[]): string[] {
   return reasons.flatMap((reason) => ("file" in reason ? [shownName(reason.file)] : []));

@@ -5,6 +5,7 @@ import {
   type PrintFacts,
   placePrint,
   printKey,
+  readableTitle,
   rowWords,
   scorePrint,
   sharedWords,
@@ -111,6 +112,28 @@ describe("Carl Oscar's fit-test ring", () => {
     ["Benchy.STL", "Benchy"],
   ])("shows %s as %s", (name, shown) => {
     expect(shownName(name)).toBe(shown);
+  });
+
+  it.each([
+    // Bambu's copy number goes, hyphens and underscores are spaces, the first letter is a capital.
+    ["UOBF-fit-test-ring(2)", "UOBF fit test ring"],
+    ["spaghetti-mascot-tomato-40mm-v2(2)", "Spaghetti mascot tomato 40mm v2"],
+    ["/sdcard/cache/UOBF-fit-test-ring(2).gcode.3mf", "UOBF fit test ring"],
+    ["bath-boat (1).3mf", "Bath boat"],
+    ["planter-v2(2)(1)", "Planter v2"],
+    ["bracket_v2.gcode.3mf", "Bracket v2"],
+    ["Desk  hook__final", "Desk hook final"],
+    ["öresund-bridge", "Öresund bridge"],
+    // Only a trailing number in parentheses is a copy: words in parentheses stay, and so does the rest's case.
+    ["Smiley Box (print in place)", "Smiley Box (print in place)"],
+    ["3DBenchy", "3DBenchy"],
+    ["Model (2) of the bridge", "Model (2) of the bridge"],
+  ])("titles a build the printer makes for %s as %s", (name, title) => {
+    expect(readableTitle(name)).toBe(title);
+  });
+
+  it.each(["", "  ", ".gcode.3mf", "(2)", "--__"])("titles nothing when %j says nothing", (name) => {
+    expect(readableTitle(name)).toBeNull();
   });
 
   it("asks when the build was started yesterday: a name alone is a suggestion, not a match", () => {

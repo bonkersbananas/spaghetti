@@ -1,15 +1,13 @@
 import { createHash } from "node:crypto";
+import { readableTitle } from "../src/shared/print-match.ts";
 
-/** A build's title from a print's name: "bracket_v2.gcode.3mf" → "bracket v2". Null when nothing is left (titles are optional). */
+/**
+ * The title of the build the bridge makes for a print, as a person would write it (`readableTitle`):
+ * "UOBF-fit-test-ring(2).gcode.3mf" → "UOBF fit test ring". At most 120 characters; null when nothing is left
+ * (titles are optional). The print's own name goes to the app as the printer said it, for matching.
+ */
 export function titleFromJob(name: string): string | null {
-  const cleaned = name
-    .replace(/^.*[\\/]/, "")
-    .replace(/\.(gcode\.)?3mf$/i, "")
-    .replace(/\.gcode$/i, "")
-    .replace(/[_]+/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-  return cleaned ? cleaned.slice(0, 120) : null;
+  return readableTitle(name)?.slice(0, 120) ?? null;
 }
 
 /**

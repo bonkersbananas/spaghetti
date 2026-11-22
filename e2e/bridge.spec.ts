@@ -95,10 +95,10 @@ test("a print from the printer to the journal: attached file, progress, end, pho
     await expect
       .poll(
         async () =>
-          (await builds()).find((item: { title: string }) => item.title === "bracket v2")?.attempts[0]?.file?.name,
+          (await builds()).find((item: { title: string }) => item.title === "Bracket v2")?.attempts[0]?.file?.name,
       )
       .toBe(`${NAME}.gcode.3mf`);
-    const item = (await builds()).find((candidate: { title: string }) => candidate.title === "bracket v2");
+    const item = (await builds()).find((candidate: { title: string }) => candidate.title === "Bracket v2");
     const attempt = item.attempts[0];
     expect(attempt.createdVia).toBe(agent.id);
     expect(attempt.outcome).toBeNull();

@@ -1,3 +1,4 @@
+import { readableTitle } from "@shared/print-match";
 import { relativeTime } from "@shared/time";
 import { useQuery } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
@@ -25,9 +26,6 @@ interface MoveAttemptSheetProps {
   /** Opened from the printer's question, whose guesses the card showed already: they are left out here. */
   withoutGuesses?: boolean;
 }
-
-/** A file's name as a build's title: "UOBF-fit-test-ring.gcode.3mf" → "UOBF-fit-test-ring". */
-const titleOf = (name: string | undefined) => name?.replace(/\.(gcode\.)?3mf$|\.(gcode|stl)$/i, "").trim() || null;
 
 const nameOf = (build: ItemView) => itemName(build, build.stage === "idea" ? "idea" : "build");
 
@@ -192,7 +190,11 @@ export function MoveAttemptSheet({ open, onOpenChange, item, attempt, withoutGue
                   ? `The one the printer made: ${print?.name ?? "untitled"}`
                   : "A new build, named after its file"
               }
-              onSelect={() => moveTo({ newBuild: { title: ownElsewhere ? null : titleOf(attempt.file?.name) } })}
+              onSelect={() =>
+                moveTo({
+                  newBuild: { title: ownElsewhere ? null : attempt.file ? readableTitle(attempt.file.name) : null },
+                })
+              }
             />
           )}
         </div>
