@@ -1,3 +1,4 @@
+import { isOffTheBed } from "@shared/print-progress";
 import { relativeTime } from "@shared/time";
 import { Link } from "@tanstack/react-router";
 import { OutcomeChip } from "@/components/builds/Outcome";
@@ -47,7 +48,7 @@ export function PrintedRow({ build, fallback }: { build: ItemView; fallback?: Ph
         <span className="flex min-w-0 flex-1 flex-col gap-1">
           <span className="text-body text-ink truncate font-semibold">{build.title?.trim() || "Untitled build"}</span>
           <span className="flex items-center gap-2">
-            {last ? <OutcomeChip outcome={last.outcome} /> : null}
+            {last ? <OutcomeChip outcome={last.outcome} offTheBed={isOffTheBed(last)} /> : null}
             <span className="text-small text-ink-faint">{last ? when : `Started ${when}`}</span>
           </span>
         </span>

@@ -1,6 +1,7 @@
 import { isOutcome, type Outcome, outcomeLabel } from "@shared/attempts";
 import { isOffTheBed } from "@shared/print-progress";
 import type { ReactNode } from "react";
+import type { Step } from "@/components/builds/Outcome";
 import { coverPhoto } from "@/components/ui/Card";
 import { MetaList } from "@/components/ui/MetaList";
 import { cn } from "@/lib/cn";
@@ -12,17 +13,19 @@ import { usePrintProgress } from "@/lib/print-progress";
  * A build as one row to pick, in "Add to a build" and "Which build is this?": its cover small, then how it stands
  * ("On the bed · 30 min left", "Partly · 3 attempts").
  */
-export const inks: Record<Outcome | "printing", string> = {
+export const inks: Record<Step, string> = {
   success: "text-basil-ink",
   partial: "text-semolina-ink",
   failed: "text-tomato-ink",
   printing: "text-semolina-ink",
+  offBed: "text-ink-soft",
 };
-export const tiles: Record<Outcome | "printing", string> = {
+export const tiles: Record<Step, string> = {
   success: "bg-basil-soft text-basil-ink",
   partial: "bg-semolina-soft text-semolina-ink",
   failed: "bg-tomato-soft text-tomato-ink",
   printing: "bg-semolina-soft text-semolina-ink",
+  offBed: "bg-ink/8 text-ink-soft",
 };
 
 /** The build's cover (`coverOf`), as small as a pick row's picture. Null: the glyph tile stands in for a note. */

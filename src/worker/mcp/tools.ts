@@ -19,7 +19,14 @@ import type {
   UpkeepResponse,
   WhatWorkedResponse,
 } from "../../shared/api.ts";
-import { FAILURE_TAGS, OUTCOME_LABELS, OUTCOMES, outcomeLabel, SUCCESS_NOTES } from "../../shared/attempts.ts";
+import {
+  FAILURE_TAGS,
+  OUTCOME_LABELS,
+  OUTCOMES,
+  outcomeLabel,
+  SUCCESS_NOTES,
+  unansweredWord,
+} from "../../shared/attempts.ts";
 import { COMMENT_MAX } from "../../shared/comments.ts";
 import { OUTCOME_FILTERS } from "../../shared/journal.ts";
 import type { ScoutResponse } from "../../shared/scout.ts";
@@ -120,12 +127,13 @@ const materialArg = z.string().max(20).optional().describe('A filament type such
 
 // --- formatting: short text a model can read and act on ------------------------------------------
 
-const outcomeWord = (outcome: string | null) => outcomeLabel(outcome) ?? "printing";
+const outcomeWord = (outcome: string | null, endedAt?: number | null) =>
+  outcomeLabel(outcome) ?? unansweredWord({ endedAt });
 
 function itemLine(hit: ItemHit): string {
   const name = hit.item.title?.trim() || hit.item.note.split("\n")[0]?.slice(0, 80) || "Untitled";
   const attempts = hit.attempts
-    ? `, ${hit.attempts} ${hit.attempts === 1 ? "attempt" : "attempts"}, last ${outcomeWord(hit.lastOutcome)}`
+    ? `, ${hit.attempts} ${hit.attempts === 1 ? "attempt" : "attempts"}, last ${outcomeWord(hit.lastOutcome, hit.lastEndedAt)}`
     : "";
   return `- ${name} (${hit.item.stage}${attempts}) build_id: ${hit.item.id}`;
 }
@@ -158,7 +166,7 @@ function attemptLine(hit: AttemptHit & { sameBuild?: boolean }): string {
   const results = describeResults(a.settings);
   const name = hit.item.title?.trim() || "Untitled";
   return [
-    `- ${name}, attempt ${hit.number}${hit.partsLabel ? ` · ${hit.partsLabel}` : ""}: ${outcomeWord(a.outcome)}${hit.sameBuild ? " (this build)" : ""} (build_id: ${hit.item.id}, attempt_id: ${a.id})`,
+    `- ${name}, attempt ${hit.number}${hit.partsLabel ? ` · ${hit.partsLabel}` : ""}: ${outcomeWord(a.outcome, a.endedAt)}${hit.sameBuild ? " (this build)" : ""} (build_id: ${hit.item.id}, attempt_id: ${a.id})`,
     a.note.trim() && `  note: ${a.note.trim()}`,
     settings.length && `  settings: ${settings.join(", ")}`,
     results.length && `  result: ${results.join(", ")}`,

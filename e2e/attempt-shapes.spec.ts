@@ -3,13 +3,22 @@ import { signIn } from "./helpers.ts";
 
 const origin = (page: Page) => new URL(page.url()).origin;
 
+let hadBridge = false;
+
 test.beforeEach(async ({ page }) => {
   await signIn(page);
+  hadBridge = !!(await (await page.request.get("/api/printer")).json()).bridge;
 });
 
 test.afterEach(async ({ page }) => {
   const { items } = await (await page.request.get("/api/items?stage=idea,building,done,shelved")).json();
   for (const item of items) await page.request.delete(`/api/items/${item.id}`, { headers: { Origin: origin(page) } });
+  // The test's bridge goes again where there was none, and no working token stays behind.
+  if (!hadBridge) await page.request.delete("/api/printer/bridge", { headers: { Origin: origin(page) } });
+  const { agents } = await (await page.request.get("/api/agents")).json();
+  for (const agent of agents)
+    for (const token of agent.tokens)
+      await page.request.delete(`/api/agents/${agent.id}/tokens/${token.id}`, { headers: { Origin: origin(page) } });
 });
 
 /** A build the way the printer bridge's weekend left them: a person's partial, the printer's filing, one off the bed. */

@@ -1,7 +1,7 @@
 import { env } from "cloudflare:workers";
 import { beforeEach, describe, expect, it } from "vitest";
 import TEMPLATE from "../../guest.html?raw";
-import type { ItemResponse } from "../../src/shared/api.ts";
+import type { ItemHit, ItemResponse } from "../../src/shared/api.ts";
 import type { ShareResponse } from "../../src/shared/shares.ts";
 import { getDb } from "../../src/worker/db/index.ts";
 import { guestRoute } from "../../src/worker/guest/index.tsx";
@@ -71,6 +71,12 @@ describe("attempts with no outcome, or one the app has no word for", () => {
     const html = await response.text();
     expect(html).toContain("Off the bed");
     expect(html).toContain("Printing");
+    // Off the bed is drawn neutral, like in the app: only the print on the bed gets the printing look.
+    expect(html).toContain("gp-outcome--offbed");
+    expect(html).toContain("gp-trail-step--offbed");
+    // (The attempt with the outcome nobody knows has no end either, so it reads as printing too.)
+    expect(html.match(/gp-outcome--printing/g)).toHaveLength(2);
+    expect(html.match(/gp-outcome--offbed/g)).toHaveLength(1);
     expect(html).not.toContain("undefined");
   });
 
@@ -82,6 +88,14 @@ describe("attempts with no outcome, or one the app has no word for", () => {
     expect(notebook).toContain("Lid clip, by Alex Rivera: off the bed, not answered yet.");
     expect(notebook).toContain("Lid clip, by Alex Rivera: still printing.");
     expect(notebook).not.toContain("undefined");
+  });
+
+  it("tells a search hit when its last attempt stopped, so agents hear off the bed, not printing", async () => {
+    await env.DB.prepare("UPDATE attempts SET ended_at = ? WHERE id = ?")
+      .bind(at("2026-01-14T15:00:00+01:00"), printing)
+      .run();
+    const found = await (await request("/api/search?q=lid", { cookie })).json<{ builds: ItemHit[] }>();
+    expect(found.builds[0]).toMatchObject({ lastOutcome: null, lastEndedAt: at("2026-01-14T15:00:00+01:00") });
   });
 
   it("keeps every screen's data loading", async () => {

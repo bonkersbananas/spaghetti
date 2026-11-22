@@ -2230,6 +2230,15 @@ export const shots: Shot[] = [
     cleanup: unshareAll,
   },
   {
+    // A print that came off the bed with nobody saying how it went: a neutral "Off the bed", not the pulsing Printing.
+    name: "shared-build-off-bed",
+    path: "/sign-in",
+    signedOut: true,
+    fullPage: true,
+    prepare: openShared("items", SEED_BUILD_IDS.drawerDivider),
+    cleanup: unshareAll,
+  },
+  {
     // The bins' twist, with the PETG recipe as how we print it and the bin it keeps as its model, sliced (only for
     // this shot: cleanup takes both off again).
     name: "shared-twist",
@@ -5360,6 +5369,19 @@ export const shots: Shot[] = [
     },
   },
   {
+    // A print that came off the bed, beside the one before it: "Off the bed", not Printing.
+    name: "compare-off-bed",
+    path: `/builds/${SEED_BUILD_IDS.drawerDivider}`,
+    prepare: async (page) => {
+      await openCompare(page);
+      await page.getByRole("dialog", { name: /^Attempt \d+ and attempt \d+$/ }).waitFor();
+      await page.waitForTimeout(500);
+    },
+    cleanup: async (page) => {
+      await page.keyboard.press("Escape");
+    },
+  },
+  {
     // Desktop: the attempt's name opens a list of every attempt; picking one swaps that column.
     name: "compare-pickers",
     path: `/builds/${SEED_BUILD_IDS.headphoneStand}`,
@@ -5622,6 +5644,15 @@ export const shots: Shot[] = [
       const box = page.getByRole("searchbox", { name: "Search" });
       await box.press("ArrowDown");
       await box.blur();
+    },
+  },
+  {
+    // An attempt that came off the bed, found by its note: "Off the bed", not Printing.
+    name: "search-off-bed",
+    path: "/search?q=tangle",
+    prepare: async (page) => {
+      await page.getByText("Off the bed").first().waitFor();
+      await page.getByRole("searchbox", { name: "Search" }).blur();
     },
   },
   {
@@ -8148,6 +8179,19 @@ shots.push(
         await page.getByRole("button", { name: "Start building" }).first().waitFor();
         const sheet = await openMovePicker(page);
         await sheet.getByRole("button", { name: /Towel hook/ }).click();
+        await page.getByText("Which print is it about?").waitFor();
+        await page.waitForTimeout(300);
+      },
+      cleanup: closeDialog,
+    },
+    {
+      // The attempt that came off the bed is the newest: neutral "Off the bed" with the finish flag, not Printing.
+      name: "move-attempt-off-bed",
+      path: `/ideas/${looseCapture}`,
+      prepare: async (page) => {
+        await page.getByRole("button", { name: "Start building" }).first().waitFor();
+        const sheet = await openMovePicker(page);
+        await sheet.getByRole("button", { name: /Drawer divider/ }).click();
         await page.getByText("Which print is it about?").waitFor();
         await page.waitForTimeout(300);
       },
