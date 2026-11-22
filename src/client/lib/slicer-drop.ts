@@ -5,7 +5,6 @@
 import { type RefObject, useEffect, useRef } from "react";
 
 /** Sliced .gcode.3mf from Bambu Studio and Orca Slicer, and models to slice: .stl and plain .3mf. */
-export const SLICER_ACCEPT = ".3mf,.stl,model/3mf,model/stl,application/vnd.ms-package.3dmanufacturing-3dmodel+xml";
 export const isSlicerFile = (file: File) => /\.(3mf|stl)$/i.test(file.name);
 
 /** Where a dropped .3mf goes: the open attempt sheet first, else the build on screen. */

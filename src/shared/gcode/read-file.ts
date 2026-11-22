@@ -34,7 +34,14 @@ const MAX_SMALL = 8 * 1024 * 1024;
 const MAX_MODEL = 24 * 1024 * 1024;
 const GCODE = /^Metadata\/plate_(\d+)\.gcode$/;
 
-export class ToolpathError extends Error {}
+export class ToolpathError extends Error {
+  /** `noGcode`: the file has no G-code for the plate asked for (or none at all). */
+  readonly code?: "noGcode";
+  constructor(message: string, code?: "noGcode") {
+    super(message);
+    this.code = code;
+  }
+}
 
 /** A file as a blob, or as a stream with its length (a fetch's body, so nothing is held whole). */
 export type ToolpathSource = Blob | { stream: ReadableStream<Uint8Array>; size: number };
@@ -48,6 +55,8 @@ export async function readToolpaths(file: ToolpathSource, options: ReadToolpaths
   let reader: GcodeReader | null = null;
   let plate = 0;
   let sawGcode = false;
+  /** The plates the file has G-code for, to say which when the one asked for isn't there. */
+  const plates: number[] = [];
   let failure: Error | null = null;
   let tooBig = false;
 
@@ -71,6 +80,7 @@ export async function readToolpaths(file: ToolpathSource, options: ReadToolpaths
     const m = GCODE.exec(name);
     if (!m) return;
     const n = Number(m[1]);
+    plates.push(n);
     if (reader || (options.plate !== undefined && n !== options.plate)) return;
     sawGcode = true;
     plate = n;
@@ -113,7 +123,14 @@ export async function readToolpaths(file: ToolpathSource, options: ReadToolpaths
     if ((e as Error).name === "AbortError") throw e;
     throw new ToolpathError(`Could not read the file: ${(e as Error).message}`);
   }
-  if (!sawGcode || !reader) throw new ToolpathError("This file has no G-code (it was saved before slicing)");
+  if (!sawGcode || !reader) {
+    throw new ToolpathError(
+      plates.length && options.plate !== undefined
+        ? `This file has toolpaths for ${plates.length > 1 ? "plates" : "plate"} ${plates.sort((a, b) => a - b).join(", ")}, not plate ${options.plate}. Slice plate ${options.plate} and add that file.`
+        : "This file has no toolpaths yet: it was saved before slicing. Slice it, then add the sliced file (.gcode.3mf).",
+      "noGcode",
+    );
+  }
 
   const text = (name: string): string | undefined => {
     const parts = small.get(name);
