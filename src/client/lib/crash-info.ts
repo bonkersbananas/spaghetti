@@ -3,7 +3,7 @@ import { appVersion } from "./app-version";
 /** The component stack React reported for this very error, never an earlier crash's. */
 const caught = (error: unknown) => {
   const last = (window as { __crash?: { error: unknown; stack?: string } }).__crash;
-  return last?.error === error ? last.stack : undefined;
+  return last && last.error === error ? last.stack : undefined;
 };
 
 /** Everything Copy details gives: enough to find where it broke without the device in hand. */
