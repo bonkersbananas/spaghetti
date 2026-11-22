@@ -1,4 +1,5 @@
-import { OUTCOME_LABELS } from "@shared/attempts";
+import { outcomeLabel } from "@shared/attempts";
+import { isOffTheBed } from "@shared/print-progress";
 import { relativeTime } from "@shared/time";
 import { useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
@@ -29,12 +30,13 @@ interface MoveToBuildSheetProps {
 }
 
 function AttemptMeta({ attempt }: { attempt: AttemptView }) {
-  const left = useLeft(attempt.outcome ? undefined : attempt);
+  const offBed = isOffTheBed(attempt);
+  const left = useLeft(attempt.outcome || offBed ? undefined : attempt);
   const tone = attempt.outcome ?? "printing";
   return (
     <MetaList>
       <span className={cn("font-semibold", inks[tone])}>
-        {attempt.outcome ? OUTCOME_LABELS[attempt.outcome] : "Printing"}
+        {outcomeLabel(attempt.outcome) ?? (offBed ? "Off the bed" : "Printing")}
       </span>
       <span>{left ?? relativeTime(attempt.printedAt)}</span>
     </MetaList>

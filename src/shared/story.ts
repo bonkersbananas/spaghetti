@@ -1,7 +1,7 @@
 import type { AttemptFile, Item, Person } from "./api.ts";
 import {
   type AttemptSettings,
-  OUTCOME_LABELS,
+  outcomeLabel,
   plateName,
   shortPreset,
   type TagDefinition,
@@ -168,7 +168,7 @@ export function buildStory(item: Item, context: StoryContext): string {
   lines.push(`## Attempts (${item.attempts.length})`, "");
   if (!item.attempts.length) lines.push("_None yet._", "");
   item.attempts.forEach((attempt, index) => {
-    const outcome = attempt.outcome ? OUTCOME_LABELS[attempt.outcome] : "Printing";
+    const outcome = outcomeLabel(attempt.outcome) ?? (attempt.endedAt != null ? "Off the bed" : "Printing");
     const printed = attemptPartsLabel(attempt, item.parts);
     lines.push(
       `### Attempt ${index + 1}${printed ? ` · ${printed}` : ""}: ${outcome}`,

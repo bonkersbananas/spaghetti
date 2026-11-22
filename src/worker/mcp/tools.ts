@@ -19,7 +19,7 @@ import type {
   UpkeepResponse,
   WhatWorkedResponse,
 } from "../../shared/api.ts";
-import { FAILURE_TAGS, OUTCOME_LABELS, OUTCOMES, SUCCESS_NOTES } from "../../shared/attempts.ts";
+import { FAILURE_TAGS, OUTCOME_LABELS, OUTCOMES, outcomeLabel, SUCCESS_NOTES } from "../../shared/attempts.ts";
 import { COMMENT_MAX } from "../../shared/comments.ts";
 import { OUTCOME_FILTERS } from "../../shared/journal.ts";
 import type { ScoutResponse } from "../../shared/scout.ts";
@@ -120,8 +120,7 @@ const materialArg = z.string().max(20).optional().describe('A filament type such
 
 // --- formatting: short text a model can read and act on ------------------------------------------
 
-const outcomeWord = (outcome: string | null) =>
-  outcome ? OUTCOME_LABELS[outcome as keyof typeof OUTCOME_LABELS] : "printing";
+const outcomeWord = (outcome: string | null) => outcomeLabel(outcome) ?? "printing";
 
 function itemLine(hit: ItemHit): string {
   const name = hit.item.title?.trim() || hit.item.note.split("\n")[0]?.slice(0, 80) || "Untitled";

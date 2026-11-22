@@ -1,4 +1,4 @@
-import { OUTCOME_LABELS } from "@shared/attempts";
+import { outcomeLabel } from "@shared/attempts";
 import { daysLeft } from "@shared/deleted";
 import { inlineTime } from "@shared/time";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -106,7 +106,10 @@ function RecentlyDeleted() {
                       <span className="flex min-w-0 flex-1 flex-col">
                         <span className="text-body text-ink truncate font-semibold">Attempt of {of}</span>
                         <MetaList className="text-small text-ink-faint">
-                          <span>{entry.outcome ? OUTCOME_LABELS[entry.outcome] : "Was printing"}</span>
+                          <span>
+                            {outcomeLabel(entry.outcome) ??
+                              (entry.endedAt == null ? "Was printing" : "Was off the bed")}
+                          </span>
                           <span>printed {inlineTime(entry.printedAt)}</span>
                         </MetaList>
                         <span className="text-small text-ink-faint">{goesFor(entry.deletedAt)}</span>

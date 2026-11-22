@@ -1,5 +1,5 @@
 import type { Spool } from "@shared/api";
-import { OUTCOME_LABELS, OUTCOMES } from "@shared/attempts";
+import { OUTCOMES, outcomeLabel } from "@shared/attempts";
 import type { LabelField } from "@shared/label-read";
 import { gramsText } from "@shared/ledger";
 import { recipesFor } from "@shared/recipes";
@@ -583,7 +583,7 @@ function PrintedWith({ spool }: { spool: Spool }) {
           <MetaList className="text-small text-ink-faint">
             {counts.map(({ outcome, count }) => (
               <span key={outcome}>
-                {count} {OUTCOME_LABELS[outcome].toLowerCase()}
+                {count} {outcomeLabel(outcome)?.toLowerCase()}
               </span>
             ))}
           </MetaList>

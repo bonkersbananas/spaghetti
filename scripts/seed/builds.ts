@@ -53,6 +53,10 @@ interface SeedAttempt {
   partsFile?: 1 | 2;
   /** What it printed of the build's parts, by name, with the good pieces. */
   parts?: Array<{ name: string; count: number }>;
+  /** Filed by the printer bridge: `created_via` is its agent, `started_by` stays empty (nobody said who started it). */
+  viaPrinter?: boolean;
+  /** What the app made of the print the bridge filed (a `print_jobs` row): placed in this build, or asking which. */
+  printJob?: { name: string; placed: "matched" | "new"; asking?: boolean };
 }
 
 interface SeedBuild {
@@ -66,7 +70,12 @@ interface SeedBuild {
   attempts: SeedAttempt[];
   /** A build made of parts (the others stay simple). */
   parts?: Array<{ name: string; quantity: number }>;
+  /** The printer bridge made the build itself (its `created_via` is the printer's agent). */
+  viaPrinter?: boolean;
 }
+
+/** The printer bridge's agent, as the seed has it (a row in `agents` with `printer` set, so what it filed is the printer's). */
+export const SEED_PRINTER_AGENT = "5eed0000-0000-4000-8000-0000000a6e10";
 
 /** Stable ids, so screenshots can open a build or an attempt. */
 export const SEED_BUILD_IDS = {
@@ -83,6 +92,10 @@ export const SEED_BUILD_IDS = {
   drawerDividerAttempt: "5eed0000-0000-4000-8000-0000000f0902",
   /** The one build with parts: a hull in two halves, a deck and a paddle wheel, from a slicer file. */
   paddleSteamer: "5eed0000-0000-4000-8000-000000000109",
+  /** Builds with the shapes real prints made (see REAL_PRINT_BUILDS). */
+  starOrnament: "5eed0000-0000-4000-8000-000000000201",
+  lidClip: "5eed0000-0000-4000-8000-000000000202",
+  cableComb: "5eed0000-0000-4000-8000-000000000203",
 };
 
 const yellowPla = { type: "PLA", brand: "Bambu", colorHex: "#f2c230", colorName: "Sunflower yellow", amsSlot: "A2" };
@@ -902,6 +915,155 @@ const OLDER_BUILDS: SeedBuild[] = [
   },
 ];
 
+const redPla = { type: "PLA", brand: "Bambu", colorHex: "#b4332b", colorName: "Scarlet", amsSlot: "A3" };
+const ornamentBase: AttemptSettings = {
+  bedType: "Textured PEI Plate",
+  nozzle: "main",
+  nozzleDiameter: 0.4,
+  layerHeight: 0.16,
+  infillDensity: 15,
+  processPreset: "0.16mm Optimal @BBL X2D",
+  nozzleTemperature: 220,
+  bedTemperature: 55,
+};
+
+/**
+ * The shapes real prints made once the printer bridge ran (the first weekend of printing): printer-made attempts
+ * mixed with person-made ones in one build, a partial and a failure with no note and no tags, one attempt with four
+ * photos and one with none, a three-colour AMS print, a build in progress with a success last, and prints the app
+ * placed ("matched": straight into a build, "asking": which build is this?). Dates are all in the past, and none is
+ * on the bed or off it, so Today's blocks and the shots that count prints on the bed stay as they were.
+ */
+const REAL_PRINT_BUILDS: SeedBuild[] = [
+  {
+    id: SEED_BUILD_IDS.starOrnament,
+    by: "alex",
+    create: { title: "Star ornament", createdAgo: 6 * DAY },
+    stage: "building",
+    startedAgo: 5 * DAY,
+    attempts: [
+      {
+        // A person's, a failure with nothing written and no tags.
+        id: "5eed0000-0000-4000-8000-0000000e0101",
+        by: "alex",
+        ago: 4 * DAY + 2 * HOUR,
+        outcome: "failed",
+        finishedAfter: 25 * MIN,
+        settings: { ...ornamentBase, filaments: [jadeWhite, yellowPla], failedAtPercent: 12 },
+        photos: [{ file: "spaghetti-fail.svg", color: "#777065", crop: [300, 300, 600, 450] }],
+      },
+      {
+        // The printer's, a partial with no note and no tags.
+        id: "5eed0000-0000-4000-8000-0000000e0102",
+        by: "alex",
+        viaPrinter: true,
+        ago: 2 * DAY + 5 * HOUR,
+        outcome: "partial",
+        finishedAfter: 2 * HOUR + 10 * MIN,
+        settings: {
+          ...ornamentBase,
+          filaments: [jadeWhite, yellowPla, redPla],
+          estimatedMinutes: 120,
+          actualMinutes: 131,
+        },
+        photos: [{ file: "gear-set.svg", color: "#8a7f6f" }],
+        printJob: { name: "star-ornament-3c", placed: "matched" },
+      },
+      {
+        // The printer's, a three-colour print that worked, with four photos, last in a build still in progress.
+        id: "5eed0000-0000-4000-8000-0000000e0103",
+        by: "alex",
+        viaPrinter: true,
+        ago: DAY + 4 * HOUR,
+        outcome: "success",
+        finishedAfter: 2 * HOUR + 20 * MIN,
+        settings: {
+          ...ornamentBase,
+          filaments: [
+            { ...jadeWhite, grams: 9 },
+            { ...yellowPla, grams: 6 },
+            { ...redPla, grams: 4 },
+          ],
+          estimatedMinutes: 125,
+          actualMinutes: 128,
+          weightGrams: 19,
+        },
+        photos: [
+          { file: "gear-set.svg", color: "#8a7f6f" },
+          { file: "gear-set.svg", color: "#8a7f6f", crop: [200, 200, 600, 450], filter: "brightness(1.05)" },
+          { file: "gear-set.svg", color: "#8a7f6f", crop: [400, 300, 500, 375], filter: "saturate(1.1)" },
+          { file: "gear-set.svg", color: "#8a7f6f", crop: [100, 100, 700, 525], filter: "contrast(1.05)" },
+        ],
+        printJob: { name: "star-ornament-3c(2)", placed: "matched" },
+      },
+    ],
+  },
+  {
+    id: SEED_BUILD_IDS.lidClip,
+    by: "sam",
+    create: { title: "Lid clip", note: "For the flour tub.", createdAgo: 4 * DAY },
+    stage: "done",
+    startedAgo: 3 * DAY + 6 * HOUR,
+    finishedAgo: 2 * DAY + 20 * HOUR,
+    attempts: [
+      {
+        // A person's partial with nothing written, then the printer's success with no photo at all.
+        id: "5eed0000-0000-4000-8000-0000000e0201",
+        by: "sam",
+        ago: 3 * DAY + 4 * HOUR,
+        outcome: "partial",
+        finishedAfter: 40 * MIN,
+        settings: { filaments: [charcoal], layerHeight: 0.2, infillDensity: 25, estimatedMinutes: 45 },
+        photos: [{ file: "ams-hook.svg", color: "#c3ab8e" }],
+      },
+      {
+        id: "5eed0000-0000-4000-8000-0000000e0202",
+        by: "sam",
+        viaPrinter: true,
+        ago: 2 * DAY + 22 * HOUR,
+        outcome: "success",
+        finishedAfter: 44 * MIN,
+        settings: {
+          filaments: [charcoal],
+          layerHeight: 0.2,
+          infillDensity: 25,
+          estimatedMinutes: 45,
+          actualMinutes: 44,
+        },
+        printJob: { name: "lid-clip", placed: "matched" },
+      },
+    ],
+  },
+  {
+    // A build the printer made itself, for a print the app could not place: it still asks which build it is.
+    id: SEED_BUILD_IDS.cableComb,
+    by: "alex",
+    viaPrinter: true,
+    create: { title: "cable-comb-v2", createdAgo: 2 * DAY + 6 * HOUR },
+    stage: "building",
+    startedAgo: 2 * DAY + 6 * HOUR,
+    attempts: [
+      {
+        id: "5eed0000-0000-4000-8000-0000000e0301",
+        by: "alex",
+        viaPrinter: true,
+        ago: 2 * DAY + 6 * HOUR,
+        outcome: "success",
+        finishedAfter: 55 * MIN,
+        settings: {
+          filaments: [jadeWhite],
+          layerHeight: 0.2,
+          infillDensity: 15,
+          estimatedMinutes: 52,
+          actualMinutes: 55,
+        },
+        photos: [{ file: "cable-clips.svg", color: "#a89c8c" }],
+        printJob: { name: "cable-comb-v2", placed: "new", asking: true },
+      },
+    ],
+  },
+];
+
 /** Logs the attempts through the API, then backdates the dates the API sets to "now". */
 export async function seedBuilds(
   browser: Browser,
@@ -911,8 +1073,10 @@ export async function seedBuilds(
   now: number,
 ) {
   const headers = { Origin: origin };
-  const sql: string[] = [];
-  for (const build of [...SEED_BUILDS, ...OLDER_BUILDS]) {
+  const sql: string[] = [
+    `INSERT INTO agents (id, name, owner_id, created_at, printer) SELECT '${SEED_PRINTER_AGENT}', 'Printer bridge', id, ${now}, 1 FROM users WHERE username = 'alex';`,
+  ];
+  for (const build of [...SEED_BUILDS, ...OLDER_BUILDS, ...REAL_PRINT_BUILDS]) {
     if (build.create) {
       const { title, note = "", createdAgo, asIdea } = build.create;
       const created = await requests[build.by].post("/api/items", {
@@ -1010,6 +1174,17 @@ export async function seedBuilds(
           `UPDATE attempts SET created_at = ${now - attempt.ago}, ended_at = ${ended}, suggested_failure_tag = ${tag} WHERE id = '${attempt.id}';`,
         );
       }
+      if (attempt.viaPrinter) {
+        sql.push(
+          `UPDATE attempts SET created_via = '${SEED_PRINTER_AGENT}', started_by = NULL WHERE id = '${attempt.id}';`,
+        );
+      }
+      if (attempt.printJob) {
+        const { name, placed, asking = false } = attempt.printJob;
+        sql.push(
+          `INSERT INTO print_jobs (attempt_id, name, gcode_file, plate, estimate_minutes, placed, reasons, item_id, asking, created_at) VALUES ('${attempt.id}', '${name}', 'Metadata/plate_1.gcode', 1, ${attempt.settings.estimatedMinutes ?? "NULL"}, '${placed}', '${placed === "matched" ? '[{"kind":"words"},{"kind":"fresh"}]' : "[]"}', '${build.id}', ${asking ? 1 : 0}, ${now - attempt.ago});`,
+        );
+      }
     }
     if (build.stage !== "building") {
       // The final photo: the newest photo of the last attempt that worked, as finishing picks it.
@@ -1028,6 +1203,7 @@ export async function seedBuilds(
       });
       if (!patched.ok()) throw new Error(`Finishing ${build.id} failed: ${patched.status()}`);
     }
+    if (build.viaPrinter) sql.push(`UPDATE items SET created_via = '${SEED_PRINTER_AGENT}' WHERE id = '${build.id}';`);
     const finished = build.finishedAgo === undefined ? "NULL" : String(now - build.finishedAgo);
     sql.push(
       `UPDATE items SET started_at = ${now - build.startedAgo}, finished_at = ${finished} WHERE id = '${build.id}';`,

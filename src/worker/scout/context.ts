@@ -1,5 +1,5 @@
 import { and, desc, eq, inArray, isNull, ne } from "drizzle-orm";
-import { OUTCOME_LABELS, tagLabel } from "../../shared/attempts.ts";
+import { outcomeLabel, tagLabel } from "../../shared/attempts.ts";
 import { settingsMaterial } from "../../shared/recipes.ts";
 import { scoutKeysIn } from "../../shared/scout.ts";
 import { REMAINING_LABELS } from "../../shared/spools.ts";
@@ -99,7 +99,7 @@ export async function scoutNotebook(db: Db): Promise<ScoutNotebook> {
     for (const build of builds) {
       const own = tries.filter((attempt) => attempt.itemId === build.id);
       const material = [...new Set(own.map((attempt) => settingsMaterial(attempt.settings)).filter(Boolean))].join("/");
-      const outcomes = [...new Set(own.map((a) => (a.outcome ? OUTCOME_LABELS[a.outcome] : null)).filter(Boolean))];
+      const outcomes = [...new Set(own.map((a) => outcomeLabel(a.outcome)).filter(Boolean))];
       const wrong = [...new Set(own.flatMap((attempt) => attempt.failureTags))]
         .map((slug) => tagLabel("failure", slug))
         .slice(0, 4);

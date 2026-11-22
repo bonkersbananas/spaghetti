@@ -1,4 +1,4 @@
-import { OUTCOME_LABELS, OUTCOMES } from "@shared/attempts";
+import { OUTCOMES, outcomeLabel } from "@shared/attempts";
 import type { MonthBar } from "@shared/insights";
 import { outcomeDots } from "@/components/builds/Outcome";
 import { cn } from "@/lib/cn";
@@ -10,7 +10,7 @@ const total = (bar: MonthBar) => bar.success + bar.partial + bar.failed;
 /** "March: 14 prints, 10 worked, 1 partly, 3 spaghetti". */
 export function monthSentence(bar: MonthBar): string {
   const parts = OUTCOMES.filter((outcome) => bar[outcome] > 0).map(
-    (outcome) => `${bar[outcome]} ${OUTCOME_LABELS[outcome].toLowerCase()}`,
+    (outcome) => `${bar[outcome]} ${outcomeLabel(outcome)?.toLowerCase()}`,
   );
   return `${MONTHS[bar.month]}: ${total(bar)} ${total(bar) === 1 ? "print" : "prints"}${parts.length ? `, ${parts.join(", ")}` : ""}`;
 }
