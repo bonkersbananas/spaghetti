@@ -9,7 +9,7 @@ import type {
   PhotoResponse,
 } from "@shared/api";
 import { ONE_REQUEST_FILE_BYTES } from "@shared/api";
-import type { AttemptSettings, Outcome } from "@shared/attempts";
+import { type AttemptSettings, isOutcome, type Outcome } from "@shared/attempts";
 import type { AttemptPart } from "@shared/parts";
 import type { FileKind } from "@shared/slicing/types.ts";
 import { useSyncExternalStore } from "react";
@@ -218,7 +218,12 @@ class Outbox {
    * behind, or what the service worker queued (a notification's answer given with no signal).
    */
   async pickUp() {
-    const stored = await this.store.all().catch(() => [] as OutboxEntry[]);
+    // A finish stored in a shape this version doesn't know (an outcome it has no word for) is dropped, not shown.
+    const stored = (await this.store.all().catch(() => [] as OutboxEntry[])).map((entry) =>
+      entry.finishes?.some((f) => !isOutcome(f.outcome))
+        ? { ...entry, finishes: entry.finishes.filter((f) => isOutcome(f.outcome)) }
+        : entry,
+    );
     const known = new Set(this.state.entries.map((entry) => entry.itemId));
     // An entry this page already holds may have gained a finish from the service worker.
     for (const entry of stored) {
