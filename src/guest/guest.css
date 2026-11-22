@@ -1,8 +1,9 @@
 /*
  * The shared page (guest.html, written by src/worker/guest): one idea, build or twist for someone who isn't signed in
  * (decision 0075). Built on the app's tokens and faces (tokens.css, Fraunces and Figtree) and nothing else of the
- * app's: no script, no app shell, light only like the landing page. Everything here is the page's own (gp-…).
- * Photos first: a row to swipe on a phone, one large photo with the rest beside it on a computer.
+ * app's: no app shell, light only like the landing page, and one small script, for the 3D view (decision 0077).
+ * Everything here is the page's own (gp-…). Photos first: a row to swipe on a phone, one large photo with the rest
+ * beside it on a computer.
  */
 @import "../client/styles/tokens.css";
 
@@ -47,77 +48,83 @@
 
 /* ---- Base ---- */
 
-*,
-*::before,
-*::after {
-  box-sizing: border-box;
-}
+/*
+ * In a layer, as the app's preflight is: the page's own classes win over it, and so do the 3D view's utilities
+ * (src/guest/viewer.css), which load after it on a tap.
+ */
+@layer base {
+  *,
+  *::before,
+  *::after {
+    box-sizing: border-box;
+  }
 
-html {
-  color-scheme: light;
-  background: var(--sg-paper);
-  color: var(--sg-ink);
-  font-family: var(--gp-sans);
-  font-size: 100%;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-  -webkit-text-size-adjust: 100%;
-  text-rendering: optimizeLegibility;
-  scroll-padding-top: 1.5rem;
-}
+  html {
+    color-scheme: light;
+    background: var(--sg-paper);
+    color: var(--sg-ink);
+    font-family: var(--gp-sans);
+    font-size: 100%;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    -webkit-text-size-adjust: 100%;
+    text-rendering: optimizeLegibility;
+    scroll-padding-top: 1.5rem;
+  }
 
-body {
-  margin: 0;
-  font-size: var(--sg-text-body);
-  line-height: var(--sg-text-body-lh);
-  overflow-x: clip;
-}
+  body {
+    margin: 0;
+    font-size: var(--sg-text-body);
+    line-height: var(--sg-text-body-lh);
+    overflow-x: clip;
+  }
 
-h1,
-h2,
-h3,
-p,
-dl,
-dd,
-ul,
-ol {
-  margin: 0;
-}
+  h1,
+  h2,
+  h3,
+  p,
+  dl,
+  dd,
+  ul,
+  ol {
+    margin: 0;
+  }
 
-ul,
-ol {
-  padding: 0;
-  list-style: none;
-}
+  ul,
+  ol {
+    padding: 0;
+    list-style: none;
+  }
 
-img,
-svg {
-  display: block;
-  max-width: 100%;
-}
+  img,
+  svg {
+    display: block;
+    max-width: 100%;
+  }
 
-h1,
-h2,
-h3 {
-  font-family: var(--gp-display);
-  font-variation-settings:
-    "SOFT" 100,
-    "WONK" 0;
-  font-weight: 600;
-  text-wrap: balance;
-}
+  h1,
+  h2,
+  h3 {
+    font-family: var(--gp-display);
+    font-variation-settings:
+      "SOFT" 100,
+      "WONK" 0;
+    font-weight: 600;
+    text-wrap: balance;
+  }
 
-p {
-  text-wrap: pretty;
-}
+  p {
+    text-wrap: pretty;
+  }
 
-a {
-  color: inherit;
-}
+  a {
+    color: inherit;
+  }
 
-::selection {
-  background: var(--sg-semolina-soft);
-  color: var(--sg-ink);
+  ::selection {
+    background: var(--sg-semolina-soft);
+    color: var(--sg-ink);
+  }
 }
 
 :where(a):focus-visible {
@@ -811,17 +818,39 @@ html:has(.gp-lightbox:target) {
   gap: 0.5rem;
 }
 
+/*
+ * A filament's colour as a small bead: SpoolDisc's soft highlight on the colour and a little shade on its far side, in
+ * a rim. It reads as a thing in that colour, so a white one is white filament, never an empty radio button (a flat
+ * white disc in a ring is one, and SpoolDisc's wound rings at this size are a target).
+ */
 .gp-swatch {
   flex: none;
-  width: 0.875rem;
-  height: 0.875rem;
+  width: 1rem;
+  height: 1rem;
   border-radius: 999px;
-  box-shadow: var(--gp-rim);
+  background-image: radial-gradient(
+    circle at 32% 26%,
+    color-mix(in srgb, var(--sg-cream) 40%, transparent),
+    transparent 50%
+  );
+  box-shadow:
+    inset -1px -1.5px 2.5px color-mix(in srgb, var(--sg-ink) 12%, transparent),
+    inset 0 0 0 1px color-mix(in srgb, var(--sg-ink) 15%, transparent);
 }
 
-/* A light filament on a light panel: a firmer rim, as SpoolDisc's (docs/design.md). */
+/*
+ * A light filament on a light panel: no highlight would show, so the far side gets real shade and the bead a small
+ * drop onto the card, which round it into a ball; a quieter rim than a radio button's ring.
+ */
 .gp-swatch--light {
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--sg-ink) 35%, transparent);
+  background-image: radial-gradient(
+    circle at 35% 30%,
+    transparent 45%,
+    color-mix(in srgb, var(--sg-ink) 24%, transparent) 100%
+  );
+  box-shadow:
+    0 1px 1.5px color-mix(in srgb, var(--sg-ink) 15%, transparent),
+    inset 0 0 0 1px color-mix(in srgb, var(--sg-ink) 18%, transparent);
 }
 
 .gp-dl {
@@ -889,6 +918,661 @@ html:has(.gp-lightbox:target) {
   .gp-attempt-photos--odd li:first-child {
     grid-column: 1 / -1;
     aspect-ratio: 4 / 3;
+  }
+}
+
+/* ---- The models (decision 0077) ---- */
+
+/*
+ * Each kept file as the app's raised card, in the column of words: the plate on the render ground (its picture opens
+ * the 3D view) beside what the print takes in ink over the file's name and quiet lines, then its cautions and the
+ * settings across the card under both. On a computer the column scrolls beside the photos, which stay in view.
+ */
+.gp-count {
+  font-family: var(--gp-sans);
+  font-size: var(--sg-text-small);
+  font-weight: 600;
+  letter-spacing: 0;
+  color: var(--sg-ink-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+.gp-files-hint {
+  margin-top: 0.125rem;
+  font-size: var(--sg-text-small);
+  line-height: var(--sg-text-small-lh);
+  color: var(--sg-ink-faint);
+}
+
+.gp-file-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin-top: 1rem;
+}
+
+.gp-file {
+  position: relative;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-areas:
+    "plate words"
+    "more more";
+  align-items: center;
+  gap: 0.75rem 0.875rem;
+  padding: 0.75rem;
+  border-radius: var(--gp-radius-lg);
+  background: var(--sg-cream);
+  box-shadow: var(--sg-shadow-soft);
+}
+
+.gp-file > .gp-plate {
+  grid-area: plate;
+  width: 5.5rem;
+  height: 5.5rem;
+}
+
+/* On a phone the words sit beside the plate and the rest runs across the card under both. */
+.gp-file-text {
+  display: contents;
+}
+
+.gp-file-words {
+  grid-area: words;
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+  min-width: 0;
+}
+
+.gp-file-more {
+  grid-area: more;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+.gp-file-more:empty {
+  display: none;
+}
+
+/*
+ * What opens the 3D view: the card's first lines as a button, whose ::after covers the whole card (or the attempt's
+ * row), so a tap anywhere on it opens the view; the card itself shows the hover, the press and the focus ring.
+ */
+.gp-open,
+.gp-file-heading {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.125rem;
+  min-width: 0;
+}
+
+.gp-open {
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.gp-open > *,
+.gp-file-heading > * {
+  max-width: 100%;
+}
+
+/*
+ * Over everything on the card: its meta and settings lines are positioned too (each piece's dot hangs in a gutter) and
+ * come after the button, so without the z-index they would take a tap themselves. The card isolates it.
+ */
+.gp-open::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  border-radius: var(--gp-radius-lg);
+}
+
+.gp-open:focus-visible {
+  outline: none;
+}
+
+.gp-open:focus-visible::after {
+  box-shadow: var(--gp-ring);
+}
+
+.gp-file--3d,
+.gp-attempt-file--3d {
+  isolation: isolate;
+  transition:
+    transform var(--sg-duration-instant) var(--sg-ease-out),
+    box-shadow var(--sg-duration-fast) var(--sg-ease-out),
+    background-color var(--sg-duration-fast) var(--sg-ease-out);
+}
+
+/* "About 1 h 26 min · 13.2 g": the print first, as the app's card leads once a model is sliced. */
+.gp-file-lead {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.gp-file-lead--name,
+.gp-file-name,
+.gp-attempt-file-name {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.gp-file-name {
+  font-size: var(--sg-text-small);
+  line-height: var(--sg-text-small-lh);
+  color: var(--sg-ink-faint);
+}
+
+.gp-file-meta {
+  font-size: var(--sg-text-small);
+  line-height: var(--sg-text-small-lh);
+  color: var(--sg-ink-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+/* The app's MetaList: each piece's dot in a gutter on its left, which the line's frame clips where a piece starts it. */
+.gp-pieces {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.gp-pieces-row {
+  display: flex;
+  flex-wrap: wrap;
+  margin-left: -1rem;
+}
+
+.gp-piece {
+  position: relative;
+  max-width: 100%;
+  padding-left: 1rem;
+  white-space: nowrap;
+}
+
+.gp-piece::before {
+  content: "·" / "";
+  position: absolute;
+  left: 0;
+  width: 1rem;
+  text-align: center;
+  color: var(--sg-ink-ghost);
+}
+
+/* What it is sliced with, in the settings row's words: as quiet as the name and size above it. */
+.gp-file-settings {
+  font-size: var(--sg-text-small);
+  line-height: var(--sg-text-small-lh);
+  color: var(--sg-ink-faint);
+}
+
+/* What prints it: each filament's colour before its name, so a light one reads as the colour of those words. */
+.gp-file .gp-filaments {
+  font-weight: 500;
+  color: var(--sg-ink-soft);
+}
+
+/* A caution, as the app's: advice in semolina with its circled mark, never an alarm. */
+.gp-caution {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.375rem;
+  font-size: var(--sg-text-small);
+  line-height: var(--sg-text-small-lh);
+  color: var(--sg-semolina-ink);
+}
+
+.gp-caution .gp-icon {
+  margin-top: 0.125rem;
+  font-size: 1rem;
+}
+
+/* The plate's picture: the whole model on the render ground, a hairline edge and a faint shadow so white reads. */
+.gp-plate {
+  position: relative;
+  display: grid;
+  place-items: center;
+  flex: none;
+  padding: 0.375rem;
+  border: 0;
+  border-radius: var(--gp-radius-md);
+  background: var(--sg-render);
+  box-shadow: var(--sg-shadow-well);
+  color: var(--sg-ink-faint);
+  font: inherit;
+}
+
+.gp-plate-img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  filter: var(--sg-render-shadow);
+}
+
+/* A small plate (an attempt's, 56 px): the tile's deeper ground and firmer edge, so a white model isn't a pale outline. */
+.gp-plate--small {
+  background: var(--sg-render-tile);
+}
+
+.gp-plate--small .gp-plate-img {
+  filter: var(--sg-render-shadow-tile);
+}
+
+.gp-plate-none {
+  font-size: 1.5rem;
+}
+
+/* The 3D view's cue: a quiet pill on the picture's corner, as the app's ThreeDButton has it. */
+.gp-3d {
+  position: absolute;
+  right: 0.25rem;
+  bottom: 0.25rem;
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.125rem 0.5rem 0.125rem 0.375rem;
+  border-radius: 999px;
+  background: var(--sg-veil);
+  color: var(--sg-on-veil);
+  font-size: var(--sg-text-caption);
+  line-height: var(--sg-text-caption-lh);
+  font-weight: 650;
+  pointer-events: none;
+  transition: background-color var(--sg-duration-fast) var(--sg-ease-out);
+}
+
+.gp-3d .gp-icon {
+  font-size: 0.75rem;
+}
+
+/*
+ * An attempt's file, small as on the app's story card: the plate with only the cube and the file's name. One that
+ * opens in 3D is a row of its own on the paper, "See how it prints" under the name, all of it the button.
+ */
+.gp-attempt-file {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  min-width: 0;
+}
+
+.gp-attempt-file--3d {
+  padding: 0.5rem 0.875rem 0.5rem 0.5rem;
+  border-radius: var(--gp-radius-md);
+  background: var(--sg-paper);
+}
+
+.gp-attempt-file--3d .gp-open::after {
+  border-radius: var(--gp-radius-md);
+}
+
+.gp-attempt-file-cta {
+  font-size: var(--sg-text-small);
+  line-height: var(--sg-text-small-lh);
+  font-weight: 600;
+  color: var(--sg-basil-ink);
+}
+
+.gp-plate--small {
+  width: 3.5rem;
+  height: 3.5rem;
+  padding: 0.25rem;
+}
+
+.gp-plate--small .gp-3d {
+  right: 0.125rem;
+  bottom: 0.125rem;
+  justify-content: center;
+  width: 1.25rem;
+  height: 1.25rem;
+  padding: 0;
+  backdrop-filter: blur(4px);
+}
+
+.gp-plate--small .gp-3d .gp-icon {
+  font-size: 0.6875rem;
+}
+
+.gp-attempt-file-name {
+  font-size: var(--sg-text-small);
+  line-height: var(--sg-text-small-lh);
+  font-weight: 600;
+  color: var(--sg-ink-soft);
+}
+
+/* What a build is made of: each part with how far it is, a tick once it is done. */
+.gp-parts {
+  margin-top: 0.5rem;
+}
+
+.gp-part {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.5rem 0;
+  box-shadow: inset 0 -1px 0 var(--sg-hairline);
+}
+
+.gp-part:last-child {
+  box-shadow: none;
+}
+
+.gp-part-name {
+  min-width: 0;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.gp-part-progress {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: var(--sg-text-small);
+  line-height: var(--sg-text-small-lh);
+  color: var(--sg-ink-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+.gp-part--done .gp-part-progress {
+  color: var(--sg-basil-ink);
+  font-weight: 600;
+}
+
+@media (min-width: 48rem) {
+  /* The app's raised card's 96 px plate. */
+  .gp-file > .gp-plate {
+    width: 6rem;
+    height: 6rem;
+  }
+
+  /*
+   * As the app's FileCard on a computer: everything in one column beside the plate, its cautions, settings and
+   * colours under the name, so the card is no taller than it needs and nothing sits alone under the plate.
+   */
+  .gp-file {
+    grid-template-areas: "plate text";
+    align-items: start;
+    padding: 0.875rem;
+  }
+
+  .gp-file-text {
+    grid-area: text;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    align-self: center;
+    min-width: 0;
+  }
+
+  /* An attempt's file row is as wide as what it says, not a bar across the attempt's whole card. */
+  .gp-attempt-file--3d {
+    align-self: flex-start;
+    width: fit-content;
+    max-width: 100%;
+  }
+}
+
+/*
+ * The 3D view's sheet (src/guest/island.ts opens it; the viewer inside is the app's own PrintViewer): as the app's
+ * Sheet shows it, a bottom sheet nearly the screen's height on a phone, a large panel over the dimmed page on a
+ * computer. It is here, with the page, so it opens at once while the viewer's code is still on its way.
+ */
+html.gp-viewing {
+  overflow: hidden;
+}
+
+.gp-viewer {
+  position: fixed;
+  inset: auto 0 0;
+  width: 100%;
+  max-width: none;
+  /* Tall, with a strip of the dimmed page left above it to tap closed, as the app's sheet leaves. */
+  height: min(86svh, calc(100svh - var(--sg-safe-top) - 5rem));
+  max-height: none;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--sg-ink);
+  overflow: visible;
+}
+
+.gp-viewer::backdrop {
+  background: var(--sg-scrim);
+  animation: gp-fade-in var(--sg-duration-base) var(--sg-ease-out);
+}
+
+.gp-viewer-sheet {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+  border-radius: var(--gp-radius-xl) var(--gp-radius-xl) 0 0;
+  background: var(--sg-lifted);
+  box-shadow: var(--sg-shadow-float);
+  animation: gp-sheet-up var(--sg-duration-slow) var(--sg-ease-out);
+  transition: transform var(--sg-duration-base) var(--sg-ease-out);
+}
+
+.gp-viewer--closing::backdrop {
+  animation: gp-fade-out var(--sg-duration-base) var(--sg-ease-out) forwards;
+}
+
+/* The handle and the head: a finger pulls the sheet down by them (island.ts), never by the stage, which turns the print. */
+.gp-viewer-grip {
+  flex: none;
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+/* The app's sheet's handle: a short soft bar at the top. */
+.gp-viewer-handle {
+  display: block;
+  width: 2.5rem;
+  height: 0.375rem;
+  margin: 0.625rem auto 0;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--sg-ink) 15%, transparent);
+}
+
+.gp-viewer-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 1rem;
+  padding: 0.5rem 0.75rem 0.875rem 1.25rem;
+}
+
+.gp-viewer-words {
+  flex: 1;
+  min-width: 0;
+}
+
+.gp-viewer-title {
+  font-size: var(--sg-text-title);
+  line-height: var(--sg-text-title-lh);
+  letter-spacing: -0.01em;
+}
+
+.gp-viewer-name {
+  overflow: hidden;
+  font-size: var(--sg-text-small);
+  line-height: var(--sg-text-small-lh);
+  color: var(--sg-ink-faint);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.gp-viewer-close {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 2.75rem;
+  height: 2.75rem;
+  margin-top: -0.375rem;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--sg-ink-soft);
+  font-size: 1.25rem;
+  cursor: pointer;
+}
+
+.gp-viewer-close:focus-visible,
+.gp-viewer-again:focus-visible {
+  outline: none;
+  box-shadow: var(--gp-ring);
+}
+
+/* The viewer fills the rest; its own stage (the app's) paints the studio light. */
+.gp-viewer-stage {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  outline: none;
+  background: radial-gradient(ellipse 80% 70% at 50% 38%, var(--sg-stage), var(--sg-paper-deep) 82%);
+}
+
+.gp-viewer-stage > * {
+  flex: 1;
+  min-height: 0;
+}
+
+/* While the viewer's code comes: a breathing dot where the print will stand, never a spinner. */
+.gp-viewer-wait {
+  flex: none;
+  align-self: center;
+  width: 0.75rem;
+  height: 0.75rem;
+  margin: auto;
+  border-radius: 999px;
+  background: var(--sg-semolina);
+  animation: gp-breathe 1.8s ease-in-out infinite;
+}
+
+.gp-viewer-note {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.875rem;
+  padding: 2rem;
+  text-align: center;
+  color: var(--sg-ink-soft);
+}
+
+.gp-viewer-note p {
+  max-width: 20rem;
+}
+
+.gp-viewer-again {
+  height: 2.75rem;
+  padding: 0 1.25rem;
+  border: 0;
+  border-radius: 999px;
+  background: var(--sg-cream);
+  box-shadow: var(--sg-shadow-soft);
+  color: var(--sg-ink);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+@keyframes gp-sheet-up {
+  from {
+    transform: translateY(100%);
+  }
+}
+
+@keyframes gp-pop-in {
+  from {
+    opacity: 0;
+    transform: translateY(0.5rem) scale(0.98);
+  }
+}
+
+@keyframes gp-fade-in {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes gp-fade-out {
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes gp-breathe {
+  50% {
+    opacity: 0.45;
+    transform: scale(0.88);
+  }
+}
+
+@media (min-width: 48rem) {
+  .gp-viewer {
+    inset: 0;
+    width: min(72rem, calc(100vw - 6rem));
+    height: min(52rem, calc(100svh - 6rem));
+    margin: auto;
+  }
+
+  .gp-viewer-sheet {
+    border-radius: var(--gp-radius-xl);
+    animation: gp-pop-in var(--sg-duration-base) var(--sg-ease-out);
+  }
+
+  /* A panel on a computer: no handle, nothing to pull. */
+  .gp-viewer-handle {
+    display: none;
+  }
+
+  .gp-viewer-grip {
+    touch-action: auto;
+  }
+
+  .gp-viewer-head {
+    padding: 1.5rem 1rem 1rem 1.75rem;
+  }
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .gp-viewer-close:hover {
+    background: color-mix(in srgb, var(--sg-ink) 6%, transparent);
+    color: var(--sg-ink);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .gp-viewer::backdrop,
+  .gp-viewer-sheet,
+  .gp-viewer-wait {
+    animation: none;
+  }
+
+  .gp-viewer-sheet {
+    transition: none;
   }
 }
 
@@ -1024,6 +1708,19 @@ html:has(.gp-lightbox:target) {
     box-shadow: var(--sg-shadow-raised);
   }
 
+  .gp-file--3d:hover {
+    box-shadow: var(--sg-shadow-raised);
+  }
+
+  .gp-attempt-file--3d:hover {
+    background: var(--sg-paper-deep);
+  }
+
+  .gp-file--3d:hover .gp-3d,
+  .gp-attempt-file--3d:hover .gp-3d {
+    background: var(--sg-veil-strong);
+  }
+
   .gp-link:hover {
     text-decoration-color: currentColor;
   }
@@ -1035,15 +1732,23 @@ html:has(.gp-lightbox:target) {
 
 @media (pointer: fine) {
   .gp-model:active,
-  .gp-zoom:active {
+  .gp-zoom:active,
+  .gp-attempt-file--3d:active {
     transform: scale(0.98);
+  }
+
+  /* A whole card gives a little less, as the app's cards do. */
+  .gp-file--3d:active {
+    transform: scale(0.99);
   }
 }
 
 /* A finger gets a dim once it has stayed a moment (a scroll never flashes it), as the app's touch press does. */
 @media (pointer: coarse) {
   .gp-model:active,
-  .gp-zoom:active {
+  .gp-zoom:active,
+  .gp-file--3d:active,
+  .gp-attempt-file--3d:active {
     opacity: 0.8;
     transition: opacity 0s 70ms;
   }
@@ -1051,12 +1756,16 @@ html:has(.gp-lightbox:target) {
 
 @media (prefers-reduced-motion: reduce) {
   .gp-zoom,
-  .gp-model {
+  .gp-model,
+  .gp-file--3d,
+  .gp-attempt-file--3d {
     transition: none;
   }
 
   .gp-model:active,
-  .gp-zoom:active {
+  .gp-zoom:active,
+  .gp-file--3d:active,
+  .gp-attempt-file--3d:active {
     transform: none;
   }
 }

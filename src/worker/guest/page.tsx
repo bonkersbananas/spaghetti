@@ -11,7 +11,9 @@ import {
   type GuestBuild,
   type GuestChange,
   type GuestFilament,
+  type GuestFile,
   type GuestModel,
+  type GuestPart,
   type GuestPhoto,
   type GuestSetting,
   type GuestView,
@@ -22,11 +24,15 @@ import {
  * The page someone who isn't signed in sees at /s/<token> (decision 0075): one idea, build or twist, read-only,
  * photos first, with no app around it and no script at all. Rendered by the Worker with hono/jsx, which escapes every
  * text and attribute; links are made only from http(s) addresses (checkLinkUrl). Styles are src/guest/guest.css.
+ * Its one script (src/guest/island.ts, decision 0077) only opens the 3D view of a plate when its picture is tapped.
  */
 
 /** Where a guest fetches one of the page's photos: through the link's own token, never /api. */
 export const photoUrl = (token: string, id: string, variant: "thumb" | "large") =>
   `/s/${token}/photos/${id}/${variant}`;
+
+/** Where a guest fetches a file's plate picture and the plate's toolpaths: through the link's own token, never /api. */
+export const fileUrl = (token: string, id: string, part: "thumb" | "toolpaths") => `/s/${token}/files/${id}/${part}`;
 
 const OUT = { target: "_blank", rel: "noopener noreferrer nofollow ugc" } as const;
 
@@ -288,6 +294,221 @@ function Settings({ settings, filaments }: { settings: GuestSetting[]; filaments
   );
 }
 
+/**
+ * Short pieces on one line, as the app's MetaList ("About 21 min · 3.3 g each · Sliced by Spaghetti"), that wraps
+ * cleanly: each piece carries its dot in a gutter the row hangs into, so a dot never begins or ends a line.
+ */
+function Pieces({ pieces, class: className, inline }: { pieces: string[]; class: string; inline?: boolean }) {
+  if (!pieces.length) return null;
+  const row = (
+    <span class="gp-pieces-row">
+      {pieces.map((piece, index) => (
+        <span class="gp-piece">
+          {index > 0 && <span class="gp-sr">, </span>}
+          {piece}
+        </span>
+      ))}
+    </span>
+  );
+  // Inside a button (a card's lead), where only phrasing content may go.
+  if (inline) return <span class={`gp-pieces ${className}`}>{row}</span>;
+  return <p class={`gp-pieces ${className}`}>{row}</p>;
+}
+
+/**
+ * What the 3D view is given to draw a plate (src/guest/viewer.tsx reads it): where the toolpaths are, through the
+ * token, and what the app's own viewer is told about the file. JSON in a data attribute, escaped like any attribute.
+ */
+function viewData(token: string, file: GuestFile) {
+  const view = file.view;
+  if (!view) return undefined;
+  return JSON.stringify({
+    url: fileUrl(token, file.id, "toolpaths"),
+    id: file.id,
+    name: file.name,
+    ...view,
+  });
+}
+
+/**
+ * A file's plate picture on the render ground, as the app's PlateThumb. Where the plate can be seen in 3D it carries a
+ * quiet "3D" pill on its corner (the app's ThreeDButton); the card or row around it is what opens the view.
+ */
+function Plate({ token, file, compact }: { token: string; file: GuestFile; compact?: boolean }) {
+  return (
+    <span class={`gp-plate ${file.view ? "gp-plate--3d" : ""} ${compact ? "gp-plate--small" : ""}`}>
+      {file.thumb ? (
+        <img
+          class="gp-plate-img"
+          src={fileUrl(token, file.id, "thumb")}
+          alt={file.view ? "" : `${file.name}, its plate`}
+          loading="lazy"
+          decoding="async"
+        />
+      ) : (
+        <Icon name="file" class="gp-plate-none" />
+      )}
+      {file.view && (
+        <span class="gp-3d" aria-hidden="true">
+          <Icon name="cube" />
+          {!compact && "3D"}
+        </span>
+      )}
+    </span>
+  );
+}
+
+/**
+ * What opens a plate's 3D view: a button holding the card's own first lines, named by what they say, whose tap area
+ * covers the whole card or row (its ::after), so anywhere on it opens the view, as an app card opens.
+ */
+function Opens({ token, file, children }: { token: string; file: GuestFile; children: Child }) {
+  return (
+    <button type="button" class="gp-open" data-view3d={viewData(token, file)} aria-haspopup="dialog">
+      {children}
+      <span class="gp-sr">, in 3D</span>
+    </button>
+  );
+}
+
+/** A caution, as the app's: the circled mark and one short sentence in semolina, advice and never an alarm. */
+function Cautions({ cautions }: { cautions: string[] }) {
+  if (!cautions.length) return null;
+  return (
+    <>
+      {cautions.map((caution) => (
+        <p class="gp-caution">
+          <Icon name="caution" />
+          <span>{caution}</span>
+        </p>
+      ))}
+    </>
+  );
+}
+
+/**
+ * A model or slicer file as the app's card shows it, read-only: the plate, what the print takes ("About 1 h 26 min ·
+ * 13.2 g") over the file's name and its size, its cautions, what it is sliced with in the settings row's words, and
+ * its filaments, each with its colour. The whole card opens the 3D view. No download, no "Open in Bambu Studio".
+ */
+function FileCard({ token, file }: { token: string; file: GuestFile }) {
+  const heading =
+    file.lead.length > 0 ? (
+      <>
+        <Pieces pieces={file.lead} class="gp-file-lead" inline />
+        <span class="gp-sr">, </span>
+        <span class="gp-file-name">{file.name}</span>
+      </>
+    ) : (
+      <span class="gp-file-lead gp-file-lead--name">{file.name}</span>
+    );
+  return (
+    <li class={`gp-file ${file.view ? "gp-file--3d" : ""}`}>
+      <Plate token={token} file={file} />
+      {/* One column beside the plate on a computer, as the app's FileCard; on a phone its lines run across the card. */}
+      <div class="gp-file-text">
+        <div class="gp-file-words">
+          {file.view ? (
+            <Opens token={token} file={file}>
+              {heading}
+            </Opens>
+          ) : (
+            <p class="gp-file-heading">{heading}</p>
+          )}
+          <Pieces pieces={file.meta} class="gp-file-meta" />
+        </div>
+        {(file.cautions.length > 0 || file.settings.length > 0 || file.filaments.length > 0) && (
+          <div class="gp-file-more">
+            <Cautions cautions={file.cautions} />
+            <Pieces pieces={file.settings} class="gp-file-settings" />
+            <Filaments filaments={file.filaments} />
+          </div>
+        )}
+      </div>
+    </li>
+  );
+}
+
+/**
+ * The files kept with the thing: its models, each a card whose plate opens the 3D view. In the column of words, as the
+ * app's idea page has them under the note: on a computer they scroll beside the photos, which stay in view.
+ */
+function Files({ token, files }: { token: string; files: GuestFile[] }) {
+  if (!files.length) return null;
+  const viewable = files.some((file) => file.view);
+  return (
+    <section class="gp-block gp-files" aria-labelledby="gp-files">
+      <h2 class="gp-block-title" id="gp-files">
+        {files.length === 1 ? "The model" : `The models`}
+        {files.length > 1 && <span class="gp-count"> {files.length}</span>}
+      </h2>
+      {viewable && (
+        // What a tap gives: the print in 3D. Not "layer by layer": it opens on the finished print (it builds itself up
+        // only the first time on a device), and its play button is a quiet one in the corner.
+        <p class="gp-files-hint">
+          {files.length === 1 ? "Tap the model" : "Tap a model"} to see it in 3D, as it will print.
+        </p>
+      )}
+      <ul class="gp-file-list">
+        {files.map((file) => (
+          <FileCard token={token} file={file} />
+        ))}
+      </ul>
+    </section>
+  );
+}
+
+/**
+ * An attempt's file on its card, small as the app's story card has it: the plate and the file's name. Where it can be
+ * seen in 3D, the whole row is the button, and says so: "See how it prints".
+ */
+function AttemptFile({ token, file }: { token: string; file: GuestFile }) {
+  const name = <span class="gp-attempt-file-name">{file.name}</span>;
+  return (
+    <div class={`gp-attempt-file ${file.view ? "gp-attempt-file--3d" : ""}`}>
+      <Plate token={token} file={file} compact />
+      <div class="gp-file-words">
+        {file.view ? (
+          <Opens token={token} file={file}>
+            {name}
+            <span class="gp-sr">, </span>
+            <span class="gp-attempt-file-cta">See how it prints</span>
+          </Opens>
+        ) : (
+          <>
+            <p class="gp-file-heading">{name}</p>
+            <Pieces pieces={file.meta.filter((piece) => !/ each$/.test(piece))} class="gp-file-meta" />
+          </>
+        )}
+        <Cautions cautions={file.cautions} />
+      </div>
+    </div>
+  );
+}
+
+/** What a build is made of, and how far each part is: "Hull half · 1 of 2", a tick once it is done. */
+function Parts({ parts }: { parts: GuestPart[] }) {
+  if (!parts.length) return null;
+  return (
+    <section class="gp-block" aria-labelledby="gp-parts">
+      <h2 class="gp-block-title" id="gp-parts">
+        What it's made of
+      </h2>
+      <ul class="gp-parts">
+        {parts.map((part) => (
+          <li class={part.done ? "gp-part gp-part--done" : "gp-part"}>
+            <span class="gp-part-name">{part.name}</span>
+            <span class="gp-part-progress">
+              {part.done && <Icon name="check" />}
+              {part.progress}
+            </span>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
 const OUTCOME_ICON: Record<string, GuestIconName> = { success: "worked", partial: "partly", failed: "spaghetti" };
 
 function OutcomeBadge({ attempt }: { attempt: GuestAttempt }) {
@@ -346,7 +567,11 @@ function Attempt({ token, attempt, shown }: { token: string; attempt: GuestAttem
           <OutcomeBadge attempt={attempt} />
           <h3 class="gp-attempt-title">Attempt {attempt.number}</h3>
         </div>
-        <p class="gp-attempt-meta">{[guestDate(attempt.printedAt), ...attempt.results].join(" · ")}</p>
+        <p class="gp-attempt-meta">
+          {[guestDate(attempt.printedAt), ...attempt.results, ...(attempt.printed ? [attempt.printed] : [])].join(
+            " · ",
+          )}
+        </p>
       </div>
       {shown.length > 0 && (
         <ul class={`gp-attempt-photos ${shown.length % 2 ? "gp-attempt-photos--odd" : ""}`}>
@@ -363,6 +588,7 @@ function Attempt({ token, attempt, shown }: { token: string; attempt: GuestAttem
         <ChangeLine changes={attempt.changes} number={attempt.number} />
         <Note text={attempt.note} class="gp-note--attempt" />
         <Tags wrong={attempt.wentWrong} well={attempt.wentWell} />
+        {attempt.file && <AttemptFile token={token} file={attempt.file} />}
         {settings && (
           <div class="gp-details">
             <Settings settings={attempt.settings} filaments={attempt.filaments} />
@@ -412,8 +638,8 @@ function Changes({ changes }: { changes: GuestChange[] }) {
 
 const OVERLINE: Record<GuestView["kind"], string> = { idea: "An idea", build: "A build", twist: "A twist on a model" };
 
-/** The words beside (or under) the photos: what it is, its note, the model, and for a build how it went. */
-function Story({ view, noteShown }: { view: GuestView; noteShown: boolean }) {
+/** The words beside (or under) the photos: what it is, its note, the model, for a build how it went, and its files. */
+function Story({ view, token, noteShown }: { view: GuestView; token: string; noteShown: boolean }) {
   const dates =
     view.kind === "idea"
       ? `Noted ${guestDate(view.capturedAt)}`
@@ -444,6 +670,7 @@ function Story({ view, noteShown }: { view: GuestView; noteShown: boolean }) {
           {view.totals.length > 0 && <p class="gp-summary-totals">{view.totals.join(" · ")}</p>}
         </section>
       )}
+      {view.kind === "build" && <Parts parts={view.parts} />}
       {view.kind === "twist" && <Changes changes={view.changes} />}
       {view.kind === "twist" && view.recipe && (
         <section class="gp-block" aria-labelledby="gp-recipe">
@@ -455,6 +682,7 @@ function Story({ view, noteShown }: { view: GuestView; noteShown: boolean }) {
           <Settings settings={view.recipe.settings} filaments={view.recipe.filaments} />
         </section>
       )}
+      <Files token={token} files={view.files} />
     </div>
   );
 }
@@ -490,7 +718,7 @@ export function GuestBody({ view, token }: { view: GuestView; token: string }) {
       <main class={`gp-page gp-page--${view.kind} ${gallery.length || noteLeads ? "" : "gp-page--no-photos"}`} id="top">
         <article class="gp-article">
           {noteLeads ? <NoteCard text={view.note} model={view.model} /> : <Gallery token={token} shown={gallery} />}
-          <Story view={view} noteShown={noteLeads} />
+          <Story view={view} token={token} noteShown={noteLeads} />
         </article>
         {attempts.length > 0 && (
           <section class="gp-attempts" aria-labelledby="gp-attempts">

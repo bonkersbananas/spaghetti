@@ -1,6 +1,6 @@
 # 0075. A public link shows one idea, build or twist, read-only, to anyone who has it
 
-Status: Accepted
+Status: Accepted; amended by [0077](0077-a-shared-page-shows-the-models-and-their-3d-view.md): the page shows the models as their cards and opens their 3D view (one small script), still never a file
 
 **Decision:** Either person can give an idea, a build or a twist a public link, on purpose and one at a time, from the share button on its page. Someone who isn't signed in opens `https://spaghetti.day/s/<token>` and sees that one thing, read-only, on a page of its own: no app around it, no script, photos first. Nothing is shared by default; the private link (the page itself, for the two people) stays the share button's other choice. The share button shows a basil globe while a link is live; the panel copies it again (phones: the system share sheet) and stops it at once, with Undo bringing back the same address. Sharing again later makes a new token.
 

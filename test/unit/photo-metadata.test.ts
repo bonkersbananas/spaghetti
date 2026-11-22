@@ -75,11 +75,44 @@ describe("hasPhotoMetadata", () => {
     expect(hasPhotoMetadata(webp(["VP8X", [0x10, 0, 0, 0, 0, 0, 0, 0, 0, 0]], vp8))).toBe(false);
   });
 
-  it("refuses what it can't read as a JPEG or a WebP", () => {
+  it("refuses what it can't read as a JPEG, a WebP or a PNG", () => {
     expect(hasPhotoMetadata(new Uint8Array([1, 2, 3, 4]))).toBe(true);
-    expect(hasPhotoMetadata(fixture("plate-hook.png"))).toBe(true);
+    expect(hasPhotoMetadata(fixture("plate-hook.png").subarray(0, 200))).toBe(true);
     expect(hasPhotoMetadata(new Uint8Array([0xff, 0xd8, 0xff]))).toBe(true);
     expect(hasPhotoMetadata(new Uint8Array(0))).toBe(true);
+  });
+
+  it("reads a plate picture's PNG chunks (decision 0077): only those that draw it pass", () => {
+    expect(hasPhotoMetadata(fixture("plate-hook.png"))).toBe(false);
+    expect(hasPhotoMetadata(withPngChunk(fixture("plate-hook.png"), "tEXt", "Comment\0Sliced on Alex's laptop"))).toBe(
+      true,
+    );
+    expect(hasPhotoMetadata(withPngChunk(fixture("plate-hook.png"), "eXIf", "MM\0*"))).toBe(true);
+    // Bytes after the end are refused too, as after a JPEG's.
+    expect(hasPhotoMetadata(new Uint8Array([...fixture("plate-hook.png"), 1, 2, 3]))).toBe(true);
+  });
+});
+
+/** A PNG with one more chunk after its header (its CRC left zero: the reader doesn't check it). */
+function withPngChunk(png: Uint8Array, type: string, text: string) {
+  const body = ascii(text);
+  const chunk = [...be16(0), ...be16(body.length), ...ascii(type), ...body, 0, 0, 0, 0];
+  const header = 8 + 12 + 13;
+  return new Uint8Array([...png.subarray(0, header), ...chunk, ...png.subarray(header)]);
+}
+
+describe("a plate picture's PNG", () => {
+  it("loses its text, EXIF and time, and keeps the chunks that draw it byte for byte", () => {
+    const clean = fixture("plate-tugboat.png");
+    const tagged = withPngChunk(withPngChunk(clean, "tEXt", "Software\0BambuStudio on alex-mbp"), "tIME", "\u0007");
+    const stripped = stripPhotoMetadata(tagged) as Uint8Array;
+    expect(stripped).toEqual(clean);
+    expect(hasPhotoMetadata(stripped)).toBe(false);
+    expect(new TextDecoder().decode(stripped)).not.toContain("alex");
+  });
+
+  it("has nothing for a PNG cut short", () => {
+    expect(stripPhotoMetadata(fixture("plate-tugboat.png").subarray(0, 100))).toBeNull();
   });
 });
 
@@ -205,7 +238,7 @@ describe("stripPhotoMetadata", () => {
     for (const bytes of [
       new Uint8Array(0),
       new Uint8Array([1, 2, 3, 4]),
-      fixture("plate-hook.png"),
+      fixture("plate-hook.png").subarray(0, 200), // a PNG cut short
       new Uint8Array([0xff, 0xd8, 0xff]),
       whole.subarray(0, whole.length - 2), // no EOI
       whole.subarray(0, 40), // cut inside a segment
