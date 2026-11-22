@@ -2,7 +2,7 @@
 
 Status: Accepted (Carl Oscar asked for it on Nov 21, 2026, after the bridge filed his fit-test ring as a new build)
 
-**Decision:** the printer bridge no longer decides which build a print belongs to: it files each print in a build of its own (named after the job), and the Worker places it. A pure matcher (`shared/print-match.ts`) scores the ideas and builds in progress on what a person could check:
+**Decision:** the printer bridge no longer decides which build a print belongs to: it files each print in a build of its own (named after the job as a person would write it, `readableTitle`: "UOBF fit test ring" for "UOBF-fit-test-ring(2)"; the print's name goes to the app as the printer said it, for matching), and the Worker places it. A pure matcher (`shared/print-match.ts`) scores the ideas and builds in progress on what a person could check:
 
 - the same file by name, kept with the build or printed in one of its attempts: 60 points. Names are compared without path, extension (`.gcode.3mf`, `.3mf`, `.gcode`, `.stl`), copy suffix ("(2)", " (1)", " copy"), `_plate_N`, accents (UÖBF is uobf), case or separators. A copy's trailing number ("ring-2") is 50, a name sharing most words 25.
 - the build's title is the job's name: 45 (most words alike: 20).

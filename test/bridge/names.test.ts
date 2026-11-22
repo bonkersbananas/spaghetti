@@ -2,11 +2,15 @@ import { describe, expect, it } from "vitest";
 import { jpegSize, stableId, titleFromJob } from "../../bridge/names.ts";
 
 describe("names", () => {
-  it("cleans a file name into a title", () => {
-    expect(titleFromJob("bracket_v2.gcode.3mf")).toBe("bracket v2");
+  it("cleans a file name into a title a person would write", () => {
+    expect(titleFromJob("bracket_v2.gcode.3mf")).toBe("Bracket v2");
     expect(titleFromJob("/cache/Desk  hook.3mf")).toBe("Desk hook");
+    expect(titleFromJob("UOBF-fit-test-ring(2)")).toBe("UOBF fit test ring");
+    expect(titleFromJob("spaghetti-mascot-tomato-40mm-v2(2).gcode.3mf")).toBe("Spaghetti mascot tomato 40mm v2");
+    expect(titleFromJob("Smiley Box (print in place)")).toBe("Smiley Box (print in place)");
     expect(titleFromJob("  ")).toBeNull();
     expect(titleFromJob(".gcode.3mf")).toBeNull();
+    expect(titleFromJob(`${"a".repeat(200)}.3mf`)).toHaveLength(120);
   });
 
   it("makes the same id from the same parts and a different one otherwise", () => {

@@ -4,7 +4,7 @@
  * caches change at once; the server follows, and a failure puts everything back. One toast undoes a move.
  */
 import type { Item, MoveAttemptResponse, PrintSuggestionsResponse } from "@shared/api";
-import { type MatchReason, namesIn, rowWords, sharedWords } from "@shared/print-match";
+import { type MatchReason, namesIn, readableTitle, rowWords, sharedWords } from "@shared/print-match";
 import { inlineTime } from "@shared/time";
 import { type QueryClient, queryOptions, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
@@ -124,7 +124,8 @@ export function moveAttempt(queryClient: QueryClient, { attempt, from, to, go, o
   if (!canEdit(attempt.pending || from.pending)) return false;
   const own = attempt.print?.ownItemId;
   const targetId = "item" in to ? to.item.id : own && own !== from.id ? own : crypto.randomUUID();
-  const newTitle = "newBuild" in to ? (to.newBuild.title ?? attempt.print?.name ?? null) : null;
+  const printName = attempt.print?.name;
+  const newTitle = "newBuild" in to ? (to.newBuild.title ?? (printName ? readableTitle(printName) : null)) : null;
   const fromBefore = cachedItem(queryClient, from.id) ?? (from as Item);
   const toBefore = "item" in to ? (cachedItem(queryClient, to.item.id) ?? (to.item as Item)) : null;
   const fromGoes = goesWith(from, attempt);

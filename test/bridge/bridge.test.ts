@@ -222,7 +222,7 @@ describe("a print, start to end", () => {
       "the file attached",
     );
     const item = [...app.items.values()][0] as NonNullable<ReturnType<typeof app.items.get>>;
-    expect(item.title).toBe("bracket v2");
+    expect(item.title).toBe("Bracket v2");
     const attempt = item.attempts[0]!;
     expect(String(app.files.get(attempt.id)?.get("name"))).toBe(`${NAME}.gcode.3mf`);
     expect(JSON.parse(String(app.files.get(attempt.id)?.get("prefill")))).toMatchObject({
