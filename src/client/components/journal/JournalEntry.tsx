@@ -1,5 +1,5 @@
 import type { JournalEntry as Entry, Item, Person, Photo as PhotoData } from "@shared/api";
-import { outcomeLabel, tagLabel } from "@shared/attempts";
+import { isOutcome, outcomeLabel, tagLabel } from "@shared/attempts";
 import { dateFormat } from "@shared/date-format";
 import { attemptPartsLabel } from "@shared/parts";
 import { isOffTheBed, offTheBedLabel } from "@shared/print-progress";
@@ -397,7 +397,7 @@ const AttemptRow = forwardRef<HTMLAnchorElement, JournalEntryProps>(function Att
         : undefined;
   const name = itemName(item);
   const offBed = isOffTheBed(attempt);
-  const OutcomeIcon = attempt.outcome ? outcomeIcons[attempt.outcome] : offBed ? FinishIcon : PrintingIcon;
+  const OutcomeIcon = isOutcome(attempt.outcome) ? outcomeIcons[attempt.outcome] : offBed ? FinishIcon : PrintingIcon;
   const ink = outcomeInk[attempt.outcome ?? "printing"];
   const estimated = attempt.outcome === null && !offBed && attempt.settings.estimatedMinutes !== undefined;
   return (

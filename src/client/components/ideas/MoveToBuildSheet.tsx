@@ -1,4 +1,4 @@
-import { outcomeLabel } from "@shared/attempts";
+import { isOutcome, outcomeLabel } from "@shared/attempts";
 import { isOffTheBed } from "@shared/print-progress";
 import { relativeTime } from "@shared/time";
 import { useQueryClient } from "@tanstack/react-query";
@@ -156,7 +156,10 @@ export function MoveToBuildSheet({ open, onOpenChange, idea, onMoved }: MoveToBu
                       ? { src: fileThumbSrc(attempt.file), fit: "contain" }
                       : null
                 }
-                glyph={{ icon: attempt.outcome ? outcomeIcons[attempt.outcome] : PrintingIcon, tone: tiles[tone] }}
+                glyph={{
+                  icon: isOutcome(attempt.outcome) ? outcomeIcons[attempt.outcome] : PrintingIcon,
+                  tone: tiles[tone],
+                }}
                 title={`Attempt ${attempt.number}`}
                 mark={index === 0 ? <Chip>Latest</Chip> : undefined}
                 meta={<AttemptMeta attempt={attempt} />}

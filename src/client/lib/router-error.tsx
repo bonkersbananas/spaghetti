@@ -6,8 +6,8 @@ import { lazy, Suspense } from "react";
 const ErrorScreen = lazy(() => import("@/components/ui/ErrorScreen"));
 
 /** The router's default error screen, and the root's. */
-export const RouterError = ({ error, reset }: ErrorComponentProps) => (
+export const RouterError = ({ error, reset, info }: ErrorComponentProps) => (
   <Suspense fallback={null}>
-    <ErrorScreen error={error} reset={reset} />
+    <ErrorScreen error={error} reset={reset} componentStack={info?.componentStack} />
   </Suspense>
 );

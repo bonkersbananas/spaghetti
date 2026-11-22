@@ -1,6 +1,6 @@
 import { type Outcome, outcomeLabel } from "@shared/attempts";
 import { cn } from "@/lib/cn";
-import { outcomeDots } from "./Outcome";
+import { outcomeDots, stepOf } from "./Outcome";
 
 /** Dots shown at most; earlier attempts collapse into a count. */
 const MAX_DOTS = 12;
@@ -52,8 +52,8 @@ export function OutcomeStrip({ attempts, className }: OutcomeStripProps) {
         {shown.map((attempt) => {
           const dot = cn(
             "relative size-2.5 shrink-0 rounded-full",
-            outcomeDots[attempt.outcome ?? (attempt.offBed ? "offBed" : "printing")],
-            attempt.outcome === null && !attempt.offBed && "animate-pulse",
+            outcomeDots[stepOf(attempt)],
+            stepOf(attempt) === "printing" && "animate-pulse",
           );
           return <span key={attempt.id} aria-hidden className={dot} />;
         })}

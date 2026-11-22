@@ -69,7 +69,11 @@ registerServiceWorker();
 const root = document.getElementById("root");
 if (!root) throw new Error("#root is missing from index.html");
 
-createRoot(root).render(
+createRoot(root, {
+  onCaughtError: (error, info) => {
+    (window as { __crash?: { error: unknown; stack?: string } }).__crash = { error, stack: info.componentStack };
+  },
+}).render(
   <StrictMode>
     <PersistQueryClientProvider
       client={queryClient}

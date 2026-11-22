@@ -4,7 +4,7 @@ import { FinishIcon, type Icon, PrintingIcon } from "@/components/ui/icons";
 import { Photo } from "@/components/ui/Photo";
 import { cn } from "@/lib/cn";
 import { useIsDesktop } from "@/lib/use-media-query";
-import { outcomeIcons } from "./Outcome";
+import { outcomeIcons, type Step, stepOf } from "./Outcome";
 import { outcomeSentence, type StripAttempt, word } from "./OutcomeStrip";
 
 export interface TrailAttempt extends StripAttempt {
@@ -21,10 +21,6 @@ interface AttemptTrailProps {
   selected?: string | null;
   className?: string;
 }
-
-type Step = Outcome | "printing" | "offBed";
-
-const stepOf = (attempt: TrailAttempt): Step => attempt.outcome ?? (attempt.offBed ? "offBed" : "printing");
 
 const stepIcons: Record<Step, Icon> = { ...outcomeIcons, printing: PrintingIcon, offBed: FinishIcon };
 

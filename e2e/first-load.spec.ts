@@ -27,6 +27,7 @@ import { SEED_PASSWORD, SEED_USERS } from "../scripts/lib/local-app.ts";
  * Raise a screen's ceiling only for code that screen shows at once, and say why in the pull request.
  * 2026-11-15: /today and /journal +2: the "Since Thursday" gate on both (the block itself loads only when there is a catch-up, but its
  * lazy import adds its dependency list to the gate's chunk, about 1.5 kB gzip).
+ * 2026-11-22: /today, /ideas, /journal and /search +1 to +2: the saved copy is repaired when read back and keyed to the build (sanitizeCached, appVersion), and the outbox drops an outcome it has no word for (about 0.4 kB gzip in the main bundle); the error screen's report loads with that screen.
  * 2026-11-18: /pantry +1: the phone's compact spool tile (SpoolChip) and its remembered Tiles / Compact choice, both drawn on the Pantry at once (about 0.9 kB gzip).
  * 2026-11-19: /pantry and /printer +1: both draw what the next-slot offer and the new-spool sheet open from (the slot wiring on each page, about
  * 0.2 kB gzip); the lookups, product picks and the offer itself are in chunks that load on the first tap, and what else grew on these screens since
@@ -48,11 +49,11 @@ import { SEED_PASSWORD, SEED_USERS } from "../scripts/lib/local-app.ts";
  */
 const CEILING_KB = {
   "/sign-in": 185,
-  "/today": 296,
-  "/ideas": 264,
+  "/today": 297,
+  "/ideas": 266,
   "/builds": 267,
-  "/journal": 283,
-  "/search": 275,
+  "/journal": 284,
+  "/search": 277,
   "/pantry": 261,
   "/printer": 260,
 } as const;

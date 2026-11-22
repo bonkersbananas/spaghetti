@@ -219,11 +219,20 @@ class Outbox {
    */
   async pickUp() {
     // A finish stored in a shape this version doesn't know (an outcome it has no word for) is dropped, not shown.
-    const stored = (await this.store.all().catch(() => [] as OutboxEntry[])).map((entry) =>
-      entry.finishes?.some((f) => !isOutcome(f.outcome))
+    const stored = (await this.store.all().catch(() => [] as OutboxEntry[])).map((raw) => {
+      // A pending attempt with an outcome it has no word for goes back to having none.
+      const entry = raw.attempts?.some((a) => a.outcome != null && !isOutcome(a.outcome))
+        ? {
+            ...raw,
+            attempts: raw.attempts.map((a) =>
+              a.outcome != null && !isOutcome(a.outcome) ? { ...a, outcome: null } : a,
+            ),
+          }
+        : raw;
+      return entry.finishes?.some((f) => !isOutcome(f.outcome))
         ? { ...entry, finishes: entry.finishes.filter((f) => isOutcome(f.outcome)) }
-        : entry,
-    );
+        : entry;
+    });
     const known = new Set(this.state.entries.map((entry) => entry.itemId));
     // An entry this page already holds may have gained a finish from the service worker.
     for (const entry of stored) {

@@ -1,8 +1,10 @@
+import { sanitizeCached } from "@shared/sanitize-cache";
 import { trimCache } from "@shared/trim-cache";
 import type { Query, QueryClient } from "@tanstack/react-query";
 import { useQueryClient } from "@tanstack/react-query";
 import type { PersistedClient, Persister } from "@tanstack/react-query-persist-client";
 import { useCallback, useSyncExternalStore } from "react";
+import { appVersion } from "./app-version";
 import { openStore } from "./idb";
 import { rememberedUser } from "./queries";
 import { subscribeToSeen } from "./seen-store";
@@ -44,8 +46,12 @@ export const PERSISTED_ROOTS = [
 /** The roots that are "what you saw" (the offline strip dates them); tags and people are support data. */
 const SEEN_ROOTS = ["items", "journal", "search"];
 
-/** Bump when the shape of cached data changes: older copies are dropped, not misread. */
-const CACHE_VERSION = "1";
+/**
+ * Older copies are dropped, not misread: the key is the build's own entry script, so every deploy starts from the
+ * server's data again (the cache only fills the screen until the network answers, and a shape change can never
+ * slip past a forgotten bump). The "2" is for changes to how the copy itself is stored.
+ */
+const CACHE_VERSION = `2:${appVersion()}`;
 /** Forget what was seen this long ago. */
 export const MAX_AGE = 7 * 24 * 60 * 60 * 1000;
 /** How many of each kept besides the item lists (which hold every item already): the most recently fetched. */
@@ -159,7 +165,7 @@ export const persister: Persister = {
         if (!fetchedAt.has(hash)) fetchedAt.set(hash, time);
       }
       changed();
-      return stored.client;
+      return sanitizeCached(stored.client);
     }).catch(() => undefined),
   removeClient: () => clearPersistedQueries(),
 };

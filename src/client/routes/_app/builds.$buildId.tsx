@@ -1,5 +1,5 @@
 import type { Recipe } from "@shared/api";
-import { creditedTo, type Outcome, tagLabel } from "@shared/attempts";
+import { creditedTo, isOutcome, type Outcome, tagLabel } from "@shared/attempts";
 import { beganAsIdea } from "@shared/deleted";
 import { modelOf } from "@shared/model-mark";
 import { attemptPartsLabel } from "@shared/parts";
@@ -260,7 +260,7 @@ function Build({ item }: { item: ItemView }) {
     if (!finishParam || !linkedAttempt) return;
     const attempt = item.attempts.find((candidate) => candidate.id === linkedAttempt);
     if (!attempt) return;
-    if (attempt.outcome === null) openSheet(attempt.id, finishParam === "1" ? undefined : (finishParam as Outcome));
+    if (attempt.outcome === null) openSheet(attempt.id, isOutcome(finishParam) ? finishParam : undefined);
     void navigate({
       to: "/builds/$buildId",
       params: { buildId: item.id },
@@ -628,8 +628,8 @@ function Build({ item }: { item: ItemView }) {
                 {shownAttempt && !(item.stage === "done" && shownPhoto?.id === hero?.id) && (
                   // Whose photo it is, where "Final print" sits: the attempt's name with how it went (and the printer's mark when it took the print).
                   <Chip
-                    tone={shownAttempt.outcome ? outcomeTones[shownAttempt.outcome] : "neutral"}
-                    icon={shownAttempt.outcome ? outcomeIcons[shownAttempt.outcome] : undefined}
+                    tone={isOutcome(shownAttempt.outcome) ? outcomeTones[shownAttempt.outcome] : "neutral"}
+                    icon={isOutcome(shownAttempt.outcome) ? outcomeIcons[shownAttempt.outcome] : undefined}
                     onPhoto
                     className="shadow-soft absolute top-3 left-3"
                   >
