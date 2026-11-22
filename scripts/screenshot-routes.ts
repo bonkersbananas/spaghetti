@@ -2180,6 +2180,61 @@ export const shots: Shot[] = [
     cleanup: unshareAll,
   },
   {
+    // A keyboard reaches the twist's model card: the focus ring goes round the whole card, which is its button.
+    name: "shared-twist-focus",
+    path: "/sign-in",
+    signedOut: true,
+    width: 1440,
+    why: "a keyboard's focus ring; a phone has none",
+    prepare: async (page) => {
+      await binsTwistWithModel(page);
+      const card = page.locator(".gp-file .gp-open").first();
+      await card.focus();
+      await page.keyboard.press("Shift+Tab");
+      await page.keyboard.press("Tab");
+      await card.evaluate((button) => button.closest(".gp-file")?.scrollIntoView({ block: "center" }));
+      await page.waitForTimeout(300);
+    },
+    cleanup: unshareBinsTwist,
+  },
+  {
+    // The sheet opens at once while the viewer's code is on its way: a breathing dot where the print will stand.
+    name: "shared-build-3d-loading",
+    path: "/sign-in",
+    signedOut: true,
+    prepare: async (page) => {
+      await openShared("items", SEED_BUILD_IDS.tugboat)(page);
+      // The viewer's code never comes (the built page's chunk, or the dev server's module).
+      await page.route(/\/(assets\/guest\/viewer-[\w-]+\.js|src\/guest\/viewer\.tsx)(\?.*)?$/, () => undefined);
+      await page
+        .getByRole("button", { name: /^tugboat\.gcode\.3mf\s*, See how it prints/ })
+        .first()
+        .click();
+      await page.locator(".gp-viewer-wait").waitFor();
+      await page.waitForTimeout(400);
+    },
+    cleanup: unshareAll,
+  },
+  {
+    // Offline: the viewer's code can't load, so the sheet says so, with a way to try again.
+    name: "shared-build-3d-offline",
+    path: "/sign-in",
+    signedOut: true,
+    prepare: async (page) => {
+      await openShared("items", SEED_BUILD_IDS.tugboat)(page);
+      await page.route(/\/(assets\/guest\/viewer-[\w-]+\.js|src\/guest\/viewer\.tsx)(\?.*)?$/, (route) =>
+        route.abort(),
+      );
+      await page
+        .getByRole("button", { name: /^tugboat\.gcode\.3mf\s*, See how it prints/ })
+        .first()
+        .click();
+      await page.getByRole("button", { name: "Try again" }).waitFor();
+      await page.waitForTimeout(300);
+    },
+    cleanup: unshareAll,
+  },
+  {
     // A photo opened large over the shared page (a :target view, no script).
     name: "shared-photo-open",
     path: "/sign-in",
