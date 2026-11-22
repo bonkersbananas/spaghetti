@@ -658,6 +658,8 @@ export interface ItemHit {
   /** How many attempts it has, and how the last one went. */
   attempts: number;
   lastOutcome: Outcome | null;
+  /** When the last attempt stopped on the printer, if it did: with no outcome, it is off the bed, not printing. */
+  lastEndedAt: number | null;
   /** The part of a long note (or of the comment) that matched, with SNIPPET_OPEN/CLOSE around matched words. */
   snippet: string | null;
   /** Set when the hit is a comment in its thread, not the item's own words: the snippet is that comment's. */

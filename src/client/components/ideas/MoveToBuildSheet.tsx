@@ -5,10 +5,10 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { BuildMeta, inks, pictureOf, tiles, useLeft } from "@/components/builds/BuildPick";
-import { outcomeIcons } from "@/components/builds/Outcome";
+import { outcomeIcons, stepOf } from "@/components/builds/Outcome";
 import { Chip } from "@/components/ui/Chip";
 import { TextField } from "@/components/ui/Field";
-import { BuildsIcon, PrintingIcon, SearchIcon } from "@/components/ui/icons";
+import { BuildsIcon, FinishIcon, PrintingIcon, SearchIcon } from "@/components/ui/icons";
 import { MetaList } from "@/components/ui/MetaList";
 import { Overline } from "@/components/ui/Overline";
 import { PickRow } from "@/components/ui/PickRow";
@@ -32,7 +32,7 @@ interface MoveToBuildSheetProps {
 function AttemptMeta({ attempt }: { attempt: AttemptView }) {
   const offBed = isOffTheBed(attempt);
   const left = useLeft(attempt.outcome || offBed ? undefined : attempt);
-  const tone = attempt.outcome ?? "printing";
+  const tone = stepOf({ outcome: attempt.outcome, offBed });
   return (
     <MetaList>
       <span className={cn("font-semibold", inks[tone])}>
@@ -144,7 +144,7 @@ export function MoveToBuildSheet({ open, onOpenChange, idea, onMoved }: MoveToBu
         <div className="flex flex-col">
           {attempts.map((attempt, index) => {
             const photo = picked.photos.find((p) => p.attemptId === attempt.id);
-            const tone = attempt.outcome ?? "printing";
+            const tone = stepOf({ outcome: attempt.outcome, offBed: isOffTheBed(attempt) });
             return (
               <PickRow
                 key={attempt.id}
@@ -157,7 +157,11 @@ export function MoveToBuildSheet({ open, onOpenChange, idea, onMoved }: MoveToBu
                       : null
                 }
                 glyph={{
-                  icon: isOutcome(attempt.outcome) ? outcomeIcons[attempt.outcome] : PrintingIcon,
+                  icon: isOutcome(attempt.outcome)
+                    ? outcomeIcons[attempt.outcome]
+                    : tone === "offBed"
+                      ? FinishIcon
+                      : PrintingIcon,
                   tone: tiles[tone],
                 }}
                 title={`Attempt ${attempt.number}`}

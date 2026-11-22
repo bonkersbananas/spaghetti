@@ -512,7 +512,7 @@ function Parts({ parts }: { parts: GuestPart[] }) {
 const OUTCOME_ICON: Record<string, GuestIconName> = { success: "worked", partial: "partly", failed: "spaghetti" };
 
 function OutcomeBadge({ attempt }: { attempt: GuestAttempt }) {
-  const tone = attempt.outcome ?? "printing";
+  const tone = attempt.outcome ?? (attempt.offBed ? "offbed" : "printing");
   return (
     <span class={`gp-outcome gp-outcome--${tone}`}>
       {attempt.outcome ? <Icon name={OUTCOME_ICON[attempt.outcome] as GuestIconName} /> : <span class="gp-dot" />}
@@ -604,7 +604,7 @@ function Trail({ build }: { build: GuestBuild }) {
   return (
     <ol class="gp-trail" aria-hidden="true">
       {build.attempts.map((attempt) => (
-        <li class={`gp-trail-step gp-trail-step--${attempt.outcome ?? "printing"}`} />
+        <li class={`gp-trail-step gp-trail-step--${attempt.outcome ?? (attempt.offBed ? "offbed" : "printing")}`} />
       ))}
     </ol>
   );

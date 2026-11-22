@@ -1,4 +1,5 @@
 import type { AttemptHit, FixHit, ItemHit, Spool } from "@shared/api";
+import { isOffTheBed } from "@shared/print-progress";
 import { highlight, searchTerms, words } from "@shared/search";
 import { isShortcut, keycaps, type ShortcutId, shortcutKeys } from "@shared/shortcuts";
 import { inlineTime, relativeTime } from "@shared/time";
@@ -515,7 +516,7 @@ function attemptEntry(
       ),
       photo: hit.photo ? { src: photoSrc(hit.photo.id, "thumb"), color: hit.photo.color || undefined } : null,
       icon: BuildsIcon,
-      trailing: <OutcomeChip outcome={hit.attempt.outcome} />,
+      trailing: <OutcomeChip outcome={hit.attempt.outcome} offTheBed={isOffTheBed(hit.attempt)} />,
     },
   };
 }
@@ -537,7 +538,7 @@ function fixEntry(fix: FixHit, terms: ReturnType<typeof searchTerms>, navigate: 
       subtitle: [`Attempt ${fix.number}`, after.charAt(0).toLowerCase() + after.slice(1), ...fix.changes].join(" · "),
       photo: fix.photo ? { src: photoSrc(fix.photo.id, "thumb"), color: fix.photo.color || undefined } : null,
       icon: BuildsIcon,
-      trailing: <OutcomeChip outcome={fix.attempt.outcome} />,
+      trailing: <OutcomeChip outcome={fix.attempt.outcome} offTheBed={isOffTheBed(fix.attempt)} />,
     },
   };
 }

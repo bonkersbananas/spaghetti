@@ -23,6 +23,7 @@ import {
 } from "../../shared/model-mark.ts";
 import { printablesTitleFromLink } from "../../shared/model-name.ts";
 import { attemptPartsLabel, partProgress, progressLabel } from "../../shared/parts.ts";
+import { isOffTheBed } from "../../shared/print-progress.ts";
 import { perPiece, sliceLead } from "../../shared/slicing/card.ts";
 import { originalFilamentColours, printedFilamentNames } from "../../shared/slicing/colours.ts";
 import { viewerPlate } from "../../shared/slicing/files.ts";
@@ -132,6 +133,8 @@ export interface GuestAttempt {
   /** Null while it prints (or waits for its answer). */
   outcome: Outcome | null;
   outcomeLabel: string;
+  /** Stopped on the printer, nobody has said how it went (`isOffTheBed`): drawn neutral, not as printing. */
+  offBed: boolean;
   printedAt: number;
   note: string;
   photos: GuestPhoto[];
@@ -436,7 +439,7 @@ export function itemView(item: Item, custom: { failure: TagDefinition[]; success
 
   const attempts: GuestAttempt[] = item.attempts.map((attempt, index) => {
     const number = index + 1;
-    const outcomeText = outcomeWordOf(attempt.outcome) ?? (attempt.endedAt ? "Off the bed" : "Printing");
+    const outcomeText = outcomeWordOf(attempt.outcome) ?? (isOffTheBed(attempt) ? "Off the bed" : "Printing");
     // A tag that only says the outcome again ("Spaghetti" on a spaghetti) is left out: the outcome already says it.
     const notTheOutcome = (label: string) => label.trim().toLowerCase() !== outcomeText.toLowerCase();
     return {
@@ -444,6 +447,7 @@ export function itemView(item: Item, custom: { failure: TagDefinition[]; success
       // Anything but the three outcomes reads as no outcome yet: the page draws an icon for each one it names.
       outcome: isOutcome(attempt.outcome) ? attempt.outcome : null,
       outcomeLabel: outcomeText,
+      offBed: isOffTheBed(attempt),
       printedAt: attempt.printedAt,
       note: attempt.note.trim(),
       photos: onlyPhotos(shown.filter((photo) => photo.attemptId === attempt.id).map(guestPhoto)),

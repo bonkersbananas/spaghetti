@@ -283,6 +283,7 @@ async function itemHits(
         },
         attempts: own.length,
         lastOutcome: (last?.row.outcome ?? null) as Outcome | null,
+        lastEndedAt: last?.row.endedAt?.getTime() ?? null,
         snippet,
         comment,
         photo: photo ? toApiPhoto(photo) : null,

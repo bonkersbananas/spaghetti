@@ -1,4 +1,5 @@
 import { isOutcome, outcomeLabel } from "@shared/attempts";
+import { isOffTheBed } from "@shared/print-progress";
 import { relativeTime } from "@shared/time";
 import { AnimatePresence, m, useReducedMotion } from "motion/react";
 import { type PointerEvent, useRef, useState } from "react";
@@ -209,7 +210,7 @@ function DesktopCompare({
         {columns.map(([column, attempt, other]) => (
           <div key={column} className="flex min-w-0 flex-col gap-3">
             <div className="flex items-center gap-2.5">
-              <OutcomeChip outcome={attempt.outcome} />
+              <OutcomeChip outcome={attempt.outcome} offTheBed={isOffTheBed(attempt)} />
               <AttemptPicker item={item} attempt={attempt} other={other} onPick={(id) => swap(column, id)} />
               <span className="text-small text-ink-faint ml-auto shrink-0">{when(attempt)}</span>
             </div>
@@ -357,7 +358,7 @@ function PhoneCompare({ item, older, newer }: { item: ItemView; older: AttemptVi
         />
       </div>
       <div className="flex items-center gap-2.5">
-        <OutcomeChip outcome={attempt.outcome} />
+        <OutcomeChip outcome={attempt.outcome} offTheBed={isOffTheBed(attempt)} />
         <span className="text-body text-ink font-semibold">Attempt {attempt.number}</span>
         <span className="text-small text-ink-faint ml-auto">{when(attempt)}</span>
       </div>
