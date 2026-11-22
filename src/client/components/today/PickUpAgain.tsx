@@ -1,4 +1,4 @@
-import { OUTCOME_LABELS, tagLabel } from "@shared/attempts";
+import { isOutcome, outcomeLabel, tagLabel } from "@shared/attempts";
 import { relativeTime } from "@shared/time";
 import { Link } from "@tanstack/react-router";
 import { AnimatePresence, m, useReducedMotion } from "motion/react";
@@ -51,8 +51,8 @@ function Row({ item }: { item: ItemView }) {
           {name.text}
         </span>
         <MetaList className="text-small text-ink-faint">
-          {last?.outcome ? (
-            <span className={cn("font-semibold", outcomeInk[last.outcome])}>{OUTCOME_LABELS[last.outcome]}</span>
+          {last && isOutcome(last.outcome) ? (
+            <span className={cn("font-semibold", outcomeInk[last.outcome])}>{outcomeLabel(last.outcome)}</span>
           ) : (
             <span>No attempts yet</span>
           )}

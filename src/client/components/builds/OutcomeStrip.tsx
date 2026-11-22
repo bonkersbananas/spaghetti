@@ -1,4 +1,4 @@
-import { isOutcome, OUTCOME_LABELS, type Outcome } from "@shared/attempts";
+import { type Outcome, outcomeLabel } from "@shared/attempts";
 import { cn } from "@/lib/cn";
 import { outcomeDots, stepOf } from "./Outcome";
 
@@ -21,11 +21,7 @@ interface OutcomeStripProps {
 }
 
 export const word = (attempt: StripAttempt) =>
-  isOutcome(attempt.outcome)
-    ? OUTCOME_LABELS[attempt.outcome].toLowerCase()
-    : attempt.offBed
-      ? "off the bed"
-      : "printing";
+  outcomeLabel(attempt.outcome)?.toLowerCase() ?? (attempt.offBed ? "off the bed" : "printing");
 
 /** "3 attempts: spaghetti, partly, printing". */
 export function outcomeSentence(attempts: StripAttempt[]): string {

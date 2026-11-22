@@ -1,5 +1,5 @@
 import type { Spool } from "@shared/api";
-import { OUTCOME_LABELS } from "@shared/attempts";
+import { outcomeLabel } from "@shared/attempts";
 import { gramsText } from "@shared/ledger";
 import { daysAgo } from "@shared/time";
 import { useQuery } from "@tanstack/react-query";
@@ -89,7 +89,10 @@ export function UsedBy({ spool }: { spool: Spool }) {
                   className="focus-ring text-ink min-w-0 truncate rounded-sm hover:underline"
                 >
                   {row.entry.title || "Untitled build"}, attempt {row.entry.number}
-                  <span className="text-ink-faint"> · {OUTCOME_LABELS[row.entry.outcome].toLowerCase()}</span>
+                  <span className="text-ink-faint">
+                    {" "}
+                    · {outcomeLabel(row.entry.outcome)?.toLowerCase() ?? "no verdict yet"}
+                  </span>
                 </Link>
                 <span className="text-ink-soft tabular shrink-0">
                   {row.entry.approximate ? "about " : ""}

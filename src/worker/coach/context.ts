@@ -4,7 +4,7 @@
  * (shared/story.ts); never a photo, and nothing it would need a person's details for.
  */
 import { and, desc, eq, inArray, isNull } from "drizzle-orm";
-import { type AttemptSettings, OUTCOME_LABELS, tagLabel } from "../../shared/attempts.ts";
+import { type AttemptSettings, outcomeLabel, tagLabel } from "../../shared/attempts.ts";
 import { dryingWindow } from "../../shared/drying.ts";
 import { recipesFor, settingsMaterial } from "../../shared/recipes.ts";
 import { describeResults, describeSettings } from "../../shared/story.ts";
@@ -16,7 +16,7 @@ import { readsByAttempt, toApiPhotoRead } from "../photo-read/run.ts";
 const DAY = 24 * 3_600_000;
 
 function sentence(attempt: Attempt, change: string[]): string[] {
-  const lines = [`Outcome: ${attempt.outcome ? OUTCOME_LABELS[attempt.outcome] : "printing"}.`];
+  const lines = [`Outcome: ${outcomeLabel(attempt.outcome)?.toLowerCase() ?? "not answered yet"}.`];
   if (attempt.failureTags.length) {
     lines.push(`Went wrong: ${attempt.failureTags.map((slug) => tagLabel("failure", slug)).join(", ")}.`);
   }

@@ -3572,6 +3572,11 @@ export const shots: Shot[] = [
     },
   },
   { name: "build", path: `/builds/${SEED_BUILD_IDS.tugboat}`, fullPage: true },
+  // The shapes real prints made (see REAL_PRINT_BUILDS in scripts/seed/builds.ts): a person's and the printer's attempts
+  // in one build, a three-colour print with four photos, one with none, and a print the app still asks about.
+  { name: "build-printer-mixed", path: `/builds/${SEED_BUILD_IDS.starOrnament}`, fullPage: true },
+  { name: "build-printer-no-photo", path: `/builds/${SEED_BUILD_IDS.lidClip}`, fullPage: true },
+  { name: "build-printer-asking", path: `/builds/${SEED_BUILD_IDS.cableComb}`, fullPage: true },
   // A build between prints: its stage chip says In progress (it isn't on the bed).
   { name: "build-between-prints", path: `/builds/${SEED_BUILD_IDS.cableChain}` },
   {

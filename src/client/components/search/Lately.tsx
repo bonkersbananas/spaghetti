@@ -1,4 +1,4 @@
-import { OUTCOME_LABELS } from "@shared/attempts";
+import { outcomeLabel } from "@shared/attempts";
 import { isOffTheBed } from "@shared/print-progress";
 import { relativeTime } from "@shared/time";
 import { useMemo } from "react";
@@ -53,7 +53,8 @@ function LatelyTile({ build }: { build: ItemView }) {
     last?.settings.estimatedMinutes,
   );
   let sub: string | undefined;
-  if (last?.outcome) sub = `${OUTCOME_LABELS[last.outcome]} · ${relativeTime(last.finishedAt ?? last.printedAt)}`;
+  if (outcomeLabel(last?.outcome))
+    sub = `${outcomeLabel(last?.outcome)} · ${relativeTime(last?.finishedAt ?? last?.printedAt ?? 0)}`;
   else if (last && isOffTheBed(last)) sub = `Off the bed · ${relativeTime(last.endedAt ?? last.printedAt)}`;
   else if (last) {
     // The time left (the last part of "Layer 70 of 205 · 30 min left"), the same words the sidebar and the cards use.

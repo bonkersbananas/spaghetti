@@ -12,6 +12,8 @@ export interface InsightAttempt {
   id: string;
   itemId: string;
   outcome: Outcome | null;
+  /** When the printer saw it stop: with no outcome, it is off the bed, not printing. */
+  endedAt?: number | null;
   printedAt: number;
   createdAt: number;
   failureTags: readonly string[];
@@ -64,6 +66,8 @@ export interface LongBuild {
   photo: MadePhoto | null;
   /** How each attempt this year went, oldest first (null: still printing). */
   outcomes: (Outcome | null)[];
+  /** Parallel to `outcomes`: true for an attempt with no outcome that came off the bed (not printing). */
+  offBed: boolean[];
 }
 
 /** A build that got made this year: it had an attempt that worked. */
@@ -302,6 +306,7 @@ export function computeInsights(
       attempts: list.length,
       photo: pictureOf(itemId, list),
       outcomes: byPrintTime(list).map((attempt) => attempt.outcome),
+      offBed: byPrintTime(list).map((attempt) => attempt.outcome === null && attempt.endedAt != null),
     }));
 
   const allMade = [...attemptsByBuild]

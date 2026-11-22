@@ -2,8 +2,9 @@ import { and, desc, eq, isNull } from "drizzle-orm";
 import type { AttemptFile, Item } from "../../shared/api.ts";
 import {
   type AttemptSettings,
-  OUTCOME_LABELS,
+  isOutcome,
   type Outcome,
+  outcomeLabel as outcomeWordOf,
   plateName,
   shortPreset,
   summarizeBuild,
@@ -435,17 +436,14 @@ export function itemView(item: Item, custom: { failure: TagDefinition[]; success
 
   const attempts: GuestAttempt[] = item.attempts.map((attempt, index) => {
     const number = index + 1;
-    const outcomeLabel = attempt.outcome
-      ? OUTCOME_LABELS[attempt.outcome]
-      : attempt.endedAt
-        ? "Off the bed"
-        : "Printing";
+    const outcomeText = outcomeWordOf(attempt.outcome) ?? (attempt.endedAt ? "Off the bed" : "Printing");
     // A tag that only says the outcome again ("Spaghetti" on a spaghetti) is left out: the outcome already says it.
-    const notTheOutcome = (label: string) => label.trim().toLowerCase() !== outcomeLabel.toLowerCase();
+    const notTheOutcome = (label: string) => label.trim().toLowerCase() !== outcomeText.toLowerCase();
     return {
       number,
-      outcome: attempt.outcome,
-      outcomeLabel,
+      // Anything but the three outcomes reads as no outcome yet: the page draws an icon for each one it names.
+      outcome: isOutcome(attempt.outcome) ? attempt.outcome : null,
+      outcomeLabel: outcomeText,
       printedAt: attempt.printedAt,
       note: attempt.note.trim(),
       photos: onlyPhotos(shown.filter((photo) => photo.attemptId === attempt.id).map(guestPhoto)),

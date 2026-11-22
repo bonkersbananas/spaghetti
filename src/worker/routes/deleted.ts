@@ -59,6 +59,7 @@ export const deletedRoutes = new Hono<AppEnv>().get("/", async (c) => {
       itemId: attempts.itemId,
       itemTitle: items.title,
       outcome: attempts.outcome,
+      endedAt: attempts.endedAt,
       printedAt: attempts.printedAt,
       deletedAt: attempts.deletedAt,
     })
@@ -81,6 +82,7 @@ export const deletedRoutes = new Hono<AppEnv>().get("/", async (c) => {
     itemId: row.itemId,
     itemTitle: row.itemTitle,
     outcome: row.outcome,
+    endedAt: row.endedAt?.getTime() ?? null,
     printedAt: row.printedAt.getTime(),
     deletedAt: row.deletedAt?.getTime() ?? 0,
   }));

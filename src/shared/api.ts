@@ -426,6 +426,8 @@ export interface DeletedAttempt {
   /** The idea or build it belongs to (its title, or null when it has none). */
   itemTitle: string | null;
   outcome: Outcome | null;
+  /** When the printer saw it stop: with no outcome, it was off the bed, not printing. */
+  endedAt: number | null;
   printedAt: number;
   deletedAt: number;
 }

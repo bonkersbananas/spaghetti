@@ -125,8 +125,21 @@ describe("computeInsights", () => {
         attempts: 4,
         photo: { id: "b3-worked-new", color: "#aaaaaa" },
         outcomes: ["partial", "success", "failed", null],
+        offBed: [false, false, false, false],
       },
     ]);
+  });
+
+  it("tells a print that came off the bed from one still printing", () => {
+    const off = { ...at("ob", 5, null), endedAt: Date.UTC(2026, 2, 5, 14) };
+    const built = computeInsights(
+      [at("ob", 1, "failed"), at("ob", 3, "partial"), off, at("ob", 6, null)],
+      new Map([["ob", { title: "Lid", coverPhotoId: null }]]),
+      [],
+      2026,
+    );
+    expect(built.longestBuilds[0]?.outcomes).toEqual(["failed", "partial", null, null]);
+    expect(built.longestBuilds[0]?.offBed).toEqual([false, false, true, false]);
   });
 
   it("makes a mosaic of builds that worked: the cover, else the picture of the attempt that worked", () => {
