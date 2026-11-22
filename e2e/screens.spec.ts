@@ -19,6 +19,8 @@ interface Seeded {
   ideaId: string;
   buildId: string;
   spoolId: string;
+  /** When the prints were made: the week to open is theirs even if the test crosses midnight. */
+  seededAt: number;
 }
 
 async function post(page: Page, url: string, options: Parameters<Page["request"]["post"]>[1]) {
@@ -79,7 +81,7 @@ async function seed(page: Page): Promise<Seeded> {
       settings: { filaments, bedTemperature: 80, layerHeight: 0.2, brim: true },
     },
   });
-  return { ideaId, buildId, spoolId };
+  return { ideaId, buildId, spoolId, seededAt: Date.now() };
 }
 
 async function clearSpools(page: Page) {
@@ -142,7 +144,7 @@ test("the main screens and their sheets open", async ({ page, isMobile }) => {
   await expect(page.getByText("Corners lifted").first()).toBeVisible();
 
   // The week: this week holds the seeded prints, and a week long ago is empty.
-  await screen(page, `/week/${mondayOf(Date.now())}`, "This week");
+  await screen(page, `/week/${mondayOf(data.seededAt)}`, /^(This|Last) week$/);
   await expect(page.getByRole("heading", { level: 2, name: /^The week in a few lines/ })).toBeVisible();
   await screen(page, "/week/2024-01-01", /2024/);
   await expect(page.getByRole("heading", { level: 2, name: "Not a strand this week" })).toBeVisible();

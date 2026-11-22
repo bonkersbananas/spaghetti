@@ -1,4 +1,5 @@
 import { expect, type Page, test } from "@playwright/test";
+import { recently } from "./clock.ts";
 import { clearIdeas, signIn } from "./helpers";
 
 /**
@@ -33,7 +34,7 @@ async function seed(page: Page) {
     note: "Corners lifted",
     settings: petg(70),
     // Minutes ago, not hours: "today" is the workspace's (Stockholm) day, and a few hours back is yesterday after midnight.
-    printedAt: Date.now() - 2 * MINUTE,
+    printedAt: recently(2 * MINUTE),
   });
   const worked = crypto.randomUUID();
   await post(page, `/api/items/${build}/attempts`, {
@@ -41,7 +42,7 @@ async function seed(page: Page) {
     outcome: "success",
     note: "Clean and flat",
     settings: petg(80),
-    printedAt: Date.now() - MINUTE,
+    printedAt: recently(MINUTE),
   });
   return { build, worked };
 }

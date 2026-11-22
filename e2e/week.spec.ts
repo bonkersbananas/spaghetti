@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { expect, type Page, test } from "@playwright/test";
 import { SEED_PASSWORD, SEED_USERS } from "../scripts/lib/local-app.ts";
 import { addWeeks, mondayOf, weekIsReadyToWrite } from "../src/shared/week.ts";
+import { recently } from "./clock.ts";
 
 const user = SEED_USERS[0];
 const origin = (page: Page) => new URL(page.url()).origin;
@@ -49,7 +50,7 @@ async function aBuild(page: Page, title: string, printedAt: number) {
 const thisWeek = () => mondayOf(Date.now());
 
 test("shows the week's prints as photos, then a few lines, and turns to the weeks either side", async ({ page }) => {
-  const itemId = await aBuild(page, "Week test boat", Date.now() - 60_000);
+  const itemId = await aBuild(page, "Week test boat", recently(60_000));
   await page.goto(`/week/${thisWeek()}`);
   await expect(page.getByRole("heading", { level: 1, name: "This week" })).toBeVisible();
   // Photos first: the print is a picture that opens its attempt.
@@ -90,7 +91,7 @@ test("a week with nothing in it is a short warm line, and a day opens its own we
 });
 
 test("the journal and the palette lead to the week", async ({ page, isMobile }) => {
-  await aBuild(page, "Journal week boat", Date.now() - 60_000);
+  await aBuild(page, "Journal week boat", recently(60_000));
   await page.goto("/journal");
   await expect(page.getByRole("heading", { level: 1, name: "Journal" })).toBeVisible();
   await page
