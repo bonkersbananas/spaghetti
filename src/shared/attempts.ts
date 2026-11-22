@@ -6,7 +6,7 @@
  * where they overlap, so phase 5 can prefill an attempt from a slicer file.
  */
 
-export { OUTCOMES, type Outcome } from "./outcomes.ts";
+export { isOutcome, OUTCOMES, type Outcome } from "./outcomes.ts";
 
 import type { Outcome } from "./outcomes.ts";
 

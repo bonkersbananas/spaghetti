@@ -7,6 +7,10 @@
 export const OUTCOMES = ["success", "partial", "failed"] as const;
 export type Outcome = (typeof OUTCOMES)[number];
 
+/** Whether a value read from outside the types (a stored finish, a link, a cache) is one of the outcomes. */
+export const isOutcome = (value: unknown): value is Outcome =>
+  typeof value === "string" && (OUTCOMES as readonly string[]).includes(value);
+
 /**
  * The outcome filter: one outcome, or "failures" (spaghetti and partly: every
  * attempt with something to learn from).

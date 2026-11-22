@@ -11,7 +11,7 @@ import type {
   PhotoResponse,
   UnscrapRequest,
 } from "@shared/api";
-import { byPrintTime, changesSince, mergeNote, unionTags } from "@shared/attempts";
+import { byPrintTime, changesSince, isOutcome, mergeNote, unionTags } from "@shared/attempts";
 import { type InfiniteData, type QueryClient, queryOptions, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useRef, useState } from "react";
 import { toast } from "@/components/ui/Toast";
@@ -396,7 +396,10 @@ function withAttempts(itemId: string, saved: Attempt[], entry: OutboxEntry | und
   const finishes = entry?.finishes ?? [];
   const attempts = finishes.length
     ? saved.map((attempt) => {
-        const finish = attempt.outcome === null ? finishes.find((f) => f.attemptId === attempt.id) : undefined;
+        const finish =
+          attempt.outcome === null
+            ? finishes.find((f) => f.attemptId === attempt.id && isOutcome(f.outcome))
+            : undefined;
         return finish ? applyFinish(attempt, finish) : attempt;
       })
     : saved;
