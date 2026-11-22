@@ -310,7 +310,7 @@ describe("choosing the attempt", () => {
     expect(build.attempts).toHaveLength(1);
   });
 
-  it("starts the next attempt on an open build whose latest attempt used a file with the same name", async () => {
+  it("tells the app what the printer said, and follows the print to the build the app put it in", async () => {
     const build = app.addBuild("Bracket", [
       {
         printedAt: Date.now() - 86_400_000,
@@ -319,15 +319,21 @@ describe("choosing the attempt", () => {
         settings: { layerHeight: 0.16 },
       },
     ]);
-    runBridge();
+    const told: object[] = [];
+    app.place = (print) => {
+      if (print) told.push(print);
+      return build.id;
+    };
+    const bridge = runBridge();
     await until(() => printer.published.length > 0, "the status request");
-    await printer.replay(fullPrint.slice(0, 4));
-    await until(
-      () => build.attempts.length === 2 && build.attempts[1]?.file != null,
-      "the second attempt with its file",
-    );
+    await printer.replay(fullPrint);
+    await until(() => build.attempts[1]?.endedAt != null, "the end, on the build the app chose");
+    await settle(bridge);
+    expect(told[0]).toMatchObject({ name: NAME, gcodeFile: "Metadata/plate_1.gcode", plate: 1 });
+    // The printer's own build went; the end and the photo went where the print is.
     expect(app.items.size).toBe(1);
-    expect(build.attempts[1]?.settings).toMatchObject({ layerHeight: 0.16 });
+    expect(build.attempts[1]?.settings.actualMinutes).toBeGreaterThanOrEqual(1);
+    expect(app.photos.at(-1)?.itemId).toBe(build.id);
   });
 
   it("makes a new build when nothing fits", async () => {

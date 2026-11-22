@@ -2,14 +2,14 @@
  * What the bridge does for each moment, against the app. Every job is safe to run twice: ids are made from the
  * printer and the print, and the app answers a repeat with what it already has.
  */
-import type { Attempt, Item } from "../src/shared/api.ts";
+import type { Attempt, Item, PrintFactsRequest } from "../src/shared/api.ts";
 import { MAX_SLICER_FILE_BYTES } from "../src/shared/api.ts";
 import { printablePlates, settingsFromFile, slicerName } from "../src/shared/threemf/prefill.ts";
 import { readThreeMf } from "../src/shared/threemf/read.ts";
 import { type AmsAction, planAmsSync, type Tray } from "./ams.ts";
-import type { Api } from "./api.ts";
+import { type Api, HttpError } from "./api.ts";
 import type { Job } from "./job-machine.ts";
-import { fileKey, jpegSize, stableId, titleFromJob } from "./names.ts";
+import { jpegSize, stableId, titleFromJob } from "./names.ts";
 import type { Store } from "./store.ts";
 
 /** A hand-started attempt is attached to only if it began no earlier than this before the printer's start. */
@@ -48,14 +48,17 @@ export function findHandStarted(builds: readonly Item[], job: Job, known: Readon
     .sort((a, b) => b.attempt.printedAt - a.attempt.printedAt)[0];
 }
 
-/** The open build whose latest attempt was printed from a slicer file with this print's name. */
-export function findSameFile(builds: readonly Item[], job: Job, fileName: string | null) {
-  const wanted = fileKey(fileName ?? job.name);
-  if (!wanted) return undefined;
-  return builds.find((item) => {
-    const latest = [...item.attempts].sort((a, b) => b.printedAt - a.printedAt)[0];
-    return latest?.file && fileKey(latest.file.name) === wanted;
-  });
+/**
+ * What the printer said about the print, for the app to find the build it belongs to (decision 0076): the bridge
+ * files it in a build of its own and the app moves it to the one it matches, if any.
+ */
+export function printFacts(job: Job, fileName: string | null, estimate: number | undefined): PrintFactsRequest {
+  return {
+    name: job.name || fileName,
+    gcodeFile: job.gcodeFile,
+    plate: job.plate,
+    estimateMinutes: job.estimateMinutes ?? estimate ?? null,
+  };
 }
 
 export async function startJob(ctx: JobContext, payload: Extract<JobPayload, { type: "start" }>, bytes?: Uint8Array) {
@@ -72,18 +75,15 @@ export async function startJob(ctx: JobContext, payload: Extract<JobPayload, { t
       ctx.log(`Attaching the print "${job.name}" to the attempt already started by hand.`);
       ref = { itemId: hand.item.id, attemptId: hand.attempt.id };
     } else {
-      const same = findSameFile(builds, job, payload.fileName);
-      const itemId = same?.id ?? stableId(ctx.printerId, job.key, "build");
-      ctx.log(
-        same ? `Starting the next attempt on "${same.title ?? same.id}".` : `Starting a new build for "${job.name}".`,
-      );
+      // A build of its own, which the app swaps for the build the print belongs to when it finds one.
+      ctx.log(`Filing the print "${job.name}"; the app puts it in the build it belongs to.`);
       ref = {
-        itemId,
+        itemId: stableId(ctx.printerId, job.key, "build"),
         attemptId,
         todo: {
-          createItem: same ? null : { title: titleFromJob(payload.fileName ?? job.name) },
-          // On a new build the file's settings; on a next attempt the app carries the last attempt's over.
-          ...(read && !same ? { settings: read.settings } : {}),
+          createItem: { title: titleFromJob(payload.fileName ?? job.name) },
+          // The file's settings when there is a file; without one the app carries the build's last attempt's over.
+          ...(read ? { settings: read.settings } : {}),
           printedAt: job.startedAt,
         },
       };
@@ -93,8 +93,14 @@ export async function startJob(ctx: JobContext, payload: Extract<JobPayload, { t
   if (ref.todo) {
     const { createItem, settings, printedAt } = ref.todo;
     if (createItem) await api.createItem({ id: ref.itemId, title: createItem.title, stage: "building" });
-    await api.createAttempt(ref.itemId, { id: ref.attemptId, printedAt, ...(settings ? { settings } : {}) });
-    ref = { itemId: ref.itemId, attemptId: ref.attemptId };
+    const attempt = await api.createAttempt(ref.itemId, {
+      id: ref.attemptId,
+      printedAt,
+      ...(settings ? { settings } : {}),
+      print: printFacts(job, payload.fileName, read?.settings.estimatedMinutes),
+    });
+    // Where the app put it: the build it matched, or the one made for it.
+    ref = { itemId: attempt.itemId ?? ref.itemId, attemptId: ref.attemptId };
     store.rememberAttempt(job.key, ref);
   }
   if (bytes && read)
@@ -142,15 +148,21 @@ export async function endJob(ctx: JobContext, payload: Extract<JobPayload, { typ
     ctx.log(`Nothing to end for "${payload.job.name}": its start never reached the app.`);
     return;
   }
-  const item = await ctx.api.item(ref.itemId);
-  const attempt = item.attempts.find((candidate) => candidate.id === ref.attemptId);
-  if (!attempt) return;
   const minutes = Math.max(1, Math.round((payload.endedAt - payload.job.startedAt) / 60_000));
-  await ctx.api.updateAttempt(attempt.id, {
-    endedAt: payload.endedAt,
-    suggestedFailureTag: payload.suggestedTag,
-    settings: { ...attempt.settings, actualMinutes: minutes },
-  });
+  // By the attempt alone: someone may have moved it to another build since (decision 0076).
+  try {
+    await ctx.api.updateAttempt(ref.attemptId, {
+      endedAt: payload.endedAt,
+      suggestedFailureTag: payload.suggestedTag,
+      settingsMerge: { set: { actualMinutes: minutes } },
+    });
+  } catch (error) {
+    if (error instanceof HttpError && error.status === 404) {
+      ctx.log(`Nothing to end for "${payload.job.name}": its attempt was deleted.`);
+      return;
+    }
+    throw error;
+  }
 }
 
 export async function photoJob(ctx: JobContext, payload: Extract<JobPayload, { type: "photo" }>, bytes?: Uint8Array) {

@@ -124,11 +124,17 @@ export function buildStory(item: Item, context: StoryContext): string {
     const agent = via ? context.agents.get(via) : undefined;
     return agent ? `${person} via ${agent}` : person;
   };
+  // A print the printer recorded is the printer's, not whoever paired the bridge (decision 0076).
+  const printedBy = (attempt: Item["attempts"][number]) => {
+    if (!attempt.fromPrinter) return who(attempt.createdBy, attempt.createdVia);
+    const person = attempt.startedBy ? context.people.get(attempt.startedBy)?.name : undefined;
+    return person ? `${person}, from the printer` : "the printer";
+  };
   const title = item.title?.trim() || "Untitled";
   const lines: string[] = [`# ${title}`, ""];
   const facts = [
     `${item.stage === "idea" ? "An idea" : `A build (${item.stage})`}`,
-    `captured ${date(item.createdAt)} by ${who(item.createdBy, item.createdVia)}`,
+    `captured ${date(item.createdAt)} by ${item.fromPrinter ? "the printer" : who(item.createdBy, item.createdVia)}`,
   ];
   if (item.startedAt) facts.push(`building since ${date(item.startedAt)}`);
   if (item.finishedAt) facts.push(`${item.stage === "shelved" ? "shelved" : "finished"} ${date(item.finishedAt)}`);
@@ -167,7 +173,7 @@ export function buildStory(item: Item, context: StoryContext): string {
     lines.push(
       `### Attempt ${index + 1}${printed ? ` · ${printed}` : ""}: ${outcome}`,
       "",
-      `_${date(attempt.printedAt)} · ${who(attempt.createdBy, attempt.createdVia)} · id: ${attempt.id}_`,
+      `_${date(attempt.printedAt)} · ${printedBy(attempt)} · id: ${attempt.id}_`,
       "",
     );
     if (attempt.note.trim()) lines.push(attempt.note.trim(), "");

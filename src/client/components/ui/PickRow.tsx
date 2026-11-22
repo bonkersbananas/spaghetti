@@ -18,6 +18,7 @@ interface PickRowProps {
   onSelect: () => void;
   /** Starts with focus (the suggested choice), so Enter takes it. */
   autoFocus?: boolean;
+  disabled?: boolean;
   className?: string;
 }
 
@@ -25,7 +26,18 @@ interface PickRowProps {
  * One choice in a list of things to pick from, picture first: a tap takes it. Builds in "Add to a build", attempts in
  * the second step. 56 px tall (a thumb's row), a faint wash on hover. Always a picture or a glyph, never an empty tile.
  */
-export function PickRow({ photo, glyph, title, meta, mark, quiet, onSelect, autoFocus, className }: PickRowProps) {
+export function PickRow({
+  photo,
+  glyph,
+  title,
+  meta,
+  mark,
+  quiet,
+  onSelect,
+  autoFocus,
+  disabled,
+  className,
+}: PickRowProps) {
   const tile = cn("shrink-0 rounded-md", quiet ? "size-9 md:size-10" : "size-10 md:size-11");
   const GlyphIcon = glyph?.icon;
   return (
@@ -34,28 +46,32 @@ export function PickRow({ photo, glyph, title, meta, mark, quiet, onSelect, auto
       onClick={onSelect}
       // biome-ignore lint/a11y/noAutofocus: the suggested row takes Enter in a sheet that was just opened to choose.
       autoFocus={autoFocus}
+      disabled={disabled}
       className={cn(
-        "pressable focus-ring duration-fast hover:bg-ink/4 -mx-2 flex min-h-14 w-[calc(100%+1rem)] items-center gap-3 rounded-lg px-2 py-2 text-left transition-colors",
+        "pressable focus-ring duration-fast hover:bg-ink/4 -mx-2 flex min-h-14 w-[calc(100%+1rem)] items-center gap-3 rounded-lg px-2 py-2 text-left transition-colors disabled:pointer-events-none disabled:opacity-60",
         className,
       )}
     >
-      {photo ? (
-        <Photo
-          src={photo.src}
-          alt=""
-          color={photo.color}
-          fit={photo.fit}
-          frame={photo.fit === "contain" ? "render-tile" : undefined}
-          className={cn(tile, photo.fit === "contain" && "p-0.5")}
-        />
-      ) : (
-        <span
-          aria-hidden
-          className={cn(tile, "flex items-center justify-center", glyph?.tone ?? "bg-ink/5 text-ink-faint")}
-        >
-          {GlyphIcon && <GlyphIcon size={quiet ? 18 : 22} />}
-        </span>
-      )}
+      {/* The picture's slot is the same size in every row, so a quiet row's smaller picture keeps the titles in line. */}
+      <span className="flex size-10 shrink-0 items-center justify-center md:size-11">
+        {photo ? (
+          <Photo
+            src={photo.src}
+            alt=""
+            color={photo.color}
+            fit={photo.fit}
+            frame={photo.fit === "contain" ? "render-tile" : undefined}
+            className={cn(tile, photo.fit === "contain" && "p-0.5")}
+          />
+        ) : (
+          <span
+            aria-hidden
+            className={cn(tile, "flex items-center justify-center", glyph?.tone ?? "bg-ink/5 text-ink-faint")}
+          >
+            {GlyphIcon && <GlyphIcon size={quiet ? 18 : 22} />}
+          </span>
+        )}
+      </span>
       <span className="min-w-0 flex-1">
         <span className="flex min-w-0 items-center gap-2">
           <span className={cn("text-body truncate", quiet ? "text-ink-soft font-medium" : "text-ink font-semibold")}>

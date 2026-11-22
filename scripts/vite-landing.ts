@@ -16,13 +16,12 @@ export const LANDING_ASSETS = "assets/landing/";
 /**
  * The shared page's template (guest.html, src/guest): what someone who isn't signed in sees at /s/<token>
  * (decision 0075). The Worker writes the page into it (src/worker/guest); like the landing page, it is kept apart
- * from the app, out of the service worker's precache, with no script.
+ * from the app, out of the service worker's precache. It has its own build (scripts/vite-guest.ts, decision 0077).
  */
 export const GUEST_ASSETS = "assets/guest/";
 
 const isLanding = (paths: readonly string[]) =>
   paths.some((path) => /(^|\/)(src\/landing\/|landing\.html$)/.test(path));
-const isGuest = (paths: readonly string[]) => paths.some((path) => /(^|\/)(src\/guest\/|guest\.html$)/.test(path));
 
 export function landingPage(): Plugin {
   return {
@@ -32,20 +31,15 @@ export function landingPage(): Plugin {
         client: {
           build: {
             rolldownOptions: {
-              input: { index: "index.html", landing: "landing.html", guest: "guest.html" },
+              // The shared page (guest.html) is built on its own, after this one (scripts/vite-guest.ts).
+              input: { index: "index.html", landing: "landing.html" },
               output: {
                 entryFileNames: (chunk) =>
-                  chunk.name === "landing"
-                    ? `${LANDING_ASSETS}[name]-[hash].js`
-                    : chunk.name === "guest"
-                      ? `${GUEST_ASSETS}[name]-[hash].js`
-                      : "assets/[name]-[hash].js",
+                  chunk.name === "landing" ? `${LANDING_ASSETS}[name]-[hash].js` : "assets/[name]-[hash].js",
                 assetFileNames: (asset) =>
                   isLanding(asset.originalFileNames) || asset.names.includes("landing.css")
                     ? `${LANDING_ASSETS}[name]-[hash][extname]`
-                    : isGuest(asset.originalFileNames) || asset.names.includes("guest.css")
-                      ? `${GUEST_ASSETS}[name]-[hash][extname]`
-                      : "assets/[name]-[hash][extname]",
+                    : "assets/[name]-[hash][extname]",
               },
             },
           },

@@ -1,10 +1,10 @@
 import type { Person } from "@shared/api";
-import type { Outcome } from "@shared/attempts";
+import { creditedTo, type Outcome } from "@shared/attempts";
 import { attemptPartsLabel } from "@shared/parts";
 import { isOffTheBed } from "@shared/print-progress";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { AnimatePresence, m, useReducedMotion } from "motion/react";
-import { Fragment, useRef } from "react";
+import { Fragment, lazy, Suspense, useRef } from "react";
 import { AutoHeight } from "@/components/ui/AutoHeight";
 import { Avatar, ViaText } from "@/components/ui/Avatar";
 import { Button, IconButton } from "@/components/ui/Button";
@@ -28,6 +28,10 @@ import { useIsDesktop } from "@/lib/use-media-query";
 import { OffTheBed } from "./OffTheBed";
 import { OutcomeChip, OutcomePicker } from "./Outcome";
 import { PhotoReadNote } from "./PhotoReadNote";
+
+// Which build a print the printer filed belongs to (decision 0076): its code comes only with such a print.
+const PrintPlace = lazy(() => import("./print-place-lazy").then((entry) => entry.loadPrintPlace()));
+const PrinterBy = lazy(() => import("./print-place-lazy").then((entry) => entry.loadPrinterBy()));
 
 interface PrintingCardProps {
   item: ItemView;
@@ -160,6 +164,9 @@ export function PrintingCard({
   const name = itemName(item);
   const partsLabel = attemptPartsLabel(attempt, item.parts);
   const filaments = attempt.settings.filaments ?? [];
+  // The printer asks which build this is, or says why it put it in this one.
+  const asking = !!attempt.print?.asking;
+  const placed = !asking && !!attempt.print?.reasons.length;
 
   // "Snap this print": on a phone the camera opens at once and the photo lands in the capture sheet already aimed at
   // this print; on desktop (no camera) the sheet opens aimed, ready for a drop or a note.
@@ -289,11 +296,26 @@ export function PrintingCard({
             >
               {name.text}
             </h3>
-            {person && (
-              <span className="mt-1.5 flex shrink-0 items-center gap-2">
-                <ViaText name={via} person={person?.name} className="hidden md:inline" />
-                <Avatar person={person} size="xs" via={via} />
+            {attempt.fromPrinter ? (
+              // The printer's, not whoever paired the bridge; a tap says who started it (decision 0076).
+              <span className="text-small mt-1.5 flex min-h-6 shrink-0 items-center">
+                <Suspense fallback={null}>
+                  <PrinterBy
+                    attempt={attempt}
+                    person={person}
+                    itemId={item.id}
+                    readOnly={readOnly}
+                    className="pointer-events-auto z-10"
+                  />
+                </Suspense>
               </span>
+            ) : (
+              person && (
+                <span className="mt-1.5 flex shrink-0 items-center gap-2">
+                  <ViaText name={via} person={person?.name} className="hidden md:inline" />
+                  <Avatar person={person} size="xs" via={via} />
+                </span>
+              )
             )}
           </div>
           <div
@@ -314,6 +336,11 @@ export function PrintingCard({
             )}
             {filaments.length > 0 && <FilamentGlance filaments={filaments} />}
           </div>
+          {placed && (
+            <Suspense fallback={null}>
+              <PrintPlace item={item} attempt={attempt} where="card" className="pointer-events-auto relative z-10" />
+            </Suspense>
+          )}
         </div>
         <div
           className={cn(
@@ -322,6 +349,11 @@ export function PrintingCard({
             wide.body,
           )}
         >
+          {asking && (
+            <Suspense fallback={null}>
+              <PrintPlace item={item} attempt={attempt} where="card" className="pointer-events-auto" />
+            </Suspense>
+          )}
           {offBed && attempt.endedAt !== null ? (
             // The printer says it stopped: no bar to draw, only the calm question and the three answers.
             <OffTheBed
@@ -457,7 +489,7 @@ export function BedCards({ prints, people, via, spread = false, unread, classNam
     unread: unread?.(item.id),
     item,
     attempt,
-    person: people.get(attempt.createdBy),
+    person: people.get(creditedTo(attempt) ?? ""),
     via: via(attempt.createdVia),
   });
   return (

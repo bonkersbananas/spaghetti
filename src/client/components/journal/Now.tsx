@@ -1,3 +1,4 @@
+import { creditedTo } from "@shared/attempts";
 import { isOffTheBed } from "@shared/print-progress";
 import { type QueryClient, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AnimatePresence, m, useReducedMotion } from "motion/react";
@@ -86,7 +87,7 @@ export default function Now() {
                           lead={onBed.length === 2 ? "short" : "wide"}
                           item={item}
                           attempt={attempt}
-                          person={people?.find((person) => person.id === attempt.createdBy)}
+                          person={people?.find((person) => person.id === creditedTo(attempt))}
                           via={via(attempt.createdVia)}
                         />
                       </m.div>

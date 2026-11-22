@@ -249,8 +249,12 @@ describe("what a guest gets", () => {
     }
     // No address of anyone's in what the Worker wrote (the template's font paths have an @ of their own).
     expect(html.slice(html.indexOf("<body"))).not.toContain("@");
-    // Nothing to press that changes anything, and no script at all.
-    expect(html).not.toMatch(/<(form|button|input|textarea|select|script)\b/i);
+    // Nothing to press that changes anything (an idea without models has not even a 3D view to open), and no script
+    // but the page's own, from its build (decision 0077).
+    expect(html.slice(html.indexOf("<body"))).not.toMatch(/<(form|button|input|textarea|select|script)\b/i);
+    expect([...html.matchAll(/<script\b[^>]*>/g)].map((match) => match[0])).toEqual([
+      '<script type="module" src="/src/guest/island.ts">',
+    ]);
   });
 
   it("answers with the headers that keep the link private", async () => {
@@ -263,7 +267,9 @@ describe("what a guest gets", () => {
     expect(headers.get("X-Frame-Options")).toBe("DENY");
     expect(headers.get("Content-Security-Policy")).toMatch(/frame-ancestors 'none'/);
     expect(headers.get("Content-Security-Policy")).toMatch(/default-src 'none'/);
-    expect(headers.get("Content-Security-Policy")).not.toMatch(/script-src/);
+    // Script and workers only from the page's own build (its 3D view, decision 0077), nothing inline.
+    expect(headers.get("Content-Security-Policy")).toContain(`script-src ${ORIGIN}/assets/guest/;`);
+    expect(headers.get("Content-Security-Policy")).not.toMatch(/script-src[^;]*'unsafe/);
     expect(headers.get("Cache-Control")).toBe("private, no-store");
     const { html } = await guest(`/s/${made.token}`);
     expect(html).toContain('<meta name="robots"');
@@ -605,8 +611,12 @@ describe("escaping", () => {
   async function expectInert(html: string) {
     const elements = await parse(html);
     const tags = new Set(elements.map((element) => element.tag));
-    for (const tag of ["script", "iframe", "object", "embed", "form", "base", "style"])
-      expect(tags.has(tag), tag).toBe(false);
+    for (const tag of ["iframe", "object", "embed", "form", "base", "style"]) expect(tags.has(tag), tag).toBe(false);
+    // The one script is the template's own (the 3D view's, decision 0077): never one the Worker wrote.
+    for (const script of elements.filter((element) => element.tag === "script")) {
+      expect(Object.fromEntries(script.attributes)).toEqual({ type: "module", src: "/src/guest/island.ts" });
+    }
+    expect(html.slice(html.indexOf("<body"))).not.toMatch(/<script\b/i);
     for (const { tag, attributes } of elements) {
       for (const [name, value] of attributes) {
         expect(name.startsWith("on"), `${tag} ${name}`).toBe(false);

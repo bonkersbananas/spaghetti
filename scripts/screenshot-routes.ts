@@ -13,8 +13,9 @@ import {
 } from "../e2e/fixtures/model-3mf.ts";
 import { boxesStl, boxStl, fusilliStl, glassesStl } from "../e2e/fixtures/model-stl.ts";
 import { SLICER_FILE_NAME, slicerFile } from "../e2e/fixtures/slicer-file.ts";
+import { readThreeMf, settingsFromFile } from "../src/shared/threemf/index.ts";
 import { SEED_AGENTS } from "./seed/agents.ts";
-import { SEED_BUILD_IDS } from "./seed/builds.ts";
+import { SEED_BUILD_IDS, seedBridge } from "./seed/builds.ts";
 import { commentId } from "./seed/comments.ts";
 import { SEED_IDS } from "./seed/ideas.ts";
 import { SEED_NOW } from "./seed/index.ts";
@@ -842,6 +843,162 @@ async function removeTwistModels(page: Page) {
     await page.request.delete(`/api/twists/${id}`, { headers });
   }
   modelTwists.splice(0);
+}
+
+/**
+ * The shared page's models (decision 0077), Carl Oscar's kind of idea: a few photos and five models sliced in the
+ * browser (one with parts in the air, a project of three plates, one in its own colours), shared, and opened by a
+ * guest. Leaves the browser signed out on the guest's page.
+ */
+const SHELF_IDEA = {
+  title: "Pasta shelf helpers",
+  note: "Little things for the pasta shelf: a knob for the jar, a rack to dry tagliatelle on, bins for the small shapes and a bracket to hold it all. One plate a weekend.",
+};
+const SHELF_PHOTOS = [
+  { file: "model-2.jpg", color: "#c9b79a" },
+  { file: "model-1.jpg", color: "#8a7458" },
+  { file: "model-3.jpg", color: "#3f6b55" },
+];
+
+/** More little things for the shelf, so the idea holds eleven models as Carl Oscar's does. */
+const SPOON_REST = {
+  name: "spoon-rest.stl",
+  bytes: boxesStl([
+    { at: [0, 0, 0], size: [70, 30, 3] },
+    { at: [0, 0, 3], size: [70, 3, 6] },
+    { at: [0, 27, 3], size: [70, 3, 6] },
+  ]),
+};
+const LID_STAND = {
+  name: "lid-stand.stl",
+  bytes: boxesStl([
+    { at: [0, 0, 0], size: [50, 40, 4] },
+    { at: [8, 4, 4], size: [4, 32, 36] },
+    { at: [38, 4, 4], size: [4, 32, 36] },
+  ]),
+};
+const MEASURE = {
+  name: "pasta-measure.stl",
+  bytes: boxesStl([
+    { at: [0, 0, 0], size: [60, 20, 4] },
+    { at: [0, 0, 4], size: [40, 20, 4] },
+    { at: [0, 0, 8], size: [20, 20, 4] },
+  ]),
+};
+/** The shelf's five, for the 3D view's shots; Carl Oscar's case, eleven, for the page's. */
+const SHELF_MODELS = [FUSILLI, RACK, BINS, HOTDOG, BRACKET];
+const SHELF_ALL = [...SHELF_MODELS, TWO_TONE, PLAQUE, MANY_BINS, SPOON_REST, LID_STAND, MEASURE];
+
+async function sharedShelf(page: Page, models = SHELF_MODELS) {
+  const origin = new URL(page.url() || "http://127.0.0.1").origin;
+  const headers = { Origin: origin };
+  await page.request.post("/api/session", { data: { username: "alex", password: "spaghetti-al-dente" }, headers });
+  const id = crypto.randomUUID();
+  modelItems.push(id);
+  await page.request.post("/api/items", { headers, data: { id, ...SHELF_IDEA } });
+  for (const [position, photo] of SHELF_PHOTOS.entries()) {
+    const bytes = readFileSync(join(import.meta.dirname, "../e2e/fixtures", photo.file));
+    const uploaded = await page.request.put(`/api/items/${id}/photos/${crypto.randomUUID()}`, {
+      headers,
+      multipart: {
+        width: "1200",
+        height: "900",
+        color: photo.color,
+        position: String(position),
+        large: { name: "large.jpg", mimeType: "image/jpeg", buffer: bytes },
+        thumb: { name: "thumb.jpg", mimeType: "image/jpeg", buffer: bytes },
+      },
+    });
+    if (!uploaded.ok()) throw new Error(`Uploading ${photo.file} failed: ${uploaded.status()}`);
+  }
+  await openIdea(page, id);
+  const kept = async () => {
+    const { item } = await (await page.request.get(`/api/items/${id}`)).json();
+    return (item?.files ?? []) as { hasThumb: boolean; slice?: { status: string } | null }[];
+  };
+  // One at a time, each once the server has its row: dropped together, they would be listed in the order their
+  // uploads happened to finish, and so differently at each width.
+  for (const [index, model] of models.entries()) {
+    await page.getByTestId("idea-file-input").setInputFiles({
+      name: model.name,
+      mimeType: model.name.endsWith(".3mf") ? "model/3mf" : "model/stl",
+      buffer: Buffer.from(model.bytes),
+    });
+    for (let tries = 0; (await kept()).length <= index; tries++) {
+      if (tries > 240) throw new Error(`${model.name} never reached the server`);
+      await page.waitForTimeout(250);
+    }
+  }
+  // Each is sliced here, one at a time, and its slice and picture saved: wait for the server to have them all.
+  for (let tries = 0; ; tries++) {
+    const files = await kept();
+    if (files.length === models.length && files.every((file) => file.hasThumb && file.slice?.status === "sliced"))
+      break;
+    if (tries > 900) throw new Error("The shelf's models never all reached the server sliced");
+    await page.waitForTimeout(500);
+  }
+  const token = await guestShare(page, "items", id);
+  await page.goto(`/s/${token}`);
+  await page.locator("h1").first().waitFor();
+  await page
+    .locator(".gp-file")
+    .nth(models.length - 1)
+    .waitFor();
+}
+
+/** Opens the shared page's 3D view of the plate whose picture says this, and waits for the print to be drawn. */
+async function openSharedViewer(page: Page, name: string | RegExp) {
+  await page.getByRole("button", { name }).first().click();
+  const dialog = page.getByRole("dialog", { name: "3D view" });
+  await dialog.locator("[data-viewer=ready]").waitFor({ timeout: 60_000 });
+  await page.waitForTimeout(400);
+}
+
+/** The bins twist keeps the Gridfinity bin, scaled to 84 % for the 42 mm grid, as its model; shared afterwards. */
+async function binsTwistWithModel(page: Page) {
+  const origin = new URL(page.url() || "http://127.0.0.1").origin;
+  await page.request.post("/api/session", {
+    data: { username: "alex", password: "spaghetti-al-dente" },
+    headers: { Origin: origin },
+  });
+  await page.request.patch(`/api/twists/${SEED_TWIST_IDS.bins}`, {
+    data: { recipeId: SEED_RECIPE_IDS.petg },
+    headers: { Origin: origin },
+  });
+  await page.goto(`/twists/${SEED_TWIST_IDS.bins}`);
+  await page.getByRole("button", { name: "Adapt an STL" }).click();
+  const sheet = page.getByRole("dialog", { name: "Adapt an STL" });
+  await sheet.getByTestId("adapt-file-input").setInputFiles({
+    name: "gridfinity-bin-2x1.stl",
+    mimeType: "model/stl",
+    buffer: gridfinityBin(),
+  });
+  await sheet.getByRole("textbox", { name: "Scale" }).fill("84");
+  await sheet.getByRole("button", { name: "Keep with the twist" }).click();
+  await sheet.waitFor({ state: "hidden" });
+  for (let tries = 0; ; tries++) {
+    const { twist } = await (await page.request.get(`/api/twists/${SEED_TWIST_IDS.bins}`)).json();
+    if (twist?.model?.hasThumb && twist.model.slice?.status === "sliced") break;
+    if (tries > 240) throw new Error("The bins twist's model never reached the server sliced");
+    await page.waitForTimeout(500);
+  }
+  await openShared("twists", SEED_TWIST_IDS.bins)(page);
+}
+
+async function unshareBinsTwist(page: Page) {
+  await asAlex(page, async (origin) => {
+    const { twist } = await (await page.request.get(`/api/twists/${SEED_TWIST_IDS.bins}`)).json();
+    if (twist?.model) {
+      await page.request.delete(`/api/twists/${SEED_TWIST_IDS.bins}/file/${twist.model.id}`, {
+        headers: { Origin: origin },
+      });
+    }
+    await page.request.patch(`/api/twists/${SEED_TWIST_IDS.bins}`, {
+      data: { recipeId: null },
+      headers: { Origin: origin },
+    });
+  });
+  await unshareAll(page);
 }
 
 const BEFORE_MAIN = !!process.env.SG_BEFORE;
@@ -1813,6 +1970,126 @@ async function keepBuilds(
 }
 
 /**
+ * Prints the printer bridge files (decision 0076), through an agent token as the bridge sends them, so the shots show
+ * what the real matcher made of them. Each shot removes what it filed; the agent stays (the Agents shots run before).
+ */
+const filedPrints: string[] = [];
+const filedAttempts: string[] = [];
+const bridgeTokens = new Map<string, string>();
+
+async function bridgeToken(page: Page): Promise<string> {
+  const origin = new URL(page.url()).origin;
+  const known = bridgeTokens.get(origin);
+  if (known) return known;
+  const made = await page.request.post("/api/agents", {
+    headers: { Origin: origin },
+    data: { name: "Printer bridge", scopes: ["read", "attempts", "printer"] },
+  });
+  const { token } = (await made.json()) as { token: string };
+  // The bridge says it is there, as a real one does: only its agent's prints are matched (decision 0076).
+  await page.request.put("/api/printer/bridge", {
+    headers: { Origin: origin, Authorization: `Bearer ${token}` },
+    data: {},
+  });
+  bridgeTokens.set(origin, token);
+  return token;
+}
+
+/** The bridge files a print named `name`: its own build first, then the attempt, which the app places. */
+async function bridgeFiles(page: Page, name: string, { ago = 25 * 60_000, estimate = 40 } = {}) {
+  const headers = { Origin: new URL(page.url()).origin, Authorization: `Bearer ${await bridgeToken(page)}` };
+  const ownId = crypto.randomUUID();
+  const attemptId = crypto.randomUUID();
+  filedPrints.push(ownId);
+  await page.request.post("/api/items", { headers, data: { id: ownId, title: name, stage: "building" } });
+  const filed = await page.request.post(`/api/items/${ownId}/attempts`, {
+    headers,
+    data: {
+      id: attemptId,
+      // The browser's clock is the seed's: the print began a while before it.
+      printedAt: SEED_NOW - ago,
+      settings: {
+        estimatedMinutes: estimate,
+        filaments: [{ type: "PLA", brand: "Bambu", colorHex: "#f4f1ea", colorName: "Jade white", amsSlot: "A1" }],
+      },
+      print: { name, gcodeFile: "Metadata/plate_1.gcode", plate: 1, estimateMinutes: estimate },
+    },
+  });
+  const { attempt } = (await filed.json()) as { attempt: { itemId: string } };
+  filedAttempts.push(attemptId);
+  return { ownId, attemptId, itemId: attempt.itemId };
+}
+
+/**
+ * A build (or an idea) keeping a slicer file: started 40 minutes before the shots' "now" (just before a print that
+ * then goes straight into it), or `startedAgo` before.
+ */
+async function buildAboutToPrint(
+  page: Page,
+  title: string,
+  fileName: string,
+  {
+    startedAgo = 40 * 60_000,
+    stage = "building",
+    bytes = slicerFile(),
+  }: { startedAgo?: number; stage?: "building" | "idea"; bytes?: Uint8Array } = {},
+) {
+  const headers = { Origin: new URL(page.url()).origin };
+  const id = crypto.randomUUID();
+  filedPrints.push(id);
+  await page.request.post("/api/items", {
+    headers,
+    data: { id, title, stage, createdAt: SEED_NOW - startedAgo },
+  });
+  const read = readThreeMf(bytes);
+  const thumb = read.plates[0]?.thumbnail?.bytes;
+  await page.request.put(`/api/items/${id}/files/${crypto.randomUUID()}`, {
+    headers,
+    multipart: {
+      name: fileName,
+      size: String(bytes.length),
+      plate: "1",
+      plateCount: String(read.plates.length),
+      slicer: "BambuStudio 02.01.00.00",
+      prefill: JSON.stringify(settingsFromFile(read, 1)),
+      file: { name: fileName, mimeType: "application/octet-stream", buffer: Buffer.from(bytes) },
+      ...(thumb ? { thumb: { name: "plate_1.png", mimeType: "image/png", buffer: Buffer.from(thumb) } } : {}),
+    },
+  });
+  return id;
+}
+
+async function removeFiledPrints(page: Page) {
+  await page.unrouteAll({ behavior: "ignoreErrors" });
+  const origin = new URL(page.url()).origin;
+  const headers = { Origin: origin };
+  for (const id of filedAttempts.splice(0)) await page.request.delete(`/api/attempts/${id}`, { headers });
+  for (const id of filedPrints.splice(0)) await page.request.delete(`/api/items/${id}`, { headers });
+  // The shot's bridge goes (its token with it), and the seed's report comes back for the shots after.
+  if (bridgeTokens.delete(origin)) {
+    await page.request.delete("/api/printer/bridge", { headers });
+    await seedBridge(page.request, origin);
+  }
+}
+
+/**
+ * The printer's question: a herb planter started two days ago and an idea for the balcony both keep planter-v2, so
+ * the print of "planter-v2(2)" could be either, and it asks.
+ */
+async function printToAskAbout(page: Page) {
+  await buildAboutToPrint(page, "Herb planter", "planter-v2.gcode.3mf", { startedAgo: 2 * 24 * 60 * 60_000 });
+  await buildAboutToPrint(page, "Planters for the balcony", "planter-v2.gcode.3mf", {
+    startedAgo: 5 * 24 * 60 * 60_000,
+    stage: "idea",
+  });
+  return bridgeFiles(page, "planter-v2(2)");
+}
+
+/** Only these prints on the bed (the rest of the builds as they are), so the printer's question is the one shown. */
+const onlyOnTheBed = (page: Page, ids: string[]) =>
+  keepBuilds(page, (item) => !item.attempts?.some((attempt) => attempt.outcome === null) || ids.includes(item.id));
+
+/**
  * The seed's agents (scripts/seed/agents.ts) by name, so the work done through them shows the agent's mark: the seed
  * keeps them out of the database to leave the Agents page's shots alone. The page is reloaded to show them.
  */
@@ -1953,29 +2230,130 @@ export const shots: Shot[] = [
     cleanup: unshareAll,
   },
   {
-    // The bins' twist, with the PETG recipe as how we print it (only for this shot: cleanup takes it off again).
+    // The bins' twist, with the PETG recipe as how we print it and the bin it keeps as its model, sliced (only for
+    // this shot: cleanup takes both off again).
     name: "shared-twist",
     path: "/sign-in",
     signedOut: true,
     fullPage: true,
+    prepare: binsTwistWithModel,
+    cleanup: unshareBinsTwist,
+  },
+  {
+    // Carl Oscar's case (decision 0077): photos, then eleven models as the app's cards, each opening its 3D view; one
+    // with parts in the air, a project's plate 1 of 3, models in their own colours, one in four filaments.
+    name: "shared-models",
+    path: "/sign-in",
+    signedOut: true,
+    fullPage: true,
+    prepare: (page) => sharedShelf(page, SHELF_ALL),
+    cleanup: async (page) => {
+      await unshareAll(page);
+      await asAlex(page, () => removeModelItems(page));
+    },
+  },
+  {
+    // The same eleven on a computer's screen, scrolled to about the eighth: the photos stay in view beside them.
+    name: "shared-models-scrolled",
+    path: "/sign-in",
+    signedOut: true,
+    width: 1440,
+    why: "the photos stay beside the models only on a computer",
     prepare: async (page) => {
-      await asAlex(page, (origin) =>
-        page.request.patch(`/api/twists/${SEED_TWIST_IDS.bins}`, {
-          data: { recipeId: SEED_RECIPE_IDS.petg },
-          headers: { Origin: origin },
-        }),
-      );
-      await openShared("twists", SEED_TWIST_IDS.bins)(page);
+      await sharedShelf(page, SHELF_ALL);
+      await page
+        .locator(".gp-file")
+        .nth(7)
+        .evaluate((card) => {
+          const box = card.getBoundingClientRect();
+          window.scrollBy(0, box.top + box.height / 2 - window.innerHeight / 2);
+        });
+      await page.waitForTimeout(300);
     },
     cleanup: async (page) => {
-      await asAlex(page, (origin) =>
-        page.request.patch(`/api/twists/${SEED_TWIST_IDS.bins}`, {
-          data: { recipeId: null },
-          headers: { Origin: origin },
-        }),
-      );
       await unshareAll(page);
+      await asAlex(page, () => removeModelItems(page));
     },
+  },
+  {
+    // A guest taps the knob's plate: the app's own 3D view of how it prints, in a sheet over the page.
+    name: "shared-models-3d",
+    path: "/sign-in",
+    signedOut: true,
+    prepare: async (page) => {
+      await sharedShelf(page);
+      await openSharedViewer(page, /fusilli-knob\.stl\s*, in 3D$/);
+    },
+    cleanup: async (page) => {
+      await unshareAll(page);
+      await asAlex(page, () => removeModelItems(page));
+    },
+  },
+  {
+    // A build's attempt, its plate opened in 3D from the shared page: the tugboat's sliced file, every layer.
+    name: "shared-build-3d",
+    path: "/sign-in",
+    signedOut: true,
+    prepare: async (page) => {
+      await openShared("items", SEED_BUILD_IDS.tugboat)(page);
+      await openSharedViewer(page, /^tugboat\.gcode\.3mf\s*, See how it prints/);
+    },
+    cleanup: unshareAll,
+  },
+  {
+    // A keyboard reaches the twist's model card: the focus ring goes round the whole card, which is its button.
+    name: "shared-twist-focus",
+    path: "/sign-in",
+    signedOut: true,
+    width: 1440,
+    why: "a keyboard's focus ring; a phone has none",
+    prepare: async (page) => {
+      await binsTwistWithModel(page);
+      const card = page.locator(".gp-file .gp-open").first();
+      await card.focus();
+      await page.keyboard.press("Shift+Tab");
+      await page.keyboard.press("Tab");
+      await card.evaluate((button) => button.closest(".gp-file")?.scrollIntoView({ block: "center" }));
+      await page.waitForTimeout(300);
+    },
+    cleanup: unshareBinsTwist,
+  },
+  {
+    // The sheet opens at once while the viewer's code is on its way: a breathing dot where the print will stand.
+    name: "shared-build-3d-loading",
+    path: "/sign-in",
+    signedOut: true,
+    prepare: async (page) => {
+      await openShared("items", SEED_BUILD_IDS.tugboat)(page);
+      // The viewer's code never comes (the built page's chunk, or the dev server's module).
+      await page.route(/\/(assets\/guest\/viewer-[\w-]+\.js|src\/guest\/viewer\.tsx)(\?.*)?$/, () => undefined);
+      await page
+        .getByRole("button", { name: /^tugboat\.gcode\.3mf\s*, See how it prints/ })
+        .first()
+        .click();
+      await page.locator(".gp-viewer-wait").waitFor();
+      await page.waitForTimeout(400);
+    },
+    cleanup: unshareAll,
+  },
+  {
+    // Offline: the viewer's code can't load, so the sheet says so, with a way to try again.
+    name: "shared-build-3d-offline",
+    path: "/sign-in",
+    signedOut: true,
+    prepare: async (page) => {
+      await openShared("items", SEED_BUILD_IDS.tugboat)(page);
+      await page.route(/\/(assets\/guest\/viewer-[\w-]+\.js|src\/guest\/viewer\.tsx)(\?.*)?$/, (route) =>
+        route.abort(),
+      );
+      await page
+        .getByRole("button", { name: /^tugboat\.gcode\.3mf\s*, See how it prints/ })
+        .first()
+        .click();
+      await page.getByRole("button", { name: "Try again" }).waitFor();
+      await page.waitForTimeout(300);
+    },
+    cleanup: unshareAll,
   },
   {
     // A photo opened large over the shared page (a :target view, no script).
@@ -6515,6 +6893,7 @@ export const shots: Shot[] = [
   { name: "styleguide-buttons", path: "/styleguide", selector: "#buttons" },
   { name: "styleguide-sharing", path: "/styleguide", selector: "#sharing" },
   { name: "styleguide-builds", path: "/styleguide", selector: "#builds" },
+  { name: "styleguide-prints", path: "/styleguide", selector: "#prints" },
   // The "…" menu rows, a build's menu while its print is on the bed among them.
   { name: "styleguide-sheets", path: "/styleguide", selector: "#sheets" },
   {
@@ -7888,6 +8267,356 @@ shots.push(
     },
   ] as Shot[]),
 );
+
+// Which build a print belongs to (decision 0076): the printer's question, a print it placed, and moving one.
+// After the Agents shots: these make the printer bridge's agent.
+shots.push(
+  ...([
+    {
+      // A print the printer filed in a build of its own: two keep the same file, so it asks which.
+      name: "builds-which-build",
+      path: "/builds",
+      prepare: async (page) => {
+        const { ownId } = await printToAskAbout(page);
+        await onlyOnTheBed(page, [ownId]);
+        await page.getByRole("heading", { name: "Which build is this?" }).first().waitFor();
+        await page.waitForTimeout(400);
+      },
+      cleanup: removeFiledPrints,
+    },
+    {
+      // The same on Today (desktop): the question sits on the print's own card.
+      name: "today-which-build",
+      path: "/today",
+      width: 1440,
+      why: "Today is desktop-only",
+      prepare: async (page) => {
+        const { ownId } = await printToAskAbout(page);
+        await onlyOnTheBed(page, [ownId]);
+        await page.getByRole("heading", { name: "Which build is this?" }).first().waitFor();
+        await page.waitForTimeout(400);
+      },
+      cleanup: removeFiledPrints,
+    },
+    {
+      // And in the phone's Journal, where Now shows what is on the bed.
+      name: "journal-which-build",
+      path: "/journal",
+      width: 390,
+      why: "Now is the phone's Today",
+      prepare: async (page) => {
+        const { ownId } = await printToAskAbout(page);
+        await onlyOnTheBed(page, [ownId]);
+        await page.getByRole("heading", { name: "Which build is this?" }).first().waitFor();
+        await page.waitForTimeout(400);
+      },
+      cleanup: removeFiledPrints,
+    },
+    {
+      // The printer's build itself: the question leads its print's card.
+      name: "build-which-build",
+      path: "/builds",
+      prepare: async (page) => {
+        const { ownId } = await printToAskAbout(page);
+        await page.goto(`/builds/${ownId}`);
+        await page
+          .getByRole("button", { name: /^Herb planter/ })
+          .first()
+          .waitFor();
+        // The whole question in view on a phone, above the action bar.
+        await page
+          .getByRole("button", { name: "Its own build" })
+          .first()
+          .evaluate((node) => node.scrollIntoView({ block: "center" }));
+        await page.waitForTimeout(400);
+      },
+      cleanup: removeFiledPrints,
+    },
+    {
+      // "Another build": the builds in progress (the card's guesses left out, it shows them), search on desktop, "Its
+      // own build", then done and shelved.
+      name: "which-build-sheet",
+      path: "/builds",
+      prepare: async (page) => {
+        const { ownId } = await printToAskAbout(page);
+        await page.goto(`/builds/${ownId}`);
+        await page.getByRole("button", { name: "Another build" }).first().click();
+        await page.getByRole("dialog", { name: "Which build is this?" }).getByText("In progress").waitFor();
+        await page.waitForTimeout(500);
+      },
+      cleanup: removeFiledPrints,
+    },
+    {
+      // The same sheet on a phone, scrolled to its end: "Its own build" and the done and shelved builds, a step quieter.
+      name: "which-build-sheet-end",
+      path: "/builds",
+      width: 390,
+      why: "the phone's sheet scrolls; the desktop's shows the same in which-build-sheet",
+      prepare: async (page) => {
+        const { ownId } = await printToAskAbout(page);
+        await page.goto(`/builds/${ownId}`);
+        await page.getByRole("button", { name: "Another build" }).first().click();
+        const sheet = page.getByRole("dialog", { name: "Which build is this?" });
+        await sheet.getByText("In progress").waitFor();
+        await page.waitForTimeout(500);
+        await sheet
+          .getByRole("button")
+          .last()
+          .evaluate((node) => node.scrollIntoView({ block: "end" }));
+        await page.waitForTimeout(400);
+      },
+      cleanup: removeFiledPrints,
+    },
+    {
+      // While the guesses are on their way: the question and its buttons at once, a row's room kept for them.
+      name: "builds-which-build-loading",
+      path: "/builds",
+      prepare: async (page) => {
+        await page.route("**/api/attempts/*/suggestions", () => {
+          // Held: the guesses never arrive while the shot is taken.
+        });
+        const { ownId } = await printToAskAbout(page);
+        await onlyOnTheBed(page, [ownId]);
+        await page.getByRole("heading", { name: "Which build is this?" }).first().waitFor();
+        await page.waitForTimeout(400);
+      },
+      cleanup: removeFiledPrints,
+    },
+    {
+      // Nothing fits: no question, one quiet line with a way to move it anyway.
+      name: "builds-which-build-none",
+      path: "/builds",
+      prepare: async (page) => {
+        const { ownId } = await bridgeFiles(page, "cable-clip-v3");
+        await onlyOnTheBed(page, [ownId]);
+        await page.getByRole("button", { name: "Move it" }).first().waitFor();
+        await page.waitForTimeout(400);
+      },
+      cleanup: removeFiledPrints,
+    },
+    {
+      // A print the app put straight into the build started a moment before with the same file: why, and a way out.
+      name: "builds-matched",
+      path: "/builds",
+      prepare: async (page) => {
+        const boat = await buildAboutToPrint(page, "Bath boat", "bath-boat.gcode.3mf", { bytes: tugboatFile() });
+        await bridgeFiles(page, "bath-boat(2)");
+        await onlyOnTheBed(page, [boat]);
+        await page.getByRole("button", { name: "Not this build?" }).first().waitFor();
+        await page.waitForTimeout(400);
+      },
+      cleanup: removeFiledPrints,
+    },
+    {
+      name: "build-matched",
+      path: "/builds",
+      prepare: async (page) => {
+        const boat = await buildAboutToPrint(page, "Bath boat", "bath-boat.gcode.3mf", { bytes: tugboatFile() });
+        await bridgeFiles(page, "bath-boat(2)");
+        await page.goto(`/builds/${boat}`);
+        await page.getByRole("button", { name: "Not this build?" }).first().waitFor();
+        // The attempt and its line in view on a phone (below the build's picture and note).
+        await page
+          .getByRole("button", { name: "Not this build?" })
+          .first()
+          .evaluate((node) => node.scrollIntoView({ block: "center" }));
+        await page.waitForTimeout(400);
+      },
+      cleanup: removeFiledPrints,
+    },
+    {
+      // Any attempt can move: its "…" has "Move to another build", which opens the same sheet.
+      name: "move-attempt-sheet",
+      path: `/builds/${SEED_IDS.desiccantHook}`,
+      prepare: async (page) => {
+        await page.getByRole("button", { name: "Options for attempt 2" }).click();
+        await page.getByRole("button", { name: "Move to another build" }).click();
+        await page.getByRole("dialog", { name: "Move attempt 2" }).getByText("In progress").waitFor();
+        await page.waitForTimeout(500);
+      },
+    },
+    {
+      // Further down the same sheet on a phone: a new build comes right after the builds in progress, before the
+      // done and shelved ones, within the thumb's reach.
+      name: "move-attempt-sheet-new",
+      path: `/builds/${SEED_IDS.desiccantHook}`,
+      width: 390,
+      why: "the phone's sheet scrolls; the desktop's shows it whole in move-attempt-sheet",
+      prepare: async (page) => {
+        await page.getByRole("button", { name: "Options for attempt 2" }).click();
+        await page.getByRole("button", { name: "Move to another build" }).click();
+        const sheet = page.getByRole("dialog", { name: "Move attempt 2" });
+        await sheet.getByText("In progress").waitFor();
+        await page.waitForTimeout(500);
+        await sheet
+          .getByRole("button", { name: /^Its own build/ })
+          .evaluate((node) => node.scrollIntoView({ block: "center" }));
+        await page.waitForTimeout(400);
+      },
+    },
+    {
+      // "Not this build?" on a matched print: the builds in progress, then "Its own build", which brings back the build
+      // the printer made (scrolled to it on a phone).
+      name: "not-this-build-sheet",
+      path: "/builds",
+      prepare: async (page) => {
+        const boat = await buildAboutToPrint(page, "Bath boat", "bath-boat.gcode.3mf", { bytes: tugboatFile() });
+        await bridgeFiles(page, "bath-boat(2)");
+        await page.goto(`/builds/${boat}`);
+        await page.getByRole("button", { name: "Not this build?" }).first().click();
+        const sheet = page.getByRole("dialog", { name: "Move attempt 1" });
+        await sheet.getByText("In progress").waitFor();
+        await page.waitForTimeout(500);
+        await sheet
+          .getByRole("button", { name: /^Its own build/ })
+          .evaluate((node) => node.scrollIntoView({ block: "center" }));
+        await page.waitForTimeout(400);
+      },
+      cleanup: removeFiledPrints,
+    },
+    {
+      // The moment after a move: the toast says where it went, with View and Undo.
+      name: "build-moved-toast",
+      path: "/builds",
+      prepare: async (page) => {
+        const boat = await buildAboutToPrint(page, "Bath boat", "bath-boat.gcode.3mf", { bytes: tugboatFile() });
+        await bridgeFiles(page, "bath-boat(2)");
+        await page.goto(`/builds/${boat}`);
+        await page.getByRole("button", { name: "Not this build?" }).first().click();
+        const sheet = page.getByRole("dialog", { name: "Move attempt 1" });
+        await sheet.getByRole("button", { name: /^Paddle steamer/ }).click();
+        await page.getByText("Moved to Paddle steamer").waitFor();
+        await sheet.waitFor({ state: "hidden" });
+        await page.waitForTimeout(600);
+      },
+      cleanup: async (page) => {
+        const headers = { Origin: new URL(page.url()).origin };
+        const { item } = (await (await page.request.get(`/api/items/${SEED_BUILD_IDS.paddleSteamer}`)).json()) as {
+          item: { attempts: Array<{ id: string; outcome: string | null }> };
+        };
+        for (const attempt of item.attempts.filter((one) => one.outcome === null))
+          await page.request.delete(`/api/attempts/${attempt.id}`, { headers });
+        await removeFiledPrints(page);
+      },
+    },
+    {
+      // Not this build: moved to the paddle steamer, the toast says so with View and Undo, and the attempt says from where.
+      name: "build-moved",
+      path: "/builds",
+      prepare: async (page) => {
+        const boat = await buildAboutToPrint(page, "Bath boat", "bath-boat.gcode.3mf", { bytes: tugboatFile() });
+        await bridgeFiles(page, "bath-boat(2)");
+        await page.goto(`/builds/${boat}`);
+        await page.getByRole("button", { name: "Not this build?" }).first().click();
+        const sheet = page.getByRole("dialog", { name: "Move attempt 1" });
+        await sheet.getByRole("button", { name: /^Paddle steamer/ }).click();
+        await page.getByText("Moved to Paddle steamer").waitFor();
+        await page.getByRole("button", { name: "View" }).click();
+        await page
+          .getByText(/^Moved here from/)
+          .first()
+          .waitFor();
+        await page
+          .getByText(/^Moved here from/)
+          .first()
+          .scrollIntoViewIfNeeded();
+        await page.waitForTimeout(500);
+      },
+      cleanup: async (page) => {
+        // The moved print goes with the shot's builds.
+        const headers = { Origin: new URL(page.url()).origin };
+        const { item } = (await (await page.request.get(`/api/items/${SEED_BUILD_IDS.paddleSteamer}`)).json()) as {
+          item: { attempts: Array<{ id: string; outcome: string | null }> };
+        };
+        for (const attempt of item.attempts.filter((one) => one.outcome === null))
+          await page.request.delete(`/api/attempts/${attempt.id}`, { headers });
+        await removeFiledPrints(page);
+      },
+    },
+    {
+      // A print from the printer on the bed, nobody named: the printer's mark and "From the printer", never the avatar
+      // of whoever paired the bridge.
+      name: "builds-from-printer",
+      path: "/builds",
+      prepare: async (page) => {
+        const { ownId } = await bridgeFiles(page, "cable-clip-v3");
+        await onlyOnTheBed(page, [ownId]);
+        await page.getByRole("button", { name: "From the printer. Say who started it" }).first().waitFor();
+        await page.waitForTimeout(400);
+      },
+      cleanup: removeFiledPrints,
+    },
+    {
+      // The same card once someone said Sam started it: his avatar, with the printer as its small mark.
+      name: "builds-started-by",
+      path: "/builds",
+      prepare: async (page) => {
+        const { ownId, attemptId } = await bridgeFiles(page, "cable-clip-v3");
+        await startedBy(page, attemptId, "sam");
+        await onlyOnTheBed(page, [ownId]);
+        await page
+          .getByRole("button", { name: /· from the printer\. Change who started it$/ })
+          .first()
+          .waitFor();
+        await page.waitForTimeout(400);
+      },
+      cleanup: removeFiledPrints,
+    },
+    {
+      // The printer's build: the attempt's header names the printer, and the build's own line says the printer made it.
+      name: "build-from-printer",
+      path: "/builds",
+      prepare: async (page) => {
+        const { ownId } = await bridgeFiles(page, "cable-clip-v3");
+        await page.goto(`/builds/${ownId}`);
+        await page.getByText(/^Made by the printer/).waitFor();
+        // The header and the build's own line in view on a phone, above the action bar.
+        await page.getByText(/^Made by the printer/).evaluate((node) => node.scrollIntoView({ block: "center" }));
+        await page.waitForTimeout(400);
+      },
+      cleanup: removeFiledPrints,
+    },
+    {
+      // "Who started it?": the two of you (you first), a sheet on phones and a popover from the line on desktop.
+      name: "who-started-picker",
+      path: "/builds",
+      prepare: async (page) => {
+        const { ownId } = await bridgeFiles(page, "cable-clip-v3");
+        await page.goto(`/builds/${ownId}`);
+        await page.getByRole("button", { name: "From the printer. Say who started it" }).first().click();
+        await page.getByRole("dialog", { name: "Who started it?" }).getByRole("button", { name: "You" }).waitFor();
+        await page.waitForTimeout(500);
+      },
+      cleanup: removeFiledPrints,
+    },
+    {
+      // A tap on Sam: the header says "Sam Okafor · from the printer", and the toast has Undo.
+      name: "build-started-by",
+      path: "/builds",
+      prepare: async (page) => {
+        const { ownId } = await bridgeFiles(page, "cable-clip-v3");
+        await page.goto(`/builds/${ownId}`);
+        await page.getByRole("button", { name: "From the printer. Say who started it" }).first().click();
+        const picker = page.getByRole("dialog", { name: "Who started it?" });
+        await picker.getByRole("button", { name: "Sam Okafor" }).click();
+        await page.getByText("Started by Sam Okafor").waitFor();
+        await picker.waitFor({ state: "hidden" });
+        await page.waitForTimeout(600);
+      },
+      cleanup: removeFiledPrints,
+    },
+  ] as Shot[]),
+);
+
+/** Says, as a person does, who started a print the printer recorded (`username` one of the seed's people). */
+async function startedBy(page: Page, attemptId: string, username: string) {
+  const headers = { Origin: new URL(page.url()).origin };
+  const { people } = (await (await page.request.get("/api/people")).json()) as {
+    people: Array<{ id: string; username: string }>;
+  };
+  const person = people.find((one) => one.username === username);
+  await page.request.put(`/api/attempts/${attemptId}/started-by`, { headers, data: { startedBy: person?.id ?? null } });
+}
 
 // Last: the queued finish stays offline and unsent, so nothing after it would work.
 shots.push(

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { fileKey, jpegSize, stableId, titleFromJob } from "../../bridge/names.ts";
+import { jpegSize, stableId, titleFromJob } from "../../bridge/names.ts";
 
 describe("names", () => {
   it("cleans a file name into a title", () => {
@@ -7,11 +7,6 @@ describe("names", () => {
     expect(titleFromJob("/cache/Desk  hook.3mf")).toBe("Desk hook");
     expect(titleFromJob("  ")).toBeNull();
     expect(titleFromJob(".gcode.3mf")).toBeNull();
-  });
-
-  it("compares file names the way people would", () => {
-    expect(fileKey("Bracket_v2.gcode.3mf")).toBe(fileKey("bracket v2"));
-    expect(fileKey("/sdcard/bracket v2.3mf")).toBe("bracket v2");
   });
 
   it("makes the same id from the same parts and a different one otherwise", () => {

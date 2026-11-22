@@ -5,6 +5,7 @@ import { tanstackRouter } from "@tanstack/router-plugin/vite";
 import react from "@vitejs/plugin-react";
 import { defineConfig } from "vite";
 import { bundleReport } from "./scripts/vite-bundle-report.ts";
+import { guestPage } from "./scripts/vite-guest.ts";
 import { landingPage } from "./scripts/vite-landing.ts";
 import { phosphorWeights } from "./scripts/vite-phosphor-weights.ts";
 import { serviceWorker } from "./scripts/vite-service-worker.ts";
@@ -33,6 +34,8 @@ export default defineConfig(({ command }) => ({
     tailwindcss(),
     serviceWorker(),
     landingPage(),
+    // The shared page (guest.html) and its 3D view: built on its own, after the app (decision 0077).
+    guestPage(),
     // The slicing engine's files at /slicer/<version>/ (docs/slicer.md): before the Worker's plugin, so `vite dev` serves them.
     slicerEngine(),
     ...(process.env.SPAGHETTI_BUNDLE_REPORT ? [bundleReport()] : []),

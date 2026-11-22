@@ -510,6 +510,22 @@ export function describeChanges(before: AttemptSettings, after: AttemptSettings)
   return diffSettings(before, after).flatMap((row) => row.changes);
 }
 
+/**
+ * What changed since the attempt before, as the chips on an attempt say it. An attempt the printer bridge (or another
+ * agent) filed says only what it knew, which is nothing at all when it couldn't read the file: a setting it left out
+ * is unknown, not taken away, which matters once the print is moved next to attempts that said more (decision 0076).
+ */
+export function changesSince(
+  before: AttemptSettings,
+  attempt: { settings: AttemptSettings; createdVia: string | null },
+): SettingChange[] {
+  if (!attempt.createdVia) return describeChanges(before, attempt.settings);
+  const said = Object.fromEntries(
+    Object.entries(before).filter(([key]) => attempt.settings[key as keyof AttemptSettings] !== undefined),
+  ) as AttemptSettings;
+  return describeChanges(said, attempt.settings);
+}
+
 function supportChange(before: AttemptSettings, after: AttemptSettings): SettingChange | null {
   const a = before.supportEnabled ? (before.supportType ?? "normal") : null;
   const b = after.supportEnabled ? (after.supportType ?? "normal") : null;
@@ -641,4 +657,17 @@ export function summarizeBuild(attempts: readonly SummarizableAttempt[]): BuildS
     grams: gramsKnown ? { value: grams, atLeast: gramsMissing } : null,
     filaments,
   };
+}
+
+/**
+ * The person an attempt is credited to (decision 0076): whoever logged it, or for a print from the printer whoever a
+ * person said started it, and nobody until then. The printer bridge's prints are never the owner's: pairing the
+ * bridge doesn't start anyone's prints.
+ */
+export function creditedTo(attempt: {
+  createdBy: string;
+  fromPrinter?: boolean;
+  startedBy?: string | null;
+}): string | null {
+  return attempt.fromPrinter ? (attempt.startedBy ?? null) : attempt.createdBy;
 }

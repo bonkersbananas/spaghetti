@@ -1,4 +1,5 @@
 import type { JournalEntry as Entry, Item, Person } from "@shared/api";
+import { creditedTo } from "@shared/attempts";
 import { Link } from "@tanstack/react-router";
 import { JournalEntry } from "@/components/journal/JournalEntry";
 import { Button } from "@/components/ui/Button";
@@ -59,7 +60,7 @@ export function Lately({ label, summary, entries, items, people, via }: LatelyPr
               <JournalEntry
                 entry={entry}
                 item={item}
-                person={people.get(attempt?.createdBy ?? entry.by)}
+                person={people.get((attempt ? creditedTo(attempt) : entry.by) ?? "")}
                 via={via(entry.via)}
                 when="time"
                 compact

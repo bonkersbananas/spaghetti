@@ -161,7 +161,10 @@ export interface WeekPrint {
   outcome: Outcome | null;
   /** When it was printed (the "when" of the attempt). */
   at: number;
-  by: string;
+  /** Whose print it is (shared/attempts.ts `creditedTo`): null for a print from the printer nobody has said they started. */
+  by: string | null;
+  /** The printer bridge recorded it (decision 0076). */
+  fromPrinter?: boolean;
   photo: WeekPhoto | null;
 }
 

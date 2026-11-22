@@ -645,6 +645,42 @@
   mask-image: linear-gradient(to bottom, black calc(100% - 3lh), transparent calc(100% - 1lh));
 }
 /*
+ * The printer's mark and glyph (decision 0076), drawn in CSS rather than with the icon component, so the avatar every
+ * screen loads doesn't carry an icon's six weights in its script. `printer-glyph`: Phosphor's Printer (fill) as a mask in
+ * the current color (the printer's small mark on the avatar of whoever started a print). `printer-mark`: PrinterMark,
+ * a rounded square on a layer of ink with the glyph in `ink-soft`, about 60 % of it as a face's initials are.
+ */
+@utility printer-glyph {
+  background-color: currentColor;
+  -webkit-mask:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 256 256'%3E%3Cpath d='M240,96v80a8,8,0,0,1-8,8H200v32a8,8,0,0,1-8,8H64a8,8,0,0,1-8-8V184H24a8,8,0,0,1-8-8V96c0-13.23,11.36-24,25.33-24H56V40a8,8,0,0,1,8-8H192a8,8,0,0,1,8,8V72h14.67C228.64,72,240,82.77,240,96ZM72,72H184V48H72Zm112,88H72v48H184Zm16-44a12,12,0,1,0-12,12A12,12,0,0,0,200,116Z'/%3E%3C/svg%3E")
+    center / contain no-repeat;
+  mask:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 256 256'%3E%3Cpath d='M240,96v80a8,8,0,0,1-8,8H200v32a8,8,0,0,1-8,8H64a8,8,0,0,1-8-8V184H24a8,8,0,0,1-8-8V96c0-13.23,11.36-24,25.33-24H56V40a8,8,0,0,1,8-8H192a8,8,0,0,1,8,8V72h14.67C228.64,72,240,82.77,240,96ZM72,72H184V48H72Zm112,88H72v48H184Zm16-44a12,12,0,1,0-12,12A12,12,0,0,0,200,116Z'/%3E%3C/svg%3E")
+    center / contain no-repeat;
+}
+@utility printer-mark {
+  position: relative;
+  display: inline-block;
+  flex-shrink: 0;
+  border-radius: var(--radius-mark);
+  /* A layer of ink, as a row's glyph tile is: it lifts off cream in both themes (the dark well would read as a hole). */
+  background-color: color-mix(in oklab, var(--color-ink) 7%, transparent);
+  color: var(--color-ink-soft);
+  &::after {
+    content: "";
+    position: absolute;
+    inset: 21%;
+    background-color: currentColor;
+    -webkit-mask:
+      url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 256 256'%3E%3Cpath d='M240,96v80a8,8,0,0,1-8,8H200v32a8,8,0,0,1-8,8H64a8,8,0,0,1-8-8V184H24a8,8,0,0,1-8-8V96c0-13.23,11.36-24,25.33-24H56V40a8,8,0,0,1,8-8H192a8,8,0,0,1,8,8V72h14.67C228.64,72,240,82.77,240,96ZM72,72H184V48H72Zm112,88H72v48H184Zm16-44a12,12,0,1,0-12,12A12,12,0,0,0,200,116Z'/%3E%3C/svg%3E")
+      center / contain no-repeat;
+    mask:
+      url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 256 256'%3E%3Cpath d='M240,96v80a8,8,0,0,1-8,8H200v32a8,8,0,0,1-8,8H64a8,8,0,0,1-8-8V184H24a8,8,0,0,1-8-8V96c0-13.23,11.36-24,25.33-24H56V40a8,8,0,0,1,8-8H192a8,8,0,0,1,8,8V72h14.67C228.64,72,240,82.77,240,96ZM72,72H184V48H72Zm112,88H72v48H184Zm16-44a12,12,0,1,0-12,12A12,12,0,0,0,200,116Z'/%3E%3C/svg%3E")
+      center / contain no-repeat;
+  }
+}
+/*
  * The agent mark's cutout on an avatar (ui/Avatar.tsx), one per size: the face with a rounded square taken out of its
  * lower right corner, a hair wider than the mark that sits there. A mask, so it reads on any surface (paper, cream, a
  * sheet, a photo) without a ring in the surface's color, and never covers the face. Kept here, not built in

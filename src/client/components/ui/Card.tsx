@@ -57,6 +57,11 @@ export interface CardProps {
   person?: Pick<Person, "name" | "color">;
   /** The agent it was made through: the avatar gets its mark and says "via …". */
   via?: string;
+  /**
+   * The printer's (decision 0076): a print it recorded, or a build it made. Its mark stands in the avatar's place, or
+   * with `person` (someone said they started it) their avatar carries the printer as its small mark.
+   */
+  printer?: boolean;
   /** "portrait" (4:5) suits grids of prints; "tall" is 3:4. */
   aspect?: "landscape" | "square" | "portrait" | "tall";
   /** Where the card leads (a TanStack Router link). */
@@ -97,6 +102,7 @@ export function Card({
   reactions,
   person,
   via,
+  printer,
   aspect = "landscape",
   link,
   onClick,
@@ -224,13 +230,20 @@ export function Card({
         {sub && <p className={cn("text-small text-ink-soft truncate", heading ? "pt-0.5" : "pt-1")}>{sub}</p>}
         {reactions}
         {/* The title has the whole width; the time, the avatar and (laid over the card) the menu share one row below it. */}
-        {(meta || person || reserveEnd) && (
+        {(meta || person || printer || reserveEnd) && (
           <div
             className={cn("mt-auto flex min-h-8 items-center gap-1.5", heading && "pt-0.5", reserveEnd && "h-10 pr-9")}
           >
             {meta && <p className="text-small text-ink-faint line-clamp-2 min-w-0 flex-1">{meta}</p>}
             {!meta && <span className="flex-1" />}
-            {person && <Avatar person={person} size="xs" via={via} />}
+            {person ? (
+              <Avatar person={person} size="xs" via={printer ? undefined : via} printer={printer} />
+            ) : (
+              // The printer's mark (ui/PrinterMark.tsx), drawn in CSS here: the card is on every first load.
+              printer && (
+                <span role="img" aria-label="The printer" title="The printer" className="printer-mark size-6" />
+              )
+            )}
           </div>
         )}
       </div>

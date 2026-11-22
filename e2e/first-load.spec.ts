@@ -40,13 +40,18 @@ import { SEED_PASSWORD, SEED_USERS } from "../scripts/lib/local-app.ts";
  * every card and the idea's note use), a note that is only a link shows it once as its card, and a shared title loses its site's name.
  * 2026-11-18: /ideas, /journal and /pantry +2: the quiet unread dot on the Journal tab and Today's sidebar item (UnreadDot and the
  * unread-comments query, about 1.1 kB gzip), drawn by the shell on every screen; main's /journal was already 0.6 over its ceiling.
+ * 2026-11-21: /today +1 and /journal +2: a print from the printer is the printer's, not whoever paired the bridge (decision
+ * 0076), so the cards on the bed, Lately and the Journal's entries draw the printer's mark and "From the printer" in the
+ * avatar's place (about 0.5 kB gzip, with the print's question from the same pull request). Kept small: the mark and its
+ * glyph are CSS (printer-mark, printer-glyph), the line and the "Who started it?" tap load with the card's other printer
+ * parts (print-place-lazy.ts), and none of it is in the avatar every screen loads. Main's /journal was already 1.0 over.
  */
 const CEILING_KB = {
   "/sign-in": 185,
-  "/today": 295,
+  "/today": 296,
   "/ideas": 264,
   "/builds": 267,
-  "/journal": 281,
+  "/journal": 283,
   "/search": 275,
   "/pantry": 261,
   "/printer": 260,
