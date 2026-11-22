@@ -31,6 +31,9 @@ interface PhotoStripProps {
   attemptPhotos?: { photo: PhotoView; attempt: number }[];
   /** Makes an attempt's photo the build's cover (an own photo is moved first instead). */
   onCoverAttemptPhoto?: (photoId: string) => void;
+  /** The cover is one of the attempts' photos (`coverPhotoId`): making an own photo the cover takes it back. */
+  coverIsAttemptPhoto?: string | null;
+  onClearCover?: () => void;
 }
 
 /**
@@ -48,6 +51,8 @@ export function PhotoStrip({
   fixedCover,
   attemptPhotos = [],
   onCoverAttemptPhoto,
+  coverIsAttemptPhoto,
+  onClearCover,
 }: PhotoStripProps) {
   const queryClient = useQueryClient();
   const isDesktop = useIsDesktop();
@@ -87,7 +92,12 @@ export function PhotoStrip({
     return {
       // Photos still uploading keep their place at the end; saved ones can't move or go without a connection.
       cover:
-        !fixedCover && !offline && !photo.upload && (attemptOf.has(id) ? !!onCoverAttemptPhoto : order.indexOf(id) > 0),
+        !fixedCover &&
+        !offline &&
+        !photo.upload &&
+        (attemptOf.has(id)
+          ? !!onCoverAttemptPhoto && id !== coverIsAttemptPhoto
+          : order.indexOf(id) > 0 || !!coverIsAttemptPhoto),
       remove: !offline || !!photo.upload,
     };
   };
@@ -153,7 +163,8 @@ export function PhotoStrip({
 
   function move(photoId: string, by: number) {
     const from = order.indexOf(photoId);
-    if (offline) return;
+    // Attempt photos stay with their attempt: only the build's own can be moved.
+    if (offline || from < 0) return;
     const to = from + by;
     if (to < 0 || to >= order.length) return;
     const next = [...order];
@@ -188,8 +199,8 @@ export function PhotoStrip({
         }}
         aria-label={
           attempt
-            ? `Photo ${index + 1}, attempt ${attempt}`
-            : `Photo ${index + 1}${index === 0 && !fixedCover ? ", the cover" : ""}`
+            ? `Photo ${index + 1}, attempt ${attempt}${id === coverIsAttemptPhoto ? ", the cover" : ""}`
+            : `Photo ${index + 1}${index === 0 && !fixedCover && !coverIsAttemptPhoto ? ", the cover" : ""}`
         }
         aria-current={selected || undefined}
         aria-haspopup={selected && actionable ? "dialog" : undefined}
@@ -313,6 +324,7 @@ export function PhotoStrip({
               onCoverAttemptPhoto?.(menu.id);
               return;
             }
+            if (coverIsAttemptPhoto) onClearCover?.();
             const next = [menu.id, ...order.filter((id) => id !== menu.id)];
             setOrder(next);
             commit(next);

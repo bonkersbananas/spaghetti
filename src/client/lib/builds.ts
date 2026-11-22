@@ -98,9 +98,8 @@ async function changeStage(
   }
 }
 
-/** An idea goes on the bed: the same record, with its photos and notes, becomes a build. */
-/** Makes a photo of one of the build's attempts its cover (what the cards and the top lead with), at once. */
-export async function setCover(queryClient: QueryClient, id: string, photoId: string) {
+/** Sets the build's cover photo (what the cards and the top lead with), or with null lets the first own photo lead again. */
+export async function setCover(queryClient: QueryClient, id: string, photoId: string | null) {
   const before = cachedItem(queryClient, id)?.coverPhotoId ?? null;
   patchCachedItem(queryClient, id, (item) => ({ ...item, coverPhotoId: photoId }));
   try {
@@ -111,6 +110,7 @@ export async function setCover(queryClient: QueryClient, id: string, photoId: st
   }
 }
 
+/** An idea goes on the bed: the same record, with its photos and notes, becomes a build. */
 export function startBuild(queryClient: QueryClient, item: ItemView) {
   if (!canEdit(item.pending)) return;
   const wasUpNext = cachedItem(queryClient, item.id)?.upNext ?? item.upNext;

@@ -611,7 +611,11 @@ function Build({ item }: { item: ItemView }) {
                 onCoverAttemptPhoto={(id) => setCover(queryClient, item.id, id)}
                 selectedId={gallery[photoIndex]?.id}
                 onSelect={setPhotoId}
-                fixedCover={!!item.coverPhotoId}
+                fixedCover={item.stage === "done" && !!item.coverPhotoId}
+                coverIsAttemptPhoto={
+                  attemptPhotos.some((e) => e.photo.id === item.coverPhotoId) ? item.coverPhotoId : null
+                }
+                onClearCover={() => setCover(queryClient, item.id, null)}
               />
             )}
             {gallery.length === 0 &&
