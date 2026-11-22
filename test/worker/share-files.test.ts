@@ -115,12 +115,12 @@ const sliceSettings = {
   orca: "2.5.0-dev",
 } satisfies FileSlice["settings"];
 
-function fileForm(name: string, kind: "model" | "slicer", bytes: Uint8Array, thumb?: Uint8Array) {
+function fileForm(name: string, kind: "model" | "slicer", bytes: Uint8Array, thumb?: Uint8Array, plate = [1, 1]) {
   const body = new FormData();
   body.set("name", name);
   body.set("size", String(bytes.length));
-  body.set("plate", "1");
-  body.set("plateCount", "1");
+  body.set("plate", String(plate[0]));
+  body.set("plateCount", String(plate[1]));
   body.set("prefill", kind === "slicer" ? JSON.stringify({ estimatedMinutes: 95, weightGrams: 31.5 }) : "{}");
   body.set("kind", kind);
   body.set("file", new File([bytes], name));
@@ -129,11 +129,11 @@ function fileForm(name: string, kind: "model" | "slicer", bytes: Uint8Array, thu
 }
 
 /** A model kept with an idea or build, sliced (with a slicer's text in its plate picture, and floating parts). */
-async function addModel(itemId: string, name = "fusilli-knob.stl", slice: Partial<FileSlice> = {}) {
+async function addModel(itemId: string, name = "fusilli-knob.stl", slice: Partial<FileSlice> = {}, plate = [1, 1]) {
   const id = uuid();
   const kept = await request(`/api/items/${itemId}/files/${id}`, {
     method: "PUT",
-    body: fileForm(name, "model", strToU8("solid knob\nendsolid knob\n")),
+    body: fileForm(name, "model", strToU8("solid knob\nendsolid knob\n"), undefined, plate),
     cookie,
   });
   expect(kept.status).toBe(201);
@@ -248,6 +248,22 @@ describe("a shared thing's models", () => {
     });
     for (const secret of ["secret-api-key", "Users", "Alex"])
       expect(new TextDecoder().decode(bytes)).not.toContain(secret);
+  });
+
+  it("opens a project's plate 2 in 3D: the sliced file holds it as its plate 1", async () => {
+    const item = await createItem({ title: "Bins" });
+    // Plate 2 of a project of 3, sliced here: Spaghetti's sliced file has that plate's G-code as plate_1.gcode.
+    const fileId = await addModel(item.id, "stackable-bins.3mf", { plate: { index: 2, count: 3, height: 40 } }, [2, 3]);
+    const made = await share("items", item.id);
+    const { html } = await guest(`/s/${made.token}`);
+    expect(html).toContain("Plate 2 of 3");
+    const data = JSON.parse(
+      (/data-view3d="([^"]*)"/.exec(html)?.[1] ?? "").replaceAll("&quot;", '"').replaceAll("&amp;", "&"),
+    );
+    expect(data.plate).toBe(1);
+    const { response } = await toolpaths(made.token, fileId);
+    expect(response.status).toBe(200);
+    expect(Object.keys(unzipSync(new Uint8Array(await response.arrayBuffer())))).toContain("Metadata/plate_1.gcode");
   });
 
   it("isn't a file to open or save: a navigation, a download or another site's page gets the 404", async () => {

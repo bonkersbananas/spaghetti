@@ -24,6 +24,7 @@ import { printablesTitleFromLink } from "../../shared/model-name.ts";
 import { attemptPartsLabel, partProgress, progressLabel } from "../../shared/parts.ts";
 import { perPiece, sliceLead } from "../../shared/slicing/card.ts";
 import { originalFilamentColours, printedFilamentNames } from "../../shared/slicing/colours.ts";
+import { viewerPlate } from "../../shared/slicing/files.ts";
 import { slicingOfSlice } from "../../shared/slicing/model.ts";
 import { filamentWords, slicingSummary } from "../../shared/slicing/settings.ts";
 import { readSize } from "../../shared/slicing/size.ts";
@@ -312,7 +313,8 @@ export function guestFile(file: AttemptFile, fallback?: readonly (string | null 
       view:
         file.stored && slice.bytes !== 0
           ? {
-              plate: file.plate,
+              // The sliced file holds the one plate it was sliced from as its plate 1, whichever of the project's.
+              plate: viewerPlate(file),
               ...(slice.copies && slice.copies > 1 ? { copies: slice.copies } : {}),
               ...(size ? { size } : {}),
               ...(slice.colours?.length
