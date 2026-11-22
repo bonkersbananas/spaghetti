@@ -70,8 +70,8 @@ const root = document.getElementById("root");
 if (!root) throw new Error("#root is missing from index.html");
 
 createRoot(root, {
-  onCaughtError: (_error, info) => {
-    (window as { __componentStack?: string }).__componentStack = info.componentStack;
+  onCaughtError: (error, info) => {
+    (window as { __crash?: { error: unknown; stack?: string } }).__crash = { error, stack: info.componentStack };
   },
 }).render(
   <StrictMode>
