@@ -286,7 +286,7 @@ export function LogAttempt({
               onPick={slicer.picker.open}
               onPlate={slicer.choosePlate}
               onAddUnknown={slicer.addUnknown}
-              ideaFiles={previous ? undefined : item.files}
+              ideaFiles={item.files}
               onUseIdeaFile={(kept) => void attachKept(kept)}
               unknown={slicer.unknownFilaments}
               card={

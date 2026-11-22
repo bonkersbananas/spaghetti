@@ -4,7 +4,8 @@ import { useQueryClient } from "@tanstack/react-query";
 import { type ReactNode, useState } from "react";
 import { PlateThumb, SavedFileCard } from "@/components/builds/SlicerFile";
 import { formatMinutes } from "@/components/builds/settings";
-import { NextIcon } from "@/components/ui/icons";
+import { Button } from "@/components/ui/Button";
+import { NextIcon, SlicerFileIcon } from "@/components/ui/icons";
 import { MetaList } from "@/components/ui/MetaList";
 import { Overline } from "@/components/ui/Overline";
 import { removeItemFile } from "@/lib/item-files";
@@ -20,12 +21,15 @@ export default function ItemFiles({
   files,
   readOnly,
   folded,
+  onAdd,
 }: {
   itemId: string;
   files: AttemptFile[];
   readOnly?: boolean;
   /** A build with attempts: each file is one line (name, time, grams, quality) that opens its full card. */
   folded?: boolean;
+  /** Opens the picker: a quiet "Add a file" ends the list (a build, where the file list is the place to add one). */
+  onAdd?: () => void;
 }) {
   const queryClient = useQueryClient();
   if (!files.length) return null;
@@ -52,6 +56,11 @@ export default function ItemFiles({
           </li>
         ))}
       </ul>
+      {onAdd && (
+        <Button variant="quiet" icon={SlicerFileIcon} onClick={onAdd} disabled={readOnly} className="-mx-3 self-start">
+          Add a file
+        </Button>
+      )}
     </section>
   );
 }

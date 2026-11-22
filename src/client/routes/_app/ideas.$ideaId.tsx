@@ -37,10 +37,7 @@ import { useCaptureHere } from "@/lib/capture";
 import { cn } from "@/lib/cn";
 import { announceDraft } from "@/lib/drafts";
 import { ariaShortcuts, shortcutCaps, useHotkeys } from "@/lib/hotkeys";
-import { addItemFile } from "@/lib/item-files";
 import { deleteItem, type ItemView, useIdeas, useItem, useItemFields } from "@/lib/items";
-import { modelAccept } from "@/lib/model-pick";
-import { scrollBehavior } from "@/lib/motion";
 import { whyNotMove } from "@/lib/move";
 import { useBackTo } from "@/lib/origin";
 import { useScreenActions } from "@/lib/palette";
@@ -53,9 +50,9 @@ import { itemName, useRememberItem } from "@/lib/recent";
 import { recipesQuery } from "@/lib/recipes-query";
 import { useSlicerDropTarget } from "@/lib/slicer-drop";
 import { useStickyColumn } from "@/lib/sticky-column";
-import { takeModels } from "@/lib/take-models";
 import { makeTwist, suggestedTwistName, useTwists } from "@/lib/twists";
 import { setUpNext, splitQueue } from "@/lib/up-next";
+import { useItemFilePicker } from "@/lib/use-item-file-picker";
 import { useAfterPaint, useIsDesktop } from "@/lib/use-media-query";
 import { useSettled } from "@/lib/use-settled";
 import { useWho } from "@/lib/who";
@@ -295,34 +292,8 @@ const Idea = memo(function Idea({ item }: { item: ItemView }) {
 
   // A .gcode.3mf, .3mf or .stl is kept with the idea: picked here, or dropped anywhere on the page (desktop).
   const files = item.files ?? [];
-  const filePicker = useRef<HTMLInputElement>(null);
-  const keepFile = (file: File) => {
-    if (!canEdit(item.pending)) return;
-    // The new card comes in below the fold on a phone: bring it into view once it is there.
-    // Only a longer list counts, and only for a while: a file that can't be read adds nothing, and a later removal
-    // or sync must not scroll the page.
-    wantsNewFile.current = files.length;
-    window.setTimeout(() => {
-      wantsNewFile.current = null;
-    }, 10_000);
-    void addItemFile(queryClient, item.id, file);
-  };
-  const wantsNewFile = useRef<number | null>(null);
-  // biome-ignore lint/correctness/useExhaustiveDependencies: once per added file.
-  useEffect(() => {
-    if (wantsNewFile.current === null || files.length <= wantsNewFile.current) return;
-    wantsNewFile.current = null;
-    let frames = 0;
-    // The file list loads lazily: look for its last card for a few frames.
-    const look = () => {
-      const cards = document.querySelectorAll<HTMLElement>(`section[aria-labelledby="files-${item.id}"] > ul > li`);
-      const last = cards[cards.length - 1];
-      if (last) last.scrollIntoView({ block: "center", behavior: scrollBehavior() });
-      else if (frames++ < 30) requestAnimationFrame(look);
-    };
-    requestAnimationFrame(look);
-  }, [files.length]);
-  useSlicerDropTarget(keepFile);
+  const filePicker = useItemFilePicker(item, files);
+  useSlicerDropTarget(filePicker.keepFile);
 
   const hasPhotos = photos.length > 0;
   // No photo yet, but a model or slicer file: its plate picture is the cover until the first photo comes.
@@ -453,18 +424,7 @@ const Idea = memo(function Idea({ item }: { item: ItemView }) {
             <IdeaTitleChips item={item} forWhom={forWhom} setForWhom={setForWhom} readOnly={readOnly} />
             {/* No photo and no plate picture: on a phone one slim line, here under the title instead of two tiles above it. */}
             {!hero && !reading && <AddFirstPhotos itemId={item.id} row />}
-            <input
-              ref={filePicker}
-              type="file"
-              accept={modelAccept()}
-              multiple
-              hidden
-              data-testid="idea-file-input"
-              onChange={(event) => {
-                void takeModels([...(event.target.files ?? [])], keepFile);
-                event.target.value = "";
-              }}
-            />
+            {filePicker.input}
             {/* The model's link shows once, as its card below: the note names it short, and has no card of its own. */}
             <NoteField
               value={note}
@@ -496,7 +456,7 @@ const Idea = memo(function Idea({ item }: { item: ItemView }) {
                 variant="quiet"
                 icon={SlicerFileIcon}
                 disabled={readOnly || item.pending}
-                onClick={() => filePicker.current?.click()}
+                onClick={() => filePicker.open()}
               >
                 Add a file
               </Button>
