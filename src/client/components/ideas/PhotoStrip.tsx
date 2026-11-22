@@ -24,6 +24,13 @@ interface PhotoStripProps {
   onSelect: (photoId: string) => void;
   /** The cover is chosen elsewhere (a finished build's final photo): the first photo isn't it, so no "Make cover". */
   fixedCover?: boolean;
+  /**
+   * A build's attempts' photos (newest attempt first), after its own: tap to show, hold for Make cover and Remove,
+   * each marked with its attempt's number. They don't reorder: they stay with their attempt.
+   */
+  attemptPhotos?: { photo: PhotoView; attempt: number }[];
+  /** Makes an attempt's photo the build's cover (an own photo is moved first instead). */
+  onCoverAttemptPhoto?: (photoId: string) => void;
 }
 
 /**
@@ -33,7 +40,15 @@ interface PhotoStripProps {
  * hold any photo with a finger and let go (a hold lifts it; moving it then reorders), or right-click one (with a mouse, its "…" shows on hover). A sheet on phones, a
  * popover from the thumbnail on desktop; Remove goes at once, with Undo.
  */
-export function PhotoStrip({ itemId, photos, selectedId, onSelect, fixedCover }: PhotoStripProps) {
+export function PhotoStrip({
+  itemId,
+  photos,
+  selectedId,
+  onSelect,
+  fixedCover,
+  attemptPhotos = [],
+  onCoverAttemptPhoto,
+}: PhotoStripProps) {
   const queryClient = useQueryClient();
   const isDesktop = useIsDesktop();
   const hasCamera = useHasCamera();
@@ -54,7 +69,9 @@ export function PhotoStrip({ itemId, photos, selectedId, onSelect, fixedCover }:
     if (!dragging) setOrder(ids);
   }, [key, dragging]);
 
-  const byId = new Map(photos.map((photo) => [photo.id, photo]));
+  const byId = new Map([...photos, ...attemptPhotos.map((entry) => entry.photo)].map((photo) => [photo.id, photo]));
+  const attemptOf = new Map(attemptPhotos.map((entry) => [entry.photo.id, entry.attempt]));
+  const total = photos.length + attemptPhotos.length;
 
   // The menu: which photo it is for, the thumbnail it hangs from (desktop) and gets focus back.
   // What it offers is fixed as it opens, so its rows don't change under the finger (or as it closes after Remove).
@@ -69,7 +86,8 @@ export function PhotoStrip({ itemId, photos, selectedId, onSelect, fixedCover }:
     if (!photo) return { cover: false, remove: false };
     return {
       // Photos still uploading keep their place at the end; saved ones can't move or go without a connection.
-      cover: !fixedCover && !offline && !photo.upload && order.indexOf(id) > 0,
+      cover:
+        !fixedCover && !offline && !photo.upload && (attemptOf.has(id) ? !!onCoverAttemptPhoto : order.indexOf(id) > 0),
       remove: !offline || !!photo.upload,
     };
   };
@@ -83,7 +101,11 @@ export function PhotoStrip({ itemId, photos, selectedId, onSelect, fixedCover }:
     anchor.current = thumbs.current.get(id) ?? null;
     setMenu({
       id,
-      title: photos.length > 1 ? `Photo ${order.indexOf(id) + 1} of ${photos.length}` : "This photo",
+      title: attemptOf.has(id)
+        ? `Attempt ${attemptOf.get(id)}'s photo`
+        : total > 1
+          ? `Photo ${order.indexOf(id) + 1} of ${total}`
+          : "This photo",
       can: actions(id),
     });
     setMenuOpen(true);
@@ -143,6 +165,7 @@ export function PhotoStrip({ itemId, photos, selectedId, onSelect, fixedCover }:
 
   const thumb = (id: string, index: number, photo: PhotoView) => {
     const selected = id === selectedId;
+    const attempt = attemptOf.get(id);
     const actionable = hasActions(id);
     const button = (
       <button
@@ -163,7 +186,11 @@ export function PhotoStrip({ itemId, photos, selectedId, onSelect, fixedCover }:
             move(id, event.key === "ArrowLeft" ? -1 : 1);
           }
         }}
-        aria-label={`Photo ${index + 1}${index === 0 && !fixedCover ? ", the cover" : ""}`}
+        aria-label={
+          attempt
+            ? `Photo ${index + 1}, attempt ${attempt}`
+            : `Photo ${index + 1}${index === 0 && !fixedCover ? ", the cover" : ""}`
+        }
         aria-current={selected || undefined}
         aria-haspopup={selected && actionable ? "dialog" : undefined}
         aria-description={selected && actionable ? "Press again for Make cover and Remove" : undefined}
@@ -183,6 +210,15 @@ export function PhotoStrip({ itemId, photos, selectedId, onSelect, fixedCover }:
           color={photo.color || undefined}
           busy={!!photo.upload}
         />
+        {attempt && (
+          // Whose it is: the attempt's number, quietly, on the corner (the menu's dot has the other one).
+          <span
+            aria-hidden
+            className="bg-veil text-on-veil text-caption absolute top-1 left-1 rounded-full px-1.5 leading-5 font-semibold tabular-nums backdrop-blur-md"
+          >
+            #{attempt}
+          </span>
+        )}
       </button>
     );
     if (!actionable) return button;
@@ -254,6 +290,15 @@ export function PhotoStrip({ itemId, photos, selectedId, onSelect, fixedCover }:
           })}
         </ul>
       )}
+      {attemptPhotos.length > 0 && (
+        <ul className="flex shrink-0 gap-2.5" aria-label="Attempts' photos">
+          {attemptPhotos.map(({ photo }, index) => (
+            <li key={photo.id} className="group/thumb relative shrink-0 list-none">
+              {thumb(photo.id, photos.length + index, photo)}
+            </li>
+          ))}
+        </ul>
+      )}
       {hasCamera && <AddPhotoTile size="sm" icon={CameraIcon} label="Take a photo" onClick={camera.open} />}
       <AddPhotoTile size="sm" icon={isDesktop ? PlusIcon : ImageIcon} label="Add photos" onClick={library.open} />
       {menu && (
@@ -264,6 +309,10 @@ export function PhotoStrip({ itemId, photos, selectedId, onSelect, fixedCover }:
           anchor={anchor}
           can={menu.can}
           onCover={() => {
+            if (attemptOf.has(menu.id)) {
+              onCoverAttemptPhoto?.(menu.id);
+              return;
+            }
             const next = [menu.id, ...order.filter((id) => id !== menu.id)];
             setOrder(next);
             commit(next);

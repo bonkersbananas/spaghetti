@@ -99,6 +99,18 @@ async function changeStage(
 }
 
 /** An idea goes on the bed: the same record, with its photos and notes, becomes a build. */
+/** Makes a photo of one of the build's attempts its cover (what the cards and the top lead with), at once. */
+export async function setCover(queryClient: QueryClient, id: string, photoId: string) {
+  const before = cachedItem(queryClient, id)?.coverPhotoId ?? null;
+  patchCachedItem(queryClient, id, (item) => ({ ...item, coverPhotoId: photoId }));
+  try {
+    await api<ItemResponse>(`/items/${id}`, { method: "PATCH", json: { coverPhotoId: photoId } });
+  } catch {
+    patchCachedItem(queryClient, id, (item) => ({ ...item, coverPhotoId: before }));
+    toast.error("Couldn't save that change", "It's back the way it was. Try again in a moment.");
+  }
+}
+
 export function startBuild(queryClient: QueryClient, item: ItemView) {
   if (!canEdit(item.pending)) return;
   const wasUpNext = cachedItem(queryClient, item.id)?.upNext ?? item.upNext;

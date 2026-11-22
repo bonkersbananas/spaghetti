@@ -64,7 +64,7 @@ import { Section } from "@/components/ui/Section";
 import { ShareLinkButton } from "@/components/ui/ShareLinkButton";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { useVia } from "@/lib/agents";
-import { deleteAttempt, finishBuild, heroPhoto, reopenBuild, shelveBuild, useTagOptions } from "@/lib/builds";
+import { deleteAttempt, finishBuild, heroPhoto, reopenBuild, setCover, shelveBuild, useTagOptions } from "@/lib/builds";
 import { useCaptureHere } from "@/lib/capture";
 import { ariaShortcuts, shortcutCaps, useHotkeys } from "@/lib/hotkeys";
 import {
@@ -197,12 +197,20 @@ function Build({ item }: { item: ItemView }) {
   // Photos: the best one leads, then the build's own (from the idea, or added here).
   const hero = heroPhoto(item);
   const own = item.photos.filter((photo) => !photo.attemptId);
-  const gallery = hero && !own.some((photo) => photo.id === hero.id) ? [hero, ...own] : own;
+  // Then every attempt's, newest attempt first, whoever saved them: adding a photo never hides another.
+  const attemptPhotos = [...item.attempts]
+    .reverse()
+    .flatMap((attempt) =>
+      item.photos
+        .filter((photo) => photo.attemptId === attempt.id)
+        .map((photo) => ({ photo, attempt: attempt.number })),
+    );
+  const gallery = [...own, ...attemptPhotos.map((entry) => entry.photo)];
   // Without a photo, the cover rule's next step: the newest plate picture (coverOf in lib/previews.ts).
   const cover = coverOf(item);
   const plate = cover.kind === "plate" ? cover.file : undefined;
   const [editingParts, setEditingParts] = useState(false);
-  const [photoId, setPhotoId] = useState(gallery[0]?.id);
+  const [photoId, setPhotoId] = useState((hero ?? gallery[0])?.id);
   const photoIndex = Math.max(
     0,
     gallery.findIndex((photo) => photo.id === photoId),
@@ -594,11 +602,13 @@ function Build({ item }: { item: ItemView }) {
               </div>
             ) : null}
             {gallery.length > 0 && (
-              // Only the build's own photos are here (an attempt's belong to their attempt, removed in its sheet), and a
-              // finished build's cover is its final photo, not the first.
+              // The build's own photos (they reorder), then its attempts' (marked with their number), and a finished build's
+              // cover is its final photo, not the first.
               <PhotoStrip
                 itemId={item.id}
                 photos={own}
+                attemptPhotos={attemptPhotos}
+                onCoverAttemptPhoto={(id) => setCover(queryClient, item.id, id)}
                 selectedId={gallery[photoIndex]?.id}
                 onSelect={setPhotoId}
                 fixedCover={!!item.coverPhotoId}
