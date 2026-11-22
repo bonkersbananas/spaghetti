@@ -53,6 +53,7 @@ import {
   RecipeIcon,
   ReopenIcon,
   ShelveIcon,
+  SlicerFileIcon,
   TrashIcon,
   TwistIcon,
 } from "@/components/ui/icons";
@@ -91,6 +92,7 @@ import { canBeRecipe, type RecipeSourceAttempt, useRecipes } from "@/lib/recipes
 import { useSlicerDropTarget } from "@/lib/slicer-drop";
 import { useStickyColumn } from "@/lib/sticky-column";
 import { twistFromBuild, useTwists } from "@/lib/twists";
+import { useItemFilePicker } from "@/lib/use-item-file-picker";
 import { useAfterPaint, useIsDesktop } from "@/lib/use-media-query";
 import { useWho } from "@/lib/who";
 
@@ -274,6 +276,8 @@ function Build({ item }: { item: ItemView }) {
     const target = onto?.id ?? null;
     setSheet({ open: true, attemptId: target, file: { file, key: Date.now() } });
   });
+  // A model or slicer file picked from the Files section (a drop on the build starts an attempt, above).
+  const filePicker = useItemFilePicker(item, item.files ?? []);
   const primary = () => openSheet(printing?.id ?? null);
   const [selected, setSelected] = useState<string | null>(linkedAttempt ?? null);
   // Came here for one attempt: bring it into view.
@@ -723,7 +727,7 @@ function Build({ item }: { item: ItemView }) {
               />
               <NoteLinks note={note} model={model} />
               {/* The quiet action under the model, as on an idea: keep it as a twist, or open the one it prints. */}
-              {(model || existingTwistId || onlyOpenable(item.files) || !item.parts.length) && (
+              {(model || existingTwistId || onlyOpenable(item.files) || !item.parts.length || !item.files?.length) && (
                 <div className="-mx-3 -mt-1 flex flex-wrap items-center gap-x-1">
                   {(model || existingTwistId) && (
                     <Button
@@ -733,6 +737,17 @@ function Build({ item }: { item: ItemView }) {
                       onClick={saveAsTwist}
                     >
                       {existingTwistId ? "Twist" : "Save as twist"}
+                    </Button>
+                  )}
+                  {/* The first file: once the build has one, "Add a file" ends its Files list instead. */}
+                  {!item.files?.length && (
+                    <Button
+                      variant="quiet"
+                      icon={SlicerFileIcon}
+                      disabled={readOnly || item.pending}
+                      onClick={filePicker.open}
+                    >
+                      Add a file
                     </Button>
                   )}
                   <OpenOnlyFile files={item.files} />
@@ -752,12 +767,14 @@ function Build({ item }: { item: ItemView }) {
               selected={selected}
             />
 
+            {filePicker.input}
             {!!item.files?.length && (
               <ItemFiles
                 itemId={item.id}
                 files={item.files}
-                readOnly={readOnly}
+                readOnly={readOnly || item.pending}
                 folded={item.attempts.length > 0 && !isDesktop}
+                onAdd={filePicker.open}
               />
             )}
 
