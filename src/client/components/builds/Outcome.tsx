@@ -1,4 +1,4 @@
-import { OUTCOME_LABELS, OUTCOMES, type Outcome } from "@shared/attempts";
+import { isOutcome, OUTCOME_LABELS, OUTCOMES, type Outcome } from "@shared/attempts";
 import { m } from "motion/react";
 import { type CSSProperties, useState } from "react";
 import { AutoHeight } from "@/components/ui/AutoHeight";
@@ -63,6 +63,11 @@ export const outcomeDots: Record<Outcome | "printing" | "offBed", string> = {
   /** Stopped, no verdict yet: neutral, like its chip. */
   offBed: "bg-ink/30",
 };
+
+/** Where an attempt stands: its outcome, else off the bed, else printing. A value this build has no word for (an old copy kept on the device) counts as no outcome, never a crash. */
+export type Step = Outcome | "printing" | "offBed";
+export const stepOf = (attempt: { outcome?: unknown; offBed?: boolean | null }): Step =>
+  isOutcome(attempt.outcome) ? attempt.outcome : attempt.offBed ? "offBed" : "printing";
 
 interface OutcomePickerProps {
   value: Outcome | null;
@@ -193,14 +198,14 @@ interface OutcomeChipProps {
 
 /** How an attempt went, as a chip; "Printing" with a gentle pulse while it runs, "Off the bed" once it stopped. */
 export function OutcomeChip({ outcome, offTheBed, onPhoto, className }: OutcomeChipProps) {
-  if (!outcome && offTheBed) {
+  if (!isOutcome(outcome) && offTheBed) {
     return (
       <Chip tone="neutral" icon={FinishIcon} onPhoto={onPhoto} className={className}>
         Off the bed
       </Chip>
     );
   }
-  if (!outcome) {
+  if (!isOutcome(outcome)) {
     return (
       <Chip tone="semolina" className={className}>
         <span className="relative flex size-2" aria-hidden>

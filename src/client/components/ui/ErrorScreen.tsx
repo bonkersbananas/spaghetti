@@ -1,11 +1,15 @@
 import { useEffect, useState } from "react";
 import { TangledPot } from "@/components/illustrations/TangledPot";
+import { crashReport } from "@/lib/crash-info";
+import { clearPersistedQueries } from "@/lib/persist";
 import { reloadIntoNewBuild } from "@/lib/stale-build";
 import { Button } from "./Button";
 import { CheckIcon, CopyIcon, ExpandIcon } from "./icons";
 
 interface ErrorScreenProps {
   error: unknown;
+  /** React's component stack for the crash, where the router has it. */
+  componentStack?: string;
   /** Tries the screen again without reloading, when the router offers it. */
   reset?: () => void;
   /** Styleguide only: show the "newer version" wording. The router passes just the error. */
@@ -28,7 +32,19 @@ const isChunkError = (error: unknown) =>
     String((error as Error | undefined)?.message ?? error),
   );
 
-export default function ErrorScreen({ error, reset, updating: forced = false, className }: ErrorScreenProps) {
+/** Reload, after dropping the saved copy of the server's data (a copy this version may misread); the outbox and drafts stay. */
+async function untangleAndReload() {
+  await Promise.race([clearPersistedQueries(), new Promise((done) => setTimeout(done, 1500))]);
+  location.reload();
+}
+
+export default function ErrorScreen({
+  error,
+  componentStack,
+  reset,
+  updating: forced = false,
+  className,
+}: ErrorScreenProps) {
   const [copied, setCopied] = useState(false);
   const message = messageOf(error);
   const stale = isChunkError(error);
@@ -53,7 +69,7 @@ export default function ErrorScreen({ error, reset, updating: forced = false, cl
           : "Nothing you saved is lost. Reload, and it should untangle."}
       </p>
       <div className="mt-6 flex flex-wrap justify-center gap-3">
-        <Button variant="primary" onClick={() => location.reload()}>
+        <Button variant="primary" onClick={() => void untangleAndReload()}>
           Reload
         </Button>
         {reset && !updating && (
@@ -81,7 +97,7 @@ export default function ErrorScreen({ error, reset, updating: forced = false, cl
             variant="quiet"
             icon={copied ? CheckIcon : CopyIcon}
             onClick={() => {
-              void navigator.clipboard?.writeText(message).then(() => {
+              void navigator.clipboard?.writeText(crashReport(error, componentStack)).then(() => {
                 setCopied(true);
                 setTimeout(() => setCopied(false), 1500);
               });

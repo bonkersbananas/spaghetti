@@ -20,7 +20,7 @@ import { AttemptTags } from "./AttemptTags";
 import { EstimateLine } from "./Estimate";
 import { NotEnoughNote } from "./NotEnoughNote";
 import { OffTheBed } from "./OffTheBed";
-import { OutcomeChip, outcomeDots } from "./Outcome";
+import { OutcomeChip, outcomeDots, stepOf } from "./Outcome";
 import { SettingsLine } from "./SettingsLine";
 import { SavedFileCard } from "./SlicerFile";
 import { filamentLabel, summarizeResults, summarizeSettings } from "./settings";
@@ -128,7 +128,7 @@ export const AttemptEntry = forwardRef<HTMLLIElement, AttemptEntryProps>(functio
         <span
           className={cn(
             "ring-paper relative mt-5 size-3 rounded-full ring-4",
-            outcomeDots[attempt.outcome ?? (offBed ? "offBed" : "printing")],
+            outcomeDots[stepOf(attempt)],
             printing && "animate-pulse",
           )}
         />

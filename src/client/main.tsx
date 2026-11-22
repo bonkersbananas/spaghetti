@@ -6,6 +6,7 @@ import { PersistQueryClientProvider } from "@tanstack/react-query-persist-client
 import { createRouter, RouterProvider } from "@tanstack/react-router";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
+import { rememberComponentStack } from "./lib/crash-info";
 import { focusContentAfterMoves } from "./lib/focus-content";
 import { followTextSize, stopPageZoom } from "./lib/no-page-zoom";
 import { registerServiceWorker } from "./lib/offline";
@@ -69,7 +70,9 @@ registerServiceWorker();
 const root = document.getElementById("root");
 if (!root) throw new Error("#root is missing from index.html");
 
-createRoot(root).render(
+createRoot(root, {
+  onCaughtError: (_error, info) => rememberComponentStack(info.componentStack),
+}).render(
   <StrictMode>
     <PersistQueryClientProvider
       client={queryClient}

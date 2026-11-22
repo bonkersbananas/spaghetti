@@ -1,4 +1,4 @@
-import { OUTCOME_LABELS } from "@shared/attempts";
+import { isOutcome, OUTCOME_LABELS } from "@shared/attempts";
 import { relativeTime } from "@shared/time";
 import { AnimatePresence, m, useReducedMotion } from "motion/react";
 import { type PointerEvent, useRef, useState } from "react";
@@ -283,7 +283,7 @@ function AttemptPicker({
                     aria-hidden
                     className={cn(
                       "size-2.5 shrink-0 rounded-full",
-                      outcomeDots[candidate.outcome ?? "printing"],
+                      outcomeDots[isOutcome(candidate.outcome) ? candidate.outcome : "printing"],
                       taken && "opacity-40",
                     )}
                   />
