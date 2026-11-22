@@ -1,5 +1,5 @@
 import { and, eq, gte, isNull, lt, or, sql } from "drizzle-orm";
-import { OUTCOME_LABELS, tagLabel } from "../../shared/attempts.ts";
+import { outcomeLabel, tagLabel } from "../../shared/attempts.ts";
 import { settingsMaterial } from "../../shared/recipes.ts";
 import { describeSettings } from "../../shared/story.ts";
 import { addWeeks, mondayOf, type Week, weekIsReadyToWrite, weekRangeLabel } from "../../shared/week.ts";
@@ -48,7 +48,7 @@ export async function weekNotebook(db: Db, week: Week): Promise<string> {
   for (const { attempt, title } of rows) {
     const material = settingsMaterial(attempt.settings);
     lines.push(
-      `- ${title?.trim() || "untitled"}, by ${printedBy(attempt)}: ${attempt.outcome ? OUTCOME_LABELS[attempt.outcome] : "still printing"}.`,
+      `- ${title?.trim() || "untitled"}, by ${printedBy(attempt)}: ${outcomeLabel(attempt.outcome) ?? (attempt.endedAt ? "off the bed, not answered yet" : "still printing")}.`,
     );
     if (material) lines.push(`  Material: ${material}.`);
     const settings = describeSettings(attempt.settings);

@@ -8,13 +8,27 @@
 
 export { isOutcome, OUTCOMES, type Outcome } from "./outcomes.ts";
 
-import type { Outcome } from "./outcomes.ts";
+import { isOutcome, type Outcome } from "./outcomes.ts";
 
 export const OUTCOME_LABELS: Record<Outcome, string> = {
   success: "Worked",
   partial: "Partly",
   failed: "Spaghetti",
 };
+
+/**
+ * The app's word for an outcome ("Worked", "Partly", "Spaghetti"), or null for anything else: no outcome yet, or a value
+ * read from outside the types (a cache from another version, a link). Always use this over `OUTCOME_LABELS[x]`, which
+ * answers undefined (or an inherited function) for those and crashes at `.toLowerCase()`.
+ */
+export const outcomeLabel = (outcome: unknown): string | null => (isOutcome(outcome) ? OUTCOME_LABELS[outcome] : null);
+
+/**
+ * What to say of an attempt that has no (known) outcome: "off the bed" once the printer says it stopped, else
+ * "printing". Capitalise it where it starts a sentence.
+ */
+export const unansweredWord = (attempt: { endedAt?: number | null }): "off the bed" | "printing" =>
+  attempt.endedAt != null ? "off the bed" : "printing";
 
 /** One spool used by an attempt. */
 export interface AttemptFilament {

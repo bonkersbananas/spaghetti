@@ -187,6 +187,7 @@ function Tries({ builds }: { builds: LongBuild[] }) {
                       id: String(index),
                       number: index + 1,
                       outcome,
+                      offBed: build.offBed?.[index] ?? false,
                     }))}
                   />
                   <span className="text-small text-ink-faint tabular">{build.attempts} attempts</span>

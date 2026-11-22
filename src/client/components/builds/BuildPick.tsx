@@ -1,4 +1,5 @@
-import { OUTCOME_LABELS, type Outcome } from "@shared/attempts";
+import { isOutcome, type Outcome, outcomeLabel } from "@shared/attempts";
+import { isOffTheBed } from "@shared/print-progress";
 import type { ReactNode } from "react";
 import { coverPhoto } from "@/components/ui/Card";
 import { MetaList } from "@/components/ui/MetaList";
@@ -62,12 +63,14 @@ export function BuildMeta({ build, printing }: { build: ItemView; printing?: Att
       </span>,
     );
     if (left) pieces.push(<span key="left">{left}</span>);
-  } else if (last?.outcome) {
+  } else if (last && isOutcome(last.outcome)) {
     pieces.push(
       <span key="outcome" className={cn("font-semibold", inks[last.outcome])}>
-        {OUTCOME_LABELS[last.outcome]}
+        {outcomeLabel(last.outcome)}
       </span>,
     );
+  } else if (last && isOffTheBed(last)) {
+    pieces.push(<span key="off">Off the bed</span>);
   }
   pieces.push(
     <span key="count">{count ? `${count} ${count === 1 ? "attempt" : "attempts"}` : "No attempts yet"}</span>,

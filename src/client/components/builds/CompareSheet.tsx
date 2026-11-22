@@ -1,4 +1,4 @@
-import { OUTCOME_LABELS } from "@shared/attempts";
+import { outcomeLabel } from "@shared/attempts";
 import { relativeTime } from "@shared/time";
 import { AnimatePresence, m, useReducedMotion } from "motion/react";
 import { type PointerEvent, useRef, useState } from "react";
@@ -283,13 +283,13 @@ function AttemptPicker({
                     aria-hidden
                     className={cn(
                       "size-2.5 shrink-0 rounded-full",
-                      outcomeDots[candidate.outcome ?? "printing"],
+                      outcomeDots[candidate.outcome ?? (candidate.endedAt == null ? "printing" : "offBed")],
                       taken && "opacity-40",
                     )}
                   />
                   <span className="text-small text-ink font-semibold">Attempt {candidate.number}</span>
                   <span className="text-small text-ink-faint ml-auto">
-                    {candidate.outcome ? OUTCOME_LABELS[candidate.outcome] : "Printing"}
+                    {outcomeLabel(candidate.outcome) ?? (candidate.endedAt == null ? "Printing" : "Off the bed")}
                     {taken && " · other side"}
                   </span>
                 </button>

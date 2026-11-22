@@ -27,6 +27,7 @@ export const insightRoutes = new Hono<AppEnv>().get("/", async (c) => {
         id: attempts.id,
         itemId: attempts.itemId,
         outcome: attempts.outcome,
+        endedAt: attempts.endedAt,
         printedAt: attempts.printedAt,
         createdAt: attempts.createdAt,
         failureTags: attempts.failureTags,
@@ -53,7 +54,12 @@ export const insightRoutes = new Hono<AppEnv>().get("/", async (c) => {
   ]);
 
   const insights = computeInsights(
-    rows.map((row) => ({ ...row, printedAt: row.printedAt.getTime(), createdAt: row.createdAt.getTime() })),
+    rows.map((row) => ({
+      ...row,
+      endedAt: row.endedAt?.getTime() ?? null,
+      printedAt: row.printedAt.getTime(),
+      createdAt: row.createdAt.getTime(),
+    })),
     new Map(builds.map((build) => [build.id, { title: build.title, coverPhotoId: build.coverPhotoId }])),
     pictures.map((photo) => ({ ...photo, createdAt: photo.createdAt.getTime() })),
     year,

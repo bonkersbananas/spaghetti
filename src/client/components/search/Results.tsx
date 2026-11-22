@@ -1,5 +1,5 @@
 import type { AttemptFile, AttemptHit, FixHit, ItemHit, Photo as PhotoData } from "@shared/api";
-import { OUTCOME_LABELS, type TagKind, tagLabel } from "@shared/attempts";
+import { outcomeLabel, type TagKind, tagLabel } from "@shared/attempts";
 import { displayName } from "@shared/people";
 import { highlight, type SearchTerm, snippetSegments } from "@shared/search";
 import { inlineTime, relativeTime } from "@shared/time";
@@ -48,7 +48,7 @@ export function afterWords(after: FixHit["after"], tags: string[]): string {
   const when = inlineTime(after.printedAt);
   // "yesterday", "3 days ago" read on their own; a date needs its "on".
   const on = /ago$|^yesterday$|^just now$/.test(when) ? when : `on ${when}`;
-  return [`After ${OUTCOME_LABELS[after.outcome]} ${on}`, tags.join(", ")].filter(Boolean).join(" · ");
+  return [`After ${outcomeLabel(after.outcome) ?? "a try"} ${on}`, tags.join(", ")].filter(Boolean).join(" · ");
 }
 
 interface RowProps {

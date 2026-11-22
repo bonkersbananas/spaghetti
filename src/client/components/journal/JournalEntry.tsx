@@ -1,5 +1,5 @@
 import type { JournalEntry as Entry, Item, Person, Photo as PhotoData } from "@shared/api";
-import { OUTCOME_LABELS, tagLabel } from "@shared/attempts";
+import { outcomeLabel, tagLabel } from "@shared/attempts";
 import { dateFormat } from "@shared/date-format";
 import { attemptPartsLabel } from "@shared/parts";
 import { isOffTheBed, offTheBedLabel } from "@shared/print-progress";
@@ -436,7 +436,7 @@ const AttemptRow = forwardRef<HTMLAnchorElement, JournalEntryProps>(function Att
         <MetaList className="text-small">
           <span className={cn("flex items-center gap-1.5 font-semibold", ink)}>
             <OutcomeIcon size={15} aria-hidden />
-            {attempt.outcome ? OUTCOME_LABELS[attempt.outcome] : offBed ? "Off the bed" : "Printing"}
+            {outcomeLabel(attempt.outcome) ?? (offBed ? "Off the bed" : "Printing")}
           </span>
           <time
             dateTime={new Date(attempt.printedAt).toISOString()}

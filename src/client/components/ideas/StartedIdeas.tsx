@@ -1,3 +1,4 @@
+import { isOutcome } from "@shared/attempts";
 import { beganAsIdea } from "@shared/deleted";
 import { Link } from "@tanstack/react-router";
 import { coverPhoto } from "@/components/ui/Card";
@@ -28,9 +29,13 @@ export function startedStatus(item: ItemView): { stage: string; detail?: string;
     return { stage: "Printed", detail: last?.outcome === "success" ? "Worked" : undefined, tone: "good" };
   }
   if (!last) return { stage: "In progress", detail: "no attempts yet" };
-  if (last.outcome === null) return { stage: "Printing", detail: `attempt ${last.number}` };
-  const outcome = { success: "worked", partial: "partly", failed: "didn't work" }[last.outcome];
-  return { stage: "In progress", detail: `attempt ${last.number} ${outcome}` };
+  if (last.outcome === null) {
+    return { stage: last.endedAt == null ? "Printing" : "Off the bed", detail: `attempt ${last.number}` };
+  }
+  const outcome = isOutcome(last.outcome)
+    ? { success: "worked", partial: "partly", failed: "didn't work" }[last.outcome]
+    : null;
+  return { stage: "In progress", detail: `attempt ${last.number}${outcome ? ` ${outcome}` : ""}` };
 }
 
 /**
