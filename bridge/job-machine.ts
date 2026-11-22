@@ -15,6 +15,8 @@ export interface Job {
   /** From the gcode file's name; 1 when it doesn't say. */
   plate: number;
   startedAt: number;
+  /** The printer's own estimate when the print began (`mc_remaining_time`), when it said: helps the app place it. */
+  estimateMinutes?: number | null;
 }
 
 /** What is kept across restarts for the job in progress. */
@@ -129,6 +131,8 @@ export class JobMachine {
           gcodeFile: print.gcode_file ?? null,
           plate: plateOf(print.gcode_file),
           startedAt: now,
+          estimateMinutes:
+            typeof print.mc_remaining_time === "number" && print.mc_remaining_time > 0 ? print.mc_remaining_time : null,
           ended: false,
           spaghetti: false,
         };
@@ -162,10 +166,11 @@ export class JobMachine {
   }
 }
 
-const toJob = ({ key, name, gcodeFile, plate, startedAt }: TrackedJob): Job => ({
+const toJob = ({ key, name, gcodeFile, plate, startedAt, estimateMinutes }: TrackedJob): Job => ({
   key,
   name,
   gcodeFile,
   plate,
   startedAt,
+  estimateMinutes: estimateMinutes ?? null,
 });

@@ -5,6 +5,7 @@ import { describeSettings } from "../../shared/story.ts";
 import { addWeeks, mondayOf, type Week, weekIsReadyToWrite, weekRangeLabel } from "../../shared/week.ts";
 import { type Db, getDb } from "../db/index.ts";
 import { attempts, items, users, weeks } from "../db/schema.ts";
+import { printerAgents } from "../prints.ts";
 import { askClaudeForWeek } from "./claude.ts";
 import { loadWeek, WEEK_CLAIM_STALE_MS } from "./load.ts";
 
@@ -18,6 +19,12 @@ export const WEEK_WAIT_UNTIL_TIMEOUT_MS = 26_000;
 export async function weekNotebook(db: Db, week: Week): Promise<string> {
   const names = new Map((await db.select({ id: users.id, name: users.name }).from(users)).map((u) => [u.id, u.name]));
   const who = (id: string) => names.get(id) ?? "Someone";
+  const printer = await printerAgents(db);
+  // A print from the printer is the printer's until someone says who started it (decision 0076).
+  const printedBy = (attempt: typeof attempts.$inferSelect) => {
+    if (!attempt.createdVia || !printer.has(attempt.createdVia)) return who(attempt.createdBy);
+    return attempt.startedBy ? `${who(attempt.startedBy)}, from the printer` : "the printer";
+  };
   const rows = await db
     .select({ attempt: attempts, title: items.title })
     .from(attempts)
@@ -41,7 +48,7 @@ export async function weekNotebook(db: Db, week: Week): Promise<string> {
   for (const { attempt, title } of rows) {
     const material = settingsMaterial(attempt.settings);
     lines.push(
-      `- ${title?.trim() || "untitled"}, by ${who(attempt.createdBy)}: ${attempt.outcome ? OUTCOME_LABELS[attempt.outcome] : "still printing"}.`,
+      `- ${title?.trim() || "untitled"}, by ${printedBy(attempt)}: ${attempt.outcome ? OUTCOME_LABELS[attempt.outcome] : "still printing"}.`,
     );
     if (material) lines.push(`  Material: ${material}.`);
     const settings = describeSettings(attempt.settings);

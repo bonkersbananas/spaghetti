@@ -122,6 +122,7 @@ export const pairs: Pair[] = [
   { label: "Initials on sea avatar", fg: "on-accent", bg: "person-sea", min: 4.5 },
   { label: "Initials on clay avatar", fg: "on-accent", bg: "person-clay", min: 4.5 },
   { label: "The agent mark on an avatar", fg: "paper", bg: "ink-faint", min: 3 },
+  { label: "The printer's mark on a card", fg: "ink-soft", bg: "ink/0.07", under: "cream", min: 3 },
   { label: "Active icon (tomato) on the sidebar", fg: "tomato", bg: "paper-deep", min: 3 },
   { label: "Basil icon on cards", fg: "basil", bg: "cream", min: 3 },
   { label: "Print progress label", fg: "ink-soft", bg: "cream", min: 4.5 },

@@ -1,4 +1,5 @@
 import { and, desc, eq, isNotNull, isNull, ne } from "drizzle-orm";
+import type { BatchItem } from "drizzle-orm/batch";
 import { Hono } from "hono";
 import { z } from "zod";
 import type { PrinterResponse } from "../../shared/api.ts";
@@ -6,7 +7,7 @@ import { BRIDGE_PROBLEM_CODES, type BridgeStatusData } from "../../shared/bridge
 import { DEFAULT_PRINTER, type PrinterSetup, SLOT_PATTERN, X2D } from "../../shared/spools.ts";
 import { recordChange } from "../changes.ts";
 import type { Db } from "../db/index.ts";
-import { amsSlots, attempts, bridge, bridgePairings, printer, spools } from "../db/schema.ts";
+import { agents, amsSlots, attempts, bridge, bridgePairings, printer, spools } from "../db/schema.ts";
 import type { AppEnv } from "../env.ts";
 import { apiError } from "../http.ts";
 import { slicingDefaults } from "../slicing-schema.ts";
@@ -180,21 +181,29 @@ export const printerRoutes = new Hono<AppEnv>()
     const same = (a: BridgeStatusData, b: BridgeStatusData) =>
       JSON.stringify({ ...a, progress: a.progress && { ...a.progress, at: 0 } }) ===
       JSON.stringify({ ...b, progress: b.progress && { ...b.progress, at: 0 } });
-    const statements = [
+    const via = c.var.via;
+    const statements: [BatchItem<"sqlite">, ...BatchItem<"sqlite">[]] = [
       db
         .insert(bridge)
-        .values({ id: BRIDGE_ID, lastSeenAt: now, status, agentId: c.var.via })
+        .values({ id: BRIDGE_ID, lastSeenAt: now, status, agentId: via })
         .onConflictDoUpdate({
           target: bridge.id,
-          set: { lastSeenAt: now, status, ...(c.var.via ? { agentId: c.var.via } : {}) },
+          set: { lastSeenAt: now, status, ...(via ? { agentId: via } : {}) },
         }),
-    ] as const;
+    ];
+    // An agent that reports as the bridge is the printer from now on (decision 0076), also after it disconnects.
+    if (via && row?.agentId !== via) {
+      statements.push(
+        db
+          .update(agents)
+          .set({ printer: true })
+          .where(and(eq(agents.id, via), eq(agents.printer, false))),
+      );
+    }
     if (!row || !same(before, status)) {
-      await db.batch([
-        ...statements,
-        recordChange(db, { entity: "printer", id: BRIDGE_ID, action: "updated", actor: c.var.actor }),
-      ]);
-    } else await db.batch([...statements]);
+      statements.push(recordChange(db, { entity: "printer", id: BRIDGE_ID, action: "updated", actor: c.var.actor }));
+    }
+    await db.batch(statements);
     return c.json<PrinterResponse>(await loadPrinter(db));
   })
 

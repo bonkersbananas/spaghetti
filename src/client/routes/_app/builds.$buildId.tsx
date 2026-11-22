@@ -1,5 +1,5 @@
 import type { Recipe } from "@shared/api";
-import { type Outcome, tagLabel } from "@shared/attempts";
+import { creditedTo, type Outcome, tagLabel } from "@shared/attempts";
 import { beganAsIdea } from "@shared/deleted";
 import { modelOf } from "@shared/model-mark";
 import { attemptPartsLabel } from "@shared/parts";
@@ -9,7 +9,7 @@ import { fullTime, inlineTime } from "@shared/time";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { AnimatePresence } from "motion/react";
-import { useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { AttemptEntry } from "@/components/builds/AttemptEntry";
 import { AttemptSheet } from "@/components/builds/AttemptSheet";
 import { BuildSummary } from "@/components/builds/BuildSummary";
@@ -58,6 +58,7 @@ import {
 import { NoteField } from "@/components/ui/NoteField";
 import { NoteLinks } from "@/components/ui/NoteLinks";
 import { Overline } from "@/components/ui/Overline";
+import { PrinterMark } from "@/components/ui/PrinterMark";
 import { PullToGo } from "@/components/ui/PullToGo";
 import { SaveStatus } from "@/components/ui/SaveStatus";
 import { Section } from "@/components/ui/Section";
@@ -73,6 +74,7 @@ import {
   deleteItem,
   discardIfUntouched,
   type ItemView,
+  itemQuery,
   scrapBuild,
   useItem,
   useItemFields,
@@ -94,6 +96,11 @@ import { useWho } from "@/lib/who";
 /** A build with more attempts than this shows only its newest few, with a line that unfolds the rest. */
 const FOLD_AFTER = 5;
 const SHOWN_ATTEMPTS = 3;
+
+// "Move to another build" (decision 0076): loaded with the first tap on it.
+const MoveAttemptSheet = lazy(() =>
+  import("@/components/builds/MoveAttemptSheet").then((m) => ({ default: m.MoveAttemptSheet })),
+);
 
 export const Route = createFileRoute("/_app/builds/$buildId")({
   validateSearch: (search: Record<string, unknown>): { new?: boolean; attempt?: string; finish?: string } => ({
@@ -122,7 +129,16 @@ function BuildDetail() {
     if (!isIdea || window.location.pathname !== `/builds/${buildId}`) return;
     void navigate({ to: "/ideas/$ideaId", params: { ideaId: buildId }, replace: true });
   }, [isIdea, buildId, navigate]);
-  if (item && !isIdea) return <Build key={item.id} item={item} />;
+  // A printer's build that went into the build its print belongs to answers with that build (decision 0076): the
+  // page moves to its real address, and the copy kept under the old one goes, so nothing edits it there.
+  const queryClient = useQueryClient();
+  const moved = !!item && item.id !== buildId;
+  useEffect(() => {
+    if (!moved || !item) return;
+    queryClient.removeQueries({ queryKey: itemQuery(buildId).queryKey, exact: true });
+    void navigate({ to: "/builds/$buildId", params: { buildId: item.id }, search: (prev) => prev, replace: true });
+  }, [moved, item, buildId, navigate, queryClient]);
+  if (item && !isIdea && !moved) return <Build key={item.id} item={item} />;
   return (
     <>
       <h1 className="sr-only">Build</h1>
@@ -458,6 +474,14 @@ function Build({ item }: { item: ItemView }) {
   const tried = item.attempts.filter((attempt) => attempt.outcome !== null).length;
   const closest = worked ? undefined : [...item.attempts].reverse().find((attempt) => attempt.outcome === "partial");
   const [savingRecipe, setSavingRecipe] = useState<RecipeSourceAttempt | null>(null);
+  // "Move to another build" from an attempt's "…" (decision 0076): the sheet's code comes with the first tap.
+  const [movingId, setMovingId] = useState<string | null>(null);
+  const [movingOpen, setMovingOpen] = useState(false);
+  const movingAttempt = movingId ? item.attempts.find((attempt) => attempt.id === movingId) : undefined;
+  const setMoving = (attemptId: string) => {
+    setMovingId(attemptId);
+    setMovingOpen(true);
+  };
   const [openRecipe, setOpenRecipe] = useState<string | null>(null);
   // The sheets are closed on arrival: they mount once the page has painted (sooner if one is asked for at once).
   const afterPaint = useAfterPaint();
@@ -771,7 +795,7 @@ function Build({ item }: { item: ItemView }) {
                           photos={item.photos.filter((photo) => photo.attemptId === attempt.id)}
                           onPhotos={readOnly ? undefined : (files) => addPhotosToItem(item.id, files, attempt.id)}
                           readOnly={readOnly || attempt.pending}
-                          person={byId.get(attempt.createdBy)}
+                          person={byId.get(creditedTo(attempt) ?? "")}
                           via={via(attempt.createdVia)}
                           selected={attempt.id === selected}
                           first={index === 0}
@@ -789,6 +813,8 @@ function Build({ item }: { item: ItemView }) {
                               ? () => setSavingRecipe(recipeSource(attempt) ?? null)
                               : undefined
                           }
+                          item={item}
+                          onMove={readOnly || attempt.pending ? undefined : () => setMoving(attempt.id)}
                         />
                       ))}
                     </AnimatePresence>
@@ -812,10 +838,17 @@ function Build({ item }: { item: ItemView }) {
                 )}
                 <div className="text-small text-ink-faint mt-1 flex items-center gap-3 pl-0.5">
                   <span className="bg-ink/10 flex size-3 items-center justify-center rounded-full" aria-hidden />
-                  {creator && <Avatar person={creator} size="xs" via={madeVia} />}
+                  {item.fromPrinter ? (
+                    <PrinterMark size="xs" decorative />
+                  ) : (
+                    creator && <Avatar person={creator} size="xs" via={madeVia} />
+                  )}
                   {fromIdea && <IdeasIcon size={16} className="-mr-1.5 shrink-0" aria-hidden />}
                   <p>
-                    {fromIdea ? (
+                    {item.fromPrinter ? (
+                      // The printer made it for a print, not whoever paired the bridge (decision 0076).
+                      "Made by the printer "
+                    ) : fromIdea ? (
                       <>
                         {creator ? `${who(creator)} captured` : "Captured"} as an idea {inlineTime(item.createdAt)}
                         {madeVia && (
@@ -834,7 +867,7 @@ function Build({ item }: { item: ItemView }) {
                     <time dateTime={new Date(started).toISOString()} title={fullTime(started)}>
                       {inlineTime(started)}
                     </time>
-                    {!fromIdea && madeVia && (
+                    {!fromIdea && !item.fromPrinter && madeVia && (
                       <>
                         {" "}
                         <ViaText name={madeVia} person={creator?.name} />
@@ -912,6 +945,11 @@ function Build({ item }: { item: ItemView }) {
               }}
             />
             <SaveRecipeSheet source={savingRecipe} onOpenChange={(open) => !open && setSavingRecipe(null)} />
+            {movingAttempt && (
+              <Suspense fallback={null}>
+                <MoveAttemptSheet open={movingOpen} onOpenChange={setMovingOpen} item={item} attempt={movingAttempt} />
+              </Suspense>
+            )}
             <RecipeSheet recipeId={openRecipe} onOpenChange={(open) => !open && setOpenRecipe(null)} />
           </>
         )}

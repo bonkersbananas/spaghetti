@@ -15,6 +15,8 @@ export class FakeApp {
   down = false;
   /** Fail the next calls with this status. */
   refuse: { call: string; status: number } | null = null;
+  /** The app's matcher: the build a print goes to, given what the bridge said about it (null: its own). */
+  place: ((print: object | undefined) => string | null) | null = null;
 
   private guard(call: string, args: unknown) {
     this.calls.push({ call, args });
@@ -89,13 +91,19 @@ export class FakeApp {
           } as unknown as Item);
         }
       },
-      createAttempt: async (itemId: string, body: { id: string; printedAt?: number; settings?: object }) => {
+      createAttempt: async (
+        itemId: string,
+        body: { id: string; printedAt?: number; settings?: object; print?: object },
+      ) => {
         this.guard("createAttempt", { itemId, body });
-        const item = this.items.get(itemId);
+        const placed = this.place?.(body.print);
+        const item = this.items.get(placed ?? itemId);
         if (!item) throw new HttpError(404, "no item");
+        // The app put it in a build it matched: the printer's own goes (decision 0076).
+        if (placed && placed !== itemId) this.items.delete(itemId);
         let attempt = item.attempts.find((candidate) => candidate.id === body.id);
         if (!attempt) {
-          attempt = this.attempt(itemId, {
+          attempt = this.attempt(item.id, {
             id: body.id,
             printedAt: body.printedAt,
             settings: body.settings ?? item.attempts.at(-1)?.settings ?? {},
@@ -105,11 +113,13 @@ export class FakeApp {
         }
         return attempt;
       },
-      updateAttempt: async (id: string, body: Partial<Attempt>) => {
+      updateAttempt: async (id: string, body: Partial<Attempt> & { settingsMerge?: { set?: object } }) => {
         this.guard("updateAttempt", { id, body });
         const found = this.find(id);
         if (!found) throw new HttpError(404, "no attempt");
-        Object.assign(found.attempt, body);
+        const { settingsMerge, ...rest } = body;
+        Object.assign(found.attempt, rest);
+        if (settingsMerge?.set) found.attempt.settings = { ...found.attempt.settings, ...settingsMerge.set };
         return found.attempt;
       },
       putFile: async (attemptId: string, form: FormData) => {

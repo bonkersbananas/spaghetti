@@ -12,7 +12,7 @@ import { Photo } from "@/components/ui/Photo";
 import { PrintProgress } from "@/components/ui/PrintProgress";
 import { UploadBadge } from "@/components/ui/UploadBadge";
 import { cn } from "@/lib/cn";
-import type { AttemptView, PhotoView } from "@/lib/items";
+import type { AttemptView, ItemView, PhotoView } from "@/lib/items";
 import { spring } from "@/lib/motion";
 import { photoSrc } from "@/lib/previews";
 import { AttemptMenu } from "./AttemptMenu";
@@ -56,10 +56,17 @@ interface AttemptEntryProps {
   onSaveRecipe?: () => void;
   /** Offline (or a pending attempt): its model can't be sliced again from here. */
   readOnly?: boolean;
+  /** The build it is in: the printer's question and "Not this build?" move it from there. */
+  item?: ItemView;
+  /** Move it to another build (the "…" menu). */
+  onMove?: () => void;
 }
 
 // Claude's ideas for the next try load after the build page: they only exist for a failed attempt.
 const CoachNote = lazy(() => import("./Coach").then((m) => ({ default: m.CoachNote })));
+// Which build a print the printer filed belongs to, and where an attempt was moved from (decision 0076).
+const PrintPlace = lazy(() => import("./print-place-lazy").then((entry) => entry.loadPrintPlace()));
+const PrinterBy = lazy(() => import("./print-place-lazy").then((entry) => entry.loadPrinterBy()));
 
 /**
  * One attempt in a build's story: how it went, what was tried differently
@@ -84,6 +91,8 @@ export const AttemptEntry = forwardRef<HTMLLIElement, AttemptEntryProps>(functio
     onCompare,
     onSaveRecipe,
     readOnly,
+    item,
+    onMove,
   },
   ref,
 ) {
@@ -149,7 +158,7 @@ export const AttemptEntry = forwardRef<HTMLLIElement, AttemptEntryProps>(functio
                 </h3>
                 {/* Wide screens: the time sits on the line. Phones have no room for it beside the avatar and the menu: it goes under. */}
                 <span className="text-small text-ink-faint ml-auto flex min-w-0 items-center gap-2 whitespace-nowrap">
-                  <ViaText name={via} person={person?.name} className="hidden md:inline" />
+                  {!attempt.fromPrinter && <ViaText name={via} person={person?.name} className="hidden md:inline" />}
                   <time
                     dateTime={new Date(attempt.printedAt).toISOString()}
                     title={fullTime(attempt.printedAt)}
@@ -157,7 +166,20 @@ export const AttemptEntry = forwardRef<HTMLLIElement, AttemptEntryProps>(functio
                   >
                     {relativeTime(attempt.printedAt)}
                   </time>
-                  {person && <Avatar person={person} size="xs" via={via} />}
+                  {attempt.fromPrinter ? (
+                    // The printer's, not whoever paired the bridge; a tap says who started it (decision 0076).
+                    <Suspense fallback={<span className="size-6" />}>
+                      <PrinterBy
+                        attempt={attempt}
+                        person={person}
+                        itemId={item?.id}
+                        readOnly={readOnly}
+                        className="pointer-events-auto z-10"
+                      />
+                    </Suspense>
+                  ) : (
+                    person && <Avatar person={person} size="xs" via={via} />
+                  )}
                 </span>
                 {/* Above the open button, so it works. */}
                 <span className="pointer-events-auto relative z-10 -my-1.5 flex shrink-0">
@@ -165,6 +187,7 @@ export const AttemptEntry = forwardRef<HTMLLIElement, AttemptEntryProps>(functio
                     number={attempt.number}
                     onCompare={onCompare}
                     onSaveRecipe={onSaveRecipe}
+                    onMove={onMove}
                     changed={attempt.changes.length > 0}
                   />
                 </span>
@@ -180,6 +203,13 @@ export const AttemptEntry = forwardRef<HTMLLIElement, AttemptEntryProps>(functio
                 </p>
               )}
             </div>
+
+            {item && (attempt.print?.asking || attempt.print?.reasons.length || attempt.moved) && (
+              // Above the open button, so its offers and links work.
+              <Suspense fallback={null}>
+                <PrintPlace item={item} attempt={attempt} where="entry" className="pointer-events-auto relative z-10" />
+              </Suspense>
+            )}
 
             <ChangeLine changes={attempt.changes} label={`Changed since attempt ${attempt.number - 1}: `} />
 

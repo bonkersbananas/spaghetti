@@ -46,7 +46,8 @@ const count = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? on
  * What the other person did since `from`: a short sentence ("Sam printed 6 (2 worked, 2 partly, 2 spaghetti)
  * and captured 3 ideas.") and the things themselves, each once with its latest news, newest first. Their entries
  * only: yours you know. The journal credits a build's start, finish and shelving to whoever captured it, not whoever
- * did it, so only ideas and attempts say who (an attempt: whoever gave it its outcome, else who logged it).
+ * did it, so only ideas and attempts say who (an attempt: whoever gave it its outcome, else who logged it, and for a
+ * print from the printer whoever someone said started it).
  */
 export function catchUp(
   entries: readonly JournalEntry[],
@@ -63,9 +64,12 @@ export function catchUp(
     entry.kind === "attempt"
       ? (items.get(entry.itemId)?.attempts.find((a) => a.id === entry.attemptId)?.finishedBy ?? entry.by)
       : entry.by;
+  // A print from the printer that nobody has answered or said they started is nobody's (decision 0076): not news of
+  // the other person, whoever paired the bridge.
   const theirs = entries.filter(
     (entry) =>
       (entry.kind === "idea" || entry.kind === "attempt") &&
+      doneBy(entry) !== null &&
       doneBy(entry) !== me &&
       entry.at > from &&
       items.has(entry.itemId),

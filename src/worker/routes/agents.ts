@@ -59,6 +59,7 @@ const toAgent = (agent: Agent, tokens: AgentToken[], oauth: Oauth, owned: boolea
       createdAt: agent.createdAt.getTime(),
       tokens: own.map(toToken),
       connection: null,
+      printer: agent.printer,
     };
   }
   const refresh = oauth.refresh.find((row) => row.agentId === agent.id);

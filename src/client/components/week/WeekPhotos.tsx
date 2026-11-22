@@ -77,7 +77,8 @@ function PrintCard({
       title={title}
       chips={<OutcomeChip outcome={print.outcome} />}
       meta={`Attempt ${print.attempt}`}
-      person={people.get(print.by)}
+      person={print.by ? people.get(print.by) : undefined}
+      printer={print.fromPrinter}
       link={{ to: "/builds/$buildId", params: { buildId: print.itemId }, search: { attempt: print.attemptId } }}
     />
   );

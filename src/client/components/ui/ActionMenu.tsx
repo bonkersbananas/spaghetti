@@ -2,7 +2,7 @@ import { createContext, type ReactNode, type RefObject, use, useState } from "re
 import { cn } from "@/lib/cn";
 import { useIsDesktop } from "@/lib/use-media-query";
 import { IconButton } from "./Button";
-import { type Icon, MoreIcon } from "./icons";
+import { CheckIcon, type Icon, MoreIcon } from "./icons";
 import { PopoverAnchor, PopoverPanel, PopoverRoot, PopoverTrigger } from "./Popover";
 import { Sheet } from "./Sheet";
 
@@ -27,6 +27,10 @@ interface ActionMenuProps {
   returnFocus?: RefObject<HTMLElement | null>;
   /** In a sheet already: a popover on phones too, never a sheet over a sheet. */
   inSheet?: boolean;
+  /** The title as a quiet line atop the popover too, where its rows alone don't say what they pick ("Who started it?"). */
+  titled?: boolean;
+  /** Which edge of the anchor the popover lines up with: "end" for one at the end of its row. */
+  align?: "start" | "end";
   children: ReactNode;
 }
 
@@ -43,6 +47,8 @@ export function ActionMenu({
   anchor,
   returnFocus,
   inSheet,
+  titled,
+  align = "start",
   children,
 }: ActionMenuProps) {
   const isDesktop = useIsDesktop();
@@ -59,6 +65,7 @@ export function ActionMenu({
   }
   const rows = (
     <CloseContext value={close}>
+      {titled && <p className="text-small text-ink-faint px-3 pt-1.5 pb-1">{title}</p>}
       <div className="flex flex-col">{children}</div>
     </CloseContext>
   );
@@ -68,7 +75,7 @@ export function ActionMenu({
       <PopoverPanel
         label={title}
         side="bottom"
-        align="start"
+        align={align}
         size="compact"
         className="p-1.5"
         onCloseAutoFocus={(event) => {
@@ -144,7 +151,11 @@ export function MoreMenu({ label, title, description, inSheet, className, childr
 }
 
 interface ActionMenuItemProps {
-  icon: Icon;
+  icon?: Icon;
+  /** In the icon's place: a person's avatar, the printer's mark (a row that picks who). */
+  picture?: ReactNode;
+  /** The choice it is now: a check at the row's end. */
+  current?: boolean;
   onSelect: () => void;
   /** Removes or deletes: tomato words, and the last row. */
   tone?: "danger";
@@ -154,12 +165,21 @@ interface ActionMenuItemProps {
 }
 
 /** One row of an `ActionMenu`: the menu closes, then it acts. */
-export function ActionMenuItem({ icon: IconComponent, onSelect, tone, disabled, children }: ActionMenuItemProps) {
+export function ActionMenuItem({
+  icon: IconComponent,
+  picture,
+  current,
+  onSelect,
+  tone,
+  disabled,
+  children,
+}: ActionMenuItemProps) {
   const close = use(CloseContext);
   return (
     <button
       type="button"
       disabled={disabled}
+      aria-current={current || undefined}
       onClick={() => {
         close();
         onSelect();
@@ -169,8 +189,9 @@ export function ActionMenuItem({ icon: IconComponent, onSelect, tone, disabled, 
         tone === "danger" ? "text-tomato-ink" : "text-ink",
       )}
     >
-      <IconComponent size={20} aria-hidden />
-      {children}
+      {picture ?? (IconComponent && <IconComponent size={20} aria-hidden />)}
+      <span className="min-w-0 flex-1">{children}</span>
+      {current && <CheckIcon size={18} aria-hidden className="text-ink-soft shrink-0" />}
     </button>
   );
 }

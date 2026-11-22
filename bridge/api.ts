@@ -4,7 +4,6 @@ import type {
   AttemptResponse,
   CreateAttemptRequest,
   CreateSpoolRequest,
-  ItemResponse,
   ItemsResponse,
   PhotoResponse,
   PrinterResponse,
@@ -62,7 +61,6 @@ export class Api {
   }
 
   builds = async () => (await this.call<ItemsResponse>("GET", "/items?stage=building")).items;
-  item = async (id: string) => (await this.call<ItemResponse>("GET", `/items/${id}`)).item;
   createItem = (body: { id: string; title: string | null; stage: "building" }) =>
     this.call("POST", "/items", { json: body });
   createAttempt = async (itemId: string, body: CreateAttemptRequest): Promise<Attempt> =>

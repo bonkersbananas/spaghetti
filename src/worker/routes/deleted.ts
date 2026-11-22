@@ -12,7 +12,8 @@ const LIMIT = 200;
  * Recently deleted: ideas, builds and attempts that can still be restored (each has a restore endpoint,
  * decision 0006). People only. An empty idea or build, deleted untouched (a stray tap on "New build"),
  * is left out: there is nothing in it to bring back. An attempt is listed only while its build is
- * still there: restoring the build brings its attempts back with it.
+ * still there: restoring the build brings its attempts back with it. A printer's build merged into another (its
+ * print moved there, decision 0076) isn't listed either.
  */
 export const deletedRoutes = new Hono<AppEnv>().get("/", async (c) => {
   const db = c.var.db;
@@ -41,6 +42,8 @@ export const deletedRoutes = new Hono<AppEnv>().get("/", async (c) => {
     for (const row of attemptRows) hasAttempts.add(row.itemId);
   }
   const listed: DeletedItem[] = itemRows
+    // A printer's build that went into another with its print (decision 0076) isn't something anyone deleted.
+    .filter((row) => !row.mergedInto)
     .filter((row) => row.title || row.note || firstPhoto.has(row.id) || hasAttempts.has(row.id))
     .map((row) => ({
       id: row.id,

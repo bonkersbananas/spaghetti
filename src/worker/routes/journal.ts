@@ -6,6 +6,7 @@ import type { JournalKind } from "../../shared/journal.ts";
 import { items } from "../db/schema.ts";
 import type { AppEnv } from "../env.ts";
 import { apiError } from "../http.ts";
+import { creditedSql, itemCreditedSql } from "../prints.ts";
 import { loadItems } from "./items.ts";
 import { attemptFilters, type Clause, filters } from "./search.ts";
 
@@ -43,7 +44,7 @@ interface EventRow {
   item_id: string;
   at: number;
   rank: number;
-  by: string;
+  by: string | null;
   via: string | null;
 }
 
@@ -52,7 +53,7 @@ function events(f: z.infer<typeof filters>): Clause {
   const attempt = attemptFilters(f);
   const parts: Clause[] = [
     {
-      sql: `SELECT 'attempt' AS kind, a.id AS id, a.item_id AS item_id, a.printed_at AS at, ${RANK.attempt} AS rank, a.created_by AS by, a.created_via AS via
+      sql: `SELECT 'attempt' AS kind, a.id AS id, a.item_id AS item_id, a.printed_at AS at, ${RANK.attempt} AS rank, ${creditedSql("a")} AS by, a.created_via AS via
         FROM attempts AS a JOIN items AS i ON i.id = a.item_id
         WHERE a.deleted_at IS NULL AND i.deleted_at IS NULL${attempt.sql}`,
       params: attempt.params,
@@ -60,21 +61,23 @@ function events(f: z.infer<typeof filters>): Clause {
   ];
   // Outcomes and materials belong to attempts: with one of them on, the journal shows only attempts.
   if (!f.outcome && !f.material) {
-    const person = f.person ? " AND created_by = ?" : "";
+    // A build the printer made is nobody's (decision 0076).
+    const by = itemCreditedSql("items");
+    const person = f.person ? ` AND ${by} = ?` : "";
     const params = f.person ? [f.person] : [];
     parts.push(
       {
-        sql: `SELECT 'idea', id, id, created_at, ${RANK.idea}, created_by, created_via FROM items
+        sql: `SELECT 'idea', id, id, created_at, ${RANK.idea}, ${by}, created_via FROM items
           WHERE deleted_at IS NULL AND (started_at IS NULL OR started_at - created_at > ${CAPTURED_FIRST_MS})${person}`,
         params,
       },
       {
-        sql: `SELECT 'started', id, id, started_at, ${RANK.started}, created_by, created_via FROM items
+        sql: `SELECT 'started', id, id, started_at, ${RANK.started}, ${by}, created_via FROM items
           WHERE deleted_at IS NULL AND started_at IS NOT NULL${person}`,
         params,
       },
       {
-        sql: `SELECT CASE stage WHEN 'done' THEN 'finished' ELSE 'shelved' END, id, id, finished_at, ${RANK.finished}, created_by, created_via
+        sql: `SELECT CASE stage WHEN 'done' THEN 'finished' ELSE 'shelved' END, id, id, finished_at, ${RANK.finished}, ${by}, created_via
           FROM items WHERE deleted_at IS NULL AND finished_at IS NOT NULL AND stage IN ('done', 'shelved')${person}`,
         params,
       },

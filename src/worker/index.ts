@@ -11,6 +11,7 @@ import { oauthEndpoints } from "./oauth/index.ts";
 import { resumeReads } from "./photo-read/run.ts";
 import { purgeDeleted } from "./photos.ts";
 import { previewImage, previewPage, previewTarget } from "./previews.ts";
+import { pruneDownloads } from "./prints.ts";
 import { sendNudges, sendUpkeepNudge } from "./push/nudges.ts";
 import { sendWeekPush } from "./push/week.ts";
 import { openRoutes } from "./routes/open.ts";
@@ -72,6 +73,7 @@ export default {
       ctx.waitUntil(pruneOauth(getDb(env.DB)).catch((error) => console.error("oauth tidy failed", error)));
       ctx.waitUntil(pruneDeliveries(env).catch((error) => console.error("webhook tidy failed", error)));
       ctx.waitUntil(purgeScoutPictures(env).catch((error) => console.error("scout tidy failed", error)));
+      ctx.waitUntil(pruneDownloads(getDb(env.DB)).catch((error) => console.error("download tidy failed", error)));
     } else {
       // Webhooks: new changes become deliveries, and what is due (first tries and retries) is sent.
       ctx.waitUntil(

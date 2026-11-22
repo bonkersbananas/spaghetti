@@ -32,6 +32,11 @@ interface AvatarProps {
   decorative?: boolean;
   /** The agent this was done through ("Claude for Alex"): the person's avatar gets a small agent mark. */
   via?: string;
+  /**
+   * A print from the printer that this person started (decision 0076): the small mark is the printer's glyph, and
+   * the name reads "Marie, from the printer".
+   */
+  printer?: boolean;
   className?: string;
 }
 
@@ -54,8 +59,17 @@ const marks = {
  * so it is still their face, at every size; a small agent mark sits in its lower right corner, cut out of the
  * circle, and the name reads "Alex, via Claude for Alex".
  */
-export function Avatar({ person, size = "md", ringed = false, decorative = false, via, className }: AvatarProps) {
-  const label = via ? `${person.name}, via ${via}` : person.name;
+export function Avatar({
+  person,
+  size = "md",
+  ringed = false,
+  decorative = false,
+  via,
+  printer = false,
+  className,
+}: AvatarProps) {
+  const marked = printer || !!via;
+  const label = printer ? `${person.name}, from the printer` : via ? `${person.name}, via ${via}` : person.name;
   const face = (
     <span
       {...(decorative ? { "aria-hidden": true } : { role: "img", "aria-label": label, title: label })}
@@ -65,16 +79,16 @@ export function Avatar({ person, size = "md", ringed = false, decorative = false
         sizes[size],
         ringed && "ring-paper ring-2",
         // Small, two letters fill the circle: nudged a pixel up and left, they keep clear of the mark's cutout.
-        via && marks[size].cut,
-        via && (size === "xs" || size === "sm") && "pr-0.5 pb-0.5",
-        !via && className,
+        marked && marks[size].cut,
+        marked && (size === "xs" || size === "sm") && "pr-0.5 pb-0.5",
+        !marked && className,
       )}
     >
       {initials(person.name)}
       {person.photoUrl && <Picture key={person.photoUrl} url={person.photoUrl} />}
     </span>
   );
-  if (!via) return face;
+  if (!marked) return face;
   return (
     <span className={cn("relative inline-flex shrink-0", className)}>
       {face}
@@ -85,7 +99,11 @@ export function Avatar({ person, size = "md", ringed = false, decorative = false
           marks[size].className,
         )}
       >
-        <AgentIcon size={marks[size].glyph} weight="fill" />
+        {printer ? (
+          <span className="printer-glyph" style={{ width: marks[size].glyph, height: marks[size].glyph }} />
+        ) : (
+          <AgentIcon size={marks[size].glyph} weight="fill" />
+        )}
       </span>
     </span>
   );

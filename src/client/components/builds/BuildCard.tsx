@@ -120,8 +120,10 @@ export function BuildCard({
           </>
         }
         reactions={<ReactionGlance reactions={item.reactions} />}
-        person={person}
+        // A build the printer made is the printer's, not whoever paired the bridge (decision 0076).
+        person={item.fromPrinter ? undefined : person}
         via={via}
+        printer={item.fromPrinter}
         className="h-full"
       />
     </m.li>
