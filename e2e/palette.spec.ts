@@ -203,11 +203,14 @@ test.describe("on a laptop", () => {
     await expect(page.getByRole("option").first()).toHaveAccessibleName(/^Start building\b/);
     await page.keyboard.press("Enter");
     await expect(page).toHaveURL(new RegExp(`/builds/${id}$`));
+    // Hotkeys are ignored while a dialog is in the DOM, and the palette stays there a beat while it leaves.
+    await expect(page.getByRole("dialog")).toHaveCount(0);
 
     await page.keyboard.press(open);
     await page.getByRole("combobox", { name: "Jump to or run" }).pressSequentially("theme");
     await page.keyboard.press("Enter");
     await expect(page.locator("html")).toHaveAttribute("data-theme", /^(dark|light)$/);
+    await expect(page.getByRole("dialog")).toHaveCount(0);
     const first = await page.locator("html").getAttribute("data-theme");
     await page.keyboard.press(open);
     await page.getByRole("combobox", { name: "Jump to or run" }).pressSequentially("theme");
