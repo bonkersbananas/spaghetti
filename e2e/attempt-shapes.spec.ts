@@ -62,25 +62,6 @@ test("@phone a build of person-made and printer-made attempts, one off the bed a
   }
 });
 
-test("a part of the page that fails to draw says so in place, and the rest of the page works", async ({ page }) => {
-  const { itemId } = await mixedBuild(page);
-  // An attempt whose filaments came back with a hole in the list (a shape no version of the Worker sends): drawing it fails.
-  await page.route(new RegExp(`/api/items/${itemId}$`), async (route) => {
-    const response = await route.fetch();
-    const json = await response.json();
-    json.item.attempts[1].settings = { filaments: [null] };
-    await route.fulfill({ response, json });
-  });
-  await page.goto(`/builds/${itemId}`);
-  await expect(page.getByRole("textbox", { name: "Title" })).toHaveValue("Ornament");
-  await expect(page.getByText("The summary got tangled")).toBeVisible();
-  await expect(page.getByText("The attempts got tangled")).toBeVisible();
-  // The page's own screen of last resort never shows, and the rest still answers.
-  await expect(page.getByText("That got tangled")).toHaveCount(0);
-  await expect(page.getByRole("button", { name: "Add a file" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Try again" }).first()).toBeVisible();
-});
-
 test("an attempt off the bed is never called printing in Deleted", async ({ page }) => {
   const headers = { Origin: origin(page) };
   const itemId = crypto.randomUUID();

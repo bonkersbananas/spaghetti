@@ -64,7 +64,6 @@ import { PrinterMark } from "@/components/ui/PrinterMark";
 import { PullToGo } from "@/components/ui/PullToGo";
 import { SaveStatus } from "@/components/ui/SaveStatus";
 import { Section } from "@/components/ui/Section";
-import { SectionBoundary } from "@/components/ui/SectionBoundary";
 import { ShareLinkButton } from "@/components/ui/ShareLinkButton";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { useVia } from "@/lib/agents";
@@ -760,39 +759,33 @@ function Build({ item }: { item: ItemView }) {
               {!isDesktop && !worked && answer}
             </div>
 
-            <SectionBoundary name="The summary" resetKey={item.attempts}>
-              <BuildSummary
-                attempts={item.attempts}
-                photos={item.photos}
-                open={active}
-                onPick={pickAttempt}
-                selected={selected}
-              />
-            </SectionBoundary>
+            <BuildSummary
+              attempts={item.attempts}
+              photos={item.photos}
+              open={active}
+              onPick={pickAttempt}
+              selected={selected}
+            />
 
             {filePicker.input}
             {!!item.files?.length && (
-              <SectionBoundary name="The files" resetKey={item.files}>
-                <ItemFiles
-                  itemId={item.id}
-                  files={item.files}
-                  readOnly={readOnly || item.pending}
-                  folded={item.attempts.length > 0 && !isDesktop}
-                  onAdd={filePicker.open}
-                />
-              </SectionBoundary>
+              <ItemFiles
+                itemId={item.id}
+                files={item.files}
+                readOnly={readOnly || item.pending}
+                folded={item.attempts.length > 0 && !isDesktop}
+                onAdd={filePicker.open}
+              />
             )}
 
-            <SectionBoundary name="The parts" resetKey={item.parts}>
-              <PartsSection
-                editing={editingParts}
-                onEditing={setEditingParts}
-                item={item}
-                active={active}
-                readOnly={readOnly}
-                onFinishBuild={() => finishBuild(queryClient, item)}
-              />
-            </SectionBoundary>
+            <PartsSection
+              editing={editingParts}
+              onEditing={setEditingParts}
+              item={item}
+              active={active}
+              readOnly={readOnly}
+              onFinishBuild={() => finishBuild(queryClient, item)}
+            />
 
             {isDesktop && answer}
           </div>
@@ -832,46 +825,44 @@ function Build({ item }: { item: ItemView }) {
                     done.
                   </EmptyState>
                 ) : (
-                  <SectionBoundary name="The attempts" resetKey={item.attempts}>
-                    <ol aria-label="Attempts, newest first" className="flex flex-col">
-                      <AnimatePresence initial={false}>
-                        {shownStory.map((attempt, index) => (
-                          <AttemptEntry
-                            key={attempt.id}
-                            ref={(el) => {
-                              if (el) entryRefs.current.set(attempt.id, el);
-                              else entryRefs.current.delete(attempt.id);
-                            }}
-                            attempt={attempt}
-                            partsLabel={attemptPartsLabel(attempt, item.parts)}
-                            photos={item.photos.filter((photo) => photo.attemptId === attempt.id)}
-                            onPhotos={readOnly ? undefined : (files) => addPhotosToItem(item.id, files, attempt.id)}
-                            readOnly={readOnly || attempt.pending}
-                            person={byId.get(creditedTo(attempt) ?? "")}
-                            via={via(attempt.createdVia)}
-                            selected={attempt.id === selected}
-                            first={index === 0}
-                            onOpen={() => {
-                              setSelected(attempt.id);
-                              openSheet(attempt.id);
-                            }}
-                            onFinish={(outcome) => openSheet(attempt.id, outcome)}
-                            askOnCard={isDesktop}
-                            askShortcut={shortcutCaps("buildLog")}
-                            onCompare={comparePredecessor(attempt.id) ? () => openCompare(attempt.id) : undefined}
-                            onSaveRecipe={
-                              recipeSource(attempt) &&
-                              !allRecipes.some((recipe) => recipe.source?.attemptId === attempt.id)
-                                ? () => setSavingRecipe(recipeSource(attempt) ?? null)
-                                : undefined
-                            }
-                            item={item}
-                            onMove={readOnly || attempt.pending ? undefined : () => setMoving(attempt.id)}
-                          />
-                        ))}
-                      </AnimatePresence>
-                    </ol>
-                  </SectionBoundary>
+                  <ol aria-label="Attempts, newest first" className="flex flex-col">
+                    <AnimatePresence initial={false}>
+                      {shownStory.map((attempt, index) => (
+                        <AttemptEntry
+                          key={attempt.id}
+                          ref={(el) => {
+                            if (el) entryRefs.current.set(attempt.id, el);
+                            else entryRefs.current.delete(attempt.id);
+                          }}
+                          attempt={attempt}
+                          partsLabel={attemptPartsLabel(attempt, item.parts)}
+                          photos={item.photos.filter((photo) => photo.attemptId === attempt.id)}
+                          onPhotos={readOnly ? undefined : (files) => addPhotosToItem(item.id, files, attempt.id)}
+                          readOnly={readOnly || attempt.pending}
+                          person={byId.get(creditedTo(attempt) ?? "")}
+                          via={via(attempt.createdVia)}
+                          selected={attempt.id === selected}
+                          first={index === 0}
+                          onOpen={() => {
+                            setSelected(attempt.id);
+                            openSheet(attempt.id);
+                          }}
+                          onFinish={(outcome) => openSheet(attempt.id, outcome)}
+                          askOnCard={isDesktop}
+                          askShortcut={shortcutCaps("buildLog")}
+                          onCompare={comparePredecessor(attempt.id) ? () => openCompare(attempt.id) : undefined}
+                          onSaveRecipe={
+                            recipeSource(attempt) &&
+                            !allRecipes.some((recipe) => recipe.source?.attemptId === attempt.id)
+                              ? () => setSavingRecipe(recipeSource(attempt) ?? null)
+                              : undefined
+                          }
+                          item={item}
+                          onMove={readOnly || attempt.pending ? undefined : () => setMoving(attempt.id)}
+                        />
+                      ))}
+                    </AnimatePresence>
+                  </ol>
                 )}
 
                 {folds && (
@@ -939,11 +930,7 @@ function Build({ item }: { item: ItemView }) {
                 />
               )}
             </Section>
-            {!item.pending && afterPaint && (
-              <SectionBoundary name="The conversation">
-                <CommentThread itemId={item.id} writeAsk={writeAsk} readOnly={readOnly} />
-              </SectionBoundary>
-            )}
+            {!item.pending && afterPaint && <CommentThread itemId={item.id} writeAsk={writeAsk} readOnly={readOnly} />}
             {/* On a phone the closing actions stay the last thing on the page, quiet beside the primary action bar. */}
             {!isDesktop && active && !printing && (
               <div className="-mt-6 flex items-center justify-center gap-3 md:-mt-8">{stageActions}</div>

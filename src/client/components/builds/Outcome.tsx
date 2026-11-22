@@ -1,4 +1,4 @@
-import { OUTCOME_LABELS, OUTCOMES, type Outcome, outcomeLabel } from "@shared/attempts";
+import { OUTCOME_LABELS, OUTCOMES, type Outcome } from "@shared/attempts";
 import { m } from "motion/react";
 import { type CSSProperties, useState } from "react";
 import { AutoHeight } from "@/components/ui/AutoHeight";
@@ -213,7 +213,7 @@ export function OutcomeChip({ outcome, offTheBed, onPhoto, className }: OutcomeC
   }
   return (
     <Chip tone={outcomeTones[outcome]} icon={outcomeIcons[outcome]} className={className}>
-      {outcomeLabel(outcome)}
+      {OUTCOME_LABELS[outcome]}
     </Chip>
   );
 }
