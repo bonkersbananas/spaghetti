@@ -77,7 +77,7 @@ function ViewerFigure({
       ref={frame}
       aria-label={label}
       style={useHeroName(photo.id)}
-      className="relative h-full w-full shrink-0 snap-center overflow-hidden"
+      className="relative w-full shrink-0 snap-center self-stretch overflow-hidden"
     >
       <div ref={layer} className="size-full will-change-transform">
         {children}
