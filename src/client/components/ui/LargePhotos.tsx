@@ -6,8 +6,8 @@ import {
   type ReactNode,
   type RefObject,
   type TouchEvent,
+  useCallback,
   useEffect,
-  useLayoutEffect,
   useRef,
   useState,
 } from "react";
@@ -15,6 +15,7 @@ import { cn } from "@/lib/cn";
 import { comboOf } from "@/lib/hotkeys";
 import type { PhotoView } from "@/lib/items";
 import { scrollBehavior } from "@/lib/motion";
+import { claimPops } from "@/lib/own-pops";
 import { attachPhotoZoom, type PhotoZoom } from "@/lib/photo-zoom";
 import { photoSrc } from "@/lib/previews";
 import { IconButton } from "./Button";
@@ -68,12 +69,18 @@ export default function LargePhotos({ open, photos, start, title, badge, detail,
     if (open) setIndex(start);
   }
 
-  // On the photo it was opened on before the first paint, without a scroll to watch.
-  useLayoutEffect(() => {
-    if (!open) return;
-    const el = scroller.current;
-    if (el) el.scrollLeft = start * el.clientWidth;
-  }, [open, start]);
+  // On the photo it was opened on before the first paint, without a scroll to watch. Radix mounts the content a
+  // render after `open` turns true, so this is the strip's own ref, not an effect here.
+  const startAt = useRef(start);
+  startAt.current = start;
+  const placeStrip = useCallback((el: HTMLDivElement | null) => {
+    scroller.current = el;
+    if (!el) return;
+    // The router puts back where scrolled elements were, found by their place in the page, whenever it renders: an
+    // id of its own each time it opens keeps an earlier opening's place from being put back on this one.
+    el.dataset.scrollRestorationId = `large-photos-${++openings}`;
+    el.scrollLeft = startAt.current * el.clientWidth;
+  }, []);
 
   useBackCloses(open, close);
 
@@ -149,10 +156,10 @@ export default function LargePhotos({ open, photos, start, title, badge, detail,
 
           <div ref={stage} {...pull} className="relative min-h-0 flex-1">
             <div
-              ref={scroller}
+              ref={placeStrip}
               onScroll={onScroll}
               // pan-x: a finger moving sideways goes to the next photo; one moving down is the pull that closes.
-              className="flex size-full snap-x snap-mandatory overflow-x-auto overscroll-x-contain [touch-action:pan-x] [&::-webkit-scrollbar]:hidden"
+              className="flex size-full [touch-action:pan-x] snap-x snap-mandatory overflow-x-auto overscroll-x-contain [&::-webkit-scrollbar]:hidden"
               style={{ scrollbarWidth: "none" }}
             >
               {photos.map((photo, i) => (
@@ -173,7 +180,7 @@ export default function LargePhotos({ open, photos, start, title, badge, detail,
                   variant="secondary"
                   disabled={index === 0}
                   onClick={() => go(index - 1)}
-                  className="absolute top-1/2 left-5 hidden -translate-y-1/2 rounded-full disabled:invisible md:inline-flex"
+                  className="absolute top-1/2 left-5 -translate-y-1/2 rounded-full disabled:invisible max-md:hidden"
                 />
                 <IconButton
                   icon={NextIcon}
@@ -181,7 +188,7 @@ export default function LargePhotos({ open, photos, start, title, badge, detail,
                   variant="secondary"
                   disabled={index === count - 1}
                   onClick={() => go(index + 1)}
-                  className="absolute top-1/2 right-5 hidden -translate-y-1/2 rounded-full disabled:invisible md:inline-flex"
+                  className="absolute top-1/2 right-5 -translate-y-1/2 rounded-full disabled:invisible max-md:hidden"
                 />
               </>
             )}
@@ -267,7 +274,7 @@ function LargeFigure({
     >
       <div
         ref={layer}
-        className="flex size-full items-center justify-center px-0 will-change-transform [container-type:size] md:px-24"
+        className="[container-type:size] flex size-full items-center justify-center px-0 will-change-transform md:px-24"
       >
         <div
           className="shadow-raised relative overflow-hidden md:rounded-lg"
@@ -310,28 +317,38 @@ function LargeFigure({
 function useBackCloses(open: boolean, onClose: { current: () => void }) {
   useEffect(() => {
     if (!open) return;
-    window.history.pushState(window.history.state, "");
+    // Back on our entry already: an effect run again at once (React's StrictMode) finds the step off it still waiting.
+    if (leaving) {
+      clearTimeout(leaving);
+      leaving = undefined;
+    } else window.history.pushState(window.history.state, "");
     let ours = true;
-    const onPop = (event: PopStateEvent) => {
-      if (!ours) return;
+    const release = claimPops(() => {
       ours = false;
-      event.stopImmediatePropagation();
       onClose.current();
-    };
-    window.addEventListener("popstate", onPop, { capture: true });
+      return true;
+    });
     return () => {
-      window.removeEventListener("popstate", onPop, { capture: true });
+      release();
       if (!ours) return;
       // Closed by ×, Esc or a swipe: step off our entry, and keep that step from the router too.
-      const swallow = (event: PopStateEvent) => {
-        event.stopImmediatePropagation();
-        window.removeEventListener("popstate", swallow, { capture: true });
-      };
-      window.addEventListener("popstate", swallow, { capture: true });
-      window.history.back();
+      leaving = setTimeout(() => {
+        leaving = undefined;
+        const releaseStep = claimPops(() => {
+          releaseStep();
+          return true;
+        });
+        window.history.back();
+      });
     };
   }, [open, onClose]);
 }
+
+/** How many times a strip of photos has opened on this page (its scroll restoration id). */
+let openings = 0;
+
+/** A step back off the viewer's history entry, about to be taken. */
+let leaving: ReturnType<typeof setTimeout> | undefined;
 
 /**
  * A phone's swipe down closes the photo: one finger moving down more than sideways drags it down, the paper behind

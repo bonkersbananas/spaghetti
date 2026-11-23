@@ -7788,7 +7788,7 @@ export const shots: Shot[] = [
     name: "build-parts-sheet",
     path: `/builds/${SEED_BUILD_IDS.paddleSteamer}`,
     prepare: async (page) => {
-      await page.getByRole("button", { name: /^Attempt 2: partial\. Open$/ }).click();
+      await page.getByRole("button", { name: /^Attempt 2: partial\. Open$/ }).click({ position: { x: 6, y: 6 } });
       await page.getByRole("group", { name: "Hull half, pieces" }).waitFor();
     },
     cleanup: async (page) => {
