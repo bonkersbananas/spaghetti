@@ -2,6 +2,7 @@ import { fieldsFor, type SheetFields, type SheetValue, toChanges, toFields, toVa
 import type { Outcome } from "@shared/attempts";
 import { partsOnPlate } from "@shared/parts";
 import { takenWith } from "@shared/photo-read";
+import { isOffTheBed } from "@shared/print-progress";
 import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef } from "react";
 import { createPortal } from "react-dom";
@@ -9,6 +10,7 @@ import { SaveAsRecipe } from "@/components/recipes/SaveAsRecipe";
 import { ActionMenuItem, MoreMenu } from "@/components/ui/ActionMenu";
 import { Button } from "@/components/ui/Button";
 import { CameraIcon, ImageIcon, PlusIcon, TrashIcon } from "@/components/ui/icons";
+import { openLarge } from "@/components/ui/OpenLarge";
 import { AddPhotoTile, PhotoThumb, useFilePicker } from "@/components/ui/PhotoTiles";
 import { SaveStatus } from "@/components/ui/SaveStatus";
 import { deleteAttempt, queueFinish, saveAttemptChanges } from "@/lib/builds";
@@ -21,6 +23,7 @@ import { queueSlicerFile, removeSlicerFile } from "@/lib/slicer-files";
 import { useLiveFields } from "@/lib/use-autosave";
 import { useIsDesktop } from "@/lib/use-media-query";
 import { EstimateLine, elapsedIfPlausible } from "../Estimate";
+import { OutcomeChip } from "../Outcome";
 import { PhotoReadNote } from "../PhotoReadNote";
 import { SavedFileCard } from "../SlicerFile";
 import { AttemptFields } from "./AttemptFields";
@@ -284,6 +287,14 @@ export function EditAttempt({
                 alt={`Attempt photo ${index + 1}`}
                 color={photo.color || undefined}
                 busy={!!photo.upload}
+                onOpen={(event) =>
+                  openLarge(event, {
+                    photos,
+                    start: index,
+                    title: `Attempt ${attempt.number}`,
+                    badge: <OutcomeChip outcome={attempt.outcome} offTheBed={isOffTheBed(attempt)} />,
+                  })
+                }
                 confirmRemove
                 onRemove={offline && !photo.upload ? undefined : () => removePhoto(queryClient, photo)}
               />
