@@ -2,7 +2,7 @@ import type { Spool } from "@shared/api";
 import { tempRange } from "@shared/label-read";
 import { FINISHES, finishLabel, spoolColors } from "@shared/spools";
 import { useQueryClient } from "@tanstack/react-query";
-import { Fragment, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { ToggleChip } from "@/components/ui/Chip";
 import { SparkleIcon } from "@/components/ui/icons";
@@ -62,7 +62,13 @@ export function LabelLooksRight({
   const unread = colours.length === 0;
   const [pickingColour, setPickingColour] = useState(false);
   const [pickingFinish, setPickingFinish] = useState(false);
-  if (spool.fromLabel.length === 0 || spool.labelRead) return null;
+  const shown = spool.fromLabel.length > 0 && !spool.labelRead;
+  // A colour that wasn't read opens the picker once, and it stays open while colours are picked in it.
+  const needsColour = shown && unread;
+  useEffect(() => {
+    if (needsColour) setPickingColour(true);
+  }, [needsColour]);
+  if (!shown) return null;
   const facts = labelFactsLine(spool);
   const row = "flex min-h-11 items-center gap-3 text-left";
   return (
@@ -79,14 +85,14 @@ export function LabelLooksRight({
         <button
           type="button"
           className={cn(row, "focus-ring rounded-md")}
-          aria-expanded={pickingColour || unread}
+          aria-expanded={pickingColour}
           onClick={() => setPickingColour((open) => !open)}
         >
           <SpoolDisc color={value.colorHex} colors={value.colors} size="sm" />
           <span className="text-body text-ink flex-1">{unread ? "Colour wasn't read" : "Colour"}</span>
           <span className="text-small text-ink-faint">{unread ? "Pick it" : "Change"}</span>
         </button>
-        {(pickingColour || unread) && (
+        {pickingColour && (
           <div className="pb-2">
             <SpoolColourField
               value={{ colorHex: value.colorHex, colors: value.colors }}
