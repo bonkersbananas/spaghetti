@@ -121,7 +121,11 @@ export function ToggleChip({
       className={cn(
         base,
         "pressable focus-ring touch-target relative",
-        quiet ? "h-7 px-2.5" : cn("h-9 md:h-8", lead ? "gap-2 pr-3.5 pl-2" : "px-3.5"),
+        // An unpicked suggestion's 2 px dashed border comes out of its padding (border-box, fixed height), so it is
+        // exactly as wide as when it is picked: a tap never moves the chips after it.
+        quiet
+          ? "h-7 px-2.5"
+          : cn("h-9 md:h-8", lead ? "gap-2 pr-3.5 pl-2" : suggested && !selected ? "px-3" : "px-3.5"),
         selected
           ? quiet && tone !== "neutral"
             ? quietSelectedTones[tone]

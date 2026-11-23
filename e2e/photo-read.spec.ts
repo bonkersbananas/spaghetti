@@ -114,9 +114,11 @@ test("Partly where Claude said Spaghetti: nothing of Claude's comes along, it st
     failureTags: [],
     successNotes: [],
   });
-  // One tap takes a suggestion.
+  // One tap takes a suggestion, and the chip keeps its width: nothing after it moves under the thumb.
+  const width = (await adhesion.boundingBox())?.width;
   await adhesion.click();
   await expect(adhesion).toHaveAttribute("aria-pressed", "true");
+  expect((await adhesion.boundingBox())?.width).toBe(width);
   await expect
     .poll(async () => (await attemptOf(page, itemId, attemptId)).failureTags, { timeout: 10_000 })
     .toEqual(["bed-adhesion"]);
