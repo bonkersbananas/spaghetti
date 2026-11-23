@@ -48,13 +48,17 @@ import { SEED_PASSWORD, SEED_USERS } from "../scripts/lib/local-app.ts";
  * avatar's place (about 0.5 kB gzip, with the print's question from the same pull request). Kept small: the mark and its
  * glyph are CSS (printer-mark, printer-glyph), the line and the "Who started it?" tap load with the card's other printer
  * parts (print-place-lazy.ts), and none of it is in the avatar every screen loads. Main's /journal was already 1.0 over.
+ * 2026-11-23: /today and /journal +1: a Journal attempt card's photo opens the attempt's photos large, with the build's
+ * name in the viewer linking back to it (the click handler and the two-step loader's import, about 0.3 kB gzip in the
+ * card both screens draw); the viewer itself, its root and its zoom load on the first click. The entry re-exports
+ * createRoot for that root (about 0.17 kB on every screen, inside the other screens' 0.5 kB).
  */
 const CEILING_KB = {
   "/sign-in": 185,
-  "/today": 297,
+  "/today": 298,
   "/ideas": 267,
   "/builds": 268,
-  "/journal": 284,
+  "/journal": 285,
   "/search": 277,
   "/pantry": 263,
   "/printer": 262,
