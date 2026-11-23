@@ -4,6 +4,7 @@ import { relativeTime } from "@shared/time";
 import { AnimatePresence, m, useReducedMotion } from "motion/react";
 import { type PointerEvent, useRef, useState } from "react";
 import { ExpandIcon, ImageIcon } from "@/components/ui/icons";
+import { OpenLarge, openLarge } from "@/components/ui/OpenLarge";
 import { Photo } from "@/components/ui/Photo";
 import { PhotoThumb } from "@/components/ui/PhotoTiles";
 import { Popover, PopoverClose } from "@/components/ui/Popover";
@@ -70,6 +71,7 @@ const photosOf = (item: ItemView, attempt: AttemptView): PhotoView[] =>
 
 /** The lead photo of an attempt, whole (these are prints people study, never cropped); more of them as a row of thumbnails that pick. */
 function AttemptPhotos({
+  name,
   attempt,
   photos,
   picked,
@@ -77,6 +79,8 @@ function AttemptPhotos({
   fade = false,
   thumbsRow = false,
 }: {
+  /** The build's name: the viewer's title is "<name> · attempt N", as the Journal's. */
+  name: string;
   attempt: AttemptView;
   photos: PhotoView[];
   picked: string | undefined;
@@ -91,16 +95,31 @@ function AttemptPhotos({
   const frame = (
     <>
       {shown ? (
-        <Photo
-          src={photoSrc(shown.id, "large")}
-          alt={`Attempt ${attempt.number}`}
-          color={shown.color || undefined}
-          fit="contain"
-          glow
-          eager
-          frame="deep"
+        // The photo opens large, at this one with the attempt's others around it; the thumbnails below still pick.
+        <OpenLarge
+          label={`Open attempt ${attempt.number} photo large`}
           className="size-full"
-        />
+          onClick={(event) =>
+            openLarge(event, {
+              photos,
+              start: Math.max(0, photos.indexOf(shown)),
+              title: `${name} · attempt ${attempt.number}`,
+              badge: <OutcomeChip outcome={attempt.outcome} offTheBed={isOffTheBed(attempt)} />,
+              detail: relativeTime(attempt.printedAt),
+            })
+          }
+        >
+          <Photo
+            src={photoSrc(shown.id, "large")}
+            alt={`Attempt ${attempt.number}`}
+            color={shown.color || undefined}
+            fit="contain"
+            glow
+            eager
+            frame="deep"
+            className="size-full"
+          />
+        </OpenLarge>
       ) : (
         <div className="bg-well text-ink-faint text-small flex size-full flex-col items-center justify-center gap-1.5">
           <ImageIcon size={28} weight="light" aria-hidden />
@@ -215,6 +234,7 @@ function DesktopCompare({
               <span className="text-small text-ink-faint ml-auto shrink-0">{when(attempt)}</span>
             </div>
             <AttemptPhotos
+              name={itemName(item, "build")}
               attempt={attempt}
               photos={photosOf(item, attempt)}
               picked={picked[attempt.id]}
@@ -351,6 +371,7 @@ function PhoneCompare({ item, older, newer }: { item: ItemView; older: AttemptVi
       >
         <AttemptPhotos
           fade
+          name={itemName(item, "build")}
           attempt={attempt}
           photos={photosOf(item, attempt)}
           picked={picked[attempt.id]}

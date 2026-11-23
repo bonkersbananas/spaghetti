@@ -61,25 +61,55 @@ interface RowProps {
   selected: boolean;
   onPointerEnter?: () => void;
   onOpen?: () => void;
+  /** An attempt result: a tap or click on its photo opens the attempt's photos large instead of the build, named so. */
+  attempt?: AttemptHit;
+  name?: string;
   /** Inside an `ActionCard`: the card draws the selection, and the last line leaves room for its button (this wide). */
   inCard?: keyof typeof ACTION_ROOM;
   children: ReactNode;
 }
 
+// The viewer (ui/LargePhotos.tsx), loaded when a photo is first pointed at.
+const loadLarge = () => import("@/components/ui/large-photos-load");
+
 /** A result: its photo first, the words that matched beside it. */
 export const ResultRow = forwardRef<HTMLAnchorElement, RowProps>(function ResultRow(
-  { link, photo, plate, fallbackIcon: FallbackIcon, selected, onPointerEnter, onOpen, inCard, children },
+  { link, photo, plate, fallbackIcon: FallbackIcon, selected, onPointerEnter, onOpen, attempt, name, inCard, children },
   ref,
 ) {
+  const queryClient = useQueryClient();
   return (
     <PhotoRow
       ref={ref}
+      className={attempt && "[&_img]:cursor-zoom-in"}
       // Named by what it shows (outcome, title, the words that matched), as people see it.
       link={{
         ...link,
-        onPointerEnter,
+        onPointerEnter: attempt ? () => (onPointerEnter?.(), void loadLarge()) : onPointerEnter,
         viewTransition: true,
         onClick: (event) => {
+          // A tap or click on an attempt's photo opens its photos large (ui/LargePhotos.tsx) instead of the build; the
+          // rest of the row, and Enter, still lead there. A handler on the link: a button can't sit in it.
+          if (
+            attempt &&
+            photo &&
+            (event.target as Element).closest("img") &&
+            !(event.metaKey || event.ctrlKey || event.shiftKey)
+          ) {
+            event.preventDefault();
+            const opener = event.currentTarget;
+            void loadLarge().then((step) =>
+              step.showLargePhotos({
+                photos: [photo],
+                start: 0,
+                title: `${name} · attempt ${attempt.number}`,
+                // The result carries one photo: the rest of the attempt's join it once the build has come.
+                more: [queryClient, attempt.item.id],
+                opener,
+              }),
+            );
+            return;
+          }
           heroClick(event, photo?.id);
           onOpen?.();
         },
@@ -136,6 +166,8 @@ export const AttemptResult = forwardRef<HTMLAnchorElement, AttemptResultProps>(f
       ref={ref}
       link={attemptLink(hit)}
       photo={hit.photo}
+      attempt={hit}
+      name={title}
       fallbackIcon={BuildsIcon}
       selected={selected}
       onPointerEnter={onHover}

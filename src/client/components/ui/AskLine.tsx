@@ -4,8 +4,11 @@ import type { Icon } from "./icons";
 import { Skeleton } from "./Skeleton";
 
 interface AskLineProps {
-  /** The small glyph of whoever asks: the printer for "Is this Herb planter?". */
-  icon: Icon;
+  /**
+   * The small glyph of whoever asks: the printer for "Is this Herb planter?". Left out where the card already shows who
+   * asks beside its title (the printer's mark), so it isn't said twice.
+   */
+  icon?: Icon;
   /** The question in a few words, its one name in `AskName` ("Is this <AskName>Herb planter</AskName>?"). */
   children?: ReactNode;
   /** Why it asks, or why that guess, in a few faint words under the question ("Same file: planter-v2"). */
@@ -36,7 +39,7 @@ export function AskLine({ icon: Glyph, children, detail, actions, loading, class
       )}
     >
       <div className="flex min-w-0 flex-[1_1_12rem] items-start gap-2">
-        <Glyph size={16} aria-hidden className="text-ink-faint mt-0.5 shrink-0" />
+        {Glyph && <Glyph size={16} aria-hidden className="text-ink-faint mt-0.5 shrink-0" />}
         {loading ? (
           <div aria-hidden className="flex flex-1 flex-col gap-1.5 py-0.5">
             <Skeleton className="h-3.5 w-3/5 rounded-sm" />
@@ -52,13 +55,15 @@ export function AskLine({ icon: Glyph, children, detail, actions, loading, class
         )}
       </div>
       {loading ? (
-        <div aria-hidden className="flex shrink-0 items-center gap-1.5 pl-6">
+        <div aria-hidden className={cn("flex shrink-0 items-center gap-1.5", Glyph && "pl-6")}>
           <Skeleton className="h-8 w-14 rounded-sm" />
           <Skeleton className="h-8 w-28 rounded-sm" />
         </div>
       ) : (
         // Under the words on a narrow card, they start where the words do (past the glyph).
-        actions && <div className="flex max-w-full min-w-0 flex-wrap items-center gap-1.5 pl-6">{actions}</div>
+        actions && (
+          <div className={cn("flex max-w-full min-w-0 flex-wrap items-center gap-1.5", Glyph && "pl-6")}>{actions}</div>
+        )
       )}
     </section>
   );

@@ -672,6 +672,23 @@ async function ideaWithBigModel(page: Page, until: RegExp) {
 }
 
 /** Compare lives in an attempt's options menu (the newest attempt's, here): open that, then its Compare row. */
+/** The viewer open over the page, its fade-in finished. */
+async function settleLargePhotos(page: Page, name: RegExp) {
+  await page.getByRole("dialog", { name }).waitFor();
+  await page.waitForFunction(() => {
+    const dialog = document.querySelector('[role="dialog"]');
+    if (!dialog) return false;
+    for (const animation of dialog.getAnimations({ subtree: true })) animation.finish();
+    return getComputedStyle(dialog).opacity === "1";
+  });
+  await page.waitForTimeout(400);
+}
+
+async function closeLargePhotos(page: Page) {
+  await page.keyboard.press("Escape");
+  await page.getByRole("dialog").waitFor({ state: "detached" });
+}
+
 async function openCompare(page: Page) {
   await page
     .getByRole("button", { name: /^Options for attempt/ })
@@ -3671,6 +3688,32 @@ export const shots: Shot[] = [
     },
   },
   {
+    // From the attempt sheet: a tap on one of its photos opens it large over the sheet (the × still removes).
+    name: "attempt-sheet-photo-large",
+    path: `/builds/${SEED_BUILD_IDS.starOrnament}`,
+    prepare: async (page) => {
+      await page
+        .locator(`[data-attempt-id="${STAR_ORNAMENT_FOUR_PHOTOS}"]`)
+        .getByRole("button", { name: /^Attempt 3: .*Open$/ })
+        .click({ position: { x: 6, y: 6 } });
+      const tile = page.getByRole("button", { name: "Open Attempt photo 2 large" });
+      await tile.waitFor();
+      await tile.click();
+      await page.getByText("2 of 4").waitFor();
+      await page.waitForFunction(() => {
+        for (const dialog of Array.from(document.querySelectorAll('[role="dialog"]'))) {
+          for (const animation of dialog.getAnimations({ subtree: true })) animation.finish();
+        }
+        return true;
+      });
+      await page.waitForTimeout(400);
+    },
+    cleanup: async (page) => {
+      await page.keyboard.press("Escape");
+      await page.keyboard.press("Escape");
+    },
+  },
+  {
     name: "journal-attempt-photos",
     path: "/journal",
     selector: `a[href*="${STAR_ORNAMENT_FOUR_PHOTOS}"]`,
@@ -3697,6 +3740,80 @@ export const shots: Shot[] = [
       await page.keyboard.press("Escape");
       await page.getByRole("dialog").waitFor({ state: "detached" });
     },
+  },
+  // The other places a photo opens large: the compare sheet's photo, a search result's, a printing card's and the hero.
+  {
+    name: "compare-photo-large",
+    path: `/builds/${SEED_BUILD_IDS.headphoneStand}`,
+    prepare: async (page) => {
+      await openCompare(page);
+      await page.getByRole("dialog", { name: /^Attempt \d+ and attempt \d+$/ }).waitFor();
+      await page
+        .getByRole("button", { name: /^Open attempt \d+ photo large$/ })
+        .first()
+        .click();
+      await settleLargePhotos(page, /Headphone stand · attempt \d+/);
+    },
+    cleanup: async (page) => {
+      // The viewer first, then the sheet under it.
+      await page.keyboard.press("Escape");
+      await page.getByText(/^\d of \d$/).waitFor({ state: "detached" });
+      await page.keyboard.press("Escape");
+      await page.getByRole("dialog").waitFor({ state: "detached" });
+    },
+  },
+  {
+    name: "search-photo-large",
+    path: "/search?q=star",
+    prepare: async (page) => {
+      await page.locator(`a[href*="${STAR_ORNAMENT_FOUR_PHOTOS}"] img`).first().click();
+      await settleLargePhotos(page, /Star ornament · attempt \d+/);
+      // The attempt's other photos join the one the result carried.
+      await page.getByText("1 of 4").waitFor();
+    },
+    cleanup: closeLargePhotos,
+  },
+  {
+    name: "journal-now-photo-large",
+    path: "/journal",
+    width: 390,
+    prepare: async (page) => {
+      await page.locator("a[data-large]").first().click();
+      await settleLargePhotos(page, /· attempt \d+/);
+    },
+    cleanup: closeLargePhotos,
+  },
+  {
+    name: "today-photo-large",
+    path: "/today",
+    width: 1440,
+    why: "Today is desktop-only: on a phone /today goes to the Journal (journal-now-photo-large)",
+    prepare: async (page) => {
+      await page.locator("a[data-large]").first().click();
+      await settleLargePhotos(page, /· attempt \d+/);
+    },
+    cleanup: closeLargePhotos,
+  },
+  {
+    // The build's hero: a click on a computer, the small button in its corner on a phone (decision 0039).
+    name: "build-hero-large",
+    path: `/builds/${SEED_BUILD_IDS.tugboat}`,
+    prepare: async (page) => {
+      await page
+        .getByRole("button", { name: /^Enlarge picture/ })
+        .first()
+        .click();
+      await settleLargePhotos(page, /Bath tugboat/);
+    },
+    cleanup: closeLargePhotos,
+  },
+  {
+    // The hero as it is before anything opens: the phone's corner button.
+    name: "build-hero-corner",
+    path: `/builds/${SEED_BUILD_IDS.tugboat}`,
+    width: 390,
+    why: "a computer's hero has no corner button: a click on the photo opens it",
+    selector: "section[aria-label=Photos]",
   },
   // A build between prints: its stage chip says In progress (it isn't on the bed).
   { name: "build-between-prints", path: `/builds/${SEED_BUILD_IDS.cableChain}` },
@@ -8602,6 +8719,30 @@ shots.push(
           .first()
           .waitFor();
         await page.waitForTimeout(400);
+      },
+      cleanup: removeFiledPrints,
+    },
+    {
+      // A print answered a while back that still asks: the Journal's row has the same line right under its card (on a
+      // phone too, once Now no longer keeps it, after two weeks).
+      name: "journal-which-build-row",
+      path: "/journal",
+      prepare: async (page) => {
+        await buildAboutToPrint(page, "Herb planter", "planter-v2.gcode.3mf", { startedAgo: 20 * 24 * 60 * 60_000 });
+        await buildAboutToPrint(page, "Planter v2", "balcony-box.gcode.3mf", { startedAgo: 25 * 24 * 60 * 60_000 });
+        const { attemptId } = await bridgeFiles(page, "planter-v2(2)", { ago: 15 * 24 * 60 * 60_000 });
+        await answerFirst(page, attemptId);
+        await page.reload({ waitUntil: "networkidle" });
+        const question = page.getByRole("region", { name: /^Is this / }).first();
+        // Further down the notebook: scroll until its page has come.
+        for (let tries = 0; tries < 12 && !(await question.count()); tries++) {
+          await page.evaluate(() =>
+            window.scrollTo({ top: document.documentElement.scrollHeight, behavior: "instant" }),
+          );
+          await page.waitForTimeout(700);
+        }
+        await question.evaluate((node) => node.scrollIntoView({ block: "center", behavior: "instant" }));
+        await page.waitForTimeout(500);
       },
       cleanup: removeFiledPrints,
     },

@@ -7,6 +7,7 @@ import { type AppliedRecipe, RecipePicker } from "@/components/recipes/RecipePic
 import { Button } from "@/components/ui/Button";
 import { CameraIcon, ImageIcon, PlusIcon } from "@/components/ui/icons";
 import { Kbd } from "@/components/ui/Kbd";
+import { openLarge } from "@/components/ui/OpenLarge";
 import { AddPhotoTile, PhotoThumb, useFilePicker } from "@/components/ui/PhotoTiles";
 import { Sheet } from "@/components/ui/Sheet";
 import { toast } from "@/components/ui/Toast";
@@ -20,9 +21,9 @@ import {
   keptAttemptDraft,
 } from "@/lib/attempt-draft";
 import { type AttemptDraft, logAttempt } from "@/lib/builds";
-import { useDraftPhotos } from "@/lib/capture";
+import { type DraftPhoto, useDraftPhotos } from "@/lib/capture";
 import { useHasCamera } from "@/lib/has-camera";
-import type { ItemView } from "@/lib/items";
+import type { ItemView, PhotoView } from "@/lib/items";
 import { photoSrc } from "@/lib/previews";
 import { sessionQuery } from "@/lib/queries";
 import { queueSlicerFile } from "@/lib/slicer-files";
@@ -392,6 +393,22 @@ export function LogAttempt({
                     alt={`Attempt photo ${index + 1}`}
                     color={photo.processed?.color}
                     busy={!photo.processed}
+                    // Once it is ready (resized here, its pictures in the preview cache) it opens large.
+                    onOpen={
+                      photo.processed
+                        ? (event) => {
+                            const ready = largeDrafts(photos, item.id);
+                            openLarge(event, {
+                              photos: ready,
+                              start: Math.max(
+                                0,
+                                ready.findIndex((view) => view.id === photo.id),
+                              ),
+                              title: `Attempt ${number}`,
+                            });
+                          }
+                        : undefined
+                    }
                     onRemove={() => {
                       setTouched(true);
                       removeDraftPhoto(photo.id);
@@ -411,5 +428,28 @@ export function LogAttempt({
         />
       </form>
     </Sheet>
+  );
+}
+
+/** The draft photos that are ready (resized on this device), as the large viewer takes photos. */
+function largeDrafts(photos: DraftPhoto[], itemId: string): PhotoView[] {
+  return photos.flatMap((photo, position) =>
+    photo.processed
+      ? [
+          {
+            id: photo.id,
+            itemId,
+            position,
+            width: photo.processed.width,
+            height: photo.processed.height,
+            color: photo.processed.color,
+            takenAt: photo.processed.takenAt ?? null,
+            attemptId: null,
+            needsResize: false,
+            createdBy: "",
+            createdAt: 0,
+          },
+        ]
+      : [],
   );
 }
