@@ -65,8 +65,12 @@ export async function readThreeMfFile(file: Blob): Promise<ThreeMfResult> {
 
 function read(data: Uint8Array, out: ThreeMfResult): void {
   const warnings = out.warnings;
-  const { files, names, warnings: zipWarnings } = readEntries(data, rule);
+  const { files, names, warnings: zipWarnings, tooMuch } = readEntries(data, rule);
   warnings.push(...zipWarnings);
+  if (tooMuch) {
+    out.tooMuch = true;
+    return;
+  }
   if (names.length === 0) {
     if (zipWarnings.length === 0) warnings.push("This does not look like a .3mf (zip) file");
     return;

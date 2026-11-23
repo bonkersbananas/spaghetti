@@ -67,6 +67,11 @@ export async function readSlicerFile(picked: File): Promise<SlicerFileDraft | nu
   // The reader (and its unzip) loads the first time someone drops a file, not with the app.
   const { readThreeMfFile } = await import("@shared/threemf/read.ts");
   const result = await readThreeMfFile(file);
+  // Made to unpack to more than is read (shared/threemf/zip.ts): a sliced file like that is refused, a model is kept.
+  if (result.tooMuch && /\.gcode\.3mf$/i.test(file.name)) {
+    toast.error("Couldn't read that file", "It holds more than Spaghetti reads from a sliced file.");
+    return null;
+  }
   // No G-code in it: a model to slice (a Bambu Studio or Orca project, or a plain 3MF from anywhere).
   if (result.kind !== "sliced") return model();
   const plates = printablePlates(result);
