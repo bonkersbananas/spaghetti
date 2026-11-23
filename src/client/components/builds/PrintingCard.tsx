@@ -19,6 +19,7 @@ import { cn } from "@/lib/cn";
 import { useHasCamera } from "@/lib/has-camera";
 import { itemName } from "@/lib/item-name";
 import { type AttemptView, addPhotosToItem, type ItemView } from "@/lib/items";
+import { holdKeyboard } from "@/lib/keyboard-proxy";
 import { duration, ease } from "@/lib/motion";
 import { takePicked } from "@/lib/picked";
 import { coverOf } from "@/lib/previews";
@@ -435,7 +436,11 @@ export function PrintingCard({
                   <p className="text-body text-ink font-semibold">How did it go?</p>
                   <OutcomePicker
                     value={null}
-                    onChange={(outcome) => finish(outcome)}
+                    onChange={(outcome) => {
+                      // The note comes first after Partly or Spaghetti: hold the keyboard up for it (a phone's tap).
+                      if (outcome !== "success") holdKeyboard();
+                      finish(outcome);
+                    }}
                     size="md"
                     suggested={attempt.photoRead?.outcome ?? null}
                   />

@@ -2,12 +2,13 @@ import type { Part } from "@shared/api";
 import { type AttemptSettings, describeChanges, OUTCOMES, type Outcome } from "@shared/attempts";
 import type { AttemptPart } from "@shared/parts";
 import { printerHints } from "@shared/spools";
-import { Fragment, type ReactNode, useEffect, useRef, useState } from "react";
+import { Fragment, type ReactNode, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Caution, FromFileMark } from "@/components/ui/Caution";
 import { Disclosure } from "@/components/ui/Disclosure";
 import { TextArea } from "@/components/ui/Field";
 import { SettingsIcon } from "@/components/ui/icons";
 import type { AttemptView } from "@/lib/items";
+import { keyboardProxy } from "@/lib/keyboard-proxy";
 import { usePrinterSetup } from "@/lib/pantry-queries";
 import { useIsDesktop } from "@/lib/use-media-query";
 import { NotEnoughNote } from "../NotEnoughNote";
@@ -17,6 +18,9 @@ import { summarizeSettings } from "../settings";
 import { TagPicker } from "../TagPicker";
 import { ChangeChips, chipMarks } from "./ChangeChips";
 import { PlateParts } from "./PlateParts";
+
+/** How long a phone's sheet takes to slide up (vaul's 500 ms, and a beat): a note focused before then would jump. */
+const SHEET_SETTLE_MS = 600;
 
 export interface FieldsProps {
   outcome: Outcome | null;
@@ -28,8 +32,8 @@ export interface FieldsProps {
   suggestedFailureTag?: string | readonly string[];
   /** Success notes Claude suggested, marked the same way. */
   suggestedSuccessNotes?: readonly string[];
-  /** Who suggested the failure tags (success notes are only ever Claude's). */
-  suggestedFailureBy?: "printer" | "claude";
+  /** The one failure tag the printer suggested, when it is among them; the rest are Claude's. */
+  printerFailureTag?: string;
   /** The outcome Claude suggests from the photo: hinted on its button, not picked. */
   suggestedOutcome?: Outcome | null;
   /** Under the outcome buttons: "Looking at the photo…", or what Claude made of it. */
@@ -80,6 +84,7 @@ export function AttemptFields(props: FieldsProps) {
   const isDesktop = useIsDesktop();
   const withTags = outcome === "failed" || outcome === "partial";
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const noteRef = useRef<HTMLTextAreaElement>(null);
   const setup = usePrinterSetup();
   const hints = printerHints(settings, setup);
   const base =
@@ -141,11 +146,15 @@ export function AttemptFields(props: FieldsProps) {
     withOffer
   );
 
-  const outcomeBlock = (
+  // The question and its answer. On a phone after Partly or Spaghetti it also holds the note, under the question
+  // and right above the tiles: "How did it go?" heads the person's words and the answer as one group, so the note
+  // never reads as part of the tags above it.
+  const outcomeGroup = (note: ReactNode) => (
     <Fragment key="outcomeBlock">
       <fieldset disabled={props.readOnly === "all"} className="contents">
         <div className="flex flex-col gap-3">
           <p className="text-small text-ink-soft px-0.5 font-semibold">{props.outcomeLabel}</p>
+          {note}
           <OutcomePicker value={outcome} onChange={props.onOutcome} suggested={props.suggestedOutcome} />
           {props.outcomeHint}
           {props.estimate}
@@ -153,6 +162,7 @@ export function AttemptFields(props: FieldsProps) {
       </fieldset>
     </Fragment>
   );
+  const outcomeBlock = outcomeGroup(null);
   const plateBlock = (
     <Fragment key="plateBlock">
       {props.plate && (
@@ -173,18 +183,32 @@ export function AttemptFields(props: FieldsProps) {
       <fieldset disabled={props.readOnly === "all"} className="contents">
         {/* One line of meaning, but it wraps and grows so the whole note stays in view while typing. */}
         <TextArea
+          ref={noteRef}
           aria-label="Note"
           className="scroll-mb-3"
           minRows={1}
-          // The tags under it ask "What went wrong?" / "What worked?": the note doesn't repeat the question.
-          placeholder={outcome ? "One line is plenty." : "A line about this attempt"}
+          // The tags ask "What went wrong?" / "What worked?"; after a print that went wrong the note comes first and
+          // asks in plain words.
+          placeholder={
+            withTags
+              ? "What happened? In your own words."
+              : outcome
+                ? "One line is plenty."
+                : "A line about this attempt"
+          }
           maxLength={500}
           enterKeyHint="done"
           onFocus={(event) => {
-            // The keyboard is coming up: keep the whole field right above the footer, not pushed under the header.
+            // The keyboard is coming up: keep the whole field in view above the footer.
             const field = event.currentTarget;
             if (isDesktop) return;
-            for (const ms of [0, 150, 400]) window.setTimeout(() => field.scrollIntoView({ block: "end" }), ms);
+            // With the keyboard up the note goes to the foot of what is left, so what goes with it (the tags above)
+            // stays in view; without one (yet) it moves only if it must, keeping the answer under it in view.
+            const align = () => {
+              const keyboard = (window.visualViewport?.height ?? window.innerHeight) < window.innerHeight - 120;
+              field.scrollIntoView({ block: keyboard ? "end" : "nearest" });
+            };
+            for (const ms of [0, 150, 400]) window.setTimeout(align, ms);
           }}
           value={props.note}
           onChange={(event) => props.onNote(event.target.value.replace(/\n/g, " "))}
@@ -199,30 +223,37 @@ export function AttemptFields(props: FieldsProps) {
       </fieldset>
     </Fragment>
   );
+  const failurePicker = withTags && (
+    <TagPicker
+      key="failure"
+      kind="failure"
+      label="What went wrong?"
+      hide={outcome === "failed" ? ["spaghetti"] : undefined}
+      value={props.failureTags}
+      onChange={props.onFailureTags}
+      suggested={props.suggestedFailureTag}
+      suggestedBy="claude"
+      printerSuggested={props.printerFailureTag}
+      compact
+    />
+  );
+  const successPicker = (outcome === "success" || outcome === "partial") && (
+    <TagPicker
+      key="success"
+      kind="success"
+      label="What worked?"
+      value={props.successNotes}
+      onChange={props.onSuccessNotes}
+      suggested={props.suggestedSuccessNotes}
+      suggestedBy="claude"
+      compact={withTags}
+    />
+  );
   const tagsBlock = (
     <Fragment key="tagsBlock">
       <fieldset disabled={props.readOnly === "all"} className="contents">
-        {withTags && (
-          <TagPicker
-            kind="failure"
-            label="What went wrong?"
-            hide={outcome === "failed" ? ["spaghetti"] : undefined}
-            value={props.failureTags}
-            onChange={props.onFailureTags}
-            suggested={props.suggestedFailureTag}
-            suggestedBy={props.suggestedFailureBy}
-          />
-        )}
-        {(outcome === "success" || outcome === "partial") && (
-          <TagPicker
-            kind="success"
-            label="What worked?"
-            value={props.successNotes}
-            onChange={props.onSuccessNotes}
-            suggested={props.suggestedSuccessNotes}
-            suggestedBy="claude"
-          />
-        )}
+        {/* What went wrong sits nearest the note: under it on desktop, right above it on a phone (read bottom-up). */}
+        {isDesktop ? [failurePicker, successPicker] : [successPicker, failurePicker]}
       </fieldset>
     </Fragment>
   );
@@ -323,31 +354,90 @@ export function AttemptFields(props: FieldsProps) {
     return toEnd(!first);
   }, [outcome]);
 
+  // Partly or Spaghetti picked: the person's own words come first, so the note takes the focus (on a laptop typing
+  // goes straight in; on a phone the keyboard comes up with the note right above the answer). Picked in the sheet,
+  // it is inside the tap, so iOS raises the keyboard; picked on a card, the card's tap holds the keyboard with a
+  // stand-in (lib/keyboard-proxy.ts) and the note takes the focus from it once the sheet has slid up, so nothing jumps.
+  const mountedAt = useRef(performance.now());
+  const lastOutcome = useRef(outcome);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: when the outcome changes.
+  useLayoutEffect(() => {
+    const from = lastOutcome.current;
+    lastOutcome.current = outcome;
+    const note = noteRef.current;
+    if (from === outcome || !withTags || props.readOnly === "all" || !note) return;
+    const settling = isDesktop ? 0 : SHEET_SETTLE_MS - (performance.now() - mountedAt.current);
+    // With the caret after what is already written, so new words add to it.
+    const focusNote = (preventScroll: boolean) => {
+      note.focus({ preventScroll });
+      note.setSelectionRange(note.value.length, note.value.length);
+    };
+    if (settling <= 0) {
+      focusNote(!isDesktop);
+      return;
+    }
+    const timer = window.setTimeout(() => {
+      // A field or button tapped meanwhile keeps the focus; the stand-in, the sheet itself or the answer give it up.
+      const held = document.activeElement;
+      if (!held || held === document.body || held === keyboardProxy() || held.matches("[role=dialog], [role=radio]"))
+        focusNote(true);
+    }, settling);
+    return () => window.clearTimeout(timer);
+  }, [outcome]);
+
+  // After Partly or Spaghetti the note comes right after the answer (on a phone, under the question and over the
+  // tiles), then the photos the tags speak of, then the few tags; otherwise the photos and the plate come first. The
+  // note is focused after the blocks move (a layout effect), so it keeps the focus.
   const blocks = isDesktop
-    ? [
-        outcomeBlock,
-        plateBlock,
-        photosBlock,
-        noteBlock,
-        tagsBlock,
-        coachBlock,
-        whenBlock,
-        fileBlock,
-        notEnoughBlock,
-        settingsBlock,
-      ]
-    : [
-        fileBlock,
-        settingsBlock,
-        notEnoughBlock,
-        whenBlock,
-        coachBlock,
-        noteBlock,
-        plateBlock,
-        photosBlock,
-        tagsBlock,
-        outcomeBlock,
-      ];
+    ? withTags
+      ? [
+          outcomeBlock,
+          noteBlock,
+          photosBlock,
+          tagsBlock,
+          plateBlock,
+          coachBlock,
+          whenBlock,
+          fileBlock,
+          notEnoughBlock,
+          settingsBlock,
+        ]
+      : [
+          outcomeBlock,
+          plateBlock,
+          photosBlock,
+          noteBlock,
+          tagsBlock,
+          coachBlock,
+          whenBlock,
+          fileBlock,
+          notEnoughBlock,
+          settingsBlock,
+        ]
+    : withTags
+      ? [
+          fileBlock,
+          settingsBlock,
+          notEnoughBlock,
+          whenBlock,
+          coachBlock,
+          plateBlock,
+          photosBlock,
+          tagsBlock,
+          outcomeGroup(noteBlock),
+        ]
+      : [
+          fileBlock,
+          settingsBlock,
+          notEnoughBlock,
+          whenBlock,
+          coachBlock,
+          noteBlock,
+          plateBlock,
+          photosBlock,
+          tagsBlock,
+          outcomeBlock,
+        ];
 
   return (
     // biome-ignore lint/a11y/noStaticElementInteractions: it only listens to keys that bubble up from the controls inside.

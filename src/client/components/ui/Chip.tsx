@@ -66,6 +66,11 @@ interface ToggleChipProps extends Omit<ComponentPropsWithRef<"button">, "childre
   appearance?: "chip" | "quiet";
   /** How many it would show, after the label: faint at rest, in the pill's own ink once picked. */
   count?: number;
+  /**
+   * Offered by Claude or the printer and not picked yet: the dashed outline in its tone that marks what a tap
+   * accepts (as `Chip suggested`), no fill. Picked, it looks like any picked chip.
+   */
+  suggested?: boolean;
   children: ReactNode;
 }
 
@@ -74,6 +79,17 @@ const selectedTones: Record<ChipTone, string> = {
   tomato: "bg-tomato-soft text-tomato-ink ring-1 ring-inset ring-tomato/40",
   basil: "bg-basil-soft text-basil-ink ring-1 ring-inset ring-basil/40",
   semolina: "bg-semolina-soft text-semolina-ink ring-1 ring-inset ring-semolina/50",
+};
+
+/**
+ * A toggle offered by Claude or the printer, not picked yet: the suggested outcome tile's look (Outcome.tsx), a
+ * dashed ring in the tone around ink-soft words, no fill, so it never reads as picked.
+ */
+const suggestedToggleTones: Record<ChipTone, string> = {
+  neutral: "border-ink/30",
+  tomato: "border-tomato",
+  basil: "border-basil/70",
+  semolina: "border-semolina",
 };
 
 /** A quiet toggle that is on and has a status colour (Up next, My wishlist): the tone's soft fill, no ring, never the ink pill that means "picked filter". */
@@ -92,6 +108,7 @@ export function ToggleChip({
   lead,
   appearance = "chip",
   count,
+  suggested = false,
   children,
   className,
   ...props
@@ -104,14 +121,20 @@ export function ToggleChip({
       className={cn(
         base,
         "pressable focus-ring touch-target relative",
-        quiet ? "h-7 px-2.5" : cn("h-9 md:h-8", lead ? "gap-2 pr-3.5 pl-2" : "px-3.5"),
+        // An unpicked suggestion's 2 px dashed border comes out of its padding (border-box, fixed height), so it is
+        // exactly as wide as when it is picked: a tap never moves the chips after it.
+        quiet
+          ? "h-7 px-2.5"
+          : cn("h-9 md:h-8", lead ? "gap-2 pr-3.5 pl-2" : suggested && !selected ? "px-3" : "px-3.5"),
         selected
           ? quiet && tone !== "neutral"
             ? quietSelectedTones[tone]
             : selectedTones[tone]
           : quiet
             ? "text-ink-soft hover:bg-ink/5 hover:text-ink"
-            : "bg-cream text-ink-soft shadow-soft hover:text-ink",
+            : suggested
+              ? cn("text-ink-soft hover:text-ink border-2 border-dashed", suggestedToggleTones[tone])
+              : "bg-cream text-ink-soft shadow-soft hover:text-ink",
         className,
       )}
       {...props}
@@ -139,11 +162,32 @@ export function collapseChips<T>(
   return { shown, hidden: items.length - shown.length };
 }
 
-/** "4 more": the chip that opens what `collapseChips` left out. */
+/**
+ * "4 more": opens what `collapseChips` left out. A control, not one more choice: words and a caret with no pill, so
+ * it never reads as a tag.
+ */
 export function MoreChip({ hidden, onClick }: { hidden: number; onClick: () => void }) {
   return (
-    <ToggleChip selected={false} onClick={onClick} className="text-ink-faint">
+    <button
+      type="button"
+      onClick={onClick}
+      className="pressable focus-ring touch-target text-small text-ink-soft hover:text-ink rounded-pill relative inline-flex h-9 shrink-0 items-center gap-1 px-2 font-semibold md:h-8"
+    >
       {hidden} more
-    </ToggleChip>
+      {/* A small caret drawn here: an icon component would add to every screen's first load. */}
+      <svg
+        viewBox="0 0 16 16"
+        width="14"
+        height="14"
+        aria-hidden
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      >
+        <path d="m4 6 4 4 4-4" />
+      </svg>
+    </button>
   );
 }
