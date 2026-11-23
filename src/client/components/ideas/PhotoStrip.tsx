@@ -236,6 +236,15 @@ export function PhotoStrip({
     );
   };
 
+  // On a phone the add tiles lead the strip: photo after photo, a long one would push them off-screen, and adding
+  // one-handed at the printer must not start with a swipe. On desktop they close the row, where the eye ends.
+  const addTiles = (
+    <>
+      {hasCamera && <AddPhotoTile size="sm" icon={CameraIcon} label="Take a photo" onClick={camera.open} />}
+      <AddPhotoTile size="sm" icon={isDesktop ? PlusIcon : ImageIcon} label="Add photos" onClick={library.open} />
+    </>
+  );
+
   return (
     <div
       ref={strip}
@@ -243,6 +252,7 @@ export function PhotoStrip({
     >
       {camera.input}
       {library.input}
+      {!isDesktop && addTiles}
       {draggable ? (
         // Empty (a build whose photos are all its attempts'), a list would still take a gap before the add tiles.
         <Reorder.Group
@@ -304,8 +314,7 @@ export function PhotoStrip({
           ))}
         </ul>
       )}
-      {hasCamera && <AddPhotoTile size="sm" icon={CameraIcon} label="Take a photo" onClick={camera.open} />}
-      <AddPhotoTile size="sm" icon={isDesktop ? PlusIcon : ImageIcon} label="Add photos" onClick={library.open} />
+      {isDesktop && addTiles}
       {menu && (
         <PhotoMenu
           open={menuOpen}

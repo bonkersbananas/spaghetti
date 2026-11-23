@@ -58,3 +58,25 @@ test("a photo added at the top of a build leaves its attempts' photos in the str
   await expect(page.getByRole("list", { name: "Photo order" }).getByRole("button")).toHaveCount(1);
   await expect(strip.getByRole("button", { name: /attempt 1/ })).toBeVisible();
 });
+
+test("a long strip still shows its add tiles without scrolling on a phone", { tag: "@phone" }, async ({
+  page,
+  isMobile,
+}) => {
+  test.skip(!isMobile, "Phones lead the strip with its add tiles; desktop closes it");
+  const headers = { Origin: new URL(page.url()).origin };
+  const itemId = crypto.randomUUID();
+  await page.request.post("/api/items", { headers, data: { id: itemId, title: "Tomato mascot", stage: "building" } });
+  const attemptId = crypto.randomUUID();
+  await page.request.post(`/api/items/${itemId}/attempts`, {
+    headers,
+    data: { id: attemptId, outcome: "success", printedAt: Date.now() - 3_600_000 },
+  });
+  for (let i = 0; i < 6; i++) await putPhoto(page, itemId);
+  for (let i = 0; i < 4; i++) await putPhoto(page, itemId, attemptId);
+
+  await page.goto(`/builds/${itemId}`);
+  await expect(page.getByRole("list", { name: "Photo order" }).getByRole("button")).toHaveCount(6);
+  await expect(page.getByRole("button", { name: "Add photos" })).toBeInViewport({ ratio: 1 });
+  await expect(page.getByRole("button", { name: "Photo 6" })).not.toBeInViewport();
+});
