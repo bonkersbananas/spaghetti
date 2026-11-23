@@ -4,7 +4,7 @@ import type { QueryClient } from "@tanstack/react-query";
 import { toast } from "@/components/ui/Toast";
 import { api } from "./api";
 import { discardUpload, dropUpload, isRefusal, setUpload, uploadInParts } from "./big-upload";
-import { patchCachedItem } from "./items";
+import { itemKeys, patchCachedItem } from "./items";
 import { setPreview } from "./previews";
 import { fileSettings, plateOf, plateThumb, readSlicerFile, type SlicerFileDraft } from "./slicer-files";
 
@@ -12,6 +12,21 @@ import { fileSettings, plateOf, plateThumb, readSlicerFile, type SlicerFileDraft
 
 const withFiles = (queryClient: QueryClient, itemId: string, change: (files: AttemptFile[]) => AttemptFile[]) =>
   patchCachedItem(queryClient, itemId, (item) => ({ ...item, files: change(item.files ?? []) }));
+
+/**
+ * Shows a file being added at once. A fetch of the item already on its way was asked before the file existed, and
+ * its answer would take the new card off again: it is called off, and `saved` asks again once the server has the file.
+ */
+const addShown = async (queryClient: QueryClient, itemId: string, shown: AttemptFile) => {
+  const key = itemKeys.detail(itemId);
+  const calledOff = queryClient.isFetching({ queryKey: key }) > 0;
+  // Awaited: a cancelled fetch puts back the copy from before it, which would undo a card added first.
+  if (calledOff) await queryClient.cancelQueries({ queryKey: key });
+  withFiles(queryClient, itemId, (files) => [...files, shown]);
+  return () => {
+    if (calledOff) void queryClient.invalidateQueries({ queryKey: key });
+  };
+};
 
 /** The multipart body of PUT /api/items/:id/files/:fileId: the same fields as an attempt's file. */
 function bodyOf(draft: SlicerFileDraft) {
@@ -122,9 +137,12 @@ export async function addItemFile(queryClient: QueryClient, itemId: string, pick
     createdAt: Date.now(),
     pending: true,
   };
-  withFiles(queryClient, itemId, (files) => [...files, shown]);
+  const askAgain = await addShown(queryClient, itemId, shown);
   await keepFile(`/items/${itemId}/files/${draft.id}`, file, draft.id, "slicer", form, {
-    saved: (saved) => withFiles(queryClient, itemId, (files) => files.map((f) => (f.id === saved.id ? saved : f))),
+    saved: (saved) => {
+      withFiles(queryClient, itemId, (files) => files.map((f) => (f.id === saved.id ? saved : f)));
+      askAgain();
+    },
     giveUp: () => {
       withFiles(queryClient, itemId, (files) => files.filter((f) => f.id !== draft.id));
       toast.error("Couldn't keep that file", "Check the connection and try again.");
@@ -154,7 +172,7 @@ async function addItemModel(queryClient: QueryClient, itemId: string, draft: Sli
     createdAt: Date.now(),
     pending: true,
   };
-  withFiles(queryClient, itemId, (files) => [...files, shown]);
+  const askAgain = await addShown(queryClient, itemId, shown);
   // The jobs' code comes with the first model, not with the app.
   const jobs = await import("./slicing/jobs");
   void jobs.startSlice(queryClient, {
@@ -173,8 +191,10 @@ async function addItemModel(queryClient: QueryClient, itemId: string, draft: Sli
   if (file.size <= ONE_REQUEST_FILE_BYTES) form.set("file", file, file.name);
   await keepFile(`/items/${itemId}/files/${draft.id}`, file, draft.id, "model", form, {
     // A slice that reached the server first (it waits for this) stays.
-    saved: (saved) =>
-      withFiles(queryClient, itemId, (files) => files.map((f) => (f.id === saved.id ? (f.slice ? f : saved) : f))),
+    saved: (saved) => {
+      withFiles(queryClient, itemId, (files) => files.map((f) => (f.id === saved.id ? (f.slice ? f : saved) : f)));
+      askAgain();
+    },
     giveUp: () => {
       jobs.cancelSlice(draft.id);
       withFiles(queryClient, itemId, (files) => files.filter((f) => f.id !== draft.id));
