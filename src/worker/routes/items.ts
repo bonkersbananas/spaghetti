@@ -994,7 +994,10 @@ export const itemRoutes = new Hono<AppEnv>()
       return apiError(c, 400, "invalid", "That photo couldn't be read.");
     }
     const contentType = large.type;
-    if (!(PHOTO_CONTENT_TYPES as readonly string[]).includes(contentType) || thumb.type !== contentType) {
+    // An original waiting for a browser to resize it may also be a PNG (a render an agent made): the browser's
+    // variants that replace it are WebP or JPEG.
+    const allowed = fields.data.needsResize && contentType === "image/png";
+    if (!(allowed || (PHOTO_CONTENT_TYPES as readonly string[]).includes(contentType)) || thumb.type !== contentType) {
       return apiError(c, 415, "unsupported", "Photos are uploaded as WebP or JPEG.");
     }
     if (large.size > MAX_PHOTO_BYTES || thumb.size > MAX_PHOTO_BYTES) {

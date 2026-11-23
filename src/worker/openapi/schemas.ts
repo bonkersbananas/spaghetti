@@ -117,6 +117,13 @@ export const AttemptFile = z
       .nullable()
       .optional()
       .describe("The slice a re-slice replaced, kept for one undo (POST /files/{id}/sliced/restore)."),
+    createdVia: z
+      .string()
+      .nullable()
+      .optional()
+      .describe(
+        'The agent that added it ("Claude for Alex"), if any. A model an agent added has no slice until the next browser that opens the app slices it.',
+      ),
     createdAt: epoch,
   })
   .meta({ id: "AttemptFile" });

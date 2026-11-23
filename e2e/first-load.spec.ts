@@ -27,6 +27,8 @@ import { SEED_PASSWORD, SEED_USERS } from "../scripts/lib/local-app.ts";
  * Raise a screen's ceiling only for code that screen shows at once, and say why in the pull request.
  * 2026-11-15: /today and /journal +2: the "Since Thursday" gate on both (the block itself loads only when there is a catch-up, but its
  * lazy import adds its dependency list to the gate's chunk, about 1.5 kB gzip).
+ * 2026-11-23: /ideas +1, /builds +1, /pantry +2 and /printer +2: the watcher that slices a model an agent added (lib/model-read.ts, about
+ * 0.6 kB gzip) runs in the shell on every screen, like the one that resizes an agent's photos; loading it lazily only moved its chunk into the first load.
  * 2026-11-22: /today, /ideas, /journal and /search +1 to +2: the saved copy is repaired when read back and keyed to the build (sanitizeCached, appVersion), and the outbox drops an outcome it has no word for (about 0.4 kB gzip in the main bundle); the error screen's report loads with that screen.
  * 2026-11-18: /pantry +1: the phone's compact spool tile (SpoolChip) and its remembered Tiles / Compact choice, both drawn on the Pantry at once (about 0.9 kB gzip).
  * 2026-11-19: /pantry and /printer +1: both draw what the next-slot offer and the new-spool sheet open from (the slot wiring on each page, about
@@ -50,12 +52,12 @@ import { SEED_PASSWORD, SEED_USERS } from "../scripts/lib/local-app.ts";
 const CEILING_KB = {
   "/sign-in": 185,
   "/today": 297,
-  "/ideas": 266,
-  "/builds": 267,
+  "/ideas": 267,
+  "/builds": 268,
   "/journal": 284,
   "/search": 277,
-  "/pantry": 261,
-  "/printer": 260,
+  "/pantry": 263,
+  "/printer": 262,
 } as const;
 
 /** Changes smaller than this don't make a screen heavier: a renamed chunk moves a few bytes in every screen. */

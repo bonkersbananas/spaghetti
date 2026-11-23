@@ -140,6 +140,7 @@ describe("the MCP endpoint", () => {
       "get_photo",
       "capture_idea",
       "add_photo",
+      "add_file",
       "add_comment",
       "set_parts",
       "start_attempt",
@@ -269,7 +270,7 @@ describe("tools, scopes and attribution", () => {
       "https",
     );
     expect((await callTool(made.token, "capture_idea", { photo_base64: btoa("not an image at all") })).text).toContain(
-      "JPEG or WebP",
+      "JPEG, WebP or PNG",
     );
   });
 
@@ -759,7 +760,7 @@ describe("photos through MCP", () => {
       "too large",
     );
     expect((await callTool(token, "add_photo", { build_id: buildId, photo_base64: btoa("nope") })).text).toContain(
-      "JPEG or WebP",
+      "JPEG, WebP or PNG",
     );
     stubWeb({ "https://example.com/moved.jpg": () => Response.redirect("http://192.168.1.20/snapshot.jpg", 302) });
     try {

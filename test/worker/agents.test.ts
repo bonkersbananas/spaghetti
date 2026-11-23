@@ -279,6 +279,13 @@ const rows: Array<{ name: string; scope: AgentScope; method: string; path: strin
     path: `/api/twists/${uuid()}`,
     json: { note: "Looser" },
   },
+  {
+    name: "keep a twist's model",
+    scope: "capture",
+    method: "PUT",
+    path: `/api/twists/${uuid()}/file/${uuid()}`,
+    json: {},
+  },
   { name: "add a spool", scope: "printer", method: "POST", path: "/api/spools", json: { id: uuid(), material: "PLA" } },
   {
     name: "update a spool",
