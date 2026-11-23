@@ -2571,6 +2571,8 @@ export const shots: Shot[] = [
   {
     name: "today",
     path: "/today",
+    width: 1440,
+    why: "Today is desktop-only: on a phone /today goes to the Journal (journal-now shots)",
     fullPage: true,
     // The scout's pictures come from the Worker: let them land before the shot.
     prepare: async (page) => {
@@ -2590,6 +2592,8 @@ export const shots: Shot[] = [
     // One of the three answered: the block counts what is left.
     name: "today-scout-answered",
     path: "/today",
+    width: 1440,
+    why: "Today is desktop-only",
     fullPage: true,
     prepare: async (page) => {
       await mockScout(page, "one");
@@ -2684,6 +2688,8 @@ export const shots: Shot[] = [
     // Nothing printing, no builds, nothing loaded: only the old idea left on the back burner.
     name: "today-partly-empty",
     path: "/today",
+    width: 1440,
+    why: "Today is desktop-only",
     fullPage: true,
     prepare: async (page) => {
       await mockToday(page, { builds: "none", journal: "none", spools: "none", ideas: "all" });
@@ -2712,6 +2718,8 @@ export const shots: Shot[] = [
     // A brand-new notebook.
     name: "today-empty",
     path: "/today",
+    width: 1440,
+    why: "Today is desktop-only",
     prepare: async (page) => {
       await mockToday(page, { builds: "none", journal: "none", spools: "none", ideas: "none" });
       await waitUntilEased(page, "Nothing on the stove yet");
