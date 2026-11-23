@@ -542,3 +542,20 @@ test("on a phone the outcome and the photo tiles sit at the foot of the sheet, a
   await edit.getByRole("button", { name: "More for this attempt" }).click();
   await expect(page.getByRole("button", { name: "Delete attempt" })).toBeVisible();
 });
+
+test("a build opened from a list that is a moment old still shows the attempt added since", async ({ page }) => {
+  const id = crypto.randomUUID();
+  const headers = { Origin: origin(page) };
+  await page.request.post("/api/items", { headers, data: { id, title: "Late hinge", stage: "building" } });
+  // The list is fetched (and kept on the device) while the build has no attempt yet ...
+  await page.goto("/builds");
+  await expect(page.getByText("Late hinge").first()).toBeVisible();
+  // ... then the printer, or the other person, adds one, and the build is opened within the list's fresh half minute.
+  await page.request.post(`/api/items/${id}/attempts`, {
+    headers,
+    data: { id: crypto.randomUUID(), printedAt: Date.now() - 60_000, outcome: null },
+  });
+  await page.goto(`/builds/${id}`);
+  await expect(page.getByRole("textbox", { name: "Title" })).toHaveValue("Late hinge");
+  await expect(page.getByText("Attempt 1").first()).toBeVisible();
+});
