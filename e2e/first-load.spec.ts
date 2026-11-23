@@ -51,11 +51,12 @@ import { SEED_PASSWORD, SEED_USERS } from "../scripts/lib/local-app.ts";
  * 2026-11-23: /today and /journal +1: a Journal attempt card's photo opens the attempt's photos large, with the build's
  * name in the viewer linking back to it (the click handler and the two-step loader's import, about 0.3 kB gzip in the
  * card both screens draw); the viewer itself, its root and its zoom load on the first click. The entry re-exports
- * createRoot for that root (about 0.17 kB on every screen, inside the other screens' 0.5 kB).
+ * createRoot for that root (about 0.17 kB on every screen, inside the other screens' 0.5 kB). /today +1 more the same
+ * day: with "Which build is this?" on the printing card (PR 659, about 0.3 kB) it measured 298.3 kB against 298.
  */
 const CEILING_KB = {
   "/sign-in": 185,
-  "/today": 298,
+  "/today": 299,
   "/ideas": 267,
   "/builds": 268,
   "/journal": 285,
