@@ -1,7 +1,6 @@
 import { Link, type LinkComponentProps } from "@tanstack/react-router";
-import { forwardRef, type MouseEvent, type ReactNode } from "react";
+import { forwardRef, type ReactNode } from "react";
 import { cn } from "@/lib/cn";
-import { prefetchLarge } from "./OpenLarge";
 import { Photo } from "./Photo";
 
 /** How a row (or the card around one) shows it is picked, and the wash under a mouse. */
@@ -33,11 +32,6 @@ interface PhotoRowProps {
    * (`bg-well text-ink-ghost` is the default).
    */
   tile: ReactNode;
-  /**
-   * A click or tap on the picture does this instead of following the link (the photo opens large: `openLargeFromLink`);
-   * the rest of the row, and Enter, still lead where the link does.
-   */
-  onPhotoClick?: (event: MouseEvent<HTMLElement>) => void;
   tileClassName?: string;
   size?: PhotoRowSize;
   /** The photo steps back (a shelved build). */
@@ -62,39 +56,9 @@ interface PhotoRowProps {
  * all use it, so a row looks the same wherever a list of prints shows up.
  */
 export const PhotoRow = forwardRef<HTMLAnchorElement, PhotoRowProps>(function PhotoRow(
-  {
-    link,
-    photo,
-    tile,
-    onPhotoClick,
-    tileClassName,
-    size = "md",
-    faded,
-    selected,
-    bare,
-    align = "center",
-    className,
-    children,
-  },
+  { link, photo, tile, tileClassName, size = "md", faded, selected, bare, align = "center", className, children },
   ref,
 ) {
-  const picture = photo && (
-    <Photo
-      src={photo.src}
-      alt=""
-      color={photo.color}
-      fit={photo.fit}
-      frame={photo.fit === "contain" ? (size === "lg" ? "render" : "render-tile") : undefined}
-      className={cn(
-        "shrink-0 rounded-md",
-        sizes[size],
-        photo.fit === "contain" && "p-1",
-        // A render steps back by its colour only: see-through, a dark filament's faint lit edge (its outline on
-        // the dark render ground) would go with it.
-        faded && (photo.fit === "contain" ? "saturate-50" : "opacity-75 saturate-50"),
-      )}
-    />
-  );
   return (
     <Link
       ref={ref}
@@ -108,21 +72,21 @@ export const PhotoRow = forwardRef<HTMLAnchorElement, PhotoRowProps>(function Ph
       )}
     >
       {photo ? (
-        onPhotoClick ? (
-          // A handler, not a button: a button can't sit in the row's link (as the Journal's attempt photo).
-          // biome-ignore lint/a11y/noStaticElementInteractions: the row's link is the control; this is its photo's shortcut
-          // biome-ignore lint/a11y/useKeyWithClickEvents: the row's link is the control; this is its photo's shortcut
-          <span
-            onClick={onPhotoClick}
-            onPointerEnter={prefetchLarge}
-            onTouchStart={prefetchLarge}
-            className="block shrink-0 cursor-zoom-in"
-          >
-            {picture}
-          </span>
-        ) : (
-          picture
-        )
+        <Photo
+          src={photo.src}
+          alt=""
+          color={photo.color}
+          fit={photo.fit}
+          frame={photo.fit === "contain" ? (size === "lg" ? "render" : "render-tile") : undefined}
+          className={cn(
+            "shrink-0 rounded-md",
+            sizes[size],
+            photo.fit === "contain" && "p-1",
+            // A render steps back by its colour only: see-through, a dark filament's faint lit edge (its outline on
+            // the dark render ground) would go with it.
+            faded && (photo.fit === "contain" ? "saturate-50" : "opacity-75 saturate-50"),
+          )}
+        />
       ) : (
         <span
           aria-hidden

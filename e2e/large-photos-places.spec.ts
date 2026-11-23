@@ -123,7 +123,8 @@ test("the printing card's photo opens large, and the card still leads to the bui
   const id = await build(page, "Bath tugboat", [{ outcome: null, photos: 2 }]);
   // Phones have the Journal for Today: its Now block draws the same card.
   await page.goto(isMobile ? "/journal" : "/today");
-  const photo = page.getByRole("button", { name: "Open Bath tugboat photo large" }).first();
+  // Pointer only (Enter on the name leads to the build): the picture is the card's own link, marked data-large.
+  const photo = page.locator("a[data-large]").first();
   await expect(photo).toBeVisible();
   await press(photo, isMobile);
   const large = viewer(page, "Bath tugboat · attempt 1");
@@ -147,10 +148,10 @@ test("the hero opens all the photos large: a click on a computer, the corner but
   await expect(page.getByRole("textbox", { name: "Title" })).toHaveValue("Gear wall");
   const large = viewer(page, "Gear wall");
   if (isMobile) {
-    await expect(page.getByRole("button", { name: /^Enlarge photo \d of \d$/ })).toHaveCount(0);
-    await page.getByRole("button", { name: "Enlarge photo", exact: true }).tap();
+    await expect(page.getByRole("button", { name: /^Enlarge picture \d of \d$/ })).toHaveCount(0);
+    await page.getByRole("button", { name: "Enlarge picture", exact: true }).tap();
   } else {
-    await page.getByRole("button", { name: "Enlarge photo 1 of 3" }).click();
+    await page.getByRole("button", { name: "Enlarge picture 1 of 3" }).click();
   }
   // On the photo the hero showed (the best one), the other two around it.
   await expect(large.getByText(/^\d of 3$/)).toBeVisible();
@@ -181,8 +182,8 @@ test("an idea's hero opens its photos large @phone", async ({ page, isMobile }) 
   await expect(page.getByRole("textbox", { name: "Title" })).toHaveValue("Hook rail");
   await press(
     isMobile
-      ? page.getByRole("button", { name: "Enlarge photo", exact: true })
-      : page.getByRole("button", { name: "Enlarge photo 1 of 2" }),
+      ? page.getByRole("button", { name: "Enlarge picture", exact: true })
+      : page.getByRole("button", { name: "Enlarge picture 1 of 2" }),
     isMobile,
   );
   await expect(viewer(page, "Hook rail").getByText("1 of 2")).toBeVisible();

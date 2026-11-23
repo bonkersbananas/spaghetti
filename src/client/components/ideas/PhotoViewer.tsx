@@ -1,6 +1,6 @@
 import { type MouseEvent, type ReactNode, useEffect, useRef } from "react";
 import { IconButton } from "@/components/ui/Button";
-import { FullScreenIcon, NextIcon, PreviousIcon } from "@/components/ui/icons";
+import { NextIcon, PreviousIcon } from "@/components/ui/icons";
 import { OpenLarge, openLarge } from "@/components/ui/OpenLarge";
 import { Photo } from "@/components/ui/Photo";
 import { UploadBadge } from "@/components/ui/UploadBadge";
@@ -201,7 +201,7 @@ export function PhotoViewer({
               {largeTitle && isDesktop ? (
                 // A click opens it large (a double click zooms there, as it did here).
                 <OpenLarge
-                  label={`Enlarge photo ${i + 1} of ${photos.length}`}
+                  label={`Enlarge picture ${i + 1} of ${photos.length}`}
                   onClick={(event) => showLarge(event, i)}
                   className="size-full rounded-none"
                 >
@@ -229,11 +229,23 @@ export function PhotoViewer({
         </div>
         {largeTitle && !isDesktop && (
           <OpenLarge
-            label="Enlarge photo"
+            label="Enlarge picture"
             onClick={(event) => showLarge(event, index)}
             className="bg-veil text-on-veil hover:bg-veil-strong touch-target absolute right-3 bottom-3 flex size-9 items-center justify-center rounded-full backdrop-blur-md"
           >
-            <FullScreenIcon size={18} aria-hidden />
+            <svg
+              viewBox="0 0 20 20"
+              width="18"
+              height="18"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.8"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden
+            >
+              <path d="M12 3h5v5M8 17H3v-5M17 3l-5.5 5.5M3 17l5.5-5.5" />
+            </svg>
           </OpenLarge>
         )}
       </div>

@@ -4,7 +4,7 @@ import { displayName } from "@shared/people";
 import { isOffTheBed } from "@shared/print-progress";
 import { highlight, type SearchTerm, snippetSegments } from "@shared/search";
 import { inlineTime, relativeTime } from "@shared/time";
-import { type QueryClient, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { LinkProps } from "@tanstack/react-router";
 import { forwardRef, type MouseEvent, type ReactNode, useLayoutEffect, useRef, useState } from "react";
 import { OutcomeChip } from "@/components/builds/Outcome";
@@ -22,12 +22,10 @@ import {
   IdeasIcon,
   ShelveIcon,
 } from "@/components/ui/icons";
-import { openLargeFromLink, showLargeAgain } from "@/components/ui/OpenLarge";
 import { PhotoRow } from "@/components/ui/PhotoRow";
 import { useTagOptions } from "@/lib/builds";
 import { cn } from "@/lib/cn";
 import { heroClick } from "@/lib/hero";
-import { cachedItem, itemQuery } from "@/lib/items";
 import { coverOf, fileThumbSrc, photoSrc } from "@/lib/previews";
 import { peopleQuery, sessionQuery } from "@/lib/queries";
 import { useIsDesktop } from "@/lib/use-media-query";
@@ -62,59 +60,55 @@ interface RowProps {
   selected: boolean;
   onPointerEnter?: () => void;
   onOpen?: () => void;
-  /** An attempt result: a tap or click on its photo opens the attempt's photos large instead of the build. */
+  /** An attempt result: a tap or click on its photo opens the attempt's photos large instead of the build, named so. */
   attempt?: AttemptHit;
+  name?: string;
   /** Inside an `ActionCard`: the card draws the selection, and the last line leaves room for its button (this wide). */
   inCard?: keyof typeof ACTION_ROOM;
   children: ReactNode;
 }
 
-/**
- * An attempt result's photo opens large, titled as the Journal's ("Gear wall · attempt 2"). The result carries one
- * photo; it opens at once on that, and the rest of the attempt's photos join it when the build is cached or has come
- * (the hit's photo is the attempt's first, so nothing moves under a finger).
- */
-function openHitPhotos(event: MouseEvent<HTMLElement>, hit: AttemptHit, photo: PhotoData, queryClient: QueryClient) {
-  const { attempt, item } = hit;
-  const view = {
-    title: `${item.title?.trim() || "Untitled build"} · attempt ${hit.number}`,
-    badge: <OutcomeChip outcome={attempt.outcome} offTheBed={isOffTheBed(attempt)} />,
-    detail: relativeTime(attempt.printedAt),
-    start: 0,
-  };
-  const ownOf = (built?: { photos: PhotoData[] } | null) =>
-    built?.photos.filter((candidate) => candidate.attemptId === attempt.id) ?? [];
-  const known = ownOf(cachedItem(queryClient, item.id));
-  const opener = openLargeFromLink(event, {
-    ...view,
-    photos: known.length && known[0]?.id === photo.id ? known : [photo],
-  });
-  if (known.length || !opener) return;
-  void queryClient
-    .ensureQueryData(itemQuery(item.id))
-    .then((built) => {
-      const own = ownOf(built);
-      if (own.length > 1 && own[0]?.id === photo.id) showLargeAgain({ ...view, photos: own, opener });
-    })
-    .catch(() => {});
-}
+// The viewer (ui/LargePhotos.tsx), loaded when a photo is first pointed at.
+const loadLarge = () => import("@/components/ui/large-photos-load");
 
 /** A result: its photo first, the words that matched beside it. */
 export const ResultRow = forwardRef<HTMLAnchorElement, RowProps>(function ResultRow(
-  { link, photo, plate, fallbackIcon: FallbackIcon, selected, onPointerEnter, onOpen, attempt, inCard, children },
+  { link, photo, plate, fallbackIcon: FallbackIcon, selected, onPointerEnter, onOpen, attempt, name, inCard, children },
   ref,
 ) {
   const queryClient = useQueryClient();
   return (
     <PhotoRow
       ref={ref}
-      onPhotoClick={attempt && photo ? (event) => openHitPhotos(event, attempt, photo, queryClient) : undefined}
+      className={attempt && "[&_img]:cursor-zoom-in"}
       // Named by what it shows (outcome, title, the words that matched), as people see it.
       link={{
         ...link,
-        onPointerEnter,
+        onPointerEnter: attempt ? () => (onPointerEnter?.(), void loadLarge()) : onPointerEnter,
         viewTransition: true,
         onClick: (event) => {
+          // A tap or click on an attempt's photo opens its photos large (ui/LargePhotos.tsx) instead of the build; the
+          // rest of the row, and Enter, still lead there. A handler on the link: a button can't sit in it.
+          if (
+            attempt &&
+            photo &&
+            (event.target as Element).closest("img") &&
+            !(event.metaKey || event.ctrlKey || event.shiftKey)
+          ) {
+            event.preventDefault();
+            const opener = event.currentTarget;
+            void loadLarge().then((step) =>
+              step.showLargePhotos({
+                photos: [photo],
+                start: 0,
+                title: `${name} · attempt ${attempt.number}`,
+                // The result carries one photo: the rest of the attempt's join it once the build has come.
+                more: [queryClient, attempt.item.id],
+                opener,
+              }),
+            );
+            return;
+          }
           heroClick(event, photo?.id);
           onOpen?.();
         },
@@ -172,6 +166,7 @@ export const AttemptResult = forwardRef<HTMLAnchorElement, AttemptResultProps>(f
       link={attemptLink(hit)}
       photo={hit.photo}
       attempt={hit}
+      name={title}
       fallbackIcon={BuildsIcon}
       selected={selected}
       onPointerEnter={onHover}
