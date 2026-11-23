@@ -61,6 +61,16 @@ export async function requestLabelRead(
 export const clearLabelRead = (queryClient: QueryClient, spoolId: string) =>
   patchSpool(queryClient, spoolId, (spool) => ({ ...spool, labelRead: null }));
 
+/** "Looks right": what the label filled stays, and its "from the label" marks go. */
+export async function confirmLabelRead(queryClient: QueryClient, spoolId: string) {
+  patchSpool(queryClient, spoolId, (spool) => ({ ...spool, fromLabel: [] }));
+  try {
+    await api<LabelReadResponse>(`/spools/${spoolId}/label-read/confirm`, { method: "POST" });
+  } catch {
+    void queryClient.invalidateQueries({ queryKey: spoolsQuery.queryKey });
+  }
+}
+
 /** Puts away a list nobody wants, or the line that says the label couldn't be read. */
 export async function dismissLabelRead(queryClient: QueryClient, spoolId: string) {
   clearLabelRead(queryClient, spoolId);

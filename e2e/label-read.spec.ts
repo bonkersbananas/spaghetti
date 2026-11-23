@@ -65,6 +65,24 @@ test("adds a spool from a label photo, the fields fill in, and an edit is the pe
   expect(spool.photo).not.toBeNull();
 });
 
+test("one tap on 'Looks right' keeps what the label said", async ({ page }) => {
+  await page.goto("/pantry");
+  await page
+    .getByRole("button", { name: /^Add (a )?spool$/ })
+    .first()
+    .click();
+  const sheet = page.getByRole("dialog", { name: "New spool" });
+  await sheet.getByTestId("spool-photo-input").setInputFiles(jade);
+  const card = page.getByRole("region", { name: "What Claude read" });
+  await expect(card).toContainText("Nozzle 190–230 °C", { timeout: 20_000 });
+  await card.getByRole("button", { name: "Looks right" }).click();
+  await expect(card).toBeHidden();
+  await expect.poll(async () => (await spoolsByApi(page))[0]?.fromLabel).toEqual([]);
+  const [spool] = await spoolsByApi(page);
+  expect(spool.nozzleTempMax).toBe(230);
+  expect(spool.colorName).toBe("Jade White");
+});
+
 test("keeps what was typed and fills the rest", async ({ page }) => {
   const id = await addSpool(page, { brand: "Sunlu" });
   await readFrom(page, id, jade);
