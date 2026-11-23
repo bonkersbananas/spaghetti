@@ -12,7 +12,7 @@ import { attemptFiles, itemFiles, twistFiles } from "../db/schema.ts";
 import type { AppEnv } from "../env.ts";
 import { apiError } from "../http.ts";
 import { fileKey } from "../photos.ts";
-import { disposition, liveFile, THREEMF_TYPE } from "./files.ts";
+import { disposition, idOfOtherFile, liveFile, THREEMF_TYPE } from "./files.ts";
 
 /**
  * /api/uploads: a big file (over ONE_REQUEST_FILE_BYTES) sent in parts, because one request body may hold 100 MB at
@@ -64,6 +64,11 @@ export const uploadRoutes = new Hono<AppEnv>()
       const found = await liveFile(c, id);
       if (!found) return apiError(c, 404, "not_found", "That file isn't here.");
       if (found.row.kind !== "model") return apiError(c, 409, "conflict", "Only a model is sliced.");
+    }
+    // An agent's upload goes under the id of a file nobody has made yet: bytes sent under an existing file's id would
+    // replace that file's (every file keeps them at files/<id>/…).
+    if (c.var.via && (await idOfOtherFile(c.var.db, id, null))) {
+      return apiError(c, 409, "conflict", "That file id belongs to another file.");
     }
     const contentType =
       part === "sliced" || kind === "slicer" ? THREEMF_TYPE : isStlName(name) ? "model/stl" : "model/3mf";

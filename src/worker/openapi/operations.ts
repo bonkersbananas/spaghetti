@@ -86,7 +86,10 @@ export interface Operation {
   description?: string;
 }
 
-const photoFiles = { large: "The photo at display size (WebP or JPEG).", thumb: "The same photo as a thumbnail." };
+const photoFiles = {
+  large: "The photo at display size (WebP or JPEG; a PNG only with needsResize, an original a browser will resize).",
+  thumb: "The same photo as a thumbnail (the same type as large).",
+};
 const notFound = (what: string) => `not_found: no such ${what}.`;
 const any = (description: string, shape?: Record<string, z.ZodType>) => loose(description, shape);
 const ceremony = (description: string) => z.object({ ceremonyId: z.string(), options: any(description) });
@@ -520,7 +523,7 @@ export const operations: Record<string, Operation> = {
     multipart: { fields: itemPhotoFields, files: photoFiles, required: ["large", "thumb"] },
     response: one("photo", Photo),
     status: 201,
-    errors: { 413: "too_large: over 12 MB.", 415: "unsupported: not WebP or JPEG." },
+    errors: { 413: "too_large: over 12 MB.", 415: "unsupported: not WebP or JPEG (or a PNG with needsResize)." },
   },
   "POST /items/:id/attempts": {
     summary: "Starts a print attempt on a build, with its settings.",
@@ -751,7 +754,7 @@ export const operations: Record<string, Operation> = {
   "POST /items/:id/files/:fileId/restore": { summary: "Brings the file back.", response: one("file", AttemptFile) },
   "PUT /twists/:id/file/:fileId": {
     summary:
-      "Keeps a model (kind model: an .stl or plain .3mf the app slices) as the twist's own, in place of the one it kept. The same body as an idea's file. People only.",
+      "Keeps a model (kind model: an .stl or plain .3mf the app slices) as the twist's own, in place of the one it kept. The same body as an idea's file. Scope capture; an agent may replace a model an agent added, never one a person did (409).",
     multipart: {
       fields: fileFields.omit({ id: true }),
       files: {
@@ -788,6 +791,12 @@ export const operations: Record<string, Operation> = {
       "Keeps that a person downloaded a file of an idea or build to print it, for a month: which build the next print belongs to (decision 0076). People only.",
     response: "empty",
     status: 204,
+    errors: { 404: "not_found: that file isn't here." },
+  },
+  "POST /files/:id/read-claim": {
+    summary:
+      "Claims slicing a model an agent added (it has no slice yet), for ten minutes, so two devices don't both do it. People only.",
+    response: z.object({ claimed: z.boolean() }),
     errors: { 404: "not_found: that file isn't here." },
   },
   "PUT /files/:id/sliced": {

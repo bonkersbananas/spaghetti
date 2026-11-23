@@ -323,3 +323,233 @@ describe("add_file", () => {
     expect(plain.status).toBe(415);
   });
 });
+
+describe("files from agents and the people's own", () => {
+  const SETTINGS = {
+    machine: "Bambu Lab X2D 0.4 nozzle",
+    process: "0.20mm Standard @BBL X2D",
+    filaments: ["Bambu PLA Basic @BBL X2D 0.4 nozzle"],
+    layerHeight: 0.2,
+    materials: ["PLA"],
+    bedType: "Textured PEI Plate",
+    supports: false,
+    scale: 100,
+    engine: "1",
+    orca: "2.5.0-dev",
+  };
+  const slicedBody = (status: "sliced" | "failed", extra: Record<string, string> = {}) => {
+    const body = new FormData();
+    body.set(
+      "slice",
+      JSON.stringify(
+        status === "sliced"
+          ? { status, settings: SETTINGS, at: 1 }
+          : { status, settings: SETTINGS, problem: "engine", at: 2 },
+      ),
+    );
+    if (status === "sliced") {
+      body.set("sliced", new File([new Uint8Array([0x50, 0x4b, 3, 4])], "x.gcode.3mf"));
+      body.set("prefill", JSON.stringify({ estimatedMinutes: 38, weightGrams: 11.3 }));
+    }
+    for (const [key, value] of Object.entries(extra)) body.set(key, value);
+    return body;
+  };
+
+  /** A person's own file on an attempt, put there the way the app does. */
+  async function personsFile(attemptId: string, name = "mine.stl") {
+    const body = new FormData();
+    const bytes = boxStl(5);
+    body.set("id", crypto.randomUUID());
+    body.set("name", name);
+    body.set("size", String(bytes.length));
+    body.set("plate", "1");
+    body.set("plateCount", "1");
+    body.set("prefill", "{}");
+    body.set("kind", "model");
+    body.set("file", new File([bytes], name));
+    const response = await request(`/api/attempts/${attemptId}/file`, { method: "PUT", body, cookie });
+    expect(response.status).toBe(201);
+  }
+
+  it("never replaces a file a person added to an attempt or a twist", async () => {
+    const { token } = await makeAgent(["capture", "attempts", "read"]);
+    const buildId = await idea(token);
+    const attempt = field(
+      (await callTool(token, "log_attempt", { build_id: buildId, outcome: "success" })).text,
+      "attempt_id",
+    );
+    await personsFile(attempt);
+    const refused = await callTool(token, "add_file", {
+      attempt_id: attempt,
+      name: "x.stl",
+      file_base64: base64(boxStl(6)),
+    });
+    expect(refused.isError).toBe(true);
+    expect(refused.text).toContain("A person added the file");
+    expect((await itemOf(buildId)).attempts[0]?.file?.name).toBe("mine.stl");
+    // A twist's model a person made.
+    const twistId = field((await callTool(token, "add_twist", { name: "Knob" })).text, "twist_id");
+    const theirs = new FormData();
+    theirs.set("name", "knob.stl");
+    theirs.set("size", String(boxStl(5).length));
+    theirs.set("plate", "1");
+    theirs.set("plateCount", "1");
+    theirs.set("prefill", "{}");
+    theirs.set("kind", "model");
+    theirs.set("file", new File([boxStl(5)], "knob.stl"));
+    expect(
+      (await request(`/api/twists/${twistId}/file/${crypto.randomUUID()}`, { method: "PUT", body: theirs, cookie }))
+        .status,
+    ).toBe(201);
+    const twistRefused = await callTool(token, "add_file", {
+      twist_id: twistId,
+      name: "k2.stl",
+      file_base64: base64(boxStl(7)),
+    });
+    expect(twistRefused.text).toContain("A person added the file");
+    const { twists } = await (await request("/api/twists", { cookie })).json<TwistsResponse>();
+    expect(twists[0]?.model?.name).toBe("knob.stl");
+  });
+
+  it("fills an attempt's empty fields from an agent's file, never what was typed", async () => {
+    const { token } = await makeAgent(["capture", "attempts"]);
+    const buildId = await idea(token);
+    const attempt = field(
+      (
+        await callTool(token, "log_attempt", {
+          build_id: buildId,
+          outcome: "success",
+          settings: { estimatedMinutes: 10 },
+        })
+      ).text,
+      "attempt_id",
+    );
+    expect(
+      (
+        await callTool(token, "add_file", {
+          attempt_id: attempt,
+          name: "clips.gcode.3mf",
+          file_base64: base64(slicedFile()),
+        })
+      ).isError,
+    ).toBe(false);
+    const settings = (await itemOf(buildId)).attempts[0]?.settings;
+    expect(settings).toMatchObject({ estimatedMinutes: 10, weightGrams: 18.4 });
+    expect(settings?.filaments?.[0]?.type).toBe("PLA");
+  });
+
+  it("fills the attempt from the slice the browser makes of an agent's model, and a failure never replaces a good slice", async () => {
+    const { token } = await makeAgent(["capture", "attempts"]);
+    const buildId = await idea(token);
+    const attempt = field(
+      (await callTool(token, "log_attempt", { build_id: buildId, outcome: "success", settings: { weightGrams: 5 } }))
+        .text,
+      "attempt_id",
+    );
+    const added = await callTool(token, "add_file", {
+      attempt_id: attempt,
+      name: "cube.stl",
+      file_base64: base64(boxStl(10)),
+    });
+    const fileId = field(added.text, "file_id");
+    // One device claims it; another doesn't. A person's own model is nobody's to claim here.
+    expect(
+      (
+        await (
+          await request(`/api/files/${fileId}/read-claim`, { method: "POST", cookie })
+        ).json<{ claimed: boolean }>()
+      ).claimed,
+    ).toBe(true);
+    expect(
+      (
+        await (
+          await request(`/api/files/${fileId}/read-claim`, { method: "POST", cookie })
+        ).json<{ claimed: boolean }>()
+      ).claimed,
+    ).toBe(false);
+    expect(
+      (
+        await request(`/api/files/${fileId}/read-claim`, {
+          method: "POST",
+          headers: { Authorization: `Bearer ${token}` },
+        })
+      ).status,
+    ).toBe(403);
+    expect(
+      (await request(`/api/files/${fileId}/sliced`, { method: "PUT", body: slicedBody("sliced"), cookie })).status,
+    ).toBe(200);
+    expect((await itemOf(buildId)).attempts[0]?.settings).toMatchObject({ weightGrams: 5, estimatedMinutes: 38 });
+    // Sliced: nothing to claim any more, and another device's failure leaves the good slice be.
+    expect(
+      (
+        await (
+          await request(`/api/files/${fileId}/read-claim`, { method: "POST", cookie })
+        ).json<{ claimed: boolean }>()
+      ).claimed,
+    ).toBe(false);
+    const failed = await request(`/api/files/${fileId}/sliced`, {
+      method: "PUT",
+      body: slicedBody("failed", { quiet: "1" }),
+      cookie,
+    });
+    expect(failed.status).toBe(200);
+    expect((await itemOf(buildId)).attempts[0]?.file?.slice?.status).toBe("sliced");
+    // A re-slice someone asked for keeps the slice it replaces for the undo, and may fail.
+    const again = await request(`/api/files/${fileId}/sliced`, {
+      method: "PUT",
+      body: slicedBody("failed", { keep: "previous" }),
+      cookie,
+    });
+    expect(again.status).toBe(200);
+    expect((await itemOf(buildId)).attempts[0]?.file?.slice?.status).toBe("failed");
+  });
+
+  it("refuses a file id that belongs to another file, on every upload route", async () => {
+    const { token } = await makeAgent(["capture", "attempts"]);
+    const buildId = await idea(token);
+    const other = await idea(token, "Other");
+    const attempt = field(
+      (await callTool(token, "log_attempt", { build_id: other, outcome: "success" })).text,
+      "attempt_id",
+    );
+    const twistId = field((await callTool(token, "add_twist", { name: "Knob" })).text, "twist_id");
+    const itemFile = field(
+      (await callTool(token, "add_file", { build_id: buildId, name: "a.stl", file_base64: base64(boxStl(5)) })).text,
+      "file_id",
+    );
+    const form = (name = "b.stl") => {
+      const body = new FormData();
+      body.set("name", name);
+      body.set("size", String(boxStl(6).length));
+      body.set("plate", "1");
+      body.set("plateCount", "1");
+      body.set("prefill", "{}");
+      body.set("kind", "model");
+      body.set("file", new File([boxStl(6)], name));
+      return body;
+    };
+    const auth = { Authorization: `Bearer ${token}` };
+    // The item file's id, offered to a twist, to another item and, as an attempt's file, to an attempt.
+    expect(
+      (await request(`/api/twists/${twistId}/file/${itemFile}`, { method: "PUT", body: form(), headers: auth })).status,
+    ).toBe(409);
+    expect(
+      (await request(`/api/items/${other}/files/${itemFile}`, { method: "PUT", body: form(), headers: auth })).status,
+    ).toBe(409);
+    const asAttempt = form();
+    asAttempt.set("id", itemFile);
+    expect(
+      (await request(`/api/attempts/${attempt}/file`, { method: "PUT", body: asAttempt, headers: auth })).status,
+    ).toBe(409);
+    const start = await request("/api/uploads", {
+      method: "POST",
+      headers: auth,
+      json: { id: itemFile, part: "file", kind: "model", name: "c.stl", size: 10 },
+    });
+    expect(start.status).toBe(409);
+    // Its bytes are the ones it was given.
+    expect(new Uint8Array(await (await request(`/api/files/${itemFile}`, { cookie })).arrayBuffer())).toEqual(
+      boxStl(5),
+    );
+  });
+});

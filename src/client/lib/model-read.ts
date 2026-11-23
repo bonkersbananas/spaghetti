@@ -1,5 +1,6 @@
-import type { AttemptFile, Item } from "@shared/api";
+import type { AttemptFile, Item, ReadClaimResponse } from "@shared/api";
 import type { QueryClient } from "@tanstack/react-query";
+import { api } from "./api";
 import { isOnline } from "./connection";
 import { itemKeys } from "./items";
 import { twistsQuery } from "./twists-query";
@@ -12,8 +13,11 @@ import { twistsQuery } from "./twists-query";
  * (lib/photo-resize.ts); decision 0078.
  *
  * Only a model an agent added is taken up: one a person added and never sliced offers "Slice it" and waits for them.
- * Tabs share a Web Lock per file, so two tabs of one browser don't slice it twice; two browsers may, and the second
- * save writes the same thing again.
+ * The server hands out one claim at a time (as for a photo's resize, ten minutes), so two devices don't slice it
+ * twice; tabs share a Web Lock too. A phone leaves it for a laptop (it has the memory for one slice at a time, and the
+ * battery), as does a connection that saves data and a tab nobody is looking at: a slice running when the tab hides is
+ * stopped, and its claim lapses. What a slice makes is saved, and so is the engine failing on the model, so a model
+ * that can't be sliced isn't tried again by every device that opens the app.
  */
 const RETRY_AFTER_MS = 5 * 60 * 1000;
 const triedAt = new Map<string, number>();
@@ -50,18 +54,36 @@ function unreadModels(queryClient: QueryClient): Unread[] {
   return [...found.values()].filter(({ file }) => now - (triedAt.get(file.id) ?? 0) > RETRY_AFTER_MS);
 }
 
+/** Whether this device leaves the job to another: a phone, or a connection that saves data. */
+const leavesIt = () => {
+  const saveData = (navigator as Navigator & { connection?: { saveData?: boolean } }).connection?.saveData;
+  return !!saveData || (typeof matchMedia === "function" && matchMedia("(pointer: coarse)").matches);
+};
+
 /** Slices one model. Returns quietly whenever it isn't this browser's job. */
 async function readOne(queryClient: QueryClient, { file, target }: Unread) {
   const work = async () => {
     const jobs = await import("./slicing/jobs");
     // Someone is slicing it on this device already (the card's own job).
     if (jobs.sliceResult(file.id)) return;
-    await jobs.startSlice(queryClient, {
-      fileId: file.id,
-      name: file.name,
-      source: () => jobs.fetchOriginal(file.id),
-      target,
-    });
+    const { claimed } = await api<ReadClaimResponse>(`/files/${file.id}/read-claim`, { method: "POST" });
+    if (!claimed) return;
+    // Nobody is looking any more: stop (the claim lapses, and another device or a later visit slices it).
+    const stop = () => {
+      if (document.visibilityState === "hidden") jobs.cancelSlice(file.id);
+    };
+    document.addEventListener("visibilitychange", stop);
+    try {
+      await jobs.startSlice(queryClient, {
+        fileId: file.id,
+        name: file.name,
+        source: () => jobs.fetchOriginal(file.id),
+        target,
+        quiet: true,
+      });
+    } finally {
+      document.removeEventListener("visibilitychange", stop);
+    }
   };
   try {
     if (navigator.locks) {
@@ -91,7 +113,7 @@ export function followUnreadModels(queryClient: QueryClient) {
     running = true;
     try {
       for (let next = unreadModels(queryClient)[0]; next; next = unreadModels(queryClient)[0]) {
-        if (stopped || !isOnline() || document.visibilityState === "hidden") return;
+        if (stopped || !isOnline() || document.visibilityState === "hidden" || leavesIt()) return;
         await readOne(queryClient, next);
         await new Promise((resolve) => setTimeout(resolve, 500));
       }
@@ -102,7 +124,7 @@ export function followUnreadModels(queryClient: QueryClient) {
 
   function schedule() {
     if (scheduled || stopped) return;
-    if (!unreadModels(queryClient).length) return;
+    if (leavesIt() || !unreadModels(queryClient).length) return;
     scheduled = true;
     whenIdle(() => {
       scheduled = false;

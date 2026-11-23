@@ -981,6 +981,11 @@ export interface ResizeClaimResponse {
   claimed: boolean;
 }
 
+/** POST /api/files/:id/read-claim: whether this browser now has the job of slicing a model an agent added. */
+export interface ReadClaimResponse {
+  claimed: boolean;
+}
+
 export const MAX_PHOTO_BYTES = 12 * 1024 * 1024;
 export const PHOTO_CONTENT_TYPES = ["image/webp", "image/jpeg"] as const;
 

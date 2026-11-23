@@ -516,7 +516,7 @@ export const tools: Tool[] = [
     name: "add_file",
     title: "Add a model file to an idea, build, attempt or twist",
     description:
-      'Put a 3D model file straight into Spaghetti, so a model made in this conversation lands in the app. Formats: .stl (binary or ASCII) and .3mf (a plain model, a Bambu Studio / OrcaSlicer project, or a sliced .gcode.3mf); nothing else (a .step or .obj must be converted first). Give the file as an https file_url (the open internet only, up to 25 MB) or as file_base64 (up to 10 MB), and its name (ending in .stl or .3mf; optional with a file_url that ends that way). Say where it goes with exactly one of: build_id (an idea or build; it keeps up to 20 files), attempt_id (that print attempt\'s slicer file, which replaces the one it has), or twist_id (a twist\'s model, which replaces its current one). A model is sliced and its picture drawn by the next browser that opens the app, quietly, and shows meanwhile as waiting; a sliced .gcode.3mf is read here for its plate, settings and picture. Marked in the app as added via this agent; removing is for people. For a render or photo of the model use add_photo (PNG is fine). Needs the "capture" scope for an idea, build or twist, the "attempts" scope for an attempt.',
+      'Put a 3D model file straight into Spaghetti, so a model made in this conversation lands in the app. Formats: .stl (binary or ASCII) and .3mf (a plain model, a Bambu Studio / OrcaSlicer project, or a sliced .gcode.3mf); nothing else (a .step or .obj must be converted first). Give the file as an https file_url (the open internet only, up to 25 MB) or as file_base64 (up to 10 MB), and its name (ending in .stl or .3mf; optional with a file_url that ends that way). Say where it goes with exactly one of: build_id (an idea or build; it keeps up to 20 files), attempt_id (that print attempt\'s slicer file, which replaces the one it has), or twist_id (a twist\'s model, which replaces its current one). A model is sliced and its picture drawn by the next browser that opens the app, quietly, and shows meanwhile as waiting; a sliced .gcode.3mf is read here for its plate, settings and picture. Marked in the app as added via this agent; removing is for people. For a render or photo of the model use add_photo (PNG is fine). Needs the "capture" scope for an idea, build or twist, the "attempts" scope for an attempt. An agent can\'t replace a file a person added to an attempt or twist: it is refused, and a person removes theirs in the app first.',
     scopes: ["capture", "attempts"],
     readOnly: false,
     input: z.object({
@@ -535,9 +535,9 @@ export const tools: Tool[] = [
         return { text: "Give exactly one of build_id, attempt_id or twist_id.", isError: true };
       }
       if (!args.file_url && !args.file_base64) return { text: "Give a file_url or file_base64.", isError: true };
-      const needs = args.attempt_id ? ["attempts" as const] : args.twist_id ? ["capture" as const] : null;
-      if (needs && !needs.some((scope) => ctx.scopes.includes(scope))) {
-        return { text: `This token needs the "${needs[0]}" scope for that.`, isError: true };
+      const needs = args.attempt_id ? ("attempts" as const) : ("capture" as const);
+      if (!ctx.scopes.includes(needs)) {
+        return { text: `This token needs the "${needs}" scope for that.`, isError: true };
       }
       let info: FileInfo;
       try {
