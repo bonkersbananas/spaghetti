@@ -3671,6 +3671,32 @@ export const shots: Shot[] = [
     },
   },
   {
+    // From the attempt sheet: a tap on one of its photos opens it large over the sheet (the × still removes).
+    name: "attempt-sheet-photo-large",
+    path: `/builds/${SEED_BUILD_IDS.starOrnament}`,
+    prepare: async (page) => {
+      await page
+        .locator(`[data-attempt-id="${STAR_ORNAMENT_FOUR_PHOTOS}"]`)
+        .getByRole("button", { name: /^Attempt 3: .*Open$/ })
+        .click({ position: { x: 6, y: 6 } });
+      const tile = page.getByRole("button", { name: "Open Attempt photo 2 large" });
+      await tile.waitFor();
+      await tile.click();
+      await page.getByText("2 of 4").waitFor();
+      await page.waitForFunction(() => {
+        for (const dialog of Array.from(document.querySelectorAll('[role="dialog"]'))) {
+          for (const animation of dialog.getAnimations({ subtree: true })) animation.finish();
+        }
+        return true;
+      });
+      await page.waitForTimeout(400);
+    },
+    cleanup: async (page) => {
+      await page.keyboard.press("Escape");
+      await page.keyboard.press("Escape");
+    },
+  },
+  {
     name: "journal-attempt-photos",
     path: "/journal",
     selector: `a[href*="${STAR_ORNAMENT_FOUR_PHOTOS}"]`,
