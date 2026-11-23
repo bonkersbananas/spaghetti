@@ -59,11 +59,7 @@ test("a photo added at the top of a build leaves its attempts' photos in the str
   await expect(strip.getByRole("button", { name: /attempt 1/ })).toBeVisible();
 });
 
-test("a long strip still shows its add tiles without scrolling on a phone", { tag: "@phone" }, async ({
-  page,
-  isMobile,
-}) => {
-  test.skip(!isMobile, "Phones lead the strip with its add tiles; desktop closes it");
+test("a long strip still shows its add tiles without scrolling", { tag: "@phone" }, async ({ page }) => {
   const headers = { Origin: new URL(page.url()).origin };
   const itemId = crypto.randomUUID();
   await page.request.post("/api/items", { headers, data: { id: itemId, title: "Tomato mascot", stage: "building" } });

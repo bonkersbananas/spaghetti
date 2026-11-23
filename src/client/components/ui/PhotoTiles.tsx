@@ -10,7 +10,7 @@ interface AddPhotoTileProps extends Omit<ComponentPropsWithRef<"button">, "child
   icon: Icon;
   label: string;
   /**
-   * "lg" is the big empty-state tile; "md" and "sm" sit in a row of photos (at its end; the idea and build strip leads with them on a phone) (sm shows only the icon);
+   * "lg" is the big empty-state tile; "md" and "sm" sit in a row of photos (the idea and build strip leads with them, so a long one never hides them) (sm shows only the icon);
    * "row" is a full-width strip with the icon beside the label; "card" fills a 4:5 grid cell.
    */
   size?: "lg" | "md" | "sm" | "row" | "card";
