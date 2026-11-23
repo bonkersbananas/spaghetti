@@ -149,7 +149,18 @@ export async function fillPrinterAttempt(db: Db, attemptId: string, actor: Chang
       return row ? [{ ...row, colors: colorsOf(row.colors), slot: tray.slot }] : [];
     });
     // A spool gone since leaves a tray unknown: then nothing is guessed.
-    if (found.length === trays.length) settings = withTrays(settings, found) ?? settings;
+    if (found.length === trays.length) {
+      // Filaments this fill copied in (not the attempt's own) name the spool of an earlier print: the tray's spool,
+      // the one the printer used, takes its place.
+      const copied = !attempt.settings.filaments && settings.filaments;
+      const base = copied
+        ? {
+            ...settings,
+            filaments: copied.map(({ spoolId: _spool, amsSlot: _slot, ...filament }) => filament),
+          }
+        : settings;
+      settings = withTrays(base, found) ?? settings;
+    }
   }
   if (settings === attempt.settings) return false;
   const now = new Date();

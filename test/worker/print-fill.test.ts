@@ -170,4 +170,31 @@ describe("what a printer-made attempt gets from where it is placed", () => {
     const plain = await bridgePrints({ name: "Something else" });
     expect(plain.attempt.settings).toEqual({});
   });
+
+  it("prefers the tray's spool to the one an earlier attempt copied in", async () => {
+    const [oldSpool, newSpool] = [uuid(), uuid()];
+    for (const id of [oldSpool, newSpool]) {
+      await request("/api/spools", { method: "POST", cookie, json: { id, material: "PLA", colorHex: "#f4f4f0" } });
+    }
+    const id = await build("Hook");
+    await request(`/api/items/${id}/attempts`, {
+      method: "POST",
+      cookie,
+      json: {
+        id: uuid(),
+        outcome: "success",
+        printedAt: Date.now() - 86_400_000,
+        settings: { filaments: [{ type: "PLA", spoolId: oldSpool }] },
+      },
+    });
+    await request("/api/printer/slots/A1", { method: "PUT", cookie, json: { spoolId: newSpool } });
+    const made = await bridgePrints({ name: "Hook", trays: ["A1"] });
+    const moved = await request(`/api/attempts/${made.attemptId}/move`, {
+      method: "POST",
+      cookie,
+      json: { targetId: id },
+    });
+    const attempt = (await moved.json<AttemptResponse>()).attempt;
+    expect(attempt.settings.filaments?.[0]).toMatchObject({ spoolId: newSpool, amsSlot: "A1" });
+  });
 });
