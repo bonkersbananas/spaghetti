@@ -291,7 +291,7 @@ export async function runLabelRead(
       .get();
     await fillSpool(db, spool.id, only, fresh?.placeholders ?? [], owner);
   }
-  await settle(db, row, { status: "done", ...record });
+  await settle(db, row, { status: "done", answer: only ? JSON.stringify(only) : null, ...record });
 }
 
 /**
@@ -343,6 +343,7 @@ export async function acceptLabelRead(
           id,
           material: label.material ?? "PLA",
           brand: label.brand,
+          line: label.line,
           colorName: label.colorName,
           colorHex: label.colorHex,
           finish: label.finish,

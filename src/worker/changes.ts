@@ -13,6 +13,8 @@ export interface ChangeInput {
   itemId?: string | SQL | null;
   action: ChangeAction;
   actor: ChangeActor;
+  /** Names of the fields an edit touched (never their values). */
+  fields?: readonly string[];
 }
 
 /**
@@ -29,7 +31,7 @@ export function recordChange(db: Db, input: ChangeInput) {
   return db
     .insert(changes)
     .select(sql`SELECT NULL, ${input.entity}, ${input.id}, ${input.itemId ?? null}, ${input.action},
-    ${input.actor.kind}, ${input.actor.id}, ${Date.now()} WHERE changes() > 0`);
+    ${input.actor.kind}, ${input.actor.id}, ${Date.now()}, ${input.fields?.length ? JSON.stringify(input.fields) : null} WHERE changes() > 0`);
 }
 
 /** A row of the changes table as the API shows it. */
