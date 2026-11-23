@@ -23,7 +23,10 @@ test.afterEach(async ({ page }) => {
   await clearIdeas(page);
 });
 
-test("1, 2, 3 answer the outcome, Enter logs it, and Spaghetti needs no Spaghetti tag", async ({ page, isMobile }) => {
+test("1, 2, 3 answer the outcome, words go straight into the note after Spaghetti, Enter logs it", async ({
+  page,
+  isMobile,
+}) => {
   test.skip(isMobile, "Keys are for the desktop");
   const id = crypto.randomUUID();
   await page.request.post("/api/items", { headers: { Origin: origin(page) }, data: { id, title: "Hinge" } });
@@ -33,23 +36,30 @@ test("1, 2, 3 answer the outcome, Enter logs it, and Spaghetti needs no Spaghett
   await page.keyboard.press("a");
   const sheet = page.getByRole("dialog", { name: "Attempt 1" });
   await expect(sheet).toBeVisible();
+  // Worked keeps the calm path: focus follows the pick, so another key changes the answer.
+  await page.keyboard.press("1");
+  await expect(sheet.getByRole("radio", { name: "Worked", checked: true })).toBeVisible();
+  await expect(sheet.getByRole("radio", { name: "Worked" })).toBeFocused();
   await page.keyboard.press("3");
   await expect(sheet.getByRole("radio", { name: "Spaghetti", checked: true })).toBeVisible();
   await expect(sheet.getByRole("button", { name: "Bed adhesion" })).toBeVisible();
   await expect(sheet.getByRole("button", { name: "Spaghetti", exact: true })).toHaveCount(0);
-  // Focus follows the pick, and a key pick is a tap: the line for a failure is there.
-  await expect(sheet.getByRole("radio", { name: "Spaghetti" })).toBeFocused();
+  // A key pick is a tap: the line for a failure is there.
   await expect(sheet.getByText("Good one to have on record.")).toBeVisible();
-  await page.keyboard.press("2");
-  await expect(sheet.getByRole("radio", { name: "Partly", checked: true })).toBeVisible();
-  await expect(sheet.getByRole("radio", { name: "Partly" })).toBeFocused();
-  await page.keyboard.press("3");
-  // Focus is still on an outcome button: Enter logs the one picked, it doesn't pick the focused one.
+  // After Spaghetti the person's own words come first: the note has the focus, and typing goes in.
+  const note = sheet.getByRole("textbox", { name: "Note" });
+  await expect(note).toBeFocused();
+  await page.keyboard.type("Let go at 2 mm");
+  await expect(note).toHaveValue("Let go at 2 mm");
+  await expect(sheet.getByRole("radio", { name: "Spaghetti", checked: true })).toBeVisible();
+  // Enter in the note logs the attempt.
   await page.keyboard.press("Enter");
   await expect(sheet).toBeHidden();
   await expect
-    .poll(async () => (await getItem(page, id)).attempts.map((a: { outcome: string }) => a.outcome))
-    .toEqual(["failed"]);
+    .poll(async () =>
+      (await getItem(page, id)).attempts.map((a: { outcome: string; note: string }) => [a.outcome, a.note]),
+    )
+    .toEqual([["failed", "Let go at 2 mm"]]);
 });
 
 test("grows an idea into a build, logs a failure and a success, and finishes it", async ({ page, isMobile }) => {

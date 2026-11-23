@@ -37,3 +37,51 @@ export function suggestedTagWords(
       : []),
   ];
 }
+
+/** What the person's answer takes along when it is picked: the tags as they now stand, only where they change. */
+export interface TakenWith {
+  failureTags?: string[];
+  successNotes?: string[];
+}
+
+const sameSet = (a: readonly string[], b: readonly string[]) =>
+  a.length === b.length && a.every((slug) => b.includes(slug));
+
+/**
+ * The tags an answer to "How did it go?" brings along (decision 0023). Claude's suggested tags and success notes come
+ * only with the outcome Claude suggested: picking another outcome is just picking, and they stay offered, marked, one
+ * tap each. The printer's suggested failure tag comes with any answer but Worked. Nothing is ever added over what the
+ * person already chose; leaving an answer for another takes off what came along with it untouched (never a failure
+ * tag on Worked, never Claude's Spaghetti tags on Partly).
+ */
+export function takenWith(
+  picked: Outcome,
+  before: { outcome: Outcome | null; failureTags: readonly string[]; successNotes: readonly string[] },
+  suggestion: {
+    read: Pick<PhotoRead, "outcome" | "failureTags" | "successNotes"> | null;
+    printerTag: string | null;
+  },
+): TakenWith {
+  const { read, printerTag } = suggestion;
+  let failureTags = [...before.failureTags];
+  let successNotes = [...before.successNotes];
+  // What came with the previous answer, untouched since, goes with it.
+  if (before.outcome && before.outcome !== picked) {
+    if (read?.outcome === before.outcome) {
+      if (failureTags.length && sameSet(failureTags, read.failureTags)) failureTags = [];
+      if (successNotes.length && sameSet(successNotes, read.successNotes)) successNotes = [];
+    }
+    if (picked === "success" && printerTag && sameSet(failureTags, [printerTag])) failureTags = [];
+  }
+  const claude = read?.outcome === picked ? read : null;
+  if (picked !== "success" && failureTags.length === 0) {
+    if (claude?.failureTags.length) failureTags = [...claude.failureTags];
+    else if (printerTag) failureTags = [printerTag];
+  }
+  if (picked !== "failed" && successNotes.length === 0 && claude?.successNotes.length)
+    successNotes = [...claude.successNotes];
+  return {
+    ...(sameSet(failureTags, before.failureTags) ? {} : { failureTags }),
+    ...(sameSet(successNotes, before.successNotes) ? {} : { successNotes }),
+  };
+}
