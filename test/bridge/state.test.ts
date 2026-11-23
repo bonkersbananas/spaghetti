@@ -65,12 +65,45 @@ describe("folding reports into a printer state", () => {
 });
 
 describe("the job machine", () => {
-  it("says which tray fed the print when it began, and nothing when the printer named none", () => {
-    const withTray = [fullPrint[0], delta({ ams: { tray_now: "1" } }), ...fullPrint.slice(1)] as Report[];
-    const [started] = play(withTray).events;
-    expect(started).toMatchObject({ type: "started", job: { trays: ["A2"] } });
-    const [bare] = play(fullPrint).events;
-    expect(bare).toMatchObject({ type: "started", job: { trays: [] } });
+  const prepare = delta({
+    gcode_state: "PREPARE",
+    job_id: JOB,
+    subtask_name: NAME,
+    gcode_file: "Metadata/plate_1.gcode",
+    mc_percent: 0,
+  });
+  const tray = (id: string) => delta({ ams: { tray_now: id } });
+  const trayEvents = (events: JobEvent[]) =>
+    events.flatMap((event) => (event.type === "trays" ? [event.job.trays] : []));
+
+  it("reads the tray only once the print is running, not while it prepares (a stale tray)", () => {
+    const { events } = play([
+      fullReport({ state: "IDLE" }),
+      tray("3"),
+      prepare,
+      tray("3"),
+      delta({ gcode_state: "RUNNING", mc_remaining_time: 90, layer_num: 0 }),
+      tray("255"),
+      tray("1"),
+      delta({ layer_num: 1 }),
+    ]);
+    const started = events.find((event) => event.type === "started");
+    expect(started && "job" in started && started.job.trays).toEqual([]);
+    // Neither PREPARE's tray 3 nor the "no tray" in between: the tray the printer reports once it prints.
+    expect(trayEvents(events)).toEqual([["A2"]]);
+  });
+
+  it("keeps every tray a multi-colour print goes through, telling the app each time", () => {
+    const { events } = play([
+      fullReport({ state: "IDLE" }),
+      prepare,
+      delta({ gcode_state: "RUNNING", layer_num: 1 }),
+      tray("0"),
+      tray("0"),
+      tray("2"),
+      tray("255"),
+    ]);
+    expect(trayEvents(events)).toEqual([["A1"], ["A1", "A3"]]);
   });
 
   it("starts once at the new job id, and ends at FINISH", () => {

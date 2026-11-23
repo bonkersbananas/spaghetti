@@ -65,6 +65,9 @@ async function bridgePrints(print: Record<string, unknown>, settings?: object) {
   return { ownId, attemptId, attempt: (await response.json<AttemptResponse>()).attempt };
 }
 
+const move = (attemptId: string, json: Record<string, unknown>) =>
+  request(`/api/attempts/${attemptId}/move`, { method: "POST", cookie, json });
+
 const attemptOf = async (id: string, attemptId: string) =>
   (await (await request(`/api/items/${id}`, { cookie })).json<ItemResponse>()).item.attempts.find(
     (one) => one.id === attemptId,
@@ -81,30 +84,49 @@ describe("what a printer-made attempt gets from where it is placed", () => {
     expect(attempt.settings.filaments?.[0]).toMatchObject({ type: "PLA", colorHex: "#f4f4f0" });
   });
 
-  it("takes them when a person places the print later, but only what is empty", async () => {
+  it("fills what is empty when a person places the print later, never what they set", async () => {
+    // Filed before the build holds its file: nothing matches, and the print asks which build it is.
+    const { attemptId, attempt } = await bridgePrints({ name: "gear-plate", plate: 1 });
+    expect(attempt.settings).toEqual({});
     const id = await build("Gear");
     await keepFile(id, "gear-plate.3mf", SLICED);
-    const { attemptId, ownId } = await bridgePrints({ name: "gear-plate", plate: 1 });
-    // The print matched on its own; undo that: a new build, which holds no file.
-    const away = await request(`/api/attempts/${attemptId}/move`, {
-      method: "POST",
-      cookie,
-      json: { newBuild: { id: uuid() } },
-    });
-    expect(away.status).toBe(200);
-    expect(ownId).toBeTruthy();
-    const moved = (await away.json<{ attempt: { itemId: string } }>()).attempt.itemId;
-    // A person's temperature on it, then back into the build with the file.
     await request(`/api/attempts/${attemptId}`, {
       method: "PATCH",
       cookie,
       json: { settingsMerge: { set: { nozzleTemperature: 250 } } },
     });
-    const back = await request(`/api/attempts/${attemptId}/move`, { method: "POST", cookie, json: { targetId: id } });
-    expect(back.status).toBe(200);
-    expect(moved).not.toBe(id);
-    const attempt = await attemptOf(id, attemptId);
-    expect(attempt?.settings).toMatchObject({ nozzleTemperature: 250, layerHeight: 0.2 });
+    const moved = await move(attemptId, { targetId: id });
+    expect(moved.status).toBe(200);
+    expect((await attemptOf(id, attemptId))?.settings).toMatchObject({ nozzleTemperature: 250, layerHeight: 0.2 });
+  });
+
+  it("takes out what a wrong match put in when the print moves to the right build, and fills from there", async () => {
+    const a = await build("Gear");
+    await keepFile(a, "gear-plate.3mf", SLICED);
+    const b = await build("Gears, the other one");
+    await request(`/api/items/${b}/attempts`, {
+      method: "POST",
+      cookie,
+      json: {
+        id: uuid(),
+        outcome: "success",
+        printedAt: Date.now() - 86_400_000,
+        settings: { layerHeight: 0.12, filaments: [{ type: "PETG", colorName: "black" }] },
+      },
+    });
+    const { attemptId, attempt } = await bridgePrints({ name: "gear-plate", plate: 1 });
+    expect(attempt.itemId).toBe(a);
+    expect(attempt.settings).toMatchObject({ layerHeight: 0.2, nozzleTemperature: 220 });
+
+    // Someone changes the bed temperature after the fill: that is theirs, and stays.
+    await request(`/api/attempts/${attemptId}`, {
+      method: "PATCH",
+      cookie,
+      json: { settingsMerge: { set: { bedTemperature: 70 } } },
+    });
+    expect((await move(attemptId, { targetId: b })).status).toBe(200);
+    const after = (await attemptOf(b, attemptId))?.settings;
+    expect(after).toEqual({ layerHeight: 0.12, filaments: [{ type: "PETG", colorName: "black" }], bedTemperature: 70 });
   });
 
   it("takes the build's latest attempt's settings when it has no sliced file", async () => {
@@ -171,12 +193,14 @@ describe("what a printer-made attempt gets from where it is placed", () => {
     expect(plain.attempt.settings).toEqual({});
   });
 
-  it("prefers the tray's spool to the one an earlier attempt copied in", async () => {
+  it("puts the tray's spool on the filament an earlier attempt copied in, at creation", async () => {
     const [oldSpool, newSpool] = [uuid(), uuid()];
     for (const id of [oldSpool, newSpool]) {
       await request("/api/spools", { method: "POST", cookie, json: { id, material: "PLA", colorHex: "#f4f4f0" } });
     }
+    // A build the print matches by its file's name (a file with no choices of its own), whose last attempt names a spool.
     const id = await build("Hook");
+    await keepFile(id, "hook.3mf", { estimatedMinutes: 40 });
     await request(`/api/items/${id}/attempts`, {
       method: "POST",
       cookie,
@@ -184,17 +208,81 @@ describe("what a printer-made attempt gets from where it is placed", () => {
         id: uuid(),
         outcome: "success",
         printedAt: Date.now() - 86_400_000,
-        settings: { filaments: [{ type: "PLA", spoolId: oldSpool }] },
+        settings: { layerHeight: 0.16, filaments: [{ type: "PLA", spoolId: oldSpool, amsSlot: "A3" }] },
       },
     });
     await request("/api/printer/slots/A1", { method: "PUT", cookie, json: { spoolId: newSpool } });
-    const made = await bridgePrints({ name: "Hook", trays: ["A1"] });
-    const moved = await request(`/api/attempts/${made.attemptId}/move`, {
+    const { attempt } = await bridgePrints({ name: "hook", trays: ["A1"] });
+    expect(attempt.itemId).toBe(id);
+    expect(attempt.settings.layerHeight).toBe(0.16);
+    expect(attempt.settings.filaments).toEqual([
+      expect.objectContaining({ type: "PLA", spoolId: newSpool, amsSlot: "A1" }),
+    ]);
+  });
+
+  it("takes the trays the bridge reports once the print runs, and leaves a filament a person typed", async () => {
+    const spoolId = uuid();
+    await request("/api/spools", {
       method: "POST",
       cookie,
-      json: { targetId: id },
+      json: { id: spoolId, material: "PLA", colorHex: "#f4f4f0" },
     });
-    const attempt = (await moved.json<AttemptResponse>()).attempt;
-    expect(attempt.settings.filaments?.[0]).toMatchObject({ spoolId: newSpool, amsSlot: "A1" });
+    await request("/api/printer/slots/A2", { method: "PUT", cookie, json: { spoolId } });
+    const id = await build("Gear");
+    await keepFile(id, "gear-plate.3mf", SLICED);
+    const { attemptId } = await bridgePrints({ name: "gear-plate", plate: 1 });
+    expect((await attemptOf(id, attemptId))?.settings.filaments?.[0]?.spoolId).toBeUndefined();
+    const told = await asBridge(`/api/attempts/${attemptId}`, { method: "PATCH", json: { trays: ["A2"] } });
+    expect(told.status).toBe(200);
+    expect((await told.json<AttemptResponse>()).attempt.settings.filaments?.[0]).toMatchObject({
+      spoolId,
+      amsSlot: "A2",
+    });
+
+    // A print someone unlinked the spool of and typed their own filament for: placed later, theirs stays.
+    const own = await bridgePrints({ name: "other" });
+    await asBridge(`/api/attempts/${own.attemptId}`, { method: "PATCH", json: { trays: ["A2"] } });
+    await request(`/api/attempts/${own.attemptId}`, {
+      method: "PATCH",
+      cookie,
+      json: { settings: { filaments: [{ type: "PETG", colorName: "black" }] } },
+    });
+    const there = await build("Last time");
+    await request(`/api/items/${there}/attempts`, {
+      method: "POST",
+      cookie,
+      json: { id: uuid(), outcome: "success", printedAt: Date.now() - 86_400_000, settings: { layerHeight: 0.2 } },
+    });
+    expect((await move(own.attemptId, { targetId: there })).status).toBe(200);
+    expect((await attemptOf(there, own.attemptId))?.settings).toEqual({
+      layerHeight: 0.2,
+      filaments: [{ type: "PETG", colorName: "black" }],
+    });
+  });
+
+  it("copies nothing from a file of several plates when the plate is unknown, nor the last attempt's keys to a file's", async () => {
+    const id = await build("Gear");
+    await keepFile(id, "gear-plate.3mf", SLICED, 2);
+    const { attempt } = await bridgePrints({ name: "gear-plate" });
+    // A file kept as plate 2 of 2: an old bridge doesn't say which plate printed.
+    expect(attempt.itemId).toBe(id);
+    expect(attempt.settings.layerHeight).toBeUndefined();
+
+    const other = await build("Hook");
+    await request(`/api/items/${other}/attempts`, {
+      method: "POST",
+      cookie,
+      json: {
+        id: uuid(),
+        outcome: "success",
+        printedAt: Date.now() - 86_400_000,
+        settings: { layerHeight: 0.16, supportType: "tree", brim: true },
+      },
+    });
+    await keepFile(other, "hook.3mf", { estimatedMinutes: 5 });
+    // The bridge read the print's own file: its settings are complete, so the last attempt adds nothing to them.
+    const read = await bridgePrints({ name: "hook", plate: 1 }, { layerHeight: 0.2, supportEnabled: false });
+    expect(read.attempt.itemId).toBe(other);
+    expect(read.attempt.settings).toEqual({ layerHeight: 0.2, supportEnabled: false });
   });
 });

@@ -10,7 +10,7 @@ import { remainingFrom, traysOf } from "./ams.ts";
 import { type Api, HttpError } from "./api.ts";
 import type { Camera } from "./camera.ts";
 import { type EndResult, type Job, type JobEvent, JobMachine, progressOf } from "./job-machine.ts";
-import { amsJob, endJob, type JobContext, type JobPayload, photoJob, startJob } from "./jobs.ts";
+import { amsJob, endJob, type JobContext, type JobPayload, photoJob, startJob, traysJob } from "./jobs.ts";
 import type { PrinterFiles } from "./printer-files.ts";
 import { emptyState, foldReport, type PrinterState, parseReport } from "./printer-state.ts";
 import type { Queue, QueuedJob } from "./queue.ts";
@@ -157,6 +157,10 @@ export class Bridge {
         return this.onStarted(event.job);
       case "ended":
         return this.onEnded(event.job, event.result, event.endedAt, event.spaghetti);
+      case "trays":
+        this.deps.queue.add({ type: "trays", job: event.job } as unknown as QueuedJob);
+        this.kick();
+        return;
       case "lost":
         this.log(
           `The printer moved on from "${event.job.name}" before its end was seen; it is left for a person to finish.`,
@@ -320,6 +324,8 @@ export class Bridge {
     switch (payload.type) {
       case "start":
         return startJob(this.context, payload, bytes);
+      case "trays":
+        return traysJob(this.context, payload);
       case "end":
         return endJob(this.context, payload);
       case "photo":

@@ -859,6 +859,8 @@ export const printJobs = sqliteTable("print_jobs", {
   fileId: text("file_id"),
   /** The printer's active trays when the print began, with the pantry's spool in each then (bridges that send them). */
   trays: text("trays", { mode: "json" }).$type<Array<{ slot: string; spoolId: string | null }>>(),
+  /** What the app's fill put on the attempt (see print-fill.ts), so a move can take it out again and fill afresh. */
+  filled: text("filled", { mode: "json" }).$type<AttemptSettings>(),
   placed: text("placed").$type<"matched" | "new">().notNull(),
   reasons: text("reasons", { mode: "json" }).$type<MatchReason[]>().notNull().default(sql`'[]'`),
   itemId: text("item_id").notNull(),

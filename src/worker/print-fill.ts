@@ -5,12 +5,18 @@
  * follow, decision 0078) from, in turn:
  *
  * 1. the sliced file it matched: the build's file (kept with it or printed in one of its attempts) that the job is
- *    named after, on the plate printed;
- * 2. else the build's latest attempt that has settings, as "same as last time" carries them;
- * 3. the spools the printer's active trays held when the print began (an old bridge sends none).
+ *    named after, on the plate printed (when the plate is unknown and the file has several, none: they differ);
+ * 2. else, for an attempt with no settings of its own, the build's latest attempt that has settings, as "same as
+ *    last time" carries them;
+ * 3. the spools the printer's active trays held while the print ran (an old bridge sends none), only on filaments
+ *    this fill put in, or where there are none: a filament a person or agent set is theirs.
+ *
+ * What a fill put in is remembered (`print_jobs.filled`), so that when the print is placed elsewhere ("Not this
+ * build?") what the earlier fill put in goes and the new place fills afresh: a value still as the fill left it is
+ * taken out, one changed since is someone's and stays.
  */
 import { and, desc, eq, isNull, ne } from "drizzle-orm";
-import { type AttemptSettings, byPrintTime, carryOver, fillSettings, RESULT_KEYS } from "../shared/attempts.ts";
+import { type AttemptFilament, type AttemptSettings, byPrintTime, carryOver, RESULT_KEYS } from "../shared/attempts.ts";
 import type { ChangeActor } from "../shared/changes.ts";
 import { printKey } from "../shared/print-match.ts";
 import { filamentFromSpool } from "../shared/spools.ts";
@@ -46,24 +52,21 @@ async function fromFile(
   attempt: Attempt,
   job: { name: string | null; plate: number | null; fileId: string | null },
 ): Promise<AttemptSettings | null> {
+  const columns = (table: typeof itemFiles | typeof attemptFiles) => ({
+    id: table.id,
+    name: table.name,
+    plate: table.plate,
+    plateCount: table.plateCount,
+    prefill: table.prefill,
+  });
   const [kept, printed] = await Promise.all([
     db
-      .select({
-        id: itemFiles.id,
-        name: itemFiles.name,
-        plate: itemFiles.plate,
-        prefill: itemFiles.prefill,
-      })
+      .select(columns(itemFiles))
       .from(itemFiles)
       .where(and(eq(itemFiles.itemId, attempt.itemId), isNull(itemFiles.deletedAt)))
       .orderBy(desc(itemFiles.createdAt)),
     db
-      .select({
-        id: attemptFiles.id,
-        name: attemptFiles.name,
-        plate: attemptFiles.plate,
-        prefill: attemptFiles.prefill,
-      })
+      .select(columns(attemptFiles))
       .from(attemptFiles)
       .innerJoin(attempts, eq(attempts.id, attemptFiles.attemptId))
       .where(
@@ -79,8 +82,11 @@ async function fromFile(
   const files = [...kept, ...printed].filter((file) => hasChoices(file.prefill));
   const key = printKey(job.name);
   const byId = job.fileId ? files.find((file) => file.id === job.fileId) : undefined;
+  // With no plate named (bridges before 0.2), a file of several plates can't say which one was printed.
   const byName = key
-    ? files.filter((file) => printKey(file.name) === key && (!job.plate || file.plate === job.plate))
+    ? files.filter(
+        (file) => printKey(file.name) === key && (job.plate ? file.plate === job.plate : file.plateCount <= 1),
+      )
     : [];
   return (byId ?? byName[0])?.prefill ?? null;
 }
@@ -101,20 +107,6 @@ async function fromLastAttempt(db: Db, attempt: Attempt): Promise<AttemptSetting
   return null;
 }
 
-/** Puts the spools of the active trays on the attempt's filaments, one by one, where a filament has no spool yet. */
-function withTrays(settings: AttemptSettings, found: readonly SpoolInTray[]): AttemptSettings | null {
-  if (!found.length) return null;
-  const filaments = settings.filaments ?? [];
-  // One tray feeds a one-colour print; several trays are matched to a file's filaments only when their numbers agree.
-  if (filaments.length > 1 && filaments.length !== found.length) return null;
-  const next = (filaments.length ? filaments : [{}]).map((filament, index) => {
-    const spool = found[index];
-    return spool && !filament.spoolId ? filamentFromSpool(spool, filament) : filament;
-  });
-  if (JSON.stringify(next) === JSON.stringify(filaments)) return null;
-  return { ...settings, filaments: next };
-}
-
 /** The stored colours (JSON) of a multi-colour spool, as a list. */
 function colorsOf(stored: string | null): string[] | null {
   try {
@@ -127,21 +119,58 @@ function colorsOf(stored: string | null): string[] | null {
 
 type SpoolInTray = Omit<typeof spools.$inferSelect, "colors"> & { colors: string[] | null; slot: string };
 
+/** The fill's filaments with the trays' spools on them, one by one (several trays only when the numbers agree). */
+function withTrays(filaments: readonly AttemptFilament[], found: readonly SpoolInTray[]): AttemptFilament[] | null {
+  if (!found.length) return null;
+  if (filaments.length > 1 && filaments.length !== found.length) return null;
+  const bare = filaments.map(({ spoolId: _spool, amsSlot: _slot, ...filament }) => filament);
+  return (bare.length ? bare : [{}]).map((filament, index) => {
+    const spool = found[index];
+    return spool ? filamentFromSpool(spool, filament) : filament;
+  });
+}
+
+const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
+
 /**
- * Fills a printer-made attempt's empty settings and filaments from where it is now. Does nothing for an attempt the
- * printer didn't file (no print job), and never replaces a value that is there. Returns whether it changed anything.
+ * Fills a printer-made attempt's empty settings and filaments from where it is now, after taking out what an
+ * earlier fill put in (where it is still as the fill left it). Does nothing for an attempt the printer didn't file
+ * (no print job), and never replaces a value that is there. Returns whether it changed anything.
  */
-export async function fillPrinterAttempt(db: Db, attemptId: string, actor: ChangeActor): Promise<boolean> {
+export async function fillPrinterAttempt(
+  db: Db,
+  attemptId: string,
+  actor: ChangeActor,
+  { filing = false }: { filing?: boolean } = {},
+): Promise<boolean> {
   const [attempt, job] = await Promise.all([
     db.select().from(attempts).where(eq(attempts.id, attemptId)).get(),
     db.select().from(printJobs).where(eq(printJobs.attemptId, attemptId)).get(),
   ]);
   if (!attempt || attempt.deletedAt || !job) return false;
-  let settings = attempt.settings;
-  const source = (await fromFile(db, attempt, job)) ?? (await fromLastAttempt(db, attempt));
-  if (source) settings = fillSettings(settings, source) ?? settings;
+  const settings: Record<string, unknown> = { ...attempt.settings };
+  const before = job.filled ?? {};
+  for (const [key, value] of Object.entries(before)) if (same(settings[key], value)) delete settings[key];
+
+  const added: Record<string, unknown> = {};
+  const source =
+    (await fromFile(db, attempt, job)) ??
+    // Filing: settings the bridge sent are its own file's, complete: the last attempt's would only mix in keys the
+    // file never has (a tree support beside supportEnabled false).
+    (filing && hasChoices(settings as AttemptSettings) ? null : await fromLastAttempt(db, attempt));
+  for (const [key, value] of Object.entries(source ?? {})) {
+    if (value === undefined || settings[key] !== undefined) continue;
+    settings[key] = value;
+    added[key] = value;
+  }
+
   const trays = job.trays ?? [];
-  if (trays.length && trays.every((tray) => tray.spoolId)) {
+  // Only filaments this fill put in, or none at all: a filament someone set is theirs.
+  if (
+    trays.length &&
+    trays.every((tray) => tray.spoolId) &&
+    (settings.filaments === undefined || settings.filaments === added.filaments)
+  ) {
     const rows = await db.select().from(spools).where(isNull(spools.deletedAt));
     const byId = new Map(rows.map((row) => [row.id, row]));
     const found = trays.flatMap((tray) => {
@@ -149,29 +178,29 @@ export async function fillPrinterAttempt(db: Db, attemptId: string, actor: Chang
       return row ? [{ ...row, colors: colorsOf(row.colors), slot: tray.slot }] : [];
     });
     // A spool gone since leaves a tray unknown: then nothing is guessed.
-    if (found.length === trays.length) {
-      // Filaments this fill copied in (not the attempt's own) name the spool of an earlier print: the tray's spool,
-      // the one the printer used, takes its place.
-      const copied = !attempt.settings.filaments && settings.filaments;
-      const base = copied
-        ? {
-            ...settings,
-            filaments: copied.map(({ spoolId: _spool, amsSlot: _slot, ...filament }) => filament),
-          }
-        : settings;
-      settings = withTrays(base, found) ?? settings;
+    const filaments =
+      found.length === trays.length ? withTrays((added.filaments as AttemptFilament[]) ?? [], found) : null;
+    if (filaments) {
+      settings.filaments = filaments;
+      added.filaments = filaments;
     }
   }
-  if (settings === attempt.settings) return false;
+
+  if (same(settings, attempt.settings) && same(added, before)) return false;
   const now = new Date();
   const [changed] = await db.batch([
     db
       .update(attempts)
-      .set({ settings, updatedAt: now })
+      .set({ settings: settings as AttemptSettings, updatedAt: now })
       // Only while nobody changed the attempt since it was read: a person's edit is never lost to a fill.
       .where(and(eq(attempts.id, attempt.id), eq(attempts.updatedAt, attempt.updatedAt)))
       .returning({ id: attempts.id }),
     recordChange(db, { entity: "attempt", id: attempt.id, itemId: attempt.itemId, action: "updated", actor }),
   ]);
-  return changed.length > 0;
+  if (!changed.length) return false;
+  await db
+    .update(printJobs)
+    .set({ filled: added as AttemptSettings })
+    .where(eq(printJobs.attemptId, attempt.id));
+  return true;
 }
