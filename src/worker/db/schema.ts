@@ -857,6 +857,8 @@ export const printJobs = sqliteTable("print_jobs", {
   estimateMinutes: integer("estimate_minutes"),
   /** The Spaghetti file the print's .gcode.3mf says it was sliced from, when the bridge could read the file. */
   fileId: text("file_id"),
+  /** The printer's active trays when the print began, with the pantry's spool in each then (bridges that send them). */
+  trays: text("trays", { mode: "json" }).$type<Array<{ slot: string; spoolId: string | null }>>(),
   placed: text("placed").$type<"matched" | "new">().notNull(),
   reasons: text("reasons", { mode: "json" }).$type<MatchReason[]>().notNull().default(sql`'[]'`),
   itemId: text("item_id").notNull(),

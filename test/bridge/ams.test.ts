@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { findSpool, planAmsSync, remainingFrom, type Tray, traysOf } from "../../bridge/ams.ts";
+import { activeTraysOf, findSpool, planAmsSync, remainingFrom, type Tray, traysOf } from "../../bridge/ams.ts";
 import { emptyState, foldReport } from "../../bridge/printer-state.ts";
 import type { Spool } from "../../src/shared/api.ts";
 import { NO_LABEL } from "../../src/shared/label-read.ts";
@@ -151,5 +151,24 @@ describe("the AMS sync plan", () => {
   it("leaves a level alone where the printer doesn't know it", () => {
     const found = spool({ slot: "A3", colorHex: "#00ae42", remaining: "low" });
     expect(planAmsSync([tray({ slot: "A3", trayUuid: null, remain: null })], [found], "p").actions).toEqual([]);
+  });
+});
+
+describe("activeTraysOf", () => {
+  const at = (trayNow: string | undefined) => activeTraysOf({ ams: { tray_now: trayNow } });
+
+  it("names the slot of the tray feeding the print", () => {
+    expect(at("0")).toEqual(["A1"]);
+    expect(at("5")).toEqual(["B2"]);
+    expect(at("15")).toEqual(["D4"]);
+  });
+
+  it("knows the external spool, and no tray", () => {
+    expect(at("254")).toEqual(["Ext"]);
+    expect(at("255")).toEqual([]);
+    expect(at("16")).toEqual([]);
+    expect(at(undefined)).toEqual([]);
+    expect(activeTraysOf({})).toEqual([]);
+    expect(at("x")).toEqual([]);
   });
 });

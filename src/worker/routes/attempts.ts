@@ -22,6 +22,7 @@ import { type Attempt, attemptFiles, attempts, coachRuns, items } from "../db/sc
 import type { AppEnv } from "../env.ts";
 import { apiError, toApiAttempts } from "../http.ts";
 import { readsByAttempt, toApiPhotoRead } from "../photo-read/run.ts";
+import { fillPrinterAttempt } from "../print-fill.ts";
 import { fileThePrint, mergedTarget, printNowIn, printViews } from "../prints.ts";
 import { stageDates } from "./items.ts";
 
@@ -99,6 +100,7 @@ const printFacts = z.object({
   plate: z.number().int().min(1).max(64).nullable().optional(),
   estimateMinutes: between(0, 100_000).nullable().optional(),
   fileId: z.uuid().nullable().optional(),
+  trays: z.array(z.string().max(8)).max(16).nullable().optional(),
 });
 
 const createAttempt = z.object({
@@ -228,6 +230,8 @@ export const itemAttemptRoutes = new Hono<AppEnv>().post("/:id/attempts", async 
   const filing = await fileThePrint(db, c.var.via, item, body.print, printed.getTime(), now);
   const target = filing?.target ?? item;
   let attemptSettings = body.settings;
+  // A print from the printer starts empty: what it lacks is filled once it is in, file first, then the last attempt.
+  if (!attemptSettings && filing) attemptSettings = {};
   if (!attemptSettings) {
     // "Same as last time": start from the attempt printed just before this one.
     const before = byPrintTime(
@@ -279,9 +283,14 @@ export const itemAttemptRoutes = new Hono<AppEnv>().post("/:id/attempts", async 
   if (!attempt || attempt.itemId !== target.id) {
     return apiError(c, 409, "conflict", "That attempt belongs to something else.");
   }
+  // A print from the printer, placed in a build: what it lacks comes from the file or the build's last attempt.
+  const filled = filing ? await fillPrinterAttempt(db, attempt.id, c.var.actor) : false;
+  const placed = filled
+    ? ((await db.select().from(attempts).where(eq(attempts.id, attempt.id)).get()) ?? attempt)
+    : attempt;
   // Logged already as Partly or Spaghetti: Claude thinks about the next try.
-  await coachAfterAnswer(c, attempt);
-  return c.json<AttemptResponse>({ attempt: await loadAttempt(db, attempt) }, 201);
+  await coachAfterAnswer(c, placed);
+  return c.json<AttemptResponse>({ attempt: await loadAttempt(db, placed) }, 201);
 });
 
 /** /api/attempts/:id: change, delete (soft) and restore an attempt. */
