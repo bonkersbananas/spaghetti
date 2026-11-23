@@ -35,7 +35,7 @@ const weightText = (grams: number | null) =>
 interface LabelLooksRightProps {
   spool: Spool;
   /** The page's live colour and finish (what is typed, not yet saved included). */
-  value: { colorHex: string | null; colors: string[] | null; finish: string | null };
+  value: { colorHex: string | null; colors: string[] | null; finish: string | null; colorName: string | null };
   onChange: (changes: Partial<{ colorHex: string | null; colors: string[] | null; finish: string | null }>) => void;
   onSetWeight: () => void;
   readOnly: boolean;
@@ -90,7 +90,7 @@ export function LabelLooksRight({
         >
           <SpoolDisc color={value.colorHex} colors={value.colors} size="sm" />
           <span className="text-body text-ink flex-1">
-            {unread ? "Colour wasn't read" : spool.colorName ? `Colour · ${spool.colorName}` : "Colour"}
+            {unread ? "Colour wasn't read" : value.colorName?.trim() ? `Colour · ${value.colorName.trim()}` : "Colour"}
           </span>
           <span className="text-small text-ink-faint">{unread ? "Pick it" : "Change"}</span>
         </button>
