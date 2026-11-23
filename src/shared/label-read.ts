@@ -16,6 +16,7 @@ export { NO_LABEL } from "./no-label.ts";
 /** The spool fields a label can fill, by their names in the spool's API object. */
 export const LABEL_FIELDS = [
   "brand",
+  "line",
   "material",
   "finish",
   "colorName",
@@ -35,6 +36,8 @@ export type LabelField = (typeof LABEL_FIELDS)[number];
 /** One spool as a label states it: every value is null when the label doesn't say. */
 export interface LabelSpool {
   brand: string | null;
+  /** The product line printed before the material ("PolyTerra", "Panchroma"); not Bambu's "Basic" (that is the finish). */
+  line: string | null;
   /** "PLA", "PETG", "PLA-CF"… */
   material: string | null;
   /** The label's variant ("Basic", "Matte", "HF"), kept as the spool's finish. */
@@ -81,6 +84,7 @@ export const LABEL_FAILURE_LINES: Record<"unreadable" | "failed" | "cap", string
 /** The words for each field, as "from the label" lists them. */
 export const LABEL_FIELD_NAMES: Record<LabelField, string> = {
   brand: "Brand",
+  line: "Product line",
   material: "Material",
   finish: "Finish",
   colorName: "Color name",
@@ -119,6 +123,7 @@ export function labelSpoolLine(spool: LabelSpool): { title: string; detail: stri
 
 export const emptyLabelSpool = (): LabelSpool => ({
   brand: null,
+  line: null,
   material: null,
   finish: null,
   colorName: null,
