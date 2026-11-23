@@ -247,6 +247,11 @@ export interface AttemptFile {
   slicing?: SlicingSettings | null;
   /** The slice a re-slice replaced, kept for one undo (POST /api/files/:id/sliced/restore). */
   previous?: PreviousSlice | null;
+  /**
+   * The agent that added it ("via Claude for Alex"), if any. A model an agent added is sliced by the next browser that
+   * opens the app (lib/model-read.ts), which draws its picture and saves the slice.
+   */
+  createdVia?: string | null;
   createdAt: number;
 }
 

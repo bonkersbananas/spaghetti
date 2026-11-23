@@ -2,7 +2,14 @@ import { MAX_PHOTO_BYTES } from "../../shared/api.ts";
 import { checkLinkUrl } from "../../shared/link-safety.ts";
 import { resolvesPublic } from "../link-preview.ts";
 
-const TOO_LARGE = "That photo is too large (over 12 MB).";
+/** What a transfer is of, for its error messages, and how much of it is taken. */
+export interface Transfer {
+  what: string;
+  limit: number;
+}
+const PHOTO: Transfer = { what: "photo", limit: MAX_PHOTO_BYTES };
+const tooLarge = ({ what, limit }: Transfer) =>
+  new Error(`That ${what} is too large (over ${Math.round(limit / (1024 * 1024))} MB).`);
 
 /** What the API needs to know about a photo that wasn't resized in a browser. */
 export interface ImageInfo {
@@ -48,9 +55,16 @@ function webpSize(b: Uint8Array): { width: number; height: number } | null {
   return null;
 }
 
+/** Width and height from a PNG's header chunk. */
+function pngSize(b: Uint8Array): { width: number; height: number } | null {
+  if (ascii(b, 12, 4) !== "IHDR") return null;
+  const u32 = (o: number) => u16be(b, o) * 65_536 + u16be(b, o + 2);
+  return { width: u32(16), height: u32(20) };
+}
+
 /** Reads a JPEG or WebP's type and size from its bytes. PNG and the rest are refused: the API stores JPEG and WebP. */
 export function readImage(bytes: Uint8Array): ImageInfo {
-  if (bytes.length > MAX_PHOTO_BYTES) throw new Error(TOO_LARGE);
+  if (bytes.length > MAX_PHOTO_BYTES) throw tooLarge(PHOTO);
   let size: { width: number; height: number } | null = null;
   let contentType: ImageInfo["contentType"];
   if (bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) {
@@ -68,14 +82,35 @@ export function readImage(bytes: Uint8Array): ImageInfo {
   return { bytes, contentType, ...size };
 }
 
-export function fromBase64(data: string): Uint8Array {
+/** A photo an agent sends: JPEG or WebP as above, or a PNG, kept as it is until a browser makes the WebP or JPEG copies. */
+export function readAgentImage(bytes: Uint8Array): Omit<ImageInfo, "contentType"> & {
+  contentType: ImageInfo["contentType"] | "image/png";
+} {
+  if (!(bytes[0] === 0x89 && ascii(bytes, 1, 3) === "PNG")) {
+    try {
+      return readImage(bytes);
+    } catch (error) {
+      if (error instanceof Error && error.message === "Photos must be JPEG or WebP images.")
+        throw new Error("Photos must be JPEG, WebP or PNG images.");
+      throw error;
+    }
+  }
+  if (bytes.length > MAX_PHOTO_BYTES) throw tooLarge(PHOTO);
+  const size = pngSize(bytes);
+  if (!size || size.width < 1 || size.height < 1 || size.width > 10_000 || size.height > 10_000) {
+    throw new Error("That image's size couldn't be read, or is over 10,000 px.");
+  }
+  return { bytes, contentType: "image/png", ...size };
+}
+
+export function fromBase64(data: string, what = "photo"): Uint8Array {
   // Allow a data: URL prefix.
   const clean = data.replace(/^data:[^,]*,/, "").replace(/\s+/g, "");
   try {
     const binary = atob(clean.replace(/-/g, "+").replace(/_/g, "/"));
     return Uint8Array.from(binary, (char) => char.charCodeAt(0));
   } catch {
-    throw new Error("The photo isn't valid base64.");
+    throw new Error(`The ${what} isn't valid base64.`);
   }
 }
 
@@ -99,10 +134,9 @@ export async function fromUrl(
   } catch {
     throw new Error("The photo couldn't be fetched from that URL.");
   }
-  return readPhoto(response);
+  return readBody(response);
 }
 
-const NOT_PUBLIC = "The photo URL must be an https address on the open internet.";
 const PHOTO_REDIRECTS = 3;
 
 /**
@@ -110,7 +144,9 @@ const PHOTO_REDIRECTS = 3;
  * first and each redirect (https, a public name, no port or credentials, a name that resolves to public addresses
  * only), so the Worker, or the container on someone's home network, never fetches something local for a token.
  */
-export async function fromPublicUrl(url: string): Promise<Uint8Array> {
+export async function fromPublicUrl(url: string, transfer: Transfer = PHOTO): Promise<Uint8Array> {
+  const { what } = transfer;
+  const NOT_PUBLIC = `The ${what} URL must be an https address on the open internet.`;
   const signal = AbortSignal.timeout(10_000);
   let next = checkLinkUrl(url);
   for (let hop = 0; hop <= PHOTO_REDIRECTS; hop++) {
@@ -121,32 +157,33 @@ export async function fromPublicUrl(url: string): Promise<Uint8Array> {
       response = await fetch(next, { signal, redirect: "manual" });
     } catch (error) {
       if (error instanceof Error && error.message === NOT_PUBLIC) throw error;
-      throw new Error("The photo couldn't be fetched from that URL.");
+      throw new Error(`The ${what} couldn't be fetched from that URL.`);
     }
     const location = response.headers.get("location");
-    if (response.status < 300 || response.status >= 400 || !location) return readPhoto(response);
+    if (response.status < 300 || response.status >= 400 || !location) return readBody(response, transfer);
     await response.body?.cancel().catch(() => undefined);
     next = URL.canParse(location, next.href) ? checkLinkUrl(new URL(location, next).href) : null;
   }
-  throw new Error("The photo URL redirected too many times.");
+  throw new Error(`The ${what} URL redirected too many times.`);
 }
 
-/** The body of a photo's answer, cut off at the size cap. */
-async function readPhoto(response: Response): Promise<Uint8Array> {
-  if (!response.ok) throw new Error(`The photo URL answered ${response.status}.`);
-  if (Number(response.headers.get("content-length") ?? 0) > MAX_PHOTO_BYTES) throw new Error(TOO_LARGE);
+/** The body of an answer, cut off at the size cap. */
+async function readBody(response: Response, transfer: Transfer = PHOTO): Promise<Uint8Array> {
+  const { what, limit } = transfer;
+  if (!response.ok) throw new Error(`The ${what} URL answered ${response.status}.`);
+  if (Number(response.headers.get("content-length") ?? 0) > limit) throw tooLarge(transfer);
   // The header can be missing or wrong: the cap is enforced while reading, and the download stops there.
   const reader = response.body?.getReader();
-  if (!reader) throw new Error("The photo URL sent nothing.");
+  if (!reader) throw new Error(`The ${what} URL sent nothing.`);
   const chunks: Uint8Array[] = [];
   let total = 0;
   for (;;) {
     const { done, value } = await reader.read();
     if (done) break;
     total += value.length;
-    if (total > MAX_PHOTO_BYTES) {
+    if (total > limit) {
       await reader.cancel().catch(() => undefined);
-      throw new Error(TOO_LARGE);
+      throw tooLarge(transfer);
     }
     chunks.push(value);
   }

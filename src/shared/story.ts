@@ -57,6 +57,13 @@ function fileLine(file: AttemptFile): string {
   return `${file.name}${bits.length ? ` (${bits.join(", ")})` : ""}`;
 }
 
+/** "; added via Claude for Alex", and for a model no browser has sliced yet, that the app does it next time it is open. */
+function addedVia(file: AttemptFile, context: { agents: ReadonlyMap<string, string> }): string {
+  const agent = file.createdVia ? context.agents.get(file.createdVia) : undefined;
+  if (!agent) return "";
+  return `; added via ${agent}${file.kind === "model" && !file.slice ? ", sliced by the app the next time it is open" : ""}`;
+}
+
 /** What the story needs to name people and agents. */
 export interface StoryContext {
   people: ReadonlyMap<string, Pick<Person, "name">>;
@@ -151,7 +158,7 @@ export function buildStory(item: Item, context: StoryContext): string {
       "Files kept with the idea, to download in the app: slicer files, and models (.stl, .3mf) that Spaghetti slices.",
       "",
     );
-    for (const file of item.files) lines.push(`- ${fileLine(file)}`);
+    for (const file of item.files) lines.push(`- ${fileLine(file)}${addedVia(file, context)}`);
     lines.push("");
   }
 
@@ -204,7 +211,7 @@ export function buildStory(item: Item, context: StoryContext): string {
     if (attempt.file) {
       lines.push(
         attempt.file.kind === "model"
-          ? `Model: ${fileLine(attempt.file)}.`
+          ? `Model: ${fileLine(attempt.file)}${addedVia(attempt.file, context)}.`
           : `Slicer file: ${attempt.file.name} (plate ${attempt.file.plate} of ${attempt.file.plateCount}).`,
         "",
       );

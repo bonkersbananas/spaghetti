@@ -40,6 +40,8 @@ const rules: Array<[method: string, path: RegExp, needs: Needs]> = [
   ["PATCH", new RegExp(`^/attempts/${id}$`), ["attempts"]],
   ["POST", new RegExp(`^/attempts/${id}/finish$`), ["attempts"]],
   ["PUT", new RegExp(`^/attempts/${id}/file$`), ["attempts"]],
+  // The model a twist keeps: added by the agents that make twists. Removing is for people.
+  ["PUT", new RegExp(`^/twists/${id}/file/${id}$`), ["capture"]],
   ["POST", /^\/tags$/, ["attempts"]],
   // A recipe is saved from an attempt that worked; its name and note change the same way. Deleting is for people.
   ["POST", /^\/recipes$/, ["attempts"]],

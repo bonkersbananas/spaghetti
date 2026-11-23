@@ -393,7 +393,14 @@ export const attemptFileRoutes = new Hono<AppEnv>()
       ...others.map((row) => db.delete(attemptFiles).where(eq(attemptFiles.id, row.id))),
       db
         .insert(attemptFiles)
-        .values({ id: fields.id, attemptId, ...values, createdBy: c.var.user.id, createdAt: new Date() })
+        .values({
+          id: fields.id,
+          attemptId,
+          ...values,
+          createdBy: c.var.user.id,
+          createdVia: c.var.via,
+          createdAt: new Date(),
+        })
         .onConflictDoUpdate({ target: attemptFiles.id, set: values }),
       recordChange(db, {
         entity: "file",
@@ -526,7 +533,14 @@ export const itemFileRoutes = new Hono<AppEnv>()
     await db.batch([
       db
         .insert(itemFiles)
-        .values({ id: fileId, itemId, ...values, createdBy: c.var.user.id, createdAt: new Date() })
+        .values({
+          id: fileId,
+          itemId,
+          ...values,
+          createdBy: c.var.user.id,
+          createdVia: c.var.via,
+          createdAt: new Date(),
+        })
         .onConflictDoUpdate({ target: itemFiles.id, set: values }),
       recordChange(db, {
         entity: "file",
@@ -644,7 +658,14 @@ export const twistFileRoutes = new Hono<AppEnv>()
         .where(and(eq(twistFiles.twistId, twistId), isNull(twistFiles.deletedAt), ne(twistFiles.id, fileId))),
       db
         .insert(twistFiles)
-        .values({ id: fileId, twistId, ...values, createdBy: c.var.user.id, createdAt: new Date() })
+        .values({
+          id: fileId,
+          twistId,
+          ...values,
+          createdBy: c.var.user.id,
+          createdVia: c.var.via,
+          createdAt: new Date(),
+        })
         .onConflictDoUpdate({ target: twistFiles.id, set: values }),
       recordChange(db, { entity: "twist", id: twistId, action: "updated", actor: c.var.actor }),
       db

@@ -13,6 +13,7 @@ import { CONTENT_ID, focusContent } from "@/lib/focus-content";
 import { useHotkeys } from "@/lib/hotkeys";
 import { connectOutbox } from "@/lib/items";
 import { useLiveUpdates } from "@/lib/live";
+import { followUnreadModels } from "@/lib/model-read";
 import { clearOfflineData } from "@/lib/offline";
 import { outbox } from "@/lib/outbox";
 import { PaletteProvider, usePalette } from "@/lib/palette";
@@ -128,6 +129,8 @@ function Shell() {
   );
   // Photos that came from an agent are resized quietly, in idle time, by the first browser that sees them.
   useEffect(() => followUnresizedPhotos(queryClient), [queryClient]);
+  // Models from an agent are sliced the same way (and their pictures drawn), once, by the first browser that sees them.
+  useEffect(() => followUnreadModels(queryClient), [queryClient]);
   // The two pages every list opens: their code is fetched once the app is idle (the tab bar already warms the lists),
   // so the first tap on an idea or a build doesn't wait for it. The routes have no loaders, so nothing else loads.
   const router = useRouter();

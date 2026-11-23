@@ -790,6 +790,8 @@ export const attemptFiles = sqliteTable(
     createdBy: text("created_by")
       .notNull()
       .references(() => users.id),
+    /** The agent it came through ("via Claude for Alex"), if any; `createdBy` is then its owner. */
+    createdVia: text("created_via"),
     createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
     deletedAt: integer("deleted_at", { mode: "timestamp_ms" }),
   },
@@ -824,6 +826,8 @@ export const itemFiles = sqliteTable(
     createdBy: text("created_by")
       .notNull()
       .references(() => users.id),
+    /** The agent it came through ("via Claude for Alex"), if any; `createdBy` is then its owner. */
+    createdVia: text("created_via"),
     createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
     deletedAt: integer("deleted_at", { mode: "timestamp_ms" }),
   },
@@ -954,6 +958,8 @@ export const twistFiles = sqliteTable(
     createdBy: text("created_by")
       .notNull()
       .references(() => users.id),
+    /** The agent it came through ("via Claude for Alex"), if any; `createdBy` is then its owner. */
+    createdVia: text("created_via"),
     createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
     deletedAt: integer("deleted_at", { mode: "timestamp_ms" }),
   },

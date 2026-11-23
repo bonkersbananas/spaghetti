@@ -1,6 +1,7 @@
 import { z } from "zod";
 import type { AgentScope } from "../../shared/agents.ts";
 import type {
+  AttemptFile,
   AttemptHit,
   AttemptResponse,
   FinishAttemptResponse,
@@ -36,7 +37,8 @@ import { CHANGE_KINDS, changeChip, TWIST_CHANGES_MAX } from "../../shared/twists
 import { formatHours, sinceWords } from "../../shared/upkeep.ts";
 import { mondayOf, printsWords, type WeekResponse } from "../../shared/week.ts";
 import { settings as attemptSettings } from "../routes/attempts.ts";
-import { fromBase64, fromPublicUrl, readImage, toBase64 } from "./image.ts";
+import { FILE_TRANSFER, type FileInfo, MAX_AGENT_BASE64_BYTES, nameFromUrl, readModelFile } from "./file.ts";
+import { fromBase64, fromPublicUrl, readAgentImage, toBase64 } from "./image.ts";
 
 /** What a tool can do: call Spaghetti's own API as the agent (same token, same scopes, same "via"). */
 export interface ApiResult {
@@ -180,8 +182,11 @@ function attemptLine(hit: AttemptHit & { sameBuild?: boolean }): string {
 
 // --- photos --------------------------------------------------------------------------------------
 
-const photoUrlArg = z.string().max(2000).optional().describe("An https URL of a JPEG or WebP photo.");
-const photoBase64Arg = z.string().optional().describe("Or the photo itself as base64 (JPEG or WebP, up to 12 MB).");
+const photoUrlArg = z.string().max(2000).optional().describe("An https URL of a JPEG, WebP or PNG photo.");
+const photoBase64Arg = z
+  .string()
+  .optional()
+  .describe("Or the photo itself as base64 (JPEG, WebP or PNG, up to 12 MB).");
 
 /** A picture sent to Claude stays under this (base64 makes it a third bigger): well under what claude.ai takes in a result. */
 const MAX_SHOWN_BYTES = 900_000;
@@ -203,15 +208,15 @@ function photoLine(photo: Photo, place: string): string {
 
 /** Reads and uploads one photo to an item (and attempt), the way capture_idea does. */
 async function readPhotoArgs(args: { photo_url?: string; photo_base64?: string }) {
-  if (args.photo_base64) return readImage(fromBase64(args.photo_base64));
-  if (args.photo_url) return readImage(await fromPublicUrl(args.photo_url));
+  if (args.photo_base64) return readAgentImage(fromBase64(args.photo_base64));
+  if (args.photo_url) return readAgentImage(await fromPublicUrl(args.photo_url));
   return undefined;
 }
 
 async function uploadPhoto(
   ctx: ToolContext,
   itemId: string,
-  image: ReturnType<typeof readImage>,
+  image: ReturnType<typeof readAgentImage>,
   attemptId?: string,
 ): Promise<{ ok: true; photo: Photo } | { ok: false; text: string }> {
   const form = new FormData();
@@ -229,6 +234,33 @@ async function uploadPhoto(
   const uploaded = await ctx.call(`/api/items/${itemId}/photos/${crypto.randomUUID()}`, { method: "PUT", form });
   if (!uploaded.ok) return { ok: false, text: failure(uploaded).text };
   return { ok: true, photo: (uploaded.json as { photo: Photo }).photo };
+}
+
+/** Uploads one model file the way the app does: the same fields, so it looks like a file added in a browser. */
+async function uploadFile(
+  ctx: ToolContext,
+  target: { path: string; id?: string },
+  info: FileInfo,
+): Promise<{ ok: true; file: AttemptFile } | { ok: false; text: string }> {
+  const fileId = crypto.randomUUID();
+  const form = new FormData();
+  form.set("id", fileId);
+  form.set("name", info.name);
+  form.set("size", String(info.bytes.length));
+  form.set("plate", String(info.plate));
+  form.set("plateCount", String(info.plateCount));
+  form.set("kind", info.kind);
+  form.set("prefill", JSON.stringify(info.prefill));
+  if (info.objects.length) form.set("objects", JSON.stringify(info.objects));
+  if (info.slicer) form.set("slicer", info.slicer);
+  if (info.thumb) form.set("thumb", new File([info.thumb.bytes], "thumb", { type: info.thumb.type }));
+  form.set("file", new File([info.bytes], info.name));
+  const path = target.path.replace(":file", fileId);
+  const uploaded = await ctx.call(path, { method: "PUT", form });
+  if (!uploaded.ok) return { ok: false, text: failure(uploaded).text };
+  const body = uploaded.json as { file?: AttemptFile; attempt?: { file: AttemptFile | null } };
+  const file = body.file ?? body.attempt?.file;
+  return file ? { ok: true, file } : { ok: false, text: "The file was sent but the answer was unclear." };
 }
 
 // --- the tools -----------------------------------------------------------------------------------
@@ -423,7 +455,7 @@ export const tools: Tool[] = [
       if (!args.title?.trim() && !args.note?.trim() && !args.photo_url && !args.photo_base64) {
         return { text: "Give a title, a note or a photo.", isError: true };
       }
-      let image: ReturnType<typeof readImage> | undefined;
+      let image: ReturnType<typeof readAgentImage> | undefined;
       try {
         image = await readPhotoArgs(args);
       } catch (error) {
@@ -448,7 +480,7 @@ export const tools: Tool[] = [
     name: "add_photo",
     title: "Add a photo to an idea, build or attempt",
     description:
-      'Add a photo to something that already exists: an idea or build (build_id), or one of its print attempts (also give attempt_id). It goes after the photos already there and shows in the app marked as added via this agent; people can remove it there. Send an https photo_url or photo_base64 (JPEG or WebP, up to 12 MB). Use capture_idea for a new idea. Needs the "capture" scope for an idea or build, the "attempts" scope for an attempt.',
+      'Add a photo to something that already exists: an idea or build (build_id), or one of its print attempts (also give attempt_id). It goes after the photos already there and shows in the app marked as added via this agent; people can remove it there. Send an https photo_url or photo_base64 (JPEG, WebP or PNG, up to 12 MB; a PNG render is fine). For a model file (.stl, .3mf) use add_file. Use capture_idea for a new idea. Needs the "capture" scope for an idea or build, the "attempts" scope for an attempt.',
     scopes: ["capture", "attempts"],
     readOnly: false,
     input: z.object({
@@ -466,7 +498,7 @@ export const tools: Tool[] = [
       const needs = args.attempt_id ? "attempts" : "capture";
       if (!ctx.scopes.includes(needs))
         return { text: `This token needs the "${needs}" scope for that.`, isError: true };
-      let image: ReturnType<typeof readImage> | undefined;
+      let image: ReturnType<typeof readAgentImage> | undefined;
       try {
         image = await readPhotoArgs(args);
       } catch (error) {
@@ -477,6 +509,73 @@ export const tools: Tool[] = [
       return uploaded.ok
         ? { text: `Photo added. photo_id: ${uploaded.photo.id}.` }
         : { text: uploaded.text, isError: true };
+    },
+  }),
+
+  tool({
+    name: "add_file",
+    title: "Add a model file to an idea, build, attempt or twist",
+    description:
+      'Put a 3D model file straight into Spaghetti, so a model made in this conversation lands in the app. Formats: .stl (binary or ASCII) and .3mf (a plain model, a Bambu Studio / OrcaSlicer project, or a sliced .gcode.3mf); nothing else (a .step or .obj must be converted first). Give the file as an https file_url (the open internet only, up to 25 MB) or as file_base64 (up to 10 MB), and its name (ending in .stl or .3mf; optional with a file_url that ends that way). Say where it goes with exactly one of: build_id (an idea or build; it keeps up to 20 files), attempt_id (that print attempt\'s slicer file, which replaces the one it has), or twist_id (a twist\'s model, which replaces its current one). A model is sliced and its picture drawn by the next browser that opens the app, quietly, and shows meanwhile as waiting; a sliced .gcode.3mf is read here for its plate, settings and picture. Marked in the app as added via this agent; removing is for people. For a render or photo of the model use add_photo (PNG is fine). Needs the "capture" scope for an idea, build or twist, the "attempts" scope for an attempt.',
+    scopes: ["capture", "attempts"],
+    readOnly: false,
+    input: z.object({
+      build_id: id.optional().describe("The idea's or build's id (from search): the file is kept with it."),
+      attempt_id: id
+        .optional()
+        .describe("The attempt (from get_build or search): the file it was printed from. Replaces its file."),
+      twist_id: id.optional().describe("The twist (from list_twists): its model. Replaces its current model."),
+      name: z.string().max(200).optional().describe('The file\'s name, ending in .stl or .3mf, such as "bracket.stl".'),
+      file_url: z.string().max(2000).optional().describe("An https URL of the file (up to 25 MB)."),
+      file_base64: z.string().optional().describe("Or the file itself as base64 (up to 10 MB)."),
+    }),
+    async run(args, ctx) {
+      const targets = [args.build_id, args.attempt_id, args.twist_id].filter(Boolean).length;
+      if (targets !== 1) {
+        return { text: "Give exactly one of build_id, attempt_id or twist_id.", isError: true };
+      }
+      if (!args.file_url && !args.file_base64) return { text: "Give a file_url or file_base64.", isError: true };
+      const needs = args.attempt_id ? ["attempts" as const] : args.twist_id ? ["capture" as const] : null;
+      if (needs && !needs.some((scope) => ctx.scopes.includes(scope))) {
+        return { text: `This token needs the "${needs[0]}" scope for that.`, isError: true };
+      }
+      let info: FileInfo;
+      try {
+        // The name first: nothing is fetched for a file that can't be named.
+        const name = args.name?.trim() || (args.file_url ? nameFromUrl(args.file_url) : null);
+        if (!name) throw new Error("Give the file's name, ending in .stl or .3mf.");
+        let bytes: Uint8Array;
+        if (args.file_base64) {
+          // The text is a third bigger than the bytes: refuse before decoding it.
+          if (args.file_base64.length > Math.ceil((MAX_AGENT_BASE64_BYTES * 4) / 3) + 4096)
+            throw new Error("That file is too large to send as base64 (over 10 MB): give a file_url.");
+          bytes = fromBase64(args.file_base64, "file");
+        } else {
+          bytes = await fromPublicUrl(args.file_url as string, FILE_TRANSFER);
+        }
+        info = readModelFile(bytes, name);
+      } catch (error) {
+        return { text: error instanceof Error ? error.message : "The file couldn't be read.", isError: true };
+      }
+      const target = args.attempt_id
+        ? { path: `/api/attempts/${args.attempt_id}/file` }
+        : args.twist_id
+          ? { path: `/api/twists/${args.twist_id}/file/:file` }
+          : { path: `/api/items/${args.build_id}/files/:file` };
+      if (args.twist_id && info.kind !== "model") {
+        return { text: "A twist keeps a model: an .stl or a plain .3mf, not a sliced file.", isError: true };
+      }
+      const uploaded = await uploadFile(ctx, target, info);
+      if (!uploaded.ok) return { text: uploaded.text, isError: true };
+      const { file } = uploaded;
+      const box = info.size ? `, about ${info.size.join(" × ")} mm` : "";
+      const next =
+        info.kind === "model"
+          ? "The next browser that opens the app slices it and draws its picture."
+          : "It was read as a sliced file: its plate, settings and picture are there.";
+      return {
+        text: `File added. file_id: ${file.id} (${file.name}, ${info.kind === "model" ? "a model" : "a sliced file"}${box}). ${next}`,
+      };
     },
   }),
 
@@ -580,11 +679,13 @@ export const tools: Tool[] = [
       success_notes: successNotesArg,
       settings: settingsArg,
       parts: partsArg,
-      photo_url: photoUrlArg.describe("An https URL of a JPEG or WebP photo of the print, to attach to the attempt."),
+      photo_url: photoUrlArg.describe(
+        "An https URL of a JPEG, WebP or PNG photo of the print, to attach to the attempt.",
+      ),
       photo_base64: photoBase64Arg,
     }),
     async run(args, ctx) {
-      let image: ReturnType<typeof readImage> | undefined;
+      let image: ReturnType<typeof readAgentImage> | undefined;
       try {
         image = await readPhotoArgs(args);
       } catch (error) {
@@ -627,11 +728,13 @@ export const tools: Tool[] = [
       failure_tags: failureTagsArg,
       success_notes: successNotesArg,
       parts: partsArg,
-      photo_url: photoUrlArg.describe("An https URL of a JPEG or WebP photo of the print, to attach to the attempt."),
+      photo_url: photoUrlArg.describe(
+        "An https URL of a JPEG, WebP or PNG photo of the print, to attach to the attempt.",
+      ),
       photo_base64: photoBase64Arg,
     }),
     async run(args, ctx) {
-      let image: ReturnType<typeof readImage> | undefined;
+      let image: ReturnType<typeof readAgentImage> | undefined;
       try {
         image = await readPhotoArgs(args);
       } catch (error) {

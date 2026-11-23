@@ -10172,7 +10172,7 @@
       "put": {
         "operationId": "putTwistsByIdFileByFileId",
         "summary": "Keeps a model (kind model: an .stl or plain .3mf the app slices) as the twist's own, in place of the one it kept. The same body as an idea's file. People only.",
-        "description": "Only a signed-in person, never an agent token.",
+        "description": "Needs the \"capture\" scope. A route may narrow this by what the body asks for; see docs/api.md.",
         "tags": [
           "twists"
         ],
@@ -10309,6 +10309,16 @@
               }
             }
           },
+          "403": {
+            "description": "missing_scope or person_only: the token lacks the scope, or only a signed-in person may.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
           "404": {
             "description": "not_found: no such twist.",
             "content": {
@@ -10332,10 +10342,15 @@
         },
         "security": [
           {
+            "bearerAuth": []
+          },
+          {
             "sessionCookie": []
           }
         ],
-        "x-scopes": "person"
+        "x-scopes": [
+          "capture"
+        ]
       },
       "delete": {
         "operationId": "deleteTwistsByIdFileByFileId",
@@ -20686,6 +20701,13 @@
               {
                 "type": "null"
               }
+            ]
+          },
+          "createdVia": {
+            "description": "The agent that added it (\"Claude for Alex\"), if any. A model an agent added has no slice until the next browser that opens the app slices it.",
+            "type": [
+              "string",
+              "null"
             ]
           },
           "createdAt": {
