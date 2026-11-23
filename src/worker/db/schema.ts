@@ -573,6 +573,8 @@ export const labelReads = sqliteTable(
     runOutcome: text("run_outcome"),
     /** The rest of the diagnosis as JSON: model, stop reason, HTTP status, error type, how long it took. Never the photo. */
     detail: text("detail"),
+    /** What Claude found when the photo had one label, as the code cleaned it (JSON): to tell a field it left empty from one a person changed. */
+    answer: text("answer"),
   },
   (table) => [index("label_reads_spool_idx").on(table.spoolId)],
 );
@@ -1006,6 +1008,8 @@ export const changes = sqliteTable(
     actorKind: text("actor_kind").$type<ChangeActorKind>().notNull(),
     actorId: text("actor_id").notNull(),
     at: integer("at", { mode: "timestamp_ms" }).notNull(),
+    /** Which fields a spool edit touched, as a JSON list of names (never values); null where not recorded. */
+    fields: text("fields"),
   },
   (table) => [index("changes_at_idx").on(table.at)],
 );

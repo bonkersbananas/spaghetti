@@ -10,6 +10,7 @@ import { addUser, ORIGIN, request, resetDb, signIn } from "./helpers.ts";
 type Answer = { spools?: unknown[]; json?: unknown; stopReason?: string; status?: number };
 
 const none = {
+  line: null,
   brand: null,
   material: null,
   variant: null,
@@ -268,6 +269,48 @@ describe("reading a spool's label", () => {
     const finished = await settled(slow);
     expect(finished.netGrams).toBe(250);
     expect(finished.fromLabel).not.toContain("netGrams");
+  });
+
+  it("fills the product line and a colour read from the filament, and keeps the cleaned answer", async () => {
+    // A recorded answer: a Polymaker-style label with a line, no printed colour name, a colour taken from the filament.
+    const recorded = {
+      ...none,
+      brand: "Polymaker",
+      line: "PolyTerra",
+      material: "PLA",
+      variant: "PLA Matte",
+      colorHex: "#C8372D",
+      netGrams: 1000,
+      nozzleTempMin: 190,
+      nozzleTempMax: 230,
+    };
+    const claude = stubClaude({ spools: [recorded] });
+    const id = await makeSpool();
+    await readLabel(id, { placeholders: ["material", "netGrams"] });
+    const spool = await settled(id);
+    expect(spool).toMatchObject({ brand: "Polymaker", line: "PolyTerra", finish: "matte", colorHex: "#c8372d" });
+    expect(spool.fromLabel).toEqual(expect.arrayContaining(["line", "colorHex", "finish"]));
+    // The prompt asks for the filament's own colour and for the line.
+    const sent = JSON.stringify(claude.bodies[0]);
+    expect(sent).toContain("visible in the photo");
+    expect(sent).toContain("product line");
+    // What was found is kept, cleaned, so a later edit can be told from a field the read left empty.
+    const row = await env.DB.prepare("SELECT answer FROM label_reads WHERE spool_id = ?")
+      .bind(id)
+      .first<{ answer: string }>();
+    expect(JSON.parse(row?.answer ?? "{}")).toMatchObject({ line: "PolyTerra", colorHex: "#c8372d", colorName: null });
+  });
+
+  it("records which fields an edit touched, never what they were set to", async () => {
+    const id = await makeSpool();
+    await asPerson(`/api/spools/${id}`, { method: "PATCH", json: { brand: "Secret Brand", colorHex: "#112233" } });
+    const row = await env.DB.prepare(
+      "SELECT fields FROM changes WHERE entity = 'spool' AND entity_id = ? AND action = 'updated' ORDER BY seq DESC",
+    )
+      .bind(id)
+      .first<{ fields: string }>();
+    expect(JSON.parse(row?.fields ?? "[]").sort()).toEqual(["brand", "colorHex"]);
+    expect(row?.fields).not.toContain("Secret");
   });
 
   it("makes a spool for each label after a confirmation that lists them", async () => {
