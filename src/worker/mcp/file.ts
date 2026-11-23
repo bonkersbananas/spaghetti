@@ -112,6 +112,11 @@ export function readModelFile(bytes: Uint8Array, rawName: string): FileInfo {
     throw new Error(`That isn't a 3MF file (a zip). ${WHAT}`);
   }
   const result = readThreeMf(bytes);
+  if (result.tooMuch) {
+    throw new Error(
+      "That 3MF holds more than Spaghetti can read here (too many or too large parts). Send a plainer file.",
+    );
+  }
   // No G-code in it: a model to slice (a project, or a plain 3MF from anywhere).
   if (result.kind !== "sliced") {
     return { name, bytes, kind: "model", plate: 1, plateCount: 1, prefill: {}, objects: [] };

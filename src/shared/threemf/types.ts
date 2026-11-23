@@ -87,6 +87,8 @@ export interface ThreeMfResult {
   slicer?: { name: string; version?: string };
   plates: Plate[];
   settings: PrintSettings;
+  /** The file would unpack to more than is read (shared/threemf/zip.ts): nothing was read from it. */
+  tooMuch?: true;
   /** Everything that went wrong or was skipped; the reader never throws. */
   warnings: string[];
 }

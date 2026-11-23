@@ -202,6 +202,24 @@ describe("add_file", () => {
     expect((await itemOf(buildId)).files ?? []).toHaveLength(0);
   });
 
+  it("refuses a 3MF that would unpack to more than the Worker may hold, without reading it", async () => {
+    const { token } = await makeAgent(["capture"]);
+    const buildId = await idea(token);
+    // Sixty pictures each just under their own 4 MB limit: a quarter of a megabyte as a file, 240 MB unpacked.
+    const entries: Record<string, Uint8Array> = { "Metadata/slice_info.config": strToU8("<config/>") };
+    for (let n = 1; n <= 60; n++) entries[`Metadata/plate_${n}.png`] = new Uint8Array(4 * 1024 * 1024 - 1);
+    const bomb = zipSync(entries, { level: 9 });
+    expect(bomb.length).toBeLessThan(1024 * 1024);
+    const refused = await callTool(token, "add_file", {
+      build_id: buildId,
+      name: "bomb.3mf",
+      file_base64: base64(bomb),
+    });
+    expect(refused.isError).toBe(true);
+    expect(refused.text).toContain("more than Spaghetti can read");
+    expect((await itemOf(buildId)).files ?? []).toHaveLength(0);
+  });
+
   it("keeps an attempt's slicer file, replacing the one it had, with the attempts scope", async () => {
     const { token, agent } = await makeAgent(["capture", "attempts"]);
     const buildId = await idea(token);
