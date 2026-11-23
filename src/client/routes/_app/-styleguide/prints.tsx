@@ -1,5 +1,7 @@
-import { WhichBuildQuestion } from "@/components/builds/PrintPlace";
-import { BuildsIcon, IdeasIcon, MoveIntoIcon, PrinterIcon } from "@/components/ui/icons";
+import { WhichBuildLine } from "@/components/builds/PrintPlace";
+import { AskLine, AskName } from "@/components/ui/AskLine";
+import { Button } from "@/components/ui/Button";
+import { MoveIntoIcon, PrinterIcon } from "@/components/ui/icons";
 import { KeepNames, KeptName } from "@/components/ui/KeepNames";
 import { WhyLine } from "@/components/ui/WhyLine";
 import { Label, Panel, Section } from "./shared";
@@ -12,69 +14,52 @@ export function PrintsSection() {
     <Section
       id="prints"
       title="Which build is this?"
-      note="A print the printer bridge files goes into the build it matches, with one quiet line saying why; when the app isn't sure, the print asks, with its best guesses as rows a tap takes. Every answer can be undone."
+      note="A print the printer bridge files goes into the build it matches, with one quiet line saying why; when the app isn't sure, the print asks in one line (Is this Herb planter?) on its card and on the build page: Yes moves it, Another build opens the searchable sheet. Every answer can be undone."
     >
       <div className="grid gap-6 md:grid-cols-2">
         <Panel className="flex flex-col gap-6">
           <div className="flex flex-col gap-3">
-            <Label>The printer's question: what the guesses share, said once</Label>
-            <WhichBuildQuestion
-              shared="Both print planter-v2."
-              names={["planter-v2"]}
-              offers={[
-                {
-                  id: "a",
-                  photo: null,
-                  glyph: BuildsIcon,
-                  title: "Herb planter",
-                  line: "Started 2 days ago · 1 attempt",
-                  onSelect: nothing,
-                },
-                {
-                  id: "b",
-                  photo: null,
-                  glyph: IdeasIcon,
-                  title: "Planters for the balcony",
-                  line: "Saved 5 days ago",
-                  idea: true,
-                  onSelect: nothing,
-                },
-              ]}
+            <Label>The printer's question: the likely build, one tap to say yes</Label>
+            <WhichBuildLine
+              likely={{ title: "Herb planter", why: "Same file: planter-v2", names: ["planter-v2"] }}
+              onYes={nothing}
               onMore={nothing}
-              onKeep={nothing}
             />
           </div>
           <div className="flex flex-col gap-3">
-            <Label>Different reasons: each row its own</Label>
-            <WhichBuildQuestion
-              name="paddle-steamer(2)"
-              names={["paddle-steamer"]}
-              offers={[
-                {
-                  id: "c",
-                  photo: null,
-                  glyph: BuildsIcon,
-                  title: "Paddle steamer",
-                  line: "Attempt 2 printed paddle-steamer",
-                  onSelect: nothing,
-                },
-                {
-                  id: "d",
-                  photo: null,
-                  glyph: IdeasIcon,
-                  title: "Bath toys",
-                  line: "Downloaded 4 min before it began",
-                  idea: true,
-                  onSelect: nothing,
-                },
-              ]}
+            <Label>An idea it would start</Label>
+            <WhichBuildLine
+              likely={{
+                title: "Planters for the balcony",
+                why: "Downloaded 4 min before it began",
+                names: [],
+                idea: true,
+              }}
+              onYes={nothing}
               onMore={nothing}
-              onKeep={nothing}
             />
           </div>
           <div className="flex flex-col gap-3">
-            <Label>While the guesses load</Label>
-            <WhichBuildQuestion loading offers={[]} onMore={nothing} onKeep={nothing} />
+            <Label>Nothing fits: the sheet, to pick or keep it in its own build</Label>
+            <WhichBuildLine printName="cable-clip-v3" onMore={nothing} />
+          </div>
+          <div className="flex flex-col gap-3">
+            <Label>While the guess loads: its room kept</Label>
+            <WhichBuildLine loading onMore={nothing} />
+          </div>
+          <div className="flex flex-col gap-3">
+            <Label>AskLine, the system's piece: any question one tap answers</Label>
+            <AskLine
+              icon={PrinterIcon}
+              detail="Its file is named much like ring.3mf"
+              actions={
+                <Button variant="secondary" size="sm" onClick={nothing}>
+                  Yes
+                </Button>
+              }
+            >
+              Is this <AskName>UÖBF glass markers</AskName>?
+            </AskLine>
           </div>
         </Panel>
         <Panel className="flex flex-col gap-3">

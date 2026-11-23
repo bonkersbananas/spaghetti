@@ -135,7 +135,9 @@ export function moveAttempt(queryClient: QueryClient, { attempt, from, to, go, o
   const base = (toBefore?.photos ?? []).reduce((top, photo) => Math.max(top, photo.position), -1) + 1;
   const moving = photos.map((photo, index) => ({ ...photo, itemId: targetId, position: base + index }));
   const { number: _number, pending: _pending, finishQueued: _queued, ...plain } = attempt;
-  const moved = { ...plain, itemId: targetId, parts: [], file: attempt.file } as Item["attempts"][number];
+  // Answered: the question goes at once, on whichever card shows the print now (the server says the same).
+  const print = plain.print ? { ...plain.print, asking: false, reasons: [] } : plain.print;
+  const moved = { ...plain, itemId: targetId, parts: [], file: attempt.file, print } as Item["attempts"][number];
 
   const show = () => {
     if (fromGoes) patchCachedItem(queryClient, from.id, () => null);

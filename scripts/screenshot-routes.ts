@@ -8443,13 +8443,16 @@ shots.push(
 shots.push(
   ...([
     {
-      // A print the printer filed in a build of its own: two keep the same file, so it asks which.
+      // A print the printer filed in a build of its own: two keep the same file, so it asks "Is this Herb planter?".
       name: "builds-which-build",
       path: "/builds",
       prepare: async (page) => {
         const { ownId } = await printToAskAbout(page);
         await onlyOnTheBed(page, [ownId]);
-        await page.getByRole("heading", { name: "Which build is this?" }).first().waitFor();
+        await page
+          .getByRole("region", { name: /^Is this / })
+          .first()
+          .waitFor();
         await page.waitForTimeout(400);
       },
       cleanup: removeFiledPrints,
@@ -8463,7 +8466,10 @@ shots.push(
       prepare: async (page) => {
         const { ownId } = await printToAskAbout(page);
         await onlyOnTheBed(page, [ownId]);
-        await page.getByRole("heading", { name: "Which build is this?" }).first().waitFor();
+        await page
+          .getByRole("region", { name: /^Is this / })
+          .first()
+          .waitFor();
         await page.waitForTimeout(400);
       },
       cleanup: removeFiledPrints,
@@ -8477,7 +8483,10 @@ shots.push(
       prepare: async (page) => {
         const { ownId } = await printToAskAbout(page);
         await onlyOnTheBed(page, [ownId]);
-        await page.getByRole("heading", { name: "Which build is this?" }).first().waitFor();
+        await page
+          .getByRole("region", { name: /^Is this / })
+          .first()
+          .waitFor();
         await page.waitForTimeout(400);
       },
       cleanup: removeFiledPrints,
@@ -8489,13 +8498,9 @@ shots.push(
       prepare: async (page) => {
         const { ownId } = await printToAskAbout(page);
         await page.goto(`/builds/${ownId}`);
+        // The question in view on a phone, above the action bar.
         await page
-          .getByRole("button", { name: /^Herb planter/ })
-          .first()
-          .waitFor();
-        // The whole question in view on a phone, above the action bar.
-        await page
-          .getByRole("button", { name: "Its own build" })
+          .getByRole("region", { name: /^Is this / })
           .first()
           .evaluate((node) => node.scrollIntoView({ block: "center" }));
         await page.waitForTimeout(400);
@@ -8503,8 +8508,8 @@ shots.push(
       cleanup: removeFiledPrints,
     },
     {
-      // "Another build": the builds in progress (the card's guesses left out, it shows them), search on desktop, "Its
-      // own build", then done and shelved.
+      // "Another build": the other guess first (the one passed over left out), the builds in progress, "Its own
+      // build", then done and shelved; search on top on desktop, at the sheet's foot on phones.
       name: "which-build-sheet",
       path: "/builds",
       prepare: async (page) => {
@@ -8538,7 +8543,30 @@ shots.push(
       cleanup: removeFiledPrints,
     },
     {
-      // While the guesses are on their way: the question and its buttons at once, a row's room kept for them.
+      // Searching the sheet: on top on desktop, at its foot on phones (the keyboard isn't drawn in the shot); a name
+      // finds builds and ideas alike.
+      name: "which-build-sheet-search",
+      path: "/builds",
+      prepare: async (page) => {
+        const { ownId } = await printToAskAbout(page);
+        await onlyOnTheBed(page, [ownId]);
+        await page
+          .getByRole("region", { name: /^Is this / })
+          .first()
+          .getByRole("button", { name: "Another build" })
+          .click();
+        const sheet = page.getByRole("dialog", { name: "Which build is this?" });
+        await sheet.getByText("In progress").waitFor();
+        await sheet.getByRole("searchbox", { name: "Search builds" }).fill("plant");
+        await page.waitForTimeout(500);
+        // The field's caret blinks: out of the shot.
+        await sheet.getByRole("searchbox", { name: "Search builds" }).blur();
+        await page.waitForTimeout(300);
+      },
+      cleanup: removeFiledPrints,
+    },
+    {
+      // While the guess is on its way: the line keeps its room, words and buttons as bars.
       name: "builds-which-build-loading",
       path: "/builds",
       prepare: async (page) => {
@@ -8547,19 +8575,19 @@ shots.push(
         });
         const { ownId } = await printToAskAbout(page);
         await onlyOnTheBed(page, [ownId]);
-        await page.getByRole("heading", { name: "Which build is this?" }).first().waitFor();
+        await page.locator("section[aria-busy=true]").first().waitFor();
         await page.waitForTimeout(400);
       },
       cleanup: removeFiledPrints,
     },
     {
-      // Nothing fits: no question, one quiet line with a way to move it anyway.
+      // Nothing fits: "Nothing matched cable-clip-v3." and "Which build?", which opens the sheet.
       name: "builds-which-build-none",
       path: "/builds",
       prepare: async (page) => {
         const { ownId } = await bridgeFiles(page, "cable-clip-v3");
         await onlyOnTheBed(page, [ownId]);
-        await page.getByRole("button", { name: "Move it" }).first().waitFor();
+        await page.getByRole("button", { name: "Which build?" }).first().waitFor();
         await page.waitForTimeout(400);
       },
       cleanup: removeFiledPrints,

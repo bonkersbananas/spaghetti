@@ -350,8 +350,10 @@ export function PrintingCard({
             wide.body,
           )}
         >
+          {/* "Is this Herb planter?" right above "How did it go?": both answered standing at the printer. Its room is
+              kept while its code comes (the size of its line), so the card doesn't jump. */}
           {asking && (
-            <Suspense fallback={null}>
+            <Suspense fallback={<div aria-hidden className="bg-ink/4 h-12 rounded-md" />}>
               <PrintPlace item={item} attempt={attempt} where="card" className="pointer-events-auto" />
             </Suspense>
           )}
