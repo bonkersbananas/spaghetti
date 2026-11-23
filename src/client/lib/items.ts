@@ -112,14 +112,40 @@ function withAttemptEdits<T extends Attempt>(server: T, sentAt: number): T {
 const withEditedAttempts = (item: Item, sentAt: number): Item =>
   attemptEdits.size ? { ...item, attempts: item.attempts.map((attempt) => withAttemptEdits(attempt, sentAt)) } : item;
 
+/**
+ * Files this tab added: on their way (Infinity, a big one that failed with its retry too) or when they reached the
+ * server. Only these are kept in answers that don't know of them yet (keepFilesAddedHere): a pending card restored
+ * from an earlier visit has nothing left to finish it, and goes with the next answer.
+ */
+const filesAddedHere = new Map<string, number>();
+
+/** A file added in this tab: shown and on its way, saved (the server has it), or given up on or taken off. */
+export function noteFileAddedHere(fileId: string, state: "adding" | "saved" | "gone") {
+  if (state === "gone") filesAddedHere.delete(fileId);
+  else filesAddedHere.set(fileId, state === "adding" ? Number.POSITIVE_INFINITY : Date.now());
+}
+
+/**
+ * An answer about an item asked before a file added in this tab reached the server lacks it: its card stays (one
+ * still on its way, a big one that failed with its retry, or one saved since the question was asked).
+ */
+function keepFilesAddedHere(client: QueryClient, item: Item, askedAt: number): Item {
+  const cached = client.getQueryData<Item | null>(itemKeys.detail(item.id));
+  if (!cached?.files?.length) return item;
+  const known = new Set((item.files ?? []).map((file) => file.id));
+  const extra = cached.files.filter((file) => !known.has(file.id) && (filesAddedHere.get(file.id) ?? -1) >= askedAt);
+  return extra.length ? { ...item, files: [...(item.files ?? []), ...extra] } : item;
+}
+
 export function itemQuery(id: string) {
   return queryOptions({
     queryKey: itemKeys.detail(id),
-    queryFn: async () => {
+    queryFn: async ({ client }) => {
       const sentAt = performance.now();
       const askedAt = Date.now();
       try {
-        return withEditedAttempts(withSavedWords(id, (await api<ItemResponse>(`/items/${id}`)).item, sentAt), askedAt);
+        const fetched = (await api<ItemResponse>(`/items/${id}`)).item;
+        return withEditedAttempts(withSavedWords(id, keepFilesAddedHere(client, fetched, askedAt), sentAt), askedAt);
       } catch (error) {
         if (error instanceof ApiError && error.status === 404) return null;
         throw error;
@@ -498,8 +524,9 @@ export function useItem(id: string) {
     ...itemQuery(id),
     enabled: !pendingEntry,
     refetchInterval: (current) => whileReading(current.state.data ? [current.state.data] : []),
-    // Opened from a list: show what the list already has, at once, as old as the list is
-    // (so a list restored from the device is asked about again rather than trusted as fresh).
+    // Opened from a list: show what the list already has, at once, and ask for the build itself straight away. The
+    // list's copy is never trusted as fresh: it can be from before an attempt or a photo was added (by the printer,
+    // the other person, or this device a moment ago), and the change feed only tells of what comes after it starts.
     initialData: () => {
       for (const list of LISTS) {
         const found = queryClient.getQueryData<Item[]>(itemKeys.list(list))?.find((item) => item.id === id);
@@ -507,6 +534,8 @@ export function useItem(id: string) {
       }
       return undefined;
     },
+    // As old as the list is, for "Showing what you saw" offline; stale at once all the same (no fetch has answered
+    // for the build itself yet), so it is asked for as it opens.
     initialDataUpdatedAt: () => {
       for (const list of LISTS) {
         const state = queryClient.getQueryState<Item[]>(itemKeys.list(list));
@@ -514,6 +543,8 @@ export function useItem(id: string) {
       }
       return undefined;
     },
+    staleTime: (current) =>
+      current.state.dataUpdateCount > 0 ? (queryClient.getDefaultOptions().queries?.staleTime as number) : 0,
   });
   const item = useMemo(() => {
     if (pendingEntry) return fromEntry(pendingEntry, state);
