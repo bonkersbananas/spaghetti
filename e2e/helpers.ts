@@ -107,3 +107,24 @@ export async function smallTargets(page: Page, within = "body") {
     return small;
   }, within);
 }
+
+/** Rows that scroll sideways with nothing for the keyboard: no tabindex, no focusable item inside. */
+export async function strandedScrollers(page: Page) {
+  return page.evaluate(() => {
+    const focusable =
+      'a[href],button:not([disabled]),input:not([disabled]):not([type=hidden]),select:not([disabled]),textarea:not([disabled]),summary,[tabindex]:not([tabindex="-1"])';
+    const visible = (el: Element) => (el as HTMLElement).getClientRects().length > 0;
+    const out: string[] = [];
+    for (const el of Array.from(document.querySelectorAll<HTMLElement>("body *"))) {
+      const x = getComputedStyle(el).overflowX;
+      if (x !== "auto" && x !== "scroll") continue;
+      if (el.scrollWidth <= el.clientWidth + 1 || !visible(el)) continue;
+      // A card's photos swipe inside its link: the page it opens shows them all to a keyboard (design.md, Card).
+      if (el.hasAttribute("data-photos-on-page")) continue;
+      if (el.matches(focusable) && el.getAttribute("tabindex") !== "-1") continue;
+      if (Array.from(el.querySelectorAll<HTMLElement>(focusable)).some((inner) => visible(inner))) continue;
+      out.push(`${el.tagName.toLowerCase()}.${el.className.toString().slice(0, 80)}`);
+    }
+    return out;
+  });
+}

@@ -172,7 +172,8 @@ export function PickTile({
   return (
     <button
       type="button"
-      aria-label={caption ? undefined : label}
+      // A caption or a note face names the tile in its own words (a note's several lines tell two notes with the same first line apart); only a bare glyph needs a label.
+      aria-label={caption || note ? undefined : label}
       aria-pressed={rank === undefined ? undefined : picked}
       disabled={disabled}
       onClick={onToggle}

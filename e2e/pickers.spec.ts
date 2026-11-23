@@ -105,3 +105,20 @@ test("the wishlist picker's tiles share one size and keep to their cells", { tag
   await expect(sheet.getByText("https://", { exact: false })).toHaveCount(0);
   await expectNamedOnce(sheet);
 });
+
+test("note tiles are named by their words, so two notes never read alike", { tag: "@phone" }, async ({ page }) => {
+  // The same first line, then different words; and a title shared by two notes.
+  await make(page, { note: "Hook for the garage\nthree prongs, 5 mm" });
+  await make(page, { note: "Hook for the garage\nbrass look" });
+  await make(page, { title: "Hook", note: "For the coats" });
+  await make(page, { title: "Hook", note: "For the towels" });
+  await page.goto("/builds");
+  await page
+    .getByRole("button", { name: /^(New build|Pick an idea to print)$/ })
+    .first()
+    .click();
+  const sheet = page.getByRole("dialog");
+  for (const name of [/garage.*three prongs/s, /garage.*brass look/s, /coats.*Hook/s, /towels.*Hook/s]) {
+    await expect(sheet.getByRole("button", { name })).toHaveCount(1);
+  }
+});

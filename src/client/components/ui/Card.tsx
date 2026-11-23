@@ -135,6 +135,8 @@ export function Card({
             ref={scroller}
             // The card doesn't shrink under a press that starts here (pressable): on iOS that would end the swipe.
             data-swipe
+            // Inside the card's link, so no tab stop of its own: a keyboard sees every photo on the page the link opens.
+            data-photos-on-page
             onScroll={(event) => {
               const el = event.currentTarget;
               if (!el.clientWidth) return;

@@ -69,7 +69,14 @@ function SharedIdea({ item, onClose }: { item: ItemView; onClose: () => void }) 
           <SaveStatus state={fields.saveState} />
         </div>
         {photos.length > 0 && (
-          <div className="-mx-5 flex gap-2.5 overflow-x-auto px-5 pt-1 pb-1 md:-mx-6 md:px-6">
+          // biome-ignore lint/a11y/useSemanticElements: a row of pictures, not a form fieldset
+          <div
+            role="group"
+            aria-label="Shared photos"
+            // The thumbnails here are plain pictures: with several, the row itself takes the arrow keys.
+            tabIndex={photos.length > 1 ? 0 : undefined}
+            className="focus-ring -mx-5 flex gap-2.5 overflow-x-auto px-5 pt-1 pb-1 md:-mx-6 md:px-6"
+          >
             {photos.map((photo, index) => (
               <PhotoThumb
                 key={photo.id}

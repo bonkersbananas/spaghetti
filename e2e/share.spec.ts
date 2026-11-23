@@ -13,10 +13,10 @@ async function waitForServiceWorker(page: Page) {
 async function shareInto(
   page: Page,
   fields: { title?: string; text?: string; url?: string },
-  photo?: { name: string; type: string; base64: string },
+  ...photos: { name: string; type: string; base64: string }[]
 ) {
   await page.evaluate(
-    ({ fields, photo }) => {
+    ({ fields, photos }) => {
       const form = document.createElement("form");
       form.method = "POST";
       form.action = "/api/share";
@@ -27,20 +27,23 @@ async function shareInto(
         input.value = value;
         form.append(input);
       }
-      if (photo) {
+      if (photos.length) {
         const input = document.createElement("input");
         input.type = "file";
         input.name = "media";
-        const bytes = Uint8Array.from(atob(photo.base64), (c) => c.charCodeAt(0));
+        input.multiple = true;
         const transfer = new DataTransfer();
-        transfer.items.add(new File([bytes], photo.name, { type: photo.type }));
+        for (const photo of photos) {
+          const bytes = Uint8Array.from(atob(photo.base64), (c) => c.charCodeAt(0));
+          transfer.items.add(new File([bytes], photo.name, { type: photo.type }));
+        }
         input.files = transfer.files;
         form.append(input);
       }
       document.body.append(form);
       form.submit();
     },
-    { fields, photo },
+    { fields, photos },
   );
 }
 
@@ -70,6 +73,8 @@ test("the share target saves a shared link and photo as an idea, and the Capture
   const note = sheet.getByRole("textbox", { name: "Add a word" });
   await expect(note).toHaveValue("Check this out\nhttps://example.com/clips/1");
   await expect(sheet.getByRole("img", { name: "Shared photo 1" })).toBeVisible();
+  // One picture needs no tab stop for its row.
+  await expect(sheet.getByRole("group", { name: "Shared photos" })).not.toHaveAttribute("tabindex");
 
   // Saved already, before anything is typed.
   await expect.poll(async () => (await serverIdeas(page)).length).toBe(1);
@@ -121,4 +126,22 @@ test("without the service worker, a POST to the share route still brings the wor
   const location = new URL(response.headers().location ?? "", baseURL);
   expect(location.pathname).toBe("/share");
   expect(location.searchParams.get("url")).toBe("https://example.com/x");
+});
+
+test("several shared photos sit in a row the keyboard can scroll", async ({ page }) => {
+  await signIn(page);
+  await waitForServiceWorker(page);
+  await clearIdeas(page);
+  const base64 = readFileSync("e2e/fixtures/tugboat.jpg").toString("base64");
+  await shareInto(
+    page,
+    { text: "Three views" },
+    ...[1, 2, 3].map((n) => ({ name: `view${n}.jpg`, type: "image/jpeg", base64 })),
+  );
+  const sheet = page.getByRole("dialog", { name: "Into the pot" });
+  const row = sheet.getByRole("group", { name: "Shared photos" });
+  await expect(row.getByRole("img")).toHaveCount(3);
+  await expect(row).toHaveAttribute("tabindex", "0");
+  await row.focus();
+  await expect(row).toBeFocused();
 });
