@@ -20,6 +20,11 @@ export interface PhotoProps {
    * wide frame sits on a soft glow, not between two flat bars.
    */
   glow?: boolean;
+  /**
+   * A smaller copy that is likely on hand already (the thumbnail a card showed): drawn at once under the picture until
+   * it arrives, so a photo opened large shows something real at once instead of its color.
+   */
+  preview?: string;
   className?: string;
   imgClassName?: string;
 }
@@ -46,6 +51,7 @@ export function Photo({
   eager,
   frame = "well",
   glow,
+  preview,
   className,
   imgClassName,
 }: PhotoProps) {
@@ -60,6 +66,16 @@ export function Photo({
       // The photo's own color is data, not design.
       style={color && !loaded ? { backgroundColor: color } : undefined} // design-lint-ignore
     >
+      {preview && !loaded && !seen && (
+        <img
+          src={preview}
+          alt=""
+          aria-hidden
+          draggable={false}
+          decoding="async"
+          className={cn("absolute inset-0 size-full", fit === "cover" ? "object-cover" : "object-contain")}
+        />
+      )}
       {glow && fit === "contain" && (
         <img
           src={src}

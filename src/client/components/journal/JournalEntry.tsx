@@ -142,7 +142,32 @@ const AttemptCard = forwardRef<HTMLAnchorElement, JournalEntryProps>(function At
         </>
       )}
       {photo && (
-        <div className="relative aspect-4/3 shrink-0 overflow-hidden rounded-md md:w-2/5">
+        // A tap or click on the photo opens the attempt's photos large (ui/LargePhotos.tsx) instead of the build; the
+        // rest of the card, and Enter, open the build, where every photo opens large too. A handler, not a button: a
+        // button can't sit in the card's link, and taking the card apart weighed more than the Journal's first load had.
+        // biome-ignore lint/a11y/noStaticElementInteractions: the card's link is the control; this is its photo's shortcut
+        // biome-ignore lint/a11y/useKeyWithClickEvents: the card's link is the control; this is its photo's shortcut
+        <div
+          onClick={(event) => {
+            // A modified click (a new tab or window) is still the card's link.
+            if (event.metaKey || event.ctrlKey || event.shiftKey) return;
+            event.preventDefault();
+            const opener = event.currentTarget.closest("a");
+            void import("@/components/ui/large-photos-load").then((step) =>
+              step.showLargePhotos({
+                photos,
+                start: 0,
+                title: `attempt ${index + 1}`,
+                // The build's name leads, and leads there: the card's own link, with this attempt picked.
+                place: opener && { name: name.text, link: opener },
+                badge: <OutcomeChip outcome={attempt.outcome} offTheBed={offBed} />,
+                detail: person ? `${person.name} · ${time}` : time,
+                opener,
+              }),
+            );
+          }}
+          className="relative aspect-4/3 shrink-0 cursor-zoom-in overflow-hidden rounded-md md:w-2/5"
+        >
           <Photo
             src={photoSrc(photo.id, "large")}
             // The card's own text names it; the picture would only repeat that.
@@ -157,11 +182,11 @@ const AttemptCard = forwardRef<HTMLAnchorElement, JournalEntryProps>(function At
             onPhoto
             className="shadow-soft absolute bottom-2 left-2"
           />
-          {photos.length > 1 && (
-            <span className="absolute top-2 right-2">
-              <PhotoCountBadge count={photos.length} />
-            </span>
-          )}
+          {/* The cue that the photo opens its own way (the rest of the card opens the build), in the corner a plate's
+              3D pill takes: the photos glyph and how many. */}
+          <span className="absolute right-2 bottom-2">
+            <PhotoCountBadge count={photos.length} />
+          </span>
         </div>
       )}
       <div className={plate ? "contents" : "flex min-w-0 flex-1 flex-col gap-2.5 px-2.5 pt-3 pb-2.5 md:px-4 md:py-3"}>

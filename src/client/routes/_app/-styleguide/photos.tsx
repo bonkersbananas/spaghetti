@@ -1,16 +1,20 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import dragonPhoto from "@/assets/samples/dragon.svg";
 import planterPhoto from "@/assets/samples/planter.svg";
 import vasePhoto from "@/assets/samples/vase.svg";
+import { OutcomeChip } from "@/components/builds/Outcome";
 import { ActionMenu, ActionMenuItem } from "@/components/ui/ActionMenu";
 import { Button } from "@/components/ui/Button";
 import * as Icons from "@/components/ui/icons";
+import { OpenLarge, openLarge } from "@/components/ui/OpenLarge";
 import { Photo } from "@/components/ui/Photo";
 import { PhotoMenuDot } from "@/components/ui/PhotoMenuDot";
 import { AddPhotoTile, PhotoThumb } from "@/components/ui/PhotoTiles";
 import { ProgressRing } from "@/components/ui/ProgressRing";
 import { toast } from "@/components/ui/Toast";
 import { UploadBadge } from "@/components/ui/UploadBadge";
+import type { PhotoView } from "@/lib/items";
+import { photoSrc, setPreview } from "@/lib/previews";
 import { Label, Panel, Section } from "./shared";
 
 /** A photo's average color is data, measured from its pixels, not a design token. */
@@ -68,8 +72,76 @@ export function PhotoSection() {
             <Button icon={Icons.ImageIcon}>From library</Button>
           </div>
         </Panel>
+        <Panel className="flex min-w-0 flex-col gap-4 md:col-span-2">
+          <Label>
+            Photos opened large: a tap or click on an attempt's photo opens it over the whole screen, on the deep paper.
+            Swipe, ← → or the thumbnails for the others; ×, Esc or a swipe down closes it
+          </Label>
+          <LargePhotosDemo />
+        </Panel>
       </div>
     </Section>
+  );
+}
+
+const LARGE_SAMPLES = [
+  { id: "sample-large-dragon", src: dragonPhoto, alt: "Dragon" },
+  { id: "sample-large-planter", src: planterPhoto, alt: "Planter" },
+  { id: "sample-large-vase", src: vasePhoto, alt: "Vase" },
+];
+
+/** Three sample photos (through the preview cache photos made on this device use) that open large. */
+function LargePhotosDemo() {
+  const [photos, setPhotos] = useState<PhotoView[]>([]);
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      for (const sample of LARGE_SAMPLES) {
+        const blob = await (await fetch(sample.src)).blob();
+        setPreview(sample.id, blob, blob);
+      }
+      if (cancelled) return;
+      setPhotos(
+        LARGE_SAMPLES.map((sample, position) => ({
+          id: sample.id,
+          itemId: "sample",
+          position,
+          width: 1200,
+          height: 900,
+          color: SAMPLE_PHOTO_COLOR,
+          takenAt: null,
+          attemptId: "sample",
+          needsResize: false,
+          createdBy: "sample",
+          createdAt: 0,
+        })),
+      );
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+  return (
+    <div className="flex gap-2.5">
+      {photos.map((photo, index) => (
+        <OpenLarge
+          key={photo.id}
+          label={`Open photo ${index + 1} of ${photos.length} large`}
+          onClick={(event) =>
+            openLarge(event, {
+              photos,
+              start: index,
+              title: "Attempt 2",
+              badge: <OutcomeChip outcome="success" />,
+              detail: "Alex · 2 hours ago",
+            })
+          }
+          className={index === 0 ? "aspect-4/3 w-56 rounded-md" : "size-20 self-end rounded-md"}
+        >
+          <Photo src={photoSrc(photo.id, index === 0 ? "large" : "thumb")} alt="" className="size-full" />
+        </OpenLarge>
+      ))}
+    </div>
   );
 }
 
