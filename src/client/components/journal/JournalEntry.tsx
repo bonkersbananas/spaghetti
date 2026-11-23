@@ -149,6 +149,8 @@ const AttemptCard = forwardRef<HTMLAnchorElement, JournalEntryProps>(function At
         // biome-ignore lint/a11y/useKeyWithClickEvents: the card's link is the control; this is its photo's shortcut
         <div
           onClick={(event) => {
+            // A modified click (a new tab or window) is still the card's link.
+            if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0) return;
             event.preventDefault();
             const opener = event.currentTarget.closest("a");
             void import("@/components/ui/large-photos-load").then((step) =>

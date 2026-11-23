@@ -123,6 +123,14 @@ test("on a phone a tap opens it, a swipe goes to the next, a swipe down closes i
   await expect(large).toBeHidden();
   await expect(page).toHaveURL(new RegExp(`/builds/${id}$`));
   await expect(thumb).toBeFocused();
+
+  // A step back in history (Safari's swipe back, where there is no close watcher) leaves the page and closes it too,
+  // rather than leaving this attempt's photos over the page before.
+  await thumb.tap();
+  await expect(large.getByText("2 of 3")).toBeVisible();
+  await page.goBack();
+  await expect(page).not.toHaveURL(new RegExp(`/builds/${id}$`));
+  await expect(large).toBeHidden();
 });
 
 test("the Journal's attempt card opens its photos large, and its words open the build @phone", async ({ page }) => {

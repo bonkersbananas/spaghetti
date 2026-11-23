@@ -27,7 +27,12 @@ export async function showLargePhotos(view: Omit<LargePhotosProps, "open" | "onC
     root = createRoot(host);
   }
   shown = view;
+  // Back or a swipe back where there is no close watcher (Safari, Firefox) changes the page under it: it closes with
+  // the page it was opened on, rather than showing that page's photos over another.
+  const onPageChange = () => draw(false);
   const draw = (open: boolean) => {
+    if (open) window.addEventListener("popstate", onPageChange);
+    else window.removeEventListener("popstate", onPageChange);
     // Closed, it stays mounted until it has faded out (Radix waits for the animation), and the next opening reuses it.
     if (shown) root?.render(<LargePhotos {...shown} open={open} onClose={() => draw(false)} />);
   };
