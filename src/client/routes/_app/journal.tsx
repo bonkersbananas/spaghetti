@@ -27,7 +27,7 @@ import { Kbd } from "@/components/ui/Kbd";
 import { Overline } from "@/components/ui/Overline";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { useVia } from "@/lib/agents";
-import { printingAttempts } from "@/lib/builds";
+import { askingAttempts, printingAttempts } from "@/lib/builds";
 import { cn } from "@/lib/cn";
 import { useOnline } from "@/lib/connection";
 import { useHotkeys } from "@/lib/hotkeys";
@@ -160,7 +160,10 @@ function Journal() {
   const builds = useBuilds();
   const shown = useMemo(() => {
     if (!showNow || builds.isPending) return entries;
-    const onBed = new Set(printingAttempts(builds.items).map(({ attempt }) => attempt.id));
+    // With the answered prints Now keeps while they ask which build they are.
+    const onBed = new Set(
+      [...printingAttempts(builds.items), ...askingAttempts(builds.items)].map(({ attempt }) => attempt.id),
+    );
     return entries.filter((entry) => {
       if (!entry.attemptId) return true;
       if (onBed.has(entry.attemptId)) return false;

@@ -22392,6 +22392,7 @@
               "type": "string",
               "enum": [
                 "brand",
+                "line",
                 "material",
                 "finish",
                 "colorName",

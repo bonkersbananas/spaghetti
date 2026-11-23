@@ -37,6 +37,7 @@ export function EditAttempt({
   incomingFile,
   footerHost,
   menuHost,
+  ask,
 }: {
   item: ItemView;
   attempt: AttemptView;
@@ -49,6 +50,8 @@ export function EditAttempt({
   footerHost: HTMLElement | null;
   /** Where its "…" menu is drawn: the sheet's header, top right, as the app's other menus. */
   menuHost: HTMLElement | null;
+  /** Asked with the outcome, right above it: the printer's "which build is this?". */
+  ask?: React.ReactNode;
 }) {
   const queryClient = useQueryClient();
   const isDesktop = useIsDesktop();
@@ -242,6 +245,7 @@ export function EditAttempt({
         }
         suggestedOutcome={read?.outcome}
         outcomeHint={reading ? <PhotoReadNote read={reading} /> : null}
+        ask={ask}
         onFailureTags={(failureTags) => change({ failureTags })}
         successNotes={value.successNotes}
         onSuccessNotes={(successNotes) => change({ successNotes })}

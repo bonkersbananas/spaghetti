@@ -4,10 +4,11 @@ import { isOffTheBed } from "@shared/print-progress";
 import { showsSettings } from "@shared/story-settings";
 import { fullTime, relativeTime } from "@shared/time";
 import { m } from "motion/react";
-import { forwardRef, lazy, Suspense } from "react";
+import { type ComponentProps, forwardRef, lazy, Suspense } from "react";
 import { Avatar, ViaText } from "@/components/ui/Avatar";
 import { Button } from "@/components/ui/Button";
 import { ChangeLine } from "@/components/ui/ChangeLine";
+import { OpenLarge, openLarge } from "@/components/ui/OpenLarge";
 import { Photo } from "@/components/ui/Photo";
 import { PrintProgress } from "@/components/ui/PrintProgress";
 import { UploadBadge } from "@/components/ui/UploadBadge";
@@ -105,6 +106,16 @@ export const AttemptEntry = forwardRef<HTMLLIElement, AttemptEntryProps>(functio
   const results = summarizeResults(attempt.settings);
   const filaments = attempt.settings.filaments ?? [];
   const [lead, ...rest] = photos;
+  // Any photo opens large over the page, above the card's own button (which opens the attempt).
+  const large = (start: number) => ({
+    photos,
+    start,
+    title: `Attempt ${attempt.number}`,
+    badge: <OutcomeChip outcome={attempt.outcome} offTheBed={offBed} />,
+    detail: [attempt.fromPrinter ? "From the printer" : person?.name, relativeTime(attempt.printedAt)]
+      .filter(Boolean)
+      .join(" · "),
+  });
   const showsDetails =
     filaments.length > 0 ||
     settings.length > 0 ||
@@ -222,8 +233,11 @@ export const AttemptEntry = forwardRef<HTMLLIElement, AttemptEntryProps>(functio
                 <EntryPhoto
                   photo={lead}
                   alt={`Attempt ${attempt.number}`}
+                  // Not "Attempt 1 …": the card's own button is the one named after the attempt.
+                  label={photos.length > 1 ? `Open photo 1 of ${photos.length} large` : "Open the photo large"}
                   variant="large"
                   className="aspect-4/3 w-full md:aspect-3/2"
+                  onClick={(event) => openLarge(event, large(0))}
                 />
                 {rest.length > 0 && (
                   <div className="flex gap-2">
@@ -232,8 +246,10 @@ export const AttemptEntry = forwardRef<HTMLLIElement, AttemptEntryProps>(functio
                         key={photo.id}
                         photo={photo}
                         alt={`Attempt ${attempt.number}, photo ${index + 2}`}
+                        label={`Open photo ${index + 2} of ${photos.length} large`}
                         className="size-16 flex-none md:size-20"
                         more={index === 3 && rest.length > 4 ? rest.length - 4 : 0}
+                        onClick={(event) => openLarge(event, large(index + 1))}
                       />
                     ))}
                   </div>
@@ -338,21 +354,30 @@ export const AttemptEntry = forwardRef<HTMLLIElement, AttemptEntryProps>(functio
   );
 });
 
+/** One of the card's photos: a button above the card's own, that opens it large. */
 function EntryPhoto({
   photo,
   alt,
+  label,
   className,
   more = 0,
   variant = "thumb",
+  ...opens
 }: {
   photo: PhotoView;
   alt: string;
+  label: string;
   className?: string;
   more?: number;
   variant?: "thumb" | "large";
-}) {
+} & Omit<ComponentProps<typeof OpenLarge>, "label" | "className">) {
   return (
-    <div className={cn("relative overflow-hidden rounded-md", className)}>
+    <OpenLarge
+      label={label}
+      className={cn("pointer-events-auto relative z-10 rounded-md", className)}
+      data-photo-id={photo.id}
+      {...opens}
+    >
       <Photo src={photoSrc(photo.id, variant)} alt={alt} color={photo.color || undefined} className="size-full" />
       {photo.upload && (
         <UploadBadge
@@ -366,6 +391,6 @@ function EntryPhoto({
           +{more}
         </span>
       )}
-    </div>
+    </OpenLarge>
   );
 }

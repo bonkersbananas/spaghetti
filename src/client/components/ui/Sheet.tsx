@@ -45,6 +45,12 @@ export interface SheetProps {
   children: ReactNode;
 }
 
+/**
+ * Radix's dialog, for an overlay of the design system that isn't a sheet (ui/LargePhotos.tsx): taken from here, it
+ * stays in this module's chunk instead of becoming a chunk of its own that every page's preload list must name.
+ */
+export { Dialog };
+
 /** A press on a toast (Undo) isn't "outside" the sheet: it must not close it. */
 const keepOpenForToast = (event: { target: EventTarget | null; preventDefault: () => void }) => {
   if (event.target instanceof Element && event.target.closest("[data-sonner-toaster]")) event.preventDefault();

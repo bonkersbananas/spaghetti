@@ -7,7 +7,7 @@ import { PrintingCard } from "@/components/builds/PrintingCard";
 import { Since } from "@/components/today/Since";
 import { Section } from "@/components/ui/Section";
 import { useVia } from "@/lib/agents";
-import { printingAttempts } from "@/lib/builds";
+import { askingAttempts, printingAttempts } from "@/lib/builds";
 import { cn } from "@/lib/cn";
 import { useBuilds } from "@/lib/items";
 import { duration, ease } from "@/lib/motion";
@@ -35,11 +35,14 @@ export default function Now() {
   const hasDueUpkeep = useDueUpkeep().length > 0;
   const hasScoutPicks = waitingPicks(useScout()).length > 0;
   // The ones asking "how did it go?" lead: someone standing at the printer needs those first. (Stable: the rest keep their order.)
+  // Then the prints already answered that still ask which build they are, until someone places them.
   const onBed = useMemo(
-    () =>
-      printingAttempts(builds.items, now, live).sort(
+    () => [
+      ...printingAttempts(builds.items, now, live).sort(
         (a, b) => Number(isOffTheBed(b.attempt)) - Number(isOffTheBed(a.attempt)),
       ),
+      ...askingAttempts(builds.items, now),
+    ],
     [builds.items, now, live],
   );
   // One or two prints stack, each worth its height; from three they sit in a sideways row so the journal still starts

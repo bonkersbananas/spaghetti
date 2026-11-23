@@ -433,6 +433,22 @@ export function printingAttempts(
   return found.sort((a, b) => rank(a.attempt) - rank(b.attempt) || b.attempt.printedAt - a.attempt.printedAt);
 }
 
+/**
+ * Prints already answered ("how did it go?") that still ask which build they belong to (decision 0076): people answer
+ * the outcome first, so these stay beside the prints on the bed, on Today and the Journal's Now, until someone places
+ * them. Newest first; only those printed in the last 12e8 ms (about two weeks), so an old question doesn't sit on Today for good.
+ */
+export const askingAttempts = (items: ItemView[], now = Date.now()) =>
+  items
+    .flatMap((item) =>
+      item.stage === "idea" || item.pending
+        ? []
+        : item.attempts
+            .filter((one) => one.outcome !== null && one.print?.asking && now - one.printedAt < 12e8)
+            .map((attempt) => ({ item, attempt })),
+    )
+    .sort((a, b) => b.attempt.printedAt - a.attempt.printedAt);
+
 /** Failure tags and success notes people added themselves. */
 export const tagsQuery = queryOptions({
   queryKey: ["tags"] as const,

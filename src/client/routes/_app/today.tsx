@@ -22,7 +22,7 @@ import { CheckIcon, PlusIcon } from "@/components/ui/icons";
 import { Section } from "@/components/ui/Section";
 import { CardSkeleton, RowSkeleton } from "@/components/ui/Skeleton";
 import { useVia } from "@/lib/agents";
-import { printingAttempts } from "@/lib/builds";
+import { askingAttempts, printingAttempts } from "@/lib/builds";
 import { useCapture } from "@/lib/capture";
 import { cn } from "@/lib/cn";
 import { itemName } from "@/lib/item-name";
@@ -90,7 +90,11 @@ function Today() {
 
   const live = printer.data?.bridge?.progress;
   const onBed = useMemo(() => printingAttempts(builds.items, now, live), [builds.items, now, live]);
-  const onBedIds = useMemo(() => new Set(onBed.map(({ attempt }) => attempt.id)), [onBed]);
+  // Answered prints that still ask which build they are stay beside them until someone places them.
+  const asking = useMemo(() => askingAttempts(builds.items, now), [builds.items, now]);
+  const cards = useMemo(() => [...onBed, ...asking], [onBed, asking]);
+  // Lately leaves out every print shown in a card above, the answered ones still asking too.
+  const onBedIds = useMemo(() => new Set(cards.map(({ attempt }) => attempt.id)), [cards]);
   const waiting = useMemo(() => pickUpAgain(builds.items), [builds.items]);
   const queued = useMemo(() => upNextIdeas(ideas.items), [ideas.items]);
   const burner = useMemo(() => backBurnerIdea(ideas.items, now), [ideas.items, now]);
@@ -125,7 +129,7 @@ function Today() {
     !loading &&
     !settling &&
     !brandNew &&
-    onBed.length === 0 &&
+    cards.length === 0 &&
     waiting.length === 0 &&
     queued.length === 0 &&
     !burner &&
@@ -134,14 +138,19 @@ function Today() {
     !lately;
 
   // The left column holds the prints, the scout's picks and the back burner; with none of them it is not drawn.
-  const leftHasContent = loading || onBed.length > 0 || hasScoutPicks || !!burner;
+  const leftHasContent = loading || cards.length > 0 || hasScoutPicks || !!burner;
 
   const subtitle = new Date(now).toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" });
 
   const bedSection =
-    onBed.length > 0 ? (
-      <Section id="today-bed" title="On the bed" size="overline" count={onBed.length > 1 ? onBed.length : undefined}>
-        <BedCards prints={onBed} people={byId} via={via} />
+    cards.length > 0 ? (
+      <Section
+        id="today-bed"
+        title={onBed.length ? "On the bed" : "Which build?"}
+        size="overline"
+        count={cards.length > 1 ? cards.length : undefined}
+      >
+        <BedCards prints={cards} people={byId} via={via} />
       </Section>
     ) : null;
 

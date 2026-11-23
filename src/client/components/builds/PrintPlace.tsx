@@ -1,23 +1,21 @@
 import type { AttemptMoved } from "@shared/api";
-import { filedWords, namesIn, readableTitle } from "@shared/print-match";
+import { filedWords, namesIn, readableTitle, rowWords, sharedWords } from "@shared/print-match";
 import { inlineTime } from "@shared/time";
 import { useQuery } from "@tanstack/react-query";
-import { type ComponentProps, lazy, Suspense, useId, useState } from "react";
+import { lazy, Suspense, useState } from "react";
+import { AskLine, AskName } from "@/components/ui/AskLine";
 import { Button } from "@/components/ui/Button";
-import { Chip } from "@/components/ui/Chip";
-import { BuildsIcon, type Icon, IdeasIcon, MoveIntoIcon, PrinterIcon, SearchIcon } from "@/components/ui/icons";
+import { MoveIntoIcon, PrinterIcon, SearchIcon } from "@/components/ui/icons";
 import { KeepNames, KeptName } from "@/components/ui/KeepNames";
-import { PickRow } from "@/components/ui/PickRow";
-import { Skeleton } from "@/components/ui/Skeleton";
+import { MetaList } from "@/components/ui/MetaList";
 import { WhyLine } from "@/components/ui/WhyLine";
 import { type AttemptView, type ItemView, useBuilds, useIdeas } from "@/lib/items";
-import { offerLines, suggestionsQuery, useMoveAttempt } from "@/lib/print-moves";
+import { suggestionsQuery, useMoveAttempt } from "@/lib/print-moves";
 import { peopleQuery } from "@/lib/queries";
 import { useReadOnly } from "@/lib/read-only";
 import { itemName } from "@/lib/recent";
 import { useIsDesktop } from "@/lib/use-media-query";
 import { useWho } from "@/lib/who";
-import { picturesApart } from "./BuildPick";
 
 const MoveAttemptSheet = lazy(() => import("./MoveAttemptSheet").then((m) => ({ default: m.MoveAttemptSheet })));
 
@@ -28,26 +26,30 @@ interface PrintPlaceProps {
   /**
    * "card": a print on the bed (Today, Builds, the Journal's Now): the printer's question, or why it is in this build.
    * "entry": an attempt in a build's story: the same, and where it was moved from.
+   * "sheet": the attempt's sheet ("How did it go?"): only the printer's question.
    */
-  where: "card" | "entry";
+  where: "card" | "entry" | "sheet";
+  /** Follows the print to the build it went to, whichever way it moved (the attempt's sheet reopens there). */
+  follow?: (toId: string) => void;
   className?: string;
 }
 
 /**
- * Where a print the printer bridge filed is, and why (decision 0076). A print in its own build asks "Which build is
- * this?" with the builds it may belong to as rows a tap takes, then "Another build" and "Its own build"; a print the
- * app filed in a build says why in one quiet line with "Not this build?"; an attempt moved here says from where. Every
- * way to change it opens the same sheet, and every move has an Undo.
+ * Where a print the printer bridge filed is, and why (decision 0076). A print in its own build asks in one line,
+ * "Is this Herb planter?" with Yes and "Another build" (or, when nothing fits, "Which build?"); a print the app
+ * filed in a build says why in one quiet line with "Not this build?"; an attempt moved here says from where. Every
+ * way to change it opens the same sheet, and every move has an Undo. The card on the bed and the attempt on the build
+ * page ask in the same words.
  */
-export default function PrintPlace({ item, attempt, where, className }: PrintPlaceProps) {
+export default function PrintPlace({ item, attempt, where, follow, className }: PrintPlaceProps) {
   const [open, setOpen] = useState(false);
   // The sheet's code comes with the first tap.
   const [asked, setAsked] = useState(false);
-  // Opened from the question, whose guesses the card shows already: the sheet leaves them out.
-  const [fromQuestion, setFromQuestion] = useState(false);
+  // The builds the question offered and someone passed over ("Another build"): the sheet doesn't lead with them.
+  const [passed, setPassed] = useState<readonly string[]>([]);
   const readOnly = useReadOnly(item.pending || attempt.pending);
-  const openSheet = (question: boolean) => {
-    setFromQuestion(question);
+  const openSheet = (notThis: readonly string[]) => {
+    setPassed(notThis);
     setAsked(true);
     setOpen(true);
   };
@@ -55,12 +57,14 @@ export default function PrintPlace({ item, attempt, where, className }: PrintPla
 
   let content: React.ReactNode = null;
   if (print?.asking) {
-    content = <WhichBuild item={item} attempt={attempt} onMore={openSheet} readOnly={readOnly} />;
+    content = <WhichBuild item={item} attempt={attempt} onMore={openSheet} follow={follow} readOnly={readOnly} />;
+  } else if (where === "sheet") {
+    content = null;
   } else if (print?.reasons.length) {
     content = (
       <WhyLine
         icon={PrinterIcon}
-        action={readOnly ? undefined : { label: "Not this build?", onClick: () => openSheet(false) }}
+        action={readOnly ? undefined : { label: "Not this build?", onClick: () => openSheet([]) }}
       >
         <KeepNames text={filedWords(print.reasons)} names={namesIn(print.reasons)} />
       </WhyLine>
@@ -79,7 +83,8 @@ export default function PrintPlace({ item, attempt, where, className }: PrintPla
             onOpenChange={setOpen}
             item={item}
             attempt={attempt}
-            withoutGuesses={fromQuestion}
+            notThis={passed}
+            follow={follow}
           />
         </Suspense>
       )}
@@ -104,164 +109,167 @@ function MovedLine({ moved }: { moved: AttemptMoved }) {
 interface WhichBuildProps {
   item: ItemView;
   attempt: AttemptView;
-  /** Opens the sheet: from the question (`true`: its guesses are on the card already), or to move it at all. */
-  onMore: (question: boolean) => void;
+  /** Opens the sheet; the builds the question offered, which someone passed over, don't lead it. */
+  onMore: (notThis: readonly string[]) => void;
+  follow?: (toId: string) => void;
   readOnly: boolean;
 }
 
 /**
- * The printer's question for a print it filed in its own build: the builds it may belong to (at most three), each a
- * row a tap takes, then "Another build" (the sheet) and "Its own build". Nothing is asked when nothing fits: one quiet
- * line says so, with a way to move it anyway.
+ * The printer's question for a print it filed in its own build, in one line: the build the Worker's matcher ranks
+ * first (decision 0076), "Is this Herb planter?", with Yes (moved at once, Undo in the toast) and "Another build"
+ * (the sheet, searchable). When the first two are as likely as each other (the same reason holds for both: they keep
+ * its file, or have its name), it names both, "Is this Herb planter or Balcony planters?", one tap each. When nothing fits,
+ * "Which build?" opens the sheet and "Keep it as its own" answers it in one tap. While the guesses are on their way
+ * the line keeps its room.
  */
-function WhichBuild({ item, attempt, onMore, readOnly }: WhichBuildProps) {
+function WhichBuild({ item, attempt, onMore, follow, readOnly }: WhichBuildProps) {
   const { data: suggestions, isPending } = useQuery(suggestionsQuery(attempt.id));
   const { items: builds } = useBuilds();
   const { items: ideas } = useIdeas();
-  const moves = useMoveAttempt(item, attempt);
+  const moves = useMoveAttempt(item, attempt, follow);
   const byId = new Map([...builds, ...ideas].map((one) => [one.id, one]));
   const offers = (suggestions ?? []).flatMap((one) => {
     const build = byId.get(one.itemId);
     return build && build.id !== item.id && !build.pending ? [{ build, reasons: one.reasons }] : [];
   });
+  const [first, second] = offers;
+  // As likely as each other only when the same reason holds for both (the same file, or the job's name), so the
+  // line can say it once, true of both: "Both print planter-v2."
+  const shared = first && second ? sharedWords([first, second]) : null;
+  const offered = first ? (shared && second ? [first, second] : [first]) : [];
+  const why = shared ?? rowWords(first?.reasons ?? []);
+  // The printer's build is named after the job until someone renames it: then the card's title says the name already.
   const printName = attempt.print?.name ?? null;
-
-  if (!isPending && !offers.length) {
-    return (
-      <WhyLine icon={PrinterIcon} action={readOnly ? undefined : { label: "Move it", onClick: () => onMore(false) }}>
-        Nothing matched {printName ? <KeptName>{printName}</KeptName> : "it"}, so it has its own build.
-      </WhyLine>
-    );
-  }
-  // The build is named after the job until someone renames it: then the card's title says the name already, as the
-  // printer said it or as the bridge titled it ("UOBF fit test ring" for "UOBF-fit-test-ring(2)").
   const title = item.title?.trim().toLowerCase();
   const said =
     !!printName &&
     !!title &&
     (printName.trim().toLowerCase() === title || readableTitle(printName)?.toLowerCase() === title);
-  const { shared, sameFile, lines, names } = offerLines(offers);
-  const pictures = picturesApart(
-    offers.map((offer) => offer.build),
-    sameFile,
-  );
   return (
-    <WhichBuildQuestion
-      name={said ? null : printName}
-      shared={shared}
-      names={names}
+    <WhichBuildLine
       loading={isPending}
-      offers={offers.map(({ build }, index) => ({
+      printName={said ? null : printName}
+      guesses={offered.map(({ build }) => ({
         id: build.id,
-        photo: pictures[index],
-        glyph: build.stage === "idea" ? IdeasIcon : BuildsIcon,
         title: itemName(build, build.stage === "idea" ? "idea" : "build"),
-        line: lines[index] ?? "",
         idea: build.stage === "idea",
-        onSelect: () => moves.move({ item: build }),
+        onPick: () => moves.move({ item: build }),
       }))}
-      onMore={() => onMore(true)}
+      why={why}
+      names={offered.flatMap((one) => namesIn(one.reasons))}
+      onMore={() => onMore(offered.map((one) => one.build.id))}
       onKeep={() => moves.keep()}
       disabled={readOnly}
     />
   );
 }
 
-interface WhichBuildQuestionProps {
-  /** The job's name as the printer said it, when the card's title doesn't say it already. */
-  name?: string | null;
-  /** What every guess has in common, said once ("Both print planter-v2."). */
-  shared?: string | null;
-  /** File names in the lines, each kept whole. */
+interface WhichBuildLineProps {
+  /** The builds it asks about: the matcher's first, or its first two when they are as likely as each other. */
+  guesses?: ReadonlyArray<{ id: string; title: string; idea?: boolean; onPick: () => void }>;
+  /** Why: the one guess's reason ("Same file: planter-v2"), or what two share ("Both print planter-v2."). */
+  why?: string;
+  /** File names in `why`, each kept whole. */
   names?: readonly string[];
-  /** The guesses are on their way: a row's room is kept for them, so the card doesn't jump. */
+  /** The job's name as the printer said it, for "Nothing matched cable-clip-v3.", when the title doesn't say it. */
+  printName?: string | null;
   loading?: boolean;
-  /** The builds it may belong to, best first, each with what sets it apart (or why, when their reasons differ). */
-  offers: Array<{
-    id: string;
-    photo: ComponentProps<typeof PickRow>["photo"];
-    glyph: Icon;
-    title: string;
-    line: string;
-    /** An idea, which the print would start: marked so. */
-    idea?: boolean;
-    onSelect: () => void;
-  }>;
   onMore: () => void;
-  onKeep: () => void;
+  /** "Keep it as its own", when nothing fits: the print stays in its own build and the question goes. */
+  onKeep?: () => void;
   disabled?: boolean;
 }
 
-/** The question as it reads (the styleguide shows it with sample builds). */
-export function WhichBuildQuestion({
-  name,
-  shared,
+/** The question as it reads, on the card, the build page and the attempt's sheet alike (the styleguide shows it). */
+export function WhichBuildLine({
+  guesses = [],
+  why,
   names = [],
+  printName,
   loading,
-  offers,
   onMore,
   onKeep,
   disabled,
-}: WhichBuildQuestionProps) {
-  const headingId = useId();
-  // The magnifier only where "Another build" opens a field to search in (the desktop's sheet).
+}: WhichBuildLineProps) {
+  // The magnifier only where the sheet opens on a field to search in (the desktop's).
   const isDesktop = useIsDesktop();
-  return (
-    <section aria-labelledby={headingId} className="flex flex-col gap-1">
-      <div className="flex flex-col gap-0.5">
-        <h4 id={headingId} className="text-body text-ink flex items-center gap-2 font-sans font-semibold">
-          <PrinterIcon size={18} aria-hidden className="text-ink-faint shrink-0" />
-          Which build is this?
-        </h4>
-        {(name || shared) && (
-          <p className="text-small text-ink-faint pl-6.5 text-pretty">
-            {name && (
-              <>
-                The printer calls it <KeptName>{name}</KeptName>.{shared ? " " : ""}
-              </>
+  const another = (label: string, variant: "secondary" | "quiet") => (
+    <Button variant={variant} size="sm" icon={isDesktop ? SearchIcon : undefined} disabled={disabled} onClick={onMore}>
+      {label}
+    </Button>
+  );
+  if (loading) return <AskLine icon={PrinterIcon} loading />;
+  const [first, second] = guesses;
+  if (!first) {
+    return (
+      <AskLine
+        icon={PrinterIcon}
+        actions={
+          <>
+            {another("Which build?", "secondary")}
+            {onKeep && (
+              <Button variant="quiet" size="sm" disabled={disabled} onClick={onKeep}>
+                Keep it as its own
+              </Button>
             )}
-            {shared && <KeepNames text={shared} names={names} />}
-          </p>
-        )}
-      </div>
-      <div className="flex flex-col">
-        {loading && (
-          // A row's room, shaped like one: its picture and two lines.
-          <div aria-hidden className="flex min-h-14 items-center gap-3 py-2">
-            <Skeleton className="size-10 shrink-0 rounded-md md:size-11" />
-            <div className="flex flex-1 flex-col gap-1.5">
-              <Skeleton className="h-4 w-2/5 rounded-sm" />
-              <Skeleton className="h-3 w-1/4 rounded-sm" />
-            </div>
-          </div>
-        )}
-        {offers.map((offer) => (
-          <PickRow
-            key={offer.id}
-            photo={offer.photo}
-            glyph={{ icon: offer.glyph }}
-            title={offer.title}
-            mark={offer.idea ? <Chip>Idea</Chip> : undefined}
-            meta={<KeepNames text={offer.line} names={names} />}
-            disabled={disabled}
-            onSelect={offer.onSelect}
-          />
-        ))}
-      </div>
-      <div className="-mx-3 flex flex-wrap items-center gap-x-1">
-        <Button
-          variant="quiet"
-          size="sm"
-          icon={isDesktop ? SearchIcon : undefined}
-          disabled={disabled}
-          onClick={onMore}
-        >
-          Another build
-        </Button>
-        <Button variant="quiet" size="sm" icon={BuildsIcon} disabled={disabled} onClick={onKeep}>
-          Its own build
-        </Button>
-      </div>
-    </section>
+          </>
+        }
+      >
+        Nothing matched {printName ? <KeptName>{printName}</KeptName> : "this print"}.
+      </AskLine>
+    );
+  }
+  const ideaWord = guesses.length === 1 && first.idea ? "An idea" : null;
+  return (
+    <AskLine
+      icon={PrinterIcon}
+      detail={
+        ideaWord || why ? (
+          <MetaList>
+            {ideaWord && <span>{ideaWord}</span>}
+            {why && (
+              // In a span of its own: a MetaList piece is a flex box, which would drop the space after "Same file:".
+              <span>
+                <KeepNames text={why} names={names} />
+              </span>
+            )}
+          </MetaList>
+        ) : undefined
+      }
+      actions={
+        <>
+          {second ? (
+            // Each named, one tap each; a long name is cut, the question above says it whole.
+            guesses.map((guess) => (
+              <Button
+                key={guess.id}
+                variant="secondary"
+                size="sm"
+                disabled={disabled}
+                onClick={guess.onPick}
+                className="max-w-56"
+              >
+                <span className="min-w-0 truncate">{guess.title}</span>
+              </Button>
+            ))
+          ) : (
+            <Button variant="secondary" size="sm" disabled={disabled} onClick={first.onPick}>
+              Yes
+            </Button>
+          )}
+          {another("Another build", "quiet")}
+        </>
+      }
+    >
+      Is this <AskName>{first.title}</AskName>
+      {second && (
+        <>
+          {" "}
+          or <AskName>{second.title}</AskName>
+        </>
+      )}
+      ?
+    </AskLine>
   );
 }

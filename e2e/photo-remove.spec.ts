@@ -159,7 +159,8 @@ test("Escape in an attempt's sheet cancels the question and keeps the sheet", as
     },
   });
   await page.goto(`/builds/${id}`, { waitUntil: "networkidle" });
-  await page.getByRole("button", { name: /Attempt 1/ }).click();
+  // The card's corner: its middle is the photo, which opens large.
+  await page.getByRole("button", { name: /Attempt 1/ }).click({ position: { x: 24, y: 24 } });
   const sheet = page.getByRole("dialog");
   await sheet.getByRole("button", { name: /^Remove Attempt photo 1/ }).click();
   await expect(sheet.getByRole("button", { name: /Press again to remove/ })).toBeVisible();

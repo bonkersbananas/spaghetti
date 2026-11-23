@@ -1,7 +1,8 @@
 import type { Outcome } from "@shared/attempts";
 import { offTheBedLabel } from "@shared/print-progress";
+import { useNavigate } from "@tanstack/react-router";
 import { AnimatePresence, m, useReducedMotion } from "motion/react";
-import { useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
 import { IconButton } from "@/components/ui/Button";
 import { NextIcon, PreviousIcon } from "@/components/ui/icons";
 import { Sheet } from "@/components/ui/Sheet";
@@ -23,6 +24,9 @@ interface AttemptSheetProps {
   /** Steps the open attempt to the one before or after it (the header's arrows); without it there are none. */
   onStep?: (attemptId: string) => void;
 }
+
+// The printer's "which build is this?" (decision 0076): its code comes only with such a print.
+const PrintPlace = lazy(() => import("./print-place-lazy").then((entry) => entry.loadPrintPlace()));
 
 const lowerFirst = (text: string) => text.charAt(0).toLowerCase() + text.slice(1);
 
@@ -54,6 +58,7 @@ export function AttemptSheet({
   // The sheet's frame (title, arrows, footer) stays put when stepping; only what is inside it changes.
   const [footerHost, setFooterHost] = useState<HTMLElement | null>(null);
   const [menuHost, setMenuHost] = useState<HTMLElement | null>(null);
+  const navigate = useNavigate();
   if (attemptId) {
     if (!attempt) return null;
     const printing = attempt.outcome === null;
@@ -118,6 +123,27 @@ export function AttemptSheet({
               incomingFile={incomingFile}
               footerHost={footerHost}
               menuHost={menuHost}
+              // The printer's question, with the outcome and right above it (the sheet's foot on a phone, in the
+              // thumb's reach): answering the outcome leaves it be, and a move takes the sheet along to the build the
+              // print went to, which opens it again there.
+              ask={
+                attempt.print?.asking && (
+                  <Suspense fallback={<div aria-hidden className="bg-ink/4 h-12 rounded-md" />}>
+                    <PrintPlace
+                      item={item}
+                      attempt={attempt}
+                      where="sheet"
+                      follow={(buildId) =>
+                        void navigate({
+                          to: "/builds/$buildId",
+                          params: { buildId },
+                          search: { attempt: attempt.id, finish: "open" },
+                        })
+                      }
+                    />
+                  </Suspense>
+                )
+              }
             />
           </m.div>
         </AnimatePresence>

@@ -286,7 +286,13 @@ export const spoolRoutes = new Hono<AppEnv>()
         })
         .where(and(eq(spools.id, spoolId), isNull(spools.deletedAt)))
         .returning({ id: spools.id }),
-      recordChange(c.var.db, { entity: "spool", id: spoolId, action: "updated", actor: c.var.actor }),
+      recordChange(c.var.db, {
+        entity: "spool",
+        id: spoolId,
+        action: "updated",
+        actor: c.var.actor,
+        fields: [...Object.keys(values), ...(driedAt !== undefined ? ["driedAt"] : [])],
+      }),
     ]);
     if (!row) return apiError(c, 404, "not_found", notFound);
     await touchFields(c.var.db, spoolId, touched);
