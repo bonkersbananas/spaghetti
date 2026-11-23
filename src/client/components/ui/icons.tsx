@@ -14,6 +14,7 @@ export {
   ArrowRight as ArrowRightIcon,
   ArrowSquareOut as OpenInAppIcon,
   ArrowsClockwise as SameAgainIcon,
+  ArrowsOut as FullScreenIcon,
   ArrowsOutCardinal as MoveIcon,
   ArrowUp as MoveUpIcon,
   ArrowUpRight as ExternalIcon,

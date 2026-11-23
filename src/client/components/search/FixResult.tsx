@@ -45,6 +45,7 @@ export const FixResult = forwardRef<HTMLAnchorElement, FixResultProps>(function 
         ref={ref}
         link={attemptLink(fix)}
         photo={fix.photo}
+        attempt={fix}
         fallbackIcon={BuildsIcon}
         selected={selected}
         onPointerEnter={onHover}

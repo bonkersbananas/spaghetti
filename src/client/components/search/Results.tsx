@@ -4,9 +4,9 @@ import { displayName } from "@shared/people";
 import { isOffTheBed } from "@shared/print-progress";
 import { highlight, type SearchTerm, snippetSegments } from "@shared/search";
 import { inlineTime, relativeTime } from "@shared/time";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { type QueryClient, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { LinkProps } from "@tanstack/react-router";
-import { forwardRef, type ReactNode, useLayoutEffect, useRef, useState } from "react";
+import { forwardRef, type MouseEvent, type ReactNode, useLayoutEffect, useRef, useState } from "react";
 import { OutcomeChip } from "@/components/builds/Outcome";
 import { SettingsLine } from "@/components/builds/SettingsLine";
 import { summarizeSettings } from "@/components/builds/settings";
@@ -22,11 +22,12 @@ import {
   IdeasIcon,
   ShelveIcon,
 } from "@/components/ui/icons";
+import { openLargeFromLink, showLargeAgain } from "@/components/ui/OpenLarge";
 import { PhotoRow } from "@/components/ui/PhotoRow";
 import { useTagOptions } from "@/lib/builds";
 import { cn } from "@/lib/cn";
 import { heroClick } from "@/lib/hero";
-import { cachedItem } from "@/lib/items";
+import { cachedItem, itemQuery } from "@/lib/items";
 import { coverOf, fileThumbSrc, photoSrc } from "@/lib/previews";
 import { peopleQuery, sessionQuery } from "@/lib/queries";
 import { useIsDesktop } from "@/lib/use-media-query";
@@ -61,19 +62,53 @@ interface RowProps {
   selected: boolean;
   onPointerEnter?: () => void;
   onOpen?: () => void;
+  /** An attempt result: a tap or click on its photo opens the attempt's photos large instead of the build. */
+  attempt?: AttemptHit;
   /** Inside an `ActionCard`: the card draws the selection, and the last line leaves room for its button (this wide). */
   inCard?: keyof typeof ACTION_ROOM;
   children: ReactNode;
 }
 
+/**
+ * An attempt result's photo opens large, titled as the Journal's ("Gear wall · attempt 2"). The result carries one
+ * photo; it opens at once on that, and the rest of the attempt's photos join it when the build is cached or has come
+ * (the hit's photo is the attempt's first, so nothing moves under a finger).
+ */
+function openHitPhotos(event: MouseEvent<HTMLElement>, hit: AttemptHit, photo: PhotoData, queryClient: QueryClient) {
+  const { attempt, item } = hit;
+  const view = {
+    title: `${item.title?.trim() || "Untitled build"} · attempt ${hit.number}`,
+    badge: <OutcomeChip outcome={attempt.outcome} offTheBed={isOffTheBed(attempt)} />,
+    detail: relativeTime(attempt.printedAt),
+    start: 0,
+  };
+  const ownOf = (built?: { photos: PhotoData[] } | null) =>
+    built?.photos.filter((candidate) => candidate.attemptId === attempt.id) ?? [];
+  const known = ownOf(cachedItem(queryClient, item.id));
+  const opener = openLargeFromLink(event, {
+    ...view,
+    photos: known.length && known[0]?.id === photo.id ? known : [photo],
+  });
+  if (known.length || !opener) return;
+  void queryClient
+    .ensureQueryData(itemQuery(item.id))
+    .then((built) => {
+      const own = ownOf(built);
+      if (own.length > 1 && own[0]?.id === photo.id) showLargeAgain({ ...view, photos: own, opener });
+    })
+    .catch(() => {});
+}
+
 /** A result: its photo first, the words that matched beside it. */
 export const ResultRow = forwardRef<HTMLAnchorElement, RowProps>(function ResultRow(
-  { link, photo, plate, fallbackIcon: FallbackIcon, selected, onPointerEnter, onOpen, inCard, children },
+  { link, photo, plate, fallbackIcon: FallbackIcon, selected, onPointerEnter, onOpen, attempt, inCard, children },
   ref,
 ) {
+  const queryClient = useQueryClient();
   return (
     <PhotoRow
       ref={ref}
+      onPhotoClick={attempt && photo ? (event) => openHitPhotos(event, attempt, photo, queryClient) : undefined}
       // Named by what it shows (outcome, title, the words that matched), as people see it.
       link={{
         ...link,
@@ -136,6 +171,7 @@ export const AttemptResult = forwardRef<HTMLAnchorElement, AttemptResultProps>(f
       ref={ref}
       link={attemptLink(hit)}
       photo={hit.photo}
+      attempt={hit}
       fallbackIcon={BuildsIcon}
       selected={selected}
       onPointerEnter={onHover}

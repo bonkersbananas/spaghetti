@@ -1,6 +1,7 @@
-import { type ReactNode, useEffect, useRef } from "react";
+import { type MouseEvent, type ReactNode, useEffect, useRef } from "react";
 import { IconButton } from "@/components/ui/Button";
-import { NextIcon, PreviousIcon } from "@/components/ui/icons";
+import { FullScreenIcon, NextIcon, PreviousIcon } from "@/components/ui/icons";
+import { OpenLarge, openLarge } from "@/components/ui/OpenLarge";
 import { Photo } from "@/components/ui/Photo";
 import { UploadBadge } from "@/components/ui/UploadBadge";
 import { cn } from "@/lib/cn";
@@ -24,6 +25,12 @@ interface PhotoViewerProps {
    * are under the photo.
    */
   capOnPhone?: boolean;
+  /**
+   * What the photos are of ("Gear wall"): the photo opens large (ui/LargePhotos.tsx) with all of them. A click on the
+   * photo does it on a computer; a phone keeps the photo for pinch, double tap and swipe (decision 0039), and a small
+   * button in its corner opens it instead.
+   */
+  largeTitle?: string;
 }
 
 /** Keeps the frame between 4:5 and 4:3, shaped by the cover. */
@@ -93,7 +100,15 @@ function ViewerFigure({
  * nothing is cropped. Nothing on it removes or closes: removing a photo is in the strip's menu (`PhotoStrip`,
  * decision 0054), away from where a hand reaches for "back".
  */
-export function PhotoViewer({ photos, index, onIndexChange, alt, className, capOnPhone }: PhotoViewerProps) {
+export function PhotoViewer({
+  photos,
+  index,
+  onIndexChange,
+  alt,
+  className,
+  capOnPhone,
+  largeTitle,
+}: PhotoViewerProps) {
   const isDesktop = useIsDesktop();
   const scroller = useRef<HTMLDivElement>(null);
   const settle = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
@@ -151,6 +166,8 @@ export function PhotoViewer({ photos, index, onIndexChange, alt, className, capO
   }, []);
 
   const many = photos.length > 1;
+  const showLarge = (event: MouseEvent<HTMLElement>, start: number) =>
+    openLarge(event, { photos, start, title: largeTitle ?? alt });
   return (
     <section aria-roledescription="carousel" aria-label="Photos" className={cn("group/viewer relative", className)}>
       <div className="relative">
@@ -181,17 +198,44 @@ export function PhotoViewer({ photos, index, onIndexChange, alt, className, capO
                 )
               }
             >
-              <Photo
-                src={photoSrc(photo.id, "large")}
-                alt={many ? `${alt} (${i + 1} of ${photos.length})` : alt}
-                color={photo.color || undefined}
-                fit={capOnPhone && !isDesktop ? "cover" : "contain"}
-                eager={Math.abs(i - index) <= 1}
-                className="bg-paper-deep size-full"
-              />
+              {largeTitle && isDesktop ? (
+                // A click opens it large (a double click zooms there, as it did here).
+                <OpenLarge
+                  label={`Enlarge photo ${i + 1} of ${photos.length}`}
+                  onClick={(event) => showLarge(event, i)}
+                  className="size-full rounded-none"
+                >
+                  <Photo
+                    src={photoSrc(photo.id, "large")}
+                    alt={many ? `${alt} (${i + 1} of ${photos.length})` : alt}
+                    color={photo.color || undefined}
+                    fit={capOnPhone && !isDesktop ? "cover" : "contain"}
+                    eager={Math.abs(i - index) <= 1}
+                    className="bg-paper-deep size-full"
+                  />
+                </OpenLarge>
+              ) : (
+                <Photo
+                  src={photoSrc(photo.id, "large")}
+                  alt={many ? `${alt} (${i + 1} of ${photos.length})` : alt}
+                  color={photo.color || undefined}
+                  fit={capOnPhone && !isDesktop ? "cover" : "contain"}
+                  eager={Math.abs(i - index) <= 1}
+                  className="bg-paper-deep size-full"
+                />
+              )}
             </ViewerFigure>
           ))}
         </div>
+        {largeTitle && !isDesktop && (
+          <OpenLarge
+            label="Enlarge photo"
+            onClick={(event) => showLarge(event, index)}
+            className="bg-veil text-on-veil hover:bg-veil-strong touch-target absolute right-3 bottom-3 flex size-9 items-center justify-center rounded-full backdrop-blur-md"
+          >
+            <FullScreenIcon size={18} aria-hidden />
+          </OpenLarge>
+        )}
       </div>
 
       {many && (
