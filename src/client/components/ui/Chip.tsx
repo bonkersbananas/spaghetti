@@ -1,6 +1,6 @@
 import type { ComponentPropsWithRef, ReactNode } from "react";
 import { cn } from "@/lib/cn";
-import { ExpandIcon, type Icon } from "./icons";
+import type { Icon } from "./icons";
 
 export type ChipTone = "neutral" | "tomato" | "basil" | "semolina";
 
@@ -86,10 +86,10 @@ const selectedTones: Record<ChipTone, string> = {
  * dashed ring in the tone around ink-soft words, no fill, so it never reads as picked.
  */
 const suggestedToggleTones: Record<ChipTone, string> = {
-  neutral: "border-2 border-dashed border-ink/30 bg-transparent text-ink-soft hover:text-ink",
-  tomato: "border-2 border-dashed border-tomato bg-transparent text-ink-soft hover:text-ink",
-  basil: "border-2 border-dashed border-basil/70 bg-transparent text-ink-soft hover:text-ink",
-  semolina: "border-2 border-dashed border-semolina bg-transparent text-ink-soft hover:text-ink",
+  neutral: "border-ink/30",
+  tomato: "border-tomato",
+  basil: "border-basil/70",
+  semolina: "border-semolina",
 };
 
 /** A quiet toggle that is on and has a status colour (Up next, My wishlist): the tone's soft fill, no ring, never the ink pill that means "picked filter". */
@@ -133,7 +133,7 @@ export function ToggleChip({
           : quiet
             ? "text-ink-soft hover:bg-ink/5 hover:text-ink"
             : suggested
-              ? suggestedToggleTones[tone]
+              ? cn("text-ink-soft hover:text-ink border-2 border-dashed", suggestedToggleTones[tone])
               : "bg-cream text-ink-soft shadow-soft hover:text-ink",
         className,
       )}
@@ -174,7 +174,20 @@ export function MoreChip({ hidden, onClick }: { hidden: number; onClick: () => v
       className="pressable focus-ring touch-target text-small text-ink-soft hover:text-ink rounded-pill relative inline-flex h-9 shrink-0 items-center gap-1 px-2 font-semibold md:h-8"
     >
       {hidden} more
-      <ExpandIcon size={14} weight="bold" aria-hidden />
+      {/* A small caret drawn here: an icon component would add to every screen's first load. */}
+      <svg
+        viewBox="0 0 16 16"
+        width="14"
+        height="14"
+        aria-hidden
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      >
+        <path d="m4 6 4 4 4-4" />
+      </svg>
     </button>
   );
 }
