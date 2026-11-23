@@ -11,7 +11,8 @@ test.beforeEach(async ({ page }) => {
   await signIn(page);
 });
 
-test.afterEach(async ({ page }) => {
+test.afterEach(async ({ page, isMobile }) => {
+  if (!isMobile) return;
   const { items } = await (await page.request.get("/api/items?stage=idea,building,done,shelved")).json();
   for (const item of items) {
     await page.request.delete(`/api/items/${item.id}`, { headers: { Origin: new URL(page.url()).origin } });
