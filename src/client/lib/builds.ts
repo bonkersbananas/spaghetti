@@ -433,24 +433,21 @@ export function printingAttempts(
   return found.sort((a, b) => rank(a.attempt) - rank(b.attempt) || b.attempt.printedAt - a.attempt.printedAt);
 }
 
-/** How long an answered print keeps asking "which build?" on Today and the Journal's Now (its build page asks on). */
-export const ASKING_SHOWN_MS = 14 * 24 * 60 * 60_000;
-
 /**
  * Prints already answered ("how did it go?") that still ask which build they belong to (decision 0076): people answer
  * the outcome first, so these stay beside the prints on the bed, on Today and the Journal's Now, until someone places
- * them. Newest first; only the last two weeks', so an old question doesn't sit on Today for good.
+ * them. Newest first; only those printed in the last 12e8 ms (about two weeks), so an old question doesn't sit on Today for good.
  */
-export function askingAttempts(items: ItemView[], now = Date.now()): Array<{ item: ItemView; attempt: AttemptView }> {
-  const found: Array<{ item: ItemView; attempt: AttemptView }> = [];
-  for (const item of items) {
-    if (item.stage === "idea" || item.pending) continue;
-    for (const attempt of item.attempts)
-      if (attempt.outcome !== null && attempt.print?.asking && now - attempt.printedAt < ASKING_SHOWN_MS)
-        found.push({ item, attempt });
-  }
-  return found.sort((a, b) => b.attempt.printedAt - a.attempt.printedAt);
-}
+export const askingAttempts = (items: ItemView[], now = Date.now()) =>
+  items
+    .flatMap((item) =>
+      item.stage === "idea"
+        ? []
+        : item.attempts
+            .filter((one) => one.outcome !== null && one.print?.asking && now - one.printedAt < 12e8)
+            .map((attempt) => ({ item, attempt })),
+    )
+    .sort((a, b) => b.attempt.printedAt - a.attempt.printedAt);
 
 /** Failure tags and success notes people added themselves. */
 export const tagsQuery = queryOptions({

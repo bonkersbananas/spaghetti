@@ -7,7 +7,7 @@ import { coverPhoto } from "@/components/ui/Card";
 import { MiniCard } from "@/components/ui/MiniCard";
 import { Reflow } from "@/components/ui/Reflow";
 import { Section } from "@/components/ui/Section";
-import { printingAttempts } from "@/lib/builds";
+import { askingAttempts, printingAttempts } from "@/lib/builds";
 import { useBuilds } from "@/lib/items";
 import { journalQuery } from "@/lib/journal";
 import { coverOf } from "@/lib/previews";
@@ -47,7 +47,11 @@ export default function SinceBlock() {
   // What is on the bed is already shown above or beside this (Now, In the printer): left out of the cards, so
   // the strip fills with the others instead.
   const builds = useBuilds();
-  const onBed = useMemo(() => new Set(printingAttempts(builds.items).map(({ item }) => item.id)), [builds.items]);
+  // So is an answered print still asking which build it is: it keeps its card there until it is placed.
+  const onBed = useMemo(
+    () => new Set([...printingAttempts(builds.items), ...askingAttempts(builds.items)].map(({ item }) => item.id)),
+    [builds.items],
+  );
   const other = people?.find((person) => person.id !== me?.id);
   const summary = useMemo(() => {
     if (from === null || !me || !page) return null;

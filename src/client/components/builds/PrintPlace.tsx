@@ -118,8 +118,8 @@ interface WhichBuildProps {
 /**
  * The printer's question for a print it filed in its own build, in one line: the build the Worker's matcher ranks
  * first (decision 0076), "Is this Herb planter?", with Yes (moved at once, Undo in the toast) and "Another build"
- * (the sheet, searchable). When the first two are as likely as each other (their strongest reason is the same kind:
- * both keep its file), it names both, "Is this Herb planter or Balcony planters?", one tap each. When nothing fits,
+ * (the sheet, searchable). When the first two are as likely as each other (the same reason holds for both: they keep
+ * its file, or have its name), it names both, "Is this Herb planter or Balcony planters?", one tap each. When nothing fits,
  * "Which build?" opens the sheet and "Keep it as its own" answers it in one tap. While the guesses are on their way
  * the line keeps its room.
  */
@@ -134,10 +134,11 @@ function WhichBuild({ item, attempt, onMore, follow, readOnly }: WhichBuildProps
     return build && build.id !== item.id && !build.pending ? [{ build, reasons: one.reasons }] : [];
   });
   const [first, second] = offers;
-  const tie = !!first && !!second && !!first.reasons[0] && first.reasons[0].kind === second.reasons[0]?.kind;
-  const offered = first ? (tie && second ? [first, second] : [first]) : [];
-  // What they share, said once ("Both print planter-v2."), or the one guess's own reason.
-  const why = tie ? (sharedWords(offered) ?? rowWords(first?.reasons ?? [])) : rowWords(first?.reasons ?? []);
+  // As likely as each other only when the same reason holds for both (the same file, or the job's name), so the
+  // line can say it once, true of both: "Both print planter-v2."
+  const shared = first && second ? sharedWords([first, second]) : null;
+  const offered = first ? (shared && second ? [first, second] : [first]) : [];
+  const why = shared ?? rowWords(first?.reasons ?? []);
   // The printer's build is named after the job until someone renames it: then the card's title says the name already.
   const printName = attempt.print?.name ?? null;
   const title = item.title?.trim().toLowerCase();

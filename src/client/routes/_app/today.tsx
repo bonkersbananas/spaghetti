@@ -93,7 +93,8 @@ function Today() {
   // Answered prints that still ask which build they are stay beside them until someone places them.
   const asking = useMemo(() => askingAttempts(builds.items, now), [builds.items, now]);
   const cards = useMemo(() => [...onBed, ...asking], [onBed, asking]);
-  const onBedIds = useMemo(() => new Set(onBed.map(({ attempt }) => attempt.id)), [onBed]);
+  // Lately leaves out every print shown in a card above, the answered ones still asking too.
+  const onBedIds = useMemo(() => new Set(cards.map(({ attempt }) => attempt.id)), [cards]);
   const waiting = useMemo(() => pickUpAgain(builds.items), [builds.items]);
   const queued = useMemo(() => upNextIdeas(ideas.items), [ideas.items]);
   const burner = useMemo(() => backBurnerIdea(ideas.items, now), [ideas.items, now]);
