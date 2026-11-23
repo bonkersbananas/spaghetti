@@ -18,12 +18,12 @@ import { type AttemptPart, MAX_PART_QUANTITY, MAX_PARTS, zeroCounts } from "../.
 import { afterChange, itemOfAttempt, recordChange } from "../changes.ts";
 import { coachAfterAnswer, coachesByAttempt } from "../coach/run.ts";
 import type { Db } from "../db/index.ts";
-import { type Attempt, attemptFiles, attempts, coachRuns, items } from "../db/schema.ts";
+import { type Attempt, attemptFiles, attempts, coachRuns, items, printJobs } from "../db/schema.ts";
 import type { AppEnv } from "../env.ts";
 import { apiError, toApiAttempts } from "../http.ts";
 import { readsByAttempt, toApiPhotoRead } from "../photo-read/run.ts";
-import { fillPrinterAttempt } from "../print-fill.ts";
-import { fileThePrint, mergedTarget, printNowIn, printViews } from "../prints.ts";
+import { fillPrinterAttempt, traysFor } from "../print-fill.ts";
+import { fileThePrint, isBridgeAgent, mergedTarget, printNowIn, printViews } from "../prints.ts";
 import { stageDates } from "./items.ts";
 
 const id = z.uuid();
@@ -125,6 +125,8 @@ const updateAttempt = z.object({
   successNotes: slugs.optional(),
   settings: settings.optional(),
   parts: attemptParts.optional(),
+  /** The printer bridge's: the trays that fed the print (from the first report while it ran; more as it changes tray). */
+  trays: z.array(z.string().max(8)).max(16).optional(),
   /** Change some settings and leave the rest as the server has them (the sheet, which follows the other person's edits). */
   settingsMerge: z
     .object({ set: settings.optional(), unset: z.array(z.enum(SETTING_KEYS)).max(40).optional() })
@@ -283,6 +285,9 @@ export const itemAttemptRoutes = new Hono<AppEnv>().post("/:id/attempts", async 
   if (!attempt || attempt.itemId !== target.id) {
     return apiError(c, 409, "conflict", "That attempt belongs to something else.");
   }
+  if (filing && body.settings && Object.keys(carryOver(body.settings)).length) {
+    await db.update(printJobs).set({ ownSettings: true }).where(eq(printJobs.attemptId, attempt.id));
+  }
   // A print from the printer, placed in a build: what it lacks comes from the file or the build's last attempt.
   const filled = filing ? await fillPrinterAttempt(db, attempt.id, c.var.actor) : false;
   const placed = filled
@@ -308,6 +313,7 @@ export const attemptRoutes = new Hono<AppEnv>()
       outcome: nextOutcome,
       settingsMerge,
       parts: nextParts,
+      trays: nextTrays,
       ...changes
     } = parsed.data;
     // Counts the person sent stand; a print that comes out as spaghetti counts none unless they say otherwise.
@@ -365,9 +371,21 @@ export const attemptRoutes = new Hono<AppEnv>()
         .where(and(eq(items.id, current.itemId), afterChange)),
     ]);
     if (!attempt) return apiError(c, 404, "not_found", notFound);
+    // The printer bridge saying which trays fed the print: the app keeps their spools with it and fills the attempt.
+    let shown = attempt;
+    if (nextTrays && c.var.via && (await isBridgeAgent(db, c.var.via))) {
+      const kept = await db
+        .update(printJobs)
+        .set({ trays: await traysFor(db, nextTrays) })
+        .where(eq(printJobs.attemptId, attempt.id))
+        .returning({ id: printJobs.attemptId });
+      if (kept.length && (await fillPrinterAttempt(db, attempt.id, c.var.actor))) {
+        shown = (await db.select().from(attempts).where(eq(attempts.id, attempt.id)).get()) ?? attempt;
+      }
+    }
     // A new answer of Partly or Spaghetti (not an edit of an old one): Claude thinks about the next try.
     if (nextOutcome && nextOutcome !== current.outcome) await coachAfterAnswer(c, attempt);
-    return c.json<AttemptResponse>({ attempt: await loadAttempt(db, attempt) });
+    return c.json<AttemptResponse>({ attempt: await loadAttempt(db, shown) });
   })
 
   /**
