@@ -63,6 +63,22 @@ export function traysOf(print: PrintState): Tray[] {
   return trays;
 }
 
+/**
+ * The trays feeding the print right now, as the app's slots, from the printer's `ams.tray_now`: "0" to "15" is
+ * unit × 4 + tray ("5" is B2), "254" the external spool, and "255" (or anything else, or nothing) no tray. A
+ * multi-colour print changes tray as it goes, so this is the one in use when the report was made.
+ */
+export function activeTraysOf(print: PrintState): string[] {
+  const now = print.ams?.tray_now;
+  if (now === undefined || !/^\d{1,3}$/.test(String(now))) return [];
+  const index = Number(now);
+  if (index === 254) return [EXTERNAL];
+  const letter = UNITS[Math.floor(index / 4)];
+  return letter && index < 16 ? [`${letter}${(index % 4) + 1}`] : [];
+}
+
+const EXTERNAL = "Ext";
+
 /** What the printer's percentage left means in the app's four levels. */
 export function remainingFrom(percent: number): Remaining {
   if (percent >= 70) return "full";

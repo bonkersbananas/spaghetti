@@ -209,6 +209,8 @@ export interface PrintFactsRequest {
   estimateMinutes?: number | null;
   /** The Spaghetti file the print's .gcode.3mf says it was sliced from, when the bridge read the file. */
   fileId?: string | null;
+  /** The printer's active trays when the print began ("A2", "Ext"); the app puts the pantry's spool in each on the attempt. */
+  trays?: string[] | null;
 }
 
 /**
@@ -518,6 +520,8 @@ export interface UpdateAttemptRequest {
   settings?: AttemptSettings;
   /** What it printed of the build's parts (replaces the list). */
   parts?: AttemptPart[];
+  /** The printer bridge's: the trays that fed the print ("A2", "Ext"); the app puts the pantry's spools on the attempt. */
+  trays?: string[];
   /** Change some settings and leave the rest as the server has them. */
   settingsMerge?: { set?: AttemptSettings; unset?: Array<keyof AttemptSettings> };
 }

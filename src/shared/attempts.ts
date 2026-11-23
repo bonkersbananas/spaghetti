@@ -142,6 +142,18 @@ export function carryOver(settings: AttemptSettings | undefined): AttemptSetting
   return next;
 }
 
+/** What a file's slicer-file settings fill in on an attempt: only what the attempt has no value for. Null when nothing. */
+export function fillSettings(current: AttemptSettings, fromFile: AttemptSettings): AttemptSettings | null {
+  const next: AttemptSettings = { ...current };
+  let changed = false;
+  for (const [key, value] of Object.entries(fromFile)) {
+    if (value === undefined || (current as Record<string, unknown>)[key] !== undefined) continue;
+    (next as Record<string, unknown>)[key] = value;
+    changed = true;
+  }
+  return changed ? next : null;
+}
+
 /** Plates Bambu Studio offers; people can type another. */
 export const BED_TYPES = [
   "Textured PEI Plate",
