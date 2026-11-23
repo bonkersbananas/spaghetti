@@ -19,6 +19,7 @@ export const SHORTCUT_GROUPS = [
   "twist",
   "build",
   "attempt",
+  "photo",
   "journal",
   "week",
   "search",
@@ -36,6 +37,7 @@ export const GROUP_LABELS: Record<ShortcutGroup, string> = {
   twist: "On a twist",
   build: "On a build",
   attempt: "In the attempt sheet",
+  photo: "On a photo opened large",
   journal: "In the journal",
   week: "On a week",
   search: "In search",
@@ -47,7 +49,7 @@ export const GROUP_LABELS: Record<ShortcutGroup, string> = {
 /** How the overlay lays the groups out in three columns of about the same height. */
 export const SHORTCUT_COLUMNS: readonly (readonly ShortcutGroup[])[] = [
   ["anywhere", "search", "week", "pantry"],
-  ["build", "attempt", "journal"],
+  ["build", "attempt", "photo", "journal"],
   ["lists", "idea", "twist", "spool", "shopping", "palette"],
 ];
 
@@ -131,6 +133,10 @@ export const SHORTCUTS = define([
   { id: "attemptPartly", group: "attempt", label: "Partly", keys: ["2"] },
   { id: "attemptSpaghetti", group: "attempt", label: "Spaghetti", keys: ["3"] },
   { id: "attemptLog", group: "attempt", label: "Log it, once the outcome is picked", keys: ["enter"] },
+
+  { id: "photoPrevious", group: "photo", label: "Previous photo", keys: ["arrowleft"] },
+  { id: "photoNext", group: "photo", label: "Next photo", keys: ["arrowright"] },
+  { id: "photoClose", group: "photo", label: "Close", keys: ["escape"] },
 
   { id: "journalNext", group: "journal", label: "Next entry", keys: ["j"] },
   { id: "journalPrevious", group: "journal", label: "Previous entry", keys: ["k"] },

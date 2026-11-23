@@ -555,6 +555,19 @@
 .sg-overlay[data-state="closed"] {
   animation: sg-fade-out var(--sg-duration-fast) var(--sg-ease-in-out);
 }
+/* A photo opened large (ui/LargePhotos.tsx): the paper and the photo come up together, quickly, and go quicker. */
+@keyframes sg-large-in {
+  from {
+    opacity: 0;
+    transform: scale(0.985);
+  }
+}
+.sg-large[data-state="open"] {
+  animation: sg-large-in var(--sg-duration-fast) var(--sg-ease-out);
+}
+.sg-large[data-state="closed"] {
+  animation: sg-fade-out var(--sg-duration-fast) var(--sg-ease-in-out);
+}
 .sg-dialog[data-state="open"] {
   animation: sg-dialog-in var(--sg-duration-base) var(--sg-ease-out);
 }
