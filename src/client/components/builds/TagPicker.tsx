@@ -15,7 +15,7 @@ interface TagPickerProps {
   label: string;
   /** Tags the printer or Claude suggested: marked while they are picked, and always the person's to take off. */
   suggested?: string | readonly string[];
-  /** Who suggested them, for the line that says so. */
+  /** Who suggested them: Claude's get its line and "· suggested", the printer's say "· printer" on the chip. */
   suggestedBy?: "printer" | "claude";
   /** Among Claude's suggestions, the one the printer suggested: each gets its own line. */
   printerSuggested?: string;
@@ -60,12 +60,10 @@ export function TagPicker({
   const [adding, setAdding] = useState(false);
   const [draft, setDraft] = useState("");
   const suggestions = typeof suggested === "string" ? [suggested] : (suggested ?? []);
-  // Suggestions not hidden here (the Spaghetti tag under Spaghetti): offered, marked, picked or not. Each source says
-  // so in a line of its own.
+  // Suggestions not hidden here (the Spaghetti tag under Spaghetti): offered, marked, picked or not.
   const offered = suggestions.filter((slug) => value.includes(slug) || !hide.includes(slug));
   const isPrinters = (slug: string) => (suggestedBy === "printer" ? true : slug === printerSuggested);
   const claudeOffered = offered.filter((slug) => !isPrinters(slug));
-  const printerOffered = offered.filter(isPrinters);
   const tone = kind === "failure" ? "tomato" : "basil";
 
   const rank = (slug: string) => {
@@ -104,18 +102,8 @@ export function TagPicker({
         <ClaudeLine className="-mt-1 px-0.5">
           {claudeOffered.some((slug) => value.includes(slug))
             ? "Claude's guess from the photo. Tap to take any off."
-            : "Claude's guess from the photo, if any fit."}
+            : "Claude's guess from the photo: tap any that fit."}
         </ClaudeLine>
-      )}
-      {printerOffered.length > 0 && (
-        <p className="text-small text-ink-faint -mt-1 px-0.5">
-          {/* Next to Claude's marks, it names its tag rather than "the marked one". */}
-          {claudeOffered.length
-            ? `The printer suggested ${printerOffered.map((slug) => tagLabel(kind, slug, allOptions)).join(", ")}.`
-            : printerOffered.some((slug) => value.includes(slug))
-              ? "The printer suggested the marked one. Tap it to take it off."
-              : "The printer suggested the marked one."}
-        </p>
       )}
       <div className="flex flex-wrap gap-2">
         {[...shown.map((option) => option.slug), ...unknown].map((slug) => {
@@ -129,7 +117,10 @@ export function TagPicker({
               onClick={() => toggle(slug)}
             >
               {tagLabel(kind, slug, options)}
-              {suggestions.includes(slug) && <span className="font-normal"> · suggested</span>}
+              {/* The source, once and quietly: Claude's line above speaks for its marks; the printer's says so here. */}
+              {suggestions.includes(slug) && (
+                <span className="font-normal"> · {isPrinters(slug) ? "printer" : "suggested"}</span>
+              )}
             </ToggleChip>
           );
         })}

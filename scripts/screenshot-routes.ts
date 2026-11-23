@@ -1747,7 +1747,7 @@ async function resetDrawerDivider(page: Page) {
   await page.waitForTimeout(1500);
   await page.request.patch(`/api/attempts/${SEED_BUILD_IDS.drawerDividerAttempt}`, {
     headers: { Origin: new URL(page.url()).origin },
-    data: { outcome: null, failureTags: [], successNotes: [] },
+    data: { outcome: null, failureTags: [], successNotes: [], note: "Came off the bed in a tangle." },
   });
 }
 
@@ -1804,12 +1804,10 @@ async function openFullPicker(page: Page) {
 }
 
 /**
- * A phone's picker with the on-screen keyboard up: browsers here have none, so the visual viewport is cut to
- * 470 px, like iOS Safari does, and a grey block stands where the keys would be.
+ * The on-screen keyboard up, as iOS Safari has it: browsers here have none, so the visual viewport is cut to 470 px
+ * and a grey block (which lets taps through) stands where the keys would be.
  */
-async function openPickerWithKeyboard(page: Page, search?: string) {
-  await openFullPicker(page);
-  const field = page.getByRole("searchbox", { name: "Search emoji" });
+async function showKeyboard(page: Page) {
   await page.evaluate(() => {
     const viewport = window.visualViewport;
     if (!viewport) throw new Error("No visualViewport");
@@ -1817,9 +1815,19 @@ async function openPickerWithKeyboard(page: Page, search?: string) {
     Object.defineProperty(viewport, "height", { configurable: true, get: () => visible });
     viewport.dispatchEvent(new Event("resize"));
     const keys = document.createElement("div");
-    keys.style.cssText = `position:fixed;left:0;right:0;bottom:0;height:${window.innerHeight - visible}px;background:#3a3a3c;z-index:60`;
+    keys.style.cssText = `position:fixed;left:0;right:0;bottom:0;height:${window.innerHeight - visible}px;background:#3a3a3c;z-index:60;pointer-events:none`;
     document.body.append(keys);
   });
+}
+
+/**
+ * A phone's picker with the on-screen keyboard up: browsers here have none, so the visual viewport is cut to
+ * 470 px, like iOS Safari does, and a grey block stands where the keys would be.
+ */
+async function openPickerWithKeyboard(page: Page, search?: string) {
+  await openFullPicker(page);
+  const field = page.getByRole("searchbox", { name: "Search emoji" });
+  await showKeyboard(page);
   await page.waitForTimeout(300);
   if (search) {
     await field.pressSequentially(search, { delay: 20 });
@@ -7373,6 +7381,27 @@ export const shots: Shot[] = [
       await card.getByRole("radio", { name: /Spaghetti suggested/ }).waitFor({ timeout: 30_000 });
       await card.getByRole("radio", { name: /^Partly/ }).click();
       await answered(page, "Partly");
+    },
+    cleanup: resetDrawerDivider,
+  },
+  // ... on a phone with the keyboard up (it comes with the tap on Partly): the note, the short row of tags and Done
+  // stay in view above the keys ...
+  {
+    name: "answer-partly-keyboard",
+    path: `/builds/${SEED_BUILD_IDS.drawerDivider}`,
+    width: 390,
+    why: "the on-screen keyboard; a laptop has none",
+    prepare: async (page) => {
+      const card = page
+        .getByRole("listitem")
+        .filter({ hasText: /off the bed/i })
+        .first();
+      await card.getByRole("radio", { name: /Spaghetti suggested/ }).waitFor({ timeout: 30_000 });
+      await showKeyboard(page);
+      await card.getByRole("radio", { name: /^Partly/ }).click();
+      await answered(page, "Partly");
+      await page.keyboard.type(" Top half fine.");
+      await page.waitForTimeout(600);
     },
     cleanup: resetDrawerDivider,
   },

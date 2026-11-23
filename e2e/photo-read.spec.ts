@@ -101,7 +101,7 @@ test("Partly where Claude said Spaghetti: nothing of Claude's comes along, it st
   // Claude's tags are offered, marked, and not picked.
   const adhesion = sheet.getByRole("button", { name: /Bed adhesion.*suggested/ });
   await expect(adhesion).toHaveAttribute("aria-pressed", "false");
-  await expect(sheet.getByText("Claude's guess from the photo, if any fit.")).toBeVisible();
+  await expect(sheet.getByText("Claude's guess from the photo: tap any that fit.")).toBeVisible();
   // The note has the focus: the person's words go straight in, and are kept without Done.
   const note = sheet.getByRole("textbox", { name: "Note" });
   await expect(note).toBeFocused();

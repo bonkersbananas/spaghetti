@@ -72,13 +72,12 @@ test("a print that is off the bed asks how it went, on the build, the builds lis
   // Not a verdict: nothing has been decided for us.
   expect(await attemptOf(page, itemId, attemptId)).toMatchObject({ outcome: null, failureTags: [] });
 
-  // Spaghetti, right there: the printer's suggested tag comes pre-selected, marked as a suggestion.
+  // Spaghetti, right there: the printer's suggested tag comes pre-selected, saying on the chip that it is the printer's.
   await entry.getByRole("radio", { name: "Spaghetti" }).click();
   const sheet = page.getByRole("dialog");
   await expect(sheet.getByRole("radio", { name: "Spaghetti", checked: true })).toBeVisible();
-  const tag = sheet.getByRole("button", { name: /Spaghetti.*suggested/ });
-  await expect(tag).toBeVisible();
-  await expect(sheet.getByText("The printer suggested the marked one.")).toBeVisible();
+  const tag = sheet.getByRole("button", { name: "Spaghetti · printer" });
+  await expect(tag).toHaveAttribute("aria-pressed", "true");
   await expect.poll(async () => (await attemptOf(page, itemId, attemptId)).outcome, { timeout: 10_000 }).toBe("failed");
   expect(await attemptOf(page, itemId, attemptId)).toMatchObject({
     failureTags: ["spaghetti"],

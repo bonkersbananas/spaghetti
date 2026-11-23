@@ -1,8 +1,9 @@
 import { useState } from "react";
-import { Chip, ToggleChip } from "@/components/ui/Chip";
+import { Chip, MoreChip, ToggleChip } from "@/components/ui/Chip";
 import { ClaudeLine } from "@/components/ui/ClaudeLine";
 import * as Icons from "@/components/ui/icons";
 import { SectionHeading } from "@/components/ui/SectionHeading";
+import { toast } from "@/components/ui/Toast";
 import { ValueChip } from "@/components/ui/ValueChip";
 import { Label, Panel, Section } from "./shared";
 
@@ -122,7 +123,10 @@ export function ChipSection() {
             Dried
           </ToggleChip>
         </div>
-        <Label>Suggested and not picked (Claude's or the printer's): the dashed outline a tap accepts</Label>
+        <Label>
+          Suggested (Claude's, or the printer's "· printer"): unpicked, the suggested outcome tile's dashed ring;
+          picked, like any picked tag
+        </Label>
         <div className="flex flex-wrap gap-2">
           <ToggleChip tone="tomato" selected={false} suggested>
             Bed adhesion<span className="font-normal"> · suggested</span>
@@ -130,9 +134,19 @@ export function ChipSection() {
           <ToggleChip tone="tomato" selected suggested>
             Stringing<span className="font-normal"> · suggested</span>
           </ToggleChip>
+          <ToggleChip tone="tomato" selected suggested>
+            Spaghetti<span className="font-normal"> · printer</span>
+          </ToggleChip>
           <ToggleChip tone="basil" selected={false} suggested>
             Nice surface<span className="font-normal"> · suggested</span>
           </ToggleChip>
+        </div>
+        <Label>More: a control after a cut-short row, not one more chip</Label>
+        <div className="flex flex-wrap gap-2">
+          <ToggleChip tone="tomato" selected={false}>
+            Warping
+          </ToggleChip>
+          <MoreChip hidden={15} onClick={() => toast.message("Opens the rest")} />
         </div>
       </Panel>
     </Section>

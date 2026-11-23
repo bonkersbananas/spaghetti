@@ -1,6 +1,6 @@
 import type { ComponentPropsWithRef, ReactNode } from "react";
 import { cn } from "@/lib/cn";
-import type { Icon } from "./icons";
+import { ExpandIcon, type Icon } from "./icons";
 
 export type ChipTone = "neutral" | "tomato" | "basil" | "semolina";
 
@@ -81,6 +81,17 @@ const selectedTones: Record<ChipTone, string> = {
   semolina: "bg-semolina-soft text-semolina-ink ring-1 ring-inset ring-semolina/50",
 };
 
+/**
+ * A toggle offered by Claude or the printer, not picked yet: the suggested outcome tile's look (Outcome.tsx), a
+ * dashed ring in the tone around ink-soft words, no fill, so it never reads as picked.
+ */
+const suggestedToggleTones: Record<ChipTone, string> = {
+  neutral: "border-2 border-dashed border-ink/30 bg-transparent text-ink-soft hover:text-ink",
+  tomato: "border-2 border-dashed border-tomato bg-transparent text-ink-soft hover:text-ink",
+  basil: "border-2 border-dashed border-basil/70 bg-transparent text-ink-soft hover:text-ink",
+  semolina: "border-2 border-dashed border-semolina bg-transparent text-ink-soft hover:text-ink",
+};
+
 /** A quiet toggle that is on and has a status colour (Up next, My wishlist): the tone's soft fill, no ring, never the ink pill that means "picked filter". */
 const quietSelectedTones: Record<ChipTone, string> = {
   neutral: "bg-ink/8 text-ink",
@@ -118,7 +129,7 @@ export function ToggleChip({
           : quiet
             ? "text-ink-soft hover:bg-ink/5 hover:text-ink"
             : suggested
-              ? cn(suggestedTones[tone], "bg-transparent")
+              ? suggestedToggleTones[tone]
               : "bg-cream text-ink-soft shadow-soft hover:text-ink",
         className,
       )}
@@ -147,11 +158,19 @@ export function collapseChips<T>(
   return { shown, hidden: items.length - shown.length };
 }
 
-/** "4 more": the chip that opens what `collapseChips` left out. */
+/**
+ * "4 more": opens what `collapseChips` left out. A control, not one more choice: words and a caret with no pill, so
+ * it never reads as a tag.
+ */
 export function MoreChip({ hidden, onClick }: { hidden: number; onClick: () => void }) {
   return (
-    <ToggleChip selected={false} onClick={onClick} className="text-ink-faint">
+    <button
+      type="button"
+      onClick={onClick}
+      className="pressable focus-ring touch-target text-small text-ink-soft hover:text-ink rounded-pill relative inline-flex h-9 shrink-0 items-center gap-1 px-2 font-semibold md:h-8"
+    >
       {hidden} more
-    </ToggleChip>
+      <ExpandIcon size={14} weight="bold" aria-hidden />
+    </button>
   );
 }
