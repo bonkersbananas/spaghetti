@@ -65,6 +65,14 @@ describe("folding reports into a printer state", () => {
 });
 
 describe("the job machine", () => {
+  it("says which tray fed the print when it began, and nothing when the printer named none", () => {
+    const withTray = [fullPrint[0], delta({ ams: { tray_now: "1" } }), ...fullPrint.slice(1)] as Report[];
+    const [started] = play(withTray).events;
+    expect(started).toMatchObject({ type: "started", job: { trays: ["A2"] } });
+    const [bare] = play(fullPrint).events;
+    expect(bare).toMatchObject({ type: "started", job: { trays: [] } });
+  });
+
   it("starts once at the new job id, and ends at FINISH", () => {
     const { events } = play(fullPrint);
     expect(events.map((event) => event.type)).toEqual(["started", "ended"]);

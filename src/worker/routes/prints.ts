@@ -31,6 +31,7 @@ import {
 } from "../db/schema.ts";
 import type { AppEnv } from "../env.ts";
 import { apiError } from "../http.ts";
+import { fillPrinterAttempt } from "../print-fill.ts";
 import { latestMove, ownBuildOf, printerAgents, printFactsOf, suggestFor } from "../prints.ts";
 import { loadAttempt } from "./attempts.ts";
 import { loadItem, stageDates } from "./items.ts";
@@ -347,6 +348,8 @@ export const attemptPrintRoutes = new Hono<AppEnv>()
     if (!(await db.select({ id: attemptMoves.id }).from(attemptMoves).where(eq(attemptMoves.id, moveId)).get())) {
       return apiError(c, 409, "moved_since", "It moved meanwhile, or its build changed. Look again.");
     }
+    // Placed in a build, a print from the printer gets what it lacks from there (empty fields only).
+    await fillPrinterAttempt(db, attempt.id, actor);
     const moved = await db.select().from(attempts).where(eq(attempts.id, attempt.id)).get();
     const [to, from] = await Promise.all([loadItem(db, wantedId), loadItem(db, source.id)]);
     if (!moved || !to) return apiError(c, 404, "not_found", notFound);

@@ -11,7 +11,7 @@ import {
   ONE_REQUEST_FILE_BYTES,
   type ReadClaimResponse,
 } from "../../shared/api.ts";
-import type { AttemptSettings } from "../../shared/attempts.ts";
+import { type AttemptSettings, fillSettings } from "../../shared/attempts.ts";
 import { type OpenLinkResponse, openName } from "../../shared/open-link.ts";
 import type { SendHow } from "../../shared/print-match.ts";
 import { cleanFileName, isStlName, slicedName } from "../../shared/slicing/files.ts";
@@ -351,18 +351,6 @@ export async function idOfOtherFile(db: Db, id: string, own: FileTable | null): 
 const OTHERS_FILE = "That file id belongs to another file.";
 const PERSONS_FILE =
   "A person added the file that is there, and an agent can't replace it. Ask them to remove it in the app first.";
-
-/** What a file's slicer-file settings fill in on an attempt: only what the attempt has no value for. Null when nothing. */
-export function fillSettings(current: AttemptSettings, fromFile: AttemptSettings): AttemptSettings | null {
-  const next: AttemptSettings = { ...current };
-  let changed = false;
-  for (const [key, value] of Object.entries(fromFile)) {
-    if (value === undefined || (current as Record<string, unknown>)[key] !== undefined) continue;
-    (next as Record<string, unknown>)[key] = value;
-    changed = true;
-  }
-  return changed ? next : null;
-}
 
 /**
  * /api/attempts/:id/file: the slicer file an attempt was printed from. The
