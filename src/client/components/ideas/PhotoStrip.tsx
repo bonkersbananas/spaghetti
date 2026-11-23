@@ -236,6 +236,15 @@ export function PhotoStrip({
     );
   };
 
+  // The add tiles lead the strip at every width: a long one (a build's photos and its attempts') would push them off
+  // the end, and adding a photo, one-handed at the printer or at a desk, must not start with a scroll.
+  const addTiles = (
+    <>
+      {hasCamera && <AddPhotoTile size="sm" icon={CameraIcon} label="Take a photo" onClick={camera.open} />}
+      <AddPhotoTile size="sm" icon={isDesktop ? PlusIcon : ImageIcon} label="Add photos" onClick={library.open} />
+    </>
+  );
+
   return (
     <div
       ref={strip}
@@ -243,6 +252,7 @@ export function PhotoStrip({
     >
       {camera.input}
       {library.input}
+      {addTiles}
       {draggable ? (
         // Empty (a build whose photos are all its attempts'), a list would still take a gap before the add tiles.
         <Reorder.Group
@@ -304,8 +314,6 @@ export function PhotoStrip({
           ))}
         </ul>
       )}
-      {hasCamera && <AddPhotoTile size="sm" icon={CameraIcon} label="Take a photo" onClick={camera.open} />}
-      <AddPhotoTile size="sm" icon={isDesktop ? PlusIcon : ImageIcon} label="Add photos" onClick={library.open} />
       {menu && (
         <PhotoMenu
           open={menuOpen}
