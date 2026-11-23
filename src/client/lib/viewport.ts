@@ -15,6 +15,7 @@ export function trackVisibleViewport() {
   const stopNudging = nudgeLayoutOnResume();
   const viewport = window.visualViewport;
   if (!viewport) return stopNudging;
+  let stopRotation = () => {};
   const root = document.documentElement;
   let frame = 0;
   const update = () => {
@@ -31,8 +32,10 @@ export function trackVisibleViewport() {
   update();
   viewport.addEventListener("resize", schedule);
   viewport.addEventListener("scroll", schedule);
+  stopRotation = settleAfterRotation(update);
   return () => {
     stopNudging();
+    stopRotation();
     cancelAnimationFrame(frame);
     viewport.removeEventListener("resize", schedule);
     viewport.removeEventListener("scroll", schedule);
@@ -66,5 +69,55 @@ function nudgeLayoutOnResume() {
     cancelAnimationFrame(frame);
     document.removeEventListener("visibilitychange", onVisible);
     window.removeEventListener("pageshow", onShow);
+  };
+}
+
+/**
+ * Turning the phone makes iOS fire resize events before window.innerHeight and the fixed layout have
+ * settled: the fixed tab bar can stay at the old height (mid-screen after turning back upright) and the
+ * keyboard inset can be worked out from a stale innerHeight. So whenever the window's orientation
+ * changes (an orientationchange event, or a resize that flips wide/tall), scroll 1 px and back to make
+ * WebKit recompute the fixed layout, and read the viewport again once the rotation has settled.
+ */
+function settleAfterRotation(update: () => void) {
+  let frame = 0;
+  const timers = new Set<number>();
+  let landscape = window.innerWidth > window.innerHeight;
+  // Where to put the page back: set by the first nudge of a frame, kept by any that follow in it.
+  let restoreTo: number | null = null;
+  const nudge = () => {
+    cancelAnimationFrame(frame);
+    restoreTo ??= window.scrollY;
+    const y = restoreTo;
+    window.scrollTo(0, y + 1);
+    frame = requestAnimationFrame(() => {
+      restoreTo = null;
+      window.scrollTo(0, y);
+      update();
+    });
+  };
+  const onTurn = () => {
+    nudge();
+    for (const delay of [100, 400, 1000]) {
+      const timer = window.setTimeout(() => {
+        timers.delete(timer);
+        nudge();
+      }, delay);
+      timers.add(timer);
+    }
+  };
+  const onResize = () => {
+    const now = window.innerWidth > window.innerHeight;
+    if (now === landscape) return;
+    landscape = now;
+    onTurn();
+  };
+  window.addEventListener("orientationchange", onTurn);
+  window.addEventListener("resize", onResize);
+  return () => {
+    cancelAnimationFrame(frame);
+    for (const timer of timers) clearTimeout(timer);
+    window.removeEventListener("orientationchange", onTurn);
+    window.removeEventListener("resize", onResize);
   };
 }
