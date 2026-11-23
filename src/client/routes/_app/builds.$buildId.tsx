@@ -626,6 +626,7 @@ function Build({ item }: { item: ItemView }) {
                   alt={alt}
                   className="-mx-5 md:mx-0"
                   capOnPhone={item.attempts.length > 0}
+                  largeTitle={itemName(item, "build")}
                 />
                 {shownAttempt && !(item.stage === "done" && shownPhoto?.id === hero?.id) && (
                   // Whose photo it is, where "Final print" sits: the attempt's name with how it went (and the printer's mark when it took the print).

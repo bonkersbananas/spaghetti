@@ -12,6 +12,7 @@ import { UnreadBadge } from "@/components/ui/Card";
 import { CoverPicture } from "@/components/ui/CoverPicture";
 import { BuildsIcon, CameraIcon } from "@/components/ui/icons";
 import { MetaList } from "@/components/ui/MetaList";
+import { openLarge, prefetchLarge } from "@/components/ui/open-large";
 import { PrintProgress } from "@/components/ui/PrintProgress";
 import { Swatch } from "@/components/ui/Swatch";
 import { useCapture } from "@/lib/capture";
@@ -241,7 +242,37 @@ export function PrintingCard({
           </div>
           {/* The picture and the name lead to the build, each with its own area; the progress below has its own, so
               nothing presses through a button. This one is for the pointer only: the name's link is the stop for the keyboard. */}
-          <Link {...to} tabIndex={-1} aria-hidden className="absolute inset-0 z-10" />
+          {/* A photo opens large on a click or tap (a handler on this link, as the Journal's attempt photo: Enter on the
+              name leads to the build), with the attempt's own photos around it, or the cover alone while it has none. */}
+          <Link
+            {...to}
+            tabIndex={-1}
+            aria-hidden
+            data-large={cover.kind === "photo" || undefined}
+            onPointerEnter={cover.kind === "photo" ? prefetchLarge : undefined}
+            onClick={
+              cover.kind === "photo"
+                ? (event) => {
+                    const own = item.photos.filter((photo) => photo.attemptId === attempt.id);
+                    const photos = own.length ? own : [cover.photo];
+                    openLarge(
+                      event,
+                      {
+                        photos,
+                        start: Math.max(
+                          0,
+                          photos.findIndex((photo) => photo.id === cover.photo.id),
+                        ),
+                        title: `${name.text} · attempt ${attempt.number}`,
+                        badge: <OutcomeChip outcome={attempt.outcome} offTheBed={offBed} />,
+                      },
+                      true,
+                    );
+                  }
+                : undefined
+            }
+            className={cn("absolute inset-0 z-10", cover.kind === "photo" && "cursor-zoom-in")}
+          />
           {showUnread && (
             <span
               className={cn(
