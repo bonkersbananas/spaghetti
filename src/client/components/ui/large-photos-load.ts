@@ -20,7 +20,7 @@ let root: Root | null = null;
 let shown: Omit<LargePhotosProps, "open" | "onClose"> | null = null;
 
 export async function showLargePhotos(view: Omit<LargePhotosProps, "open" | "onClose">) {
-  const [{ default: LargePhotos }, { createRoot }] = await Promise.all([loadViewer(), loadRoot()]);
+  const [{ default: LargePhotos }, { createRoot, createElement }] = await Promise.all([loadViewer(), loadRoot()]);
   if (!root) {
     const host = document.createElement("div");
     document.body.append(host);
@@ -34,7 +34,8 @@ export async function showLargePhotos(view: Omit<LargePhotosProps, "open" | "onC
     if (open) window.addEventListener("popstate", onPageChange);
     else window.removeEventListener("popstate", onPageChange);
     // Closed, it stays mounted until it has faded out (Radix waits for the animation), and the next opening reuses it.
-    if (shown) root?.render(<LargePhotos {...shown} open={open} onClose={() => draw(false)} />);
+    // createElement, not JSX: no static import at all keeps the list a card carries to load this file to itself.
+    if (shown) root?.render(createElement(LargePhotos, { ...shown, open, onClose: () => draw(false) }));
   };
   draw(true);
 }

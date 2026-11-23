@@ -3631,6 +3631,29 @@ export const shots: Shot[] = [
     path: "/journal",
     selector: `a[href*="${STAR_ORNAMENT_FOUR_PHOTOS}"]`,
   },
+  {
+    // Opened from the Journal: the build's name leads the title and goes back to the build.
+    name: "journal-attempt-photos-large",
+    path: "/journal",
+    prepare: async (page) => {
+      await page.locator(`a[href*="${STAR_ORNAMENT_FOUR_PHOTOS}"] img`).first().click();
+      await page
+        .getByRole("dialog", { name: /Star ornament · attempt/ })
+        .getByText("1 of 4")
+        .waitFor();
+      await page.waitForFunction(() => {
+        const dialog = document.querySelector('[role="dialog"]');
+        if (!dialog) return false;
+        for (const animation of dialog.getAnimations({ subtree: true })) animation.finish();
+        return getComputedStyle(dialog).opacity === "1";
+      });
+      await page.waitForTimeout(400);
+    },
+    cleanup: async (page) => {
+      await page.keyboard.press("Escape");
+      await page.getByRole("dialog").waitFor({ state: "detached" });
+    },
+  },
   // A build between prints: its stage chip says In progress (it isn't on the bed).
   { name: "build-between-prints", path: `/builds/${SEED_BUILD_IDS.cableChain}` },
   {

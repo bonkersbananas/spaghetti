@@ -14,9 +14,11 @@ import type { PhotoView } from "@/lib/items";
 import { scrollBehavior } from "@/lib/motion";
 import type { PhotoZoom } from "@/lib/photo-zoom";
 import { photoSrc } from "@/lib/previews";
-import { IconButton } from "./Button";
+import { Button, IconButton } from "./Button";
 import { CloseIcon, NextIcon, PreviousIcon } from "./icons";
+import { Kbd } from "./Kbd";
 import { Photo } from "./Photo";
+import { PhotoThumb } from "./PhotoTiles";
 import { Dialog } from "./Sheet";
 
 export interface LargePhotosProps {
@@ -30,6 +32,12 @@ export interface LargePhotosProps {
   badge?: ReactNode;
   /** Under the title: who and when. */
   detail?: ReactNode;
+  /**
+   * The build the photos are from, before the title ("Star ornament · attempt 3"), where the viewer was opened away
+   * from it (the Journal): its name links where `link` (the card's own link) goes, and a click on it follows that link
+   * (the viewer closes first).
+   */
+  place?: { name: string; link: HTMLAnchorElement } | null;
   /** Where focus goes back to when it closes: the photo that opened it. */
   opener: HTMLElement | null;
   onClose: () => void;
@@ -46,7 +54,17 @@ const FLICK = 0.6;
  * Back close it, and focus goes back to the photo it was opened from. Pinch, double tap, double click and ctrl+wheel
  * zoom in place (lib/photo-zoom.ts). Opened with `openLarge` (ui/OpenLarge.tsx), which loads it on demand.
  */
-export default function LargePhotos({ open, photos, start, title, badge, detail, opener, onClose }: LargePhotosProps) {
+export default function LargePhotos({
+  open,
+  photos,
+  start,
+  title,
+  badge,
+  detail,
+  place,
+  opener,
+  onClose,
+}: LargePhotosProps) {
   const [index, setIndex] = useState(start);
   const scroller = useRef<HTMLDivElement>(null);
   const stage = useRef<HTMLDivElement>(null);
@@ -124,30 +142,64 @@ export default function LargePhotos({ open, photos, start, title, badge, detail,
         >
           <div ref={backdrop} aria-hidden className="bg-paper-deep paper-grain absolute inset-0" />
 
+          {/* Desktop: the title row on top. Phones: under the photo, above the thumbnails, where a thumb reaches the
+              close; the photo has the top of the screen, and a grabber there says it can be pulled down. */}
           <div
             ref={header}
-            className="relative flex shrink-0 items-start gap-3 px-4 pt-[max(0.75rem,var(--sg-safe-top))] pb-2 md:px-6 md:pt-5 md:pb-3"
+            className="relative flex shrink-0 items-start gap-3 px-4 pt-3 max-md:order-2 md:px-6 md:pt-5 md:pb-3"
           >
-            <div className="min-w-0 flex-1 pt-1.5 md:pt-1">
-              <div className="flex min-w-0 items-center gap-2">
-                {badge}
-                <Dialog.Title className="text-body text-ink min-w-0 truncate font-sans font-semibold">
+            <div className="min-w-0 flex-1 md:flex-none">
+              {/* Desktop: the outcome before the title. Phones: the title has the width (it may take two lines), and the
+                  outcome goes under it, beside who and when. */}
+              <div className="flex min-w-0 items-center gap-2.5">
+                <span className="shrink-0 max-md:hidden">{badge}</span>
+                <Dialog.Title className="text-body md:text-title text-ink min-w-0 font-sans font-semibold max-md:line-clamp-2 md:truncate">
+                  {place && (
+                    <>
+                      <a
+                        href={place.link.href}
+                        onClick={(event) => {
+                          if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+                          event.preventDefault();
+                          onClose();
+                          place.link.click();
+                        }}
+                        className="focus-ring decoration-ink/30 rounded-xs underline-offset-4 hover:underline"
+                      >
+                        {place.name}
+                      </a>
+                      <span className="text-ink-faint font-medium"> · </span>
+                    </>
+                  )}
                   {title}
                 </Dialog.Title>
               </div>
-              {detail && <p className="text-small text-ink-faint mt-0.5 truncate">{detail}</p>}
+              <div className="mt-1 flex min-w-0 items-center gap-2">
+                <span className="shrink-0 md:hidden">{badge}</span>
+                {detail && <p className="text-small text-ink-faint min-w-0 truncate">{detail}</p>}
+              </div>
             </div>
             {many && (
-              <p className="text-small text-ink-soft shrink-0 pt-2.5 tabular-nums md:pt-2" aria-live="polite">
+              <p
+                className="text-small text-ink-soft md:text-body shrink-0 pt-3 tabular-nums md:pt-1.5"
+                aria-live="polite"
+              >
                 {index + 1} of {count}
               </p>
             )}
             <Dialog.Close asChild>
-              <IconButton icon={CloseIcon} label="Close (Esc)" className="-mr-1.5 rounded-full md:-mr-2" />
+              <Button
+                variant="quiet"
+                icon={CloseIcon}
+                shortcut={["Esc"]}
+                aria-label="Close"
+                title="Close (Esc)"
+                className="-mr-2 shrink-0 max-md:size-11 max-md:rounded-full max-md:px-0 md:ml-auto"
+              />
             </Dialog.Close>
           </div>
 
-          <div ref={stage} {...pull} className="relative min-h-0 flex-1">
+          <div ref={stage} {...pull} className="relative min-h-0 flex-1 max-md:order-1">
             <div
               ref={placeStrip}
               onScroll={onScroll}
@@ -165,55 +217,35 @@ export default function LargePhotos({ open, photos, start, title, badge, detail,
                 />
               ))}
             </div>
+            <span
+              aria-hidden
+              className="rounded-pill bg-ink/25 pointer-events-none absolute top-[calc(var(--sg-safe-top)+0.625rem)] left-1/2 h-1 w-10 -translate-x-1/2 md:hidden"
+            />
             {many && (
               <>
-                <IconButton
-                  icon={PreviousIcon}
-                  label="Previous photo (←)"
-                  variant="secondary"
-                  disabled={index === 0}
-                  onClick={() => go(index - 1)}
-                  className="absolute top-1/2 left-5 -translate-y-1/2 rounded-full disabled:invisible max-md:hidden"
-                />
-                <IconButton
-                  icon={NextIcon}
-                  label="Next photo (→)"
-                  variant="secondary"
-                  disabled={index === count - 1}
-                  onClick={() => go(index + 1)}
-                  className="absolute top-1/2 right-5 -translate-y-1/2 rounded-full disabled:invisible max-md:hidden"
-                />
+                <SideButton side="left" disabled={index === 0} onClick={() => go(index - 1)} />
+                <SideButton side="right" disabled={index === count - 1} onClick={() => go(index + 1)} />
               </>
             )}
           </div>
 
           <div
             ref={footer}
-            className="relative shrink-0 px-4 pt-3 pb-[max(1rem,var(--sg-safe-bottom))] md:pt-4 md:pb-6"
+            className="relative shrink-0 px-4 pt-3 pb-[max(1rem,var(--sg-safe-bottom))] max-md:order-3 md:pt-4 md:pb-6"
           >
             {many && (
               <div className="flex justify-center">
-                <div className="-m-1 flex max-w-full gap-2 overflow-x-auto p-1 [&::-webkit-scrollbar]:hidden">
+                <div className="-m-2 flex max-w-full gap-2.5 overflow-x-auto p-2 [&::-webkit-scrollbar]:hidden">
                   {photos.map((photo, i) => (
-                    <button
+                    <PhotoThumb
                       key={photo.id}
-                      type="button"
-                      onClick={() => go(i)}
-                      aria-label={`Photo ${i + 1}`}
-                      aria-current={i === index || undefined}
-                      className={cn(
-                        "pressable focus-ring relative size-11 shrink-0 overflow-hidden rounded-sm md:size-14 md:rounded-md",
-                        "duration-fast transition-opacity",
-                        i === index ? "shadow-ring opacity-100" : "opacity-55 hover:opacity-90",
-                      )}
-                    >
-                      <Photo
-                        src={photoSrc(photo.id, "thumb")}
-                        alt=""
-                        color={photo.color || undefined}
-                        className="size-full"
-                      />
-                    </button>
+                      size="xs"
+                      src={photoSrc(photo.id, "thumb")}
+                      alt={`Photo ${i + 1}`}
+                      color={photo.color || undefined}
+                      onSelect={() => go(i)}
+                      selected={i === index}
+                    />
                   ))}
                 </div>
               </div>
@@ -222,6 +254,30 @@ export default function LargePhotos({ open, photos, start, title, badge, detail,
         </Dialog.Content>
       </Dialog.Portal>
     </Dialog.Root>
+  );
+}
+
+/** A side button for the photo before or after, at the window's edge, its key under it (desktop only). */
+function SideButton({ side, disabled, onClick }: { side: "left" | "right"; disabled: boolean; onClick: () => void }) {
+  const left = side === "left";
+  return (
+    <div
+      className={cn(
+        "absolute top-1/2 flex -translate-y-1/2 flex-col items-center gap-2 max-md:hidden",
+        left ? "left-5" : "right-5",
+        disabled && "invisible",
+      )}
+    >
+      <IconButton
+        icon={left ? PreviousIcon : NextIcon}
+        label={left ? "Previous photo (←)" : "Next photo (→)"}
+        variant="secondary"
+        disabled={disabled}
+        onClick={onClick}
+        className="rounded-full"
+      />
+      <Kbd keys={[left ? "←" : "→"]} />
+    </div>
   );
 }
 
@@ -277,7 +333,9 @@ function LargeFigure({
         className="[container-type:size] flex size-full items-center justify-center px-0 will-change-transform md:px-24"
       >
         <div
-          className="shadow-raised relative overflow-hidden md:rounded-lg"
+          // Phones: the whole page, the photo contained on a glow of its own colours (no bare paper above and below a
+          // landscape photo). Desktop: a box of the photo's own shape, its corners rounded on the paper.
+          className="md:shadow-raised relative overflow-hidden max-md:!aspect-auto max-md:!h-full max-md:!w-full md:rounded-lg"
           // The picture's own proportions are data: the box is exactly its shape at the largest size that fits.
           style={
             {
@@ -292,6 +350,8 @@ function LargeFigure({
             preview={photoSrc(photo.id, "thumb")}
             alt={label}
             color={photo.color || undefined}
+            fit="contain"
+            glow
             frame="deep"
             eager={near}
             className="size-full"

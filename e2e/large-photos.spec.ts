@@ -60,7 +60,7 @@ test("a thumbnail opens its photo large; arrows step, Esc and × close, focus co
   const large = viewer(page);
   await expect(large).toBeVisible();
   await expect(large.getByText("2 of 3")).toBeVisible();
-  await expect(large.getByRole("button", { name: "Photo 2" })).toHaveAttribute("aria-current", "true");
+  await expect(large.getByRole("button", { name: "Photo 2" })).toHaveAttribute("aria-pressed", "true");
   await page.keyboard.press("ArrowRight");
   await expect(large.getByText("3 of 3")).toBeVisible();
   // At the last photo there is no next one (the button steps aside).
@@ -77,7 +77,7 @@ test("a thumbnail opens its photo large; arrows step, Esc and × close, focus co
   // The lead photo opens on the first, and × closes it.
   await page.getByRole("button", { name: "Open photo 1 of 3 large" }).click();
   await expect(large.getByText("1 of 3")).toBeVisible();
-  await large.getByRole("button", { name: "Close (Esc)" }).click();
+  await large.getByRole("button", { name: "Close", exact: true }).click();
   await expect(large).toBeHidden();
   await expect(page.getByRole("button", { name: "Open photo 1 of 3 large" })).toBeFocused();
 
@@ -126,6 +126,7 @@ test("on a phone a tap opens it, a swipe goes to the next, a swipe down closes i
 
   // A step back in history (Safari's swipe back, where there is no close watcher) leaves the page and closes it too,
   // rather than leaving this attempt's photos over the page before.
+  await expect(page.getByRole("dialog")).toHaveCount(0);
   await thumb.tap();
   await expect(large.getByText("2 of 3")).toBeVisible();
   await page.goBack();
@@ -147,4 +148,15 @@ test("the Journal's attempt card opens its photos large, and its words open the 
 
   await card.getByText("attempt 1").click();
   await expect(page).toHaveURL(new RegExp(`/builds/${id}`));
+
+  // The viewer says which build, and its name goes there, with the attempt picked.
+  await page.goto("/journal");
+  await page
+    .getByRole("link", { name: /Gear wall.*attempt 1/ })
+    .locator("img")
+    .first()
+    .click();
+  await large.getByRole("link", { name: "Gear wall" }).click();
+  await expect(large).toBeHidden();
+  await expect(page).toHaveURL(new RegExp(`/builds/${id}\\?attempt=`));
 });

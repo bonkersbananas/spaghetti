@@ -56,8 +56,8 @@ export const AddPhotoTile = forwardRef<HTMLButtonElement, AddPhotoTileProps>(fun
 
 interface PhotoThumbProps {
   src: string;
-  /** "md" in the capture sheet, "sm" in an idea's strip. */
-  size?: "md" | "sm";
+  /** "md" in the capture sheet, "sm" in an idea's strip, "xs" under a photo opened large (44 px on phones, 56 on desktop). */
+  size?: "md" | "sm" | "xs";
   alt: string;
   color?: string;
   /** Still being resized or uploaded. */
@@ -87,7 +87,13 @@ export function PhotoThumb({
 }: PhotoThumbProps) {
   const photo = <Photo src={src} alt={alt} color={color} eager className="shadow-soft size-full rounded-md" />;
   return (
-    <div className={cn("relative shrink-0", size === "md" ? "size-24" : "size-16", className)}>
+    <div
+      className={cn(
+        "relative shrink-0",
+        size === "md" ? "size-24" : size === "sm" ? "size-16" : "size-11 md:size-14",
+        className,
+      )}
+    >
       {onSelect ? (
         <button
           type="button"
