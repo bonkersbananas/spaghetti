@@ -1,4 +1,4 @@
-import { and, eq, isNotNull, isNull, ne } from "drizzle-orm";
+import { and, eq, isNotNull, isNull, lt, ne, or } from "drizzle-orm";
 import type { BatchItem } from "drizzle-orm/batch";
 import { type Context, Hono } from "hono";
 import { z } from "zod";
@@ -9,13 +9,16 @@ import {
   MAX_MODEL_FILE_BYTES,
   MAX_SLICER_FILE_BYTES,
   ONE_REQUEST_FILE_BYTES,
+  type ReadClaimResponse,
 } from "../../shared/api.ts";
+import type { AttemptSettings } from "../../shared/attempts.ts";
 import { type OpenLinkResponse, openName } from "../../shared/open-link.ts";
 import type { SendHow } from "../../shared/print-match.ts";
 import { cleanFileName, isStlName, slicedName } from "../../shared/slicing/files.ts";
 import { SLICER_IDS } from "../../shared/slicing/settings.ts";
 import type { PreviousSlice } from "../../shared/slicing/types.ts";
 import { afterChange, fileOfAttempt, itemOfAttempt, recordChange } from "../changes.ts";
+import type { Db } from "../db/index.ts";
 import {
   type AttemptFileRow,
   attemptFiles,
@@ -35,6 +38,9 @@ import { type FilePart, fileKey, fileKeys } from "../photos.ts";
 import { slicingSettings } from "../slicing-schema.ts";
 import { loadAttempt, settings } from "./attempts.ts";
 import { openable } from "./open.ts";
+
+/** How long a device keeps the job of slicing a model an agent added. */
+const READ_CLAIM_MS = 10 * 60 * 1000;
 
 const THUMB_TYPES = ["image/png", "image/jpeg", "image/webp"];
 
@@ -204,6 +210,8 @@ const slicedFields = z.object({
   keep: z.enum(["previous"]).optional(),
   /** "1" when the sliced file was sent in parts first (POST /api/uploads). */
   uploaded: z.literal("1").optional(),
+  /** "1" from a background read of a model an agent added (lib/model-read.ts): its failure never replaces a good slice. */
+  quiet: z.literal("1").optional(),
 });
 
 /** PATCH /api/files/:id: the slicing settings people chose for a model (null: back to the defaults). */
@@ -328,6 +336,34 @@ function liveAttempt(c: { var: AppEnv["Variables"] }, attemptId: string) {
     .get();
 }
 
+/** Whether a file id is taken by a file of another kind: every file keeps its bytes under `files/<id>/…`, whoever's it is. */
+export async function idOfOtherFile(db: Db, id: string, own: FileTable | null): Promise<boolean> {
+  const [onAttempt, onItem, onTwist] = await Promise.all([
+    own === "attempt"
+      ? null
+      : db.select({ id: attemptFiles.id }).from(attemptFiles).where(eq(attemptFiles.id, id)).get(),
+    own === "item" ? null : db.select({ id: itemFiles.id }).from(itemFiles).where(eq(itemFiles.id, id)).get(),
+    own === "twist" ? null : db.select({ id: twistFiles.id }).from(twistFiles).where(eq(twistFiles.id, id)).get(),
+  ]);
+  return !!(onAttempt || onItem || onTwist);
+}
+
+const OTHERS_FILE = "That file id belongs to another file.";
+const PERSONS_FILE =
+  "A person added the file that is there, and an agent can't replace it. Ask them to remove it in the app first.";
+
+/** What a file's slicer-file settings fill in on an attempt: only what the attempt has no value for. Null when nothing. */
+export function fillSettings(current: AttemptSettings, fromFile: AttemptSettings): AttemptSettings | null {
+  const next: AttemptSettings = { ...current };
+  let changed = false;
+  for (const [key, value] of Object.entries(fromFile)) {
+    if (value === undefined || (current as Record<string, unknown>)[key] !== undefined) continue;
+    (next as Record<string, unknown>)[key] = value;
+    changed = true;
+  }
+  return changed ? next : null;
+}
+
 /**
  * /api/attempts/:id/file: the slicer file an attempt was printed from. The
  * browser reads the file and sends what it found with the bytes; the Worker
@@ -363,6 +399,25 @@ export const attemptFileRoutes = new Hono<AppEnv>()
     const existing = await db.select().from(attemptFiles).where(eq(attemptFiles.id, fields.id)).get();
     if (existing && existing.attemptId !== attemptId) {
       return apiError(c, 409, "conflict", "That file belongs to another attempt.");
+    }
+    if (!existing && (await idOfOtherFile(db, fields.id, "attempt"))) return apiError(c, 409, "conflict", OTHERS_FILE);
+    // Nor does it send a person's file again under its own id: that would replace the bytes in place.
+    if (c.var.via && existing && !existing.createdVia) return apiError(c, 409, "conflict", PERSONS_FILE);
+    // An agent doesn't destroy what a person added: it can replace its own work, not theirs.
+    if (c.var.via) {
+      const theirs = await db
+        .select({ id: attemptFiles.id })
+        .from(attemptFiles)
+        .where(
+          and(
+            eq(attemptFiles.attemptId, attemptId),
+            isNull(attemptFiles.deletedAt),
+            isNull(attemptFiles.createdVia),
+            ne(attemptFiles.id, fields.id),
+          ),
+        )
+        .get();
+      if (theirs) return apiError(c, 409, "conflict", PERSONS_FILE);
     }
 
     const stored = file instanceof File || !!fields.uploaded;
@@ -414,8 +469,18 @@ export const attemptFileRoutes = new Hono<AppEnv>()
         .set({ updatedAt: new Date() })
         .where(and(eq(items.id, itemId), afterChange)),
     ];
+    // A file an agent sent fills in what the attempt has no value for yet (the time, the grams, the filaments the file
+    // says), as the sheet does in the app; what a person typed is never replaced. Spools and parts stay for people.
+    const filled = c.var.via ? fillSettings(found.attempt.settings, fields.prefill) : null;
+    if (filled) {
+      statements.push(
+        db.update(attempts).set({ settings: filled, updatedAt: new Date() }).where(eq(attempts.id, attemptId)),
+        recordChange(db, { entity: "attempt", id: attemptId, itemId, action: "updated", actor: c.var.actor }),
+      );
+    }
     await db.batch(statements as [BatchItem<"sqlite">, ...BatchItem<"sqlite">[]]);
-    return c.json<AttemptResponse>({ attempt: await loadAttempt(db, found.attempt) }, existing ? 200 : 201);
+    const answer = filled ? { ...found.attempt, settings: filled } : found.attempt;
+    return c.json<AttemptResponse>({ attempt: await loadAttempt(db, answer) }, existing ? 200 : 201);
   })
 
   /** Takes the file off the attempt at once; restore is the undo. */
@@ -513,6 +578,9 @@ export const itemFileRoutes = new Hono<AppEnv>()
     if (existing && existing.itemId !== itemId) {
       return apiError(c, 409, "conflict", "That file belongs to another idea.");
     }
+    if (!existing && (await idOfOtherFile(db, fileId, "item"))) return apiError(c, 409, "conflict", OTHERS_FILE);
+    // An agent adds files to an idea; it doesn't rewrite a person's, or bring back one they removed.
+    if (c.var.via && existing && !existing.createdVia) return apiError(c, 409, "conflict", PERSONS_FILE);
     // A new file, or a removed one coming back by its id, takes a place: the limit counts the live ones.
     if ((!existing || existing.deletedAt) && (await liveFileCount(c, itemId)) >= MAX_ITEM_FILES) {
       return apiError(c, 409, "too_many", `An idea keeps at most ${MAX_ITEM_FILES} files.`);
@@ -606,7 +674,7 @@ const liveTwist = (c: { var: AppEnv["Variables"] }, twistId: string) =>
 /**
  * /api/twists/:id/file/:fileId: the model a twist keeps (decision 0053). The same multipart body as an idea's file, and
  * a twist keeps one model at a time: a new one takes the place of the one before, which stays for the purge (and for
- * "Remove"'s undo only while it is the live one). People only.
+ * "Remove"'s undo only while it is the live one). An agent (capture) may replace a model an agent added, never a person's.
  */
 export const twistFileRoutes = new Hono<AppEnv>()
   .put("/:id/file/:fileId", async (c) => {
@@ -636,6 +704,23 @@ export const twistFileRoutes = new Hono<AppEnv>()
     const existing = await db.select().from(twistFiles).where(eq(twistFiles.id, fileId)).get();
     if (existing && existing.twistId !== twistId) {
       return apiError(c, 409, "conflict", "That file belongs to another twist.");
+    }
+    if (!existing && (await idOfOtherFile(db, fileId, "twist"))) return apiError(c, 409, "conflict", OTHERS_FILE);
+    if (c.var.via && existing && !existing.createdVia) return apiError(c, 409, "conflict", PERSONS_FILE);
+    if (c.var.via) {
+      const theirs = await db
+        .select({ id: twistFiles.id })
+        .from(twistFiles)
+        .where(
+          and(
+            eq(twistFiles.twistId, twistId),
+            isNull(twistFiles.deletedAt),
+            isNull(twistFiles.createdVia),
+            ne(twistFiles.id, fileId),
+          ),
+        )
+        .get();
+      if (theirs) return apiError(c, 409, "conflict", PERSONS_FILE);
     }
     const stored = file instanceof File || !!fields.uploaded;
     const hasThumb = thumb instanceof File;
@@ -904,6 +989,35 @@ export const fileRoutes = new Hono<AppEnv>()
   })
 
   /**
+   * Takes the job of slicing a model an agent added (decision 0078), for ten minutes, as a photo's resize is claimed:
+   * two devices don't both slice it. `claimed: false` when another has it, or when it isn't waiting any more.
+   */
+  .post("/:id/read-claim", async (c) => {
+    const id = c.req.param("id");
+    if (!z.uuid().safeParse(id).success) return apiError(c, 400, "invalid", "That file's id isn't valid.");
+    const found = await liveFile(c, id);
+    if (!found) return apiError(c, 404, "not_found", "That file isn't here.");
+    const { row, table } = found;
+    if (row.kind !== "model" || !row.createdVia || row.slice || !row.stored) {
+      return c.json<ReadClaimResponse>({ claimed: false });
+    }
+    const target = tableOf(table);
+    const now = Date.now();
+    const [claimed] = await c.var.db
+      .update(target)
+      .set({ readClaimedAt: new Date(now) })
+      .where(
+        and(
+          eq(target.id, id),
+          isNull(target.slice),
+          or(isNull(target.readClaimedAt), lt(target.readClaimedAt, new Date(now - READ_CLAIM_MS))),
+        ),
+      )
+      .returning({ id: target.id });
+    return c.json<ReadClaimResponse>({ claimed: !!claimed });
+  })
+
+  /**
    * Multipart: `slice` (how it went, JSON), and when it was sliced the `sliced` .gcode.3mf (up to
    * MAX_SLICER_FILE_BYTES), what the reader made of it (`prefill`, `objects`, `slicer`) and the plate's `thumb`. A
    * failed slice may send its picture too. Slicing again replaces it; only a model is sliced.
@@ -947,6 +1061,11 @@ export const fileRoutes = new Hono<AppEnv>()
       return apiError(c, 415, "unsupported", "The plate's picture couldn't be kept.");
     }
     const { row, table } = found;
+    // A failure from a background read never takes the place of a good slice: a device that couldn't slice a model
+    // another one has sliced says nothing. (A re-slice someone asked for may fail, and keeps the slice for the undo.)
+    if (!done && fields.quiet && row.slice?.status === "sliced") {
+      return c.json<ItemFileResponse>({ file: toApiFile(row) });
+    }
     // Kept for one undo: the slice this replaces, its file and its picture.
     const previous: PreviousSlice | null | undefined =
       fields.keep === "previous" && !fields.uploaded && row.slice
@@ -994,7 +1113,26 @@ export const fileRoutes = new Hono<AppEnv>()
     };
     const db = c.var.db;
     const target = tableOf(table);
-    await db.batch([db.update(target).set(values).where(eq(target.id, id)), ...touched(c, found, id)]);
+    // A model an agent put on an attempt: what its slice says fills in the attempt's empty fields (the time, the grams).
+    const attemptId = table === "attempt" && row.createdVia && done ? (row as { attemptId?: string }).attemptId : null;
+    const attempt = attemptId ? await db.select().from(attempts).where(eq(attempts.id, attemptId)).get() : undefined;
+    const filled = attempt && fields.prefill ? fillSettings(attempt.settings, fields.prefill) : null;
+    await db.batch([
+      db.update(target).set(values).where(eq(target.id, id)),
+      ...touched(c, found, id),
+      ...(filled && attempt
+        ? [
+            db.update(attempts).set({ settings: filled, updatedAt: new Date() }).where(eq(attempts.id, attempt.id)),
+            recordChange(db, {
+              entity: "attempt",
+              id: attempt.id,
+              itemId: attempt.itemId,
+              action: "updated",
+              actor: c.var.actor,
+            }),
+          ]
+        : []),
+    ] as [BatchItem<"sqlite">, ...BatchItem<"sqlite">[]]);
     const updated = await db.select().from(target).where(eq(target.id, id)).get();
     return c.json<ItemFileResponse>({ file: toApiFile(updated as NonNullable<typeof updated>) });
   })

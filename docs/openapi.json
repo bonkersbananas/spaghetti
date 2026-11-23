@@ -5779,13 +5779,13 @@
                     "type": "string",
                     "contentEncoding": "base64",
                     "contentMediaType": "application/octet-stream",
-                    "description": "The photo at display size (WebP or JPEG)."
+                    "description": "The photo at display size (WebP or JPEG; a PNG only with needsResize, an original a browser will resize)."
                   },
                   "thumb": {
                     "type": "string",
                     "contentEncoding": "base64",
                     "contentMediaType": "application/octet-stream",
-                    "description": "The same photo as a thumbnail."
+                    "description": "The same photo as a thumbnail (the same type as large)."
                   }
                 },
                 "required": [
@@ -5870,7 +5870,7 @@
             }
           },
           "415": {
-            "description": "unsupported: not WebP or JPEG.",
+            "description": "unsupported: not WebP or JPEG (or a PNG with needsResize).",
             "content": {
               "application/json": {
                 "schema": {
@@ -10171,7 +10171,7 @@
     "/api/twists/{id}/file/{fileId}": {
       "put": {
         "operationId": "putTwistsByIdFileByFileId",
-        "summary": "Keeps a model (kind model: an .stl or plain .3mf the app slices) as the twist's own, in place of the one it kept. The same body as an idea's file. People only.",
+        "summary": "Keeps a model (kind model: an .stl or plain .3mf the app slices) as the twist's own, in place of the one it kept. The same body as an idea's file. Scope capture; an agent may replace a model an agent added, never one a person did (409).",
         "description": "Needs the \"capture\" scope. A route may narrow this by what the body asks for; see docs/api.md.",
         "tags": [
           "twists"
@@ -10887,6 +10887,73 @@
         "x-scopes": "person"
       }
     },
+    "/api/files/{id}/read-claim": {
+      "post": {
+        "operationId": "postFilesByIdReadClaim",
+        "summary": "Claims slicing a model an agent added (it has no slice yet), for ten minutes, so two devices don't both do it. People only.",
+        "description": "Only a signed-in person, never an agent token.",
+        "tags": [
+          "files"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Done.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "claimed": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "claimed"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "signed_out or invalid_token: no credentials, or a token that is unknown or revoked.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "not_found: that file isn't here.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "x-scopes": "person"
+      }
+    },
     "/api/files/{id}/sliced": {
       "put": {
         "operationId": "putFilesByIdSliced",
@@ -10935,6 +11002,10 @@
                     ]
                   },
                   "uploaded": {
+                    "type": "string",
+                    "const": "1"
+                  },
+                  "quiet": {
                     "type": "string",
                     "const": "1"
                   },
@@ -13073,13 +13144,13 @@
                     "type": "string",
                     "contentEncoding": "base64",
                     "contentMediaType": "application/octet-stream",
-                    "description": "The photo at display size (WebP or JPEG)."
+                    "description": "The photo at display size (WebP or JPEG; a PNG only with needsResize, an original a browser will resize)."
                   },
                   "thumb": {
                     "type": "string",
                     "contentEncoding": "base64",
                     "contentMediaType": "application/octet-stream",
-                    "description": "The same photo as a thumbnail."
+                    "description": "The same photo as a thumbnail (the same type as large)."
                   }
                 },
                 "required": [
@@ -16429,13 +16500,13 @@
                     "type": "string",
                     "contentEncoding": "base64",
                     "contentMediaType": "application/octet-stream",
-                    "description": "The photo at display size (WebP or JPEG)."
+                    "description": "The photo at display size (WebP or JPEG; a PNG only with needsResize, an original a browser will resize)."
                   },
                   "thumb": {
                     "type": "string",
                     "contentEncoding": "base64",
                     "contentMediaType": "application/octet-stream",
-                    "description": "The same photo as a thumbnail."
+                    "description": "The same photo as a thumbnail (the same type as large)."
                   }
                 },
                 "required": [

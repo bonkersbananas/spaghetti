@@ -74,6 +74,8 @@ interface Entry extends SliceJob {
   queryClient: QueryClient;
   controller: AbortController;
   png?: Blob;
+  /** A quiet job's engine failure is saved, so it isn't tried again (see `quiet`). */
+  saveEngineFailure?: boolean;
   done: Promise<SliceOutcome | null>;
 }
 
@@ -183,6 +185,11 @@ export function startSlice(
     again?: boolean;
     before?: SliceFigures;
     delay?: number;
+    /**
+     * A background read of a model an agent added (lib/model-read.ts): the engine failing on the model is saved like
+     * any other failure, so that no device tries it again; this device not getting the model or the engine isn't.
+     */
+    quiet?: boolean;
   },
 ): Promise<SliceOutcome | null> {
   entries.get(job.fileId)?.controller.abort();
@@ -210,14 +217,24 @@ export function startSlice(
     if (controller.signal.aborted) return null;
     update(entry, { status: "slicing" });
     let outcome: SliceOutcome;
+    // This device's trouble (the model or the engine's code not fetched): never saved.
+    let deviceTrouble = false;
     const pantry = await pantryAndDefaults(queryClient);
     const ask = { chosen: entry.chosen, defaults: entry.defaults ?? pantry.defaults, spools: pantry.spools };
     if (controller.signal.aborted) return null;
     try {
-      const blob = typeof job.source === "function" ? await job.source() : job.source;
+      const blob = await (typeof job.source === "function"
+        ? job.source().catch((error: unknown) => {
+            deviceTrouble = true;
+            throw error;
+          })
+        : job.source);
       // Kept all the same: a laptop or desktop that shows it slices it (the card says so).
       if (tooBigForPhone(blob.size)) throw new TooBigForPhone();
-      const { sliceModel } = await import("./slice-model");
+      const { sliceModel } = await import("./slice-model").catch((error: unknown) => {
+        deviceTrouble = true;
+        throw error;
+      });
       outcome = await sliceModel(
         blob,
         job.name,
@@ -248,6 +265,7 @@ export function startSlice(
     if (entry.png && !entry.again) setPreview(job.fileId, entry.png, entry.png);
     if (!outcome.ok && outcome.slice.problem === "memory") outcome.slice.device = onPhone() ? "phone" : "computer";
     entry.outcome = outcome;
+    if (job.quiet && !deviceTrouble) entry.saveEngineFailure = true;
     update(entry, { status: outcome.ok ? "sliced" : "failed", fraction: 1, picture: !!entry.png });
     if (entry.target) void save(entry);
     return outcome;
@@ -317,7 +335,7 @@ export function forgetChange(fileId: string) {
 async function save(entry: Entry) {
   const { outcome, target } = entry;
   if (!outcome || !target) return;
-  if (!outcome.ok && outcome.slice.problem === "engine") return;
+  if (!outcome.ok && outcome.slice.problem === "engine" && !entry.saveEngineFailure) return;
   const form = new FormData();
   form.set("slice", JSON.stringify(outcome.slice));
   if (outcome.png) form.set("thumb", outcome.png, "plate_1.png");
@@ -334,6 +352,7 @@ async function save(entry: Entry) {
   // Slicing again, the server keeps the slice this replaces for one undo; one sent in parts is in the bucket over
   // it already, so that slice can't be kept and there is no undo.
   if (entry.again && !inParts) form.set("keep", "previous");
+  if (entry.saveEngineFailure) form.set("quiet", "1");
   for (let tries = 0; tries < 60; tries++) {
     if (entry.controller.signal.aborted || entries.get(entry.fileId) !== entry) return;
     try {

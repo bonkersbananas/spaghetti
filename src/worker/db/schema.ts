@@ -792,6 +792,8 @@ export const attemptFiles = sqliteTable(
       .references(() => users.id),
     /** The agent it came through ("via Claude for Alex"), if any; `createdBy` is then its owner. */
     createdVia: text("created_via"),
+    /** When a browser took the job of slicing a model an agent added (so two devices don't both); it lapses (decision 0078). */
+    readClaimedAt: integer("read_claimed_at", { mode: "timestamp_ms" }),
     createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
     deletedAt: integer("deleted_at", { mode: "timestamp_ms" }),
   },
@@ -828,6 +830,8 @@ export const itemFiles = sqliteTable(
       .references(() => users.id),
     /** The agent it came through ("via Claude for Alex"), if any; `createdBy` is then its owner. */
     createdVia: text("created_via"),
+    /** When a browser took the job of slicing a model an agent added (so two devices don't both); it lapses (decision 0078). */
+    readClaimedAt: integer("read_claimed_at", { mode: "timestamp_ms" }),
     createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
     deletedAt: integer("deleted_at", { mode: "timestamp_ms" }),
   },
@@ -960,6 +964,8 @@ export const twistFiles = sqliteTable(
       .references(() => users.id),
     /** The agent it came through ("via Claude for Alex"), if any; `createdBy` is then its owner. */
     createdVia: text("created_via"),
+    /** When a browser took the job of slicing a model an agent added (so two devices don't both); it lapses (decision 0078). */
+    readClaimedAt: integer("read_claimed_at", { mode: "timestamp_ms" }),
     createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
     deletedAt: integer("deleted_at", { mode: "timestamp_ms" }),
   },
