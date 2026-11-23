@@ -319,6 +319,31 @@ test("an answered print still asks on Today and the Journal: two as likely are b
   await expect(page.getByRole("region", { name: "Is this Herb planter or Balcony planters?" })).toBeVisible();
 });
 
+test("the Journal's row for a print still asking shows the same line under its card, and Yes files it", async ({
+  page,
+  isMobile,
+}) => {
+  // Phones: the Journal's Now asks for a recent print, and its row is left out of the notebook under it.
+  test.skip(isMobile, "the desktop Journal's row");
+  const planter = await buildKeeping(page, "Herb planter", "planter-v2.gcode.3mf");
+  await buildKeeping(page, "Planter v2", "balcony.gcode.3mf", { startedAgo: 3 * DAYS });
+  const { ownId, attemptId } = await bridgeFiles(page, "planter-v2(2)");
+  await page.request.patch(`/api/attempts/${attemptId}`, {
+    headers: { Origin: origin(page) },
+    data: { outcome: "success" },
+  });
+
+  await page.goto("/journal");
+  const question = page.getByRole("region", { name: "Is this Herb planter?" });
+  await expect(question).toBeVisible();
+  // Right under the card, not inside its link.
+  expect(await question.evaluate((node) => node.closest("a"))).toBeNull();
+  await question.getByRole("button", { name: "Yes" }).click();
+  await expect(page.getByText("Moved to Herb planter")).toBeVisible();
+  await expect(question).toHaveCount(0);
+  await expect.poll(() => homeOf(page, attemptId, [planter, ownId])).toEqual({ itemId: planter, asking: false });
+});
+
 test("the attempt's sheet asks it too: answering the outcome leaves the question, and Yes takes the sheet along", {
   tag: "@phone",
 }, async ({ page }) => {

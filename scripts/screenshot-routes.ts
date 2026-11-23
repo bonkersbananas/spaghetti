@@ -8723,6 +8723,30 @@ shots.push(
       cleanup: removeFiledPrints,
     },
     {
+      // A print answered a while back that still asks: the Journal's row has the same line right under its card (on a
+      // phone too, once Now no longer keeps it, after two weeks).
+      name: "journal-which-build-row",
+      path: "/journal",
+      prepare: async (page) => {
+        await buildAboutToPrint(page, "Herb planter", "planter-v2.gcode.3mf", { startedAgo: 20 * 24 * 60 * 60_000 });
+        await buildAboutToPrint(page, "Planter v2", "balcony-box.gcode.3mf", { startedAgo: 25 * 24 * 60 * 60_000 });
+        const { attemptId } = await bridgeFiles(page, "planter-v2(2)", { ago: 15 * 24 * 60 * 60_000 });
+        await answerFirst(page, attemptId);
+        await page.reload({ waitUntil: "networkidle" });
+        const question = page.getByRole("region", { name: /^Is this / }).first();
+        // Further down the notebook: scroll until its page has come.
+        for (let tries = 0; tries < 12 && !(await question.count()); tries++) {
+          await page.evaluate(() =>
+            window.scrollTo({ top: document.documentElement.scrollHeight, behavior: "instant" }),
+          );
+          await page.waitForTimeout(700);
+        }
+        await question.evaluate((node) => node.scrollIntoView({ block: "center", behavior: "instant" }));
+        await page.waitForTimeout(500);
+      },
+      cleanup: removeFiledPrints,
+    },
+    {
       // "How did it go?" opens the attempt's sheet with the question on top: one likely build, Yes or Another build.
       name: "which-build-attempt-sheet",
       path: "/builds",
