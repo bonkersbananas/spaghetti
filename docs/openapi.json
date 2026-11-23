@@ -8373,6 +8373,14 @@
                       ]
                     }
                   },
+                  "trays": {
+                    "maxItems": 16,
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "maxLength": 8
+                    }
+                  },
                   "settingsMerge": {
                     "type": "object",
                     "properties": {

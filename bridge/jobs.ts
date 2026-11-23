@@ -17,6 +17,7 @@ export const ATTACH_WINDOW_MS = 12 * 60 * 60_000;
 
 export type JobPayload =
   | { type: "start"; job: Job; fileName: string | null }
+  | { type: "trays"; job: Job }
   | { type: "end"; job: Job; endedAt: number; suggestedTag: string | null }
   | { type: "photo"; job: Job; takenAt: number }
   | { type: "ams"; trays: Tray[] };
@@ -142,6 +143,18 @@ async function uploadFile(
   if (thumb) form.set("thumb", new File([thumb.bytes as BlobPart], "thumb.png", { type: thumb.mediaType }));
   if (bytes.length <= MAX_SLICER_FILE_BYTES) form.set("file", new File([bytes as BlobPart], name, { type: FILE_TYPE }));
   await api.putFile(attemptId, form);
+}
+
+/** The trays that fed the print, once it is printing: by its attempt alone, wherever it is by now. */
+export async function traysJob(ctx: JobContext, payload: Extract<JobPayload, { type: "trays" }>) {
+  const ref = ctx.store.attemptFor(payload.job.key);
+  if (!ref) return;
+  try {
+    await ctx.api.updateAttempt(ref.attemptId, { trays: payload.job.trays ?? [] });
+  } catch (error) {
+    if (error instanceof HttpError && error.status === 404) return;
+    throw error;
+  }
 }
 
 export async function endJob(ctx: JobContext, payload: Extract<JobPayload, { type: "end" }>) {
