@@ -58,6 +58,8 @@ export function printFacts(job: Job, fileName: string | null, estimate: number |
     gcodeFile: job.gcodeFile,
     plate: job.plate,
     estimateMinutes: job.estimateMinutes ?? estimate ?? null,
+    // Left out when the printer named no tray, as an older bridge does.
+    ...(job.trays?.length ? { trays: job.trays } : {}),
   };
 }
 

@@ -3,6 +3,7 @@
  * ended. Pure: feed it states and the clock, it says what happened. It remembers one job (and is given the stored
  * one after a restart, so a print the bridge already knows about is never started twice).
  */
+import { activeTraysOf } from "./ams.ts";
 import type { PrinterState, PrintState } from "./printer-state.ts";
 
 export interface Job {
@@ -17,6 +18,8 @@ export interface Job {
   startedAt: number;
   /** The printer's own estimate when the print began (`mc_remaining_time`), when it said: helps the app place it. */
   estimateMinutes?: number | null;
+  /** The tray feeding the print when it began ("A2", "Ext"), when the printer said: the app puts the pantry's spool on the attempt. */
+  trays?: string[];
 }
 
 /** What is kept across restarts for the job in progress. */
@@ -133,6 +136,7 @@ export class JobMachine {
           startedAt: now,
           estimateMinutes:
             typeof print.mc_remaining_time === "number" && print.mc_remaining_time > 0 ? print.mc_remaining_time : null,
+          trays: activeTraysOf(print),
           ended: false,
           spaghetti: false,
         };
@@ -166,11 +170,12 @@ export class JobMachine {
   }
 }
 
-const toJob = ({ key, name, gcodeFile, plate, startedAt, estimateMinutes }: TrackedJob): Job => ({
+const toJob = ({ key, name, gcodeFile, plate, startedAt, estimateMinutes, trays }: TrackedJob): Job => ({
   key,
   name,
   gcodeFile,
   plate,
   startedAt,
   estimateMinutes: estimateMinutes ?? null,
+  trays: trays ?? [],
 });

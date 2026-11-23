@@ -209,6 +209,8 @@ export interface PrintFactsRequest {
   estimateMinutes?: number | null;
   /** The Spaghetti file the print's .gcode.3mf says it was sliced from, when the bridge read the file. */
   fileId?: string | null;
+  /** The printer's active trays when the print began ("A2", "Ext"); the app puts the pantry's spool in each on the attempt. */
+  trays?: string[] | null;
 }
 
 /**
