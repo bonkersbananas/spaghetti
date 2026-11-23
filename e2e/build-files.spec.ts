@@ -82,3 +82,58 @@ test("a build takes new model files: the first from its header, more at the end 
   await expect(sheet.getByRole("button", { name: /^Use hook-v3\.gcode\.3mf/ })).toBeVisible();
   await expect.poll(async () => (await (await page.request.get(`/api/items/${id}`)).json()).item.files.length).toBe(3);
 });
+
+test("files picked together while the build is being fetched all stay on the page", async ({ page }) => {
+  await signIn(page);
+  const headers = { Origin: new URL(page.url()).origin };
+  const id = crypto.randomUUID();
+  await page.request.post("/api/items", { headers, data: { id, title: "Twin hooks", stage: "building" } });
+  // Opened from the list, the build shows the list's copy and asks for itself: that answer is held until the files
+  // are on the page.
+  let release = () => {};
+  const held = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  let asked = false;
+  await page.route(`**/api/items/${id}`, async (route) => {
+    if (route.request().method() !== "GET") return route.fallback();
+    asked = true;
+    await held;
+    await route.fallback();
+  });
+  // The second file takes longer to be saved than the first, as one of several often does.
+  await page.route(`**/api/items/${id}/files/**`, async (route) => {
+    if (route.request().method() === "PUT" && (route.request().postData() ?? "").includes("twin-b.stl"))
+      await new Promise((resolve) => setTimeout(resolve, 3000));
+    await route.fallback();
+  });
+  await page.goto("/builds");
+  await page
+    .getByRole("link", { name: /Twin hooks/ })
+    .first()
+    .click();
+  await expect(page.getByRole("textbox", { name: "Title" })).toHaveValue("Twin hooks");
+  await expect.poll(() => asked).toBe(true);
+  await page.getByTestId("idea-file-input").setInputFiles([
+    { name: "twin-a.stl", mimeType: "model/stl", buffer: Buffer.from(boxStl(20)) },
+    { name: "twin-b.stl", mimeType: "model/stl", buffer: Buffer.from(boxStl(22)) },
+  ]);
+  const files = page.getByRole("region", { name: /^Files/ });
+  await expect(files.getByText("twin-a.stl")).toBeVisible();
+  await expect(files.getByText("twin-b.stl")).toBeVisible();
+  release();
+  // While the second is still being saved, the answers that come keep its card on the page.
+  for (let i = 0; i < 30; i++) {
+    expect(await files.getByText("twin-b.stl").count(), "the second file's card stays").toBe(1);
+    await page.waitForTimeout(100);
+  }
+  // The answers after both are saved keep both.
+  await expect
+    .poll(async () => (await (await page.request.get(`/api/items/${id}`)).json()).item.files.length, {
+      timeout: 20_000,
+    })
+    .toBe(2);
+  await page.waitForTimeout(1500);
+  await expect(files.getByText("twin-a.stl")).toBeVisible();
+  await expect(files.getByText("twin-b.stl")).toBeVisible();
+});
