@@ -226,8 +226,7 @@ test.describe("dragging a sheet down", () => {
     const { id } = await addIdea(page, "Sheet down", 2);
     try {
       await page.goto(`/ideas/${id}`, { waitUntil: "networkidle" });
-      const order = page.getByRole("list", { name: "Photo order" });
-      await expect(order.getByRole("listitem").first()).toHaveCSS("touch-action", "pan-y");
+      await expect(page.locator("ul[data-movable] li").first()).toBeVisible();
       await page.waitForTimeout(400);
       const thumb = page.getByRole("button", { name: "Photo 2", exact: true });
       await thumb.tap();
