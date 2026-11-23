@@ -236,7 +236,7 @@ function Build({ item }: { item: ItemView }) {
     gallery.findIndex((photo) => photo.id === photoId),
   );
   const shownPhoto = gallery[photoIndex];
-  // The photo the page leads with: an attempt card that has it shows its photos small, so no photo is large twice.
+  // The photo the page leads with: an attempt card that has it doesn't show it large again (AttemptEntry's heroId).
   const leadPhotoId = (hero ?? gallery[0])?.id;
   const shownAttempt = shownPhoto?.attemptId ? item.attempts.find((a) => a.id === shownPhoto.attemptId) : undefined;
   const selectPhoto = (index: number) => {
@@ -915,7 +915,7 @@ function Build({ item }: { item: ItemView }) {
                             attempt={attempt}
                             partsLabel={attemptPartsLabel(attempt, item.parts)}
                             photos={photos}
-                            photosSmall={photos.some((photo) => photo.id === leadPhotoId)}
+                            heroId={leadPhotoId}
                             onFold={
                               fold
                                 ? () => {

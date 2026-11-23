@@ -3802,6 +3802,26 @@ export const shots: Shot[] = [
     cleanup: removeModelItems,
   },
   {
+    // A row picked with J/K on a keyboard: attempt 3, with the picked ring.
+    name: "build-four-attempts-picked",
+    path: "/builds",
+    width: 1440,
+    why: "J and K are the keyboard's",
+    prepare: async (page) => {
+      await fourAttemptBuild(page);
+      await page.mouse.move(0, 0);
+      await page.keyboard.press("j");
+      await page.keyboard.press("j");
+      await page.locator('[data-attempt-row][aria-current="true"]').waitFor();
+    },
+    beforeShot: async (page) => {
+      await page
+        .getByRole("heading", { level: 2, name: /^Attempts/ })
+        .evaluate((el) => window.scrollTo(0, el.getBoundingClientRect().top + window.scrollY - 72));
+    },
+    cleanup: removeModelItems,
+  },
+  {
     name: "build-four-attempts-row-open",
     path: "/builds",
     prepare: async (page) => {

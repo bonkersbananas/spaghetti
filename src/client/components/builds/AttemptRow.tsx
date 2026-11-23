@@ -3,18 +3,22 @@ import { tagLabel } from "@shared/attempts";
 import { fullTime, relativeTime } from "@shared/time";
 import { m } from "motion/react";
 import { forwardRef, type KeyboardEvent } from "react";
+import { Avatar } from "@/components/ui/Avatar";
 import { ChangeLine } from "@/components/ui/ChangeLine";
+import { ExpandIcon } from "@/components/ui/icons";
 import { OpenLarge, openLarge } from "@/components/ui/OpenLarge";
 import { Photo } from "@/components/ui/Photo";
 import { rowHover, rowSelected } from "@/components/ui/PhotoRow";
+import { PrinterMark } from "@/components/ui/PrinterMark";
 import { useTagOptions } from "@/lib/builds";
 import { cn } from "@/lib/cn";
 import type { AttemptView, PhotoView } from "@/lib/items";
 import { spring } from "@/lib/motion";
-import { photoSrc } from "@/lib/previews";
+import { fileThumbSrc, photoSrc } from "@/lib/previews";
 import { attemptLarge } from "./AttemptEntry";
 import { AttemptMenu } from "./AttemptMenu";
 import { OutcomeChip, outcomeDots, outcomeIcons, stepOf } from "./Outcome";
+import { PlateThumb } from "./SlicerFile";
 
 interface AttemptRowProps {
   attempt: AttemptView;
@@ -50,17 +54,11 @@ export const AttemptRow = forwardRef<HTMLLIElement, AttemptRowProps>(function At
   const Icon = outcomeIcons[outcome];
   // The one line that matters: what someone wrote, else what went wrong, else what worked.
   const line = attempt.note.trim()
-    ? { text: attempt.note.trim(), className: "text-ink-soft" }
+    ? attempt.note.trim()
     : attempt.failureTags.length
-      ? {
-          text: attempt.failureTags.map((slug) => tagLabel("failure", slug, failureOptions)).join(" · "),
-          className: "text-ink-soft",
-        }
+      ? attempt.failureTags.map((slug) => tagLabel("failure", slug, failureOptions)).join(" · ")
       : attempt.successNotes.length
-        ? {
-            text: attempt.successNotes.map((slug) => tagLabel("success", slug, successOptions)).join(" · "),
-            className: "text-ink-soft",
-          }
+        ? attempt.successNotes.map((slug) => tagLabel("success", slug, successOptions)).join(" · ")
         : null;
   // Enter opens the row here, before the page's Enter (open the picked attempt's sheet) can take it.
   const onKeyDown = (event: KeyboardEvent) => {
@@ -84,10 +82,10 @@ export const AttemptRow = forwardRef<HTMLLIElement, AttemptRowProps>(function At
       data-attempt-id={attempt.id}
       data-attempt-row=""
     >
-      {/* The story's thread, its dot level with the row's picture. */}
+      {/* The story's thread, its dot on the chip's line as the card's is, so it stays put when the row opens. */}
       <div className="relative flex w-3 shrink-0 justify-center" aria-hidden>
-        <span className={cn("bg-ink/10 absolute top-0 w-0.5", last ? "h-9 md:h-10" : "bottom-0")} />
-        <span className={cn("ring-paper relative mt-7.5 size-3 rounded-full ring-4 md:mt-8.5", outcomeDots[step])} />
+        <span className={cn("bg-ink/10 absolute top-0 w-0.5", last ? "h-6" : "bottom-0")} />
+        <span className={cn("ring-paper relative mt-5 size-3 rounded-full ring-4", outcomeDots[step])} />
       </div>
 
       <div className="min-w-0 flex-1 pb-2 md:pb-3">
@@ -100,7 +98,7 @@ export const AttemptRow = forwardRef<HTMLLIElement, AttemptRowProps>(function At
             aria-label={`Attempt ${attempt.number}: ${attempt.outcome ?? "no answer"}. Expand`}
             className="pressable focus-ring absolute inset-0 z-0 rounded-lg"
           />
-          <div className="pointer-events-none relative flex items-start gap-3.5 px-3.5 py-2 md:gap-4 md:px-4">
+          <div className="pointer-events-none relative flex items-start gap-3.5 px-3.5 pt-3 pb-2 md:gap-4 md:px-4">
             {lead ? (
               <OpenLarge
                 label={
@@ -108,7 +106,7 @@ export const AttemptRow = forwardRef<HTMLLIElement, AttemptRowProps>(function At
                     ? `Open attempt ${attempt.number}'s pictures large`
                     : `Open attempt ${attempt.number}'s picture large`
                 }
-                className="pointer-events-auto relative z-10 size-14 shrink-0 rounded-md md:size-16"
+                className="pointer-events-auto relative z-10 size-12 shrink-0 rounded-md md:size-16"
                 data-photo-id={lead.id}
                 onClick={(event) => openLarge(event, attemptLarge(attempt, photos, person, 0))}
               >
@@ -119,26 +117,39 @@ export const AttemptRow = forwardRef<HTMLLIElement, AttemptRowProps>(function At
                   </span>
                 )}
               </OpenLarge>
+            ) : attempt.file?.hasThumb ? (
+              // No photo, but the plate it printed: the slicer's picture of it.
+              <PlateThumb src={fileThumbSrc(attempt.file)} alt="" className="size-12 md:size-16" />
             ) : (
               <span
                 aria-hidden
                 // Neutral: the chip and the thread's dot already say how it went, and a row stays quieter than the card.
-                className="bg-ink/4 text-ink-faint flex size-14 shrink-0 items-center justify-center rounded-md md:size-16"
+                className="bg-ink/4 text-ink-faint flex size-12 shrink-0 items-center justify-center rounded-md md:size-16"
               >
                 <Icon size={22} weight="bold" />
               </span>
             )}
             <div className="flex min-w-0 flex-1 flex-col gap-1 py-0.5">
-              <div className="flex items-center gap-2.5">
+              <div className="flex items-center gap-2 md:gap-2.5">
                 <OutcomeChip outcome={attempt.outcome} />
-                <h3 className="text-body text-ink font-sans font-semibold whitespace-nowrap">
+                <h3 className="text-body text-ink flex items-center gap-1.5 font-sans font-semibold whitespace-nowrap">
                   Attempt {attempt.number}
+                  {/* It opens: the caret the card's name has, pointing down. */}
+                  <ExpandIcon size={16} aria-hidden className="text-ink-faint shrink-0" />
                 </h3>
-                <span className="text-small text-ink-faint ml-auto hidden min-w-0 truncate whitespace-nowrap md:inline">
-                  {when}
+                {/* Who printed it and when, where the card has them on desktop; a phone's row has room for neither (when goes under). */}
+                <span className="text-small text-ink-faint ml-auto flex min-w-0 items-center gap-2 whitespace-nowrap">
+                  <span className="hidden min-w-0 truncate md:inline">{when}</span>
+                  <span className="hidden md:flex">
+                    {attempt.fromPrinter ? (
+                      <PrinterMark size="xs" decorative />
+                    ) : (
+                      person && <Avatar person={person} size="xs" />
+                    )}
+                  </span>
                 </span>
                 {/* Above the row's button, so it works. */}
-                <span className="pointer-events-auto relative z-10 -my-1.5 flex shrink-0 max-md:ml-auto">
+                <span className="pointer-events-auto relative z-10 -my-1.5 flex shrink-0">
                   <AttemptMenu
                     number={attempt.number}
                     onCompare={onCompare}
@@ -148,19 +159,21 @@ export const AttemptRow = forwardRef<HTMLLIElement, AttemptRowProps>(function At
                   />
                 </span>
               </div>
-              {/* Phones say when at the start of this line (the first has no room for it), and give it two lines. */}
-              <p className={cn("text-small line-clamp-2 min-w-0 break-words md:line-clamp-1", !line && "md:hidden")}>
+              {/* In the card's order: what it changed, then the words. */}
+              <ChangeLine changes={attempt.changes} label={`Changed since attempt ${attempt.number - 1}: `} />
+              {/* Phones say when at the start of this line (the first has no room for it), and give the note three lines. */}
+              <p
+                className={cn(
+                  "text-small line-clamp-3 min-w-0 text-pretty break-words md:line-clamp-1",
+                  !line && "md:hidden",
+                )}
+              >
                 <span className="text-ink-faint md:hidden">
                   {when}
                   {line && " · "}
                 </span>
-                {line && <span className={line.className}>{line.text}</span>}
+                {line && <span className="text-ink-soft">{line}</span>}
               </p>
-              <ChangeLine
-                changes={attempt.changes}
-                label={`Changed since attempt ${attempt.number - 1}: `}
-                className="mt-0.5"
-              />
             </div>
           </div>
         </div>

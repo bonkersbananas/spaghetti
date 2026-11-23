@@ -98,7 +98,8 @@ test("earlier attempts are rows that open in place, and stay open across a reloa
   await expect(page.getByRole("button", { name: "Attempt 2: partial. Open" })).toBeVisible();
 
   // The caret folds it back.
-  await press(page.getByRole("button", { name: "Fold attempt 2" }), isMobile);
+  // The card's chip and name fold it back (its caret points up).
+  await press(page.getByRole("button", { name: /Attempt 2$/, expanded: true }), isMobile);
   await expect(row(page, 2, "partial")).toBeVisible();
   await expect(page.locator("[data-attempt-row]")).toHaveCount(3);
 });
@@ -136,14 +137,20 @@ test("a row's picture and the open card's photos open large; the card shows smal
   isMobile,
 }) => {
   await fourAttempts(page);
-  // The page leads with the newest attempt's photo, so its card shows both of its photos small, none large.
+  // The page leads with the newest attempt's second photo. Beside it on a desktop, the card shows both of its photos
+  // small; on a phone, far below it, the card leads large with the photo the hero isn't showing.
   const card = page.locator("[data-attempt-id]").first();
   await expect(card.getByRole("button", { name: "Open photo 1 of 2 large" })).toBeVisible();
-  const sizes = await card
-    .locator("button[data-photo-id]")
-    .evaluateAll((buttons) => buttons.map((button) => button.getBoundingClientRect().width));
+  const widths = async () =>
+    card
+      .locator("button[data-photo-id]")
+      .evaluateAll((buttons) => buttons.map((button) => Math.round(button.getBoundingClientRect().width)));
+  const sizes = await widths();
   expect(sizes).toHaveLength(2);
-  for (const width of sizes) expect(width).toBeLessThanOrEqual(96);
+  if (isMobile) {
+    expect(sizes[0]).toBeGreaterThan(200);
+    expect(sizes[1]).toBeLessThanOrEqual(96);
+  } else for (const width of sizes) expect(width).toBeLessThanOrEqual(96);
 
   // A row's picture opens its attempt's photos large, and the row stays a row.
   await press(page.getByRole("button", { name: "Open attempt 2's picture large" }), isMobile);
