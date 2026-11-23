@@ -285,8 +285,11 @@ export const itemAttemptRoutes = new Hono<AppEnv>().post("/:id/attempts", async 
   if (!attempt || attempt.itemId !== target.id) {
     return apiError(c, 409, "conflict", "That attempt belongs to something else.");
   }
+  if (filing && body.settings && Object.keys(carryOver(body.settings)).length) {
+    await db.update(printJobs).set({ ownSettings: true }).where(eq(printJobs.attemptId, attempt.id));
+  }
   // A print from the printer, placed in a build: what it lacks comes from the file or the build's last attempt.
-  const filled = filing ? await fillPrinterAttempt(db, attempt.id, c.var.actor, { filing: true }) : false;
+  const filled = filing ? await fillPrinterAttempt(db, attempt.id, c.var.actor) : false;
   const placed = filled
     ? ((await db.select().from(attempts).where(eq(attempts.id, attempt.id)).get()) ?? attempt)
     : attempt;

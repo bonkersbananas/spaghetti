@@ -1,1 +1,0 @@
-ALTER TABLE `print_jobs` ADD `filled` text;

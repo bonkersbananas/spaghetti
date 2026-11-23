@@ -284,5 +284,9 @@ describe("what a printer-made attempt gets from where it is placed", () => {
     const read = await bridgePrints({ name: "hook", plate: 1 }, { layerHeight: 0.2, supportEnabled: false });
     expect(read.attempt.itemId).toBe(other);
     expect(read.attempt.settings).toEqual({ layerHeight: 0.2, supportEnabled: false });
+    // And still not when the bridge then reports its trays.
+    const told = await asBridge(`/api/attempts/${read.attemptId}`, { method: "PATCH", json: { trays: ["A1"] } });
+    expect(told.status).toBe(200);
+    expect((await attemptOf(other, read.attemptId))?.settings).toEqual({ layerHeight: 0.2, supportEnabled: false });
   });
 });

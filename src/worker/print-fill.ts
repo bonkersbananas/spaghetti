@@ -137,12 +137,7 @@ const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b)
  * earlier fill put in (where it is still as the fill left it). Does nothing for an attempt the printer didn't file
  * (no print job), and never replaces a value that is there. Returns whether it changed anything.
  */
-export async function fillPrinterAttempt(
-  db: Db,
-  attemptId: string,
-  actor: ChangeActor,
-  { filing = false }: { filing?: boolean } = {},
-): Promise<boolean> {
+export async function fillPrinterAttempt(db: Db, attemptId: string, actor: ChangeActor): Promise<boolean> {
   const [attempt, job] = await Promise.all([
     db.select().from(attempts).where(eq(attempts.id, attemptId)).get(),
     db.select().from(printJobs).where(eq(printJobs.attemptId, attemptId)).get(),
@@ -155,9 +150,9 @@ export async function fillPrinterAttempt(
   const added: Record<string, unknown> = {};
   const source =
     (await fromFile(db, attempt, job)) ??
-    // Filing: settings the bridge sent are its own file's, complete: the last attempt's would only mix in keys the
-    // file never has (a tree support beside supportEnabled false).
-    (filing && hasChoices(settings as AttemptSettings) ? null : await fromLastAttempt(db, attempt));
+    // Settings the bridge sent are its own file's, complete: the last attempt's would only mix in keys the file never
+    // has (a tree support beside supportEnabled false).
+    (job.ownSettings && hasChoices(settings as AttemptSettings) ? null : await fromLastAttempt(db, attempt));
   for (const [key, value] of Object.entries(source ?? {})) {
     if (value === undefined || settings[key] !== undefined) continue;
     settings[key] = value;

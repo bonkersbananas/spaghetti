@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "f879158a-4f85-4ffc-9233-9016faf247b2",
+  "id": "6fc2cde6-5700-4b42-b990-ff350da65e03",
   "prevId": "c4550517-5833-4f23-bdc3-2233945cfb09",
   "tables": {
     "agent_tokens": {
@@ -3034,6 +3034,14 @@
           "primaryKey": false,
           "notNull": false,
           "autoincrement": false
+        },
+        "own_settings": {
+          "name": "own_settings",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": false
         },
         "placed": {
           "name": "placed",

@@ -861,6 +861,8 @@ export const printJobs = sqliteTable("print_jobs", {
   trays: text("trays", { mode: "json" }).$type<Array<{ slot: string; spoolId: string | null }>>(),
   /** What the app's fill put on the attempt (see print-fill.ts), so a move can take it out again and fill afresh. */
   filled: text("filled", { mode: "json" }).$type<AttemptSettings>(),
+  /** The bridge sent the settings of the print's own file with it: complete, so the fill adds no other attempt's keys. */
+  ownSettings: integer("own_settings", { mode: "boolean" }).notNull().default(false),
   placed: text("placed").$type<"matched" | "new">().notNull(),
   reasons: text("reasons", { mode: "json" }).$type<MatchReason[]>().notNull().default(sql`'[]'`),
   itemId: text("item_id").notNull(),
