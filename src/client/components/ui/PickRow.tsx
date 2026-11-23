@@ -16,6 +16,8 @@ interface PickRowProps {
   /** A step quieter: a smaller tile and softer title, for what is rarely the answer (done and shelved builds). */
   quiet?: boolean;
   onSelect: () => void;
+  /** The row Enter takes from a search field above it: marked with the hover's wash. */
+  current?: boolean;
   /** Starts with focus (the suggested choice), so Enter takes it. */
   autoFocus?: boolean;
   disabled?: boolean;
@@ -34,6 +36,7 @@ export function PickRow({
   mark,
   quiet,
   onSelect,
+  current,
   autoFocus,
   disabled,
   className,
@@ -48,6 +51,7 @@ export function PickRow({
       autoFocus={autoFocus}
       disabled={disabled}
       className={cn(
+        current && "bg-ink/4",
         "pressable focus-ring duration-fast hover:bg-ink/4 -mx-2 flex min-h-14 w-[calc(100%+1rem)] items-center gap-3 rounded-lg px-2 py-2 text-left transition-colors disabled:pointer-events-none disabled:opacity-60",
         className,
       )}

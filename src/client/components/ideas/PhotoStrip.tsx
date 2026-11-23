@@ -1,6 +1,6 @@
 import { useQueryClient } from "@tanstack/react-query";
-import { Reorder } from "motion/react";
-import { type RefObject, useEffect, useRef, useState } from "react";
+import { Reorder, useDragControls } from "motion/react";
+import { type ReactNode, type RefObject, useEffect, useRef, useState } from "react";
 import { ActionMenu, ActionMenuItem } from "@/components/ui/ActionMenu";
 import { CameraIcon, ImageIcon, MakeCoverIcon, PlusIcon, TrashIcon } from "@/components/ui/icons";
 import { PhotoMenuDot } from "@/components/ui/PhotoMenuDot";
@@ -38,7 +38,8 @@ interface PhotoStripProps {
 
 /**
  * An idea's photos in a row: tap one to show it, drag to reorder (the first
- * is the cover; Alt+arrows with the keyboard), or add more. The rare things, Make cover and Remove, are a small
+ * is the cover; Alt+arrows with the keyboard), or add more. A finger's swipe scrolls the strip wherever it starts;
+ * only a hold picks a photo up to move it. The rare things, Make cover and Remove, are a small
  * menu here, never a control on the big photo (decision 0054): tap the photo that's showing again (its "…" says so),
  * hold any photo with a finger and let go (a hold lifts it; moving it then reorders), or right-click one (with a mouse, its "…" shows on hover). A sheet on phones, a
  * popover from the thumbnail on desktop; Remove goes at once, with Undo.
@@ -136,7 +137,7 @@ export function PhotoStrip({
       setLifted(target?.dataset.photoId ?? null);
     },
   );
-  // While a photo is lifted or dragged the strip keeps the touch: the page doesn't scroll (which would cancel the
+  // While a photo is lifted, taken or dragged the strip keeps the touch: the page doesn't scroll (which would cancel the
   // drag) and a downward move doesn't pull the page back (pull-to-go.ts leaves a touch someone has taken). A
   // listener of its own, because React's touch listeners are passive.
   const strip = useRef<HTMLDivElement>(null);
@@ -262,17 +263,24 @@ export function PhotoStrip({
           onReorder={setOrder}
           className="flex shrink-0 gap-2.5 empty:hidden"
           aria-label="Photo order"
+          data-movable=""
         >
           {order.map((id, index) => {
             const photo = byId.get(id);
             if (!photo) return null;
             return (
-              <Reorder.Item
+              <OwnPhoto
                 key={id}
-                value={id}
-                drag={photo.upload || offline ? false : "x"}
-                // A drag doesn't end a hold: a finger that wobbles a few px and lets go still gets the menu (the
-                // hold ends once it has moved past its slop).
+                id={id}
+                movable={!photo.upload && !offline}
+                lifted={lifted === id}
+                held={longPress.holding}
+                onTake={() => {
+                  draggingNow.current = true;
+                }}
+                onLetGo={() => {
+                  draggingNow.current = false;
+                }}
                 onDragStart={() => {
                   draggingNow.current = true;
                   setDragging(true);
@@ -282,12 +290,9 @@ export function PhotoStrip({
                   setDragging(false);
                   commit(order);
                 }}
-                className="group/thumb relative shrink-0 list-none"
-                animate={lifted === id ? LIFTED : RESTING}
-                whileDrag={LIFTED}
               >
                 {thumb(id, index, photo)}
-              </Reorder.Item>
+              </OwnPhoto>
             );
           })}
         </Reorder.Group>
@@ -338,6 +343,72 @@ export function PhotoStrip({
         />
       )}
     </div>
+  );
+}
+
+/**
+ * One of the item's own photos in the reorderable row. Motion's own drag listener would take every sideways touch
+ * (it sets touch-action pan-y), so a swipe could only ever move a photo: instead the drag starts here. With a mouse it
+ * starts as the button goes down, as before; with a finger only once a hold has lifted the photo and the finger moves
+ * on, so a swipe that starts on a photo scrolls the strip like any other.
+ */
+function OwnPhoto({
+  id,
+  movable,
+  lifted,
+  held,
+  onTake,
+  onLetGo,
+  onDragStart,
+  onDragEnd,
+  children,
+}: {
+  id: string;
+  movable: boolean;
+  lifted: boolean;
+  /** Whether a finger's hold has lifted a photo (the long press's `holding`). */
+  held: () => boolean;
+  /** A lifted photo is being taken somewhere: the strip keeps the touch from here on, before motion's drag starts. */
+  onTake: () => void;
+  onLetGo: () => void;
+  onDragStart: () => void;
+  onDragEnd: () => void;
+  children: ReactNode;
+}) {
+  const controls = useDragControls();
+  const taken = useRef(false);
+  const letGo = () => {
+    taken.current = false;
+    onLetGo();
+  };
+  return (
+    <Reorder.Item
+      value={id}
+      drag={movable ? "x" : false}
+      dragListener={false}
+      dragControls={controls}
+      onPointerDown={(event) => {
+        if (movable && event.pointerType === "mouse" && event.button === 0) controls.start(event);
+      }}
+      // Capture: the long press, on the button inside, puts the photo down once the finger passes its slop, and the
+      // drag must have it before then. A drag doesn't end a hold: a finger that wobbles a few px and lets go still gets
+      // the menu (the hold ends once it has moved past its slop).
+      onPointerMoveCapture={(event) => {
+        if (!movable || event.pointerType === "mouse" || taken.current || !held()) return;
+        taken.current = true;
+        onTake();
+        controls.start(event);
+      }}
+      onPointerUp={letGo}
+      onPointerCancel={letGo}
+      onDragStart={onDragStart}
+      onDragEnd={onDragEnd}
+      className="group/thumb relative shrink-0 list-none"
+      animate={lifted ? LIFTED : RESTING}
+      whileDrag={LIFTED}
+    >
+      {children}
+    </Reorder.Item>
   );
 }
 

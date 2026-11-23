@@ -4,7 +4,7 @@ import type { QueryClient } from "@tanstack/react-query";
 import { toast } from "@/components/ui/Toast";
 import { api } from "./api";
 import { discardUpload, dropUpload, isRefusal, setUpload, uploadInParts } from "./big-upload";
-import { patchCachedItem } from "./items";
+import { noteFileAddedHere, patchCachedItem } from "./items";
 import { setPreview } from "./previews";
 import { fileSettings, plateOf, plateThumb, readSlicerFile, type SlicerFileDraft } from "./slicer-files";
 
@@ -122,10 +122,15 @@ export async function addItemFile(queryClient: QueryClient, itemId: string, pick
     createdAt: Date.now(),
     pending: true,
   };
+  noteFileAddedHere(shown.id, "adding");
   withFiles(queryClient, itemId, (files) => [...files, shown]);
   await keepFile(`/items/${itemId}/files/${draft.id}`, file, draft.id, "slicer", form, {
-    saved: (saved) => withFiles(queryClient, itemId, (files) => files.map((f) => (f.id === saved.id ? saved : f))),
+    saved: (saved) => {
+      noteFileAddedHere(saved.id, "saved");
+      withFiles(queryClient, itemId, (files) => files.map((f) => (f.id === saved.id ? saved : f)));
+    },
     giveUp: () => {
+      noteFileAddedHere(draft.id, "gone");
       withFiles(queryClient, itemId, (files) => files.filter((f) => f.id !== draft.id));
       toast.error("Couldn't keep that file", "Check the connection and try again.");
     },
@@ -154,6 +159,7 @@ async function addItemModel(queryClient: QueryClient, itemId: string, draft: Sli
     createdAt: Date.now(),
     pending: true,
   };
+  noteFileAddedHere(shown.id, "adding");
   withFiles(queryClient, itemId, (files) => [...files, shown]);
   // The jobs' code comes with the first model, not with the app.
   const jobs = await import("./slicing/jobs");
@@ -173,10 +179,13 @@ async function addItemModel(queryClient: QueryClient, itemId: string, draft: Sli
   if (file.size <= ONE_REQUEST_FILE_BYTES) form.set("file", file, file.name);
   await keepFile(`/items/${itemId}/files/${draft.id}`, file, draft.id, "model", form, {
     // A slice that reached the server first (it waits for this) stays.
-    saved: (saved) =>
-      withFiles(queryClient, itemId, (files) => files.map((f) => (f.id === saved.id ? (f.slice ? f : saved) : f))),
+    saved: (saved) => {
+      noteFileAddedHere(saved.id, "saved");
+      withFiles(queryClient, itemId, (files) => files.map((f) => (f.id === saved.id ? (f.slice ? f : saved) : f)));
+    },
     giveUp: () => {
       jobs.cancelSlice(draft.id);
+      noteFileAddedHere(draft.id, "gone");
       withFiles(queryClient, itemId, (files) => files.filter((f) => f.id !== draft.id));
       toast.error("Couldn't keep that model", "Check the connection and try again.");
     },
@@ -189,6 +198,7 @@ export function removeItemFile(queryClient: QueryClient, itemId: string, file: A
   setUpload(file.id, null);
   void dropUpload(file.id);
   if ("pending" in file && file.pending) void discardUpload(file.id);
+  noteFileAddedHere(file.id, "gone");
   withFiles(queryClient, itemId, (files) => files.filter((f) => f.id !== file.id));
   // A model still slicing stops: brought back, it offers "Slice it".
   if (file.kind === "model") void import("./slicing/jobs").then(({ cancelSlice }) => cancelSlice(file.id));
