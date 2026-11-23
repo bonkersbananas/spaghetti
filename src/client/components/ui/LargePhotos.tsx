@@ -3,7 +3,6 @@ import {
   type KeyboardEvent,
   type ReactNode,
   type RefObject,
-  type TouchEvent,
   useCallback,
   useEffect,
   useRef,
@@ -199,7 +198,7 @@ export default function LargePhotos({
             </Dialog.Close>
           </div>
 
-          <div ref={stage} {...pull} className="relative min-h-0 flex-1 max-md:order-1">
+          <div ref={pull} className="relative min-h-0 flex-1 max-md:order-1">
             <div
               ref={placeStrip}
               onScroll={onScroll}
@@ -426,8 +425,16 @@ function usePullDown({
     for (const part of chrome) fade(part.current, 1 - Math.min(dy / 90, 1));
   }
 
-  return {
-    onTouchStart(event: TouchEvent) {
+  /**
+   * The stage's ref: native listeners, not React's, whose touch listeners are passive. While the photo is pulled its
+   * touchmoves are cancelled, so the browser starts no scroll and no fling from it: a flick that closes the photo would
+   * otherwise leave a fling the next tap only stops (Chrome makes no click of it), and a thumbnail tapped at once was
+   * lost.
+   */
+  return (el: HTMLDivElement | null) => {
+    stage.current = el;
+    if (!el) return;
+    const onTouchStart = (event: TouchEvent) => {
       const zoomed = (event.target as Element).closest("[data-zoom=in]");
       if (event.touches.length !== 1 || zoomed) {
         if (drag.current?.pulling) paint(0, true);
@@ -445,8 +452,8 @@ function usePullDown({
         speed: 0,
         pulling: null,
       };
-    },
-    onTouchMove(event: TouchEvent) {
+    };
+    const onTouchMove = (event: TouchEvent) => {
       const state = drag.current;
       const touch = event.touches[0];
       if (!state || !touch || event.touches.length !== 1) return;
@@ -455,9 +462,9 @@ function usePullDown({
       if (state.pulling === null) {
         if (Math.abs(dx) < 8 && Math.abs(dy) < 8) return;
         state.pulling = dy > 0 && dy > Math.abs(dx);
-        if (!state.pulling) return;
       }
       if (!state.pulling) return;
+      if (event.cancelable) event.preventDefault();
       // Upward it barely gives; downward it follows the finger.
       state.dy = dy > 0 ? dy : dy / 4;
       const elapsed = event.timeStamp - state.lastT;
@@ -465,19 +472,28 @@ function usePullDown({
       state.lastY = touch.clientY;
       state.lastT = event.timeStamp;
       paint(state.dy, false);
-    },
-    onTouchEnd() {
+    };
+    const onTouchEnd = () => {
       const state = drag.current;
       drag.current = null;
       if (!state?.pulling) return;
-      if (state.dy > CLOSE_PULL || (state.dy > 30 && state.speed > FLICK)) {
-        paint(state.dy + 80, true);
-        onClose();
-      } else paint(0, true);
-    },
-    onTouchCancel() {
+      // It goes at once (no exit fade: see .sg-large in app.css); short of the pull, it settles back.
+      if (state.dy > CLOSE_PULL || (state.dy > 30 && state.speed > FLICK)) onClose();
+      else paint(0, true);
+    };
+    const onTouchCancel = () => {
       if (drag.current?.pulling) paint(0, true);
       drag.current = null;
-    },
+    };
+    el.addEventListener("touchstart", onTouchStart, { passive: true });
+    el.addEventListener("touchmove", onTouchMove, { passive: false });
+    el.addEventListener("touchend", onTouchEnd);
+    el.addEventListener("touchcancel", onTouchCancel);
+    return () => {
+      el.removeEventListener("touchstart", onTouchStart);
+      el.removeEventListener("touchmove", onTouchMove);
+      el.removeEventListener("touchend", onTouchEnd);
+      el.removeEventListener("touchcancel", onTouchCancel);
+    };
   };
 }

@@ -555,7 +555,9 @@
 .sg-overlay[data-state="closed"] {
   animation: sg-fade-out var(--sg-duration-fast) var(--sg-ease-in-out);
 }
-/* A photo opened large (ui/LargePhotos.tsx): the paper and the photo come up together, quickly, and go quicker. */
+/* A photo opened large (ui/LargePhotos.tsx): the paper and the photo come up together, quickly. It goes at once, with
+   no fade: while a modal Radix dialog plays its way out the page under it gets no clicks (Chrome makes none from a
+   tap), so a thumbnail tapped as it faded was lost. */
 @keyframes sg-large-in {
   from {
     opacity: 0;
@@ -564,9 +566,6 @@
 }
 .sg-large[data-state="open"] {
   animation: sg-large-in var(--sg-duration-fast) var(--sg-ease-out);
-}
-.sg-large[data-state="closed"] {
-  animation: sg-fade-out var(--sg-duration-fast) var(--sg-ease-in-out);
 }
 .sg-dialog[data-state="open"] {
   animation: sg-dialog-in var(--sg-duration-base) var(--sg-ease-out);

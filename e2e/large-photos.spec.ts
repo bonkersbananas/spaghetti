@@ -126,10 +126,8 @@ test("on a phone a tap opens it, a swipe goes to the next, a swipe down closes i
 
   // A step back in history (Safari's swipe back, where there is no close watcher) leaves the page and closes it too,
   // rather than leaving this attempt's photos over the page before.
-  // From a fresh load: reopening right after a swipe-down is the desktop test's (here a tap now and then landed while
-  // the page was still settling, under a loaded CI runner).
-  await page.goto(`/journal`);
-  await page.goto(`/builds/${id}`);
+  // At once after the swipe down: the flick that closed it leaves no fling for this tap to stop (Chrome makes no click
+  // of a tap that stops a fling, and the viewer cancels its pull's touchmoves for that).
   await thumb.tap();
   await expect(large.getByText("2 of 3")).toBeVisible();
   await page.goBack();
