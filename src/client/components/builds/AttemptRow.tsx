@@ -32,13 +32,6 @@ interface AttemptRowProps {
   onMove?: () => void;
 }
 
-/** The face of a row without a photo: its outcome's icon on the outcome's soft tone, as the summary's trail draws it. */
-const tileTones = {
-  success: "bg-basil-soft text-basil-ink",
-  partial: "bg-semolina-soft text-semolina-ink",
-  failed: "bg-tomato-soft text-tomato-ink",
-} as const;
-
 /**
  * An earlier attempt in a build's story, folded to one compact row on the same thread as the cards: its picture (which
  * opens large), how it went, its number and when, the one line that matters (its note, else what went wrong, else what
@@ -61,12 +54,12 @@ export const AttemptRow = forwardRef<HTMLLIElement, AttemptRowProps>(function At
     : attempt.failureTags.length
       ? {
           text: attempt.failureTags.map((slug) => tagLabel("failure", slug, failureOptions)).join(" · "),
-          className: "text-tomato-ink",
+          className: "text-ink-soft",
         }
       : attempt.successNotes.length
         ? {
             text: attempt.successNotes.map((slug) => tagLabel("success", slug, successOptions)).join(" · "),
-            className: "text-basil-ink",
+            className: "text-ink-soft",
           }
         : null;
   // Enter opens the row here, before the page's Enter (open the picked attempt's sheet) can take it.
@@ -107,7 +100,7 @@ export const AttemptRow = forwardRef<HTMLLIElement, AttemptRowProps>(function At
             aria-label={`Attempt ${attempt.number}: ${attempt.outcome ?? "no answer"}. Expand`}
             className="pressable focus-ring absolute inset-0 z-0 rounded-lg"
           />
-          <div className="pointer-events-none relative flex items-start gap-3.5 p-2 md:gap-4">
+          <div className="pointer-events-none relative flex items-start gap-3.5 px-3.5 py-2 md:gap-4 md:px-4">
             {lead ? (
               <OpenLarge
                 label={
@@ -129,10 +122,8 @@ export const AttemptRow = forwardRef<HTMLLIElement, AttemptRowProps>(function At
             ) : (
               <span
                 aria-hidden
-                className={cn(
-                  "flex size-14 shrink-0 items-center justify-center rounded-md md:size-16",
-                  tileTones[outcome],
-                )}
+                // Neutral: the chip and the thread's dot already say how it went, and a row stays quieter than the card.
+                className="bg-ink/4 text-ink-faint flex size-14 shrink-0 items-center justify-center rounded-md md:size-16"
               >
                 <Icon size={22} weight="bold" />
               </span>

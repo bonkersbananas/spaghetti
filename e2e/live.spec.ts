@@ -257,11 +257,6 @@ test("the attempt sheet follows the other person's edits and the printer's repor
 
   // Alex has the finished attempt open, with its settings showing.
   await page.goto(`/builds/${buildId}`);
-  // An earlier attempt is a row: open it into its card first.
-  await page
-    .locator(`[data-attempt-id="${finished}"]`)
-    .getByRole("button", { name: /Expand$/ })
-    .click();
   await page
     .locator(`[data-attempt-id="${finished}"]`)
     .getByRole("button", { name: /Open$/ })

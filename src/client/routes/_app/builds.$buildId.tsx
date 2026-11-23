@@ -299,10 +299,16 @@ function Build({ item }: { item: ItemView }) {
       // Private mode or full: they fold again on reload, nothing more.
     }
   }, [openedKey, opened]);
-  // A card: the newest attempt, a print on the bed or off it waiting for its answer, one the printer asks about, or one
-  // opened from its row. Every other attempt is a row.
-  const isCard = (attempt: AttemptView) =>
-    attempt.id === story[0]?.id || attempt.outcome === null || !!attempt.print?.asking || opened.includes(attempt.id);
+  // Always a card: the newest attempt, a print on the bed or off it waiting for its answer, and one the printer asks
+  // about; while a print is on the bed, the newest answered attempt too (that print is its next try: its note, its tags,
+  // Claude's ideas). Every other attempt is a row until it is opened.
+  const newestAnswered = story.find((attempt) => attempt.outcome !== null);
+  const alwaysCard = (attempt: AttemptView) =>
+    attempt.id === story[0]?.id ||
+    attempt.outcome === null ||
+    !!attempt.print?.asking ||
+    (story[0]?.outcome === null && attempt.id === newestAnswered?.id);
+  const isCard = (attempt: AttemptView) => alwaysCard(attempt) || opened.includes(attempt.id);
   const openRow = (attemptId: string) => setOpened((ids) => (ids.includes(attemptId) ? ids : [...ids, attemptId]));
   // Folding takes the focus back to the row, and opening to the card's own button, so a keyboard keeps its place.
   const focusAfter = useRef<string | null>(null);
@@ -901,11 +907,7 @@ function Build({ item }: { item: ItemView }) {
                               onMove={onMove}
                             />
                           );
-                        const fold =
-                          index > 0 &&
-                          opened.includes(attempt.id) &&
-                          attempt.outcome !== null &&
-                          !attempt.print?.asking;
+                        const fold = !alwaysCard(attempt);
                         return (
                           <AttemptEntry
                             key={attempt.id}

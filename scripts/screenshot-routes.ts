@@ -3809,6 +3809,8 @@ export const shots: Shot[] = [
       // Main draws every attempt as a card: there is no row to open there.
       const row = page.getByRole("button", { name: "Attempt 2: partial. Expand", exact: true });
       if (await row.count()) await row.click();
+      // The pointer moves off, so no row keeps the wash of a hover.
+      await page.mouse.move(0, 0);
       await page.waitForTimeout(600);
     },
     beforeShot: async (page) => {

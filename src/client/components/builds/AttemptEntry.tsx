@@ -213,6 +213,7 @@ export const AttemptEntry = forwardRef<HTMLLIElement, AttemptEntryProps>(functio
                     <IconButton
                       icon={ExpandIcon}
                       label={`Fold attempt ${attempt.number}`}
+                      size="sm"
                       aria-expanded
                       onClick={onFold}
                       className="rotate-180"
