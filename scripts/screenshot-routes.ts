@@ -2211,6 +2211,9 @@ async function addToSlot(page: Page, empty: string[], slot: string, options: { o
   await page.waitForTimeout(600);
 }
 
+/** Star ornament's third attempt: the printer's three-colour print with four photos (REAL_PRINT_BUILDS). */
+const STAR_ORNAMENT_FOUR_PHOTOS = "5eed0000-0000-4000-8000-0000000e0103";
+
 export const shots: Shot[] = [
   { name: "sign-in", path: "/sign-in", signedOut: true },
   // A public link as a guest sees it (decision 0075): no app around it, photos first, read-only.
@@ -3594,6 +3597,40 @@ export const shots: Shot[] = [
   { name: "build-printer-mixed", path: `/builds/${SEED_BUILD_IDS.starOrnament}`, fullPage: true },
   { name: "build-printer-no-photo", path: `/builds/${SEED_BUILD_IDS.lidClip}`, fullPage: true },
   { name: "build-printer-asking", path: `/builds/${SEED_BUILD_IDS.cableComb}`, fullPage: true },
+  // Any photo of an attempt opens large: the card with four photos, the viewer open on its second, and the Journal's
+  // card, whose photo opens them too.
+  {
+    name: "attempt-photos",
+    path: `/builds/${SEED_BUILD_IDS.starOrnament}`,
+    selector: `[data-attempt-id="${STAR_ORNAMENT_FOUR_PHOTOS}"]`,
+  },
+  {
+    name: "attempt-photos-large",
+    path: `/builds/${SEED_BUILD_IDS.starOrnament}`,
+    prepare: async (page) => {
+      await page
+        .locator(`[data-attempt-id="${STAR_ORNAMENT_FOUR_PHOTOS}"]`)
+        .getByRole("button", { name: "Open photo 2 of 4 large" })
+        .click();
+      await page.getByRole("dialog", { name: "Attempt 3" }).getByText("2 of 4").waitFor();
+      await page.waitForFunction(() => {
+        const dialog = document.querySelector('[role="dialog"]');
+        if (!dialog) return false;
+        for (const animation of dialog.getAnimations({ subtree: true })) animation.finish();
+        return getComputedStyle(dialog).opacity === "1";
+      });
+      await page.waitForTimeout(400);
+    },
+    cleanup: async (page) => {
+      await page.keyboard.press("Escape");
+      await page.getByRole("dialog").waitFor({ state: "detached" });
+    },
+  },
+  {
+    name: "journal-attempt-photos",
+    path: "/journal",
+    selector: `a[href*="${STAR_ORNAMENT_FOUR_PHOTOS}"]`,
+  },
   // A build between prints: its stage chip says In progress (it isn't on the bed).
   { name: "build-between-prints", path: `/builds/${SEED_BUILD_IDS.cableChain}` },
   {

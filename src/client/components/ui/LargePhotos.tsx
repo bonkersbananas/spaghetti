@@ -42,9 +42,9 @@ const FLICK = 0.6;
 /**
  * Photos opened large, one at a time over the whole screen, on the deep paper of a viewer (not a black lightbox): the
  * whole print, never cropped, as large as the screen allows, with a soft shadow under it. Swipe (phone), arrow keys or
- * the side buttons (desktop) or the row of thumbnails go to the others; × , Esc, a swipe down on a phone or Back
- * close it, and focus goes back to the photo it was opened from. Pinch, double tap, double click and ctrl+wheel zoom
- * in place (lib/photo-zoom.ts). Loaded on demand (`useLargePhotos`).
+ * the side buttons (desktop) or the row of thumbnails go to the others; ×, Esc, a swipe down on a phone or Android's
+ * Back close it, and focus goes back to the photo it was opened from. Pinch, double tap, double click and ctrl+wheel
+ * zoom in place (lib/photo-zoom.ts). Opened with `openLarge` (ui/OpenLarge.tsx), which loads it on demand.
  */
 export default function LargePhotos({ open, photos, start, title, badge, detail, opener, onClose }: LargePhotosProps) {
   const [index, setIndex] = useState(start);
@@ -71,11 +71,7 @@ export default function LargePhotos({ open, photos, start, title, badge, detail,
   startAt.current = start;
   const placeStrip = useCallback((el: HTMLDivElement | null) => {
     scroller.current = el;
-    if (!el) return;
-    // The router puts back where scrolled elements were, found by their place in the page, whenever it renders: an
-    // id of its own each time it opens keeps an earlier opening's place from being put back on this one.
-    el.dataset.scrollRestorationId = `large-photos-${++openings}`;
-    el.scrollLeft = startAt.current * el.clientWidth;
+    if (el) el.scrollLeft = startAt.current * el.clientWidth;
   }, []);
 
   useBackCloses(open, close);
@@ -326,9 +322,6 @@ interface CloseWatcher {
   onclose: (() => void) | null;
   destroy: () => void;
 }
-
-/** How many times a strip of photos has opened on this page (its scroll restoration id). */
-let openings = 0;
 
 /**
  * A phone's swipe down closes the photo: one finger moving down more than sideways drags it down, the paper behind
