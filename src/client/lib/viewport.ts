@@ -83,11 +83,15 @@ function settleAfterRotation(update: () => void) {
   let frame = 0;
   const timers = new Set<number>();
   let landscape = window.innerWidth > window.innerHeight;
+  // Where to put the page back: set by the first nudge of a frame, kept by any that follow in it.
+  let restoreTo: number | null = null;
   const nudge = () => {
     cancelAnimationFrame(frame);
-    const y = window.scrollY;
+    restoreTo ??= window.scrollY;
+    const y = restoreTo;
     window.scrollTo(0, y + 1);
     frame = requestAnimationFrame(() => {
+      restoreTo = null;
       window.scrollTo(0, y);
       update();
     });
