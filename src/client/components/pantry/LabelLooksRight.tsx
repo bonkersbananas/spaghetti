@@ -89,7 +89,9 @@ export function LabelLooksRight({
           onClick={() => setPickingColour((open) => !open)}
         >
           <SpoolDisc color={value.colorHex} colors={value.colors} size="sm" />
-          <span className="text-body text-ink flex-1">{unread ? "Colour wasn't read" : "Colour"}</span>
+          <span className="text-body text-ink flex-1">
+            {unread ? "Colour wasn't read" : spool.colorName ? `Colour · ${spool.colorName}` : "Colour"}
+          </span>
           <span className="text-small text-ink-faint">{unread ? "Pick it" : "Change"}</span>
         </button>
         {pickingColour && (
