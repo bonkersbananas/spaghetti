@@ -1,5 +1,3 @@
-import * as Dialog from "@radix-ui/react-dialog";
-import { isShortcut } from "@shared/shortcuts";
 import {
   type CSSProperties,
   type KeyboardEvent,
@@ -12,16 +10,14 @@ import {
   useState,
 } from "react";
 import { cn } from "@/lib/cn";
-import { comboOf } from "@/lib/hotkeys";
 import type { PhotoView } from "@/lib/items";
 import { scrollBehavior } from "@/lib/motion";
-import { claimPops } from "@/lib/own-pops";
-import { attachPhotoZoom, type PhotoZoom } from "@/lib/photo-zoom";
+import type { PhotoZoom } from "@/lib/photo-zoom";
 import { photoSrc } from "@/lib/previews";
 import { IconButton } from "./Button";
 import { CloseIcon, NextIcon, PreviousIcon } from "./icons";
 import { Photo } from "./Photo";
-import { UploadBadge } from "./UploadBadge";
+import { Dialog } from "./Sheet";
 
 export interface LargePhotosProps {
   open: boolean;
@@ -100,9 +96,10 @@ export default function LargePhotos({ open, photos, start, title, badge, detail,
   }
 
   function onKeyDown(event: KeyboardEvent) {
-    const combo = comboOf(event.nativeEvent);
-    if (isShortcut("photoPrevious", combo)) go(index - 1);
-    else if (isShortcut("photoNext", combo)) go(index + 1);
+    // Their own keys, not the registry's (shared/shortcuts.ts, in every first load): the buttons' titles say them.
+    if (event.altKey || event.metaKey || event.ctrlKey) return;
+    if (event.key === "ArrowLeft") go(index - 1);
+    else if (event.key === "ArrowRight") go(index + 1);
     else return;
     event.preventDefault();
   }
@@ -252,9 +249,16 @@ function LargeFigure({
   const layer = useRef<HTMLDivElement>(null);
   const zoom = useRef<PhotoZoom | null>(null);
   useEffect(() => {
-    if (!frame.current || !layer.current) return;
-    zoom.current = attachPhotoZoom(frame.current, layer.current);
+    const el = frame.current;
+    const inner = layer.current;
+    if (!el || !inner) return;
+    let gone = false;
+    // Its own chunk, as PhotoViewer loads it (already fetched where a hero photo was shown).
+    void import("@/lib/photo-zoom").then((module) => {
+      if (!gone) zoom.current = module.attachPhotoZoom(el, inner);
+    });
     return () => {
+      gone = true;
       zoom.current?.destroy();
       zoom.current = null;
     };
@@ -296,13 +300,6 @@ function LargeFigure({
             eager={near}
             className="size-full"
           />
-          {photo.upload && (
-            <UploadBadge
-              state={photo.upload.status === "queued" ? "queued" : photo.upload.status}
-              progress={photo.upload.progress}
-              className="absolute bottom-3 left-3"
-            />
-          )}
         </div>
       </div>
     </figure>
@@ -310,45 +307,28 @@ function LargeFigure({
 }
 
 /**
- * Back (the phone's, the browser's) closes the photo instead of leaving the page: opening adds a history entry of its
- * own, at the same address, that the router never hears about (its pop is caught before the router's listener), and
- * closing any other way takes that entry off again.
+ * The phone's Back (Android's button or gesture) closes the photo instead of leaving the page: a close watcher, the
+ * browser's own way for an overlay to take one Back, with no history entry for the router to hear about. Where the
+ * browser has none (Safari, Firefox), Back leaves the page as before; ×, Esc and the swipe down still close it.
  */
 function useBackCloses(open: boolean, onClose: { current: () => void }) {
   useEffect(() => {
-    if (!open) return;
-    // Back on our entry already: an effect run again at once (React's StrictMode) finds the step off it still waiting.
-    if (leaving) {
-      clearTimeout(leaving);
-      leaving = undefined;
-    } else window.history.pushState(window.history.state, "");
-    let ours = true;
-    const release = claimPops(() => {
-      ours = false;
-      onClose.current();
-      return true;
-    });
-    return () => {
-      release();
-      if (!ours) return;
-      // Closed by ×, Esc or a swipe: step off our entry, and keep that step from the router too.
-      leaving = setTimeout(() => {
-        leaving = undefined;
-        const releaseStep = claimPops(() => {
-          releaseStep();
-          return true;
-        });
-        window.history.back();
-      });
-    };
+    const Watcher = (window as { CloseWatcher?: new () => CloseWatcher }).CloseWatcher;
+    if (!open || !Watcher) return;
+    const watcher = new Watcher();
+    watcher.onclose = () => onClose.current();
+    return () => watcher.destroy();
   }, [open, onClose]);
+}
+
+/** The browser's close watcher (not in TypeScript's DOM types yet). */
+interface CloseWatcher {
+  onclose: (() => void) | null;
+  destroy: () => void;
 }
 
 /** How many times a strip of photos has opened on this page (its scroll restoration id). */
 let openings = 0;
-
-/** A step back off the viewer's history entry, about to be taken. */
-let leaving: ReturnType<typeof setTimeout> | undefined;
 
 /**
  * A phone's swipe down closes the photo: one finger moving down more than sideways drags it down, the paper behind

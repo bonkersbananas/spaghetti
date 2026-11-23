@@ -87,7 +87,7 @@ test("a thumbnail opens its photo large; arrows step, Esc and × close, focus co
   await expect(sheet.getByRole("button", { name: /^Remove Attempt photo 1/ })).toBeVisible();
 });
 
-test("on a phone a tap opens it, a swipe goes to the next, a swipe down or Back closes it @phone", async ({
+test("on a phone a tap opens it, a swipe goes to the next, a swipe down closes it @phone", async ({
   page,
   isMobile,
 }) => {
@@ -117,30 +117,26 @@ test("on a phone a tap opens it, a swipe goes to the next, a swipe down or Back 
   await swipe({ x: middle.x + 150, y: middle.y }, { x: middle.x - 150, y: middle.y });
   await expect(large.getByText("3 of 3")).toBeVisible();
 
-  // A swipe down closes it.
+  // A swipe down closes it, and the page is where it was. (Android's Back closes it through a close watcher, which a
+  // test can't press: history.back() is not a close request.)
   await swipe(middle, { x: middle.x, y: middle.y + 220 });
   await expect(large).toBeHidden();
   await expect(page).toHaveURL(new RegExp(`/builds/${id}$`));
-
-  // Back closes it too, and stays on the build.
-  await thumb.tap();
-  await expect(large.getByText("2 of 3")).toBeVisible();
-  await page.goBack();
-  await expect(large).toBeHidden();
-  await expect(page).toHaveURL(new RegExp(`/builds/${id}$`));
-  await expect(page.getByRole("button", { name: "Open photo 1 of 3 large" })).toBeVisible();
+  await expect(thumb).toBeFocused();
 });
 
 test("the Journal's attempt card opens its photos large, and its words open the build @phone", async ({ page }) => {
   const id = await buildWithPhotos(page, "Gear wall", 2);
   await page.goto("/journal");
-  await page.getByRole("button", { name: "Open its 2 photos large" }).click();
+  const card = page.getByRole("link", { name: /Gear wall.*attempt 1/ });
+  await card.locator("img").first().click();
   const large = page.getByRole("dialog", { name: "Gear wall · attempt 1" });
   await expect(large.getByText("1 of 2")).toBeVisible();
   await page.keyboard.press("Escape");
   await expect(large).toBeHidden();
   await expect(page).toHaveURL(/\/journal/);
+  await expect(card).toBeFocused();
 
-  await page.getByRole("link", { name: /^Worked.*Gear wall.*attempt 1/ }).click();
+  await card.getByText("attempt 1").click();
   await expect(page).toHaveURL(new RegExp(`/builds/${id}`));
 });

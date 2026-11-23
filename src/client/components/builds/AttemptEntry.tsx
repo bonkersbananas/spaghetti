@@ -8,7 +8,7 @@ import { type ComponentProps, forwardRef, lazy, Suspense } from "react";
 import { Avatar, ViaText } from "@/components/ui/Avatar";
 import { Button } from "@/components/ui/Button";
 import { ChangeLine } from "@/components/ui/ChangeLine";
-import { OpenLarge, useLargePhotos } from "@/components/ui/OpenLarge";
+import { OpenLarge, openLarge } from "@/components/ui/OpenLarge";
 import { Photo } from "@/components/ui/Photo";
 import { PrintProgress } from "@/components/ui/PrintProgress";
 import { UploadBadge } from "@/components/ui/UploadBadge";
@@ -107,7 +107,9 @@ export const AttemptEntry = forwardRef<HTMLLIElement, AttemptEntryProps>(functio
   const filaments = attempt.settings.filaments ?? [];
   const [lead, ...rest] = photos;
   // Any photo opens large over the page, above the card's own button (which opens the attempt).
-  const large = useLargePhotos(photos, {
+  const large = (start: number) => ({
+    photos,
+    start,
     title: `Attempt ${attempt.number}`,
     badge: <OutcomeChip outcome={attempt.outcome} offTheBed={offBed} />,
     detail: [attempt.fromPrinter ? "From the printer" : person?.name, relativeTime(attempt.printedAt)]
@@ -235,7 +237,7 @@ export const AttemptEntry = forwardRef<HTMLLIElement, AttemptEntryProps>(functio
                   label={photos.length > 1 ? `Open photo 1 of ${photos.length} large` : "Open the photo large"}
                   variant="large"
                   className="aspect-4/3 w-full md:aspect-3/2"
-                  {...large.opens(0)}
+                  onClick={(event) => openLarge(event, large(0))}
                 />
                 {rest.length > 0 && (
                   <div className="flex gap-2">
@@ -247,7 +249,7 @@ export const AttemptEntry = forwardRef<HTMLLIElement, AttemptEntryProps>(functio
                         label={`Open photo ${index + 2} of ${photos.length} large`}
                         className="size-16 flex-none md:size-20"
                         more={index === 3 && rest.length > 4 ? rest.length - 4 : 0}
-                        {...large.opens(index + 1)}
+                        onClick={(event) => openLarge(event, large(index + 1))}
                       />
                     ))}
                   </div>
@@ -348,7 +350,6 @@ export const AttemptEntry = forwardRef<HTMLLIElement, AttemptEntryProps>(functio
           </div>
         </div>
       </div>
-      {large.viewer}
     </m.li>
   );
 });

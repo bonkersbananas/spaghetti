@@ -3,9 +3,9 @@ import { isOutcome, outcomeLabel, tagLabel } from "@shared/attempts";
 import { dateFormat } from "@shared/date-format";
 import { attemptPartsLabel } from "@shared/parts";
 import { isOffTheBed, offTheBedLabel } from "@shared/print-progress";
-import { fullTime, relativeTime } from "@shared/time";
+import { fullTime } from "@shared/time";
 import { Link } from "@tanstack/react-router";
-import { forwardRef, type ReactNode, useRef, useState } from "react";
+import { forwardRef, type ReactNode, useState } from "react";
 import { OutcomeChip, outcomeIcons } from "@/components/builds/Outcome";
 import { SettingsLine } from "@/components/builds/SettingsLine";
 import { summarizeSettings } from "@/components/builds/settings";
@@ -23,7 +23,6 @@ import {
   SlicerFileIcon,
 } from "@/components/ui/icons";
 import { MetaList } from "@/components/ui/MetaList";
-import { OpenLarge, useLargePhotos } from "@/components/ui/OpenLarge";
 import { Photo } from "@/components/ui/Photo";
 import { PhotoRow } from "@/components/ui/PhotoRow";
 import { PrintProgress } from "@/components/ui/PrintProgress";
@@ -79,178 +78,33 @@ const AttemptCard = forwardRef<HTMLAnchorElement, JournalEntryProps>(function At
   const successOptions = useTagOptions("success");
   const index = item.attempts.findIndex((a) => a.id === entry.attemptId);
   const attempt = item.attempts[index];
-  const photos = item.photos.filter((photo) => attempt && photo.attemptId === attempt.id);
-  const offBed = !!attempt && isOffTheBed(attempt);
-  const name = itemName(item);
-  // The photo opens large over the journal; the rest of the card opens the build.
-  const large = useLargePhotos(photos, {
-    title: `${name.text} · attempt ${index + 1}`,
-    badge: attempt && <OutcomeChip outcome={attempt.outcome} offTheBed={offBed} />,
-    detail: attempt && [person?.name, relativeTime(attempt.printedAt)].filter(Boolean).join(" · "),
-  });
-  const photoFrame = useRef<HTMLButtonElement>(null);
   if (!attempt) return null;
+  const offBed = isOffTheBed(attempt);
   const partsLabel = attemptPartsLabel(attempt, item.parts);
+  const photos = item.photos.filter((photo) => photo.attemptId === attempt.id);
   const [photo] = photos;
   // No photo yet, but the slicer's picture of the plate: shown in the photo's place and labeled as a preview.
   const plate = !photo && attempt.file?.hasThumb ? attempt.file : undefined;
   const picture = !!(photo || plate);
+  const name = itemName(item);
   const filaments = attempt.settings.filaments ?? [];
   const settings = summarizeSettings(attempt.settings).slice(0, 3);
   const time = when === "time" ? clock(attempt.printedAt) : weekday(attempt.printedAt);
-
-  // The card's words and meta: beside its picture, or below it on a phone.
-  const words = (
-    <>
-      <div
-        className={cn(
-          "flex flex-col gap-2.5",
-          plate &&
-            "col-start-2 row-start-2 min-w-0 pt-0.5 pl-3 md:col-span-3 md:col-start-3 md:row-start-1 md:px-4 md:pt-3",
-        )}
-      >
-        {/* Without a picture, the outcome leads the card. */}
-        {!picture && (
-          <div className="flex items-center gap-2">
-            <OutcomeChip outcome={attempt.outcome} offTheBed={offBed} />
-            <Meta at={attempt.printedAt} time={time} person={person} via={via} printer={attempt.fromPrinter} />
-          </div>
-        )}
-        <div className="flex items-baseline gap-2">
-          <h3 className="text-body text-ink min-w-0 flex-1 font-sans">
-            <MetaList>
-              <span className={cn("break-words", name.titled ? "font-semibold" : "font-medium")}>{name.text}</span>
-              <span className="text-small text-ink-faint font-medium whitespace-nowrap">attempt {index + 1}</span>
-            </MetaList>
-          </h3>
-          {picture && (
-            <Meta
-              at={attempt.printedAt}
-              time={time}
-              person={person}
-              via={via}
-              className={cn(plate && "max-md:hidden")}
-            />
-          )}
-        </div>
-        {partsLabel && <p className="text-small text-ink-soft -mt-1.5 break-words">{partsLabel}</p>}
-      </div>
-      <div
-        className={cn(
-          "flex flex-1 flex-col gap-2.5",
-          plate &&
-            "col-span-2 row-start-3 px-2.5 pt-3 pb-2.5 md:col-span-3 md:col-start-3 md:row-start-2 md:px-4 md:pt-2.5 md:pb-3",
-        )}
-      >
-        {attempt.outcome === null && !offBed && (
-          <PrintProgress
-            startedAt={attempt.printedAt}
-            estimatedMinutes={attempt.settings.estimatedMinutes}
-            attemptId={attempt.id}
-          />
-        )}
-        {offBed && attempt.endedAt !== null && (
-          <p className="text-small text-ink-soft">
-            <span className="text-ink font-semibold">{offTheBedLabel(attempt.endedAt)}</span> · how did it go?
-          </p>
-        )}
-        {attempt.note && <p className="text-body text-ink line-clamp-3 break-words">{attempt.note}</p>}
-        {(attempt.failureTags.length > 0 || attempt.successNotes.length > 0) && (
-          <ul className="flex flex-wrap gap-1.5" aria-label="Tags">
-            {attempt.failureTags.map((slug) => (
-              <li key={`f-${slug}`}>
-                <Chip tone="tomato">{tagLabel("failure", slug, failureOptions)}</Chip>
-              </li>
-            ))}
-            {attempt.successNotes.map((slug) => (
-              <li key={`s-${slug}`}>
-                <Chip tone="basil" icon={CheckIcon}>
-                  {tagLabel("success", slug, successOptions)}
-                </Chip>
-              </li>
-            ))}
-          </ul>
-        )}
-        {(filaments.length > 0 || settings.length > 0) && (
-          <SettingsLine
-            filaments={filaments}
-            parts={settings}
-            name={(filament) => [filament.colorName, filament.type].filter(Boolean).join(" ") || "Filament"}
-            className="text-small text-ink-faint mt-auto"
-            filamentClassName="text-ink-soft"
-          />
-        )}
-      </div>
-    </>
-  );
-
-  if (photo) {
-    // The photo and the link are siblings (a button can't sit inside a link): the link's own box covers the card, so a
-    // press anywhere but the photo opens the build, and the photo sits above it.
-    return (
-      <div
-        className={cn(
-          "group bg-cream shadow-soft hover:shadow-raised hover:bg-lifted pressable relative flex flex-col rounded-lg p-1.5 md:flex-row",
-          "has-[>a:focus-visible]:shadow-ring",
-          selected && "shadow-ring hover:shadow-ring",
-        )}
-      >
-        <OpenLarge
-          ref={photoFrame}
-          {...large.opens(0)}
-          label={photos.length > 1 ? `Open its ${photos.length} photos large` : "Open the photo large"}
-          className="relative z-10 aspect-4/3 shrink-0 rounded-md md:w-2/5"
-        >
-          <Photo
-            src={photoSrc(photo.id, "large")}
-            // The card's own text names it; the picture would only repeat that.
-            alt=""
-            color={photo.color || undefined}
-            className="size-full"
-            imgClassName="group-hover:scale-[1.02] transition-[opacity,transform] duration-slow"
-          />
-          <OutcomeChip
-            outcome={attempt.outcome}
-            offTheBed={offBed}
-            onPhoto
-            className="shadow-soft absolute bottom-2 left-2"
-          />
-          {photos.length > 1 && (
-            <span className="absolute top-2 right-2">
-              <PhotoCountBadge count={photos.length} />
-            </span>
-          )}
-        </OpenLarge>
-        <Link
-          ref={ref}
-          {...entryLink(entry, item)}
-          viewTransition
-          onClick={(event) => heroClick(event, photo.id, photoFrame.current?.querySelector("img")?.parentElement)}
-          aria-current={selected || undefined}
-          className="flex min-w-0 flex-1 flex-col gap-2.5 px-2.5 pt-3 pb-2.5 outline-none after:absolute after:inset-0 after:rounded-lg md:px-4 md:py-3"
-        >
-          {/* How it went leads the link's name, as on every attempt card; on screen it is the chip on the photo. */}
-          <span className="sr-only">
-            <OutcomeChip outcome={attempt.outcome} offTheBed={offBed} />
-          </span>
-          {words}
-        </Link>
-        {large.viewer}
-      </div>
-    );
-  }
 
   return (
     <Link
       ref={ref}
       {...entryLink(entry, item)}
       viewTransition
+      onClick={(event) => heroClick(event, photo?.id)}
       aria-current={selected || undefined}
       className={cn(
         "group bg-cream shadow-soft hover:shadow-raised hover:bg-lifted pressable focus-ring rounded-lg p-1.5",
         // A render isn't the result: on a phone it is a small picture beside the title, under a top row that says what
         // it is, with the progress and settings full width below; from md it is the card's picture at the left.
-        plate ? "grid max-md:grid-cols-[auto_minmax(0,1fr)] md:grid-cols-5 md:grid-rows-[auto_1fr]" : "flex flex-col",
+        plate
+          ? "grid max-md:grid-cols-[auto_minmax(0,1fr)] md:grid-cols-5 md:grid-rows-[auto_1fr]"
+          : "flex flex-col md:flex-row",
         selected && "shadow-ring hover:shadow-ring",
       )}
     >
@@ -287,8 +141,130 @@ const AttemptCard = forwardRef<HTMLAnchorElement, JournalEntryProps>(function At
           </div>
         </>
       )}
+      {photo && (
+        // A tap or click on the photo opens the attempt's photos large (ui/LargePhotos.tsx) instead of the build; the
+        // rest of the card, and Enter, open the build, where every photo opens large too. A handler, not a button: a
+        // button can't sit in the card's link, and taking the card apart weighed more than the Journal's first load had.
+        // biome-ignore lint/a11y/noStaticElementInteractions: the card's link is the control; this is its photo's shortcut
+        // biome-ignore lint/a11y/useKeyWithClickEvents: the card's link is the control; this is its photo's shortcut
+        <div
+          onClick={(event) => {
+            event.preventDefault();
+            const opener = event.currentTarget.closest("a");
+            void import("@/components/ui/large-photos-load").then((step) =>
+              step.showLargePhotos({
+                photos,
+                start: 0,
+                title: `${name.text} · attempt ${index + 1}`,
+                badge: <OutcomeChip outcome={attempt.outcome} offTheBed={offBed} />,
+                detail: [person?.name, time].filter(Boolean).join(" · "),
+                opener,
+              }),
+            );
+          }}
+          className="relative aspect-4/3 shrink-0 cursor-zoom-in overflow-hidden rounded-md md:w-2/5"
+        >
+          <Photo
+            src={photoSrc(photo.id, "large")}
+            // The card's own text names it; the picture would only repeat that.
+            alt=""
+            color={photo.color || undefined}
+            className="size-full"
+            imgClassName="group-hover:scale-[1.02] transition-[opacity,transform] duration-slow"
+          />
+          <OutcomeChip
+            outcome={attempt.outcome}
+            offTheBed={offBed}
+            onPhoto
+            className="shadow-soft absolute bottom-2 left-2"
+          />
+          {photos.length > 1 && (
+            <span className="absolute top-2 right-2">
+              <PhotoCountBadge count={photos.length} />
+            </span>
+          )}
+        </div>
+      )}
       <div className={plate ? "contents" : "flex min-w-0 flex-1 flex-col gap-2.5 px-2.5 pt-3 pb-2.5 md:px-4 md:py-3"}>
-        {words}
+        <div
+          className={cn(
+            "flex flex-col gap-2.5",
+            plate &&
+              "col-start-2 row-start-2 min-w-0 pt-0.5 pl-3 md:col-span-3 md:col-start-3 md:row-start-1 md:px-4 md:pt-3",
+          )}
+        >
+          {/* Without a picture, the outcome leads the card. */}
+          {!picture && (
+            <div className="flex items-center gap-2">
+              <OutcomeChip outcome={attempt.outcome} offTheBed={offBed} />
+              <Meta at={attempt.printedAt} time={time} person={person} via={via} printer={attempt.fromPrinter} />
+            </div>
+          )}
+          <div className="flex items-baseline gap-2">
+            <h3 className="text-body text-ink min-w-0 flex-1 font-sans">
+              <MetaList>
+                <span className={cn("break-words", name.titled ? "font-semibold" : "font-medium")}>{name.text}</span>
+                <span className="text-small text-ink-faint font-medium whitespace-nowrap">attempt {index + 1}</span>
+              </MetaList>
+            </h3>
+            {picture && (
+              <Meta
+                at={attempt.printedAt}
+                time={time}
+                person={person}
+                via={via}
+                className={cn(plate && "max-md:hidden")}
+              />
+            )}
+          </div>
+          {partsLabel && <p className="text-small text-ink-soft -mt-1.5 break-words">{partsLabel}</p>}
+        </div>
+        <div
+          className={cn(
+            "flex flex-1 flex-col gap-2.5",
+            plate &&
+              "col-span-2 row-start-3 px-2.5 pt-3 pb-2.5 md:col-span-3 md:col-start-3 md:row-start-2 md:px-4 md:pt-2.5 md:pb-3",
+          )}
+        >
+          {attempt.outcome === null && !offBed && (
+            <PrintProgress
+              startedAt={attempt.printedAt}
+              estimatedMinutes={attempt.settings.estimatedMinutes}
+              attemptId={attempt.id}
+            />
+          )}
+          {offBed && attempt.endedAt !== null && (
+            <p className="text-small text-ink-soft">
+              <span className="text-ink font-semibold">{offTheBedLabel(attempt.endedAt)}</span> · how did it go?
+            </p>
+          )}
+          {attempt.note && <p className="text-body text-ink line-clamp-3 break-words">{attempt.note}</p>}
+          {(attempt.failureTags.length > 0 || attempt.successNotes.length > 0) && (
+            <ul className="flex flex-wrap gap-1.5" aria-label="Tags">
+              {attempt.failureTags.map((slug) => (
+                <li key={`f-${slug}`}>
+                  <Chip tone="tomato">{tagLabel("failure", slug, failureOptions)}</Chip>
+                </li>
+              ))}
+              {attempt.successNotes.map((slug) => (
+                <li key={`s-${slug}`}>
+                  <Chip tone="basil" icon={CheckIcon}>
+                    {tagLabel("success", slug, successOptions)}
+                  </Chip>
+                </li>
+              ))}
+            </ul>
+          )}
+          {(filaments.length > 0 || settings.length > 0) && (
+            <SettingsLine
+              filaments={filaments}
+              parts={settings}
+              name={(filament) => [filament.colorName, filament.type].filter(Boolean).join(" ") || "Filament"}
+              className="text-small text-ink-faint mt-auto"
+              filamentClassName="text-ink-soft"
+            />
+          )}
+        </div>
       </div>
     </Link>
   );

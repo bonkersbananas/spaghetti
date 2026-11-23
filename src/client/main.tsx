@@ -5,13 +5,12 @@ import { QueryCache, QueryClient } from "@tanstack/react-query";
 import { PersistQueryClientProvider } from "@tanstack/react-query-persist-client";
 import { createRouter, RouterProvider } from "@tanstack/react-router";
 import { StrictMode } from "react";
-import { createRoot } from "react-dom/client";
 import { focusContentAfterMoves } from "./lib/focus-content";
 import { followTextSize, stopPageZoom } from "./lib/no-page-zoom";
 import { registerServiceWorker } from "./lib/offline";
-import { catchOwnPops } from "./lib/own-pops";
 import { MAX_AGE, persistOptions, recordFetch, refetchRestored } from "./lib/persist";
 import { isBackMove, trackMoves } from "./lib/previous-path";
+import { createRoot } from "./lib/react-root";
 import { RouterError } from "./lib/router-error";
 import { initTheme } from "./lib/theme";
 import { followTouchPress } from "./lib/touch-press";
@@ -34,9 +33,6 @@ const queryClient = new QueryClient({
     queries: { staleTime: 30_000, refetchOnWindowFocus: true, retry: 1, networkMode: "always", gcTime: MAX_AGE },
   },
 });
-
-// Before the router's history listens: a photo opened large keeps its Back step from the router (lib/own-pops.ts).
-catchOwnPops();
 
 const router = createRouter({
   routeTree,
