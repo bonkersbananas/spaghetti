@@ -272,7 +272,8 @@ test("a print nothing matches asks “Which build?”, and search finds an idea 
 
   await page.goto(`/builds/${ownId}`);
   const entry = page.locator(`[data-attempt-id="${attemptId}"]`);
-  await expect(entry.getByText("Nothing matched cable-clip-v3.")).toBeVisible();
+  // The build is named after the job already, so the line doesn't say the name again.
+  await expect(entry.getByText("Nothing matched this print.")).toBeVisible();
   await entry.getByRole("button", { name: "Which build?" }).click();
   const sheet = page.getByRole("dialog", { name: "Which build is this?" });
   // "Its own build" answers it as it stands.

@@ -104,6 +104,8 @@ export function MoveAttemptSheet({ open, onOpenChange, item, attempt, notThis }:
 
   const empty = !suggested.length && !active.length && !finished.length && !foundIdeas.length;
   const first = suggested[0]?.build ?? active[0] ?? foundIdeas[0] ?? finished[0];
+  // While searching on desktop, the row Enter takes is marked as the one in hand.
+  const enterTakes = (build: ItemView) => isDesktop && !!search.trim() && build.id === first?.id;
   const searchField = (
     <TextField
       aria-label="Search builds"
@@ -129,6 +131,25 @@ export function MoveAttemptSheet({ open, onOpenChange, item, attempt, notThis }:
   const pictures = picturesApart(
     suggested.map((one) => one.build),
     sameFile,
+  );
+
+  // "Its own build": for the printer's question, keeping it where it is, right under the guesses (in the thumb's reach
+  // on a phone, before the long list of builds); for any other attempt, after the builds in progress.
+  const ownRow = asking ? (
+    <PickRow glyph={{ icon: BuildsIcon }} title="Its own build" meta={`Keep it in ${nameOf(item)}`} onSelect={keep} />
+  ) : (
+    <PickRow
+      glyph={{ icon: BuildsIcon }}
+      title="Its own build"
+      meta={
+        ownElsewhere ? `The one the printer made: ${print?.name ?? "untitled"}` : "A new build, named after its file"
+      }
+      onSelect={() =>
+        moveTo({
+          newBuild: { title: ownElsewhere ? null : attempt.file ? readableTitle(attempt.file.name) : null },
+        })
+      }
+    />
   );
 
   return (
@@ -160,12 +181,14 @@ export function MoveAttemptSheet({ open, onOpenChange, item, attempt, notThis }:
                   title={nameOf(build)}
                   mark={build.stage === "idea" ? <Chip>Idea</Chip> : undefined}
                   meta={<KeepNames text={lines[index] ?? ""} names={names} />}
+                  current={enterTakes(build)}
                   onSelect={() => moveTo({ item: build })}
                 />
               ))}
             </div>
           </>
         )}
+        {asking && <div className="mb-4">{ownRow}</div>}
         {active.length > 0 && (
           <>
             <Overline className="mb-1" count={active.length}>
@@ -178,6 +201,7 @@ export function MoveAttemptSheet({ open, onOpenChange, item, attempt, notThis }:
                 glyph={{ icon: BuildsIcon }}
                 title={nameOf(build)}
                 meta={<BuildMeta build={build} printing={onBed?.item.id === build.id ? onBed.attempt : undefined} />}
+                current={enterTakes(build)}
                 onSelect={() => moveTo({ item: build })}
               />
             ))}
@@ -195,37 +219,16 @@ export function MoveAttemptSheet({ open, onOpenChange, item, attempt, notThis }:
                 glyph={{ icon: IdeasIcon }}
                 title={nameOf(idea)}
                 meta={`Saved ${relativeTime(idea.createdAt)}`}
+                current={enterTakes(idea)}
                 onSelect={() => moveTo({ item: idea })}
               />
             ))}
           </>
         )}
         {empty && search.trim() && <p className="text-body text-ink-soft py-4">Nothing by that name.</p>}
-        <div className={active.length || suggested.length || foundIdeas.length ? "mt-3" : undefined}>
-          {asking ? (
-            <PickRow
-              glyph={{ icon: BuildsIcon }}
-              title="Its own build"
-              meta={`Keep it in ${nameOf(item)}`}
-              onSelect={keep}
-            />
-          ) : (
-            <PickRow
-              glyph={{ icon: BuildsIcon }}
-              title="Its own build"
-              meta={
-                ownElsewhere
-                  ? `The one the printer made: ${print?.name ?? "untitled"}`
-                  : "A new build, named after its file"
-              }
-              onSelect={() =>
-                moveTo({
-                  newBuild: { title: ownElsewhere ? null : attempt.file ? readableTitle(attempt.file.name) : null },
-                })
-              }
-            />
-          )}
-        </div>
+        {!asking && (
+          <div className={active.length || suggested.length || foundIdeas.length ? "mt-3" : undefined}>{ownRow}</div>
+        )}
         {finished.length > 0 && (
           <>
             <Overline className="mt-5 mb-1" count={finished.length}>
@@ -235,6 +238,7 @@ export function MoveAttemptSheet({ open, onOpenChange, item, attempt, notThis }:
               <PickRow
                 key={build.id}
                 quiet
+                current={enterTakes(build)}
                 photo={pictureOf(build)}
                 glyph={{ icon: BuildsIcon }}
                 title={nameOf(build)}

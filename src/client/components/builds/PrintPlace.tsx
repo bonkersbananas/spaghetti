@@ -1,5 +1,5 @@
 import type { AttemptMoved } from "@shared/api";
-import { filedWords, namesIn, rowWords } from "@shared/print-match";
+import { filedWords, namesIn, readableTitle, rowWords } from "@shared/print-match";
 import { inlineTime } from "@shared/time";
 import { useQuery } from "@tanstack/react-query";
 import { lazy, Suspense, useState } from "react";
@@ -118,10 +118,17 @@ function WhichBuild({ item, attempt, onMore, readOnly }: WhichBuildProps) {
     const build = byId.get(one.itemId);
     return build && build.id !== item.id && !build.pending ? [{ build, reasons: one.reasons }] : [];
   })[0];
+  // The printer's build is named after the job until someone renames it: then the card's title says the name already.
+  const printName = attempt.print?.name ?? null;
+  const title = item.title?.trim().toLowerCase();
+  const said =
+    !!printName &&
+    !!title &&
+    (printName.trim().toLowerCase() === title || readableTitle(printName)?.toLowerCase() === title);
   return (
     <WhichBuildLine
       loading={isPending}
-      printName={attempt.print?.name ?? null}
+      printName={said ? null : printName}
       likely={
         likely && {
           title: itemName(likely.build, likely.build.stage === "idea" ? "idea" : "build"),
@@ -140,7 +147,7 @@ function WhichBuild({ item, attempt, onMore, readOnly }: WhichBuildProps) {
 interface WhichBuildLineProps {
   /** The build the matcher ranks first, as it reads; none when nothing fits. */
   likely?: { title: string; why: string; names: readonly string[]; idea?: boolean } | null | undefined;
-  /** The job's name as the printer said it, for "Nothing matched cable-clip-v3." */
+  /** The job's name as the printer said it, for "Nothing matched cable-clip-v3.", when the title doesn't say it. */
   printName?: string | null;
   loading?: boolean;
   onYes?: () => void;

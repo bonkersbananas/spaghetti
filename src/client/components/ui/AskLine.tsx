@@ -31,7 +31,7 @@ export function AskLine({ icon: Glyph, children, detail, actions, loading, class
       aria-labelledby={loading ? undefined : id}
       aria-busy={loading || undefined}
       className={cn(
-        "bg-ink/4 flex flex-wrap items-center justify-between gap-x-3 gap-y-2 rounded-md py-2 pr-2 pl-3",
+        "sg-lifted-surface bg-ink/4 flex flex-wrap items-center justify-between gap-x-3 gap-y-2 rounded-md py-2 pr-2 pl-3",
         className,
       )}
     >
