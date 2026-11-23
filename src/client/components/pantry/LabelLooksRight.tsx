@@ -106,6 +106,7 @@ export function LabelLooksRight({
           <span className="text-small text-ink-faint">Change</span>
         </button>
         {pickingFinish && (
+          // biome-ignore lint/a11y/useSemanticElements: a row of chips, not a form field set.
           <div className="flex flex-wrap gap-2 pb-2" role="group" aria-label="Finish">
             {FINISHES.map((finish) => (
               <ToggleChip
