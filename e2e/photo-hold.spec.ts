@@ -3,9 +3,8 @@ import { type CDPSession, expect, type Page, test } from "@playwright/test";
 import { signIn } from "./helpers";
 
 // On a phone a hold on a photo in the strip lifts it (as iOS Photos and the Home Screen do): moving the finger then
-// takes it to a new place, and letting go where it was opens its Make cover / Remove menu. Real touches through CDP.
-
-test.skip(({ isMobile }) => !isMobile, "A finger's hold");
+// takes it to a new place, and letting go where it was opens its Make cover / Remove menu. A swipe without the hold
+// scrolls the strip, wherever it starts. Real touches through CDP.
 
 test.beforeEach(async ({ page }) => {
   await signIn(page);
@@ -53,8 +52,7 @@ async function photoOrder(page: Page, id: string): Promise<string[]> {
 /** Opens the idea and waits until its strip can be dragged (that joins after the first paint) and motion is still. */
 async function openStrip(page: Page, id: string) {
   await page.goto(`/ideas/${id}`, { waitUntil: "networkidle" });
-  const order = page.getByRole("list", { name: "Photo order" });
-  await expect(order.getByRole("listitem").first()).toHaveCSS("touch-action", "pan-y");
+  await expect(page.locator("ul[data-movable] li").first()).toBeVisible();
   await page.waitForTimeout(400);
 }
 
@@ -75,8 +73,12 @@ async function scaleOf(page: Page, name: string) {
     .evaluate((button) => new DOMMatrix(getComputedStyle(button.closest("li") as Element).transform).a);
 }
 
-for (const when of ["after the hold", "a moment in"] as const) {
-  test(`a held photo follows the finger to a new place (moving ${when})`, { tag: "@phone" }, async ({ page }) => {
+for (const when of ["after the hold", "a moment after it lifts"] as const) {
+  test(`a held photo follows the finger to a new place (moving ${when})`, { tag: "@phone" }, async ({
+    page,
+    isMobile,
+  }) => {
+    test.skip(!isMobile, "A finger's hold");
     const { id, photoIds } = await addIdea(page, `Hold and move ${when}`, 3);
     await openStrip(page, id);
     const from = await centre(page, "Photo 1, the cover");
@@ -84,7 +86,7 @@ for (const when of ["after the hold", "a moment in"] as const) {
     const session = await page.context().newCDPSession(page);
 
     await touch(session, "touchStart", from.x, from.y);
-    await page.waitForTimeout(when === "after the hold" ? 600 : 300);
+    await page.waitForTimeout(when === "after the hold" ? 600 : 560);
     if (when === "after the hold") {
       // Lifted, and no menu while the finger is still down.
       await expect.poll(() => scaleOf(page, "Photo 1, the cover")).toBeGreaterThan(1.02);
@@ -109,7 +111,40 @@ for (const when of ["after the hold", "a moment in"] as const) {
   });
 }
 
-test("a hold let go without moving opens the photo's menu, and nothing moves", { tag: "@phone" }, async ({ page }) => {
+test("a sideways swipe that starts on a photo scrolls the strip, and nothing moves", { tag: "@phone" }, async ({
+  page,
+  isMobile,
+}) => {
+  test.skip(!isMobile, "A finger's swipe");
+  const { id, photoIds } = await addIdea(page, "Swipe the strip", 8);
+  await openStrip(page, id);
+  const strip = page.locator("ul[data-movable]").locator("..");
+  const before = await strip.evaluate((element) => element.scrollLeft);
+  const from = await centre(page, "Photo 2");
+  const session = await page.context().newCDPSession(page);
+
+  // A quick swipe to the left, as a thumb flicks: no hold first.
+  await touch(session, "touchStart", from.x, from.y);
+  for (let step = 1; step <= 10; step++) {
+    await touch(session, "touchMove", from.x - step * 20, from.y + 2);
+    await page.waitForTimeout(16);
+  }
+  await session.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+
+  await expect.poll(() => strip.evaluate((element) => element.scrollLeft)).toBeGreaterThan(before + 60);
+  await page.waitForTimeout(500);
+  expect(await scaleOf(page, "Photo 2")).toBeCloseTo(1, 2);
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  expect(await photoOrder(page, id)).toEqual(photoIds);
+  // The swipe wasn't a tap either: the first photo is still the one showing.
+  await expect(page.locator('button[aria-label="Photo 1, the cover"]')).toHaveAttribute("aria-current", "true");
+});
+
+test("a hold let go without moving opens the photo's menu, and nothing moves", { tag: "@phone" }, async ({
+  page,
+  isMobile,
+}) => {
+  test.skip(!isMobile, "A finger's hold");
   const { id, photoIds } = await addIdea(page, "Hold and let go", 3);
   await openStrip(page, id);
   const at = await centre(page, "Photo 2");
@@ -131,7 +166,11 @@ test("a hold let go without moving opens the photo's menu, and nothing moves", {
   expect(await photoOrder(page, id)).toEqual(photoIds);
 });
 
-test("a quick tap still shows a photo, and a second tap on it opens its menu", { tag: "@phone" }, async ({ page }) => {
+test("a quick tap still shows a photo, and a second tap on it opens its menu", { tag: "@phone" }, async ({
+  page,
+  isMobile,
+}) => {
+  test.skip(!isMobile, "A finger's hold");
   const { id, photoIds } = await addIdea(page, "Tap, tap", 2);
   await openStrip(page, id);
   const second = page.getByRole("button", { name: "Photo 2", exact: true });
@@ -141,4 +180,20 @@ test("a quick tap still shows a photo, and a second tap on it opens its menu", {
   await second.tap();
   await expect(page.getByRole("dialog", { name: "Photo 2 of 2" })).toBeVisible();
   expect(await photoOrder(page, id)).toEqual(photoIds);
+});
+
+test("with a mouse, a photo dragged along the strip takes its new place", async ({ page, isMobile }) => {
+  test.skip(isMobile, "A mouse");
+  const { id, photoIds } = await addIdea(page, "Drag with a mouse", 3);
+  await openStrip(page, id);
+  const from = await centre(page, "Photo 1, the cover");
+  const next = await centre(page, "Photo 2");
+  await page.mouse.move(from.x, from.y);
+  await page.mouse.down();
+  for (let step = 1; step <= 12; step++) {
+    await page.mouse.move(from.x + ((next.x - from.x + 12) * step) / 12, from.y);
+    await page.waitForTimeout(30);
+  }
+  await page.mouse.up();
+  await expect.poll(() => photoOrder(page, id)).toEqual([photoIds[1], photoIds[0], photoIds[2]]);
 });
