@@ -87,6 +87,73 @@ test("choosing something else is just picking it: no suggested tags come along",
   expect(await attemptOf(page, itemId, attemptId)).toMatchObject({ failureTags: [], successNotes: [] });
 });
 
+test("Partly where Claude said Spaghetti: nothing of Claude's comes along, it stays offered, and words come first", {
+  tag: "@phone",
+}, async ({ page }) => {
+  const { itemId, attemptId } = await offTheBed(page, "Spaghetti comb");
+  await addPhoto(page, itemId, attemptId);
+  await page.goto(`/builds/${itemId}`);
+  const entry = page.getByRole("listitem").filter({ hasText: "Attempt 1" }).first();
+  await expect(entry.getByRole("radio", { name: /Spaghetti suggested/ })).toBeVisible({ timeout: 20_000 });
+  await entry.getByRole("radio", { name: "Partly" }).click();
+  const sheet = page.getByRole("dialog");
+  await expect(sheet.getByRole("radio", { name: "Partly", checked: true })).toBeVisible();
+  // Claude's tags are offered, marked, and not picked.
+  const adhesion = sheet.getByRole("button", { name: /Bed adhesion.*suggested/ });
+  await expect(adhesion).toHaveAttribute("aria-pressed", "false");
+  await expect(sheet.getByText("Claude's guess from the photo: tap any that fit.")).toBeVisible();
+  // The note has the focus: the person's words go straight in, and are kept without Done.
+  const note = sheet.getByRole("textbox", { name: "Note" });
+  await expect(note).toBeFocused();
+  await page.keyboard.type("Top half fine, the hooks drooped");
+  await expect
+    .poll(async () => (await attemptOf(page, itemId, attemptId)).note, { timeout: 10_000 })
+    .toBe("Top half fine, the hooks drooped");
+  expect(await attemptOf(page, itemId, attemptId)).toMatchObject({
+    outcome: "partial",
+    failureTags: [],
+    successNotes: [],
+  });
+  // One tap takes a suggestion, and the chip keeps its width: nothing after it moves under the thumb.
+  const width = (await adhesion.boundingBox())?.width;
+  await adhesion.click();
+  await expect(adhesion).toHaveAttribute("aria-pressed", "true");
+  expect((await adhesion.boundingBox())?.width).toBe(width);
+  await expect
+    .poll(async () => (await attemptOf(page, itemId, attemptId)).failureTags, { timeout: 10_000 })
+    .toEqual(["bed-adhesion"]);
+});
+
+test("Partly where Claude said Partly takes Claude's tags along", async ({ page }) => {
+  const { itemId, attemptId } = await offTheBed(page, "Partly comb");
+  await addPhoto(page, itemId, attemptId);
+  await page.goto(`/builds/${itemId}`);
+  const entry = page.getByRole("listitem").filter({ hasText: "Attempt 1" }).first();
+  await entry.getByRole("radio", { name: /Partly suggested/ }).click({ timeout: 20_000 });
+  const sheet = page.getByRole("dialog");
+  await expect(sheet.getByRole("button", { name: /Stringing.*suggested/ })).toHaveAttribute("aria-pressed", "true");
+  await expect(sheet.getByText("Claude's guess from the photo. Tap to take any off.")).toBeVisible();
+  await expect(sheet.getByRole("textbox", { name: "Note" })).toBeFocused();
+  await expect
+    .poll(async () => (await attemptOf(page, itemId, attemptId)).outcome, { timeout: 10_000 })
+    .toBe("partial");
+  expect(await attemptOf(page, itemId, attemptId)).toMatchObject({ failureTags: ["stringing"], successNotes: [] });
+});
+
+test("Spaghetti where Claude said Worked takes none of its notes", async ({ page }) => {
+  const { itemId, attemptId } = await offTheBed(page, "Comb");
+  await addPhoto(page, itemId, attemptId);
+  await page.goto(`/builds/${itemId}`);
+  const entry = page.getByRole("listitem").filter({ hasText: "Attempt 1" }).first();
+  await expect(entry.getByRole("radio", { name: /Worked suggested/ })).toBeVisible({ timeout: 20_000 });
+  await entry.getByRole("radio", { name: "Spaghetti" }).click();
+  const sheet = page.getByRole("dialog");
+  await expect(sheet.getByRole("radio", { name: "Spaghetti", checked: true })).toBeVisible();
+  await expect(sheet.getByRole("textbox", { name: "Note" })).toBeFocused();
+  await expect.poll(async () => (await attemptOf(page, itemId, attemptId)).outcome, { timeout: 10_000 }).toBe("failed");
+  expect(await attemptOf(page, itemId, attemptId)).toMatchObject({ failureTags: [], successNotes: [] });
+});
+
 test("in the attempt sheet it says it is looking, then suggests", async ({ page }) => {
   test.setTimeout(60_000);
   const slow = await offTheBed(page, "Slow spaghetti comb");

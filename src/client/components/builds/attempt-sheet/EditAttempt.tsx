@@ -1,6 +1,7 @@
 import { fieldsFor, type SheetFields, type SheetValue, toChanges, toFields, toValue } from "@shared/attempt-fields";
 import type { Outcome } from "@shared/attempts";
 import { partsOnPlate } from "@shared/parts";
+import { takenWith } from "@shared/photo-read";
 import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef } from "react";
 import { createPortal } from "react-dom";
@@ -105,37 +106,32 @@ export function EditAttempt({
   const read =
     attempt.outcome === null && !value.outcome && attempt.photoRead?.status === "read" ? attempt.photoRead : null;
   const reading = attempt.outcome === null && !value.outcome ? attempt.photoRead : null;
-  // Claude's failure tags, if it named any; otherwise the printer's tag (if any) is what gets marked.
-  const claudeTags = attempt.photoRead?.status === "read" ? attempt.photoRead.failureTags : [];
+  // What is offered, marked "· suggested", whichever answer was picked: Claude's failure tags then the printer's tag,
+  // and Claude's success notes.
+  const claudeRead = attempt.photoRead?.status === "read" ? attempt.photoRead : null;
+  const claudeTags = claudeRead?.failureTags ?? [];
+  const suggestedFailureTags = [
+    ...new Set([...claudeTags, ...(attempt.suggestedFailureTag ? [attempt.suggestedFailureTag] : [])]),
+  ];
+  // Claude's suggestions come along with an answer only while the print is being answered: once it has an outcome, they only
+  // stay marked. Set as the sheet opens, so changing the answer in it still takes back what came with the first one.
+  const answering = useRef(attempt.outcome === null);
   const finish = (outcome: Outcome) => {
     // Finishing a print that was logged as it started: how long it took, if that's believable.
     const actual =
       printing && value.settings.actualMinutes === undefined
         ? elapsedIfPlausible(attempt.printedAt, value.settings.estimatedMinutes)
         : undefined;
-    // What Claude suggested from the photo, or the failure tag the printer suggested, is offered (marked as a
-    // suggestion) with the outcome that goes with it; it's the person's to take off.
-    const failureTags =
-      outcome !== "success" && value.failureTags.length === 0
-        ? read && read.outcome !== "success" && read.failureTags.length
-          ? read.failureTags
-          : attempt.suggestedFailureTag
-            ? [attempt.suggestedFailureTag]
-            : null
-        : null;
-    const successNotes =
-      outcome !== "failed" &&
-      value.successNotes.length === 0 &&
-      read &&
-      read.outcome !== "failed" &&
-      read.successNotes.length
-        ? read.successNotes
-        : null;
+    // Claude's tags and notes come only with the outcome Claude suggested; the printer's tag with any answer but
+    // Worked (decision 0023). They are the person's to take off; the others stay offered, marked, one tap each.
+    const taken = takenWith(outcome, value, {
+      read: answering.current ? claudeRead : null,
+      printerTag: attempt.suggestedFailureTag,
+    });
     change({
       outcome,
       ...(value.parts.length ? { parts: outcomeCounts(value.parts, outcome) } : {}),
-      ...(failureTags ? { failureTags } : {}),
-      ...(successNotes ? { successNotes } : {}),
+      ...taken,
       ...(actual !== undefined ? { settings: { ...value.settings, actualMinutes: actual } } : {}),
     });
   };
@@ -235,9 +231,15 @@ export function EditAttempt({
         note={value.note}
         onNote={(note) => change({ note })}
         failureTags={value.failureTags}
-        suggestedFailureTag={claudeTags.length ? claudeTags : (attempt.suggestedFailureTag ?? undefined)}
-        suggestedSuccessNotes={attempt.photoRead?.successNotes}
-        suggestedFailureBy={claudeTags.length ? "claude" : "printer"}
+        suggestedFailureTag={suggestedFailureTags}
+        suggestedSuccessNotes={claudeRead?.successNotes}
+        printerFailureTag={
+          // The printer's tag is the printer's, unless Claude named it too and its answer is the one picked.
+          attempt.suggestedFailureTag &&
+          !(claudeTags.includes(attempt.suggestedFailureTag) && value.outcome === claudeRead?.outcome)
+            ? attempt.suggestedFailureTag
+            : undefined
+        }
         suggestedOutcome={read?.outcome}
         outcomeHint={reading ? <PhotoReadNote read={reading} /> : null}
         onFailureTags={(failureTags) => change({ failureTags })}

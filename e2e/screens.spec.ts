@@ -445,6 +445,11 @@ test("fields are 16 px or larger on phones, so iOS Safari doesn't zoom in", asyn
     .click();
   const sheet = page.getByRole("dialog", { name: "Attempt 3" });
   await sheet.getByRole("radio", { name: "Spaghetti" }).click();
+  // After Spaghetti the few tags that matter show; "Add your own" is with the rest.
+  await sheet
+    .getByRole("button", { name: /^\d+ more$/ })
+    .first()
+    .click();
   await sheet.getByRole("button", { name: "Add your own" }).click();
   await sheet.getByRole("button", { name: /^Settings(?! worth)/ }).click();
   await expect(sheet.getByLabel("Bed", { exact: true })).toBeVisible();
