@@ -242,9 +242,14 @@ export function keepAsNew(queryClient: QueryClient, item: ItemView, attempt: Att
 
 /**
  * Moving this attempt from where the screen shows it: the toast's View opens the build it went to, and the page of a
- * build that went with it follows the print there.
+ * build that went with it follows the print there (or `follow` does, always).
  */
-export function useMoveAttempt(item: ItemView, attempt: AttemptView) {
+export function useMoveAttempt(
+  item: ItemView,
+  attempt: AttemptView,
+  /** Follows the print wherever it went, instead (the attempt's sheet, which reopens there). */
+  follow?: (toId: string) => void,
+) {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const go = (buildId: string, attemptId: string) =>
@@ -257,6 +262,7 @@ export function useMoveAttempt(item: ItemView, attempt: AttemptView) {
         to,
         go,
         onMoved: ({ toId, fromGoes }) => {
+          if (follow) return follow(toId);
           // Read where the page is when the move goes, not as a hook: the printing card on any screen calls this.
           if (fromGoes && window.location.pathname === `/builds/${item.id}`) go(toId, attempt.id);
         },

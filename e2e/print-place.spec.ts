@@ -119,9 +119,9 @@ const DAYS = 24 * 60 * 60_000;
 test("the build page asks which build a print is in one line: Yes puts it there, and Undo asks again", {
   tag: "@phone",
 }, async ({ page, isMobile }) => {
-  // Two builds keep the same file: the print could be either, so the app asks; the one just started is likelier.
+  // One build keeps the print's file, another only has its name: close enough to ask, and the file is likelier.
   const planter = await buildKeeping(page, "Herb planter", "planter-v2.gcode.3mf");
-  const balcony = await buildKeeping(page, "Balcony planters", "planter-v2.gcode.3mf", { startedAgo: 3 * DAYS });
+  const balcony = await buildKeeping(page, "Planter v2", "balcony.gcode.3mf", { startedAgo: 3 * DAYS });
   const { ownId, attemptId, itemId } = await bridgeFiles(page, "planter-v2(2)");
   expect(itemId).toBe(ownId);
 
@@ -165,7 +165,7 @@ test("the print's card on Today and the Journal asks which build it is, next to 
   tag: "@phone",
 }, async ({ page, browser, isMobile }) => {
   const planter = await buildKeeping(page, "Herb planter", "planter-v2.gcode.3mf");
-  await buildKeeping(page, "Balcony planters", "planter-v2.gcode.3mf", { startedAgo: 3 * DAYS });
+  await buildKeeping(page, "Planter v2", "balcony.gcode.3mf", { startedAgo: 3 * DAYS });
   const { ownId, attemptId } = await bridgeFiles(page, "planter-v2(2)");
 
   // Phones have no Today: the Journal's Now shows the print on the bed.
@@ -219,7 +219,7 @@ test("“Another build” opens the sheet, likely builds first, and search finds
   tag: "@phone",
 }, async ({ page, isMobile }) => {
   const planter = await buildKeeping(page, "Herb planter", "planter-v2.gcode.3mf");
-  const balcony = await buildKeeping(page, "Balcony planters", "planter-v2.gcode.3mf", { startedAgo: 3 * DAYS });
+  const balcony = await buildKeeping(page, "Planter v2", "balcony.gcode.3mf", { startedAgo: 3 * DAYS });
   const shelf = crypto.randomUUID();
   await page.request.post("/api/items", {
     headers: { Origin: origin(page) },
@@ -233,7 +233,7 @@ test("“Another build” opens the sheet, likely builds first, and search finds
   const sheet = page.getByRole("dialog", { name: "Which build is this?" });
   // The other guess leads; the one passed over drops to its place among the builds in progress.
   await expect(sheet.getByText("Most likely")).toBeVisible();
-  const other = sheet.getByRole("button", { name: /^Balcony planters/ });
+  const other = sheet.getByRole("button", { name: /^Planter v2/ });
   const passed = sheet.getByRole("button", { name: /^Herb planter/ });
   await expect(other).toBeVisible();
   await expect(passed).toHaveCount(1);
@@ -244,12 +244,12 @@ test("“Another build” opens the sheet, likely builds first, and search finds
   if (isMobile) {
     // Within the thumb's reach: the field is at the sheet's foot, under the list.
     const field = await search.boundingBox();
-    const list = await sheet.getByRole("button", { name: /^Balcony planters/ }).boundingBox();
+    const list = await sheet.getByRole("button", { name: /^Planter v2/ }).boundingBox();
     expect(field && list && field.y > list.y).toBe(true);
     await search.tap();
   } else await expect(search).toBeFocused();
   await search.fill("spice");
-  await expect(sheet.getByRole("button", { name: /^Balcony planters/ })).toHaveCount(0);
+  await expect(sheet.getByRole("button", { name: /^Planter v2/ })).toHaveCount(0);
   if (isMobile) await sheet.getByRole("button", { name: /^Spice shelf/ }).tap();
   else await page.keyboard.press("Enter");
 
@@ -284,6 +284,94 @@ test("a print nothing matches asks “Which build?”, and search finds an idea 
   await expect.poll(() => homeOf(page, attemptId, [idea, ownId])).toEqual({ itemId: idea, asking: false });
   const { item } = await (await page.request.get(`/api/items/${idea}`)).json();
   expect(item.stage).toBe("building");
+});
+
+test("an answered print still asks on Today and the Journal: two as likely are both offered, one tap each", {
+  tag: "@phone",
+}, async ({ page, isMobile }) => {
+  // Both keep the file: as likely as each other, so the question names both.
+  const planter = await buildKeeping(page, "Herb planter", "planter-v2.gcode.3mf");
+  const balcony = await buildKeeping(page, "Balcony planters", "planter-v2.gcode.3mf", { startedAgo: 3 * DAYS });
+  const { ownId, attemptId } = await bridgeFiles(page, "planter-v2(2)");
+  // People answer "How did it go?" first: the print is off the bed, and still in its own build.
+  const answered = await page.request.patch(`/api/attempts/${attemptId}`, {
+    headers: { Origin: origin(page) },
+    data: { outcome: "success" },
+  });
+  expect(answered.ok()).toBe(true);
+
+  await page.goto(isMobile ? "/journal" : "/today");
+  const question = page.getByRole("region", { name: "Is this Herb planter or Balcony planters?" });
+  await expect(question).toBeVisible();
+  await expect(question.getByText("Both print planter-v2.")).toBeVisible();
+  // Its card says how it went, and asks nothing else.
+  const card = page.locator("article").filter({ has: question });
+  await expect(card.getByText("Worked")).toBeVisible();
+  await expect(card.getByRole("button", { name: "How did it go?" })).toHaveCount(0);
+
+  await question.getByRole("button", { name: "Balcony planters" }).click();
+  await expect(page.getByText("Moved to Balcony planters")).toBeVisible();
+  // Placed: nothing is left to ask, so the card goes (the Journal's rows still name the build until they refresh).
+  await expect(question).toHaveCount(0);
+  // Undo while the toast is up (6 s): the question is back.
+  await page.getByRole("button", { name: "Undo" }).click();
+  await expect.poll(() => homeOf(page, attemptId, [balcony, planter, ownId])).toEqual({ itemId: ownId, asking: true });
+  await expect(page.getByRole("region", { name: "Is this Herb planter or Balcony planters?" })).toBeVisible();
+});
+
+test("the attempt's sheet asks it too: answering the outcome leaves the question, and Yes takes the sheet along", {
+  tag: "@phone",
+}, async ({ page }) => {
+  const planter = await buildKeeping(page, "Herb planter", "planter-v2.gcode.3mf");
+  await buildKeeping(page, "Planter v2", "balcony.gcode.3mf", { startedAgo: 3 * DAYS });
+  const { ownId, attemptId } = await bridgeFiles(page, "planter-v2(2)");
+
+  // "How did it go?" from Today or the Journal lands here.
+  await page.goto(`/builds/${ownId}?attempt=${attemptId}&finish=1`);
+  // "Finish attempt 1" until the answer is saved, "Attempt 1" after.
+  const sheet = page.getByRole("dialog", { name: /attempt 1$/i });
+  const question = sheet.getByRole("region", { name: "Is this Herb planter?" });
+  await expect(question).toBeVisible();
+  await sheet.getByRole("radio", { name: "Worked" }).click();
+  await expect(sheet.getByRole("radio", { name: "Worked", checked: true })).toBeVisible();
+  await expect(question).toBeVisible();
+  const outcome = async () => {
+    const response = await page.request.get(`/api/items/${planter}`);
+    const { item } = await response.json();
+    return item.attempts.find((one: { id: string }) => one.id === attemptId)?.outcome ?? null;
+  };
+  // The answer is saved before the print moves (autosave), and goes with it.
+  await expect
+    .poll(async () => {
+      const { item } = await (await page.request.get(`/api/items/${ownId}`)).json();
+      return item.attempts[0].outcome;
+    })
+    .toBe("success");
+
+  await question.getByRole("button", { name: "Yes" }).click();
+  await expect(page.getByText("Moved to Herb planter")).toBeVisible();
+  // The sheet follows the print into the herb planter, answered, without the question.
+  await expect(page).toHaveURL(new RegExp(`/builds/${planter}`));
+  const there = page.getByRole("dialog", { name: /^Attempt 1/ });
+  await expect(there).toBeVisible();
+  await expect(there.getByRole("radio", { name: "Worked", checked: true })).toBeVisible();
+  await expect(there.getByRole("region", { name: /^Is this / })).toHaveCount(0);
+  await expect.poll(outcome).toBe("success");
+});
+
+test("a print that really is new is answered in one tap: “Keep it as its own”, with Undo", { tag: "@phone" }, async ({
+  page,
+}) => {
+  const { ownId, attemptId } = await bridgeFiles(page, "cable-clip-v3");
+  await page.goto(`/builds/${ownId}`);
+  const entry = page.locator(`[data-attempt-id="${attemptId}"]`);
+  await entry.getByRole("button", { name: "Keep it as its own" }).click();
+  await expect(page.getByText("Kept in its own build")).toBeVisible();
+  await expect(entry.getByText("Nothing matched this print.")).toHaveCount(0);
+  await expect.poll(() => homeOf(page, attemptId, [ownId])).toEqual({ itemId: ownId, asking: false });
+  await page.getByRole("button", { name: "Undo" }).click();
+  await expect(entry.getByText("Nothing matched this print.")).toBeVisible();
+  await expect.poll(() => homeOf(page, attemptId, [ownId])).toEqual({ itemId: ownId, asking: true });
 });
 
 test("a print the app placed says why, and “Not this build?” moves it with one tap", { tag: "@phone" }, async ({

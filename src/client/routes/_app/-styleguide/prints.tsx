@@ -21,27 +21,35 @@ export function PrintsSection() {
           <div className="flex flex-col gap-3">
             <Label>The printer's question: the likely build, one tap to say yes</Label>
             <WhichBuildLine
-              likely={{ title: "Herb planter", why: "Same file: planter-v2", names: ["planter-v2"] }}
-              onYes={nothing}
+              guesses={[{ id: "a", title: "Herb planter", onPick: nothing }]}
+              why="Same file: planter-v2"
+              names={["planter-v2"]}
+              onMore={nothing}
+            />
+          </div>
+          <div className="flex flex-col gap-3">
+            <Label>Two as likely as each other: both named, one tap each</Label>
+            <WhichBuildLine
+              guesses={[
+                { id: "a", title: "Herb planter", onPick: nothing },
+                { id: "b", title: "Planters for the balcony", idea: true, onPick: nothing },
+              ]}
+              why="Both print planter-v2."
+              names={["planter-v2"]}
               onMore={nothing}
             />
           </div>
           <div className="flex flex-col gap-3">
             <Label>An idea it would start</Label>
             <WhichBuildLine
-              likely={{
-                title: "Planters for the balcony",
-                why: "Downloaded 4 min before it began",
-                names: [],
-                idea: true,
-              }}
-              onYes={nothing}
+              guesses={[{ id: "b", title: "Planters for the balcony", idea: true, onPick: nothing }]}
+              why="Downloaded 4 min before it began"
               onMore={nothing}
             />
           </div>
           <div className="flex flex-col gap-3">
-            <Label>Nothing fits: the sheet, to pick or keep it in its own build</Label>
-            <WhichBuildLine printName="cable-clip-v3" onMore={nothing} />
+            <Label>Nothing fits: the sheet, or keep it as its own in one tap</Label>
+            <WhichBuildLine printName="cable-clip-v3" onMore={nothing} onKeep={nothing} />
           </div>
           <div className="flex flex-col gap-3">
             <Label>While the guess loads: its room kept</Label>

@@ -155,6 +155,9 @@ export function PrintingCard({
   const navigate = useNavigate();
   const readOnly = useReadOnly(item.pending);
   const offBed = isOffTheBed(attempt);
+  // Answered already, but still asking which build it is (Today and the Journal's Now keep it until it is placed):
+  // its outcome where the progress would be, and the question.
+  const answered = attempt.outcome !== null;
   const progress = usePrintProgress(attempt.id, attempt.printedAt, attempt.settings.estimatedMinutes);
   const due = progress.state === "due";
   const showUnread = unread > 0;
@@ -251,7 +254,7 @@ export function PrintingCard({
           )}
           {/* On a compact card the words under it say the same, and a chip would cover the small picture. Off the bed
               the line beside the picture says so ("Off the bed at 10:42 · how did it go?"), so it isn't said twice. */}
-          {!offBed && (
+          {!offBed && !answered && (
             <OutcomeChip
               outcome={null}
               onPhoto
@@ -357,7 +360,10 @@ export function PrintingCard({
               <PrintPlace item={item} attempt={attempt} where="card" className="pointer-events-auto" />
             </Suspense>
           )}
-          {offBed && attempt.endedAt !== null ? (
+          {answered ? (
+            // The outcome is in: only which build is left, and the question above says it.
+            <OutcomeChip outcome={attempt.outcome} className="self-start md:mt-auto" />
+          ) : offBed && attempt.endedAt !== null ? (
             // The printer says it stopped: no bar to draw, only the calm question and the three answers.
             <OffTheBed
               endedAt={attempt.endedAt}

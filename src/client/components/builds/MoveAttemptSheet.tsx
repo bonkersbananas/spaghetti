@@ -23,8 +23,10 @@ interface MoveAttemptSheetProps {
   /** The build the attempt is in now. */
   item: ItemView;
   attempt: AttemptView;
-  /** The build the printer's question offered and someone passed over ("Another build"): left out here. */
-  notThis?: string | null;
+  /** The builds the printer's question offered and someone passed over ("Another build"): not among the guesses. */
+  notThis?: readonly string[];
+  /** Follows the print to the build it went to (the attempt's sheet). */
+  follow?: (toId: string) => void;
 }
 
 const nameOf = (build: ItemView) => itemName(build, build.stage === "idea" ? "idea" : "build");
@@ -37,7 +39,7 @@ const nameOf = (build: ItemView) => itemName(build, build.stage === "idea" ? "id
  * ideas too: on top and focused on desktop, at the sheet's foot on phones, where the thumb is and the keyboard lifts
  * it. Enter takes the first row. A tap moves at once; the toast offers Undo.
  */
-export function MoveAttemptSheet({ open, onOpenChange, item, attempt, notThis }: MoveAttemptSheetProps) {
+export function MoveAttemptSheet({ open, onOpenChange, item, attempt, notThis, follow }: MoveAttemptSheetProps) {
   const isDesktop = useIsDesktop();
   const { items: builds } = useBuilds();
   const { items: ideas } = useIdeas();
@@ -55,7 +57,7 @@ export function MoveAttemptSheet({ open, onOpenChange, item, attempt, notThis }:
     const byId = new Map([...builds, ...ideas].map((one) => [one.id, one]));
     const guessed = (suggestions ?? []).flatMap((one) => {
       const found = byId.get(one.itemId);
-      return found && found.id !== item.id && found.id !== notThis && !found.pending
+      return found && found.id !== item.id && !notThis?.includes(found.id) && !found.pending
         ? [{ build: found, reasons: one.reasons }]
         : [];
     });
@@ -84,7 +86,7 @@ export function MoveAttemptSheet({ open, onOpenChange, item, attempt, notThis }:
     if (!next) window.setTimeout(() => setSearch(""), 300);
   }
 
-  const moves = useMoveAttempt(item, attempt);
+  const moves = useMoveAttempt(item, attempt, follow);
 
   function moveTo(to: MoveTarget) {
     if (moves.move(to)) close(false);

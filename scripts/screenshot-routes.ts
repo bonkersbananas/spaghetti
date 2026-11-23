@@ -2111,6 +2111,24 @@ async function printToAskAbout(page: Page) {
   return bridgeFiles(page, "planter-v2(2)");
 }
 
+/**
+ * One likely build: the herb planter keeps planter-v2, and "Planter v2" only has the job's name, so the print asks
+ * "Is this Herb planter?" rather than naming two.
+ */
+async function printToAskAboutOne(page: Page) {
+  await buildAboutToPrint(page, "Herb planter", "planter-v2.gcode.3mf", { startedAgo: 2 * 24 * 60 * 60_000 });
+  await buildAboutToPrint(page, "Planter v2", "balcony-box.gcode.3mf", { startedAgo: 5 * 24 * 60 * 60_000 });
+  return bridgeFiles(page, "planter-v2(2)");
+}
+
+/** The print's outcome answered first ("How did it go?"), as people do: it still asks which build it is. */
+async function answerFirst(page: Page, attemptId: string) {
+  await page.request.patch(`/api/attempts/${attemptId}`, {
+    headers: { Origin: new URL(page.url()).origin },
+    data: { outcome: "success" },
+  });
+}
+
 /** Only these prints on the bed (the rest of the builds as they are), so the printer's question is the one shown. */
 const onlyOnTheBed = (page: Page, ids: string[]) =>
   keepBuilds(page, (item) => !item.attempts?.some((attempt) => attempt.outcome === null) || ids.includes(item.id));
@@ -8488,6 +8506,54 @@ shots.push(
           .first()
           .waitFor();
         await page.waitForTimeout(400);
+      },
+      cleanup: removeFiledPrints,
+    },
+    {
+      // Answered first, still asking: Today keeps it under "Which build?" with its outcome, until someone places it.
+      name: "today-which-build-answered",
+      path: "/today",
+      width: 1440,
+      why: "Today is desktop-only",
+      prepare: async (page) => {
+        const { ownId, attemptId } = await printToAskAbout(page);
+        await answerFirst(page, attemptId);
+        await onlyOnTheBed(page, [ownId]);
+        await page
+          .getByRole("region", { name: /^Is this / })
+          .first()
+          .waitFor();
+        await page.waitForTimeout(400);
+      },
+      cleanup: removeFiledPrints,
+    },
+    {
+      // The same in the phone's Journal, under Now.
+      name: "journal-which-build-answered",
+      path: "/journal",
+      width: 390,
+      why: "Now is the phone's Today",
+      prepare: async (page) => {
+        const { ownId, attemptId } = await printToAskAbout(page);
+        await answerFirst(page, attemptId);
+        await onlyOnTheBed(page, [ownId]);
+        await page
+          .getByRole("region", { name: /^Is this / })
+          .first()
+          .waitFor();
+        await page.waitForTimeout(400);
+      },
+      cleanup: removeFiledPrints,
+    },
+    {
+      // "How did it go?" opens the attempt's sheet with the question on top: one likely build, Yes or Another build.
+      name: "which-build-attempt-sheet",
+      path: "/builds",
+      prepare: async (page) => {
+        const { ownId, attemptId } = await printToAskAboutOne(page);
+        await page.goto(`/builds/${ownId}?attempt=${attemptId}&finish=1`);
+        await page.getByRole("dialog").getByRole("region", { name: "Is this Herb planter?" }).waitFor();
+        await page.waitForTimeout(600);
       },
       cleanup: removeFiledPrints,
     },

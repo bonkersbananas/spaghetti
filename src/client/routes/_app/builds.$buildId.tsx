@@ -111,7 +111,7 @@ export const Route = createFileRoute("/_app/builds/$buildId")({
     // Opened from the journal or search: that attempt is picked and in view.
     ...(typeof search.attempt === "string" && search.attempt ? { attempt: search.attempt } : {}),
     // From Today's Finish: open that attempt's sheet, with an outcome already picked ("success", "partial", "failed") or not ("1").
-    ...(typeof search.finish === "string" && /^(1|success|partial|failed)$/.test(search.finish)
+    ...(typeof search.finish === "string" && /^(1|open|success|partial|failed)$/.test(search.finish)
       ? { finish: search.finish }
       : {}),
   }),
@@ -260,7 +260,9 @@ function Build({ item }: { item: ItemView }) {
     if (!finishParam || !linkedAttempt) return;
     const attempt = item.attempts.find((candidate) => candidate.id === linkedAttempt);
     if (!attempt) return;
-    if (attempt.outcome === null) openSheet(attempt.id, isOutcome(finishParam) ? finishParam : undefined);
+    // "open": the sheet followed its print here from another build (it moved), answered or not.
+    if (attempt.outcome === null || finishParam === "open")
+      openSheet(attempt.id, isOutcome(finishParam) ? finishParam : undefined);
     void navigate({
       to: "/builds/$buildId",
       params: { buildId: item.id },

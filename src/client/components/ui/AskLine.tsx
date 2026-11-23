@@ -58,7 +58,7 @@ export function AskLine({ icon: Glyph, children, detail, actions, loading, class
         </div>
       ) : (
         // Under the words on a narrow card, they start where the words do (past the glyph).
-        actions && <div className="flex shrink-0 flex-wrap items-center gap-1.5 pl-6">{actions}</div>
+        actions && <div className="flex max-w-full min-w-0 flex-wrap items-center gap-1.5 pl-6">{actions}</div>
       )}
     </section>
   );

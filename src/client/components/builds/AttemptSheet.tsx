@@ -1,7 +1,8 @@
 import type { Outcome } from "@shared/attempts";
 import { offTheBedLabel } from "@shared/print-progress";
+import { useNavigate } from "@tanstack/react-router";
 import { AnimatePresence, m, useReducedMotion } from "motion/react";
-import { useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
 import { IconButton } from "@/components/ui/Button";
 import { NextIcon, PreviousIcon } from "@/components/ui/icons";
 import { Sheet } from "@/components/ui/Sheet";
@@ -23,6 +24,9 @@ interface AttemptSheetProps {
   /** Steps the open attempt to the one before or after it (the header's arrows); without it there are none. */
   onStep?: (attemptId: string) => void;
 }
+
+// The printer's "which build is this?" (decision 0076): its code comes only with such a print.
+const PrintPlace = lazy(() => import("./print-place-lazy").then((entry) => entry.loadPrintPlace()));
 
 const lowerFirst = (text: string) => text.charAt(0).toLowerCase() + text.slice(1);
 
@@ -54,6 +58,7 @@ export function AttemptSheet({
   // The sheet's frame (title, arrows, footer) stays put when stepping; only what is inside it changes.
   const [footerHost, setFooterHost] = useState<HTMLElement | null>(null);
   const [menuHost, setMenuHost] = useState<HTMLElement | null>(null);
+  const navigate = useNavigate();
   if (attemptId) {
     if (!attempt) return null;
     const printing = attempt.outcome === null;
@@ -107,6 +112,25 @@ export function AttemptSheet({
             exit={{ opacity: 0 }}
             transition={{ duration: reduce ? 0 : duration.fast / 2, ease: ease.out }}
           >
+            {/* The printer's question, first: answered with the outcome or before it, and answering the outcome leaves it
+                be. A move takes the sheet along to the build the print went to, which opens it again there. */}
+            {attempt.print?.asking && (
+              <Suspense fallback={<div aria-hidden className="bg-ink/4 mb-5 h-12 rounded-md" />}>
+                <PrintPlace
+                  item={item}
+                  attempt={attempt}
+                  where="sheet"
+                  className="mb-5"
+                  follow={(buildId) =>
+                    void navigate({
+                      to: "/builds/$buildId",
+                      params: { buildId },
+                      search: { attempt: attempt.id, finish: "open" },
+                    })
+                  }
+                />
+              </Suspense>
+            )}
             {/* A finish queued on this device remounts it, so it starts again from the finished attempt rather than autosaving its draft. */}
             <EditAttempt
               key={`${attempt.id}${attempt.finishQueued ? ":queued" : ""}`}
