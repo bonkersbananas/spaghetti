@@ -161,3 +161,34 @@ test("the Journal's attempt card opens its photos large, and its words open the 
   await expect(large).toBeHidden();
   await expect(page).toHaveURL(new RegExp(`/builds/${id}\\?attempt=`));
 });
+
+test("in the attempt sheet a photo opens large, the sheet stays, and × still removes @phone", async ({
+  page,
+  isMobile,
+}) => {
+  const id = await buildWithPhotos(page, "Gear wall", 2);
+  await page.goto(`/builds/${id}`);
+  // The card's corner: its middle is the photo, which opens large.
+  await page.getByRole("button", { name: "Attempt 1: success. Open" }).click({ position: { x: 24, y: 24 } });
+  const sheet = page
+    .getByRole("dialog", { name: "Attempt 1" })
+    .filter({ has: page.getByRole("textbox", { name: "Note" }) });
+  const tile = sheet.getByRole("button", { name: "Open Attempt photo 2 large" });
+  if (isMobile) await tile.tap();
+  else await tile.click();
+  // The viewer: the dialog with the row of thumbnails.
+  const large = page.getByRole("dialog").filter({ has: page.getByRole("button", { name: "Photo 1" }) });
+  await expect(large.getByText("2 of 2")).toBeVisible();
+  // A press inside the viewer isn't "outside" the sheet: the sheet stays.
+  if (isMobile) await large.getByRole("button", { name: "Photo 1" }).tap();
+  else await large.getByRole("button", { name: "Photo 1" }).click();
+  await expect(large.getByText("1 of 2")).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(page.getByText("1 of 2")).toHaveCount(0);
+  // The sheet is still there, and focus is back on the photo that opened the viewer.
+  await expect(sheet).toBeVisible();
+  await expect(tile).toBeFocused();
+  // × removes, as before (a saved photo asks in place first).
+  await sheet.getByRole("button", { name: /^Remove Attempt photo 2/ }).click();
+  await expect(sheet.getByRole("button", { name: /Press again to remove/ })).toBeVisible();
+});

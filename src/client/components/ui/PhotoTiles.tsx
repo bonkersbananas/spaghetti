@@ -1,4 +1,4 @@
-import { type ComponentPropsWithRef, forwardRef, useRef } from "react";
+import { type ComponentPropsWithRef, forwardRef, type MouseEvent, useRef } from "react";
 import { cn } from "@/lib/cn";
 import { takePicked } from "@/lib/picked";
 import { ConfirmRemove } from "./ConfirmRemove";
@@ -69,6 +69,11 @@ interface PhotoThumbProps {
   onSelect?: () => void;
   /** With `onSelect`: the one showing now. */
   selected?: boolean;
+  /**
+   * Makes the photo a button that opens it large (`openLarge`, ui/OpenLarge.tsx: the attempt sheet's photos); the ×
+   * still removes it, on top.
+   */
+  onOpen?: (event: MouseEvent<HTMLButtonElement>) => void;
   className?: string;
 }
 
@@ -83,6 +88,7 @@ export function PhotoThumb({
   confirmRemove,
   onSelect,
   selected,
+  onOpen,
   className,
 }: PhotoThumbProps) {
   const photo = <Photo src={src} alt={alt} color={color} eager className="shadow-soft size-full rounded-md" />;
@@ -94,7 +100,16 @@ export function PhotoThumb({
         className,
       )}
     >
-      {onSelect ? (
+      {onOpen ? (
+        <button
+          type="button"
+          onClick={onOpen}
+          aria-label={`Open ${alt} large`}
+          className="pressable focus-ring touch-target relative block size-full cursor-zoom-in rounded-md"
+        >
+          {photo}
+        </button>
+      ) : onSelect ? (
         <button
           type="button"
           onClick={onSelect}
@@ -111,7 +126,7 @@ export function PhotoThumb({
         photo
       )}
       {busy && (
-        <span className="bg-veil text-on-veil absolute bottom-1.5 left-1.5 flex size-6 items-center justify-center rounded-full backdrop-blur-md">
+        <span className="bg-veil text-on-veil pointer-events-none absolute bottom-1.5 left-1.5 flex size-6 items-center justify-center rounded-full backdrop-blur-md">
           <ProgressRing value={null} className="size-3.5" />
         </span>
       )}
