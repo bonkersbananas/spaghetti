@@ -11,7 +11,8 @@ import {
 import { cn } from "@/lib/cn";
 import type { PhotoView } from "@/lib/items";
 
-const load = () => import("./LargePhotos");
+// Two steps (large-photos-load.ts says why): the first one is a few bytes, and both are under way at the first point.
+const load = () => import("./large-photos-load").then((step) => step.loadLargePhotos());
 // The viewer is its own chunk: nothing of it is in a screen's first load. Pointing at, focusing or touching a photo
 // that opens it fetches it, so it is there by the time the press ends.
 const LargePhotos = lazy(load);
