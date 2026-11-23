@@ -410,11 +410,6 @@ function SpoolPage({ spool }: { spool: Spool }) {
               )}
             </div>
             <LabelReadNote spool={spool} readOnly={readOnly} titled={waiting} className="px-0.5" />
-            <LabelLooksRight
-              spool={spool}
-              readOnly={readOnly}
-              onEdit={isDesktop ? undefined : () => setDetailsOpen(true)}
-            />
             {isDesktop && details}
           </div>
 
@@ -447,6 +442,14 @@ function SpoolPage({ spool }: { spool: Spool }) {
                 ))}
               </MetaList>
             </div>
+            <LabelLooksRight
+              spool={spool}
+              value={value}
+              onChange={change}
+              onSetWeight={() => setSettingWeight(true)}
+              readOnly={readOnly}
+              onEditRest={isDesktop ? undefined : () => setDetailsOpen(true)}
+            />
 
             <fieldset disabled={readOnly} className="contents">
               {spool.gramsLeft !== null ? (
