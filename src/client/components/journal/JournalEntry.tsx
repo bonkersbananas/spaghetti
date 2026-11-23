@@ -5,7 +5,7 @@ import { attemptPartsLabel } from "@shared/parts";
 import { isOffTheBed, offTheBedLabel } from "@shared/print-progress";
 import { fullTime } from "@shared/time";
 import { Link } from "@tanstack/react-router";
-import { forwardRef, type ReactNode, useState } from "react";
+import { forwardRef, lazy, type ReactNode, Suspense, useState } from "react";
 import { OutcomeChip, outcomeIcons } from "@/components/builds/Outcome";
 import { SettingsLine } from "@/components/builds/SettingsLine";
 import { summarizeSettings } from "@/components/builds/settings";
@@ -67,8 +67,22 @@ interface JournalEntryProps {
  */
 export const JournalEntry = forwardRef<HTMLAnchorElement, JournalEntryProps>(function JournalEntry(props, ref) {
   if (props.entry.kind !== "attempt") return <EventRow {...props} ref={ref} />;
-  return props.compact ? <AttemptRow {...props} ref={ref} /> : <AttemptCard {...props} ref={ref} />;
+  if (props.compact) return <AttemptRow {...props} ref={ref} />;
+  const asking = props.item.attempts.find((one) => one.id === props.entry.attemptId)?.print?.asking;
+  if (!asking) return <AttemptCard {...props} ref={ref} />;
+  // Still asking which build it is (decision 0076): the same line as on its card on the bed, right under this one (a
+  // link can't hold its buttons). Its code comes only with such a print.
+  return (
+    <div className="flex flex-col gap-1.5">
+      <AttemptCard {...props} ref={ref} />
+      <Suspense fallback={<div aria-hidden className="bg-ink/4 h-12 rounded-md" />}>
+        <JournalAsk itemId={props.item.id} attemptId={props.entry.attemptId ?? ""} />
+      </Suspense>
+    </div>
+  );
 });
+
+const JournalAsk = lazy(() => import("@/components/builds/print-place-lazy").then((entry) => entry.loadJournalAsk()));
 
 const AttemptCard = forwardRef<HTMLAnchorElement, JournalEntryProps>(function AttemptCard(
   { entry, item, person, via, selected, when },

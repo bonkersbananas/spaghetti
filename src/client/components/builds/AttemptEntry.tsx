@@ -261,7 +261,20 @@ export const AttemptEntry = forwardRef<HTMLLIElement, AttemptEntryProps>(functio
 
             {/* The story ends with the tags; the file, how long it took and the settings are the details under it. */}
             {(attempt.file || showsDetails) && (
-              <div className="before:bg-hairline relative flex flex-col gap-3 pt-3.5 before:absolute before:top-0 before:right-0 before:left-0 before:h-px">
+              <div
+                className={cn(
+                  "relative flex flex-col gap-3",
+                  // Right under the printer's question, its wash is edge enough: no rule between the two.
+                  attempt.print?.asking &&
+                    !attempt.note &&
+                    !lead &&
+                    !attempt.changes.length &&
+                    !attempt.failureTags.length &&
+                    !attempt.successNotes.length
+                    ? "pt-0.5"
+                    : "before:bg-hairline pt-3.5 before:absolute before:top-0 before:right-0 before:left-0 before:h-px",
+                )}
+              >
                 {attempt.file && (
                   // Above the open button, so its controls work; the card's width, so the download lines up with the
                   // attempt's menu above it. Between its controls a tap still opens the attempt.

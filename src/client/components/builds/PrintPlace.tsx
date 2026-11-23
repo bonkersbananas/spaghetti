@@ -57,7 +57,17 @@ export default function PrintPlace({ item, attempt, where, follow, className }: 
 
   let content: React.ReactNode = null;
   if (print?.asking) {
-    content = <WhichBuild item={item} attempt={attempt} onMore={openSheet} follow={follow} readOnly={readOnly} />;
+    content = (
+      <WhichBuild
+        item={item}
+        attempt={attempt}
+        onMore={openSheet}
+        follow={follow}
+        readOnly={readOnly}
+        // The card, the build page and the Journal show the printer's mark beside the title already.
+        glyph={where === "sheet"}
+      />
+    );
   } else if (where === "sheet") {
     content = null;
   } else if (print?.reasons.length) {
@@ -113,6 +123,7 @@ interface WhichBuildProps {
   onMore: (notThis: readonly string[]) => void;
   follow?: (toId: string) => void;
   readOnly: boolean;
+  glyph: boolean;
 }
 
 /**
@@ -123,7 +134,7 @@ interface WhichBuildProps {
  * "Which build?" opens the sheet and "Keep it as its own" answers it in one tap. While the guesses are on their way
  * the line keeps its room.
  */
-function WhichBuild({ item, attempt, onMore, follow, readOnly }: WhichBuildProps) {
+function WhichBuild({ item, attempt, onMore, follow, readOnly, glyph }: WhichBuildProps) {
   const { data: suggestions, isPending } = useQuery(suggestionsQuery(attempt.id));
   const { items: builds } = useBuilds();
   const { items: ideas } = useIdeas();
@@ -161,6 +172,7 @@ function WhichBuild({ item, attempt, onMore, follow, readOnly }: WhichBuildProps
       onMore={() => onMore(offered.map((one) => one.build.id))}
       onKeep={() => moves.keep()}
       disabled={readOnly}
+      glyph={glyph}
     />
   );
 }
@@ -179,6 +191,8 @@ interface WhichBuildLineProps {
   /** "Keep it as its own", when nothing fits: the print stays in its own build and the question goes. */
   onKeep?: () => void;
   disabled?: boolean;
+  /** The printer's glyph before the question: off where the card shows the printer's mark already. */
+  glyph?: boolean;
 }
 
 /** The question as it reads, on the card, the build page and the attempt's sheet alike (the styleguide shows it). */
@@ -191,7 +205,9 @@ export function WhichBuildLine({
   onMore,
   onKeep,
   disabled,
+  glyph = true,
 }: WhichBuildLineProps) {
+  const icon = glyph ? PrinterIcon : undefined;
   // The magnifier only where the sheet opens on a field to search in (the desktop's).
   const isDesktop = useIsDesktop();
   const another = (label: string, variant: "secondary" | "quiet") => (
@@ -199,12 +215,12 @@ export function WhichBuildLine({
       {label}
     </Button>
   );
-  if (loading) return <AskLine icon={PrinterIcon} loading />;
+  if (loading) return <AskLine icon={icon} loading />;
   const [first, second] = guesses;
   if (!first) {
     return (
       <AskLine
-        icon={PrinterIcon}
+        icon={icon}
         actions={
           <>
             {another("Which build?", "secondary")}
@@ -223,7 +239,7 @@ export function WhichBuildLine({
   const ideaWord = guesses.length === 1 && first.idea ? "An idea" : null;
   return (
     <AskLine
-      icon={PrinterIcon}
+      icon={icon}
       detail={
         ideaWord || why ? (
           <MetaList>
@@ -272,4 +288,17 @@ export function WhichBuildLine({
       ?
     </AskLine>
   );
+}
+
+/**
+ * The question under a Journal card (decision 0076): the card is one link, so the line sits right under it, not in it.
+ * The Journal's copy of the build is read once; the line follows the builds the rest of the app keeps (the change
+ * feed), so it goes the moment anyone places the print.
+ */
+export function JournalAsk({ itemId, attemptId }: { itemId: string; attemptId: string }) {
+  const { items } = useBuilds();
+  const item = items.find((one) => one.id === itemId);
+  const attempt = item?.attempts.find((one) => one.id === attemptId);
+  if (!item || !attempt?.print?.asking) return null;
+  return <PrintPlace item={item} attempt={attempt} where="card" />;
 }
