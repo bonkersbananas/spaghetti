@@ -401,6 +401,8 @@ export const attemptFileRoutes = new Hono<AppEnv>()
       return apiError(c, 409, "conflict", "That file belongs to another attempt.");
     }
     if (!existing && (await idOfOtherFile(db, fields.id, "attempt"))) return apiError(c, 409, "conflict", OTHERS_FILE);
+    // Nor does it send a person's file again under its own id: that would replace the bytes in place.
+    if (c.var.via && existing && !existing.createdVia) return apiError(c, 409, "conflict", PERSONS_FILE);
     // An agent doesn't destroy what a person added: it can replace its own work, not theirs.
     if (c.var.via) {
       const theirs = await db
@@ -577,6 +579,8 @@ export const itemFileRoutes = new Hono<AppEnv>()
       return apiError(c, 409, "conflict", "That file belongs to another idea.");
     }
     if (!existing && (await idOfOtherFile(db, fileId, "item"))) return apiError(c, 409, "conflict", OTHERS_FILE);
+    // An agent adds files to an idea; it doesn't rewrite a person's, or bring back one they removed.
+    if (c.var.via && existing && !existing.createdVia) return apiError(c, 409, "conflict", PERSONS_FILE);
     // A new file, or a removed one coming back by its id, takes a place: the limit counts the live ones.
     if ((!existing || existing.deletedAt) && (await liveFileCount(c, itemId)) >= MAX_ITEM_FILES) {
       return apiError(c, 409, "too_many", `An idea keeps at most ${MAX_ITEM_FILES} files.`);
@@ -702,6 +706,7 @@ export const twistFileRoutes = new Hono<AppEnv>()
       return apiError(c, 409, "conflict", "That file belongs to another twist.");
     }
     if (!existing && (await idOfOtherFile(db, fileId, "twist"))) return apiError(c, 409, "conflict", OTHERS_FILE);
+    if (c.var.via && existing && !existing.createdVia) return apiError(c, 409, "conflict", PERSONS_FILE);
     if (c.var.via) {
       const theirs = await db
         .select({ id: twistFiles.id })

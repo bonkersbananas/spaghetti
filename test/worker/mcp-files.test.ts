@@ -411,6 +411,73 @@ describe("files from agents and the people's own", () => {
     expect(twists[0]?.model?.name).toBe("knob.stl");
   });
 
+  it("refuses an agent that sends a person's file again under its own id", async () => {
+    const { token } = await makeAgent(["capture", "attempts"]);
+    const auth = { Authorization: `Bearer ${token}` };
+    const buildId = await idea(token);
+    const form = (id: string, bytes = boxStl(5)) => {
+      const body = new FormData();
+      body.set("id", id);
+      body.set("name", "mine.stl");
+      body.set("size", String(bytes.length));
+      body.set("plate", "1");
+      body.set("plateCount", "1");
+      body.set("prefill", "{}");
+      body.set("kind", "model");
+      body.set("file", new File([bytes], "mine.stl"));
+      return body;
+    };
+    const itemFile = crypto.randomUUID();
+    expect(
+      (await request(`/api/items/${buildId}/files/${itemFile}`, { method: "PUT", body: form(itemFile), cookie }))
+        .status,
+    ).toBe(201);
+    expect(
+      (
+        await request(`/api/items/${buildId}/files/${itemFile}`, {
+          method: "PUT",
+          body: form(itemFile, boxStl(9)),
+          headers: auth,
+        })
+      ).status,
+    ).toBe(409);
+    const attempt = field(
+      (await callTool(token, "log_attempt", { build_id: buildId, outcome: "success" })).text,
+      "attempt_id",
+    );
+    const attemptFile = crypto.randomUUID();
+    expect(
+      (await request(`/api/attempts/${attempt}/file`, { method: "PUT", body: form(attemptFile), cookie })).status,
+    ).toBe(201);
+    expect(
+      (
+        await request(`/api/attempts/${attempt}/file`, {
+          method: "PUT",
+          body: form(attemptFile, boxStl(9)),
+          headers: auth,
+        })
+      ).status,
+    ).toBe(409);
+    const twistId = field((await callTool(token, "add_twist", { name: "Knob" })).text, "twist_id");
+    const twistFile = crypto.randomUUID();
+    expect(
+      (await request(`/api/twists/${twistId}/file/${twistFile}`, { method: "PUT", body: form(twistFile), cookie }))
+        .status,
+    ).toBe(201);
+    expect(
+      (
+        await request(`/api/twists/${twistId}/file/${twistFile}`, {
+          method: "PUT",
+          body: form(twistFile, boxStl(9)),
+          headers: auth,
+        })
+      ).status,
+    ).toBe(409);
+    for (const id of [itemFile, attemptFile, twistFile]) {
+      expect(new Uint8Array(await (await request(`/api/files/${id}`, { cookie })).arrayBuffer())).toEqual(boxStl(5));
+    }
+  });
+
   it("fills an attempt's empty fields from an agent's file, never what was typed", async () => {
     const { token } = await makeAgent(["capture", "attempts"]);
     const buildId = await idea(token);
