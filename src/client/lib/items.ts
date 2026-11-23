@@ -112,27 +112,28 @@ function withAttemptEdits<T extends Attempt>(server: T, sentAt: number): T {
 const withEditedAttempts = (item: Item, sentAt: number): Item =>
   attemptEdits.size ? { ...item, attempts: item.attempts.map((attempt) => withAttemptEdits(attempt, sentAt)) } : item;
 
-/** When this device last saved each file it added, for answers asked before then (keepFilesAddedHere). */
-const filesSavedAt = new Map<string, number>();
+/**
+ * Files this tab added: on their way (Infinity, a big one that failed with its retry too) or when they reached the
+ * server. Only these are kept in answers that don't know of them yet (keepFilesAddedHere): a pending card restored
+ * from an earlier visit has nothing left to finish it, and goes with the next answer.
+ */
+const filesAddedHere = new Map<string, number>();
 
-/** A file added on this device reached the server: an answer asked before now doesn't know of it yet. */
-export function noteFileSaved(fileId: string) {
-  filesSavedAt.set(fileId, Date.now());
+/** A file added in this tab: shown and on its way, saved (the server has it), or given up on or taken off. */
+export function noteFileAddedHere(fileId: string, state: "adding" | "saved" | "gone") {
+  if (state === "gone") filesAddedHere.delete(fileId);
+  else filesAddedHere.set(fileId, state === "adding" ? Number.POSITIVE_INFINITY : Date.now());
 }
 
 /**
- * An answer about an item asked before a file added here reached the server lacks it: the card shown on this device
- * stays (one still on its way, a big one that failed with its retry, or one saved since the question was asked).
- * A file taken off here is gone from the cache already, so it isn't brought back.
+ * An answer about an item asked before a file added in this tab reached the server lacks it: its card stays (one
+ * still on its way, a big one that failed with its retry, or one saved since the question was asked).
  */
 function keepFilesAddedHere(client: QueryClient, item: Item, askedAt: number): Item {
   const cached = client.getQueryData<Item | null>(itemKeys.detail(item.id));
   if (!cached?.files?.length) return item;
   const known = new Set((item.files ?? []).map((file) => file.id));
-  const extra = cached.files.filter(
-    (file) =>
-      !known.has(file.id) && (("pending" in file && file.pending) || (filesSavedAt.get(file.id) ?? 0) >= askedAt),
-  );
+  const extra = cached.files.filter((file) => !known.has(file.id) && (filesAddedHere.get(file.id) ?? -1) >= askedAt);
   return extra.length ? { ...item, files: [...(item.files ?? []), ...extra] } : item;
 }
 
