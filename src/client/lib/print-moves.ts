@@ -135,7 +135,9 @@ export function moveAttempt(queryClient: QueryClient, { attempt, from, to, go, o
   const base = (toBefore?.photos ?? []).reduce((top, photo) => Math.max(top, photo.position), -1) + 1;
   const moving = photos.map((photo, index) => ({ ...photo, itemId: targetId, position: base + index }));
   const { number: _number, pending: _pending, finishQueued: _queued, ...plain } = attempt;
-  const moved = { ...plain, itemId: targetId, parts: [], file: attempt.file } as Item["attempts"][number];
+  // Answered: the question goes at once, on whichever card shows the print now (the server says the same).
+  const print = plain.print ? { ...plain.print, asking: false, reasons: [] } : plain.print;
+  const moved = { ...plain, itemId: targetId, parts: [], file: attempt.file, print } as Item["attempts"][number];
 
   const show = () => {
     if (fromGoes) patchCachedItem(queryClient, from.id, () => null);
@@ -240,9 +242,14 @@ export function keepAsNew(queryClient: QueryClient, item: ItemView, attempt: Att
 
 /**
  * Moving this attempt from where the screen shows it: the toast's View opens the build it went to, and the page of a
- * build that went with it follows the print there.
+ * build that went with it follows the print there (or `follow` does, always).
  */
-export function useMoveAttempt(item: ItemView, attempt: AttemptView) {
+export function useMoveAttempt(
+  item: ItemView,
+  attempt: AttemptView,
+  /** Follows the print wherever it went, instead (the attempt's sheet, which reopens there). */
+  follow?: (toId: string) => void,
+) {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const go = (buildId: string, attemptId: string) =>
@@ -255,6 +262,7 @@ export function useMoveAttempt(item: ItemView, attempt: AttemptView) {
         to,
         go,
         onMoved: ({ toId, fromGoes }) => {
+          if (follow) return follow(toId);
           // Read where the page is when the move goes, not as a hook: the printing card on any screen calls this.
           if (fromGoes && window.location.pathname === `/builds/${item.id}`) go(toId, attempt.id);
         },

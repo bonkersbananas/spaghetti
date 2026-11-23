@@ -38,6 +38,8 @@ export interface FieldsProps {
   suggestedOutcome?: Outcome | null;
   /** Under the outcome buttons: "Looking at the photo…", or what Claude made of it. */
   outcomeHint?: ReactNode;
+  /** A question answered with the outcome, right above it (the printer's "Is this Herb planter?"). */
+  ask?: ReactNode;
   onFailureTags: (tags: string[]) => void;
   successNotes: string[];
   onSuccessNotes: (tags: string[]) => void;
@@ -153,6 +155,7 @@ export function AttemptFields(props: FieldsProps) {
     <Fragment key="outcomeBlock">
       <fieldset disabled={props.readOnly === "all"} className="contents">
         <div className="flex flex-col gap-3">
+          {props.ask}
           <p className="text-small text-ink-soft px-0.5 font-semibold">{props.outcomeLabel}</p>
           {note}
           <OutcomePicker value={outcome} onChange={props.onOutcome} suggested={props.suggestedOutcome} />
