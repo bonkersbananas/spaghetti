@@ -7,4 +7,5 @@
  */
 export const loadPrintPlace = () => import("./PrintPlace");
 export const loadPrinterBy = () => import("./PrinterBy");
+export const loadJournalAsk = () => import("./PrintPlace").then((module) => ({ default: module.JournalAsk }));
 export const loadPrinterMark = () => import("@/components/ui/PrinterMark");
