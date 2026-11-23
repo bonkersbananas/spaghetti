@@ -81,7 +81,7 @@ for (const { kind, shape, width, height, viewport } of cases) {
     const x = box.x + box.width / 2;
     const y = box.y + box.height * 0.8;
     const session = await page.context().newCDPSession(page);
-    const send = (type: string, py?: number) =>
+    const send = (type: "touchStart" | "touchMove" | "touchEnd", py?: number) =>
       session.send("Input.dispatchTouchEvent", {
         type,
         touchPoints: py === undefined ? [] : [{ x, y: py, id: 1 }],
