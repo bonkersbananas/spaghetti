@@ -441,7 +441,7 @@ export function printingAttempts(
 export const askingAttempts = (items: ItemView[], now = Date.now()) =>
   items
     .flatMap((item) =>
-      item.stage === "idea"
+      item.stage === "idea" || item.pending
         ? []
         : item.attempts
             .filter((one) => one.outcome !== null && one.print?.asking && now - one.printedAt < 12e8)

@@ -112,25 +112,6 @@ export function AttemptSheet({
             exit={{ opacity: 0 }}
             transition={{ duration: reduce ? 0 : duration.fast / 2, ease: ease.out }}
           >
-            {/* The printer's question, first: answered with the outcome or before it, and answering the outcome leaves it
-                be. A move takes the sheet along to the build the print went to, which opens it again there. */}
-            {attempt.print?.asking && (
-              <Suspense fallback={<div aria-hidden className="bg-ink/4 mb-5 h-12 rounded-md" />}>
-                <PrintPlace
-                  item={item}
-                  attempt={attempt}
-                  where="sheet"
-                  className="mb-5"
-                  follow={(buildId) =>
-                    void navigate({
-                      to: "/builds/$buildId",
-                      params: { buildId },
-                      search: { attempt: attempt.id, finish: "open" },
-                    })
-                  }
-                />
-              </Suspense>
-            )}
             {/* A finish queued on this device remounts it, so it starts again from the finished attempt rather than autosaving its draft. */}
             <EditAttempt
               key={`${attempt.id}${attempt.finishQueued ? ":queued" : ""}`}
@@ -142,6 +123,27 @@ export function AttemptSheet({
               incomingFile={incomingFile}
               footerHost={footerHost}
               menuHost={menuHost}
+              // The printer's question, with the outcome and right above it (the sheet's foot on a phone, in the
+              // thumb's reach): answering the outcome leaves it be, and a move takes the sheet along to the build the
+              // print went to, which opens it again there.
+              ask={
+                attempt.print?.asking && (
+                  <Suspense fallback={<div aria-hidden className="bg-ink/4 h-12 rounded-md" />}>
+                    <PrintPlace
+                      item={item}
+                      attempt={attempt}
+                      where="sheet"
+                      follow={(buildId) =>
+                        void navigate({
+                          to: "/builds/$buildId",
+                          params: { buildId },
+                          search: { attempt: attempt.id, finish: "open" },
+                        })
+                      }
+                    />
+                  </Suspense>
+                )
+              }
             />
           </m.div>
         </AnimatePresence>
