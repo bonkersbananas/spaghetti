@@ -498,8 +498,9 @@ export function useItem(id: string) {
     ...itemQuery(id),
     enabled: !pendingEntry,
     refetchInterval: (current) => whileReading(current.state.data ? [current.state.data] : []),
-    // Opened from a list: show what the list already has, at once, as old as the list is
-    // (so a list restored from the device is asked about again rather than trusted as fresh).
+    // Opened from a list: show what the list already has, at once, and ask for the build itself straight away. The
+    // list's copy is never trusted as fresh: it can be from before an attempt or a photo was added (by the printer,
+    // the other person, or this device a moment ago), and the change feed only tells of what comes after it starts.
     initialData: () => {
       for (const list of LISTS) {
         const found = queryClient.getQueryData<Item[]>(itemKeys.list(list))?.find((item) => item.id === id);
@@ -507,6 +508,8 @@ export function useItem(id: string) {
       }
       return undefined;
     },
+    // As old as the list is, for "Showing what you saw" offline; stale at once all the same (no fetch has answered
+    // for the build itself yet), so it is asked for as it opens.
     initialDataUpdatedAt: () => {
       for (const list of LISTS) {
         const state = queryClient.getQueryState<Item[]>(itemKeys.list(list));
@@ -514,6 +517,8 @@ export function useItem(id: string) {
       }
       return undefined;
     },
+    staleTime: (current) =>
+      current.state.dataUpdateCount > 0 ? (queryClient.getDefaultOptions().queries?.staleTime as number) : 0,
   });
   const item = useMemo(() => {
     if (pendingEntry) return fromEntry(pendingEntry, state);
