@@ -2,12 +2,13 @@ import type { Part } from "@shared/api";
 import { type AttemptSettings, describeChanges, OUTCOMES, type Outcome } from "@shared/attempts";
 import type { AttemptPart } from "@shared/parts";
 import { printerHints } from "@shared/spools";
-import { Fragment, type ReactNode, useEffect, useRef, useState } from "react";
+import { Fragment, type ReactNode, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Caution, FromFileMark } from "@/components/ui/Caution";
 import { Disclosure } from "@/components/ui/Disclosure";
 import { TextArea } from "@/components/ui/Field";
 import { SettingsIcon } from "@/components/ui/icons";
 import type { AttemptView } from "@/lib/items";
+import { keyboardProxy } from "@/lib/keyboard-proxy";
 import { usePrinterSetup } from "@/lib/pantry-queries";
 import { useIsDesktop } from "@/lib/use-media-query";
 import { NotEnoughNote } from "../NotEnoughNote";
@@ -17,6 +18,9 @@ import { summarizeSettings } from "../settings";
 import { TagPicker } from "../TagPicker";
 import { ChangeChips, chipMarks } from "./ChangeChips";
 import { PlateParts } from "./PlateParts";
+
+/** How long a phone's sheet takes to slide up (vaul's 500 ms, and a beat): a note focused before then would jump. */
+const SHEET_SETTLE_MS = 600;
 
 export interface FieldsProps {
   outcome: Outcome | null;
@@ -80,6 +84,7 @@ export function AttemptFields(props: FieldsProps) {
   const isDesktop = useIsDesktop();
   const withTags = outcome === "failed" || outcome === "partial";
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const noteRef = useRef<HTMLTextAreaElement>(null);
   const setup = usePrinterSetup();
   const hints = printerHints(settings, setup);
   const base =
@@ -173,11 +178,19 @@ export function AttemptFields(props: FieldsProps) {
       <fieldset disabled={props.readOnly === "all"} className="contents">
         {/* One line of meaning, but it wraps and grows so the whole note stays in view while typing. */}
         <TextArea
+          ref={noteRef}
           aria-label="Note"
           className="scroll-mb-3"
           minRows={1}
-          // The tags under it ask "What went wrong?" / "What worked?": the note doesn't repeat the question.
-          placeholder={outcome ? "One line is plenty." : "A line about this attempt"}
+          // The tags ask "What went wrong?" / "What worked?"; after a print that went wrong the note comes first and
+          // asks in plain words.
+          placeholder={
+            withTags
+              ? "What happened? In your own words."
+              : outcome
+                ? "One line is plenty."
+                : "A line about this attempt"
+          }
           maxLength={500}
           enterKeyHint="done"
           onFocus={(event) => {
@@ -211,6 +224,7 @@ export function AttemptFields(props: FieldsProps) {
             onChange={props.onFailureTags}
             suggested={props.suggestedFailureTag}
             suggestedBy={props.suggestedFailureBy}
+            compact
           />
         )}
         {(outcome === "success" || outcome === "partial") && (
@@ -221,6 +235,7 @@ export function AttemptFields(props: FieldsProps) {
             onChange={props.onSuccessNotes}
             suggested={props.suggestedSuccessNotes}
             suggestedBy="claude"
+            compact={withTags}
           />
         )}
       </fieldset>
@@ -323,31 +338,85 @@ export function AttemptFields(props: FieldsProps) {
     return toEnd(!first);
   }, [outcome]);
 
+  // Partly or Spaghetti picked: the person's own words come first, so the note takes the focus (on a laptop typing
+  // goes straight in; on a phone the keyboard comes up with the note right above the answer). Picked in the sheet,
+  // it is inside the tap, so iOS raises the keyboard; picked on a card, the card's tap holds the keyboard with a
+  // stand-in (lib/keyboard-proxy.ts) and the note takes the focus from it once the sheet has slid up, so nothing jumps.
+  const mountedAt = useRef(performance.now());
+  const lastOutcome = useRef(outcome);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: when the outcome changes.
+  useLayoutEffect(() => {
+    const from = lastOutcome.current;
+    lastOutcome.current = outcome;
+    const note = noteRef.current;
+    if (from === outcome || !withTags || props.readOnly === "all" || !note) return;
+    const settling = isDesktop ? 0 : SHEET_SETTLE_MS - (performance.now() - mountedAt.current);
+    if (settling <= 0) {
+      note.focus({ preventScroll: !isDesktop });
+      return;
+    }
+    const timer = window.setTimeout(() => {
+      // A field or button tapped meanwhile keeps the focus; the stand-in, the sheet itself or the answer give it up.
+      const held = document.activeElement;
+      if (!held || held === document.body || held === keyboardProxy() || held.matches("[role=dialog], [role=radio]"))
+        note.focus({ preventScroll: true });
+    }, settling);
+    return () => window.clearTimeout(timer);
+  }, [outcome]);
+
+  // After Partly or Spaghetti the note comes right after the answer, then the few tags; otherwise the photos and the
+  // plate come first. (React moves the blocks around the note, so a focused note keeps its focus.)
   const blocks = isDesktop
-    ? [
-        outcomeBlock,
-        plateBlock,
-        photosBlock,
-        noteBlock,
-        tagsBlock,
-        coachBlock,
-        whenBlock,
-        fileBlock,
-        notEnoughBlock,
-        settingsBlock,
-      ]
-    : [
-        fileBlock,
-        settingsBlock,
-        notEnoughBlock,
-        whenBlock,
-        coachBlock,
-        noteBlock,
-        plateBlock,
-        photosBlock,
-        tagsBlock,
-        outcomeBlock,
-      ];
+    ? withTags
+      ? [
+          outcomeBlock,
+          noteBlock,
+          tagsBlock,
+          plateBlock,
+          photosBlock,
+          coachBlock,
+          whenBlock,
+          fileBlock,
+          notEnoughBlock,
+          settingsBlock,
+        ]
+      : [
+          outcomeBlock,
+          plateBlock,
+          photosBlock,
+          noteBlock,
+          tagsBlock,
+          coachBlock,
+          whenBlock,
+          fileBlock,
+          notEnoughBlock,
+          settingsBlock,
+        ]
+    : withTags
+      ? [
+          fileBlock,
+          settingsBlock,
+          notEnoughBlock,
+          whenBlock,
+          coachBlock,
+          plateBlock,
+          photosBlock,
+          tagsBlock,
+          noteBlock,
+          outcomeBlock,
+        ]
+      : [
+          fileBlock,
+          settingsBlock,
+          notEnoughBlock,
+          whenBlock,
+          coachBlock,
+          noteBlock,
+          plateBlock,
+          photosBlock,
+          tagsBlock,
+          outcomeBlock,
+        ];
 
   return (
     // biome-ignore lint/a11y/noStaticElementInteractions: it only listens to keys that bubble up from the controls inside.

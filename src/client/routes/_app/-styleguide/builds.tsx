@@ -221,6 +221,7 @@ const sampleProgress = partProgress(sampleParts, [
 export function BuildsSection() {
   const [outcome, setOutcome] = useState<Outcome | null>("failed");
   const [failureTags, setFailureTags] = useState(["spaghetti"]);
+  const [fewTags, setFewTags] = useState<string[]>([]);
   const [plate, setPlate] = useState<AttemptPart[]>([{ partId: "hull", count: 1 }]);
   const [quantity, setQuantity] = useState(2);
   return (
@@ -336,6 +337,15 @@ export function BuildsSection() {
             onChange={setFailureTags}
             visible={6}
             suggested="spaghetti"
+          />
+          <TagPicker
+            kind="failure"
+            label="Compact, after Partly or Spaghetti: the suggested ones (picked or not), the most used, the rest behind more"
+            value={fewTags}
+            onChange={setFewTags}
+            suggested={["stringing", "bed-adhesion"]}
+            suggestedBy="claude"
+            compact
           />
         </Panel>
         <div className="flex min-w-0 flex-col gap-4">
