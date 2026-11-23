@@ -112,14 +112,39 @@ function withAttemptEdits<T extends Attempt>(server: T, sentAt: number): T {
 const withEditedAttempts = (item: Item, sentAt: number): Item =>
   attemptEdits.size ? { ...item, attempts: item.attempts.map((attempt) => withAttemptEdits(attempt, sentAt)) } : item;
 
+/** When this device last saved each file it added, for answers asked before then (keepFilesAddedHere). */
+const filesSavedAt = new Map<string, number>();
+
+/** A file added on this device reached the server: an answer asked before now doesn't know of it yet. */
+export function noteFileSaved(fileId: string) {
+  filesSavedAt.set(fileId, Date.now());
+}
+
+/**
+ * An answer about an item asked before a file added here reached the server lacks it: the card shown on this device
+ * stays (one still on its way, a big one that failed with its retry, or one saved since the question was asked).
+ * A file taken off here is gone from the cache already, so it isn't brought back.
+ */
+function keepFilesAddedHere(client: QueryClient, item: Item, askedAt: number): Item {
+  const cached = client.getQueryData<Item | null>(itemKeys.detail(item.id));
+  if (!cached?.files?.length) return item;
+  const known = new Set((item.files ?? []).map((file) => file.id));
+  const extra = cached.files.filter(
+    (file) =>
+      !known.has(file.id) && (("pending" in file && file.pending) || (filesSavedAt.get(file.id) ?? 0) >= askedAt),
+  );
+  return extra.length ? { ...item, files: [...(item.files ?? []), ...extra] } : item;
+}
+
 export function itemQuery(id: string) {
   return queryOptions({
     queryKey: itemKeys.detail(id),
-    queryFn: async () => {
+    queryFn: async ({ client }) => {
       const sentAt = performance.now();
       const askedAt = Date.now();
       try {
-        return withEditedAttempts(withSavedWords(id, (await api<ItemResponse>(`/items/${id}`)).item, sentAt), askedAt);
+        const fetched = (await api<ItemResponse>(`/items/${id}`)).item;
+        return withEditedAttempts(withSavedWords(id, keepFilesAddedHere(client, fetched, askedAt), sentAt), askedAt);
       } catch (error) {
         if (error instanceof ApiError && error.status === 404) return null;
         throw error;

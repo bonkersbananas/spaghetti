@@ -4,7 +4,7 @@ import type { QueryClient } from "@tanstack/react-query";
 import { toast } from "@/components/ui/Toast";
 import { api } from "./api";
 import { discardUpload, dropUpload, isRefusal, setUpload, uploadInParts } from "./big-upload";
-import { itemKeys, patchCachedItem } from "./items";
+import { noteFileSaved, patchCachedItem } from "./items";
 import { setPreview } from "./previews";
 import { fileSettings, plateOf, plateThumb, readSlicerFile, type SlicerFileDraft } from "./slicer-files";
 
@@ -12,35 +12,6 @@ import { fileSettings, plateOf, plateThumb, readSlicerFile, type SlicerFileDraft
 
 const withFiles = (queryClient: QueryClient, itemId: string, change: (files: AttemptFile[]) => AttemptFile[]) =>
   patchCachedItem(queryClient, itemId, (item) => ({ ...item, files: change(item.files ?? []) }));
-
-/** Per item, the files shown and not yet answered (saved or given up on), and the items whose fetch was called off. */
-const unanswered = new Map<string, Set<string>>();
-const askAfter = new Set<string>();
-
-/**
- * Shows a file being added at once. A fetch of the item already on its way was asked before the file existed, and
- * its answer would take the new card off again: it is called off. The returned `answered` (call it when the file is
- * saved or given up on) asks again once every file added meanwhile has its answer, so no answer drops a card still
- * on its way (several files are picked at once).
- */
-const addShown = async (queryClient: QueryClient, itemId: string, shown: AttemptFile) => {
-  const key = itemKeys.detail(itemId);
-  const waiting = unanswered.get(itemId) ?? new Set<string>();
-  unanswered.set(itemId, waiting);
-  waiting.add(shown.id);
-  if (queryClient.isFetching({ queryKey: key }) > 0) {
-    askAfter.add(itemId);
-    // Awaited: a cancelled fetch puts back the copy from before it, which would undo a card added first.
-    await queryClient.cancelQueries({ queryKey: key });
-  }
-  withFiles(queryClient, itemId, (files) => [...files, shown]);
-  return () => {
-    waiting.delete(shown.id);
-    if (waiting.size) return;
-    unanswered.delete(itemId);
-    if (askAfter.delete(itemId)) void queryClient.invalidateQueries({ queryKey: key });
-  };
-};
 
 /** The multipart body of PUT /api/items/:id/files/:fileId: the same fields as an attempt's file. */
 function bodyOf(draft: SlicerFileDraft) {
@@ -151,15 +122,14 @@ export async function addItemFile(queryClient: QueryClient, itemId: string, pick
     createdAt: Date.now(),
     pending: true,
   };
-  const answered = await addShown(queryClient, itemId, shown);
+  withFiles(queryClient, itemId, (files) => [...files, shown]);
   await keepFile(`/items/${itemId}/files/${draft.id}`, file, draft.id, "slicer", form, {
     saved: (saved) => {
+      noteFileSaved(saved.id);
       withFiles(queryClient, itemId, (files) => files.map((f) => (f.id === saved.id ? saved : f)));
-      answered();
     },
     giveUp: () => {
       withFiles(queryClient, itemId, (files) => files.filter((f) => f.id !== draft.id));
-      answered();
       toast.error("Couldn't keep that file", "Check the connection and try again.");
     },
   });
@@ -187,7 +157,7 @@ async function addItemModel(queryClient: QueryClient, itemId: string, draft: Sli
     createdAt: Date.now(),
     pending: true,
   };
-  const answered = await addShown(queryClient, itemId, shown);
+  withFiles(queryClient, itemId, (files) => [...files, shown]);
   // The jobs' code comes with the first model, not with the app.
   const jobs = await import("./slicing/jobs");
   void jobs.startSlice(queryClient, {
@@ -207,13 +177,12 @@ async function addItemModel(queryClient: QueryClient, itemId: string, draft: Sli
   await keepFile(`/items/${itemId}/files/${draft.id}`, file, draft.id, "model", form, {
     // A slice that reached the server first (it waits for this) stays.
     saved: (saved) => {
+      noteFileSaved(saved.id);
       withFiles(queryClient, itemId, (files) => files.map((f) => (f.id === saved.id ? (f.slice ? f : saved) : f)));
-      answered();
     },
     giveUp: () => {
       jobs.cancelSlice(draft.id);
       withFiles(queryClient, itemId, (files) => files.filter((f) => f.id !== draft.id));
-      answered();
       toast.error("Couldn't keep that model", "Check the connection and try again.");
     },
   });
