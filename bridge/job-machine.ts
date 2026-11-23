@@ -3,6 +3,7 @@
  * ended. Pure: feed it states and the clock, it says what happened. It remembers one job (and is given the stored
  * one after a restart, so a print the bridge already knows about is never started twice).
  */
+import { activeTraysOf } from "./ams.ts";
 import type { PrinterState, PrintState } from "./printer-state.ts";
 
 export interface Job {
@@ -17,6 +18,11 @@ export interface Job {
   startedAt: number;
   /** The printer's own estimate when the print began (`mc_remaining_time`), when it said: helps the app place it. */
   estimateMinutes?: number | null;
+  /**
+   * The trays that fed the print, as the printer reported them while it was running ("A2", "Ext"): the app puts the
+   * pantry's spools on the attempt. Not read while it prepares: the tray then can still be the last print's.
+   */
+  trays?: string[];
 }
 
 /** What is kept across restarts for the job in progress. */
@@ -35,7 +41,9 @@ export type JobEvent =
   | { type: "started"; job: Job }
   | { type: "ended"; job: Job; result: EndResult; endedAt: number; spaghetti: boolean }
   /** The printer moved on to another print before this one's end was seen: the bridge can't say how it went. */
-  | { type: "lost"; job: Job };
+  | { type: "lost"; job: Job }
+  /** The printer, now printing, reported a tray the app doesn't know yet (`job.trays` is all seen so far). */
+  | { type: "trays"; job: Job };
 
 export interface Progress {
   percent: number;
@@ -133,6 +141,7 @@ export class JobMachine {
           startedAt: now,
           estimateMinutes:
             typeof print.mc_remaining_time === "number" && print.mc_remaining_time > 0 ? print.mc_remaining_time : null,
+          trays: [],
           ended: false,
           spaghetti: false,
         };
@@ -142,6 +151,16 @@ export class JobMachine {
 
     const tracked = this.current;
     if (tracked && !tracked.ended) {
+      // Only once it is printing, with its first layer under way: before that the start G-code is still loading the
+      // filament and the tray can be the last print's. A multi-colour print moves through trays: all are kept.
+      if (gcodeState === "RUNNING" && (print.layer_num ?? 0) >= 1) {
+        const seen = tracked.trays ?? [];
+        const fresh = activeTraysOf(print).filter((tray) => !seen.includes(tray));
+        if (fresh.length) {
+          tracked.trays = [...seen, ...fresh];
+          events.push({ type: "trays", job: toJob(tracked) });
+        }
+      }
       if (seesSpaghetti(print)) tracked.spaghetti = true;
       const finished = ENDED[gcodeState];
       // A cancelled print goes back to idle on some firmware, without passing through FINISH.
@@ -166,11 +185,12 @@ export class JobMachine {
   }
 }
 
-const toJob = ({ key, name, gcodeFile, plate, startedAt, estimateMinutes }: TrackedJob): Job => ({
+const toJob = ({ key, name, gcodeFile, plate, startedAt, estimateMinutes, trays }: TrackedJob): Job => ({
   key,
   name,
   gcodeFile,
   plate,
   startedAt,
   estimateMinutes: estimateMinutes ?? null,
+  trays: trays ?? [],
 });

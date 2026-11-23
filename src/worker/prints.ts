@@ -31,6 +31,7 @@ import {
   photos,
   printJobs,
 } from "./db/schema.ts";
+import { traysFor } from "./print-fill.ts";
 
 const MINUTE = 60_000;
 /** A printer's build is fresh, and its print may still go elsewhere, for this long after the bridge made it. */
@@ -359,6 +360,7 @@ export interface PrintFactsBody {
   plate?: number | null;
   estimateMinutes?: number | null;
   fileId?: string | null;
+  trays?: string[] | null;
 }
 
 /**
@@ -394,6 +396,7 @@ export async function fileThePrint(
           .get()
       : undefined;
   const job = {
+    trays: await traysFor(db, print?.trays),
     name: facts.name,
     gcodeFile: print?.gcodeFile ?? null,
     plate: print?.plate ?? null,
