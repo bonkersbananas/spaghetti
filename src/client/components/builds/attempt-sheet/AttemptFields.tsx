@@ -32,8 +32,8 @@ export interface FieldsProps {
   suggestedFailureTag?: string | readonly string[];
   /** Success notes Claude suggested, marked the same way. */
   suggestedSuccessNotes?: readonly string[];
-  /** Who suggested the failure tags (success notes are only ever Claude's). */
-  suggestedFailureBy?: "printer" | "claude";
+  /** The one failure tag the printer suggested, when it is among them; the rest are Claude's. */
+  printerFailureTag?: string;
   /** The outcome Claude suggests from the photo: hinted on its button, not picked. */
   suggestedOutcome?: Outcome | null;
   /** Under the outcome buttons: "Looking at the photo…", or what Claude made of it. */
@@ -194,10 +194,11 @@ export function AttemptFields(props: FieldsProps) {
           maxLength={500}
           enterKeyHint="done"
           onFocus={(event) => {
-            // The keyboard is coming up: keep the whole field right above the footer, not pushed under the header.
+            // The keyboard is coming up: keep the whole field in view above the footer, moving the sheet only if it must
+            // (the answer under it stays in view when there is room).
             const field = event.currentTarget;
             if (isDesktop) return;
-            for (const ms of [0, 150, 400]) window.setTimeout(() => field.scrollIntoView({ block: "end" }), ms);
+            for (const ms of [0, 150, 400]) window.setTimeout(() => field.scrollIntoView({ block: "nearest" }), ms);
           }}
           value={props.note}
           onChange={(event) => props.onNote(event.target.value.replace(/\n/g, " "))}
@@ -223,7 +224,8 @@ export function AttemptFields(props: FieldsProps) {
             value={props.failureTags}
             onChange={props.onFailureTags}
             suggested={props.suggestedFailureTag}
-            suggestedBy={props.suggestedFailureBy}
+            suggestedBy="claude"
+            printerSuggested={props.printerFailureTag}
             compact
           />
         )}

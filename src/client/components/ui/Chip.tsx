@@ -66,6 +66,11 @@ interface ToggleChipProps extends Omit<ComponentPropsWithRef<"button">, "childre
   appearance?: "chip" | "quiet";
   /** How many it would show, after the label: faint at rest, in the pill's own ink once picked. */
   count?: number;
+  /**
+   * Offered by Claude or the printer and not picked yet: the dashed outline in its tone that marks what a tap
+   * accepts (as `Chip suggested`), no fill. Picked, it looks like any picked chip.
+   */
+  suggested?: boolean;
   children: ReactNode;
 }
 
@@ -92,6 +97,7 @@ export function ToggleChip({
   lead,
   appearance = "chip",
   count,
+  suggested = false,
   children,
   className,
   ...props
@@ -111,7 +117,9 @@ export function ToggleChip({
             : selectedTones[tone]
           : quiet
             ? "text-ink-soft hover:bg-ink/5 hover:text-ink"
-            : "bg-cream text-ink-soft shadow-soft hover:text-ink",
+            : suggested
+              ? cn(suggestedTones[tone], "bg-transparent")
+              : "bg-cream text-ink-soft shadow-soft hover:text-ink",
         className,
       )}
       {...props}

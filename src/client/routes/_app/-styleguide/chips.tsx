@@ -122,6 +122,18 @@ export function ChipSection() {
             Dried
           </ToggleChip>
         </div>
+        <Label>Suggested and not picked (Claude's or the printer's): the dashed outline a tap accepts</Label>
+        <div className="flex flex-wrap gap-2">
+          <ToggleChip tone="tomato" selected={false} suggested>
+            Bed adhesion<span className="font-normal"> · suggested</span>
+          </ToggleChip>
+          <ToggleChip tone="tomato" selected suggested>
+            Stringing<span className="font-normal"> · suggested</span>
+          </ToggleChip>
+          <ToggleChip tone="basil" selected={false} suggested>
+            Nice surface<span className="font-normal"> · suggested</span>
+          </ToggleChip>
+        </div>
       </Panel>
     </Section>
   );

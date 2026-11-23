@@ -233,7 +233,13 @@ export function EditAttempt({
         failureTags={value.failureTags}
         suggestedFailureTag={suggestedFailureTags}
         suggestedSuccessNotes={claudeRead?.successNotes}
-        suggestedFailureBy={claudeTags.length ? "claude" : "printer"}
+        printerFailureTag={
+          // The printer's tag is the printer's, unless Claude named it too and its answer is the one picked.
+          attempt.suggestedFailureTag &&
+          !(claudeTags.includes(attempt.suggestedFailureTag) && value.outcome === claudeRead?.outcome)
+            ? attempt.suggestedFailureTag
+            : undefined
+        }
         suggestedOutcome={read?.outcome}
         outcomeHint={reading ? <PhotoReadNote read={reading} /> : null}
         onFailureTags={(failureTags) => change({ failureTags })}

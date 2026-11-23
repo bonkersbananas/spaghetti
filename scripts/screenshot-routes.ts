@@ -1733,6 +1733,24 @@ async function openOffBedSheet(page: Page) {
   await page.getByRole("dialog").waitFor();
 }
 
+/** The attempt sheet with an answer picked, settled (the note takes the focus once a phone's sheet has slid up). */
+async function answered(page: Page, outcome: "Partly" | "Spaghetti") {
+  const dialog = page.getByRole("dialog");
+  await dialog.getByRole("radio", { name: new RegExp(`^${outcome}`), checked: true }).waitFor();
+  await dialog.getByText("What went wrong?").waitFor();
+  await page.waitForTimeout(1200);
+}
+
+/** Puts the drawer divider's print back off the bed, unanswered, for the shots after one that answered it. */
+async function resetDrawerDivider(page: Page) {
+  await page.keyboard.press("Escape");
+  await page.waitForTimeout(1500);
+  await page.request.patch(`/api/attempts/${SEED_BUILD_IDS.drawerDividerAttempt}`, {
+    headers: { Origin: new URL(page.url()).origin },
+    data: { outcome: null, failureTags: [], successNotes: [] },
+  });
+}
+
 async function removePhotoReadBuilds(page: Page) {
   const headers = { Origin: new URL(page.url()).origin };
   for (const id of photoReadBuilds.splice(0)) await page.request.delete(`/api/items/${id}`, { headers });
@@ -7335,6 +7353,72 @@ export const shots: Shot[] = [
       await printWithPhoto(page, "Slow lid spaghetti");
       await openOffBedSheet(page);
       await page.getByRole("dialog").getByText("Looking at the photo…").waitFor({ timeout: 8_000 });
+    },
+    cleanup: async (page) => {
+      await page.keyboard.press("Escape");
+      await removePhotoReadBuilds(page);
+    },
+  },
+  // Answering "How did it go?" against Claude's suggestion and with it (decision 0023): Claude's tags come only with
+  // the outcome it suggested, and after Partly or Spaghetti the note comes first. On the drawer divider Claude says
+  // Spaghetti: Partly picked on the build's off-the-bed card differs ...
+  {
+    name: "answer-partly-differs",
+    path: `/builds/${SEED_BUILD_IDS.drawerDivider}`,
+    prepare: async (page) => {
+      const card = page
+        .getByRole("listitem")
+        .filter({ hasText: /off the bed/i })
+        .first();
+      await card.getByRole("radio", { name: /Spaghetti suggested/ }).waitFor({ timeout: 30_000 });
+      await card.getByRole("radio", { name: /^Partly/ }).click();
+      await answered(page, "Partly");
+    },
+    cleanup: resetDrawerDivider,
+  },
+  // ... and Spaghetti picked in the sheet agrees.
+  {
+    name: "answer-spaghetti-agrees",
+    path: `/builds/${SEED_BUILD_IDS.drawerDivider}`,
+    prepare: async (page) => {
+      await openOffBedSheet(page);
+      const dialog = page.getByRole("dialog");
+      await dialog.getByRole("radio", { name: /Spaghetti suggested/ }).click({ timeout: 30_000 });
+      await answered(page, "Spaghetti");
+    },
+    cleanup: resetDrawerDivider,
+  },
+  // A print Claude reads as Partly (stringing): Partly picked in the sheet agrees ...
+  {
+    name: "answer-partly-agrees",
+    path: "/builds",
+    prepare: async (page) => {
+      await printWithPhoto(page, "Hinge pin, partly");
+      await openOffBedSheet(page);
+      await page
+        .getByRole("dialog")
+        .getByRole("radio", { name: /Partly suggested/ })
+        .click({ timeout: 30_000 });
+      await answered(page, "Partly");
+    },
+    cleanup: async (page) => {
+      await page.keyboard.press("Escape");
+      await removePhotoReadBuilds(page);
+    },
+  },
+  // ... and Spaghetti picked on its off-the-bed card differs.
+  {
+    name: "answer-spaghetti-differs",
+    path: "/builds",
+    prepare: async (page) => {
+      await printWithPhoto(page, "Hinge pin, partly");
+      const card = page
+        .getByRole("listitem")
+        .filter({ hasText: /off the bed/i })
+        .first();
+      await card.getByRole("radio", { name: /Partly suggested/ }).waitFor({ timeout: 30_000 });
+      await card.getByRole("radio", { name: /^Spaghetti/ }).click();
+      await answered(page, "Spaghetti");
     },
     cleanup: async (page) => {
       await page.keyboard.press("Escape");
