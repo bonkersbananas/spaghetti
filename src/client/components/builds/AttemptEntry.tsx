@@ -6,8 +6,9 @@ import { fullTime, relativeTime } from "@shared/time";
 import { m } from "motion/react";
 import { type ComponentProps, forwardRef, lazy, Suspense } from "react";
 import { Avatar, ViaText } from "@/components/ui/Avatar";
-import { Button } from "@/components/ui/Button";
+import { Button, IconButton } from "@/components/ui/Button";
 import { ChangeLine } from "@/components/ui/ChangeLine";
+import { ExpandIcon } from "@/components/ui/icons";
 import { OpenLarge, openLarge } from "@/components/ui/OpenLarge";
 import { Photo } from "@/components/ui/Photo";
 import { PrintProgress } from "@/components/ui/PrintProgress";
@@ -61,6 +62,26 @@ interface AttemptEntryProps {
   item?: ItemView;
   /** Move it to another build (the "…" menu). */
   onMove?: () => void;
+  /**
+   * One of its photos is the one the page leads with (the build's hero): the card shows its photos as thumbnails, so
+   * the same picture isn't large twice on one page.
+   */
+  photosSmall?: boolean;
+  /** An earlier attempt opened in place from its row: folds it back into the row. */
+  onFold?: () => void;
+}
+
+/** What opening an attempt's photos large shows: its photos from `start`, its name, how it went, who and when. */
+export function attemptLarge(attempt: AttemptView, photos: PhotoView[], person: Person | undefined, start: number) {
+  return {
+    photos,
+    start,
+    title: `Attempt ${attempt.number}`,
+    badge: <OutcomeChip outcome={attempt.outcome} offTheBed={isOffTheBed(attempt)} />,
+    detail: [attempt.fromPrinter ? "From the printer" : person?.name, relativeTime(attempt.printedAt)]
+      .filter(Boolean)
+      .join(" · "),
+  };
 }
 
 // Claude's ideas for the next try load after the build page: they only exist for a failed attempt.
@@ -94,6 +115,8 @@ export const AttemptEntry = forwardRef<HTMLLIElement, AttemptEntryProps>(functio
     readOnly,
     item,
     onMove,
+    photosSmall,
+    onFold,
   },
   ref,
 ) {
@@ -107,15 +130,7 @@ export const AttemptEntry = forwardRef<HTMLLIElement, AttemptEntryProps>(functio
   const filaments = attempt.settings.filaments ?? [];
   const [lead, ...rest] = photos;
   // Any photo opens large over the page, above the card's own button (which opens the attempt).
-  const large = (start: number) => ({
-    photos,
-    start,
-    title: `Attempt ${attempt.number}`,
-    badge: <OutcomeChip outcome={attempt.outcome} offTheBed={offBed} />,
-    detail: [attempt.fromPrinter ? "From the printer" : person?.name, relativeTime(attempt.printedAt)]
-      .filter(Boolean)
-      .join(" · "),
-  });
+  const large = (start: number) => attemptLarge(attempt, photos, person, start);
   const showsDetails =
     filaments.length > 0 ||
     settings.length > 0 ||
@@ -194,6 +209,15 @@ export const AttemptEntry = forwardRef<HTMLLIElement, AttemptEntryProps>(functio
                 </span>
                 {/* Above the open button, so it works. */}
                 <span className="pointer-events-auto relative z-10 -my-1.5 flex shrink-0">
+                  {onFold && (
+                    <IconButton
+                      icon={ExpandIcon}
+                      label={`Fold attempt ${attempt.number}`}
+                      aria-expanded
+                      onClick={onFold}
+                      className="rotate-180"
+                    />
+                  )}
                   <AttemptMenu
                     number={attempt.number}
                     onCompare={onCompare}
@@ -226,35 +250,54 @@ export const AttemptEntry = forwardRef<HTMLLIElement, AttemptEntryProps>(functio
 
             {attempt.note && <p className="text-lead md:text-body text-ink break-words">{attempt.note}</p>}
 
-            {lead && (
-              // The lead photo fills the card, as large as a print deserves; any more are small thumbnails under
-              // it (prints are physical, and a sliver of a second photo reads as cropped, not as more).
-              <div className="flex flex-col gap-2">
-                <EntryPhoto
-                  photo={lead}
-                  alt={`Attempt ${attempt.number}`}
-                  // Not "Attempt 1 …": the card's own button is the one named after the attempt.
-                  label={photos.length > 1 ? `Open photo 1 of ${photos.length} large` : "Open the photo large"}
-                  variant="large"
-                  className="aspect-4/3 w-full md:aspect-3/2"
-                  onClick={(event) => openLarge(event, large(0))}
-                />
-                {rest.length > 0 && (
-                  <div className="flex gap-2">
-                    {rest.slice(0, 4).map((photo, index) => (
-                      <EntryPhoto
-                        key={photo.id}
-                        photo={photo}
-                        alt={`Attempt ${attempt.number}, photo ${index + 2}`}
-                        label={`Open photo ${index + 2} of ${photos.length} large`}
-                        className="size-16 flex-none md:size-20"
-                        more={index === 3 && rest.length > 4 ? rest.length - 4 : 0}
-                        onClick={(event) => openLarge(event, large(index + 1))}
-                      />
-                    ))}
-                  </div>
-                )}
+            {lead && photosSmall ? (
+              // The page already leads with this photo: here they are all thumbnails, each once.
+              <div className="flex gap-2">
+                {photos.slice(0, 4).map((photo, index) => (
+                  <EntryPhoto
+                    key={photo.id}
+                    photo={photo}
+                    alt={`Attempt ${attempt.number}${index ? `, photo ${index + 1}` : ""}`}
+                    label={
+                      photos.length > 1 ? `Open photo ${index + 1} of ${photos.length} large` : "Open the photo large"
+                    }
+                    className="size-16 flex-none md:size-24"
+                    more={index === 3 && photos.length > 4 ? photos.length - 4 : 0}
+                    onClick={(event) => openLarge(event, large(index))}
+                  />
+                ))}
               </div>
+            ) : (
+              lead && (
+                // The lead photo fills the card, as large as a print deserves; any more are small thumbnails under
+                // it (prints are physical, and a sliver of a second photo reads as cropped, not as more).
+                <div className="flex flex-col gap-2">
+                  <EntryPhoto
+                    photo={lead}
+                    alt={`Attempt ${attempt.number}`}
+                    // Not "Attempt 1 …": the card's own button is the one named after the attempt.
+                    label={photos.length > 1 ? `Open photo 1 of ${photos.length} large` : "Open the photo large"}
+                    variant="large"
+                    className="aspect-4/3 w-full md:aspect-3/2"
+                    onClick={(event) => openLarge(event, large(0))}
+                  />
+                  {rest.length > 0 && (
+                    <div className="flex gap-2">
+                      {rest.slice(0, 4).map((photo, index) => (
+                        <EntryPhoto
+                          key={photo.id}
+                          photo={photo}
+                          alt={`Attempt ${attempt.number}, photo ${index + 2}`}
+                          label={`Open photo ${index + 2} of ${photos.length} large`}
+                          className="size-16 flex-none md:size-20"
+                          more={index === 3 && rest.length > 4 ? rest.length - 4 : 0}
+                          onClick={(event) => openLarge(event, large(index + 1))}
+                        />
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )
             )}
 
             <AttemptTags attempt={attempt} />
