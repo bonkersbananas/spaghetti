@@ -13500,6 +13500,73 @@
         "x-scopes": "person"
       }
     },
+    "/api/spools/{id}/label-read/confirm": {
+      "post": {
+        "operationId": "postSpoolsByIdLabelReadConfirm",
+        "summary": "\"Looks right\": what the label filled stays and is no longer listed in `fromLabel`.",
+        "description": "Only a signed-in person, never an agent token.",
+        "tags": [
+          "spools"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Done.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "spool": {
+                      "$ref": "#/components/schemas/Spool"
+                    }
+                  },
+                  "required": [
+                    "spool"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "signed_out or invalid_token: no credentials, or a token that is unknown or revoked.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "not_found: no such spool.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "x-scopes": "person"
+      }
+    },
     "/api/spools/{id}/attempts": {
       "get": {
         "operationId": "getSpoolsByIdAttempts",
