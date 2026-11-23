@@ -915,6 +915,11 @@ export const operations: Record<string, Operation> = {
     status: 201,
     errors: { 404: "not_found: nothing from the label is waiting." },
   },
+  "POST /spools/:id/label-read/confirm": {
+    summary: '"Looks right": what the label filled stays and is no longer listed in `fromLabel`.',
+    response: one("spool", Spool),
+    errors: { 404: notFound("spool") },
+  },
   "DELETE /spools/:id/label-read": {
     summary: "Puts away a label read that is waiting for a tap or didn't work out.",
     response: one("spool", Spool),

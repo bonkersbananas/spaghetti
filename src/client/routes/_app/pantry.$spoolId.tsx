@@ -23,6 +23,7 @@ import { SpoolStrand } from "@/components/illustrations/SpoolStrand";
 import { AmsLoadout } from "@/components/pantry/Ams";
 import { DryIt } from "@/components/pantry/DryIt";
 import { LabelFacts } from "@/components/pantry/LabelFacts";
+import { LabelLooksRight } from "@/components/pantry/LabelLooksRight";
 import { LabelReadNote } from "@/components/pantry/LabelReadNote";
 import { GramsHero, UsedBy } from "@/components/pantry/SpoolGrams";
 import { SetWeightSheet, WeighSheet } from "@/components/pantry/WeightSheets";
@@ -409,6 +410,11 @@ function SpoolPage({ spool }: { spool: Spool }) {
               )}
             </div>
             <LabelReadNote spool={spool} readOnly={readOnly} titled={waiting} className="px-0.5" />
+            <LabelLooksRight
+              spool={spool}
+              readOnly={readOnly}
+              onEdit={isDesktop ? undefined : () => setDetailsOpen(true)}
+            />
             {isDesktop && details}
           </div>
 

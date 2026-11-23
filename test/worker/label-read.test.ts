@@ -270,6 +270,23 @@ describe("reading a spool's label", () => {
     expect(finished.fromLabel).not.toContain("netGrams");
   });
 
+  it("keeps what the label filled when a person says it looks right, and stops listing it", async () => {
+    stubClaude({ spools: [jade] });
+    const id = await makeSpool();
+    await readLabel(id, { placeholders: ["material", "netGrams"] });
+    const read = await settled(id);
+    expect(read.fromLabel.length).toBeGreaterThan(0);
+    const confirmed = await asPerson(`/api/spools/${id}/label-read/confirm`, { method: "POST" });
+    expect(confirmed.status).toBe(200);
+    const { spool } = await confirmed.json<LabelReadResponse>();
+    expect(spool.fromLabel).toEqual([]);
+    expect(spool).toMatchObject({ brand: read.brand, colorName: read.colorName, nozzleTempMax: read.nozzleTempMax });
+    expect(
+      (await asPerson("/api/spools/00000000-0000-4000-8000-000000000000/label-read/confirm", { method: "POST" }))
+        .status,
+    ).toBe(404);
+  });
+
   it("makes a spool for each label after a confirmation that lists them", async () => {
     stubClaude({ spools: [jade, petg] });
     const id = await makeSpool();
@@ -335,6 +352,7 @@ describe("reading a spool's label", () => {
     for (const [method, path] of [
       ["POST", `/api/spools/${id}/label-read`],
       ["POST", `/api/spools/${id}/label-read/accept`],
+      ["POST", `/api/spools/${id}/label-read/confirm`],
       ["DELETE", `/api/spools/${id}/label-read`],
     ] as const) {
       const response = await request(path, {
