@@ -1,16 +1,26 @@
-import { Link } from "@tanstack/react-router";
+import { Link, useRouterState } from "@tanstack/react-router";
 import { useRef, useState } from "react";
 import { CameraIcon, PlusIcon } from "@/components/ui/icons";
 import { UnreadDot } from "@/components/ui/UnreadDot";
 import { useCapture } from "@/lib/capture";
 import { holdKeyboard } from "@/lib/keyboard-proxy";
+import { scrollToTop } from "@/lib/scroll-top";
 import { useAnyUnread } from "@/lib/unread-comments";
 import { type Section, tabs } from "./sections";
 
 function Tab({ to, label, icon: Icon, dot }: Pick<Section, "to" | "label" | "icon"> & { dot?: boolean }) {
+  const path = useRouterState({ select: (state) => state.location.pathname });
   return (
     <Link
       to={to}
+      // A tap on the tab of the page that is open, scrolled down, takes it back to the top (as on iOS). On a page
+      // deeper in the tab, or already at the top, the tap is the link's own. Focus stays where it is.
+      onClick={(event) => {
+        if (path.replace(/\/$/, "") !== to || window.scrollY <= 0) return;
+        if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+        event.preventDefault();
+        scrollToTop();
+      }}
       // Each section's code is fetched once the app is idle (routes/_app.tsx), and on the touch itself.
       className="pressable press-none group text-ink-faint data-[status=active]:text-tomato-ink flex flex-1 flex-col items-center justify-center gap-px"
     >
