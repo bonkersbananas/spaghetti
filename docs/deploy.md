@@ -30,7 +30,7 @@ One-time setup (the bucket, the domain's `www` record and redirect rule, the zon
 pnpm ship
 ```
 
-(pnpm has its own `deploy` command, as it has `doctor`, so ours is `ship`. It is `scripts/ship.ts`.) It runs `pnpm build`, applies the remote migrations (`wrangler d1 migrations apply DB --remote`) and then `wrangler deploy`. `pnpm ship --help` prints the usage and deploys nothing; `--message "<text>"` sets the version message, `--note "<sentence>"` says what changed for the two people (below), and any other argument is refused. Migrations go first, so a schema change must keep the running version working (add, don't rename or drop in one step).
+(pnpm has its own `deploy` command, as it has `doctor`, so ours is `ship`. It is `scripts/ship.ts`.) It runs `pnpm build`, applies the remote migrations (`wrangler d1 migrations apply DB --remote`) and then `wrangler deploy`. `pnpm ship --help` prints the usage and deploys nothing; `--message "<text>"` sets the version message, `--note "<sentence>"` says what changed for the two people (below), and any other argument is refused. It ends with `✓ Live at https://spaghetti.day` and a line `Migrations applied: <names>` (or `none`, or `unknown (check d1_migrations)` when the list couldn't be read), made by reading `d1_migrations` before and after applying; quote that line in a ship's report instead of reading wrangler's output. Migrations go first, so a schema change must keep the running version working (add, don't rename or drop in one step).
 
 ### The note: what changed for the two people
 

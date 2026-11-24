@@ -11,6 +11,7 @@ import { spawnSync } from "node:child_process";
 import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { addNote, entryOfHtml } from "../src/shared/whats-new.ts";
+import { migrationsSummary, parseMigrationNames, READ_MIGRATIONS } from "./lib/ship-migrations.ts";
 import { root } from "./lib/wrangler.ts";
 
 const SITE = "https://spaghetti.day";
@@ -69,9 +70,31 @@ if (!process.env.CLOUDFLARE_API_TOKEN) {
 
 step("Building", "pnpm", ["build"]);
 await writeNote(note ?? "");
+const migrationsBefore = readMigrations();
 step("Applying remote migrations", "pnpm", ["exec", "wrangler", "d1", "migrations", "apply", "DB", "--remote"]);
 step("Deploying", "pnpm", ["exec", "wrangler", "deploy", ...(message ? ["--message", message] : [])]);
+const migrationsAfter = readMigrations();
 console.log("\n✓ Live at https://spaghetti.day");
+console.log(migrationsSummary(migrationsBefore, migrationsAfter));
+
+/** The names in the remote d1_migrations, or undefined when they can't be read: this only feeds the summary and never stops a deploy. */
+function readMigrations(): string[] | undefined {
+  try {
+    const result = spawnSync(
+      "pnpm",
+      ["exec", "wrangler", "d1", "execute", "DB", "--remote", "--json", "--command", READ_MIGRATIONS],
+      {
+        cwd: root,
+        encoding: "utf8",
+        timeout: 60_000,
+        env: { ...process.env, CI: "1", WRANGLER_SEND_METRICS: "false" },
+      },
+    );
+    return result.status === 0 ? parseMigrationNames(result.stdout) : undefined;
+  } catch {
+    return undefined;
+  }
+}
 
 /**
  * Adds this version to whats-new.json in the build: the live site's file plus an entry (with an empty note when the ship has no --note, so a page can tell which versions came after the last real note). Whatever goes wrong
