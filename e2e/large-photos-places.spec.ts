@@ -3,7 +3,7 @@ import { expect, type Locator, type Page, test } from "@playwright/test";
 import { signIn } from "./helpers";
 
 // More places where a photo of a print opens large (ui/LargePhotos.tsx; the attempt cards, the Journal and the attempt
-// sheet are e2e/large-photos.spec.ts): the compare sheet, Search's attempt results, the printing card and the idea's
+// sheet are e2e/large-photos.spec.ts): the compare sheet, Search's attempt results and the idea's
 // and build's hero. On a phone the hero keeps its pinch, double tap and swipe (decision 0039): a button in its corner
 // opens it. The shared page opens its photos with no script (a :target view), so it needs nothing here.
 
@@ -116,27 +116,17 @@ test("a search result's photo opens its attempt's photos; the words still open t
   await expect(page).toHaveURL(new RegExp(`/builds/${id}`));
 });
 
-test("the printing card's photo opens large, and the card still leads to the build @phone", async ({
-  page,
-  isMobile,
-}) => {
+test("the printing card's photo leads to the build, not to the large viewer @phone", async ({ page, isMobile }) => {
   const id = await build(page, "Bath tugboat", [{ outcome: null, photos: 2 }]);
   // Phones have the Journal for Today: its Now block draws the same card.
   await page.goto(isMobile ? "/journal" : "/today");
-  // Pointer only (Enter on the name leads to the build): the picture is the card's own link, marked data-large.
-  const photo = page.locator("a[data-large]").first();
+  // The picture is the card's own pointer-only link, the same address as the name's.
+  const photo = page.locator(`a[aria-hidden="true"][href^="/builds/${id}"]`).first();
   await expect(photo).toBeVisible();
+  await expect(photo).not.toHaveCSS("cursor", "zoom-in");
   await press(photo, isMobile);
-  const large = viewer(page, "Bath tugboat · attempt 1");
-  // It opens on the photo the card shows (the newest of the attempt's), the attempt's others around it.
-  await expect(large.getByText("2 of 2")).toBeVisible();
-  await page.keyboard.press("Escape");
-  await expect(large).toBeHidden();
-  await expect(page).toHaveURL(isMobile ? /\/journal/ : /\/today/);
-  await expect(photo).toBeFocused();
-
-  await press(page.getByRole("link", { name: /Bath tugboat, attempt 1/ }).first(), isMobile);
   await expect(page).toHaveURL(new RegExp(`/builds/${id}`));
+  await expect(page.getByRole("dialog")).toHaveCount(0);
 });
 
 test("the hero opens all the photos large: a click on a computer, the corner button on a phone @phone", async ({
