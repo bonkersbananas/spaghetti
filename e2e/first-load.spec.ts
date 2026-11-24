@@ -53,16 +53,21 @@ import { SEED_PASSWORD, SEED_USERS } from "../scripts/lib/local-app.ts";
  * card both screens draw); the viewer itself, its root and its zoom load on the first click. The entry re-exports
  * createRoot for that root (about 0.17 kB on every screen, inside the other screens' 0.5 kB). /today +1 more the same
  * day: with "Which build is this?" on the printing card (PR 659, about 0.3 kB) it measured 298.3 kB against 298.
+ * 2026-11-23: ceilings lowered by what a trim saved (nothing people see moved). The summary of an attempt's settings (components/builds/settings.ts)
+ * took formatDuration from ui/Field, which dragged the whole Field module (text fields, SaveStatus, two icons, about 3.7 kB gzip) into every
+ * screen that draws a Journal entry: it reads @shared/time now. The shell's account menu loader (shell/lazy-account.ts, a list of about 2 kB gzip
+ * of the chunks its sheets need) is imported when the browser is idle or the account button is first pressed, not statically. Together:
+ * /today and /journal -5.6, /ideas, /builds, /search, /pantry and /printer about -1.9 (ceilings: -5 on /today and /journal, -1 elsewhere but /sign-in).
  */
 const CEILING_KB = {
   "/sign-in": 185,
-  "/today": 299,
-  "/ideas": 267,
-  "/builds": 268,
-  "/journal": 285,
-  "/search": 277,
-  "/pantry": 263,
-  "/printer": 262,
+  "/today": 294,
+  "/ideas": 266,
+  "/builds": 267,
+  "/journal": 280,
+  "/search": 276,
+  "/pantry": 262,
+  "/printer": 261,
 } as const;
 
 /** Changes smaller than this don't make a screen heavier: a renamed chunk moves a few bytes in every screen. */

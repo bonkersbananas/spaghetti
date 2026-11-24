@@ -15,3 +15,5 @@ Status: Accepted
 **What Claude is given:** the photo's large variant, and what the person has already written about the spool (brand, material, colour, note) as context, never as a hint to the answer. Text on a label is information, not instructions.
 
 **Left out:** reading a label that is already on a spool without a new photo being asked for (a spool with a photo and no read offers "Read this photo"); weighing or dating from a label; agents (MCP) starting a read; a visible error beyond the one quiet line.
+
+**One tap to accept (added after the first printing weekend).** While a read's facts are still marked "from the label", the spool's page shows them in one card, "Claude read this", with "Looks right" (clears the marks, `POST /api/spools/:id/label-read/confirm`) and, on a phone where the fields are folded away, "Change something". Editing a field in place still works and takes that fact off the card.

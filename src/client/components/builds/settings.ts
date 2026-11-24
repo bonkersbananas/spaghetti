@@ -1,5 +1,5 @@
 import { type AttemptFilament, type AttemptSettings, plateName, shortPreset } from "@shared/attempts";
-import { formatDuration as formatMinutes } from "@/components/ui/Field";
+import { formatDuration as formatMinutes } from "@shared/time";
 
 export { formatMinutes };
 

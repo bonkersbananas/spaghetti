@@ -574,6 +574,21 @@ export const spoolRoutes = new Hono<AppEnv>()
     return c.json<LabelReadResponse>({ spool, created }, 201);
   })
 
+  /** "Looks right": what the label filled stays as it is and stops being marked "from the label". */
+  .post("/:id/label-read/confirm", async (c) => {
+    const spoolId = c.req.param("id");
+    await c.var.db.batch([
+      c.var.db
+        .update(spools)
+        .set({ labelFields: [], updatedAt: new Date() })
+        .where(and(eq(spools.id, spoolId), isNull(spools.deletedAt))),
+      recordChange(c.var.db, { entity: "spool", id: spoolId, action: "updated", actor: c.var.actor }),
+    ]);
+    const spool = await loadSpool(c.var.db, c.env.DB, spoolId);
+    if (!spool) return apiError(c, 404, "not_found", notFound);
+    return c.json<LabelReadResponse>({ spool });
+  })
+
   /** "Not these", or putting away the line that says the label couldn't be read. */
   .delete("/:id/label-read", async (c) => {
     const spoolId = c.req.param("id");

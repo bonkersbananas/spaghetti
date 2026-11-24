@@ -1,7 +1,7 @@
 import type { Person } from "@shared/api";
 import { useSuspenseQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { lazy, Suspense, useRef, useState } from "react";
+import { type ComponentProps, type ComponentType, lazy, Suspense, useRef, useState } from "react";
 import { Mark } from "@/components/illustrations";
 import { Button } from "@/components/ui/Button";
 import { PlusIcon, SearchIcon } from "@/components/ui/icons";
@@ -16,7 +16,7 @@ import { sessionQuery } from "@/lib/queries";
 import { useAnyUnread } from "@/lib/unread-comments";
 import { useWhenIdle } from "@/lib/when-idle";
 import { AccountButton } from "./AccountButton";
-import { AccountMenu, loadAccountMenu } from "./lazy-account";
+import type AccountMenuType from "./AccountMenu";
 import { type Section, sections, workshop } from "./sections";
 
 /** The print on the bed: its code (builds, progress, photos) loads once the browser is idle, not with the first screen. */
@@ -139,7 +139,7 @@ export function Sidebar() {
 function SidebarAccount({ user }: { user: Person }) {
   // Whether the menu's code is wanted (idle time or the first press), and whether the menu is open. The open state
   // lives here, so a press opens it even when it lands on the stand-in just as the real menu mounts.
-  const [wanted, setWanted] = useState(false);
+  const [Menu, setMenu] = useState<ComponentType<ComponentProps<typeof AccountMenuType>> | null>(null);
   const [open, setOpen] = useState(false);
   // The look-alike is replaced by the real button: if it had focus (tabbed to, or just pressed), the new one takes it,
   // rather than focus falling to the page and the next Tab starting from the top.
@@ -147,25 +147,28 @@ function SidebarAccount({ user }: { user: Person }) {
   const keepFocus = () => {
     hadFocus.current = document.activeElement?.hasAttribute("data-account-button") ?? false;
   };
-  useWhenIdle(() => {
-    void loadAccountMenu().then(() => {
+  // lazy-account's own list of chunks is about 2 kB gzip: it loads with the menu, not with the first screen.
+  const wanted = () => {
+    void import("./lazy-account").then(async (module) => {
+      await module.loadAccountMenu();
       keepFocus();
-      setWanted(true);
+      setMenu(() => module.AccountMenu);
     });
-  });
+  };
+  useWhenIdle(wanted);
   const stand = (
     <AccountButton
       user={user}
       onClick={() => {
-        setWanted(true);
+        wanted();
         setOpen(true);
       }}
     />
   );
-  if (!wanted) return stand;
+  if (!Menu) return stand;
   return (
     <Suspense fallback={stand}>
-      <AccountMenu
+      <Menu
         user={user}
         open={open}
         onOpenChange={setOpen}
