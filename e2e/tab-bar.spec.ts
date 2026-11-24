@@ -66,3 +66,63 @@ test("phones: the tab bar is back at the bottom edge after the phone turns sidew
   const inset = await page.evaluate(() => document.documentElement.style.getPropertyValue("--sg-keyboard-inset"));
   expect(inset).toBe("0px");
 });
+
+/** Makes the open page tall enough to scroll (the seed's Workshop is short), then scrolls it down. */
+async function scrollDown(page: import("@playwright/test").Page) {
+  await page.evaluate(() => {
+    const spacer = document.createElement("div");
+    spacer.setAttribute("data-test-spacer", "");
+    spacer.style.height = "3000px";
+    document.querySelector("main")?.append(spacer);
+    window.scrollTo(0, 1200);
+  });
+  await expect.poll(() => page.evaluate(() => window.scrollY)).toBeGreaterThan(800);
+}
+
+const scrollTop = (page: import("@playwright/test").Page) => page.evaluate(() => window.scrollY);
+
+for (const name of ["Ideas", "Builds", "Journal", "Workshop"]) {
+  test(`phones: tapping the ${name} tab on ${name}, scrolled down, scrolls to the top`, { tag: "@phone" }, async ({
+    page,
+    isMobile,
+  }) => {
+    test.skip(!isMobile, "The tab bar is the phone's.");
+    const tabs = page.getByRole("navigation", { name: "Sections" });
+    await tabs.getByRole("link", { name }).tap();
+    await expect(page.getByRole("heading", { level: 1, name })).toBeVisible();
+    await scrollDown(page);
+    await tabs.getByRole("link", { name }).tap();
+    await expect.poll(() => scrollTop(page), { timeout: 500 }).toBe(0);
+    await expect(page).toHaveURL(new RegExp(`/${name.toLowerCase()}$`));
+    // At the top, a second tap does nothing new.
+    await tabs.getByRole("link", { name }).tap();
+    await expect(page.getByRole("heading", { level: 1, name })).toBeVisible();
+    expect(await scrollTop(page)).toBe(0);
+  });
+}
+
+test("phones: from a page deeper in a tab, its tab still goes to the tab's own page", { tag: "@phone" }, async ({
+  page,
+  isMobile,
+}) => {
+  test.skip(!isMobile, "The tab bar is the phone's.");
+  const tabs = page.getByRole("navigation", { name: "Sections" });
+  await tabs.getByRole("link", { name: "Workshop" }).tap();
+  await page
+    .locator("main")
+    .getByRole("link", { name: /^Printer/ })
+    .tap();
+  await expect(page).toHaveURL(/\/printer$/);
+  await tabs.getByRole("link", { name: "Workshop" }).tap();
+  await expect(page).toHaveURL(/\/workshop$/);
+  await expect(page.getByRole("heading", { level: 1, name: "Workshop" })).toBeVisible();
+});
+
+test("phones: with reduced motion the tab jumps to the top at once", { tag: "@phone" }, async ({ page, isMobile }) => {
+  test.skip(!isMobile, "The tab bar is the phone's.");
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await scrollDown(page);
+  await page.getByRole("navigation", { name: "Sections" }).getByRole("link", { name: "Ideas" }).tap();
+  // No frames in between: the very next read is already the top.
+  await expect.poll(() => scrollTop(page), { timeout: 100 }).toBe(0);
+});
