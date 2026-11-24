@@ -1,4 +1,4 @@
-import { and, desc, eq, isNotNull, isNull, ne } from "drizzle-orm";
+import { and, desc, eq, isNotNull, isNull, lt, ne } from "drizzle-orm";
 import type { BatchItem } from "drizzle-orm/batch";
 import { Hono } from "hono";
 import { z } from "zod";
@@ -149,15 +149,47 @@ export const printerRoutes = new Hono<AppEnv>()
     const row = await db.select().from(bridge).where(eq(bridge.id, BRIDGE_ID)).get();
     const before: BridgeStatusData = row?.status ?? { printerState: null, progress: null, unknownTrays: [] };
 
+    const offTheBed: BatchItem<"sqlite">[] = [];
     let progress = before.progress;
     if (body.progress === null) progress = null;
     else if (body.progress) {
       // Only for a print that is there: an attempt that was deleted meanwhile has nothing to show.
       const attempt = await db
-        .select({ id: attempts.id })
+        .select({ id: attempts.id, printedAt: attempts.printedAt })
         .from(attempts)
         .where(and(eq(attempts.id, body.progress.attemptId), isNull(attempts.deletedAt)))
         .get();
+      // The printer holds one plate at a time: a print it now reports that started later ends any earlier one still
+      // marked printing (a hand-logged print the bridge never followed), so it is off the bed on every screen.
+      if (attempt && before.progress?.attemptId !== attempt.id) {
+        const earlier = await db
+          .select({ id: attempts.id, itemId: attempts.itemId })
+          .from(attempts)
+          .where(
+            and(
+              isNull(attempts.outcome),
+              isNull(attempts.endedAt),
+              isNull(attempts.deletedAt),
+              ne(attempts.id, attempt.id),
+              lt(attempts.printedAt, attempt.printedAt),
+            ),
+          );
+        for (const one of earlier) {
+          offTheBed.push(
+            db
+              .update(attempts)
+              .set({ endedAt: attempt.printedAt, updatedAt: now })
+              .where(and(eq(attempts.id, one.id), isNull(attempts.outcome), isNull(attempts.endedAt))),
+            recordChange(db, {
+              entity: "attempt",
+              id: one.id,
+              itemId: one.itemId,
+              action: "updated",
+              actor: c.var.actor,
+            }),
+          );
+        }
+      }
       progress = attempt
         ? {
             attemptId: body.progress.attemptId,
@@ -203,7 +235,7 @@ export const printerRoutes = new Hono<AppEnv>()
     if (!row || !same(before, status)) {
       statements.push(recordChange(db, { entity: "printer", id: BRIDGE_ID, action: "updated", actor: c.var.actor }));
     }
-    await db.batch(statements);
+    await db.batch([...statements, ...offTheBed] as typeof statements);
     return c.json<PrinterResponse>(await loadPrinter(db));
   })
 

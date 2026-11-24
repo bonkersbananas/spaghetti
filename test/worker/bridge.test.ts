@@ -196,6 +196,33 @@ describe("PUT /api/printer/bridge", () => {
     });
   });
 
+  it("takes an earlier print still printing off the bed when the printer reports a later one", async () => {
+    const handLogged = uuid();
+    const handItem = uuid();
+    await asBridge("/api/items", { method: "POST", json: { id: handItem, stage: "building" } });
+    await asBridge(`/api/items/${handItem}/attempts`, {
+      method: "POST",
+      json: { id: handLogged, printedAt: Date.now() - 3_600_000 },
+    });
+    const live = await startPrint();
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    const later = await startPrint();
+    const feedBefore = (await (await request("/api/changes", { cookie })).json<ChangesResponse>()).cursor;
+    const progress = { attemptId: live.attemptId, percent: 5 };
+    await asBridge("/api/printer/bridge", { method: "PUT", json: { progress } });
+    const read = async (itemId: string) =>
+      (await (await request(`/api/items/${itemId}`, { cookie })).json<ItemResponse>()).item.attempts;
+    const old = (await read(handItem)).find((a) => a.id === handLogged);
+    expect(old?.outcome).toBeNull();
+    expect(old?.endedAt).toBe(live.attempt.printedAt);
+    // The print the bridge follows stays on the bed, and a later heartbeat changes nothing more.
+    expect((await read(live.itemId))[0]?.endedAt).toBeNull();
+    const changes = await (await request(`/api/changes?after=${feedBefore}`, { cookie })).json<ChangesResponse>();
+    expect(changes.changes.filter((c) => c.entity === "attempt" && c.id === handLogged)).toHaveLength(1);
+    // One that started after the live print is not touched.
+    expect((await read(later.itemId))[0]?.endedAt).toBeNull();
+  });
+
   it("is closed to tokens without the printer scope", async () => {
     const made = await request("/api/agents", {
       method: "POST",
