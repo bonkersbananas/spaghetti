@@ -3,7 +3,7 @@ import { Hono } from "hono";
 import { z } from "zod";
 import { fromBase64Url } from "../../shared/base64url.ts";
 import { isTimeZone, type PushConfig, testMessage } from "../../shared/push.ts";
-import { pushSubscriptions } from "../db/schema.ts";
+import { pushSubscriptions, users } from "../db/schema.ts";
 import type { AppEnv } from "../env.ts";
 import { apiError } from "../http.ts";
 import { loadVapid, pushTo } from "../push/nudges.ts";
@@ -54,7 +54,13 @@ const target = z.object({ endpoint });
 export const pushRoutes = new Hono<AppEnv>()
   .get("/", async (c) => {
     const rows = await c.var.db.select().from(pushSubscriptions).where(eq(pushSubscriptions.userId, c.var.user.id));
+    const offer = await c.var.db
+      .select({ at: users.pushOfferDismissedAt })
+      .from(users)
+      .where(eq(users.id, c.var.user.id))
+      .get();
     return c.json<PushConfig>({
+      offerDismissed: !!offer?.at,
       publicKey: c.env.VAPID_PUBLIC_KEY || null,
       canSend: Boolean(c.env.VAPID_PUBLIC_KEY && c.env.VAPID_PRIVATE_KEY),
       subscriptions: rows.map((row) => ({
@@ -65,6 +71,16 @@ export const pushRoutes = new Hono<AppEnv>()
         timeZone: row.timeZone,
       })),
     });
+  })
+  /** "Not now" on Today's offer: for good, for this person on every device. */
+  .post("/offer/dismiss", async (c) => {
+    await c.var.db.update(users).set({ pushOfferDismissedAt: new Date() }).where(eq(users.id, c.var.user.id));
+    return c.body(null, 204);
+  })
+  /** Brings the offer back (undoing "Not now"; the e2e tests reset with it). */
+  .delete("/offer/dismiss", async (c) => {
+    await c.var.db.update(users).set({ pushOfferDismissedAt: null }).where(eq(users.id, c.var.user.id));
+    return c.body(null, 204);
   })
   /** Turns notifications on for a device (or refreshes it: the browser may renew its subscription). */
   .put("/subscription", async (c) => {

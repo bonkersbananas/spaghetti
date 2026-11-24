@@ -13,6 +13,7 @@ import { BackBurner } from "@/components/today/BackBurner";
 import { InThePrinter } from "@/components/today/InThePrinter";
 import { Lately } from "@/components/today/Lately";
 import { NeedsYou } from "@/components/today/NeedsYou";
+import { NotificationsOfferGate } from "@/components/today/NotificationsOfferGate";
 import { PickUpAgain, pickUpAgain } from "@/components/today/PickUpAgain";
 import { Since } from "@/components/today/Since";
 import { UpNext, upNextIdeas } from "@/components/today/UpNext";
@@ -270,6 +271,8 @@ function Today() {
           </div>
         </div>
       )}
+      {/* Last, under everything that is happening: it never pushes a print waiting for its answer down. */}
+      <NotificationsOfferGate className="mt-10 empty:hidden lg:max-w-md" />
     </>
   );
 }

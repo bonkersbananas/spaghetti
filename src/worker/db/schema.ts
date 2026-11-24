@@ -30,6 +30,8 @@ export const users = sqliteTable("users", {
   photoKey: text("photo_key"),
   /** Their wishlist is shared with the others who sign in unless they keep it to themselves. */
   wishlistPrivate: integer("wishlist_private", { mode: "boolean" }).notNull().default(false),
+  /** When they waved off the offer to turn notifications on (decision 0079): for good, on every device. */
+  pushOfferDismissedAt: integer("push_offer_dismissed_at", { mode: "timestamp_ms" }),
   createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
 });
 
@@ -1183,6 +1185,21 @@ export const pushNudges = sqliteTable(
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
     kind: text("kind").$type<"off_the_bed" | "overdue">().notNull(),
+    sentAt: integer("sent_at", { mode: "timestamp_ms" }).notNull(),
+  },
+  (table) => [primaryKey({ columns: [table.attemptId, table.userId] })],
+);
+
+/** The one reminder for an unanswered print that went out (or was claimed) for a person: never a second (decision 0079). */
+export const pushReminders = sqliteTable(
+  "push_reminders",
+  {
+    attemptId: text("attempt_id")
+      .notNull()
+      .references(() => attempts.id, { onDelete: "cascade" }),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
     sentAt: integer("sent_at", { mode: "timestamp_ms" }).notNull(),
   },
   (table) => [primaryKey({ columns: [table.attemptId, table.userId] })],

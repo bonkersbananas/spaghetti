@@ -2765,6 +2765,33 @@ export const shots: Shot[] = [
     },
   },
   {
+    // A person with no push on any device: the one-time offer to turn it on, at the bottom of Today (the phone's Now).
+    name: "today-notifications-offer",
+    path: "/today",
+    prepare: async (page) => {
+      await page.evaluate(() => fetch("/api/push/offer/dismiss", { method: "DELETE" }));
+      // Headless Chromium answers "denied", which hides the offer (nothing can be turned on): a person who has
+      // not been asked yet has "default". Only while this flag is set, so the other shots keep what they had.
+      await page.addInitScript(() => {
+        if (sessionStorage.getItem("offer-shot"))
+          Object.defineProperty(Notification, "permission", { get: () => "default" });
+      });
+      await page.evaluate(() => sessionStorage.setItem("offer-shot", "1"));
+      await page.goto("about:blank");
+      await page.goto("/today");
+      const offer = page.getByRole("region", { name: "Turn on notifications" });
+      await offer.waitFor();
+      await offer.evaluate((node) => node.scrollIntoView({ block: "center" }));
+      await page.waitForFunction(() => document.getAnimations().every((a) => a.playState !== "running"));
+    },
+    cleanup: async (page) => {
+      await page.evaluate(() => {
+        sessionStorage.removeItem("offer-shot");
+        return fetch("/api/push/offer/dismiss", { method: "POST" });
+      });
+    },
+  },
+  {
     // One of the three answered: the block counts what is left.
     name: "today-scout-answered",
     path: "/today",

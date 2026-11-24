@@ -12,7 +12,7 @@ import { resumeReads } from "./photo-read/run.ts";
 import { purgeDeleted } from "./photos.ts";
 import { previewImage, previewPage, previewTarget } from "./previews.ts";
 import { pruneDownloads } from "./prints.ts";
-import { sendNudges, sendUpkeepNudge } from "./push/nudges.ts";
+import { sendNudges, sendReminders, sendUpkeepNudge } from "./push/nudges.ts";
 import { sendWeekPush } from "./push/week.ts";
 import { openRoutes } from "./routes/open.ts";
 import { purgeScoutPictures, scoutTick } from "./scout/run.ts";
@@ -82,6 +82,7 @@ export default {
           .catch((error) => console.error("webhooks failed", error)),
       );
       ctx.waitUntil(sendNudges(env).then((result) => result.sent && console.log("nudged", result)));
+      ctx.waitUntil(sendReminders(env).then((result) => result.sent && console.log("reminded", result)));
       // Drafts nobody is working on any more (a closed tab, a recycled Worker); a no-op without the key.
       ctx.waitUntil(resumeDrafts(env).catch((error) => console.error("draft resume failed", error)));
       // The gentle daily look at the Prisjakt pages of what's still to buy (decision 0041).

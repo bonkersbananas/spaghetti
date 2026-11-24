@@ -89,6 +89,7 @@ const outcomeOf = async (page: Page, itemId: string, attemptId: string) => {
 };
 
 test.afterEach(async ({ page }) => {
+  await page.request.delete("/api/push/offer/dismiss", { headers: { Origin: new URL(page.url()).origin } });
   await page.request.delete("/api/push/subscription", {
     data: { endpoint: ENDPOINT },
     headers: { Origin: new URL(page.url()).origin },
@@ -238,4 +239,59 @@ test("with no connection the answer waits in the outbox and lands when the app i
   await context.unroute("**/api/attempts/*/finish");
   await page.reload();
   await expect.poll(() => outcomeOf(page, itemId, attemptId)).toBe("failed");
+});
+
+/** Today on a desktop, the Journal's Now block on a phone: where the offer is drawn. */
+const front = (isMobile: boolean) => (isMobile ? "/journal" : "/today");
+
+test("offers notifications to a person with none, turns them on from the card, and never offers again once on", async ({
+  page,
+  isMobile,
+}) => {
+  await fakeSubscription(page);
+  await signIn(page);
+  await waitForServiceWorker(page);
+  await page.goto(front(isMobile));
+  const offer = page.getByRole("region", { name: "Turn on notifications" });
+  await expect(offer).toBeVisible();
+  await expect(offer).toContainText("done and waiting for its answer");
+  await offer.getByRole("button", { name: "Turn on" }).click();
+  await expect(page.getByText("Notifications are on")).toBeVisible();
+  await expect(offer).toHaveCount(0);
+  await expect.poll(async () => (await (await page.request.get("/api/push")).json()).subscriptions.length).toBe(1);
+  await page.reload();
+  await expect(page.getByRole("heading", { level: 1, name: /^(Today|Journal)$/ })).toBeVisible();
+  await page.waitForTimeout(1800);
+  await expect(page.getByRole("region", { name: "Turn on notifications" })).toHaveCount(0);
+});
+
+test("'Not now' waves the offer off for good, on the server", async ({ page, isMobile }) => {
+  await fakeSubscription(page);
+  await signIn(page);
+  await waitForServiceWorker(page);
+  await page.goto(front(isMobile));
+  const offer = page.getByRole("region", { name: "Turn on notifications" });
+  await offer.getByRole("button", { name: "Not now" }).click();
+  await expect(offer).toHaveCount(0);
+  await expect.poll(async () => (await (await page.request.get("/api/push")).json()).offerDismissed).toBe(true);
+  // Another device (a fresh page load with no local memory) isn't asked either.
+  await page.evaluate(() => localStorage.clear());
+  await page.reload();
+  await expect(page.getByRole("heading", { level: 1, name: /^(Today|Journal)$/ })).toBeVisible();
+  await page.waitForTimeout(1800);
+  await expect(page.getByRole("region", { name: "Turn on notifications" })).toHaveCount(0);
+});
+
+test("isn't offered to a person who already has push on", async ({ page, isMobile }) => {
+  await fakeSubscription(page);
+  await signIn(page);
+  await waitForServiceWorker(page);
+  const sheet = await openNotifications(page, isMobile);
+  await sheet.getByRole("switch", { name: /Notify this device/ }).click();
+  await expect(sheet.getByRole("switch", { name: /Notify this device/ })).toHaveAttribute("aria-checked", "true");
+  await page.keyboard.press("Escape");
+  await page.goto(front(isMobile));
+  await expect(page.getByRole("heading", { level: 1, name: /^(Today|Journal)$/ })).toBeVisible();
+  await page.waitForTimeout(1800);
+  await expect(page.getByRole("region", { name: "Turn on notifications" })).toHaveCount(0);
 });

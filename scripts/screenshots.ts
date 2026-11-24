@@ -149,6 +149,9 @@ try {
         });
         if (!response.ok()) throw new Error(`Signing in failed: ${response.status()}`);
 
+        // The seeded person has no push: wave off the offer to turn it on, so it isn't in every Today and Journal
+        // shot. Its own shot brings it back (screenshot-routes.ts).
+        await page.request.post("/api/push/offer/dismiss", { headers: { Origin: app.url } });
         for (const shot of selected.filter((s) => !s.signedOut)) {
           page = await attempt(context, page, shot, width, theme);
         }

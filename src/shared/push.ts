@@ -2,7 +2,7 @@
 import type { Outcome } from "./attempts.ts";
 
 export type NudgeKind = "off_the_bed" | "overdue";
-export type PushKind = NudgeKind | "upkeep" | "comment" | "week" | "test";
+export type PushKind = NudgeKind | "reminder" | "upkeep" | "comment" | "week" | "test";
 
 /** No nudges from 22:00 until 07:00 in the device's time zone. */
 export const QUIET_FROM_HOUR = 22;
@@ -11,6 +11,9 @@ export const QUIET_TO_HOUR = 7;
 export const OVERDUE_GRACE_MINUTES = 10;
 /** A nudge that has waited this long (a night of quiet hours fits) is dropped: the moment has passed. */
 export const NUDGE_WINDOW_HOURS = 12;
+
+/** One more reminder goes to everyone when a print is still unanswered this long after its first nudge (decision 0079). */
+export const REMINDER_AFTER_MINUTES = 60;
 
 export function localHour(timeZone: string, at: number): number {
   const hour = new Intl.DateTimeFormat("en-GB", { timeZone, hour: "numeric", hourCycle: "h23" })
@@ -154,6 +157,28 @@ export function nudgeMessage(
   };
 }
 
+/**
+ * The one reminder for a print still waiting for its answer an hour after the first nudge: a gentle second ask,
+ * not an alarm. It carries the same tag, so it replaces the first notification instead of stacking under it.
+ */
+export function reminderMessage(
+  attempt: { id: string; itemId: string },
+  itemTitle: string,
+  owner?: string,
+): PushMessage {
+  const name = itemTitle.trim() || "A print";
+  return {
+    kind: "reminder",
+    title: `${name} is still waiting`,
+    body: owner ? `When you have a moment: how did ${owner}'s print go?` : "When you have a moment: how did it go?",
+    tag: `attempt-${attempt.id}`,
+    url: attemptUrl(attempt.itemId, attempt.id),
+    attemptId: attempt.id,
+    itemId: attempt.itemId,
+    actions: NUDGE_ACTIONS,
+  };
+}
+
 /** At most one upkeep nudge a day, for all tasks and people together. */
 export const UPKEEP_NUDGE_GAP_HOURS = 24;
 
@@ -189,6 +214,8 @@ export interface PushSubscriptionBody {
 }
 
 export interface PushConfig {
+  /** They waved off the offer to turn notifications on (kept for the person, not the device). */
+  offerDismissed: boolean;
   /** Null when the server has no VAPID key: the settings row isn't shown. */
   publicKey: string | null;
   /** False when the private half is missing (a local server): subscribing works, sending doesn't. */
