@@ -90,10 +90,10 @@ export function Upkeep() {
                 <UpkeepMeter fraction={task.fraction} label={upkeepRowText(task)} thin={!task.due} />
                 <span className="text-small text-ink-faint tabular truncate">{upkeepRowText(task)}</span>
               </button>
-              {/* One control on every row: a Done button. Due rows stand out by their name and bar, not by a different control. */}
+              {/* One control on every row: a Done button, outlined where it is due and quiet where it is not. */}
               <div className="flex w-20 shrink-0 justify-end">
                 <Button
-                  variant="secondary"
+                  variant={task.due ? "secondary" : "quiet"}
                   size="sm"
                   icon={CheckIcon}
                   disabled={readOnly}
