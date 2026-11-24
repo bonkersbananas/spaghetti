@@ -16,13 +16,35 @@ export function focusAfterMove(event: RouterEvents["onResolved"]) {
   let frames = 0;
   const settle = () => {
     const active = document.activeElement;
-    if (active && active !== document.body && active.id !== CONTENT_ID && !active.closest("aside")) return;
+    if (active && active !== document.body && active.id !== CONTENT_ID && !active.closest("aside")) {
+      // The control may belong to the page that is leaving (the question's "Delete" button, until the old page is gone).
+      if (active.id !== CONTENT_ID) keepFocusInPage(active as HTMLElement);
+      return;
+    }
     // Back from an item to its list: the card that was opened has focus again, so J goes on from it. The list may
     // take a frame or two to draw.
     const card = document.querySelector<HTMLElement>(`main [data-picks] a[href="${from}"]`);
-    if (card) card.focus();
-    else if (++frames < 6) afterPaint(settle);
+    if (card) {
+      card.focus();
+      keepFocusInPage(card);
+    } else if (++frames < 6) afterPaint(settle);
     else focusContent();
   };
   afterPaint(settle);
+}
+
+/**
+ * Focus that stays where it is may sit on something about to leave: a stale card (an item deleted from its own page:
+ * the list can still draw it for a moment) or a control of the page that is going. When it leaves, focus would fall to
+ * `<body>`: it goes to the page.
+ */
+function keepFocusInPage(element: HTMLElement) {
+  const observer = new MutationObserver(() => {
+    if (element.isConnected) return;
+    observer.disconnect();
+    const active = document.activeElement;
+    if (!active || active === document.body) focusContent();
+  });
+  observer.observe(document.body, { childList: true, subtree: true });
+  setTimeout(() => observer.disconnect(), 10_000);
 }
