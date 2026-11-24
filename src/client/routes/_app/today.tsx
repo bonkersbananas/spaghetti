@@ -273,8 +273,8 @@ function Today() {
           </div>
         </div>
       )}
-      {/* With no left column (nothing on the bed, no picks) it sits last, at the column's width. */}
-      {!leftHasContent && <NotificationsOfferGate className="mt-10 empty:hidden lg:max-w-2xl" />}
+      {/* With no left column to hold it (nothing on the bed, no picks, or a welcome instead of the columns) it sits last, at the column's width. */}
+      {(brandNew || quiet || !leftHasContent) && <NotificationsOfferGate className="mt-10 empty:hidden lg:max-w-2xl" />}
     </>
   );
 }
