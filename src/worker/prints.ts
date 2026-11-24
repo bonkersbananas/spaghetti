@@ -9,6 +9,7 @@ import { byPrintTime } from "../shared/attempts.ts";
 import type { ChangeActor } from "../shared/changes.ts";
 import {
   type CandidateFile,
+  type CandidatePrint,
   type MatchCandidate,
   type PrintFacts,
   placePrint,
@@ -126,10 +127,12 @@ export async function loadCandidates(db: Db, exclude: readonly string[], at: num
         fileId: attemptFiles.id,
         fileName: attemptFiles.name,
         prefill: attemptFiles.prefill,
+        jobName: printJobs.name,
       })
       .from(attempts)
       .innerJoin(items, eq(items.id, attempts.itemId))
       .leftJoin(attemptFiles, and(eq(attemptFiles.attemptId, attempts.id), isNull(attemptFiles.deletedAt)))
+      .leftJoin(printJobs, eq(printJobs.attemptId, attempts.id))
       .where(and(open, isNull(attempts.deletedAt))),
     db
       .select({
@@ -168,20 +171,23 @@ export async function loadCandidates(db: Db, exclude: readonly string[], at: num
     const ordered = byPrintTime(
       list.map((row) => ({ ...row, printedAt: row.printedAt.getTime(), createdAt: row.createdAt.getTime() })),
     );
-    candidate.attempts = ordered.length;
+    // An attempt with several files comes once for each: attempts are numbered as the build numbers them.
+    const numberOf = new Map<string, number>();
+    for (const row of ordered) if (!numberOf.has(row.id)) numberOf.set(row.id, numberOf.size + 1);
+    candidate.attempts = numberOf.size;
     // The newest attempt's file first: "same file as attempt 3" names the latest print of it.
     const files: CandidateFile[] = [];
-    ordered.forEach((row, index) => {
+    const prints: CandidatePrint[] = [];
+    for (const row of ordered) {
+      const attempt = numberOf.get(row.id) ?? 0;
+      // The name the printer gave it (wherever it was filed first), newest first like the files.
+      if (row.jobName && !prints.some((one) => one.attempt === attempt)) prints.unshift({ name: row.jobName, attempt });
       if (row.fileId && row.fileName) {
-        files.unshift({
-          id: row.fileId,
-          name: row.fileName,
-          estimatedMinutes: estimateOf(row.prefill),
-          attempt: index + 1,
-        });
+        files.unshift({ id: row.fileId, name: row.fileName, estimatedMinutes: estimateOf(row.prefill), attempt });
       }
-    });
+    }
     candidate.files.push(...files);
+    candidate.prints = prints;
   }
   for (const send of sends) {
     candidates.get(send.itemId)?.sends.push({ fileId: send.fileId, at: send.at.getTime(), how: send.how });
@@ -405,6 +411,8 @@ export async function fileThePrint(
     createdAt: now,
   };
   return {
+    /** The matcher couldn't place it: the print asks, and Claude may be asked for a second opinion (decision 0080). */
+    unsure: placement.kind !== "match" || !target,
     /** Where the attempt goes: the build it matched, or the printer's own. */
     target: target ?? item,
     /** What goes in the batch after the attempt's insert. */
