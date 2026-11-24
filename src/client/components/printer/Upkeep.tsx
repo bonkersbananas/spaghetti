@@ -3,7 +3,6 @@ import { formatHours, progressWords } from "@shared/upkeep";
 import { useQuery } from "@tanstack/react-query";
 import { lazy, Suspense, useState } from "react";
 import { Button } from "@/components/ui/Button";
-import { TickBox } from "@/components/ui/Checklist";
 import { CheckIcon, PlusIcon } from "@/components/ui/icons";
 import { Section } from "@/components/ui/Section";
 import { UpkeepMeter } from "@/components/ui/UpkeepMeter";
@@ -91,30 +90,18 @@ export function Upkeep() {
                 <UpkeepMeter fraction={task.fraction} label={upkeepRowText(task)} thin={!task.due} />
                 <span className="text-small text-ink-faint tabular truncate">{upkeepRowText(task)}</span>
               </button>
-              {/* A column of one width, so every row's meter ends at the same place whether it holds Done or a ring. */}
+              {/* One control on every row: a Done button, outlined where it is due and quiet where it is not. */}
               <div className="flex w-20 shrink-0 justify-end">
-                {task.due ? (
-                  // The one thing to do: raised only where something is due.
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    icon={CheckIcon}
-                    disabled={readOnly}
-                    aria-label={`Done: ${task.name}`}
-                    onClick={() => setOpen({ kind: "done", id: task.id })}
-                  >
-                    Done
-                  </Button>
-                ) : (
-                  // An open ring (the Checklist's tick) for marking it done early: it says "tap to do", not "done".
-                  <TickBox
-                    checked={false}
-                    label={`Done: ${task.name}`}
-                    disabled={readOnly}
-                    className="-mr-2"
-                    onChange={() => setOpen({ kind: "done", id: task.id })}
-                  />
-                )}
+                <Button
+                  variant={task.due ? "secondary" : "quiet"}
+                  size="sm"
+                  icon={CheckIcon}
+                  disabled={readOnly}
+                  aria-label={`Done: ${task.name}`}
+                  onClick={() => setOpen({ kind: "done", id: task.id })}
+                >
+                  Done
+                </Button>
               </div>
             </li>
           ))}
