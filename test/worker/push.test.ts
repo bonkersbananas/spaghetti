@@ -1,7 +1,7 @@
 import { env } from "cloudflare:workers";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { toBase64Url } from "../../src/shared/base64url.ts";
-import { sendNudges } from "../../src/worker/push/nudges.ts";
+import { sendNudges, sendReminders } from "../../src/worker/push/nudges.ts";
 import { addUser, request, resetDb, signIn } from "./helpers.ts";
 
 const HOUR = 60 * 60 * 1000;
@@ -198,6 +198,86 @@ describe("when a nudge is sent", () => {
   });
 });
 
+describe("the one reminder", () => {
+  const ended = noon - 10 * MIN;
+  it("goes to both people an hour after the first nudge, once, whoever started the print", async () => {
+    await subscribe(alex, "alex-phone");
+    await subscribe(sam, "sam-phone");
+    await attempt(alex, "r1", { printedAt: noon - 3 * HOUR, endedAt: ended });
+    expect(await sendNudges(env, noon)).toEqual({ sent: 1 });
+    // Not yet: the nudge went out at noon.
+    expect(await sendReminders(env, noon + 59 * MIN)).toEqual({ sent: 0 });
+    expect(await sendReminders(env, noon + 60 * MIN)).toEqual({ sent: 2 });
+    const urls = pushes
+      .slice(1)
+      .map((p) => p.url)
+      .sort();
+    expect(urls).toEqual(["https://push.example/alex-phone", "https://push.example/sam-phone"]);
+    // Never a third.
+    expect(await sendReminders(env, noon + 2 * HOUR)).toEqual({ sent: 0 });
+    expect(await sendNudges(env, noon + 2 * HOUR)).toEqual({ sent: 0 });
+    expect(pushes).toHaveLength(3);
+  });
+
+  it("is skipped when the print got its outcome meanwhile", async () => {
+    await subscribe(alex, "alex-phone");
+    await attempt(alex, "r2", { printedAt: noon - 3 * HOUR, endedAt: ended });
+    await sendNudges(env, noon);
+    await request(`/api/attempts/${uid("r2")}/finish`, { method: "POST", cookie: alex, json: { outcome: "success" } });
+    expect(await sendReminders(env, noon + HOUR)).toEqual({ sent: 0 });
+  });
+
+  it("is not sent for a print that was never nudged", async () => {
+    await subscribe(alex, "alex-phone");
+    await attempt(alex, "r3", { printedAt: noon - 3 * HOUR, endedAt: ended });
+    expect(await sendReminders(env, noon + HOUR)).toEqual({ sent: 0 });
+  });
+
+  it("waits through quiet hours and is dropped once the window has passed", async () => {
+    await subscribe(alex, "alex-phone");
+    const off = night - 90 * MIN;
+    await attempt(alex, "r4", { printedAt: off - 2 * HOUR, endedAt: off });
+    await sendNudges(env, off + 5 * MIN);
+    // An hour on it is 22:35 UTC: quiet. At half past seven it is still inside the twelve hours.
+    expect(await sendReminders(env, off + 65 * MIN)).toEqual({ sent: 0 });
+    expect(await sendReminders(env, nextMorning)).toEqual({ sent: 1 });
+    await attempt(alex, "r5", { printedAt: noon - 30 * HOUR, endedAt: noon - 12 * HOUR + 5 * MIN });
+    await env.DB.prepare(
+      "INSERT INTO push_nudges (attempt_id, user_id, kind, sent_at) SELECT ?, id, 'off_the_bed', ? FROM users WHERE username = 'alex'",
+    )
+      .bind(uid("r5"), noon - 11 * HOUR)
+      .run();
+    // Eleven hours after the first nudge, past the twelve-hour window from the print's end.
+    expect(await sendReminders(env, noon + 30 * MIN)).toEqual({ sent: 0 });
+  });
+
+  it("is tried again when nothing got through", async () => {
+    await subscribe(alex, "alex-phone");
+    await attempt(alex, "r6", { printedAt: noon - 3 * HOUR, endedAt: ended });
+    await sendNudges(env, noon);
+    respondWith = () => 500;
+    expect(await sendReminders(env, noon + HOUR)).toEqual({ sent: 0 });
+    respondWith = () => 201;
+    expect(await sendReminders(env, noon + HOUR + 5 * MIN)).toEqual({ sent: 1 });
+  });
+});
+
+describe("the offer to turn notifications on", () => {
+  it("is waved off for good, for that person only", async () => {
+    const before = await (await request("/api/push", { cookie: alex })).json<{ offerDismissed: boolean }>();
+    expect(before.offerDismissed).toBe(false);
+    expect((await request("/api/push/offer", { method: "PUT", cookie: alex, json: { dismissed: true } })).status).toBe(
+      204,
+    );
+    expect(
+      (await (await request("/api/push", { cookie: alex })).json<{ offerDismissed: boolean }>()).offerDismissed,
+    ).toBe(true);
+    expect(
+      (await (await request("/api/push", { cookie: sam })).json<{ offerDismissed: boolean }>()).offerDismissed,
+    ).toBe(false);
+  });
+});
+
 describe("a push that doesn't get through", () => {
   it("is tried again on the next run, until a device takes it", async () => {
     await subscribe(alex, "alex-phone");
@@ -262,6 +342,7 @@ describe("the devices routes", () => {
     const endpoint = await subscribe(alex, "alex-phone", { alsoOthers: true });
     const mine = await (await request("/api/push", { cookie: alex })).json();
     expect(mine).toEqual({
+      offerDismissed: false,
       publicKey: env.VAPID_PUBLIC_KEY,
       canSend: true,
       subscriptions: [{ endpoint, alsoOthers: true, upkeepNudges: false, weekNudges: true, timeZone: "UTC" }],

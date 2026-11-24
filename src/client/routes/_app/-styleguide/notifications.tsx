@@ -3,6 +3,7 @@ import { useState } from "react";
 import { AddToHomeScreenHint, NotificationsSheet } from "@/components/shell/NotificationsSheet";
 import { Button } from "@/components/ui/Button";
 import { BellIcon } from "@/components/ui/icons";
+import { NotificationOffer } from "@/components/ui/NotificationOffer";
 import { NotificationPreview } from "@/components/ui/NotificationPreview";
 import { Toggle } from "@/components/ui/Toggle";
 import { Label, Panel, Section } from "./shared";
@@ -47,6 +48,14 @@ export function NotificationSection() {
             Open the settings sheet
           </Button>
           <NotificationsSheet open={open} onOpenChange={setOpen} />
+        </Panel>
+        <Panel className="flex flex-col gap-3">
+          <Label>Offer to turn notifications on</Label>
+          <p className="text-small text-ink-faint">
+            Once, last in Today (the phone's Now block), for a person with no push on any device where this one can
+            subscribe. "Not now" is for good.
+          </p>
+          <NotificationOffer onTurnOn={() => undefined} onDismiss={() => undefined} />
         </Panel>
         <Panel className="flex flex-col gap-4">
           <Label>Notification preview</Label>

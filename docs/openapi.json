@@ -1884,6 +1884,9 @@
                     "canSend": {
                       "type": "boolean"
                     },
+                    "offerDismissed": {
+                      "type": "boolean"
+                    },
                     "subscriptions": {
                       "type": "array",
                       "items": {
@@ -1896,10 +1899,70 @@
                   "required": [
                     "publicKey",
                     "canSend",
+                    "offerDismissed",
                     "subscriptions"
                   ],
                   "additionalProperties": {},
                   "description": "Push settings."
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "signed_out or invalid_token: no credentials, or a token that is unknown or revoked.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "sessionCookie": []
+          }
+        ],
+        "x-scopes": "person"
+      }
+    },
+    "/api/push/offer": {
+      "put": {
+        "operationId": "putPushOffer",
+        "summary": "Waves off (or brings back) the offer to turn notifications on, for this person on every device.",
+        "description": "Only a signed-in person, never an agent token.",
+        "tags": [
+          "push"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "dismissed": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "dismissed"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "Done; nothing comes back."
+          },
+          "400": {
+            "description": "invalid: the request couldn't be read; the message says what is wrong.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
                 }
               }
             }
