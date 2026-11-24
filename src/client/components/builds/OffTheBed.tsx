@@ -53,15 +53,15 @@ export function OffTheBed({
   return (
     <div className={cn("flex flex-col gap-2.5", className)}>
       {/* The sentence keeps its line; on a narrow card the Photo button goes under it instead of squeezing it. */}
-      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
-        <p className="text-small text-ink-soft flex items-center gap-2">
-          <FinishIcon size={16} className="text-ink-faint shrink-0" aria-hidden />
+      <div className={cn("flex justify-between gap-x-3 gap-y-1", snap ? "items-start" : "flex-wrap items-center")}>
+        <p className={cn("text-small text-ink-soft flex gap-2", snap ? "min-w-0 flex-1 items-start" : "items-center")}>
+          <FinishIcon size={16} className={cn("text-ink-faint shrink-0", snap && "mt-0.5")} aria-hidden />
           <span>
             <span className="text-ink font-semibold">{offTheBedLabel(endedAt)}</span> · how did it go?
           </span>
           {shortcut && <Kbd keys={shortcut} />}
         </p>
-        {snap}
+        {snap && <div className="shrink-0">{snap}</div>}
         {onPhotos && !snap && !photoRead && (
           <>
             <Button

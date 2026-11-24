@@ -239,6 +239,8 @@ export function PrintingCard({
                   ? "aspect-video"
                   : layout.picture,
             wide.picture,
+            // The line of words the card's own photo button used to add is gone: keep the picture as large.
+            offBed && desktop === "row" && "md:min-h-60",
           )}
         >
           {/* From md the picture is laid over the frame, not in it, so a tall picture (a square plate render) never
@@ -408,7 +410,7 @@ export function PrintingCard({
                   </>
                 )
               }
-              className="pointer-events-auto md:mt-auto"
+              className={cn("pointer-events-auto", desktop === "row" ? "md:mt-auto" : "md:mt-3")}
             />
           ) : (
             <>
