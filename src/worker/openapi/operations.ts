@@ -678,7 +678,7 @@ export const operations: Record<string, Operation> = {
   },
   "GET /attempts/:id/suggestions": {
     summary:
-      "The ideas and builds in progress a print (or any attempt) may belong to, best first, each with its score and the reasons a person can check: the same file, a file downloaded or opened in Bambu Studio just before, the same estimate (decision 0076).",
+      "The ideas and builds in progress a print (or any attempt) may belong to, best first, each with its score and the reasons a person can check: the same file, an earlier print of it with the same name, a file downloaded or opened in Bambu Studio just before, the same estimate (decision 0076). When the matcher couldn't place a print and Claude was asked, Claude's pick comes first with a `claude` reason (decision 0080).",
     response: z.object({
       suggestions: z.array(z.object({ itemId: z.uuid(), score: z.number(), reasons: z.array(z.looseObject({})) })),
     }),

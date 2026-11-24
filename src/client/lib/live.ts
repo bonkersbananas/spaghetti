@@ -76,7 +76,16 @@ export function refresh(queryClient: QueryClient, changes: Change[]) {
       case "item":
       case "attempt":
         lists = true;
-        roots.add("journal").add("insights").add("week").add("facets").add("search").add("what-worked").add("spools");
+        roots
+          .add("journal")
+          .add("insights")
+          .add("week")
+          .add("facets")
+          .add("search")
+          .add("what-worked")
+          .add("spools")
+          // Claude's pick for a print the matcher wasn't sure of arrives as a change of its attempt.
+          .add("print-suggestions");
         break;
       case "photo":
       case "file":

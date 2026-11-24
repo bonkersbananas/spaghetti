@@ -23,6 +23,7 @@ import type { AppEnv } from "../env.ts";
 import { apiError, toApiAttempts } from "../http.ts";
 import { readsByAttempt, toApiPhotoRead } from "../photo-read/run.ts";
 import { fillPrinterAttempt, traysFor } from "../print-fill.ts";
+import { matchAfterFiling } from "../print-match/run.ts";
 import { fileThePrint, isBridgeAgent, mergedTarget, printNowIn, printViews } from "../prints.ts";
 import { stageDates } from "./items.ts";
 
@@ -295,6 +296,8 @@ export const itemAttemptRoutes = new Hono<AppEnv>().post("/:id/attempts", async 
     : attempt;
   // Logged already as Partly or Spaghetti: Claude thinks about the next try.
   await coachAfterAnswer(c, placed);
+  // A print the matcher couldn't place: Claude's second opinion, after the response (decision 0080).
+  if (filing?.unsure && inserted) matchAfterFiling(c, attempt.id);
   return c.json<AttemptResponse>({ attempt: await loadAttempt(db, placed) }, 201);
 });
 
