@@ -11,6 +11,7 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { AnimatePresence } from "motion/react";
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { AttemptEntry } from "@/components/builds/AttemptEntry";
+import { AttemptRow } from "@/components/builds/AttemptRow";
 import { AttemptSheet } from "@/components/builds/AttemptSheet";
 import { BuildSummary } from "@/components/builds/BuildSummary";
 import { BuildTitleLine } from "@/components/builds/BuildTitleLine";
@@ -235,6 +236,8 @@ function Build({ item }: { item: ItemView }) {
     gallery.findIndex((photo) => photo.id === photoId),
   );
   const shownPhoto = gallery[photoIndex];
+  // The photo the page leads with: an attempt card that has it doesn't show it large again (AttemptEntry's heroId).
+  const leadPhotoId = (hero ?? gallery[0])?.id;
   const shownAttempt = shownPhoto?.attemptId ? item.attempts.find((a) => a.id === shownPhoto.attemptId) : undefined;
   const selectPhoto = (index: number) => {
     const photo = gallery[Math.max(0, Math.min(gallery.length - 1, index))];
@@ -282,10 +285,45 @@ function Build({ item }: { item: ItemView }) {
   const filePicker = useItemFilePicker(item, item.files ?? []);
   const primary = () => openSheet(printing?.id ?? null);
   const [selected, setSelected] = useState<string | null>(linkedAttempt ?? null);
+  // The earlier attempts are compact rows; these were opened in place into cards (kept for this tab, so a reload or a
+  // trip to another page and back finds them as they were left).
+  const openedKey = `spaghetti:attempts-opened:${item.id}`;
+  const [opened, setOpened] = useState<string[]>(() => {
+    const kept = readOpened(openedKey);
+    return linkedAttempt && !kept.includes(linkedAttempt) ? [...kept, linkedAttempt] : kept;
+  });
+  useEffect(() => {
+    try {
+      sessionStorage.setItem(openedKey, JSON.stringify(opened));
+    } catch {
+      // Private mode or full: they fold again on reload, nothing more.
+    }
+  }, [openedKey, opened]);
+  // Always a card: the newest attempt, a print on the bed or off it waiting for its answer, and one the printer asks
+  // about; while a print is on the bed, the newest answered attempt too (that print is its next try: its note, its tags,
+  // Claude's ideas). Every other attempt is a row until it is opened.
+  const newestAnswered = story.find((attempt) => attempt.outcome !== null);
+  const alwaysCard = (attempt: AttemptView) =>
+    attempt.id === story[0]?.id ||
+    attempt.outcome === null ||
+    !!attempt.print?.asking ||
+    (story[0]?.outcome === null && attempt.id === newestAnswered?.id);
+  const isCard = (attempt: AttemptView) => alwaysCard(attempt) || opened.includes(attempt.id);
+  const openRow = (attemptId: string) => setOpened((ids) => (ids.includes(attemptId) ? ids : [...ids, attemptId]));
+  // Folding takes the focus back to the row, and opening to the card's own button, so a keyboard keeps its place.
+  const focusAfter = useRef<string | null>(null);
+  useEffect(() => {
+    const id = focusAfter.current;
+    if (!id) return;
+    focusAfter.current = null;
+    // The row's first button opens it; the card's first button opens its sheet.
+    entryRefs.current.get(id)?.querySelector<HTMLButtonElement>("button")?.focus({ preventScroll: true });
+  });
   // Came here for one attempt: bring it into view.
   useEffect(() => {
     if (!linkedAttempt) return;
     setSelected(linkedAttempt);
+    setOpened((ids) => (ids.includes(linkedAttempt) ? ids : [...ids, linkedAttempt]));
     requestAnimationFrame(() => entryRefs.current.get(linkedAttempt)?.scrollIntoView({ block: "center" }));
   }, [linkedAttempt]);
   const selectedIndex = story.findIndex((attempt) => attempt.id === selected);
@@ -338,6 +376,7 @@ function Build({ item }: { item: ItemView }) {
   // The strip in the summary picks an attempt the way J and K do.
   const pickAttempt = (attemptId: string) => {
     setSelected(attemptId);
+    openRow(attemptId);
     bringIntoView(attemptId);
   };
 
@@ -465,7 +504,14 @@ function Build({ item }: { item: ItemView }) {
     // Only bound when they do something, so Enter on a button and arrow-key scrolling keep working.
     buildNext: story.length ? () => moveSelection(1) : undefined,
     buildPrevious: story.length ? () => moveSelection(-1) : undefined,
-    buildOpen: selected ? () => openSheet(selected) : undefined,
+    // A row opens in place first; a card opens its sheet.
+    buildOpen: selected
+      ? () => {
+          const picked = story.find((attempt) => attempt.id === selected);
+          if (picked && !isCard(picked)) openRow(picked.id);
+          else openSheet(selected);
+        }
+      : undefined,
     buildCompare: compareFound && compareTarget ? () => openCompare(compareTarget) : undefined,
     buildPhotoPrevious: gallery.length > 1 ? () => selectPhoto(photoIndex - 1) : undefined,
     buildPhotoNext: gallery.length > 1 ? () => selectPhoto(photoIndex + 1) : undefined,
@@ -830,40 +876,74 @@ function Build({ item }: { item: ItemView }) {
                 ) : (
                   <ol aria-label="Attempts, newest first" className="flex flex-col">
                     <AnimatePresence initial={false}>
-                      {shownStory.map((attempt, index) => (
-                        <AttemptEntry
-                          key={attempt.id}
-                          ref={(el) => {
-                            if (el) entryRefs.current.set(attempt.id, el);
-                            else entryRefs.current.delete(attempt.id);
-                          }}
-                          attempt={attempt}
-                          partsLabel={attemptPartsLabel(attempt, item.parts)}
-                          photos={item.photos.filter((photo) => photo.attemptId === attempt.id)}
-                          onPhotos={readOnly ? undefined : (files) => addPhotosToItem(item.id, files, attempt.id)}
-                          readOnly={readOnly || attempt.pending}
-                          person={byId.get(creditedTo(attempt) ?? "")}
-                          via={via(attempt.createdVia)}
-                          selected={attempt.id === selected}
-                          first={index === 0}
-                          onOpen={() => {
-                            setSelected(attempt.id);
-                            openSheet(attempt.id);
-                          }}
-                          onFinish={(outcome) => openSheet(attempt.id, outcome)}
-                          askOnCard={isDesktop}
-                          askShortcut={shortcutCaps("buildLog")}
-                          onCompare={comparePredecessor(attempt.id) ? () => openCompare(attempt.id) : undefined}
-                          onSaveRecipe={
-                            recipeSource(attempt) &&
-                            !allRecipes.some((recipe) => recipe.source?.attemptId === attempt.id)
-                              ? () => setSavingRecipe(recipeSource(attempt) ?? null)
-                              : undefined
-                          }
-                          item={item}
-                          onMove={readOnly || attempt.pending ? undefined : () => setMoving(attempt.id)}
-                        />
-                      ))}
+                      {shownStory.map((attempt, index) => {
+                        const ref = (el: HTMLLIElement | null) => {
+                          if (el) entryRefs.current.set(attempt.id, el);
+                          else entryRefs.current.delete(attempt.id);
+                        };
+                        const photos = item.photos.filter((photo) => photo.attemptId === attempt.id);
+                        const person = byId.get(creditedTo(attempt) ?? "");
+                        const onCompare = comparePredecessor(attempt.id) ? () => openCompare(attempt.id) : undefined;
+                        const onSaveRecipe =
+                          recipeSource(attempt) && !allRecipes.some((recipe) => recipe.source?.attemptId === attempt.id)
+                            ? () => setSavingRecipe(recipeSource(attempt) ?? null)
+                            : undefined;
+                        const onMove = readOnly || attempt.pending ? undefined : () => setMoving(attempt.id);
+                        if (!isCard(attempt))
+                          return (
+                            <AttemptRow
+                              key={attempt.id}
+                              ref={ref}
+                              attempt={attempt}
+                              photos={photos}
+                              person={person}
+                              selected={attempt.id === selected}
+                              onExpand={() => {
+                                focusAfter.current = attempt.id;
+                                openRow(attempt.id);
+                              }}
+                              onCompare={onCompare}
+                              onSaveRecipe={onSaveRecipe}
+                              onMove={onMove}
+                            />
+                          );
+                        const fold = !alwaysCard(attempt);
+                        return (
+                          <AttemptEntry
+                            key={attempt.id}
+                            ref={ref}
+                            attempt={attempt}
+                            partsLabel={attemptPartsLabel(attempt, item.parts)}
+                            photos={photos}
+                            heroId={leadPhotoId}
+                            onFold={
+                              fold
+                                ? () => {
+                                    focusAfter.current = attempt.id;
+                                    setOpened((ids) => ids.filter((id) => id !== attempt.id));
+                                  }
+                                : undefined
+                            }
+                            onPhotos={readOnly ? undefined : (files) => addPhotosToItem(item.id, files, attempt.id)}
+                            readOnly={readOnly || attempt.pending}
+                            person={person}
+                            via={via(attempt.createdVia)}
+                            selected={attempt.id === selected}
+                            first={index === 0}
+                            onOpen={() => {
+                              setSelected(attempt.id);
+                              openSheet(attempt.id);
+                            }}
+                            onFinish={(outcome) => openSheet(attempt.id, outcome)}
+                            askOnCard={isDesktop}
+                            askShortcut={shortcutCaps("buildLog")}
+                            onCompare={onCompare}
+                            onSaveRecipe={onSaveRecipe}
+                            item={item}
+                            onMove={onMove}
+                          />
+                        );
+                      })}
                     </AnimatePresence>
                   </ol>
                 )}
@@ -1122,4 +1202,14 @@ function WhatWorked({
       )}
     </section>
   );
+}
+
+/** The attempts opened from their rows in this tab, kept under `key` in sessionStorage. */
+function readOpened(key: string): string[] {
+  try {
+    const kept: unknown = JSON.parse(sessionStorage.getItem(key) ?? "[]");
+    return Array.isArray(kept) ? kept.filter((id): id is string => typeof id === "string") : [];
+  } catch {
+    return [];
+  }
 }

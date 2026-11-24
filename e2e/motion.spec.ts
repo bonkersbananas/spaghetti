@@ -150,6 +150,11 @@ test("the attempt sheet steps between attempts, saving as it goes, and not while
   await expect(page.getByRole("dialog")).toHaveCount(0);
 
   // A saved attempt: arrows, disabled at the ends.
+  // An earlier attempt is a row: open it into its card first.
+  await page
+    .locator(`[data-attempt-id="${ids[1]}"]`)
+    .getByRole("button", { name: /Expand$/ })
+    .click();
   await page
     .locator(`[data-attempt-id="${ids[1]}"]`)
     .getByRole("button", { name: /Open$/ })

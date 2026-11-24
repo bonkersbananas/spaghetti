@@ -9,6 +9,7 @@ import dragonPhoto from "@/assets/samples/dragon.svg";
 import planterPhoto from "@/assets/samples/planter.svg";
 import vasePhoto from "@/assets/samples/vase.svg";
 import { AttemptEntry } from "@/components/builds/AttemptEntry";
+import { AttemptRow } from "@/components/builds/AttemptRow";
 import { AttemptTrail, type TrailAttempt } from "@/components/builds/AttemptTrail";
 import { PlateParts } from "@/components/builds/attempt-sheet/PlateParts";
 import { BuildSummary } from "@/components/builds/BuildSummary";
@@ -365,6 +366,8 @@ export function BuildsSection() {
               onCompare={() => toast.message("Opens the comparison")}
             />
           </ol>
+          <Label>Earlier attempts fold to rows: tap one to open it in place, the caret folds it back</Label>
+          <EarlierAttempts />
           <Label>PhotoRow: the compact row (sm, md, lg; no photo shows a tile)</Label>
           <div className="flex flex-col">
             <PhotoRow link={{ to: "/styleguide" }} photo={null} tile={<Icons.BuildsIcon size={24} />} size="md">
@@ -420,5 +423,35 @@ export function BuildsSection() {
         </div>
       </div>
     </Section>
+  );
+}
+
+/** A story's earlier attempts as rows (no photo: the outcome's tile), one opening into its card and folding back. */
+function EarlierAttempts() {
+  const [opened, setOpened] = useState<string | null>(null);
+  return (
+    <ol className="flex flex-col">
+      {[sampleAttempt, sampleBefore].map((attempt) =>
+        attempt.id === opened ? (
+          <AttemptEntry
+            key={attempt.id}
+            attempt={attempt}
+            photos={[]}
+            person={people[1]}
+            onOpen={() => toast.message("Opens the attempt")}
+            onFold={() => setOpened(null)}
+          />
+        ) : (
+          <AttemptRow
+            key={attempt.id}
+            attempt={attempt}
+            photos={[]}
+            person={people[1]}
+            onExpand={() => setOpened(attempt.id)}
+            onCompare={() => toast.message("Opens the comparison")}
+          />
+        ),
+      )}
+    </ol>
   );
 }

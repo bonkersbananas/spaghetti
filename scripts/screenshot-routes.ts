@@ -1467,6 +1467,118 @@ async function buildKeeping(page: Page, files: number) {
   return sheet;
 }
 
+/**
+ * A build with four attempts, the shape a real printing weekend leaves (two spaghetti, a partly, then one that worked),
+ * on its page: what the compact rows of earlier attempts are for. Its photos are the headphone stand's, copied
+ * through the API, so the seed (and every other screen) stays as it is.
+ */
+async function fourAttemptBuild(page: Page) {
+  const headers = { Origin: new URL(page.url()).origin };
+  // A new one for each shot (removeModelItems deletes it after; a deleted id can't be made again).
+  const id = crypto.randomUUID();
+  modelItems.push(id);
+  const stand = (await (await page.request.get(`/api/items/${SEED_IDS.headphoneStand}`)).json()) as {
+    item: { photos: Array<{ id: string; attemptId: string | null; width: number; height: number; color: string }> };
+  };
+  const photos = stand.item.photos.filter((photo) => photo.attemptId);
+  const photo = (index: number) => photos[Math.min(index, photos.length - 1)];
+  const base = {
+    filaments: [{ type: "PLA", brand: "Bambu", colorHex: "#3b3a38", colorName: "Charcoal matte", amsSlot: "B1" }],
+    bedType: "Textured PEI Plate",
+    nozzleDiameter: 0.4,
+    layerHeight: 0.2,
+    infillDensity: 15,
+    supportEnabled: true,
+    supportType: "tree",
+    nozzleTemperature: 220,
+    bedTemperature: 55,
+  };
+  const HOUR = 3_600_000;
+  const attempts = [
+    {
+      outcome: "failed",
+      ago: 4 * 24 * HOUR,
+      note: "Let go of the bed at the back corner an hour in and turned into a nest.",
+      failureTags: ["spaghetti", "bed-adhesion"],
+      settings: { ...base, failedAtLayer: 64, estimatedMinutes: 250 },
+      photos: [0],
+    },
+    {
+      outcome: "partial",
+      ago: 3 * 24 * HOUR,
+      note: "Base held this time. The hook shifted about two thirds up.",
+      failureTags: ["layer-shift"],
+      successNotes: ["great-first-layer"],
+      settings: { ...base, bedTemperature: 60, brim: true, failedAtPercent: 68, estimatedMinutes: 260 },
+      photos: [1],
+    },
+    {
+      outcome: "failed",
+      ago: 2 * 24 * HOUR,
+      failureTags: ["stringing", "wet-filament"],
+      settings: { ...base, bedTemperature: 60, brim: true, infillDensity: 20, estimatedMinutes: 270 },
+      photos: [],
+    },
+    {
+      outcome: "success",
+      ago: 6 * HOUR,
+      note: "Dried the spool overnight and it came out clean all the way up. Keeping these.",
+      successNotes: ["dried-filament-helped", "settings-worth-reusing"],
+      settings: {
+        ...base,
+        bedTemperature: 60,
+        brim: true,
+        infillDensity: 20,
+        filamentDried: true,
+        estimatedMinutes: 270,
+        actualMinutes: 266,
+        weightGrams: 112,
+      },
+      photos: [2, 3],
+    },
+  ];
+  await page.request.post("/api/items", {
+    headers,
+    data: { id, title: "Headphone hook", note: "Under the desk, for the big headphones.", stage: "building" },
+  });
+  for (const attempt of attempts) {
+    const attemptId = crypto.randomUUID();
+    const created = await page.request.post(`/api/items/${id}/attempts`, {
+      headers,
+      data: {
+        id: attemptId,
+        outcome: attempt.outcome,
+        printedAt: SEED_NOW - attempt.ago,
+        note: attempt.note ?? "",
+        failureTags: attempt.failureTags ?? [],
+        successNotes: attempt.successNotes ?? [],
+        settings: attempt.settings,
+      },
+    });
+    if (!created.ok()) throw new Error(`Adding an attempt to the four-attempt build failed: ${created.status()}`);
+    for (const index of attempt.photos) {
+      const from = photo(index);
+      if (!from) continue;
+      const large = await (await page.request.get(`/api/photos/${from.id}/large`)).body();
+      const thumb = await (await page.request.get(`/api/photos/${from.id}/thumb`)).body();
+      const uploaded = await page.request.put(`/api/items/${id}/photos/${crypto.randomUUID()}`, {
+        headers,
+        multipart: {
+          width: String(from.width),
+          height: String(from.height),
+          color: from.color,
+          attemptId,
+          large: { name: "large.jpg", mimeType: "image/jpeg", buffer: large },
+          thumb: { name: "thumb.jpg", mimeType: "image/jpeg", buffer: thumb },
+        },
+      });
+      if (!uploaded.ok()) throw new Error(`Copying a photo to the four-attempt build failed: ${uploaded.status()}`);
+    }
+  }
+  await page.goto(`/builds/${id}`);
+  await page.getByRole("heading", { level: 2, name: /^Attempts/ }).waitFor();
+}
+
 /** A build with a print on the bed, opened on its "How did it go?" sheet (a phone's thumb-reach order). */
 async function finishSheet(page: Page) {
   const headers = { Origin: new URL(page.url()).origin };
@@ -3653,6 +3765,82 @@ export const shots: Shot[] = [
     },
   },
   { name: "build", path: `/builds/${SEED_BUILD_IDS.tugboat}`, fullPage: true },
+  // A build with four attempts (fourAttemptBuild): its top, its attempts (the newest a full card, the earlier ones
+  // compact rows) and one earlier row opened in place.
+  {
+    name: "build-four-attempts",
+    path: "/builds",
+    prepare: fourAttemptBuild,
+    beforeShot: async (page) => {
+      // How long the page is, and how far down attempt 1 starts: what the rows are for.
+      const { height, first } = await page.evaluate(() => ({
+        height: document.documentElement.scrollHeight,
+        first: Math.round(
+          (document.querySelector("[data-attempt-id]:last-of-type")?.getBoundingClientRect().top ?? 0) + window.scrollY,
+        ),
+      }));
+      console.log(`build-four-attempts at ${page.viewportSize()?.width}: page ${height} px, attempt 1 at ${first} px`);
+    },
+    cleanup: removeModelItems,
+  },
+  {
+    name: "build-four-attempts-page",
+    path: "/builds",
+    prepare: fourAttemptBuild,
+    fullPage: true,
+    cleanup: removeModelItems,
+  },
+  {
+    name: "build-four-attempts-story",
+    path: "/builds",
+    prepare: fourAttemptBuild,
+    beforeShot: async (page) => {
+      await page
+        .getByRole("heading", { level: 2, name: /^Attempts/ })
+        .evaluate((el) => window.scrollTo(0, el.getBoundingClientRect().top + window.scrollY - 72));
+    },
+    cleanup: removeModelItems,
+  },
+  {
+    // A row picked with J/K on a keyboard: attempt 3, with the picked ring.
+    name: "build-four-attempts-picked",
+    path: "/builds",
+    width: 1440,
+    why: "J and K are the keyboard's",
+    prepare: async (page) => {
+      await fourAttemptBuild(page);
+      await page.mouse.move(0, 0);
+      await page.keyboard.press("j");
+      await page.keyboard.press("j");
+      await page.locator('[data-attempt-row][aria-current="true"]').waitFor();
+    },
+    beforeShot: async (page) => {
+      await page
+        .getByRole("heading", { level: 2, name: /^Attempts/ })
+        .evaluate((el) => window.scrollTo(0, el.getBoundingClientRect().top + window.scrollY - 72));
+    },
+    cleanup: removeModelItems,
+  },
+  {
+    name: "build-four-attempts-row-open",
+    path: "/builds",
+    prepare: async (page) => {
+      await fourAttemptBuild(page);
+      // Main draws every attempt as a card: there is no row to open there.
+      const row = page.getByRole("button", { name: "Attempt 2: partial. Expand", exact: true });
+      if (await row.count()) await row.click();
+      // The pointer moves off, so no row keeps the wash of a hover.
+      await page.mouse.move(0, 0);
+      await page.waitForTimeout(600);
+    },
+    beforeShot: async (page) => {
+      await page
+        .locator("[data-attempt-id]")
+        .nth(2)
+        .evaluate((el) => window.scrollTo(0, el.getBoundingClientRect().top + window.scrollY - 72));
+    },
+    cleanup: removeModelItems,
+  },
   // The shapes real prints made (see REAL_PRINT_BUILDS in scripts/seed/builds.ts): a person's and the printer's attempts
   // in one build, a three-colour print with four photos, one with none, and a print the app still asks about.
   { name: "build-printer-mixed", path: `/builds/${SEED_BUILD_IDS.starOrnament}`, fullPage: true },

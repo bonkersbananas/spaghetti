@@ -8,6 +8,7 @@ import { type ComponentProps, forwardRef, lazy, Suspense } from "react";
 import { Avatar, ViaText } from "@/components/ui/Avatar";
 import { Button } from "@/components/ui/Button";
 import { ChangeLine } from "@/components/ui/ChangeLine";
+import { ExpandIcon } from "@/components/ui/icons";
 import { OpenLarge, openLarge } from "@/components/ui/OpenLarge";
 import { Photo } from "@/components/ui/Photo";
 import { PrintProgress } from "@/components/ui/PrintProgress";
@@ -16,6 +17,7 @@ import { cn } from "@/lib/cn";
 import type { AttemptView, ItemView, PhotoView } from "@/lib/items";
 import { spring } from "@/lib/motion";
 import { photoSrc } from "@/lib/previews";
+import { useIsDesktop } from "@/lib/use-media-query";
 import { AttemptMenu } from "./AttemptMenu";
 import { AttemptTags } from "./AttemptTags";
 import { EstimateLine } from "./Estimate";
@@ -61,6 +63,27 @@ interface AttemptEntryProps {
   item?: ItemView;
   /** Move it to another build (the "…" menu). */
   onMove?: () => void;
+  /**
+   * The photo the page leads with (the build's hero). When it is one of this card's, the picture isn't shown large
+   * twice: on desktop (the hero sits beside the card) the card's photos are all thumbnails; on a phone the card leads
+   * with its first other photo, with the rest (the hero's too) as thumbnails, or only thumbnails when it has no other.
+   */
+  heroId?: string;
+  /** An earlier attempt opened in place from its row: folds it back into the row. */
+  onFold?: () => void;
+}
+
+/** What opening an attempt's photos large shows: its photos from `start`, its name, how it went, who and when. */
+export function attemptLarge(attempt: AttemptView, photos: PhotoView[], person: Person | undefined, start: number) {
+  return {
+    photos,
+    start,
+    title: `Attempt ${attempt.number}`,
+    badge: <OutcomeChip outcome={attempt.outcome} offTheBed={isOffTheBed(attempt)} />,
+    detail: [attempt.fromPrinter ? "From the printer" : person?.name, relativeTime(attempt.printedAt)]
+      .filter(Boolean)
+      .join(" · "),
+  };
 }
 
 // Claude's ideas for the next try load after the build page: they only exist for a failed attempt.
@@ -94,6 +117,8 @@ export const AttemptEntry = forwardRef<HTMLLIElement, AttemptEntryProps>(functio
     readOnly,
     item,
     onMove,
+    heroId,
+    onFold,
   },
   ref,
 ) {
@@ -105,17 +130,16 @@ export const AttemptEntry = forwardRef<HTMLLIElement, AttemptEntryProps>(functio
   const settings = showSettings ? summarizeSettings(attempt.settings) : [];
   const results = summarizeResults(attempt.settings);
   const filaments = attempt.settings.filaments ?? [];
-  const [lead, ...rest] = photos;
+  const isDesktop = useIsDesktop();
+  const holdsHero = !!heroId && photos.some((photo) => photo.id === heroId);
+  const thumbsOnly = holdsHero && (isDesktop || photos.length === 1);
+  // On a phone the hero is far up the page: lead with a photo it isn't showing.
+  const other = holdsHero && !thumbsOnly ? photos.find((photo) => photo.id !== heroId) : undefined;
+  const [lead, ...rest] = other ? [other, ...photos.filter((photo) => photo !== other)] : photos;
+  const photoLabel = (index: number) =>
+    photos.length > 1 ? `Open photo ${index + 1} of ${photos.length} large` : "Open the photo large";
   // Any photo opens large over the page, above the card's own button (which opens the attempt).
-  const large = (start: number) => ({
-    photos,
-    start,
-    title: `Attempt ${attempt.number}`,
-    badge: <OutcomeChip outcome={attempt.outcome} offTheBed={offBed} />,
-    detail: [attempt.fromPrinter ? "From the printer" : person?.name, relativeTime(attempt.printedAt)]
-      .filter(Boolean)
-      .join(" · "),
-  });
+  const large = (start: number) => attemptLarge(attempt, photos, person, start);
   const showsDetails =
     filaments.length > 0 ||
     settings.length > 0 ||
@@ -163,10 +187,28 @@ export const AttemptEntry = forwardRef<HTMLLIElement, AttemptEntryProps>(functio
           <div className="pointer-events-none relative flex flex-col gap-3 p-3.5 md:p-4">
             <div className="-mb-1 flex flex-col gap-1.5">
               <div className="flex items-center gap-2.5">
-                <OutcomeChip outcome={attempt.outcome} offTheBed={offBed} />
-                <h3 className="text-body text-ink font-sans font-semibold whitespace-nowrap">
-                  Attempt {attempt.number}
-                </h3>
+                {onFold ? (
+                  // Opened from its row: the chip and the name fold it back, the caret where the row has its own.
+                  <h3 className="text-body text-ink pointer-events-auto relative z-10 min-w-0 font-sans font-semibold whitespace-nowrap">
+                    <button
+                      type="button"
+                      aria-expanded
+                      onClick={onFold}
+                      className="pressable focus-ring touch-target relative -m-1 flex items-center gap-2.5 rounded-md p-1"
+                    >
+                      <OutcomeChip outcome={attempt.outcome} offTheBed={offBed} />
+                      Attempt {attempt.number}
+                      <ExpandIcon size={16} aria-hidden className="text-ink-faint -ml-1 shrink-0 rotate-180" />
+                    </button>
+                  </h3>
+                ) : (
+                  <>
+                    <OutcomeChip outcome={attempt.outcome} offTheBed={offBed} />
+                    <h3 className="text-body text-ink font-sans font-semibold whitespace-nowrap">
+                      Attempt {attempt.number}
+                    </h3>
+                  </>
+                )}
                 {/* Wide screens: the time sits on the line. Phones have no room for it beside the avatar and the menu: it goes under. */}
                 <span className="text-small text-ink-faint ml-auto flex min-w-0 items-center gap-2 whitespace-nowrap">
                   {!attempt.fromPrinter && <ViaText name={via} person={person?.name} className="hidden md:inline" />}
@@ -226,35 +268,52 @@ export const AttemptEntry = forwardRef<HTMLLIElement, AttemptEntryProps>(functio
 
             {attempt.note && <p className="text-lead md:text-body text-ink break-words">{attempt.note}</p>}
 
-            {lead && (
-              // The lead photo fills the card, as large as a print deserves; any more are small thumbnails under
-              // it (prints are physical, and a sliver of a second photo reads as cropped, not as more).
-              <div className="flex flex-col gap-2">
-                <EntryPhoto
-                  photo={lead}
-                  alt={`Attempt ${attempt.number}`}
-                  // Not "Attempt 1 …": the card's own button is the one named after the attempt.
-                  label={photos.length > 1 ? `Open photo 1 of ${photos.length} large` : "Open the photo large"}
-                  variant="large"
-                  className="aspect-4/3 w-full md:aspect-3/2"
-                  onClick={(event) => openLarge(event, large(0))}
-                />
-                {rest.length > 0 && (
-                  <div className="flex gap-2">
-                    {rest.slice(0, 4).map((photo, index) => (
-                      <EntryPhoto
-                        key={photo.id}
-                        photo={photo}
-                        alt={`Attempt ${attempt.number}, photo ${index + 2}`}
-                        label={`Open photo ${index + 2} of ${photos.length} large`}
-                        className="size-16 flex-none md:size-20"
-                        more={index === 3 && rest.length > 4 ? rest.length - 4 : 0}
-                        onClick={(event) => openLarge(event, large(index + 1))}
-                      />
-                    ))}
-                  </div>
-                )}
+            {thumbsOnly ? (
+              // The page already leads with one of these photos: here they are all thumbnails, each once.
+              <div className="flex gap-2">
+                {photos.slice(0, 4).map((photo, index) => (
+                  <EntryPhoto
+                    key={photo.id}
+                    photo={photo}
+                    alt={`Attempt ${attempt.number}${index ? `, photo ${index + 1}` : ""}`}
+                    label={photoLabel(index)}
+                    className="size-16 flex-none md:size-24"
+                    more={index === 3 && photos.length > 4 ? photos.length - 4 : 0}
+                    onClick={(event) => openLarge(event, large(index))}
+                  />
+                ))}
               </div>
+            ) : (
+              lead && (
+                // The lead photo fills the card, as large as a print deserves; any more are small thumbnails under
+                // it (prints are physical, and a sliver of a second photo reads as cropped, not as more).
+                <div className="flex flex-col gap-2">
+                  <EntryPhoto
+                    photo={lead}
+                    alt={`Attempt ${attempt.number}`}
+                    // Not "Attempt 1 …": the card's own button is the one named after the attempt.
+                    label={photoLabel(photos.indexOf(lead))}
+                    variant="large"
+                    className="aspect-4/3 w-full md:aspect-3/2"
+                    onClick={(event) => openLarge(event, large(photos.indexOf(lead)))}
+                  />
+                  {rest.length > 0 && (
+                    <div className="flex gap-2">
+                      {rest.slice(0, 4).map((photo, index) => (
+                        <EntryPhoto
+                          key={photo.id}
+                          photo={photo}
+                          alt={`Attempt ${attempt.number}, photo ${photos.indexOf(photo) + 1}`}
+                          label={photoLabel(photos.indexOf(photo))}
+                          className="size-16 flex-none md:size-20"
+                          more={index === 3 && rest.length > 4 ? rest.length - 4 : 0}
+                          onClick={(event) => openLarge(event, large(photos.indexOf(photo)))}
+                        />
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )
             )}
 
             <AttemptTags attempt={attempt} />
