@@ -7,10 +7,10 @@ import {
   levelOf,
   notEnough,
   notEnoughText,
-  showsNotEnoughNote,
   spoolGrams,
   type Usage,
 } from "../../src/shared/ledger.ts";
+import { showsNotEnoughNote } from "../../src/shared/not-enough-rule.ts";
 import { settingsFromFile } from "../../src/shared/threemf/prefill.ts";
 
 const A = "00000000-0000-4000-8000-00000000000a";
