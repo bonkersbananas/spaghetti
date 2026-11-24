@@ -20,7 +20,10 @@ interface NotificationOfferProps {
  */
 export function NotificationOffer({ onTurnOn, onDismiss, busy, children, className }: NotificationOfferProps) {
   return (
-    <section aria-label="Turn on notifications" className={cn("bg-ink/4 flex flex-col gap-3 rounded-lg p-4", className)}>
+    <section
+      aria-label="Turn on notifications"
+      className={cn("bg-ink/4 flex flex-col gap-3 rounded-lg p-4", className)}
+    >
       <div className="flex items-start gap-3">
         <BellIcon size={20} className="text-tomato mt-0.5 shrink-0" aria-hidden />
         <div className="min-w-0">
