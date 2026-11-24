@@ -324,6 +324,32 @@ async function answerCoach(body: string, response: import("node:http").ServerRes
   );
 }
 
+/** What the stand-in says when it picks a build for a print (decision 0080). */
+export const PRINT_MATCH_REASON = "its earlier prints had this name";
+
+/**
+ * Which build a print is from: a print named like the real case ("…-print") gets the first build it was shown (the
+ * matcher's best), with a few words of why; any other print, none, so the printer's question shows as it always has.
+ */
+function answerPrintMatch(body: string, response: import("node:http").ServerResponse) {
+  const prompt = (JSON.parse(body) as { messages: Array<{ content: string }> }).messages[0]?.content ?? "";
+  const name = /^Name: (.*)$/m.exec(prompt)?.[1] ?? "";
+  const pick = name.endsWith("-print") ? (/^\[(c\d+)\]/m.exec(prompt)?.[1] ?? null) : null;
+  response.setHeader("Content-Type", "application/json");
+  response.end(
+    JSON.stringify({
+      id: "msg_fake",
+      type: "message",
+      role: "assistant",
+      model: "claude-opus-5-5",
+      content: [{ type: "text", text: JSON.stringify({ pick, reason: pick ? PRINT_MATCH_REASON : "" }) }],
+      stop_reason: "end_turn",
+      stop_sequence: null,
+      usage: { input_tokens: 10, output_tokens: 10 },
+    }),
+  );
+}
+
 /** What the stand-in calls an idea, once naming is on. */
 export const NAMED_TITLE = "Planetary gear set";
 
@@ -558,6 +584,7 @@ export async function startFakeClaude(
       if (body.includes("What should they try on the next attempt?")) return answerCoach(body, response);
       if (body.includes("Which models should they print next?")) return answerScout(base, scoutAlways, body, response);
       if (body.includes("What is the pattern in this week, if there is one?")) return answerWeek(body, response);
+      if (body.includes("Which build is this print from?")) return answerPrintMatch(body, response);
       if (body.includes('"type":"image"')) return answerPhoto(body, response);
       const asked = body.match(/https?:\/\/[^"\\\s]+/)?.[0] ?? "";
       if (asked.includes("slow")) await new Promise((resolve) => setTimeout(resolve, SLOW_MS));
