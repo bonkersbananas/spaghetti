@@ -1,5 +1,6 @@
 import type { Part } from "@shared/api";
 import { type AttemptSettings, describeChanges, OUTCOMES, type Outcome } from "@shared/attempts";
+import { showsNotEnoughNote } from "@shared/not-enough-rule";
 import type { AttemptPart } from "@shared/parts";
 import { printerHints } from "@shared/spools";
 import { Fragment, type ReactNode, useEffect, useLayoutEffect, useRef, useState } from "react";
@@ -283,8 +284,8 @@ export function AttemptFields(props: FieldsProps) {
   );
   const notEnoughBlock = (
     <Fragment key="notEnoughBlock">
-      {/* Nothing has come off the spool until the print is done: a heads-up only while it hasn't been. */}
-      {!outcome && <NotEnoughNote settings={settings} />}
+      {/* Nothing has come off the spool until the print is done: a heads-up only while logging a new attempt that hasn't printed. */}
+      {showsNotEnoughNote({ isNew: !!props.changeChips, outcome }) && <NotEnoughNote settings={settings} />}
     </Fragment>
   );
   const settingsBlock = (
