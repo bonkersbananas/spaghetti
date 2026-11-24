@@ -135,7 +135,12 @@ Run `pnpm lint && pnpm typecheck && pnpm test` before every commit; CI also runs
 - CI's Playwright shards run in the `mcr.microsoft.com/playwright:v<version>-noble` image (no install step): bump the image tag in `.github/workflows/ci.yml` (both jobs) together with `@playwright/test`.
 - The sandbox has 8 GiB: run one heavy job at a time (one `pnpm screenshots` or `screenshots:compare`, one Vite or wrangler server with its browser, one big build). Several at once ran it out of memory and the kernel killed Claude Code mid-turn.
 
-Before pushing `slicer-rs/`, run `cargo fmt --check` in it: the Rust slicer workflow runs it first and fails on any diff. Before running that workflow's end-to-end steps locally, build the WebAssembly into the default target dir (`slicer-rs/target/wasm32-unknown-unknown/release/spaghetti_slicer.wasm`): with another `CARGO_TARGET_DIR` that file is stale, and the comparison fails or passes on an old build.
+Before pushing `slicer-rs/`, run what the Rust slicer workflow runs, in `slicer-rs/`: `cargo fmt --check`, `cargo +stable clippy --all-targets -- -D warnings` and `cargo +stable clippy --lib --target wasm32-unknown-unknown --no-default-features -- -D warnings` (a sandbox's older default toolchain misses lints that stable has, so name `+stable`); any diff or warning fails it. The workflow also runs `cargo test --release` and then the `run:` blocks of "A model sliced end to end, natively and in WebAssembly, to the same file" and every step after it ("The same, …"), each ending in a `cmp` that fails the job on a difference: run them under `bash -e` in `slicer-rs/`, with the WebAssembly in the default target dir (below). Before running that workflow's end-to-end steps locally, build the WebAssembly into the default target dir (`slicer-rs/target/wasm32-unknown-unknown/release/spaghetti_slicer.wasm`): with another `CARGO_TARGET_DIR` that file is stale, and the comparison fails or passes on an old build.
+
+### Writing e2e waits
+
+- After `page.goto` or a reload, wait for a visible element (an input's value, a heading) before pressing a hotkey: `toHaveCount(0)` on something absent passes while the page is still loading.
+- Hotkeys are ignored while any `[role=dialog]` is in the DOM, and the palette stays there a beat after Enter or Escape: wait for `getByRole('dialog')` `toHaveCount(0)` before the next hotkey or palette action, or the press is swallowed.
 
 ### Setting up a sandbox
 
@@ -181,6 +186,8 @@ If a wiring step can't find its place (a file moved), the command says what to a
 3. `pnpm db:migrate` applies it locally (`pnpm dev` does too). Tests apply all migrations automatically. Remote: `pnpm ship` applies them before deploying (see docs/deploy.md).
 
 Never edit a migration that has been merged; add a new one.
+
+When two pull requests add a migration, the second to merge renumbers. Merge main, take its `migrations/meta/_journal.json` and the clashing snapshot (`git checkout --theirs …`), `git rm` your `.sql` and snapshot, and run `pnpm db:generate --name <same-name>` again; renumber a clashing `docs/decisions` file too. Drizzle-kit drops `ON DELETE` from a foreign key added by `ALTER TABLE … ADD COLUMN`: write `ON DELETE cascade` into the SQL by hand.
 
 ### Items and photos
 
