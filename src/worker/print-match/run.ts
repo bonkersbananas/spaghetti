@@ -113,6 +113,8 @@ export async function runPrintMatch(
   // Someone answered already, or it was moved: nothing to ask.
   if (!found?.job.asking || found.job.itemId !== found.attempt.itemId) return;
   const { attempt, job } = found;
+  // Nothing to go on, and nothing would show: the question offers no build for a print without a name or a mark.
+  if (!job.name && !job.fileId) return;
   const now = Date.now();
 
   // The day's cap is shared by both people (UTC days: it only has to be about right).
