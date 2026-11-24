@@ -67,6 +67,6 @@ test("a spool past its drying window asks to be dried", async ({ page }) => {
 
 test("the Printer page leads with the bed: nothing on it when idle", async ({ page }) => {
   await page.goto("/printer");
-  await expect(page.getByRole("heading", { name: "On the bed" })).toBeVisible();
-  await expect(page.getByText("Nothing on the bed.")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Printing now" })).toBeVisible();
+  await expect(page.getByText("Nothing printing.")).toBeVisible();
 });
