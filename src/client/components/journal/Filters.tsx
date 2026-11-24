@@ -125,10 +125,12 @@ export function Filters({ value, onChange, layout, tags = false }: FiltersProps)
     // A kind with one chip left joins the one before it (or after it): a lone chip between two dividers reads as noise.
     const merged: ReactNode[][] = [];
     for (const group of rest) {
-      if (group.length === 1 && merged.length > 0) merged[merged.length - 1] = [...merged[merged.length - 1], ...group];
-      else merged.push(group);
+      const last = merged.at(-1);
+      if (group.length === 1 && last) last.push(...group);
+      else merged.push([...group]);
     }
-    if (merged.length > 1 && merged[0].length === 1) merged.splice(0, 2, [...merged[0], ...merged[1]]);
+    const [first, second] = merged;
+    if (first?.length === 1 && second) merged.splice(0, 2, [...first, ...second]);
     const groups = [picked, ...merged].filter((group) => group.length > 0);
     return (
       <ChipRow label="Filters">
