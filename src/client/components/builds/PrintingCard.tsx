@@ -419,10 +419,17 @@ export function PrintingCard({
                   attemptId={attempt.id}
                   showLabel={false}
                 />
-                <div className="flex items-center justify-between gap-3 md:flex-wrap md:gap-y-2">
+                <div
+                  className={cn(
+                    "flex items-center justify-between gap-3 md:flex-wrap md:gap-y-2",
+                    compact && "max-md:flex-wrap max-md:gap-y-2",
+                  )}
+                >
                   <p
                     className={cn(
                       "text-small tabular min-w-0 flex-1 md:basis-full",
+                      // A compact card is narrow: the time left reads whole on its own line, the buttons under it.
+                      compact && "max-md:basis-full",
                       progress.state === "due" ? "text-semolina-ink font-semibold" : "text-ink-soft",
                     )}
                   >
@@ -439,7 +446,12 @@ export function PrintingCard({
                       </Fragment>
                     ))}
                   </p>
-                  <div className="pointer-events-auto flex shrink-0 items-center gap-1.5 md:ml-auto">
+                  <div
+                    className={cn(
+                      "pointer-events-auto flex shrink-0 items-center gap-1.5 md:ml-auto",
+                      compact && "max-md:ml-auto",
+                    )}
+                  >
                     {!readOnly && (
                       <IconButton
                         icon={CameraIcon}

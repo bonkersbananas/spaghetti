@@ -1,4 +1,4 @@
-import { and, desc, eq, isNotNull, isNull, ne } from "drizzle-orm";
+import { and, desc, eq, gt, isNotNull, isNull, lt, ne } from "drizzle-orm";
 import type { BatchItem } from "drizzle-orm/batch";
 import { Hono } from "hono";
 import { z } from "zod";
@@ -7,7 +7,7 @@ import { BRIDGE_PROBLEM_CODES, type BridgeStatusData } from "../../shared/bridge
 import { DEFAULT_PRINTER, type PrinterSetup, SLOT_PATTERN, X2D } from "../../shared/spools.ts";
 import { recordChange } from "../changes.ts";
 import type { Db } from "../db/index.ts";
-import { agents, amsSlots, attempts, bridge, bridgePairings, printer, spools } from "../db/schema.ts";
+import { agents, amsSlots, attempts, bridge, bridgePairings, items, printer, spools } from "../db/schema.ts";
 import type { AppEnv } from "../env.ts";
 import { apiError } from "../http.ts";
 import { slicingDefaults } from "../slicing-schema.ts";
@@ -97,10 +97,19 @@ async function loadPrinter(db: Db): Promise<PrinterResponse> {
     setup: row?.setup ?? DEFAULT_PRINTER,
     slots: Object.fromEntries(slots.map((slot) => [slot.slot, slot.spoolId])),
     bridge: bridgeRow
-      ? { ...bridgeRow.status, lastSeenAt: bridgeRow.lastSeenAt.getTime(), pairedAt: paired?.usedAt?.getTime() ?? null }
+      ? {
+          ...withoutSwept(bridgeRow.status),
+          lastSeenAt: bridgeRow.lastSeenAt.getTime(),
+          pairedAt: paired?.usedAt?.getTime() ?? null,
+        }
       : null,
   };
 }
+
+const withoutSwept = ({ sweptAttemptId: _swept, ...status }: BridgeStatusData) => status;
+
+/** How long before a live print another still-printing one can have been on the same plate. */
+const SAME_PLATE_MS = 12 * 60 * 60_000;
 
 /** /api/printer: the X2D as it's set up here, and what is loaded where. Never a live connection. */
 export const printerRoutes = new Hono<AppEnv>()
@@ -149,15 +158,66 @@ export const printerRoutes = new Hono<AppEnv>()
     const row = await db.select().from(bridge).where(eq(bridge.id, BRIDGE_ID)).get();
     const before: BridgeStatusData = row?.status ?? { printerState: null, progress: null, unknownTrays: [] };
 
+    const offTheBed: BatchItem<"sqlite">[] = [];
     let progress = before.progress;
+    let sweptAttemptId = before.sweptAttemptId;
     if (body.progress === null) progress = null;
     else if (body.progress) {
       // Only for a print that is there: an attempt that was deleted meanwhile has nothing to show.
       const attempt = await db
-        .select({ id: attempts.id })
+        .select({ id: attempts.id, printedAt: attempts.printedAt })
         .from(attempts)
         .where(and(eq(attempts.id, body.progress.attemptId), isNull(attempts.deletedAt)))
         .get();
+      // The printer holds one plate at a time: a print it now reports that started later ends an earlier one still
+      // marked printing (a hand-logged print the bridge never followed), so it is off the bed on every screen. Only
+      // prints that started within SAME_PLATE_MS before it (an older one was forgotten long ago, not on this plate),
+      // never those of deleted builds, and once per print: `sweptAttemptId` survives the bridge's `progress: null`
+      // while it is offline or loading, so the same print reported again doesn't redo an undone ending.
+      if (attempt && before.sweptAttemptId !== attempt.id) {
+        sweptAttemptId = attempt.id;
+        const earlier = await db
+          .select({
+            id: attempts.id,
+            itemId: attempts.itemId,
+            settings: attempts.settings,
+            printedAt: attempts.printedAt,
+          })
+          .from(attempts)
+          .innerJoin(items, eq(items.id, attempts.itemId))
+          .where(
+            and(
+              isNull(attempts.outcome),
+              isNull(attempts.endedAt),
+              isNull(attempts.deletedAt),
+              isNull(items.deletedAt),
+              ne(attempts.id, attempt.id),
+              lt(attempts.printedAt, attempt.printedAt),
+              gt(attempts.printedAt, new Date(attempt.printedAt.getTime() - SAME_PLATE_MS)),
+            ),
+          );
+        for (const one of earlier) {
+          // Off the bed when the next print began, or when its own estimate ran out if that came first.
+          const estimate = one.settings.estimatedMinutes;
+          const endedAt =
+            estimate && estimate > 0
+              ? new Date(Math.min(attempt.printedAt.getTime(), one.printedAt.getTime() + estimate * 60_000))
+              : attempt.printedAt;
+          offTheBed.push(
+            db
+              .update(attempts)
+              .set({ endedAt, updatedAt: now })
+              .where(and(eq(attempts.id, one.id), isNull(attempts.outcome), isNull(attempts.endedAt))),
+            recordChange(db, {
+              entity: "attempt",
+              id: one.id,
+              itemId: one.itemId,
+              action: "updated",
+              actor: c.var.actor,
+            }),
+          );
+        }
+      }
       progress = attempt
         ? {
             attemptId: body.progress.attemptId,
@@ -176,6 +236,7 @@ export const printerRoutes = new Hono<AppEnv>()
       version: body.version === undefined ? before.version : body.version,
       platform: body.platform === undefined ? before.platform : body.platform,
       problems: body.problems ?? before.problems ?? [],
+      sweptAttemptId,
     };
     // Progress is stamped at each message; what counts as a change is the printer's own numbers.
     const same = (a: BridgeStatusData, b: BridgeStatusData) =>
@@ -203,7 +264,7 @@ export const printerRoutes = new Hono<AppEnv>()
     if (!row || !same(before, status)) {
       statements.push(recordChange(db, { entity: "printer", id: BRIDGE_ID, action: "updated", actor: c.var.actor }));
     }
-    await db.batch(statements);
+    await db.batch([...statements, ...offTheBed] as typeof statements);
     return c.json<PrinterResponse>(await loadPrinter(db));
   })
 

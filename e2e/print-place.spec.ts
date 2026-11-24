@@ -494,3 +494,64 @@ test("a print from the printer names nobody until someone says who started it, w
     entry.getByRole("button", { name: "Alex Rivera · from the printer. Change who started it" }),
   ).toBeVisible();
 });
+
+test("Today counts only what is on the bed: an answered print that asks which build waits under “Which build?”", async ({
+  page,
+  isMobile,
+}) => {
+  test.skip(isMobile, "Phones have no Today: the Journal's Now block has no counts.");
+  const headers = { Origin: origin(page) };
+  for (const title of ["First plate", "Second plate"]) {
+    const id = crypto.randomUUID();
+    await page.request.post("/api/items", { headers, data: { id, title, stage: "building" } });
+    const made = await page.request.post(`/api/items/${id}/attempts`, {
+      headers,
+      data: {
+        id: crypto.randomUUID(),
+        outcome: null,
+        printedAt: Date.now() - 10 * 60_000,
+        settings: { estimatedMinutes: 120 },
+      },
+    });
+    expect(made.ok()).toBe(true);
+  }
+  const { attemptId } = await bridgeFiles(page, "cable-clip-v3");
+  await page.request.patch(`/api/attempts/${attemptId}`, { headers, data: { outcome: "success" } });
+
+  await page.goto("/today");
+  const bed = page.getByRole("region", { name: "On the bed" });
+  await expect(bed.getByRole("heading", { name: "First plate" })).toBeVisible();
+  await expect(bed.getByRole("heading", { name: "cable-clip-v3" })).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: "On the bed" })).toContainText("2");
+  await expect(bed.getByRole("article")).toHaveCount(2);
+  const which = page.getByRole("region", { name: /^Which build\?/ });
+  await expect(which.getByRole("article")).toHaveCount(1);
+});
+
+test("a hand-logged print is off the bed once the printer reports a later one", async ({ page }) => {
+  const headers = { Origin: origin(page) };
+  const handItem = crypto.randomUUID();
+  await page.request.post("/api/items", { headers, data: { id: handItem, title: "Hand logged", stage: "building" } });
+  await page.request.post(`/api/items/${handItem}/attempts`, {
+    headers,
+    data: {
+      id: crypto.randomUUID(),
+      outcome: null,
+      printedAt: Date.now() - 60 * 60_000,
+      settings: { estimatedMinutes: 240 },
+    },
+  });
+  const { attemptId } = await bridgeFiles(page, "planter-v2(2)");
+  const told = await page.request.put("/api/printer/bridge", {
+    headers: { ...headers, Authorization: `Bearer ${await bridgeToken(page)}` },
+    data: { printerState: "printing", progress: { attemptId, percent: 12, remainingMinutes: 30 } },
+  });
+  expect(told.ok()).toBe(true);
+
+  const attempts = (await (await page.request.get(`/api/items/${handItem}`)).json()).item.attempts;
+  expect(attempts[0].endedAt).not.toBeNull();
+  await page.goto("/today");
+  const card = page.getByRole("article").filter({ hasText: "Hand logged" });
+  await expect(card.getByText(/Off the bed at .* · how did it go\?/)).toBeVisible();
+  await expect(card.getByRole("progressbar")).toHaveCount(0);
+});
