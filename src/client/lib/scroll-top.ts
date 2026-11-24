@@ -25,7 +25,10 @@ export function scrollToTop() {
   }
   for (const type of ["touchstart", "wheel", "keydown"]) window.addEventListener(type, stop, { passive: true });
   const start = performance.now();
+  const path = location.pathname;
   const step = (now: number) => {
+    // Another tab was tapped meanwhile: that page is not ours to scroll.
+    if (location.pathname !== path) return stop();
     const t = Math.min(1, (now - start) / DURATION_MS);
     window.scrollTo(0, Math.round(from * (1 - (1 - (1 - t) ** 3))));
     if (t < 1) frame = requestAnimationFrame(step);
