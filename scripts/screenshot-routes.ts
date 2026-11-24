@@ -4011,7 +4011,7 @@ export const shots: Shot[] = [
       await page.getByRole("dialog").waitFor({ state: "detached" });
     },
   },
-  // The other places a photo opens large: the compare sheet's photo, a search result's, a printing card's and the hero.
+  // The other places a photo opens large: the compare sheet's photo, a search result's, and the hero.
   {
     name: "compare-photo-large",
     path: `/builds/${SEED_BUILD_IDS.headphoneStand}`,
@@ -4040,27 +4040,6 @@ export const shots: Shot[] = [
       await settleLargePhotos(page, /Star ornament · attempt \d+/);
       // The attempt's other photos join the one the result carried.
       await page.getByText("1 of 4").waitFor();
-    },
-    cleanup: closeLargePhotos,
-  },
-  {
-    name: "journal-now-photo-large",
-    path: "/journal",
-    width: 390,
-    prepare: async (page) => {
-      await page.locator("a[data-large]").first().click();
-      await settleLargePhotos(page, /· attempt \d+/);
-    },
-    cleanup: closeLargePhotos,
-  },
-  {
-    name: "today-photo-large",
-    path: "/today",
-    width: 1440,
-    why: "Today is desktop-only: on a phone /today goes to the Journal (journal-now-photo-large)",
-    prepare: async (page) => {
-      await page.locator("a[data-large]").first().click();
-      await settleLargePhotos(page, /· attempt \d+/);
     },
     cleanup: closeLargePhotos,
   },
