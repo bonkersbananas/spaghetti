@@ -17,7 +17,7 @@ const LONG = [
 ];
 const NOTE = `${"A long note about how this one went, with many words. ".repeat(6)}https://www.printables.com/model/1234567-quick-release-poop-bucket-for-p2s-x2d-h2s-h2d-and-more/files`;
 
-async function post(page: Page, url: string, data: unknown, method: "post" | "put" = "post") {
+async function post(page: Page, url: string, data: unknown, method: "post" | "put" | "patch" = "post") {
   const response = await page.request[method](url, { headers: { Origin: origin(page) }, data });
   expect(response.ok(), `${url}: ${response.status()} ${await response.text()}`).toBe(true);
   return response;
@@ -75,7 +75,7 @@ test("no main screen scrolls sideways on a phone with long titles, names and not
       note: NOTE,
       settings: { filaments, layerHeight: 0.2 },
     });
-    await page.request.patch(`/api/items/${id}`, { headers: { Origin: origin(page) }, data: { stage: "done" } });
+    await post(page, `/api/items/${id}`, { stage: "done" }, "patch");
   }
   await post(page, "/api/items", { id: buildingId, title: LONG[1], note: NOTE, stage: "building" });
   await post(page, `/api/items/${buildingId}/attempts`, {
@@ -88,10 +88,7 @@ test("no main screen scrolls sideways on a phone with long titles, names and not
   await post(page, "/api/items", { id: printingId, title: LONG[2], note: NOTE, stage: "building" });
   await post(page, `/api/items/${printingId}/attempts`, { id: crypto.randomUUID(), outcome: null });
   await post(page, "/api/items", { id: shelvedId, title: LONG[0], note: NOTE, stage: "building" });
-  await page.request.patch(`/api/items/${shelvedId}`, {
-    headers: { Origin: origin(page) },
-    data: { stage: "shelved" },
-  });
+  await post(page, `/api/items/${shelvedId}`, { stage: "shelved" }, "patch");
   await post(page, "/api/shopping-items", { id: crypto.randomUUID(), name: LONG[0] });
   await post(page, `/api/wishlists/me/items/${ideaId}`, {}, "put");
   await post(page, "/api/twists", { id: twistId, name: LONG[1], note: NOTE, designer: "A Designer With A Long Name" });
