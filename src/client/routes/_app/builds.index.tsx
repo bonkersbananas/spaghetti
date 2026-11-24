@@ -140,7 +140,11 @@ function Builds() {
           )}
           {done.length > 0 && (
             <Section title="Done" count={done.length} quiet>
-              <ul data-picks className="grid gap-1 md:grid-cols-2 md:gap-x-6 xl:grid-cols-3" aria-label="Done">
+              <ul
+                data-picks
+                className="grid grid-cols-1 gap-1 md:grid-cols-2 md:gap-x-6 xl:grid-cols-3"
+                aria-label="Done"
+              >
                 {done.map((item) => (
                   <BuildRow key={item.id} item={item} />
                 ))}
@@ -149,7 +153,11 @@ function Builds() {
           )}
           {shelved.length > 0 && (
             <Section title="On the shelf" count={shelved.length} quiet>
-              <ul data-picks className="grid gap-1 md:grid-cols-2 md:gap-x-6 xl:grid-cols-3" aria-label="On the shelf">
+              <ul
+                data-picks
+                className="grid grid-cols-1 gap-1 md:grid-cols-2 md:gap-x-6 xl:grid-cols-3"
+                aria-label="On the shelf"
+              >
                 {shelved.map((item) => (
                   <BuildRow key={item.id} item={item} />
                 ))}
