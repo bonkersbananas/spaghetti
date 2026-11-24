@@ -64,3 +64,9 @@ test("a spool past its drying window asks to be dried", async ({ page }) => {
   await expect(page.getByText("Dry it before printing")).toBeHidden();
   await page.request.delete(`/api/spools/${id}`, { headers: { Origin: origin(page) } });
 });
+
+test("the Printer page leads with the bed: nothing on it when idle", async ({ page }) => {
+  await page.goto("/printer");
+  await expect(page.getByRole("heading", { name: "Printing now" })).toBeVisible();
+  await expect(page.getByText("Nothing printing.")).toBeVisible();
+});

@@ -352,6 +352,9 @@ async function mockWebhooks(
   });
 }
 
+/** Attempts the idle-printer shot answered, to put back. */
+const printingNow: string[] = [];
+
 /** Ideas without a photo of each kind, among the seed's photo ideas, for the pickers' shots (removed by their cleanup). */
 const pickerIdeas: string[] = [];
 async function addPickerIdeas(page: Page) {
@@ -7735,6 +7738,34 @@ export const shots: Shot[] = [
     },
     cleanup: async (page) => {
       await page.context().setOffline(false);
+    },
+  },
+  {
+    // Nothing printing: the print that was on the plate is answered, and what the printer stopped still waits (one
+    // quiet line, no cards). Put back by cleanup.
+    name: "printer-idle",
+    path: "/printer",
+    prepare: async (page) => {
+      const headers = { Origin: new URL(page.url()).origin };
+      const items = (await (await page.request.get("/api/items?stage=building")).json()) as {
+        items?: Array<{ attempts: Array<{ id: string; outcome: string | null; endedAt: number | null }> }>;
+      };
+      for (const item of items.items ?? [])
+        for (const attempt of item.attempts)
+          if (attempt.outcome === null && attempt.endedAt === null) {
+            printingNow.push(attempt.id);
+            await page.request.patch(`/api/attempts/${attempt.id}`, { headers, data: { outcome: "success" } });
+          }
+      await page.reload();
+      await page.getByText("Nothing printing.").waitFor();
+    },
+    cleanup: async (page) => {
+      const headers = { Origin: new URL(page.url()).origin };
+      for (const id of printingNow.splice(0))
+        await page.request.patch(`/api/attempts/${id}`, {
+          headers,
+          data: { outcome: null, failureTags: [], successNotes: [], note: "" },
+        });
     },
   },
   // Upkeep: the list with its meters, and the Done sheet of the most due task.
