@@ -2253,6 +2253,29 @@ async function printToAskAboutOne(page: Page) {
   return bridgeFiles(page, "planter-v2(2)");
 }
 
+/**
+ * A print the matcher can't place on its own and Claude is asked about (decision 0080): the herb planter keeps
+ * planter-v2 but was started days ago, "Planter v2" has the name, and the printer called it "planter-v2(2)-print". The
+ * stand-in picks the matcher's first, so the question leads with Claude's sparkle and reason.
+ */
+async function printClaudePicks(page: Page) {
+  await buildAboutToPrint(page, "Herb planter", "planter-v2.gcode.3mf", { startedAgo: 2 * 24 * 60 * 60_000 });
+  await buildAboutToPrint(page, "Planter v2", "balcony-box.gcode.3mf", { startedAgo: 5 * 24 * 60 * 60_000 });
+  return bridgeFiles(page, "planter-v2(2)-print");
+}
+
+/** Waits for the question to say Claude's reason (it comes a moment after the print is filed). */
+async function claudesPickShown(page: Page) {
+  const question = page.getByRole("region", { name: /^Is this / }).first();
+  await question.waitFor({ timeout: 20_000 });
+  for (let tries = 0; tries < 20 && !(await page.getByText(/Claude thinks so/).count()); tries++) {
+    await page.waitForTimeout(1000);
+    if (tries === 8) await page.reload({ waitUntil: "networkidle" });
+  }
+  await question.evaluate((node) => node.scrollIntoView({ block: "center", behavior: "instant" }));
+  await page.waitForTimeout(500);
+}
+
 /** The print's outcome answered first ("How did it go?"), as people do: it still asks which build it is. */
 async function answerFirst(page: Page, attemptId: string) {
   await page.request.patch(`/api/attempts/${attemptId}`, {
@@ -9011,6 +9034,67 @@ shots.push(
         }
         await question.evaluate((node) => node.scrollIntoView({ block: "center", behavior: "instant" }));
         await page.waitForTimeout(500);
+      },
+      cleanup: removeFiledPrints,
+    },
+    {
+      // Claude's pick for a print the matcher couldn't place (decision 0080): its sparkle and reason on the card.
+      name: "builds-which-build-claude",
+      path: "/builds",
+      prepare: async (page) => {
+        const { ownId } = await printClaudePicks(page);
+        await onlyOnTheBed(page, [ownId]);
+        await claudesPickShown(page);
+      },
+      cleanup: removeFiledPrints,
+    },
+    {
+      name: "today-which-build-claude",
+      path: "/today",
+      width: 1440,
+      why: "Today is desktop-only",
+      prepare: async (page) => {
+        const { ownId } = await printClaudePicks(page);
+        await onlyOnTheBed(page, [ownId]);
+        await claudesPickShown(page);
+      },
+      cleanup: removeFiledPrints,
+    },
+    {
+      name: "journal-which-build-claude",
+      path: "/journal",
+      width: 390,
+      why: "Now is the phone's Today",
+      prepare: async (page) => {
+        const { ownId } = await printClaudePicks(page);
+        await onlyOnTheBed(page, [ownId]);
+        await claudesPickShown(page);
+      },
+      cleanup: removeFiledPrints,
+    },
+    {
+      name: "printer-which-build-claude",
+      path: "/printer",
+      prepare: async (page) => {
+        const { ownId } = await printClaudePicks(page);
+        await onlyOnTheBed(page, [ownId]);
+        await claudesPickShown(page);
+      },
+      cleanup: removeFiledPrints,
+    },
+    {
+      // And in "How did it go?": the sheet asks the same, Claude's pick first.
+      name: "which-build-attempt-sheet-claude",
+      path: "/builds",
+      prepare: async (page) => {
+        const { ownId, attemptId } = await printClaudePicks(page);
+        await claudesPickShown(page);
+        await page.goto(`/builds/${ownId}?attempt=${attemptId}&finish=1`);
+        await page
+          .getByRole("dialog")
+          .getByText(/Claude thinks so/)
+          .waitFor({ timeout: 20_000 });
+        await page.waitForTimeout(600);
       },
       cleanup: removeFiledPrints,
     },

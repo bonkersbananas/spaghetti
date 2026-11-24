@@ -5,7 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 import { lazy, Suspense, useState } from "react";
 import { AskLine, AskName } from "@/components/ui/AskLine";
 import { Button } from "@/components/ui/Button";
-import { MoveIntoIcon, PrinterIcon, SearchIcon } from "@/components/ui/icons";
+import { MoveIntoIcon, PrinterIcon, SearchIcon, SparkleIcon } from "@/components/ui/icons";
 import { KeepNames, KeptName } from "@/components/ui/KeepNames";
 import { MetaList } from "@/components/ui/MetaList";
 import { WhyLine } from "@/components/ui/WhyLine";
@@ -168,6 +168,7 @@ function WhichBuild({ item, attempt, onMore, follow, readOnly, glyph }: WhichBui
         onPick: () => moves.move({ item: build }),
       }))}
       why={why}
+      byClaude={!shared && first?.reasons[0]?.kind === "claude"}
       names={offered.flatMap((one) => namesIn(one.reasons))}
       onMore={() => onMore(offered.map((one) => one.build.id))}
       onKeep={() => moves.keep()}
@@ -184,6 +185,8 @@ interface WhichBuildLineProps {
   why?: string;
   /** File names in `why`, each kept whole. */
   names?: readonly string[];
+  /** `why` is Claude's (decision 0080): it carries Claude's sparkle, as everything Claude suggests does. */
+  byClaude?: boolean;
   /** The job's name as the printer said it, for "Nothing matched cable-clip-v3.", when the title doesn't say it. */
   printName?: string | null;
   loading?: boolean;
@@ -200,6 +203,7 @@ export function WhichBuildLine({
   guesses = [],
   why,
   names = [],
+  byClaude = false,
   printName,
   loading,
   onMore,
@@ -247,6 +251,9 @@ export function WhichBuildLine({
             {why && (
               // In a span of its own: a MetaList piece is a flex box, which would drop the space after "Same file:".
               <span>
+                {byClaude && (
+                  <SparkleIcon size={14} weight="fill" aria-hidden className="mr-1 inline-block align-text-bottom" />
+                )}
                 <KeepNames text={why} names={names} />
               </span>
             )}

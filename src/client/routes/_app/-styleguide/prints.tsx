@@ -14,7 +14,7 @@ export function PrintsSection() {
     <Section
       id="prints"
       title="Which build is this?"
-      note="A print the printer bridge files goes into the build it matches, with one quiet line saying why; when the app isn't sure, the print asks in one line (Is this Herb planter?) on its card and on the build page: Yes moves it, Another build opens the searchable sheet. Every answer can be undone."
+      note="A print the printer bridge files goes into the build it matches, with one quiet line saying why; when the app isn't sure, the print asks in one line (Is this Herb planter?) on its card and on the build page: Yes moves it, Another build opens the searchable sheet. When the matcher can't place a print, Claude's pick leads the question with its sparkle and its reason (decision 0080); it never places a print itself. Every answer can be undone."
     >
       <div className="grid gap-6 md:grid-cols-2">
         <Panel className="flex flex-col gap-6">
@@ -36,6 +36,15 @@ export function PrintsSection() {
               ]}
               why="Both print planter-v2."
               names={["planter-v2"]}
+              onMore={nothing}
+            />
+          </div>
+          <div className="flex flex-col gap-3">
+            <Label>Claude's pick, when the matcher wasn't sure: its sparkle and a few words of why</Label>
+            <WhichBuildLine
+              guesses={[{ id: "a", title: "Herb planter", onPick: nothing }]}
+              why="Claude thinks so: its earlier prints had this name"
+              byClaude
               onMore={nothing}
             />
           </div>

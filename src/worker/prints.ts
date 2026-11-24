@@ -9,6 +9,7 @@ import { byPrintTime } from "../shared/attempts.ts";
 import type { ChangeActor } from "../shared/changes.ts";
 import {
   type CandidateFile,
+  type CandidatePrint,
   type MatchCandidate,
   type PrintFacts,
   placePrint,
@@ -126,10 +127,14 @@ export async function loadCandidates(db: Db, exclude: readonly string[], at: num
         fileId: attemptFiles.id,
         fileName: attemptFiles.name,
         prefill: attemptFiles.prefill,
+        jobName: printJobs.name,
+        jobAsking: printJobs.asking,
+        jobItemId: printJobs.itemId,
       })
       .from(attempts)
       .innerJoin(items, eq(items.id, attempts.itemId))
       .leftJoin(attemptFiles, and(eq(attemptFiles.attemptId, attempts.id), isNull(attemptFiles.deletedAt)))
+      .leftJoin(printJobs, eq(printJobs.attemptId, attempts.id))
       .where(and(open, isNull(attempts.deletedAt))),
     db
       .select({
@@ -168,30 +173,33 @@ export async function loadCandidates(db: Db, exclude: readonly string[], at: num
     const ordered = byPrintTime(
       list.map((row) => ({ ...row, printedAt: row.printedAt.getTime(), createdAt: row.createdAt.getTime() })),
     );
-    candidate.attempts = ordered.length;
+    // An attempt with several files comes once for each: attempts are numbered as the build numbers them.
+    const numberOf = new Map<string, number>();
+    for (const row of ordered) if (!numberOf.has(row.id)) numberOf.set(row.id, numberOf.size + 1);
+    candidate.attempts = numberOf.size;
     // The newest attempt's file first: "same file as attempt 3" names the latest print of it.
     const files: CandidateFile[] = [];
-    ordered.forEach((row, index) => {
-      if (row.fileId && row.fileName) {
-        files.unshift({
-          id: row.fileId,
-          name: row.fileName,
-          estimatedMinutes: estimateOf(row.prefill),
-          attempt: index + 1,
-        });
+    const prints: CandidatePrint[] = [];
+    for (const row of ordered) {
+      const attempt = numberOf.get(row.id) ?? 0;
+      // A print still asking in the printer's own build says nothing yet about what this build is.
+      const asking = !!row.jobAsking && row.jobItemId === row.itemId;
+      if (asking) candidate.unplaced = true;
+      // The name the printer gave it (wherever it was filed first), newest first like the files.
+      if (row.jobName && !asking && !prints.some((one) => one.attempt === attempt)) {
+        prints.unshift({ name: row.jobName, attempt });
       }
-    });
+      if (row.fileId && row.fileName) {
+        files.unshift({ id: row.fileId, name: row.fileName, estimatedMinutes: estimateOf(row.prefill), attempt });
+      }
+    }
     candidate.files.push(...files);
+    candidate.prints = prints;
   }
   for (const send of sends) {
     candidates.get(send.itemId)?.sends.push({ fileId: send.fileId, at: send.at.getTime(), how: send.how });
   }
   return [...candidates.values()];
-}
-
-/** The builds and ideas a print may belong to, best first. */
-export async function suggestFor(db: Db, facts: PrintFacts, exclude: readonly string[]): Promise<ScoredCandidate[]> {
-  return scorePrint(facts, await loadCandidates(db, exclude, facts.startedAt));
 }
 
 /**
@@ -386,7 +394,9 @@ export async function fileThePrint(
     estimateMinutes: print?.estimateMinutes ?? null,
     fileId: print?.fileId ?? null,
   };
-  const placement = placePrint(await suggestFor(db, facts, [item.id]));
+  const candidates = await loadCandidates(db, [item.id], facts.startedAt);
+  const unplaced = new Set(candidates.filter((one) => one.unplaced).map((one) => one.id));
+  const placement = placePrint(scorePrint(facts, candidates), unplaced);
   const target =
     placement.kind === "match"
       ? await db
@@ -405,6 +415,8 @@ export async function fileThePrint(
     createdAt: now,
   };
   return {
+    /** The matcher couldn't place it: the print asks, and Claude may be asked for a second opinion (decision 0080). */
+    unsure: placement.kind !== "match" || !target,
     /** Where the attempt goes: the build it matched, or the printer's own. */
     target: target ?? item,
     /** What goes in the batch after the attempt's insert. */

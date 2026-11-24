@@ -10,7 +10,7 @@ import type { BatchItem } from "drizzle-orm/batch";
 import { Hono } from "hono";
 import { z } from "zod";
 import type { AttemptResponse, MoveAttemptResponse, PrintSuggestionsResponse } from "../../shared/api.ts";
-import { MAX_SUGGESTIONS, SUGGEST_SCORE } from "../../shared/print-match.ts";
+import { scorePrint } from "../../shared/print-match.ts";
 import { recordChange } from "../changes.ts";
 import type { Db } from "../db/index.ts";
 import {
@@ -32,7 +32,8 @@ import {
 import type { AppEnv } from "../env.ts";
 import { apiError } from "../http.ts";
 import { fillPrinterAttempt } from "../print-fill.ts";
-import { latestMove, ownBuildOf, printerAgents, printFactsOf, suggestFor } from "../prints.ts";
+import { withClaudesPick } from "../print-match/run.ts";
+import { latestMove, loadCandidates, ownBuildOf, printerAgents, printFactsOf } from "../prints.ts";
 import { loadAttempt } from "./attempts.ts";
 import { loadItem, stageDates } from "./items.ts";
 
@@ -153,9 +154,11 @@ export const attemptPrintRoutes = new Hono<AppEnv>()
     const found = await findLive(db, c.req.param("id"));
     if (!found) return apiError(c, 404, "not_found", notFound);
     const facts = await printFactsOf(db, found.attempt);
-    const scored = facts.name || facts.fileId ? await suggestFor(db, facts, [found.attempt.itemId]) : [];
+    const candidates =
+      facts.name || facts.fileId ? await loadCandidates(db, [found.attempt.itemId], facts.startedAt) : [];
+    // Claude's pick, when the matcher wasn't sure and Claude was asked, leads (decision 0080).
     return c.json<PrintSuggestionsResponse>({
-      suggestions: scored.filter((one) => one.score >= SUGGEST_SCORE).slice(0, MAX_SUGGESTIONS),
+      suggestions: await withClaudesPick(db, found.attempt.id, candidates, scorePrint(facts, candidates)),
     });
   })
 

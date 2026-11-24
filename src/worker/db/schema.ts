@@ -888,6 +888,38 @@ export const printJobs = sqliteTable("print_jobs", {
 export type PrintJobRow = typeof printJobs.$inferSelect;
 
 /**
+ * Claude's second opinion on which build a print belongs to (decision 0080), asked once per print the matcher couldn't
+ * place: what it was shown, what it picked and why, and how the run went. Its pick is only ever the first "Is this…?";
+ * a person's Yes places the print. Also what the day's cap counts (rows with `ranAt`).
+ */
+export const printMatchRuns = sqliteTable(
+  "print_match_runs",
+  {
+    attemptId: text("attempt_id")
+      .primaryKey()
+      .references(() => attempts.id, { onDelete: "cascade" }),
+    /** asking: running; picked: Claude named a build; none: it named none; failed: the call didn't work; cap: none left today. */
+    status: text("status").$type<"asking" | "picked" | "none" | "failed" | "cap">().notNull(),
+    /** The builds and ideas it was shown, in the order it saw them (their ids). */
+    candidateIds: text("candidate_ids", { mode: "json" }).$type<string[]>().notNull().default(sql`'[]'`),
+    /** The one it picked. */
+    itemId: text("item_id"),
+    /** Its few words of why. */
+    reason: text("reason"),
+    createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
+    /** When the call to Claude was made (what the cap counts); null when it never got that far. */
+    ranAt: integer("ran_at", { mode: "timestamp_ms" }),
+    /** How it ended: "picked", or why not (see worker/print-match/claude.ts). */
+    runOutcome: text("run_outcome"),
+    /** The rest of the diagnosis as JSON: model, stop reason, HTTP status, error type, how long it took. */
+    detail: text("detail"),
+  },
+  (table) => [index("print_match_runs_ran_idx").on(table.ranAt)],
+);
+
+export type PrintMatchRunRow = typeof printMatchRuns.$inferSelect;
+
+/**
  * An attempt moved from one build to another (decision 0076): who moved it, from where (the build's name then, which
  * may be gone), and what the undo needs (the photos' places, the parts it counted, whether the build it left went
  * with it, whether it was still asking which build it was). The newest row of an attempt is the line its card shows.
