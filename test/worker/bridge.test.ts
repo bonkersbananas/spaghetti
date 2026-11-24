@@ -223,6 +223,76 @@ describe("PUT /api/printer/bridge", () => {
     expect((await read(later.itemId))[0]?.endedAt).toBeNull();
   });
 
+  describe("the earlier print it takes off the bed", () => {
+    const HOUR = 3_600_000;
+    async function handLog(agoMs: number, settings: Record<string, unknown> = {}) {
+      const itemId = uuid();
+      const id = uuid();
+      await asBridge("/api/items", { method: "POST", json: { id: itemId, stage: "building" } });
+      await asBridge(`/api/items/${itemId}/attempts`, {
+        method: "POST",
+        json: { id, printedAt: Date.now() - agoMs, settings },
+      });
+      return { itemId, id };
+    }
+    const attemptOf = async (itemId: string, id: string) =>
+      (await (await request(`/api/items/${itemId}`, { cookie })).json<ItemResponse>()).item.attempts.find(
+        (a) => a.id === id,
+      );
+    const report = (attemptId: string, progress: unknown = { attemptId, percent: 5 }) =>
+      asBridge("/api/printer/bridge", { method: "PUT", json: { progress } });
+
+    it("leaves a print from before the window alone, so no stale hours, ending or nudge", async () => {
+      const old = await handLog(21 * 24 * HOUR);
+      const near = await handLog(2 * HOUR);
+      const live = await startPrint();
+      await report(live.attemptId);
+      expect((await attemptOf(old.itemId, old.id))?.endedAt).toBeNull();
+      expect((await attemptOf(near.itemId, near.id))?.endedAt).toBe(live.attempt.printedAt);
+    });
+
+    it("leaves a print of a deleted build alone", async () => {
+      const gone = await handLog(2 * HOUR);
+      expect((await request(`/api/items/${gone.itemId}`, { method: "DELETE", cookie })).status).toBe(204);
+      const live = await startPrint();
+      await report(live.attemptId);
+      await request(`/api/items/${gone.itemId}/restore`, { method: "POST", cookie });
+      expect((await attemptOf(gone.itemId, gone.id))?.endedAt).toBeNull();
+    });
+
+    it("ends it when its own estimate ran out first, never after the next print began", async () => {
+      const short = await handLog(5 * HOUR, { estimatedMinutes: 60 });
+      const live = await startPrint();
+      await report(live.attemptId);
+      const ended = (await attemptOf(short.itemId, short.id))?.endedAt;
+      const started = (await attemptOf(short.itemId, short.id))?.printedAt ?? 0;
+      expect(ended).toBe(started + HOUR);
+      expect(ended).toBeLessThan(live.attempt.printedAt);
+    });
+
+    it("sweeps once per print: the same one reported again after progress: null changes nothing", async () => {
+      const hand = await handLog(HOUR);
+      const live = await startPrint();
+      await report(live.attemptId);
+      // Someone puts it back on the bed (undo), and the bridge drops out and comes back with the same print.
+      await request(`/api/attempts/${hand.id}`, { method: "PATCH", json: { endedAt: null }, cookie });
+      await report(live.attemptId, null);
+      await report(live.attemptId);
+      await report(live.attemptId);
+      expect((await attemptOf(hand.itemId, hand.id))?.endedAt).toBeNull();
+      // A new print is a new switch.
+      const next = await startPrint();
+      await report(next.attemptId);
+      expect((await attemptOf(hand.itemId, hand.id))?.endedAt).not.toBeNull();
+    });
+
+    it("keeps its bookkeeping out of what the app reads", async () => {
+      const live = await startPrint();
+      const printer = await (await report(live.attemptId)).json<PrinterResponse>();
+      expect(printer.bridge).not.toHaveProperty("sweptAttemptId");
+    });
+  });
+
   it("is closed to tokens without the printer scope", async () => {
     const made = await request("/api/agents", {
       method: "POST",

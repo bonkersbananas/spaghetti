@@ -57,6 +57,8 @@ export interface BridgeStatusData {
   platform?: string | null;
   /** What is wrong right now, if anything. Empty when all is well. */
   problems?: BridgeProblem[];
+  /** The last live print whose arrival ended earlier prints (the server's own; never sent to the app). */
+  sweptAttemptId?: string;
 }
 
 export interface BridgeStatus extends BridgeStatusData {

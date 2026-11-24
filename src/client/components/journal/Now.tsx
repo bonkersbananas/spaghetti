@@ -88,7 +88,9 @@ export default function Now() {
                       >
                         <PrintingCard
                           compact
-                          lead={onBed.length === 2 ? "short" : "wide"}
+                          // An answered print asking which build is a small square: a photo cover would lead with a tall picture and leave
+                          // the cards beside it floating over blank space in the row.
+                          lead={attempt.outcome !== null ? undefined : onBed.length === 2 ? "short" : "wide"}
                           item={item}
                           attempt={attempt}
                           person={people?.find((person) => person.id === creditedTo(attempt))}
