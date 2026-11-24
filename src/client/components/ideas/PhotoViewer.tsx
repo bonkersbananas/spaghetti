@@ -31,7 +31,12 @@ interface PhotoViewerProps {
    * button in its corner opens it instead.
    */
   largeTitle?: string;
+  /** A thumbnail strip sits under the viewer and says which photo is shown: no dots then. */
+  withStrip?: boolean;
 }
+
+/** Past this many photos the dots become "2 / 16". */
+const MAX_DOTS = 6;
 
 /** Keeps the frame between 4:5 and 4:3, shaped by the cover. */
 function frameAspect(photo: PhotoView | undefined): number {
@@ -108,6 +113,7 @@ export function PhotoViewer({
   className,
   capOnPhone,
   largeTitle,
+  withStrip,
 }: PhotoViewerProps) {
   const isDesktop = useIsDesktop();
   const scroller = useRef<HTMLDivElement>(null);
@@ -252,17 +258,24 @@ export function PhotoViewer({
 
       {many && (
         <>
-          <div className="mt-3 flex items-center justify-center gap-1.5" aria-hidden>
-            {photos.map((photo, i) => (
-              <span
-                key={photo.id}
-                className={cn(
-                  "rounded-pill duration-base h-1.5 transition-all ease-out",
-                  i === index ? "bg-ink-soft w-5" : "bg-ink/15 w-1.5",
-                )}
-              />
+          {!withStrip &&
+            (photos.length <= MAX_DOTS ? (
+              <div className="mt-3 flex items-center justify-center gap-1.5" aria-hidden>
+                {photos.map((photo, i) => (
+                  <span
+                    key={photo.id}
+                    className={cn(
+                      "rounded-pill duration-base h-1.5 transition-all ease-out",
+                      i === index ? "bg-ink-soft w-5" : "bg-ink/15 w-1.5",
+                    )}
+                  />
+                ))}
+              </div>
+            ) : (
+              <p className="text-ink-soft mt-3 text-center text-sm tabular-nums" aria-hidden>
+                {index + 1} / {photos.length}
+              </p>
             ))}
-          </div>
           <div className="pointer-events-none absolute inset-x-3 top-1/2 hidden -translate-y-1/2 justify-between md:flex">
             <IconButton
               icon={PreviousIcon}
