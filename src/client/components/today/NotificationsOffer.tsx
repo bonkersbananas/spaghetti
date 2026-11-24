@@ -15,7 +15,7 @@ export default function NotificationsOffer() {
   const queryClient = useQueryClient();
   const device = usePushDevice();
   const dismiss = useMutation({
-    mutationFn: () => api("/push/offer/dismiss", { method: "POST" }),
+    mutationFn: () => api("/push/offer", { method: "PUT", json: { dismissed: true } }),
     onMutate: () =>
       queryClient.setQueryData(pushQuery.queryKey, (data?: PushConfig) => data && { ...data, offerDismissed: true }),
     onError: () => {

@@ -46,6 +46,7 @@ const change = z.object({
   timeZone: timeZone.optional(),
 });
 const target = z.object({ endpoint });
+const offer = z.object({ dismissed: z.boolean() });
 
 /**
  * This person's devices for web push. Person-only: not in auth/scopes.ts, and its reads are listed in
@@ -72,14 +73,14 @@ export const pushRoutes = new Hono<AppEnv>()
       })),
     });
   })
-  /** "Not now" on Today's offer: for good, for this person on every device. */
-  .post("/offer/dismiss", async (c) => {
-    await c.var.db.update(users).set({ pushOfferDismissedAt: new Date() }).where(eq(users.id, c.var.user.id));
-    return c.body(null, 204);
-  })
-  /** Brings the offer back (undoing "Not now"; the e2e tests reset with it). */
-  .delete("/offer/dismiss", async (c) => {
-    await c.var.db.update(users).set({ pushOfferDismissedAt: null }).where(eq(users.id, c.var.user.id));
+  /** "Not now" on Today's offer sets it, for good and for this person on every device; false brings the offer back. */
+  .put("/offer", async (c) => {
+    const parsed = offer.safeParse(await c.req.json().catch(() => null));
+    if (!parsed.success) return apiError(c, 400, "invalid", "That couldn't be read.");
+    await c.var.db
+      .update(users)
+      .set({ pushOfferDismissedAt: parsed.data.dismissed ? new Date() : null })
+      .where(eq(users.id, c.var.user.id));
     return c.body(null, 204);
   })
   /** Turns notifications on for a device (or refreshes it: the browser may renew its subscription). */
@@ -171,4 +172,4 @@ export const pushRoutes = new Hono<AppEnv>()
   });
 
 /** For the OpenAPI document (worker/openapi). */
-export { change as pushChange, subscribe, target as pushTarget };
+export { change as pushChange, offer as pushOffer, subscribe, target as pushTarget };

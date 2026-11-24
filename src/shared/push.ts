@@ -95,6 +95,8 @@ export interface PushMessage {
   /** Replaces an earlier notification for the same thing. */
   tag: string;
   url: string;
+  /** Sound and vibration again when this replaces a notification still showing under the same tag. */
+  renotify?: boolean;
   attemptId?: string;
   itemId?: string;
   actions: Array<{ action: string; title: string }>;
@@ -169,6 +171,7 @@ export function reminderMessage(
   const name = itemTitle.trim() || "A print";
   return {
     kind: "reminder",
+    renotify: true,
     title: `${name} is still waiting`,
     body: owner ? `When you have a moment: how did ${owner}'s print go?` : "When you have a moment: how did it go?",
     tag: `attempt-${attempt.id}`,

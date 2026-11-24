@@ -89,7 +89,10 @@ const outcomeOf = async (page: Page, itemId: string, attemptId: string) => {
 };
 
 test.afterEach(async ({ page }) => {
-  await page.request.delete("/api/push/offer/dismiss", { headers: { Origin: new URL(page.url()).origin } });
+  await page.request.put("/api/push/offer", {
+    data: { dismissed: false },
+    headers: { Origin: new URL(page.url()).origin },
+  });
   await page.request.delete("/api/push/subscription", {
     data: { endpoint: ENDPOINT },
     headers: { Origin: new URL(page.url()).origin },

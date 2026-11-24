@@ -266,7 +266,9 @@ describe("the offer to turn notifications on", () => {
   it("is waved off for good, for that person only", async () => {
     const before = await (await request("/api/push", { cookie: alex })).json<{ offerDismissed: boolean }>();
     expect(before.offerDismissed).toBe(false);
-    expect((await request("/api/push/offer/dismiss", { method: "POST", cookie: alex })).status).toBe(204);
+    expect((await request("/api/push/offer", { method: "PUT", cookie: alex, json: { dismissed: true } })).status).toBe(
+      204,
+    );
     expect(
       (await (await request("/api/push", { cookie: alex })).json<{ offerDismissed: boolean }>()).offerDismissed,
     ).toBe(true);

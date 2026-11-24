@@ -2769,7 +2769,13 @@ export const shots: Shot[] = [
     name: "today-notifications-offer",
     path: "/today",
     prepare: async (page) => {
-      await page.evaluate(() => fetch("/api/push/offer/dismiss", { method: "DELETE" }));
+      await page.evaluate(() =>
+        fetch("/api/push/offer", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ dismissed: false }),
+        }),
+      );
       // Headless Chromium answers "denied", which hides the offer (nothing can be turned on): a person who has
       // not been asked yet has "default". Only while this flag is set, so the other shots keep what they had.
       await page.addInitScript(() => {
@@ -2787,7 +2793,11 @@ export const shots: Shot[] = [
     cleanup: async (page) => {
       await page.evaluate(() => {
         sessionStorage.removeItem("offer-shot");
-        return fetch("/api/push/offer/dismiss", { method: "POST" });
+        return fetch("/api/push/offer", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ dismissed: true }),
+        });
       });
     },
   },
