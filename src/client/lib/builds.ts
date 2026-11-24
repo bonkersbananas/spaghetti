@@ -21,7 +21,7 @@ import {
 import type { BridgeProgress } from "@shared/bridge";
 import { bestPhoto, finalPhoto } from "@shared/cover";
 import type { AttemptPart } from "@shared/parts";
-import { isOffTheBed, livePrintProgress, printProgress } from "@shared/print-progress";
+import { bedOrderKey, livePrintProgress, printProgress } from "@shared/print-progress";
 import { type QueryClient, queryOptions, useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
 import { toast } from "@/components/ui/Toast";
@@ -422,17 +422,18 @@ export function printingAttempts(
     if (item.stage !== "building") continue;
     for (const attempt of item.attempts) if (attempt.outcome === null) found.push({ item, attempt });
   }
-  const rank = (attempt: AttemptView) =>
-    isOffTheBed(attempt)
-      ? 0
-      : (
-            (live?.attemptId === attempt.id ? livePrintProgress(live, now) : null) ??
-            printProgress(attempt.printedAt, attempt.settings.estimatedMinutes, now)
-          ).state === "due"
-        ? 1
-        : 2;
-  const recency = (attempt: AttemptView) => (isOffTheBed(attempt) ? (attempt.endedAt ?? 0) : attempt.printedAt);
-  return found.sort((a, b) => rank(a.attempt) - rank(b.attempt) || recency(b.attempt) - recency(a.attempt));
+  const key = (attempt: AttemptView) =>
+    bedOrderKey(
+      attempt,
+      (
+        (live?.attemptId === attempt.id ? livePrintProgress(live, now) : null) ??
+        printProgress(attempt.printedAt, attempt.settings.estimatedMinutes, now)
+      ).state,
+    );
+  return found.sort((a, b) => {
+    const [first, second] = [key(a.attempt), key(b.attempt)];
+    return first.rank - second.rank || second.recency - first.recency;
+  });
 }
 
 /**
