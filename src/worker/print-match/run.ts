@@ -20,7 +20,7 @@ import { recordChange } from "../changes.ts";
 import { type Db, getDb } from "../db/index.ts";
 import { attempts, items, printJobs, printMatchRuns, spools } from "../db/schema.ts";
 import type { AppEnv } from "../env.ts";
-import { loadCandidates } from "../prints.ts";
+import { loadCandidates, printFactsOf } from "../prints.ts";
 import { askClaudeForBuild, type CandidateToShow } from "./claude.ts";
 
 /** Per day, for the whole workspace: a printer prints a handful a day, and most of them the matcher places. */
@@ -113,8 +113,10 @@ export async function runPrintMatch(
   // Someone answered already, or it was moved: nothing to ask.
   if (!found?.job.asking || found.job.itemId !== found.attempt.itemId) return;
   const { attempt, job } = found;
-  // Nothing to go on, and nothing would show: the question offers no build for a print without a name or a mark.
-  if (!job.name && !job.fileId) return;
+  // What the question itself goes on (GET /api/attempts/:id/suggestions): the printer's name for it, else its file's or
+  // its build's. With nothing at all the question offers no build, and Claude's pick couldn't show.
+  const facts = await printFactsOf(db, attempt);
+  if (!facts.name && !facts.fileId) return;
   const now = Date.now();
 
   // The day's cap is shared by both people (UTC days: it only has to be about right).
@@ -122,10 +124,7 @@ export async function runPrintMatch(
   const capped = (await db.$count(printMatchRuns, gte(printMatchRuns.ranAt, since))) >= PRINT_MATCHES_PER_DAY;
   const startedAt = attempt.printedAt.getTime();
   const candidates = capped ? [] : await loadCandidates(db, [attempt.itemId], startedAt);
-  const scored = scorePrint(
-    { name: job.name, startedAt, estimateMinutes: job.estimateMinutes, fileId: job.fileId },
-    candidates,
-  );
+  const scored = scorePrint(facts, candidates);
   const touchedRows = candidates.length
     ? await db
         .select({ id: items.id, updatedAt: items.updatedAt })
@@ -181,7 +180,7 @@ export async function runPrintMatch(
   const answer = await askClaudeForBuild(
     apiKey,
     {
-      name: job.name,
+      name: facts.name,
       plate: job.plate,
       filaments: trays.map(spoolWords),
       estimateMinutes: job.estimateMinutes,

@@ -197,13 +197,22 @@ describe("Claude's second opinion on a print", () => {
     expect(await runs()).toHaveLength(0);
   });
 
-  it("isn't asked about a print with no name or mark: the question would offer nothing", async () => {
+  it("isn't asked about a print with no name, file or titled build: the question would offer nothing", async () => {
     const web = stubClaude({ pick: "Desk light" });
     await build("Desk light");
     const { attemptId } = await bridgePrints("named-for-now");
     await settled();
     await env.DB.prepare("DELETE FROM print_match_runs").run();
     await env.DB.prepare("UPDATE print_jobs SET name = NULL WHERE attempt_id = ?").bind(attemptId).run();
+    web.prompts.length = 0;
+    // Its build's title still names it, as the question would: Claude is asked about that.
+    await runPrintMatch(env, attemptId);
+    expect(web.prompts).toHaveLength(1);
+    expect(web.prompts[0]).toContain("Name: named-for-now");
+    await env.DB.prepare("DELETE FROM print_match_runs").run();
+    await env.DB.prepare("UPDATE items SET title = NULL WHERE id = (SELECT item_id FROM attempts WHERE id = ?)")
+      .bind(attemptId)
+      .run();
     web.prompts.length = 0;
     await runPrintMatch(env, attemptId);
     expect(web.prompts).toHaveLength(0);
