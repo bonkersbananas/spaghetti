@@ -121,9 +121,15 @@ export function Filters({ value, onChange, layout, tags = false }: FiltersProps)
 
   if (layout === "row") {
     const picked = base.flatMap(({ kind, chips }) => chips.filter((chip) => leads(kind, chip)));
-    const groups = [picked, ...base.map(({ kind, chips }) => chips.filter((chip) => !leads(kind, chip)))].filter(
-      (group) => group.length > 0,
-    );
+    const rest = base.map(({ kind, chips }) => chips.filter((chip) => !leads(kind, chip))).filter((g) => g.length > 0);
+    // A kind with one chip left joins the one before it (or after it): a lone chip between two dividers reads as noise.
+    const merged: ReactNode[][] = [];
+    for (const group of rest) {
+      if (group.length === 1 && merged.length > 0) merged[merged.length - 1] = [...merged[merged.length - 1], ...group];
+      else merged.push(group);
+    }
+    if (merged.length > 1 && merged[0].length === 1) merged.splice(0, 2, [...merged[0], ...merged[1]]);
+    const groups = [picked, ...merged].filter((group) => group.length > 0);
     return (
       <ChipRow label="Filters">
         {groups.map((group, index) => (

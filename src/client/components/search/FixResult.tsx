@@ -53,18 +53,26 @@ export const FixResult = forwardRef<HTMLAnchorElement, FixResultProps>(function 
         onOpen={onOpen}
         inCard="lg"
       >
-        <span className="flex items-center gap-2">
+        <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
           <OutcomeChip outcome={attempt.outcome} />
           <span className="text-small text-ink-faint ml-auto shrink-0 whitespace-nowrap">
-            attempt {fix.number} · {relativeTime(attempt.printedAt)}
+            <span className="md:hidden">attempt {fix.number} · </span>
+            {relativeTime(attempt.printedAt)}
           </span>
         </span>
         <span className="text-body text-ink line-clamp-2 min-w-0 font-semibold">
           <Highlight text={title} terms={terms} />
+          <span className="text-small text-ink-faint hidden font-medium md:inline">
+            {" "}
+            <span className="whitespace-nowrap">· attempt {fix.number}</span>
+          </span>
           {fix.partsLabel && (
             <span className="text-small text-ink-faint font-medium">
               {" "}
-              <span className="whitespace-nowrap">{fix.partsLabel}</span>
+              <span className="whitespace-nowrap">
+                <span className="hidden md:inline">· </span>
+                {fix.partsLabel}
+              </span>
             </span>
           )}
         </span>

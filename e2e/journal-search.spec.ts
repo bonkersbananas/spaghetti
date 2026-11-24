@@ -60,7 +60,7 @@ test("finds an attempt by a failure tag plus a material", { tag: "@phone" }, asy
 
   const attempts = page.getByRole("region", { name: "Attempts" });
   await expect(attempts.getByRole("link")).toHaveCount(1);
-  const result = attempts.getByRole("link", { name: /attempt 1.*Swatch box/ });
+  const result = attempts.getByRole("link", { name: /attempt 1.*Swatch box|Swatch box · attempt 1/ });
   await expect(result).toContainText("Corners peeled up");
   await expect(result.locator("mark", { hasText: "PETG" })).toBeVisible();
   await expect(page.getByText("Curled base")).toHaveCount(0);
@@ -251,7 +251,7 @@ test("a problem's word leads with what fixed it, and the times it happened fold 
 
   await page.goto("/search?q=warping");
   const fixed = page.getByRole("region", { name: "What fixed it" });
-  const fix = fixed.getByRole("link", { name: /attempt 3.*Swatch box/ });
+  const fix = fixed.getByRole("link", { name: /attempt 3.*Swatch box|Swatch box · attempt 3/ });
   await expect(fix).toBeVisible();
   // The failure it came after, what changed since then, and its note.
   await expect(fix).toContainText(/After Partly .* · Warping/);
