@@ -7888,27 +7888,6 @@ export const shots: Shot[] = [
     },
     cleanup: resetDrawerDivider,
   },
-  // ... and as a row of the Journal.
-  {
-    name: "answer-partly-printer-journal",
-    path: `/builds/${SEED_BUILD_IDS.drawerDivider}`,
-    prepare: async (page) => {
-      const card = page
-        .getByRole("listitem")
-        .filter({ hasText: /off the bed/i })
-        .first();
-      await card.getByRole("radio", { name: /^Partly/ }).click();
-      await answered(page, "Partly");
-      await page.keyboard.press("Escape");
-      await page.getByRole("dialog").waitFor({ state: "detached" });
-      await page.waitForTimeout(1500);
-      await page.goto("about:blank");
-      await page.goto("/journal");
-      await page.getByText("Drawer divider").first().waitFor();
-      await page.waitForTimeout(800);
-    },
-    cleanup: resetDrawerDivider,
-  },
   // ... on a phone with the keyboard up (it comes with the tap on Partly): the note, the short row of tags and Done
   // stay in view above the keys ...
   {
