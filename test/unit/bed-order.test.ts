@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { bedOrderKey, type PrintProgressState } from "../../src/shared/print-progress.ts";
+import { bedOrderKey, compareBedOrder, type PrintProgressState } from "../../src/shared/print-progress.ts";
 
 const MIN = 60_000;
 
@@ -11,12 +11,12 @@ interface Print {
   outcome?: string | null;
 }
 
-/** The order a screen lists the prints in: rank ascending, then recency descending. */
+/** The order the screens list the prints in: the keys and the comparison `printingAttempts` sorts with. */
 const order = (prints: Print[]) =>
   prints
     .filter((print) => (print.outcome ?? null) === null)
     .map((print) => ({ id: print.id, ...bedOrderKey({ outcome: null, ...print }, print.state) }))
-    .sort((a, b) => a.rank - b.rank || b.recency - a.recency)
+    .sort(compareBedOrder)
     .map((print) => print.id);
 
 describe("the order of prints on the bed", () => {

@@ -21,7 +21,7 @@ import {
 import type { BridgeProgress } from "@shared/bridge";
 import { bestPhoto, finalPhoto } from "@shared/cover";
 import type { AttemptPart } from "@shared/parts";
-import { bedOrderKey, livePrintProgress, printProgress } from "@shared/print-progress";
+import { bedOrderKey, compareBedOrder, livePrintProgress, printProgress } from "@shared/print-progress";
 import { type QueryClient, queryOptions, useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
 import { toast } from "@/components/ui/Toast";
@@ -430,10 +430,7 @@ export function printingAttempts(
         printProgress(attempt.printedAt, attempt.settings.estimatedMinutes, now)
       ).state,
     );
-  return found.sort((a, b) => {
-    const [first, second] = [key(a.attempt), key(b.attempt)];
-    return first.rank - second.rank || second.recency - first.recency;
-  });
+  return found.sort((a, b) => compareBedOrder(key(a.attempt), key(b.attempt)));
 }
 
 /**

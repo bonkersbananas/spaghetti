@@ -105,3 +105,7 @@ export function bedOrderKey(
   if (isOffTheBed(attempt)) return { rank: 0, recency: attempt.endedAt ?? 0 };
   return { rank: state === "due" ? 1 : 2, recency: attempt.printedAt };
 }
+
+/** Sorts prints by their `bedOrderKey`s: the order every screen lists the prints on the bed in. */
+export const compareBedOrder = (a: { rank: number; recency: number }, b: { rank: number; recency: number }) =>
+  a.rank - b.rank || b.recency - a.recency;
