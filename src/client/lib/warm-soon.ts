@@ -10,14 +10,17 @@ export function useWarmSoon(load: () => Promise<unknown>) {
   useEffect(() => {
     const events = ["keydown", "pointerdown"] as const;
     let done = false;
-    const warm = () => {
+    const warm = (event?: Event) => {
       if (done) return;
+      // A shortcut (⌘K) is about to ask for its own code: the other sheets wait a moment for the link, which on a slow
+      // phone the palette's chunks would otherwise share with them. The timer below still warms them.
+      if (event instanceof KeyboardEvent && (event.ctrlKey || event.metaKey)) return;
       done = true;
       for (const type of events) window.removeEventListener(type, warm, true);
       void load();
     };
     for (const type of events) window.addEventListener(type, warm, { capture: true, passive: true });
-    const timer = setTimeout(warm, 1000);
+    const timer = setTimeout(() => warm(), 1000);
     return () => {
       clearTimeout(timer);
       for (const type of events) window.removeEventListener(type, warm, true);
