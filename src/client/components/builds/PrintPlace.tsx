@@ -252,7 +252,7 @@ export function WhichBuildLine({
               // In a span of its own: a MetaList piece is a flex box, which would drop the space after "Same file:".
               <span>
                 {byClaude && (
-                  <SparkleIcon size={14} weight="fill" aria-hidden className="mr-1 inline-block align-[-2px]" />
+                  <SparkleIcon size={14} weight="fill" aria-hidden className="mr-1 inline-block align-text-bottom" />
                 )}
                 <KeepNames text={why} names={names} />
               </span>
