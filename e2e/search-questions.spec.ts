@@ -65,7 +65,7 @@ test("a settings question leads with what worked, shows the matching setting and
 
   const answer = page.getByRole("region", { name: "What worked" });
   await expect(answer.getByRole("link")).toHaveCount(1);
-  const result = answer.getByRole("link", { name: /Tugboat hull · attempt 2/ });
+  const result = answer.getByRole("link", { name: /attempt 2.*Tugboat hull/ });
   await expect(result).toContainText("Clean and flat");
   // The setting the words matched is on the card.
   await expect(result.locator("mark", { hasText: "bed" })).toBeVisible();

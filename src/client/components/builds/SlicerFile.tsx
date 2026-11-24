@@ -137,12 +137,18 @@ export function FileCard({
   // A story card's plain file is quiet meta on one line ("tugboat.gcode.3mf · 27 KB"), not a second heading under the note.
   const oneLine = !!compact && !named && !opener && !note && !status && meta.length > 0;
   const text = oneLine ? (
-    <span className="text-small text-ink-faint tabular flex min-w-0 flex-1 items-baseline gap-1.5">
+    <span className="text-small text-ink-faint tabular flex min-w-0 flex-1 flex-col gap-0.5">
       <span className="text-ink-soft truncate font-medium" title={name}>
         {name}
       </span>
-      <span aria-hidden>·</span>
-      <span className="whitespace-nowrap">{meta.join(" · ")}</span>
+      <MetaList className="text-caption">
+        {meta.map((piece, index) => (
+          // biome-ignore lint/suspicious/noArrayIndexKey: the pieces are their place in the line.
+          <span key={index} className="whitespace-nowrap">
+            {piece}
+          </span>
+        ))}
+      </MetaList>
     </span>
   ) : (
     <div className={cn("flex min-w-0 flex-1 flex-col gap-0.5", !!status && "md:self-end")}>

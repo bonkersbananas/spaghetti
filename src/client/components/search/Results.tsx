@@ -176,15 +176,18 @@ export const AttemptResult = forwardRef<HTMLAnchorElement, AttemptResultProps>(f
     >
       <span className="flex items-center gap-2">
         <OutcomeChip outcome={attempt.outcome} offTheBed={isOffTheBed(attempt)} />
-        <span className="text-small text-ink-faint ml-auto shrink-0">{relativeTime(attempt.printedAt)}</span>
+        <span className="text-small text-ink-faint ml-auto shrink-0 whitespace-nowrap">
+          attempt {hit.number} · {relativeTime(attempt.printedAt)}
+        </span>
       </span>
       <span className="text-body text-ink line-clamp-2 min-w-0 font-semibold">
         <Highlight text={title} terms={terms} />
-        <span className="text-small text-ink-faint font-medium">
-          {" "}
-          <span className="whitespace-nowrap">· attempt {hit.number}</span>
-          {hit.partsLabel ? ` · ${hit.partsLabel}` : ""}
-        </span>
+        {hit.partsLabel && (
+          <span className="text-small text-ink-faint font-medium">
+            {" "}
+            <span className="whitespace-nowrap">{hit.partsLabel}</span>
+          </span>
+        )}
       </span>
       {attempt.note && <Highlight text={attempt.note} terms={terms} className="text-body text-ink-soft line-clamp-2" />}
       {hit.coachIdea && (

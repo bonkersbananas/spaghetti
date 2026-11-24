@@ -224,7 +224,7 @@ test("picks a spool from the pantry for an attempt's filament", { tag: "@phone" 
   // The spool's page lists the print.
   await page.goto(`/pantry/${silk}`);
   const printed = page.getByRole("region", { name: /Printed with it/ });
-  await expect(printed.getByRole("link", { name: /Lampshade · attempt 1/ })).toBeVisible();
+  await expect(printed.getByRole("link", { name: /attempt 1.*Lampshade/ })).toBeVisible();
   await expect(printed).toContainText("1 worked");
 });
 

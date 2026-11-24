@@ -55,15 +55,18 @@ export const FixResult = forwardRef<HTMLAnchorElement, FixResultProps>(function 
       >
         <span className="flex items-center gap-2">
           <OutcomeChip outcome={attempt.outcome} />
-          <span className="text-small text-ink-faint ml-auto shrink-0">{relativeTime(attempt.printedAt)}</span>
+          <span className="text-small text-ink-faint ml-auto shrink-0 whitespace-nowrap">
+            attempt {fix.number} · {relativeTime(attempt.printedAt)}
+          </span>
         </span>
         <span className="text-body text-ink line-clamp-2 min-w-0 font-semibold">
           <Highlight text={title} terms={terms} />
-          <span className="text-small text-ink-faint font-medium">
-            {" "}
-            <span className="whitespace-nowrap">· attempt {fix.number}</span>
-            {fix.partsLabel ? ` · ${fix.partsLabel}` : ""}
-          </span>
+          {fix.partsLabel && (
+            <span className="text-small text-ink-faint font-medium">
+              {" "}
+              <span className="whitespace-nowrap">{fix.partsLabel}</span>
+            </span>
+          )}
         </span>
         <span className="text-small text-ink-faint">{afterWords(after, tags)}</span>
         {fix.changes.length > 0 ? (

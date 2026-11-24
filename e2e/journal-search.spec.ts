@@ -60,7 +60,7 @@ test("finds an attempt by a failure tag plus a material", { tag: "@phone" }, asy
 
   const attempts = page.getByRole("region", { name: "Attempts" });
   await expect(attempts.getByRole("link")).toHaveCount(1);
-  const result = attempts.getByRole("link", { name: /Swatch box · attempt 1/ });
+  const result = attempts.getByRole("link", { name: /attempt 1.*Swatch box/ });
   await expect(result).toContainText("Corners peeled up");
   await expect(result.locator("mark", { hasText: "PETG" })).toBeVisible();
   await expect(page.getByText("Curled base")).toHaveCount(0);
@@ -251,7 +251,7 @@ test("a problem's word leads with what fixed it, and the times it happened fold 
 
   await page.goto("/search?q=warping");
   const fixed = page.getByRole("region", { name: "What fixed it" });
-  const fix = fixed.getByRole("link", { name: /Swatch box · attempt 3/ });
+  const fix = fixed.getByRole("link", { name: /attempt 3.*Swatch box/ });
   await expect(fix).toBeVisible();
   // The failure it came after, what changed since then, and its note.
   await expect(fix).toContainText(/After Partly .* · Warping/);
@@ -336,4 +336,29 @@ test("the search field's × takes a tap anywhere at the field's end, never one i
   await expect(box).toBeFocused();
   await expect(box).toHaveValue("warping");
   await expect(clear).toBeVisible();
+});
+
+test("picked filters lead the phone's chip row, and stay put when tapped", { tag: "@phone" }, async ({
+  page,
+  isMobile,
+}) => {
+  test.skip(!isMobile, "the row only scrolls on phones");
+  await build(page, "Swatch box", [
+    { outcome: "failed", ago: 3 * HOUR, note: "Stringy", failureTags: ["stringing"], settings: petg(70) },
+    { outcome: "success", ago: 2 * HOUR, note: "Fine", settings: pla },
+  ]);
+  await page.goto("/search?tag=stringing&material=PETG");
+  const row = page.getByRole("group", { name: "Filters" });
+  const picked = row.getByRole("button", { pressed: true });
+  await expect(picked).toHaveCount(2);
+  const view = page.viewportSize()?.width ?? 390;
+  for (const chip of await picked.all()) {
+    const box = await chip.boundingBox();
+    expect(box && box.x >= 0 && box.x + box.width <= view).toBe(true);
+  }
+  // Tapping another chip doesn't shuffle the row.
+  const before = await row.getByRole("button").allTextContents();
+  await row.getByRole("button", { name: "Worked" }).click();
+  await expect(row.getByRole("button", { pressed: true })).toHaveCount(3);
+  expect(await row.getByRole("button").allTextContents()).toEqual(before);
 });
