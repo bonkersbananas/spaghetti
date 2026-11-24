@@ -3,7 +3,7 @@ import { Hono } from "hono";
 import { z } from "zod";
 import { fromBase64Url } from "../../shared/base64url.ts";
 import { isTimeZone, type PushConfig, testMessage } from "../../shared/push.ts";
-import { pushSubscriptions } from "../db/schema.ts";
+import { pushSubscriptions, users } from "../db/schema.ts";
 import type { AppEnv } from "../env.ts";
 import { apiError } from "../http.ts";
 import { loadVapid, pushTo } from "../push/nudges.ts";
@@ -46,6 +46,7 @@ const change = z.object({
   timeZone: timeZone.optional(),
 });
 const target = z.object({ endpoint });
+const offer = z.object({ dismissed: z.boolean() });
 
 /**
  * This person's devices for web push. Person-only: not in auth/scopes.ts, and its reads are listed in
@@ -54,7 +55,13 @@ const target = z.object({ endpoint });
 export const pushRoutes = new Hono<AppEnv>()
   .get("/", async (c) => {
     const rows = await c.var.db.select().from(pushSubscriptions).where(eq(pushSubscriptions.userId, c.var.user.id));
+    const offer = await c.var.db
+      .select({ at: users.pushOfferDismissedAt })
+      .from(users)
+      .where(eq(users.id, c.var.user.id))
+      .get();
     return c.json<PushConfig>({
+      offerDismissed: !!offer?.at,
       publicKey: c.env.VAPID_PUBLIC_KEY || null,
       canSend: Boolean(c.env.VAPID_PUBLIC_KEY && c.env.VAPID_PRIVATE_KEY),
       subscriptions: rows.map((row) => ({
@@ -65,6 +72,16 @@ export const pushRoutes = new Hono<AppEnv>()
         timeZone: row.timeZone,
       })),
     });
+  })
+  /** "Not now" on Today's offer sets it, for good and for this person on every device; false brings the offer back. */
+  .put("/offer", async (c) => {
+    const parsed = offer.safeParse(await c.req.json().catch(() => null));
+    if (!parsed.success) return apiError(c, 400, "invalid", "That couldn't be read.");
+    await c.var.db
+      .update(users)
+      .set({ pushOfferDismissedAt: parsed.data.dismissed ? new Date() : null })
+      .where(eq(users.id, c.var.user.id));
+    return c.body(null, 204);
   })
   /** Turns notifications on for a device (or refreshes it: the browser may renew its subscription). */
   .put("/subscription", async (c) => {
@@ -155,4 +172,4 @@ export const pushRoutes = new Hono<AppEnv>()
   });
 
 /** For the OpenAPI document (worker/openapi). */
-export { change as pushChange, subscribe, target as pushTarget };
+export { change as pushChange, offer as pushOffer, subscribe, target as pushTarget };

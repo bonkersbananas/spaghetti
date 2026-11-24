@@ -4,6 +4,7 @@ import { type QueryClient, useQuery, useQueryClient } from "@tanstack/react-quer
 import { AnimatePresence, m, useReducedMotion } from "motion/react";
 import { use, useMemo } from "react";
 import { PrintingCard } from "@/components/builds/PrintingCard";
+import { NotificationsOfferGate } from "@/components/today/NotificationsOfferGate";
 import { Since } from "@/components/today/Since";
 import { Section } from "@/components/ui/Section";
 import { useVia } from "@/lib/agents";
@@ -106,6 +107,8 @@ export default function Now() {
             {hasDueUpkeep && <UpkeepLine />}
           </div>
           <div className="empty:hidden">{hasScoutPicks && <ScoutRow />}</div>
+          {/* Under the prints and the lines: it never competes with a print waiting for its answer. */}
+          <NotificationsOfferGate />
         </div>
       </Section>
     </>

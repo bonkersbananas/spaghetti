@@ -96,6 +96,8 @@ async function showNudge(event) {
   await self.registration.showNotification(message?.title ?? "Spaghetti", {
     body: message?.body ?? "",
     tag: message?.tag ?? "spaghetti",
+    // A reminder replaces the first nudge if it is still showing: it must still make a sound.
+    renotify: message?.renotify === true,
     icon: "/icon-192.png",
     data: { url: message?.url ?? "/ideas", attemptId: message?.attemptId, itemId: message?.itemId },
     // Android and desktop Chrome have buttons; iPhone has none, and tapping the notification opens the sheet.

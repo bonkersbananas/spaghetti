@@ -5,12 +5,14 @@ import {
   isQuietHour,
   nudgeMessage,
   type PushMessage,
+  REMINDER_AFTER_MINUTES,
+  reminderMessage,
   UPKEEP_NUDGE_GAP_HOURS,
   upkeepMessage,
 } from "../../shared/push.ts";
 import { sinceWords } from "../../shared/upkeep.ts";
 import { getDb } from "../db/index.ts";
-import { attempts, items, pushNudges, pushSubscriptions, upkeepTasks, users } from "../db/schema.ts";
+import { attempts, items, pushNudges, pushReminders, pushSubscriptions, upkeepTasks, users } from "../db/schema.ts";
 import { readsByAttempt, toApiPhotoRead } from "../photo-read/run.ts";
 import { printerAgents } from "../prints.ts";
 import { loadUpkeep } from "../routes/upkeep.ts";
@@ -147,6 +149,85 @@ export async function sendNudges(env: Env, now = Date.now(), deliver: typeof pus
         await env.DB.prepare("DELETE FROM push_nudges WHERE attempt_id = ? AND user_id = ?")
           .bind(attempt.id, userId)
           .run();
+      }
+    }
+  }
+  return { sent };
+}
+
+/**
+ * The one reminder (cron, with the others): a print whose first nudge went out an hour ago and that still has no
+ * outcome goes to everyone who has push on, whoever started it, outside their quiet hours and inside the same
+ * twelve-hour window as the nudge. Once per attempt and person (push_reminders, claimed before sending, released
+ * if nothing got through); an outcome set meanwhile cancels it.
+ */
+export async function sendReminders(env: Env, now = Date.now(), deliver: typeof pushTo = pushTo) {
+  const db = getDb(env.DB);
+  const nudged = await db
+    .select({ attemptId: pushNudges.attemptId, at: pushNudges.sentAt })
+    .from(pushNudges)
+    .where(gt(pushNudges.sentAt, new Date(now - LOOK_BACK_MS)));
+  const firstAt = new Map<string, number>();
+  for (const { attemptId, at } of nudged) {
+    firstAt.set(attemptId, Math.min(at.getTime(), firstAt.get(attemptId) ?? Infinity));
+  }
+  const waiting = [...firstAt].filter(([, at]) => now - at >= REMINDER_AFTER_MINUTES * 60_000).map(([id]) => id);
+  if (!waiting.length) return { sent: 0 };
+  const open = await db
+    .select({ attempt: attempts, title: items.title })
+    .from(attempts)
+    .innerJoin(items, eq(items.id, attempts.itemId))
+    .where(
+      and(inArray(attempts.id, waiting), isNull(attempts.outcome), isNull(attempts.deletedAt), isNull(items.deletedAt)),
+    );
+  const due = open.filter(({ attempt }) =>
+    dueNudge(
+      {
+        outcome: attempt.outcome,
+        printedAt: attempt.printedAt.getTime(),
+        endedAt: attempt.endedAt?.getTime() ?? null,
+        estimatedMinutes: attempt.settings.estimatedMinutes,
+      },
+      now,
+    ),
+  );
+  if (!due.length) return { sent: 0 };
+  const vapid = await loadVapid(env);
+  if (!vapid) return { sent: 0 };
+  const subscriptions = await db.select().from(pushSubscriptions);
+  if (!subscriptions.length) return { sent: 0 };
+  const names = new Map((await db.select({ id: users.id, name: users.name }).from(users)).map((u) => [u.id, u.name]));
+  const printer = await printerAgents(db);
+  let sent = 0;
+  for (const { attempt, title } of due) {
+    const own = creditedTo({
+      createdBy: attempt.createdBy,
+      startedBy: attempt.startedBy,
+      fromPrinter: !!attempt.createdVia && printer.has(attempt.createdVia),
+    });
+    for (const userId of new Set(subscriptions.map((s) => s.userId))) {
+      const awake = subscriptions.filter((s) => s.userId === userId && !isQuietHour(s.timeZone, now));
+      if (!awake.length) continue; // Waits for the morning, while the window lasts.
+      const claim = await env.DB.prepare(
+        "INSERT OR IGNORE INTO push_reminders (attempt_id, user_id, sent_at) VALUES (?, ?, ?)",
+      )
+        .bind(attempt.id, userId, now)
+        .run();
+      if (!claim.meta.changes) continue;
+      const message = reminderMessage(
+        attempt,
+        title ?? "",
+        own === null || own === userId ? undefined : names.get(own),
+      );
+      let delivered = 0;
+      for (const device of awake) {
+        if ((await deliver(env, vapid, device, message)) === "sent") delivered++;
+      }
+      sent += delivered;
+      if (!delivered) {
+        await db
+          .delete(pushReminders)
+          .where(and(eq(pushReminders.attemptId, attempt.id), eq(pushReminders.userId, userId)));
       }
     }
   }

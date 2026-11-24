@@ -26,7 +26,7 @@ import { journalQuery, summaryQuery } from "../routes/journal.ts";
 import { decision } from "../routes/oauth.ts";
 import { bridgeSchema, setSlot, setupSchema } from "../routes/printer.ts";
 import { moveAttempt, updatePrint, updateStartedBy } from "../routes/prints.ts";
-import { pushChange, pushTarget, subscribe } from "../routes/push.ts";
+import { pushChange, pushOffer, pushTarget, subscribe } from "../routes/push.ts";
 import { createRecipe, recipeQuery, updateRecipe } from "../routes/recipes.ts";
 import { scoutKeepBody } from "../routes/scout.ts";
 import { searchQuery, whatWorkedQuery } from "../routes/search.ts";
@@ -264,8 +264,15 @@ export const operations: Record<string, Operation> = {
     response: any("Push settings.", {
       publicKey: z.string().nullable(),
       canSend: z.boolean(),
+      offerDismissed: z.boolean(),
       subscriptions: z.array(z.looseObject({})),
     }),
+  },
+  "PUT /push/offer": {
+    summary: "Waves off (or brings back) the offer to turn notifications on, for this person on every device.",
+    body: pushOffer,
+    response: "empty",
+    status: 204,
   },
   "PUT /push/subscription": {
     summary: "Saves this device for web push.",

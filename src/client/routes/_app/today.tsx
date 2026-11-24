@@ -13,6 +13,7 @@ import { BackBurner } from "@/components/today/BackBurner";
 import { InThePrinter } from "@/components/today/InThePrinter";
 import { Lately } from "@/components/today/Lately";
 import { NeedsYou } from "@/components/today/NeedsYou";
+import { NotificationsOfferGate } from "@/components/today/NotificationsOfferGate";
 import { PickUpAgain, pickUpAgain } from "@/components/today/PickUpAgain";
 import { Since } from "@/components/today/Since";
 import { UpNext, upNextIdeas } from "@/components/today/UpNext";
@@ -234,6 +235,8 @@ function Today() {
             <div className="order-6 empty:hidden">
               {!loading && <BackBurner idea={burner} person={burner ? byId.get(burner.createdBy) : undefined} />}
             </div>
+            {/* Last in the column, under what is happening: it never pushes a print waiting for its answer down. */}
+            {leftHasContent && <NotificationsOfferGate className="order-7 empty:hidden" />}
           </div>
           <div
             ref={stickyColumn}
@@ -270,6 +273,8 @@ function Today() {
           </div>
         </div>
       )}
+      {/* With no left column to hold it (nothing on the bed, no picks, or a welcome instead of the columns) it sits last, at the column's width. */}
+      {(brandNew || quiet || !leftHasContent) && <NotificationsOfferGate className="mt-10 empty:hidden lg:max-w-2xl" />}
     </>
   );
 }

@@ -1,6 +1,6 @@
 # 0016. "How did it go?" arrives as a web push nudge, once, answerable in a tap
 
-Status: Accepted
+Status: Accepted (extended by [0079](0079-one-reminder-and-an-offer-to-turn-notifications-on.md))
 
 **Decision:** the Worker sends Web Push (VAPID, signed and encrypted with WebCrypto only) when a print comes off the bed (the bridge's `ended_at`) or, without the bridge, ten minutes after its slicer estimate. At most one nudge per attempt per person, to the person who started it, and to the other person only if they chose "Also tell me about their prints" on that device. Never between 22:00 and 07:00 in the device's time zone: those wait until morning and are dropped after twelve hours or if an outcome came first. Where the platform has notification buttons, Worked / Partly / Spaghetti record the outcome through the service worker (the same `POST /attempts/:id/finish` the app uses; offline, into the outbox); tapping the notification opens the attempt sheet (`/builds/:id?attempt=…&finish=1`).
 
