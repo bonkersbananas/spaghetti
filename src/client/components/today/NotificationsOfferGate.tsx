@@ -24,8 +24,21 @@ export function NotificationsOfferGate({ className }: { className?: string }) {
   const [resolved, setResolved] = useState(false);
   const onResolved = useCallback(() => setResolved(true), []);
   useEffect(() => {
-    const timer = setTimeout(() => setLater(true), 800);
-    return () => clearTimeout(timer);
+    // Its chunk and its push fetch share a slow phone's link with whatever the person opens first (the palette's code
+    // after a ⌘K): they start once the browser is idle, not at a fixed moment after the screen. The place is held
+    // already, so nothing moves whenever the card arrives.
+    let idle = 0;
+    let wait = 0;
+    const timer = setTimeout(() => {
+      const start = () => setLater(true);
+      if ("requestIdleCallback" in window) idle = requestIdleCallback(start, { timeout: 5000 });
+      else wait = setTimeout(start, 3000) as unknown as number;
+    }, 800);
+    return () => {
+      clearTimeout(timer);
+      clearTimeout(wait);
+      if (idle && "cancelIdleCallback" in window) cancelIdleCallback(idle);
+    };
   }, []);
   const holding = show && !resolved;
   return (
