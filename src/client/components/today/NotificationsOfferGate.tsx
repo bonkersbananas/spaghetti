@@ -27,8 +27,11 @@ export function NotificationsOfferGate({ className }: { className?: string }) {
     const timer = setTimeout(() => setLater(true), 800);
     return () => clearTimeout(timer);
   }, []);
+  const holding = show && !resolved;
   return (
-    <div className={cn(className ?? "empty:hidden", show && !resolved && "min-h-24 md:min-h-[10.5rem]")}>
+    <div className={cn(className ?? "empty:hidden", holding && "min-h-24 md:min-h-[10.5rem]")}>
+      {/* Not empty while the place is held, or the callers' empty:hidden would take it away. */}
+      {holding && <span aria-hidden />}
       {later && (
         <Suspense fallback={null}>
           <NotificationsOffer show={show} onResolved={onResolved} />
