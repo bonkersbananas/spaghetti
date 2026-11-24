@@ -26,6 +26,7 @@ import { useLiveFields } from "@/lib/use-autosave";
 import { useIdle } from "@/lib/use-idle";
 
 const LowUnderBays = lazy(() => import("@/components/pantry/LowUnderBays").then((m) => ({ default: m.LowUnderBays })));
+const OnTheBed = lazy(() => import("@/components/printer/OnTheBed").then((m) => ({ default: m.OnTheBed })));
 const Upkeep = lazy(() => import("@/components/printer/Upkeep").then((m) => ({ default: m.Upkeep })));
 // Below the fold, or only after a tap: their own chunks, not part of the first load.
 const DryingTable = lazy(() => import("@/components/printer/DryingTable").then((m) => ({ default: m.DryingTable })));
@@ -155,6 +156,16 @@ function Setup({ initial }: { initial: PrinterSetup }) {
     <div className="flex max-w-3xl flex-col gap-12 md:gap-16 xl:grid xl:max-w-6xl xl:grid-cols-2 xl:items-start xl:gap-x-14">
       {/* From 1280 the page is two columns: the machine and what it holds on the left, its upkeep on the right. */}
       <div className="flex flex-col gap-12 md:gap-16">
+        {/* The page leads with the print on the bed (or says the bed is empty), as Today and Builds draw it. */}
+        <Suspense
+          fallback={
+            <div aria-hidden>
+              <Skeleton className="h-28 rounded-lg" />
+            </div>
+          }
+        >
+          <OnTheBed />
+        </Suspense>
         <div className="bg-cream shadow-soft flex flex-col gap-5 rounded-xl p-5 md:p-6">
           <div className="flex items-start justify-between gap-3">
             <div className="flex flex-col">
