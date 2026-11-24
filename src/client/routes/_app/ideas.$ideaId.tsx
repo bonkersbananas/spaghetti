@@ -366,6 +366,7 @@ const Idea = memo(function Idea({ item }: { item: ItemView }) {
                 onIndexChange={select}
                 alt={alt}
                 largeTitle={itemName(item, "idea")}
+                withStrip
                 className="-mx-5 md:mx-0"
               />
               <PhotoStrip

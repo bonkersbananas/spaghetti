@@ -7516,6 +7516,20 @@ export const shots: Shot[] = [
       await page.evaluate(() => window.scrollBy(0, -90));
     },
   },
+  {
+    // "How did it go?" for the print that has printed: no "has about 56 g left" heads-up, the filament is used already.
+    name: "answer-short-spool",
+    path: `/builds/${SEED_BUILD_IDS.tugboat}`,
+    prepare: async (page) => {
+      await page.getByTestId("not-enough").waitFor();
+      await page.getByRole("button", { name: "How did it go?" }).first().click();
+      await page.getByRole("dialog", { name: /^Finish attempt/ }).waitFor();
+      await page.waitForTimeout(900);
+    },
+    cleanup: async (page) => {
+      await page.keyboard.press("Escape");
+    },
+  },
   { name: "spool-printed", path: `/pantry/${SEED_SPOOL_IDS.bambuGreen}`, fullPage: true },
   {
     // The AMS with a dual-colour silk in A3 and a tri-colour in A4.
