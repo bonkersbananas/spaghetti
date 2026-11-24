@@ -112,7 +112,7 @@ test("a search result's photo opens its attempt's photos; the words still open t
   await expect(page).toHaveURL(/\/search/);
   await expect(row).toBeFocused();
 
-  await press(row.getByText("attempt 1"), isMobile);
+  await press(row.getByText("attempt 1").locator("visible=true"), isMobile);
   await expect(page).toHaveURL(new RegExp(`/builds/${id}`));
 });
 
