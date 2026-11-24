@@ -7870,6 +7870,45 @@ export const shots: Shot[] = [
     },
     cleanup: resetDrawerDivider,
   },
+  // The same print once answered (decision 0023, amended): Partly reads "Partly" alone, the printer's Spaghetti tag only
+  // offered in the sheet ...
+  {
+    name: "answer-partly-printer-build",
+    path: `/builds/${SEED_BUILD_IDS.drawerDivider}`,
+    prepare: async (page) => {
+      const card = page
+        .getByRole("listitem")
+        .filter({ hasText: /off the bed/i })
+        .first();
+      await card.getByRole("radio", { name: /^Partly/ }).click();
+      await answered(page, "Partly");
+      await page.keyboard.press("Escape");
+      await page.getByRole("dialog").waitFor({ state: "detached" });
+      await page.waitForTimeout(1200);
+    },
+    cleanup: resetDrawerDivider,
+  },
+  // ... and as a row of the Journal.
+  {
+    name: "answer-partly-printer-journal",
+    path: `/builds/${SEED_BUILD_IDS.drawerDivider}`,
+    prepare: async (page) => {
+      const card = page
+        .getByRole("listitem")
+        .filter({ hasText: /off the bed/i })
+        .first();
+      await card.getByRole("radio", { name: /^Partly/ }).click();
+      await answered(page, "Partly");
+      await page.keyboard.press("Escape");
+      await page.getByRole("dialog").waitFor({ state: "detached" });
+      await page.waitForTimeout(1500);
+      await page.goto("about:blank");
+      await page.goto("/journal");
+      await page.getByText("Drawer divider").first().waitFor();
+      await page.waitForTimeout(800);
+    },
+    cleanup: resetDrawerDivider,
+  },
   // ... on a phone with the keyboard up (it comes with the tap on Partly): the note, the short row of tags and Done
   // stay in view above the keys ...
   {

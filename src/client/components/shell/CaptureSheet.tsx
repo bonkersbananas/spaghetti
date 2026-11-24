@@ -407,7 +407,7 @@ export function CaptureSheet() {
               onChange={(next) => {
                 const picked = outcome === next ? null : next;
                 // The printer's guess starts picked (a tap takes it off), as in the attempt sheet.
-                const guess = picked && picked !== "success" && suggestedFailure && !failureTags.length;
+                const guess = picked === "failed" && suggestedFailure && !failureTags.length;
                 setAnswer(picked, guess ? [suggestedFailure] : failureTags);
               }}
             />
