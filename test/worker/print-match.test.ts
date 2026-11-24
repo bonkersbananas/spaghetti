@@ -61,8 +61,12 @@ beforeEach(async () => {
   });
   token = (await made.json<NewTokenResponse>()).token;
   await asBridge("/api/printer/bridge", { method: "PUT", json: { printerState: "idle", progress: null } });
+  env.PRINT_MATCH_ON_FILE = "on";
 });
-afterEach(() => vi.restoreAllMocks());
+afterEach(() => {
+  env.PRINT_MATCH_ON_FILE = "off";
+  vi.restoreAllMocks();
+});
 
 async function build(title: string, stage: "building" | "idea" = "building") {
   const id = uuid();
@@ -217,6 +221,37 @@ describe("Claude's second opinion on a print", () => {
     await runPrintMatch(env, attemptId);
     expect(web.prompts).toHaveLength(0);
     expect(await runs()).toHaveLength(0);
+  });
+
+  it("isn't asked when the filing's switch is off (the Worker tests' default)", async () => {
+    env.PRINT_MATCH_ON_FILE = "off";
+    const web = stubClaude({ pick: "Desk light" });
+    await build("Desk light");
+    await bridgePrints("Shelf-bracket-v2-print");
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    expect(web.prompts).toHaveLength(0);
+    expect(await runs()).toHaveLength(0);
+  });
+
+  it("is asked with more than a hundred builds and ideas open", async () => {
+    const web = stubClaude({ pick: "Desk light", reason: "fits" });
+    const now = Date.now();
+    const user = await env.DB.prepare("SELECT id FROM users LIMIT 1").first<{ id: string }>();
+    // 120 ideas, made straight in the database.
+    await env.DB.batch(
+      Array.from({ length: 120 }, (_, i) =>
+        env.DB.prepare(
+          "INSERT INTO items (id, title, stage, note, created_by, created_at, updated_at) VALUES (?, ?, 'idea', '', ?, ?, ?)",
+        ).bind(uuid(), `Idea number ${i}`, user?.id, now - i * 60_000, now - i * 60_000),
+      ),
+    );
+    const desk = await build("Desk light");
+    const { attemptId } = await bridgePrints("Shelf-bracket-v2-print");
+    const run = await settled();
+    expect(run).toMatchObject({ status: "picked", item_id: desk });
+    expect(JSON.parse(String(run?.candidate_ids))).toHaveLength(30);
+    expect(web.prompts).toHaveLength(1);
+    expect((await suggestions(attemptId))[0]?.itemId).toBe(desk);
   });
 
   it("stops at the day's cap, and says so in the run", async () => {

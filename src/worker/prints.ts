@@ -128,6 +128,8 @@ export async function loadCandidates(db: Db, exclude: readonly string[], at: num
         fileName: attemptFiles.name,
         prefill: attemptFiles.prefill,
         jobName: printJobs.name,
+        jobAsking: printJobs.asking,
+        jobItemId: printJobs.itemId,
       })
       .from(attempts)
       .innerJoin(items, eq(items.id, attempts.itemId))
@@ -180,8 +182,13 @@ export async function loadCandidates(db: Db, exclude: readonly string[], at: num
     const prints: CandidatePrint[] = [];
     for (const row of ordered) {
       const attempt = numberOf.get(row.id) ?? 0;
+      // A print still asking in the printer's own build says nothing yet about what this build is.
+      const asking = !!row.jobAsking && row.jobItemId === row.itemId;
+      if (asking) candidate.unplaced = true;
       // The name the printer gave it (wherever it was filed first), newest first like the files.
-      if (row.jobName && !prints.some((one) => one.attempt === attempt)) prints.unshift({ name: row.jobName, attempt });
+      if (row.jobName && !asking && !prints.some((one) => one.attempt === attempt)) {
+        prints.unshift({ name: row.jobName, attempt });
+      }
       if (row.fileId && row.fileName) {
         files.unshift({ id: row.fileId, name: row.fileName, estimatedMinutes: estimateOf(row.prefill), attempt });
       }
@@ -193,11 +200,6 @@ export async function loadCandidates(db: Db, exclude: readonly string[], at: num
     candidates.get(send.itemId)?.sends.push({ fileId: send.fileId, at: send.at.getTime(), how: send.how });
   }
   return [...candidates.values()];
-}
-
-/** The builds and ideas a print may belong to, best first. */
-export async function suggestFor(db: Db, facts: PrintFacts, exclude: readonly string[]): Promise<ScoredCandidate[]> {
-  return scorePrint(facts, await loadCandidates(db, exclude, facts.startedAt));
 }
 
 /**
@@ -392,7 +394,9 @@ export async function fileThePrint(
     estimateMinutes: print?.estimateMinutes ?? null,
     fileId: print?.fileId ?? null,
   };
-  const placement = placePrint(await suggestFor(db, facts, [item.id]));
+  const candidates = await loadCandidates(db, [item.id], facts.startedAt);
+  const unplaced = new Set(candidates.filter((one) => one.unplaced).map((one) => one.id));
+  const placement = placePrint(scorePrint(facts, candidates), unplaced);
   const target =
     placement.kind === "match"
       ? await db

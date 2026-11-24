@@ -38,7 +38,7 @@ export const printMatchEnabled = (env: Pick<Env, "ANTHROPIC_API_KEY">) => !!env.
 
 /** After the bridge filed a print the matcher couldn't place: Claude is asked after the response. */
 export function matchAfterFiling(c: Context<AppEnv>, attemptId: string): void {
-  if (!printMatchEnabled(c.env)) return;
+  if (!printMatchEnabled(c.env) || c.env.PRINT_MATCH_ON_FILE === "off") return;
   try {
     c.executionCtx.waitUntil(
       runPrintMatch(c.env, attemptId, c.var.db).catch((error) =>
@@ -69,7 +69,7 @@ const clock = (at: number) =>
     minute: "2-digit",
   }).format(new Date(at));
 
-/** "PLA Navy Blue (Clas Ohlson)": what a spool is, in a few words. */
+/** "PLA Jade White (Bambu)": what a spool is, in a few words. */
 const spoolWords = (spool: { material: string; colorName: string | null; brand: string | null }) =>
   [spool.material, spool.colorName].filter(Boolean).join(" ") + (spool.brand ? ` (${spool.brand})` : "");
 
@@ -125,12 +125,18 @@ export async function runPrintMatch(
   const startedAt = attempt.printedAt.getTime();
   const candidates = capped ? [] : await loadCandidates(db, [attempt.itemId], startedAt);
   const scored = scorePrint(facts, candidates);
-  const touchedRows = candidates.length
-    ? await db
-        .select({ id: items.id, updatedAt: items.updatedAt })
-        .from(items)
-        .where(inArray(items.id, candidates.map((one) => one.id).slice(0, 500)))
-    : [];
+  // D1 binds at most 100 values a statement: the ids go in slices.
+  const ids = candidates.map((one) => one.id);
+  const touchedRows = (
+    await Promise.all(
+      Array.from({ length: Math.ceil(ids.length / 90) }, (_, i) =>
+        db
+          .select({ id: items.id, updatedAt: items.updatedAt })
+          .from(items)
+          .where(inArray(items.id, ids.slice(i * 90, (i + 1) * 90))),
+      ),
+    )
+  ).flat();
   const touched = new Map(touchedRows.map((row) => [row.id, row.updatedAt.getTime()]));
   const shown = pickShown(candidates, scored, touched);
 

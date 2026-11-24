@@ -265,100 +265,131 @@ describe("other signals", () => {
 });
 
 /**
- * A print the printer called "LMPS-lamp-shade-v3(4)-print": the lamp shades build has printed it (and the plain
- * "(4)") before and keeps its file, while a file of an unrelated idea was opened in Bambu Studio 54 minutes earlier.
+ * A made-up print, "BRKT-shelf-peg-v5(2)-print": the shelf pegs build has printed it (and the plain "(2)") before and
+ * keeps its file, while a file of an unrelated idea was opened in Bambu Studio 37 minutes earlier.
  */
 describe("a strong name against a file opened shortly before", () => {
-  const lampShades = build({
-    id: "lamps",
-    title: "LMPS lamp shades",
+  const shelfPegs = build({
+    id: "pegs",
+    title: "BRKT shelf pegs",
     startedAt: START - 3 * 24 * 60 * MINUTE,
-    attempts: 11,
+    attempts: 9,
     files: [
-      { id: "shade", name: "LMPS-lamp-shade.3mf" },
-      { id: "shade-v2", name: "LMPS-lamp-shade-v2.3mf" },
-      { id: "shade-v3", name: "LMPS-lamp-shade-v3.3mf" },
-      { id: "ring", name: "LMPS-fit-ring-v3.3mf" },
+      { id: "peg", name: "BRKT-shelf-peg.3mf" },
+      { id: "peg-v4", name: "BRKT-shelf-peg-v4.3mf" },
+      { id: "peg-v5", name: "BRKT-shelf-peg-v5.3mf" },
+      { id: "gauge", name: "BRKT-hole-gauge-v2.3mf" },
     ],
     prints: [
-      { name: "LMPS-lamp-shade-v3(4)", attempt: 7 },
-      { name: "LMPS-lamp-shade-v3(2)", attempt: 4 },
-      { name: "LMPS-fit-ring-v3(3)", attempt: 3 },
+      { name: "BRKT-shelf-peg-v5(2)", attempt: 6 },
+      { name: "BRKT-shelf-peg-v5", attempt: 4 },
+      { name: "BRKT-hole-gauge-v2(3)", attempt: 2 },
     ],
   });
-  const cranes = build({
-    id: "cranes",
-    title: "Harbour cranes, three designs",
+  const lanterns = build({
+    id: "lanterns",
+    title: "Paper lanterns, five shapes",
     stage: "idea",
     startedAt: null,
     attempts: 0,
-    files: [{ id: "cranes-file", name: "harbour_cranes.3mf" }],
-    sends: [{ fileId: "cranes-file", at: START - 54 * MINUTE, how: "studio" }],
+    files: [{ id: "lantern-file", name: "paper_lanterns.3mf" }],
+    sends: [{ fileId: "lantern-file", at: START - 37 * MINUTE, how: "studio" }],
   });
-  const print: PrintFacts = { name: "LMPS-lamp-shade-v3(4)-print", startedAt: START };
+  const print: PrintFacts = { name: "BRKT-shelf-peg-v5(2)-print", startedAt: START };
 
   it("reads the name without its filler, copy number and version", () => {
-    expect(printKey("LMPS-lamp-shade-v3(4)-print")).toBe("lmps lamp shade v3 4 print");
-    expect(looseKey("lmps lamp shade v3 4 print")).toBe("lmps lamp shade v3");
-    // Both sides are stemmed alike ("lmps" is "lmp" to it), so a plural never costs the match.
-    expect(coreKey("lmps lamp shade v3 4 print")).toBe("lmp lamp shade");
-    expect(coreKey(printKey("LMPS lamp shades"))).toBe("lmp lamp shade");
-    expect(coreKey("glass boxes")).toBe("glass box");
+    expect(printKey("BRKT-shelf-peg-v5(2)-print")).toBe("brkt shelf peg v5 print");
+    expect(looseKey("brkt shelf peg v5 print")).toBe("brkt shelf peg v5");
+    // Both sides are stemmed alike, so a plural never costs the match.
+    expect(coreKey("brkt shelf peg v5 print")).toBe("brkt shelf peg");
+    expect(coreKey(printKey("BRKT shelf pegs"))).toBe("brkt shelf peg");
+    expect(coreKey("tool boxes")).toBe("tool box");
     expect(coreKey("tray assemblies")).toBe("tray assembly");
+    // Numbers stay: they say which thing it is.
+    expect(coreKey("gear 24 v2")).toBe("gear 24");
   });
 
   it("goes straight into the build whose earlier prints and file have its name", () => {
-    const scored = scorePrint(print, [cranes, lampShades]);
-    expect(scored[0]?.itemId).toBe("lamps");
-    expect(scored[0]).toMatchObject({ score: 150 });
+    const scored = scorePrint(print, [lanterns, shelfPegs]);
+    expect(scored[0]).toMatchObject({ itemId: "pegs", score: 150 });
     expect(scored[0]?.reasons.map((reason) => reason.kind)).toEqual(["file", "printed", "title"]);
-    expect(placePrint(scored)).toMatchObject({ kind: "match", best: { itemId: "lamps" } });
-    expect(filedWords(scored[0]?.reasons ?? [])).toBe("Filed here: it printed LMPS-lamp-shade-v3, this build's file.");
+    expect(placePrint(scored)).toMatchObject({ kind: "match", best: { itemId: "pegs" } });
+    expect(filedWords(scored[0]?.reasons ?? [])).toBe("Filed here: it printed BRKT-shelf-peg-v5, this build's file.");
     expect(filedWords(scored[0]?.reasons.slice(1) ?? [])).toBe(
-      "Filed here: attempt 7 had the same name, LMPS-lamp-shade-v3(4).",
+      "Filed here: attempt 6 had the same name, BRKT-shelf-peg-v5(2).",
     );
   });
 
   it("makes little of an unrelated file opened in Bambu Studio before it", () => {
-    const [only] = scorePrint(print, [cranes]);
-    // Within half an hour it is still a little something; 54 minutes before it is nothing.
-    expect(only).toBeUndefined();
-    const soon = { ...cranes, sends: [{ fileId: "cranes-file", at: START - 10 * MINUTE, how: "studio" as const }] };
-    expect(scorePrint(print, [soon])[0]).toMatchObject({
-      score: 10,
-      reasons: [{ kind: "sent", unrelated: true }],
-    });
+    // 37 minutes before it is nothing; within half an hour it is still a little something.
+    expect(scorePrint(print, [lanterns])).toEqual([]);
+    const soon = { ...lanterns, sends: [{ fileId: "lantern-file", at: START - 10 * MINUTE, how: "studio" as const }] };
+    expect(scorePrint(print, [soon])[0]).toMatchObject({ score: 10, reasons: [{ kind: "sent", unrelated: true }] });
     expect(placePrint(scorePrint(print, [soon]))).toEqual({ kind: "none" });
   });
 
   it("still counts the file opened before it when its name agrees", () => {
-    const opened = {
-      ...lampShades,
-      sends: [{ fileId: "shade-v3", at: START - 54 * MINUTE, how: "studio" as const }],
-    };
-    expect(scorePrint(print, [opened])[0]?.reasons).toContainEqual(
-      expect.objectContaining({ kind: "sent", minutes: 54 }),
-    );
-    expect(scorePrint(print, [opened])[0]?.reasons.find((reason) => reason.kind === "sent")).not.toHaveProperty(
-      "unrelated",
-    );
+    const opened = { ...shelfPegs, sends: [{ fileId: "peg-v5", at: START - 37 * MINUTE, how: "studio" as const }] };
+    const sent = scorePrint(print, [opened])[0]?.reasons.find((reason) => reason.kind === "sent");
+    expect(sent).toMatchObject({ kind: "sent", minutes: 37 });
+    expect(sent).not.toHaveProperty("unrelated");
   });
 
   it("knows a build by its earlier prints alone", () => {
-    const bare = { ...lampShades, title: "Desk light", files: [] };
-    const scored = scorePrint({ name: "LMPS-lamp-shade-v3(5)", startedAt: START }, [bare, cranes]);
-    expect(scored[0]).toMatchObject({ itemId: "lamps", score: 55 });
-    expect(rowWords(scored[0]?.reasons ?? [])).toBe("Same name as attempt 7");
+    const bare = { ...shelfPegs, title: "Closet", files: [] };
+    const scored = scorePrint({ name: "BRKT-shelf-peg-v5(3)", startedAt: START }, [bare, lanterns]);
+    expect(scored[0]).toMatchObject({ itemId: "pegs", score: 55 });
+    expect(rowWords(scored[0]?.reasons ?? [])).toBe("Same name as attempt 6");
     // A newer version of what it printed is much like it, not the same.
-    const newer = scorePrint({ name: "LMPS-lamp-shades-v4", startedAt: START }, [bare]);
-    expect(newer[0]?.reasons[0]).toMatchObject({ kind: "printed", like: true, attempt: 7 });
-    expect(rowWords(newer[0]?.reasons ?? [])).toBe("Named like attempt 7");
+    const newer = scorePrint({ name: "BRKT-shelf-pegs-v6", startedAt: START }, [bare]);
+    expect(newer[0]?.reasons[0]).toMatchObject({ kind: "printed", like: true, attempt: 6 });
+    expect(rowWords(newer[0]?.reasons ?? [])).toBe("Named like attempt 6");
   });
 
   it("takes plurals, versions and filler as the build's name", () => {
     const shades = build({ id: "shades", title: "Lamp shades" });
     const [best] = scorePrint({ name: "lamp-shade-v2-final", startedAt: START }, [shades]);
     expect(best).toMatchObject({ itemId: "shades", reasons: [{ kind: "title" }] });
+  });
+});
+
+describe("a printer's build still asking", () => {
+  it("is offered but never matched into", () => {
+    const scored = [{ itemId: "own", score: 100, reasons: [] }];
+    expect(placePrint(scored).kind).toBe("match");
+    expect(placePrint(scored, new Set(["own"]))).toMatchObject({ kind: "ask", suggestions: [{ itemId: "own" }] });
+  });
+});
+
+describe("numbers in names", () => {
+  // A size, a count or a year says which thing it is: a different one is never a match, and never placed.
+  it.each([
+    ["gear-24", "Gear 12", "gear-12.3mf"],
+    ["spacer_10", "Spacer 15", "spacer_15.3mf"],
+    ["cube 20 mm", "Cube 10 mm", "cube_10mm.3mf"],
+    ["calendar-2025", "Calendar 2024", "calendar-2024.3mf"],
+    ["knob-20mm", "Knob 30mm", "knob-30mm.3mf"],
+  ])("makes nothing of %s for the build %s keeping %s", (name, title, file) => {
+    const other = build({
+      id: "other",
+      title,
+      startedAt: START - 26_000,
+      attempts: 0,
+      files: [{ id: "f", name: file }],
+    });
+    expect(scorePrint({ name, startedAt: START }, [other])).toEqual([]);
+  });
+
+  it("makes nothing of an earlier print with a different number", () => {
+    const bolts = build({ id: "bolts", title: "Bolts", prints: [{ name: "M3 bolt 30", attempt: 1 }] });
+    const [best] = scorePrint({ name: "M3 bolt 20", startedAt: START }, [bolts]);
+    expect(best?.reasons.find((reason) => reason.kind === "printed")).toBeUndefined();
+  });
+
+  it("still takes the same number, a version or a copy as the same thing", () => {
+    const gear = build({ id: "gear", title: "Gear 24", files: [{ id: "g", name: "gear-24-v2.3mf" }] });
+    const [best] = scorePrint({ name: "gear-24-v2(3)-print", startedAt: START }, [gear]);
+    expect(best?.reasons.map((reason) => reason.kind)).toEqual(["file", "title"]);
   });
 });
 

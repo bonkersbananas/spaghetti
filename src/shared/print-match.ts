@@ -54,8 +54,13 @@ export interface MatchCandidate {
   attempts: number;
   files: CandidateFile[];
   sends: CandidateSend[];
-  /** The names the printer gave the prints already in it (its attempts from the printer), newest first. */
+  /**
+   * The names the printer gave the prints already in it, newest first: only prints a person placed or kept here, or
+   * the app filed here, never one still asking which build it is.
+   */
   prints?: CandidatePrint[];
+  /** A build the printer made for a print that still asks which build it is: offered, never matched into. */
+  unplaced?: boolean;
 }
 
 /** A print already in a candidate: the job's name as the printer said it, and which attempt it is. */
@@ -142,7 +147,11 @@ const MEANINGLESS = new Set(["", "untitled", "model", "plate", "print", "project
  */
 export function printKey(name: string | null | undefined): string {
   if (!name) return "";
-  let key = name.replace(/^.*[\\/]/, "").trim();
+  // A copy's number in parentheses goes wherever it is ("shelf-peg-v5(2)-print" is "shelf-peg-v5-print").
+  let key = name
+    .replace(/^.*[\\/]/, "")
+    .replace(/\s*\(\d{1,3}\)/g, " ")
+    .trim();
   for (let round = 0; round < 4; round++) {
     const before = key;
     key = key
@@ -171,16 +180,17 @@ const meaningless = (key: string) => MEANINGLESS.has(key) || MEANINGLESS.has(wit
 const FILLER = new Set(["print", "prints", "printing", "printed", "final", "copy", "gcode"]);
 
 /**
- * A key without its filler words and the copy numbers left at its end: "uobf glass marker v3 4 print" (from
- * "UOBF-glass-marker-v3(4)-print") is "uobf glass marker v3", the name of the file it was sliced from.
+ * A key without its filler words: "shelf peg v5 print" (from "Shelf-peg-v5(2)-print", whose copy number printKey
+ * drops) is "shelf peg v5", the name of the file it was sliced from.
  */
 export function looseKey(key: string): string {
-  let words = key.split(" ").filter((word) => word && !FILLER.has(word));
-  while (words.length > 1 && /^\d{1,2}$/.test(words.at(-1) ?? "")) words = words.slice(0, -1);
-  return words.join(" ");
+  return key
+    .split(" ")
+    .filter((word) => word && !FILLER.has(word))
+    .join(" ");
 }
 
-/** "markers" → "marker", "boxes" → "box", "trays" → "tray", "assemblies" → "assembly"; "glass" stays. */
+/** "hooks" → "hook", "boxes" → "box", "trays" → "tray", "assemblies" → "assembly"; "brass" stays. */
 function stem(word: string): string {
   if (word.length <= 3 || /\d/.test(word)) return word;
   if (word.endsWith("ies") && word.length > 4) return `${word.slice(0, -3)}y`;
@@ -189,12 +199,25 @@ function stem(word: string): string {
   return word;
 }
 
-/** A version ("v3", "v2b", "rev2", "ver3") or a bare number: what changes between tries of the same thing. */
-const versionish = (word: string) => /^(v|rev|ver)?\d+[a-z]?$/.test(word);
+/** A version ("v3", "v2b", "rev2", "ver3"): what changes between tries of the same thing. */
+const versionish = (word: string) => /^(v|rev|ver)\d+[a-z]?$/.test(word);
 
 /**
- * What a name is about, as words: no filler, no versions or numbers, each word in its simplest form. "UOBF glass
- * markers" and "UOBF-glass-marker-v3(4)-print" are both "uobf glass marker".
+ * A number in a name ("24", "20mm", "2025"): a size, a count or a year says which thing it is, so two names with
+ * different numbers are different things ("gear 24" is not "gear 12").
+ */
+const numberish = (word: string) => /^\d+[a-z]*$/.test(word);
+
+/** Both names have numbers, and not the same ones: whatever else they share, they are different things. */
+function numbersDiffer(a: string, b: string): boolean {
+  const left = [...new Set(a.split(" ").filter(numberish))].sort().join(" ");
+  const right = [...new Set(b.split(" ").filter(numberish))].sort().join(" ");
+  return !!left && !!right && left !== right;
+}
+
+/**
+ * What a name is about, as words: no filler or versions, each word in its simplest form (numbers stay). "Lamp shades"
+ * and "Lamp-shade-v5(2)-print" are both "lamp shade".
  */
 export function coreKey(key: string): string {
   return looseKey(key)
@@ -204,7 +227,7 @@ export function coreKey(key: string): string {
     .join(" ");
 }
 
-/** Whether two names share at least one word of what they are about (no filler, versions or numbers). */
+/** Whether two names share at least one word of what they are about (no filler or versions). */
 function related(a: string, b: string): boolean {
   const words = new Set(coreKey(a).split(" ").filter(Boolean));
   return coreKey(b)
@@ -223,12 +246,15 @@ function overlap(a: string, b: string): number {
 }
 
 /**
- * How well two names agree: the same key; the same but for a copy's number or filler ("ring-2", "…(4)-print"); or
- * about the same thing (the same words but for versions and plurals, or most words in common).
+ * How well two names agree: the same key; the same but for a copy's number or filler ("ring-2", "ring-print"); or
+ * about the same thing (the same words but for versions and plurals, or most words in common). Names with different
+ * numbers never agree.
  */
 function nameMatch(print: string, other: string, share: number): "same" | "variant" | "like" | null {
   if (!print || !other) return null;
   if (print === other) return "same";
+  // Different sizes, counts or years are different things, never a match.
+  if (numbersDiffer(print, other)) return null;
   if (withoutCopyNumber(print) === other || print === withoutCopyNumber(other)) return "variant";
   const loose = looseKey(print);
   if (loose && loose === looseKey(other)) return "variant";
@@ -341,7 +367,7 @@ export function scoreCandidate(print: PrintFacts, candidate: MatchCandidate): Sc
     const titleKey = printKey(candidate.title);
     if (titleKey && !meaningless(titleKey)) {
       const how = nameMatch(key, titleKey, 0.6);
-      // The same words but for versions and plurals ("UOBF glass markers" for "UOBF-glass-marker-v3") is its name.
+      // The same words but for versions and plurals ("Lamp shades" for "lamp-shade-v3") is its name.
       if (how && (how !== "like" || coreKey(key) === coreKey(titleKey))) {
         reasons.push({ kind: "title" });
         score += POINTS.title;
@@ -428,10 +454,13 @@ export function scorePrint(print: PrintFacts, candidates: readonly MatchCandidat
     );
 }
 
-/** One build well ahead is a match; a few with something going for them are suggestions; else nothing. */
-export function placePrint(scored: readonly ScoredCandidate[]): Placement {
+/**
+ * One build well ahead is a match; a few with something going for them are suggestions; else nothing. A printer's
+ * build still asking which build its own print is (`unplaced`) is never matched into: nobody has said what it is.
+ */
+export function placePrint(scored: readonly ScoredCandidate[], unplaced: ReadonlySet<string> = new Set()): Placement {
   const [best, next] = scored;
-  if (best && best.score >= MATCH_SCORE && best.score - (next?.score ?? 0) >= MATCH_LEAD)
+  if (best && !unplaced.has(best.itemId) && best.score >= MATCH_SCORE && best.score - (next?.score ?? 0) >= MATCH_LEAD)
     return { kind: "match", best };
   const suggestions = scored.filter((candidate) => candidate.score >= SUGGEST_SCORE).slice(0, MAX_SUGGESTIONS);
   return suggestions.length ? { kind: "ask", suggestions } : { kind: "none" };

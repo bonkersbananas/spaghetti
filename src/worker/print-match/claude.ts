@@ -14,7 +14,7 @@ export const PRINT_MATCH_MODEL = PHOTO_READ_MODEL;
 export interface PrintToPlace {
   name: string | null;
   plate: number | null;
-  /** "PLA Navy Blue", one per tray the print used. */
+  /** "PLA Jade White", one per tray the print used. */
   filaments: string[];
   estimateMinutes: number | null;
   /** "Mon 24 Nov, 18:05" in the workspace's time. */
@@ -33,7 +33,7 @@ export interface CandidateToShow {
   attempts: number;
   /** "2 h before the print", "3 days before the print". */
   lastActivity: string;
-  /** "harbour_cranes.3mf opened in Bambu Studio 54 min before the print". */
+  /** "paper_lanterns.3mf opened in Bambu Studio 12 min before the print". */
   sent: string[];
   /** What the app's own matcher found, in a few words ("Same file: lamp-shade-v3"), when it found something. */
   matcher: string | null;

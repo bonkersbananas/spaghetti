@@ -220,27 +220,48 @@ describe("a print the bridge files", () => {
   });
 
   it("knows a build by the names of the printer's earlier prints in it", async () => {
-    const lamps = await build("Desk light");
+    const lamps = await build("Closet shelves");
     await startedYesterday(lamps);
     // The first print asked, and someone said it was the desk light's.
-    const first = await bridgePrints("LMPS-lamp-shade-v3(4)");
+    const first = await bridgePrints("BRKT-shelf-peg-v5(2)");
     expect(first.attempt.print).toMatchObject({ placed: "new", asking: true });
     expect((await move(first.attemptId, { targetId: lamps })).status).toBe(200);
-    // An idea whose unrelated file was opened in Bambu Studio 54 minutes before the next print.
-    const cranes = await build("Harbour cranes, three designs", "idea");
-    const cranesFile = await keepFile(cranes, "harbour_cranes.3mf");
+    // An idea whose unrelated file was opened in Bambu Studio 37 minutes before the next print.
+    const cranes = await build("Paper lanterns, five shapes", "idea");
+    const cranesFile = await keepFile(cranes, "paper_lanterns.3mf");
     await env.DB.prepare(
       "INSERT INTO file_downloads (id, file_id, item_id, how, user_id, at) SELECT ?, ?, ?, 'studio', id, ? FROM users",
     )
-      .bind(uuid(), cranesFile, cranes, Date.now() - 54 * 60_000)
+      .bind(uuid(), cranesFile, cranes, Date.now() - 37 * 60_000)
       .run();
 
-    const { attemptId } = await bridgePrints("LMPS-lamp-shade-v3(4)-print");
+    const { attemptId } = await bridgePrints("BRKT-shelf-peg-v5(2)-print");
     const { suggestions } = await (
       await request(`/api/attempts/${attemptId}/suggestions`, { cookie })
     ).json<PrintSuggestionsResponse>();
     expect(suggestions.map((one) => one.itemId)).toEqual([lamps]);
-    expect(suggestions[0]?.reasons[0]).toMatchObject({ kind: "printed", name: "LMPS-lamp-shade-v3(4)", attempt: 1 });
+    expect(suggestions[0]?.reasons[0]).toMatchObject({ kind: "printed", name: "BRKT-shelf-peg-v5(2)", attempt: 1 });
+  });
+
+  it("asks again for a reprint while the first print still asks, rather than filing it in the printer's build", async () => {
+    const planter = await build("Herb planter");
+    await startedYesterday(planter);
+    await keepFile(planter, "planter-v2.3mf");
+    const first = await bridgePrints("planter-v2(2)");
+    expect(first.attempt.print).toMatchObject({ placed: "new", asking: true });
+
+    // The same file again (plate 2, or a reprint) before anyone answered the first.
+    const second = await bridgePrints("planter-v2(2)");
+    expect(second.attempt.itemId).toBe(second.ownId);
+    expect(second.attempt.print).toMatchObject({ placed: "new", asking: true });
+    const { suggestions } = await (
+      await request(`/api/attempts/${second.attemptId}/suggestions`, { cookie })
+    ).json<PrintSuggestionsResponse>();
+    // The herb planter leads: the first print's own build has only its name, not a print anyone placed.
+    expect(suggestions[0]?.itemId).toBe(planter);
+    expect(suggestions.find((one) => one.itemId === first.ownId)?.reasons ?? []).not.toContainEqual(
+      expect.objectContaining({ kind: "printed" }),
+    );
   });
 
   it("leaves a person's attempts and other agents' alone", async () => {

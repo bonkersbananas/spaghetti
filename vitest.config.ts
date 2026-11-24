@@ -28,6 +28,8 @@ export default defineConfig(async () => {
                   ANTHROPIC_API_KEY: "sk-ant-test-key",
                   // Saves don't ask Claude to name untitled ideas (test/worker/titles.test.ts turns it on for its own cases).
                   TITLES_ON_SAVE: "off",
+                  // A print the bridge files doesn't ask Claude which build it is (test/worker/print-match.test.ts turns it on).
+                  PRINT_MATCH_ON_FILE: "off",
                   // The tests' own relying party: requests come from http://spaghetti.test (test/worker/helpers.ts).
                   WEBAUTHN_RP_ID: "spaghetti.test",
                   WEBAUTHN_ORIGINS: "http://spaghetti.test",
