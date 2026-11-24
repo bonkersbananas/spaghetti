@@ -55,7 +55,7 @@ export function OffTheBed({
       {/* The sentence keeps its line; on a narrow card the Photo button goes under it instead of squeezing it. */}
       <div className={cn("flex justify-between gap-x-3 gap-y-1", snap ? "items-start" : "flex-wrap items-center")}>
         <p className={cn("text-small text-ink-soft flex gap-2", snap ? "min-w-0 flex-1 items-start" : "items-center")}>
-          <FinishIcon size={16} className={cn("text-ink-faint shrink-0", snap && "mt-0.5")} aria-hidden />
+          <FinishIcon size={16} className={cn("text-ink-faint shrink-0", !!snap && "mt-0.5")} aria-hidden />
           <span>
             <span className="text-ink font-semibold">{offTheBedLabel(endedAt)}</span> · how did it go?
           </span>
