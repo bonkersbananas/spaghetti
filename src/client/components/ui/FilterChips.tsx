@@ -35,7 +35,10 @@ export function ChipRow({
   );
 }
 
-/** A thin pause between kinds of chips in a ChipRow. */
+/**
+ * A thin pause in a ChipRow on phones: after the chips picked when the page opened (which lead the row), and between
+ * the kinds of chips after them.
+ */
 export function ChipDivider() {
   return <span aria-hidden className="bg-ink/10 mx-1 my-1.5 w-px shrink-0 self-stretch md:hidden" />;
 }
