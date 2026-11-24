@@ -3,7 +3,7 @@ import { tagLabel } from "@shared/attempts";
 import { OUTCOME_FILTER_LABELS, OUTCOME_FILTERS, type OutcomeFilter } from "@shared/journal";
 import { displayName } from "@shared/people";
 import { useQuery } from "@tanstack/react-query";
-import type { ReactNode } from "react";
+import { isValidElement, type ReactNode, useState } from "react";
 import { outcomeIcons } from "@/components/builds/Outcome";
 import { Avatar } from "@/components/ui/Avatar";
 import { Button } from "@/components/ui/Button";
@@ -88,7 +88,7 @@ export function Filters({ value, onChange, layout, tags = false }: FiltersProps)
   const rightChips = tagList.filter((tag) => tag.kind === "success").map(tagChip);
   const personChips = (people ?? []).map((person: Person) => (
     <ToggleChip
-      key={person.id}
+      key={person.username}
       selected={value.person === person.username}
       onClick={() => toggle("person", person.username)}
       className="pl-1.5"
@@ -104,10 +104,34 @@ export function Filters({ value, onChange, layout, tags = false }: FiltersProps)
     </Button>
   );
 
+  const base: { kind: "outcome" | "material" | "tag" | "person"; chips: ReactNode[] }[] = [
+    { kind: "outcome", chips: outcomeChips },
+    { kind: "material", chips: materialChips },
+    ...(tags ? [{ kind: "tag" as const, chips: tagChips }] : []),
+    { kind: "person", chips: personChips },
+  ];
+  // The chips picked when the page opened lead the phone's row, so none sits off-screen, however late the lists come.
+  // They are named by the value at mount: a chip tapped now stays where it is under the thumb.
+  const [opened] = useState(value);
+  const leads = (kind: string, chip: ReactNode) => {
+    const key = isValidElement(chip) ? String(chip.key) : "";
+    if (kind === "tag") return opened.tag !== undefined && key.slice(key.indexOf("-") + 1) === opened.tag;
+    return opened[kind as "outcome" | "material" | "person"] === key;
+  };
+
   if (layout === "row") {
-    const groups: ReactNode[][] = [outcomeChips, materialChips, ...(tags ? [tagChips] : []), personChips].filter(
-      (group) => group.length > 0,
-    );
+    const picked = base.flatMap(({ kind, chips }) => chips.filter((chip) => leads(kind, chip)));
+    const rest = base.map(({ kind, chips }) => chips.filter((chip) => !leads(kind, chip))).filter((g) => g.length > 0);
+    // A kind with one chip left joins the one before it (or after it): a lone chip between two dividers reads as noise.
+    const merged: ReactNode[][] = [];
+    for (const group of rest) {
+      const last = merged.at(-1);
+      if (group.length === 1 && last) last.push(...group);
+      else merged.push([...group]);
+    }
+    const [first, second] = merged;
+    if (first?.length === 1 && second) merged.splice(0, 2, [...first, ...second]);
+    const groups = [picked, ...merged].filter((group) => group.length > 0);
     return (
       <ChipRow label="Filters">
         {groups.map((group, index) => (
