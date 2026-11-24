@@ -10,6 +10,7 @@ import {
   spoolGrams,
   type Usage,
 } from "../../src/shared/ledger.ts";
+import { showsNotEnoughNote } from "../../src/shared/not-enough-rule.ts";
 import { settingsFromFile } from "../../src/shared/threemf/prefill.ts";
 
 const A = "00000000-0000-4000-8000-00000000000a";
@@ -197,5 +198,15 @@ describe("not enough for this print", () => {
   it("is quiet when there is enough, or the file said nothing", () => {
     expect(notEnough({ filaments: [{ spoolId: A, grams: 40 }] }, spools)).toEqual([]);
     expect(notEnough({ filaments: [{ spoolId: A }, { spoolId: B, grams: 10 }] }, spools)).toEqual([]);
+  });
+});
+
+describe("showsNotEnoughNote", () => {
+  it("shows only for a new attempt that hasn't printed", () => {
+    expect(showsNotEnoughNote({ isNew: true, outcome: null })).toBe(true);
+    expect(showsNotEnoughNote({ isNew: true, outcome: "success" })).toBe(false);
+    // Finishing, answering or editing a print that has printed (EditAttempt).
+    expect(showsNotEnoughNote({ isNew: false, outcome: null })).toBe(false);
+    expect(showsNotEnoughNote({ isNew: false, outcome: "failed" })).toBe(false);
   });
 });

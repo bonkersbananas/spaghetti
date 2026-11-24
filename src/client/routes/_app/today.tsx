@@ -143,16 +143,32 @@ function Today() {
 
   const subtitle = new Date(now).toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" });
 
+  // What is on the plate is counted and named on its own; an answered print that only asks which build it is waits
+  // under "Which build?", whether or not something is printing.
   const bedSection =
     cards.length > 0 ? (
-      <Section
-        id="today-bed"
-        title={onBed.length ? "On the bed" : "Which build?"}
-        size="overline"
-        count={cards.length > 1 ? cards.length : undefined}
-      >
-        <BedCards prints={cards} people={byId} via={via} />
-      </Section>
+      <div className="flex flex-col gap-10">
+        {onBed.length > 0 && (
+          <Section
+            id="today-bed"
+            title="On the bed"
+            size="overline"
+            count={onBed.length > 1 ? onBed.length : undefined}
+          >
+            <BedCards prints={onBed} people={byId} via={via} />
+          </Section>
+        )}
+        {asking.length > 0 && (
+          <Section
+            id={onBed.length > 0 ? "today-which-build" : "today-bed"}
+            title="Which build?"
+            size="overline"
+            count={asking.length > 1 ? asking.length : undefined}
+          >
+            <BedCards prints={asking} people={byId} via={via} />
+          </Section>
+        )}
+      </div>
     ) : null;
 
   return (
