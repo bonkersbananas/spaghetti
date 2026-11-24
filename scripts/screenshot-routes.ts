@@ -2387,6 +2387,46 @@ async function addToSlot(page: Page, empty: string[], slot: string, options: { o
 /** Star ornament's third attempt: the printer's three-colour print with four photos (REAL_PRINT_BUILDS). */
 const STAR_ORNAMENT_FOUR_PHOTOS = "5eed0000-0000-4000-8000-0000000e0103";
 
+/** A person with no push on any device, the offer's place remembered (it draws from the second visit). */
+async function prepareOffer(page: Page, scroll: boolean) {
+  await page.evaluate(() =>
+    fetch("/api/push/offer", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ dismissed: false }),
+    }),
+  );
+  // Headless Chromium answers "denied", which hides the offer (nothing can be turned on): a person who has
+  // not been asked yet has "default". Only while this flag is set, so the other shots keep what they had.
+  await page.addInitScript(() => {
+    if (sessionStorage.getItem("offer-shot"))
+      Object.defineProperty(Notification, "permission", { get: () => "default" });
+  });
+  await page.evaluate(() => sessionStorage.setItem("offer-shot", "1"));
+  // The first visit only remembers that the offer applies; the next one draws it.
+  await page.goto("about:blank");
+  await page.goto("/today");
+  await page.waitForFunction(() => localStorage.getItem("spaghetti:push-offer") === "1");
+  await page.goto("about:blank");
+  await page.goto("/today");
+  const offer = page.getByRole("region", { name: "Turn on notifications" });
+  await offer.waitFor();
+  if (scroll) await offer.evaluate((node) => node.scrollIntoView({ block: "center" }));
+  await page.waitForFunction(() => document.getAnimations().every((a) => a.playState !== "running"));
+}
+
+async function undoOffer(page: Page) {
+  await page.evaluate(() => {
+    sessionStorage.removeItem("offer-shot");
+    localStorage.removeItem("spaghetti:push-offer");
+    return fetch("/api/push/offer", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ dismissed: true }),
+    });
+  });
+}
+
 export const shots: Shot[] = [
   { name: "sign-in", path: "/sign-in", signedOut: true },
   // A public link as a guest sees it (decision 0075): no app around it, photos first, read-only.
@@ -2765,41 +2805,20 @@ export const shots: Shot[] = [
     },
   },
   {
-    // A person with no push on any device: the one-time offer to turn it on, at the bottom of Today (the phone's Now).
+    // A person with no push on any device: the one-time offer to turn it on, last in Today's left column (the phone's Now).
     name: "today-notifications-offer",
     path: "/today",
-    prepare: async (page) => {
-      await page.evaluate(() =>
-        fetch("/api/push/offer", {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ dismissed: false }),
-        }),
-      );
-      // Headless Chromium answers "denied", which hides the offer (nothing can be turned on): a person who has
-      // not been asked yet has "default". Only while this flag is set, so the other shots keep what they had.
-      await page.addInitScript(() => {
-        if (sessionStorage.getItem("offer-shot"))
-          Object.defineProperty(Notification, "permission", { get: () => "default" });
-      });
-      await page.evaluate(() => sessionStorage.setItem("offer-shot", "1"));
-      await page.goto("about:blank");
-      await page.goto("/today");
-      const offer = page.getByRole("region", { name: "Turn on notifications" });
-      await offer.waitFor();
-      await offer.evaluate((node) => node.scrollIntoView({ block: "center" }));
-      await page.waitForFunction(() => document.getAnimations().every((a) => a.playState !== "running"));
-    },
-    cleanup: async (page) => {
-      await page.evaluate(() => {
-        sessionStorage.removeItem("offer-shot");
-        return fetch("/api/push/offer", {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ dismissed: true }),
-        });
-      });
-    },
+    prepare: (page) => prepareOffer(page, true),
+    cleanup: undoOffer,
+  },
+  {
+    // The same at 1440 as the page first draws, unscrolled.
+    name: "today-notifications-offer-first-view",
+    path: "/today",
+    width: 1440,
+    why: "the unscrolled desktop view",
+    prepare: (page) => prepareOffer(page, false),
+    cleanup: undoOffer,
   },
   {
     // One of the three answered: the block counts what is left.

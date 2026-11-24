@@ -235,6 +235,8 @@ function Today() {
             <div className="order-6 empty:hidden">
               {!loading && <BackBurner idea={burner} person={burner ? byId.get(burner.createdBy) : undefined} />}
             </div>
+            {/* Last in the column, under what is happening: it never pushes a print waiting for its answer down. */}
+            {leftHasContent && <NotificationsOfferGate className="order-7 empty:hidden" />}
           </div>
           <div
             ref={stickyColumn}
@@ -271,8 +273,8 @@ function Today() {
           </div>
         </div>
       )}
-      {/* Last, under everything that is happening: it never pushes a print waiting for its answer down. */}
-      <NotificationsOfferGate className="mt-10 empty:hidden lg:max-w-md" />
+      {/* With no left column (nothing on the bed, no picks) it sits last, at the column's width. */}
+      {!leftHasContent && <NotificationsOfferGate className="mt-10 empty:hidden lg:max-w-2xl" />}
     </>
   );
 }

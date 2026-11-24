@@ -247,6 +247,20 @@ test("with no connection the answer waits in the outbox and lands when the app i
 /** Today on a desktop, the Journal's Now block on a phone: where the offer is drawn. */
 const front = (isMobile: boolean) => (isMobile ? "/journal" : "/today");
 
+const HINT = "spaghetti:push-offer";
+
+/**
+ * The first visit only finds out the offer applies and remembers it (nothing on the screen moves for it); the next
+ * visit draws the card, its place kept from the first paint.
+ */
+async function visitOffered(page: Page, isMobile: boolean) {
+  await page.goto(front(isMobile));
+  await expect(page.getByRole("heading", { level: 1, name: /^(Today|Journal)$/ })).toBeVisible();
+  await expect.poll(() => page.evaluate((key) => localStorage.getItem(key), HINT)).toBe("1");
+  await expect(page.getByRole("region", { name: "Turn on notifications" })).toHaveCount(0);
+  await page.reload();
+}
+
 test("offers notifications to a person with none, turns them on from the card, and never offers again once on", async ({
   page,
   isMobile,
@@ -254,10 +268,10 @@ test("offers notifications to a person with none, turns them on from the card, a
   await fakeSubscription(page);
   await signIn(page);
   await waitForServiceWorker(page);
-  await page.goto(front(isMobile));
+  await visitOffered(page, isMobile);
   const offer = page.getByRole("region", { name: "Turn on notifications" });
   await expect(offer).toBeVisible();
-  await expect(offer).toContainText("done and waiting for its answer");
+  await expect(offer).toContainText("gets its answer while it");
   await offer.getByRole("button", { name: "Turn on" }).click();
   await expect(page.getByText("Notifications are on")).toBeVisible();
   await expect(offer).toHaveCount(0);
@@ -272,7 +286,7 @@ test("'Not now' waves the offer off for good, on the server", async ({ page, isM
   await fakeSubscription(page);
   await signIn(page);
   await waitForServiceWorker(page);
-  await page.goto(front(isMobile));
+  await visitOffered(page, isMobile);
   const offer = page.getByRole("region", { name: "Turn on notifications" });
   await offer.getByRole("button", { name: "Not now" }).click();
   await expect(offer).toHaveCount(0);

@@ -52,8 +52,8 @@ export function NotificationSection() {
         <Panel className="flex flex-col gap-3">
           <Label>Offer to turn notifications on</Label>
           <p className="text-small text-ink-faint">
-            Once, at the bottom of Today (the phone's Now block), for a person with no push on any device where this one
-            can subscribe. "Not now" is for good.
+            Once, last in Today (the phone's Now block), for a person with no push on any device where this one can
+            subscribe. "Not now" is for good.
           </p>
           <NotificationOffer onTurnOn={() => undefined} onDismiss={() => undefined} />
         </Panel>
