@@ -32,7 +32,7 @@ export function NotificationsOfferGate({ className }: { className?: string }) {
     const timer = setTimeout(() => {
       const start = () => setLater(true);
       if ("requestIdleCallback" in window) idle = requestIdleCallback(start, { timeout: 5000 });
-      else wait = window.setTimeout(start, 3000);
+      else wait = setTimeout(start, 3000) as unknown as number;
     }, 800);
     return () => {
       clearTimeout(timer);
