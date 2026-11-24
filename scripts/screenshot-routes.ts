@@ -3740,7 +3740,6 @@ export const shots: Shot[] = [
     // the tab bar over it).
     name: "builds-off-bed",
     path: "/builds",
-    width: 390,
     prepare: async (page) => {
       const card = page.getByRole("heading", { name: "Drawer divider", level: 3 }).first();
       await card.waitFor();

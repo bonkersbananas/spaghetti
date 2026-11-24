@@ -406,9 +406,10 @@ export function lastActivity(item: ItemView): number {
 }
 
 /**
- * Every attempt on the bed that still has no outcome. Prints still printing come first (the one that should be
- * done by now, then the newest), then the ones the printer says are off the bed and wait for "how did it go?".
- * Today lists them all; the sidebar shows the first.
+ * Every attempt on the bed that still has no outcome, in the one order every screen uses (Today, Builds, the Journal's
+ * Now, the Printer page, the sidebar): the prints off the bed that wait for "how did it go?" first, newest ended
+ * first, since someone standing at the printer needs those; then the print still printing that should be done by now,
+ * then the other prints, newest first.
  */
 export function printingAttempts(
   items: ItemView[],
@@ -423,14 +424,15 @@ export function printingAttempts(
   }
   const rank = (attempt: AttemptView) =>
     isOffTheBed(attempt)
-      ? 2
+      ? 0
       : (
             (live?.attemptId === attempt.id ? livePrintProgress(live, now) : null) ??
             printProgress(attempt.printedAt, attempt.settings.estimatedMinutes, now)
           ).state === "due"
-        ? 0
-        : 1;
-  return found.sort((a, b) => rank(a.attempt) - rank(b.attempt) || b.attempt.printedAt - a.attempt.printedAt);
+        ? 1
+        : 2;
+  const recency = (attempt: AttemptView) => (isOffTheBed(attempt) ? (attempt.endedAt ?? 0) : attempt.printedAt);
+  return found.sort((a, b) => rank(a.attempt) - rank(b.attempt) || recency(b.attempt) - recency(a.attempt));
 }
 
 /**

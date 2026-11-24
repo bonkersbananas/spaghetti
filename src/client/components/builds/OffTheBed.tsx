@@ -1,7 +1,7 @@
 import type { Outcome } from "@shared/attempts";
 import type { PhotoRead } from "@shared/photo-read";
 import { offTheBedLabel } from "@shared/print-progress";
-import { useRef } from "react";
+import { type ReactNode, useRef } from "react";
 import { Button } from "@/components/ui/Button";
 import { CameraIcon, FinishIcon } from "@/components/ui/icons";
 import { Kbd } from "@/components/ui/Kbd";
@@ -25,6 +25,8 @@ interface OffTheBedProps {
    * on these same buttons. Shown while the attempt has no photo yet.
    */
   onPhotos?: (files: File[]) => void;
+  /** A camera button of the caller's own (the card's "Snap this print"), beside the sentence; it replaces "Take photo". */
+  snap?: ReactNode;
   /** The keys that open the attempt's sheet from the page ("A" on a build), shown after the question on desktop. */
   shortcut?: string[];
   className?: string;
@@ -41,6 +43,7 @@ export function OffTheBed({
   photoRead,
   withTags = true,
   onPhotos,
+  snap,
   shortcut,
   className,
 }: OffTheBedProps) {
@@ -58,7 +61,8 @@ export function OffTheBed({
           </span>
           {shortcut && <Kbd keys={shortcut} />}
         </p>
-        {onPhotos && !photoRead && (
+        {snap}
+        {onPhotos && !snap && !photoRead && (
           <>
             <Button
               variant="secondary"

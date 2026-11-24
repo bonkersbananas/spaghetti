@@ -178,6 +178,35 @@ export function PrintingCard({
   const camera = useRef<HTMLInputElement>(null);
   const aim = { itemId: item.id, attemptId: attempt.id, name: item.title || "the build", number: attempt.number };
 
+  // On a card off the bed the photo goes straight onto this print (and Claude reads it, as "Take photo" did); on a
+  // printing card it opens the capture sheet aimed at this print.
+  const snapButton = (
+    <IconButton
+      icon={CameraIcon}
+      label="Snap this print"
+      variant="secondary"
+      size="sm"
+      onClick={() => (hasCamera ? camera.current?.click() : snapPrint(aim))}
+    />
+  );
+  const snapInput = (
+    <input
+      ref={camera}
+      type="file"
+      accept="image/*"
+      capture="environment"
+      hidden
+      data-testid="snap-camera-input"
+      onChange={(event) => {
+        void takePicked(event.target).then((files) => {
+          if (!files.length) return;
+          if (offBed) addPhotosToItem(item.id, files, attempt.id);
+          else snapPrint(aim, files);
+        });
+      }}
+    />
+  );
+
   const finish = (outcome?: Outcome) =>
     void navigate({
       to: "/builds/$buildId",
@@ -371,10 +400,13 @@ export function PrintingCard({
               photoRead={attempt.photoRead}
               withTags={false}
               // Offline a saved build can't be changed (decision 0005), as in the attempt sheet: no photo then.
-              onPhotos={
-                readOnly || item.photos.some((photo) => photo.attemptId === attempt.id)
-                  ? undefined
-                  : (files) => addPhotosToItem(item.id, files, attempt.id)
+              snap={
+                readOnly ? undefined : (
+                  <>
+                    {snapButton}
+                    {snapInput}
+                  </>
+                )
               }
               className="pointer-events-auto md:mt-auto"
             />
@@ -421,34 +453,14 @@ export function PrintingCard({
                       compact && "max-md:ml-auto",
                     )}
                   >
-                    {!readOnly && (
-                      <IconButton
-                        icon={CameraIcon}
-                        label="Snap this print"
-                        variant="secondary"
-                        size="sm"
-                        onClick={() => (hasCamera ? camera.current?.click() : snapPrint(aim))}
-                      />
-                    )}
+                    {!readOnly && snapButton}
                     {!due && (
                       <Button variant="secondary" size="sm" onClick={() => finish()} className="shrink-0">
                         How did it go?
                       </Button>
                     )}
                   </div>
-                  <input
-                    ref={camera}
-                    type="file"
-                    accept="image/*"
-                    capture="environment"
-                    hidden
-                    data-testid="snap-camera-input"
-                    onChange={(event) => {
-                      void takePicked(event.target).then((files) => {
-                        if (files.length) snapPrint(aim, files);
-                      });
-                    }}
-                  />
+                  {snapInput}
                 </div>
               </div>
               {due && (
