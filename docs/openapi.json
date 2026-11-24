@@ -9020,7 +9020,7 @@
     "/api/attempts/{id}/suggestions": {
       "get": {
         "operationId": "getAttemptsByIdSuggestions",
-        "summary": "The ideas and builds in progress a print (or any attempt) may belong to, best first, each with its score and the reasons a person can check: the same file, a file downloaded or opened in Bambu Studio just before, the same estimate (decision 0076).",
+        "summary": "The ideas and builds in progress a print (or any attempt) may belong to, best first, each with its score and the reasons a person can check: the same file, an earlier print of it with the same name, a file downloaded or opened in Bambu Studio just before, the same estimate (decision 0076). When the matcher couldn't place a print and Claude was asked, Claude's pick comes first with a `claude` reason (decision 0080).",
         "description": "Needs the \"read\" scope. A route may narrow this by what the body asks for; see docs/api.md.",
         "tags": [
           "attempts"
