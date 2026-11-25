@@ -35,7 +35,7 @@ import { RecipeSheet } from "@/components/recipes/RecipeSheet";
 import { SaveRecipeSheet } from "@/components/recipes/SaveRecipe";
 import { DetailBar } from "@/components/shell/DetailBar";
 import { ActionBar } from "@/components/ui/ActionBar";
-import { ActionMenuItem, MoreMenu } from "@/components/ui/ActionMenu";
+import { ActionMenuAskRow, ActionMenuItem, MoreMenu } from "@/components/ui/ActionMenu";
 import { Avatar, ViaText } from "@/components/ui/Avatar";
 import { Button, IconButton } from "@/components/ui/Button";
 import { Chip } from "@/components/ui/Chip";
@@ -584,9 +584,21 @@ function Build({ item }: { item: ItemView }) {
         </>
       )}
       {scrapsToIdea && (
-        <ActionMenuItem icon={IdeasIcon} disabled={readOnly} onSelect={() => setDeleting(true)}>
-          Back to Ideas
-        </ActionMenuItem>
+        <ActionMenuAskRow
+          icon={IdeasIcon}
+          disabled={readOnly}
+          question="Back to Ideas?"
+          detail={
+            attemptCount > 0
+              ? `Its ${attemptCount === 1 ? "attempt goes" : `${attemptCount} attempts go`} with it`
+              : undefined
+          }
+          verb="Back to Ideas"
+          onConfirm={remove}
+          onAsk={() => setDeleting(true)}
+        >
+          Turn back into an idea
+        </ActionMenuAskRow>
       )}
     </MoreMenu>
   );
@@ -622,24 +634,19 @@ function Build({ item }: { item: ItemView }) {
   const workedRecipes = worked
     ? recipesFor(allRecipes, { material: settingsMaterial(worked.settings) }).slice(0, 2)
     : [];
-  // Said once: the newest attempt is a card right there with the same note and tags, so the card says only what the
-  // page doesn't (the recipes for its material), or nothing. An earlier one that is a card shows its settings line and
-  // recipes; one folded into a row keeps its note and tags, which the row doesn't show.
-  const workedIsNewest = worked?.id === story[0]?.id;
-  const workedLeads = !!worked && (workedIsNewest || isCard(worked));
+  // Said once: an attempt that is a card on this page (the newest always is) has its note and tags right there, so the
+  // What worked card keeps only the settings line and the recipes; one folded into a row keeps its note and tags too.
   const answer = worked ? (
-    workedIsNewest && workedRecipes.length === 0 ? null : (
-      <WhatWorked
-        compact={workedLeads}
-        recipesOnly={workedIsNewest}
-        attempt={worked}
-        onOpen={() => openSheet(worked.id)}
-        recipes={workedRecipes}
-        saved={allRecipes.some((recipe) => recipe.source?.attemptId === worked.id)}
-        onSaveRecipe={recipeSource(worked) && (() => setSavingRecipe(recipeSource(worked) ?? null))}
-        onOpenRecipe={setOpenRecipe}
-      />
-    )
+    <WhatWorked
+      compact={isCard(worked)}
+      attempt={worked}
+      onOpen={() => openSheet(worked.id)}
+      material={settingsMaterial(worked.settings)}
+      recipes={workedRecipes}
+      saved={allRecipes.some((recipe) => recipe.source?.attemptId === worked.id)}
+      onSaveRecipe={recipeSource(worked) && (() => setSavingRecipe(recipeSource(worked) ?? null))}
+      onOpenRecipe={setOpenRecipe}
+    />
   ) : tried > 0 ? (
     <NothingWorked tries={tried} closest={closest} onOpen={closest && (() => openSheet(closest.id))} />
   ) : null;
@@ -1144,7 +1151,7 @@ function NothingWorked({ tries, closest, onOpen }: { tries: number; closest?: At
  */
 function WhatWorked({
   compact,
-  recipesOnly,
+  material,
   attempt,
   onOpen,
   recipes,
@@ -1154,8 +1161,8 @@ function WhatWorked({
 }: {
   /** The attempt is a card on this page already: its note and tags aren't said again. */
   compact?: boolean;
-  /** It is the newest attempt, shown right here: only the recipes for its material are left to say. */
-  recipesOnly?: boolean;
+  /** Its material ("PLA"), which the recipes below are for. */
+  material: string | null;
   attempt: AttemptView;
   onOpen: () => void;
   recipes: Recipe[];
@@ -1170,40 +1177,39 @@ function WhatWorked({
   const readOnly = useReadOnly();
   return (
     <section aria-label="What worked" className="bg-basil-soft/60 flex flex-col rounded-lg">
-      {recipesOnly ? (
-        <Overline tone="basil" className="px-4 pt-4 pb-1">
-          Recipes that worked
-        </Overline>
-      ) : (
-        <button
-          type="button"
-          onClick={onOpen}
-          className="pressable focus-ring hover:bg-basil-soft flex flex-col gap-2 rounded-lg p-4 text-left"
-        >
-          <Overline tone="basil">What worked · attempt {attempt.number}</Overline>
-          <SettingsLine
-            filaments={filaments}
-            parts={settings}
-            name={filamentLabel}
-            className="text-small text-ink-soft"
-            filamentClassName="text-ink"
-          />
-          {!compact && attempt.note && (
-            <span className="text-body text-ink line-clamp-3 md:line-clamp-none">{attempt.note}</span>
-          )}
-          {!compact && attempt.successNotes.length > 0 && (
-            <span className="flex flex-wrap gap-1.5">
-              {attempt.successNotes.map((slug) => (
-                <Chip key={slug} tone="basil" icon={CheckIcon} className="bg-cream/70">
-                  {tagLabel("success", slug, successOptions)}
-                </Chip>
-              ))}
-            </span>
-          )}
-        </button>
-      )}
+      <button
+        type="button"
+        onClick={onOpen}
+        className="pressable focus-ring hover:bg-basil-soft flex flex-col gap-2 rounded-lg p-4 text-left"
+      >
+        <Overline tone="basil">What worked · attempt {attempt.number}</Overline>
+        <SettingsLine
+          filaments={filaments}
+          parts={settings}
+          name={filamentLabel}
+          className="text-small text-ink-soft"
+          filamentClassName="text-ink"
+        />
+        {!compact && attempt.note && (
+          <span className="text-body text-ink line-clamp-3 md:line-clamp-none">{attempt.note}</span>
+        )}
+        {!compact && attempt.successNotes.length > 0 && (
+          <span className="flex flex-wrap gap-1.5">
+            {attempt.successNotes.map((slug) => (
+              <Chip key={slug} tone="basil" icon={CheckIcon} className="bg-cream/70">
+                {tagLabel("success", slug, successOptions)}
+              </Chip>
+            ))}
+          </span>
+        )}
+      </button>
       {(recipes.length > 0 || onSaveRecipe || saved) && (
         <div className="flex flex-col gap-1 px-4 pb-3">
+          {recipes.length > 0 && (
+            <Overline tone="basil" className="pt-1">
+              Recipes for {material ?? "this filament"}
+            </Overline>
+          )}
           {recipes.map((recipe) => (
             <button
               key={recipe.id}

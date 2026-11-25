@@ -154,6 +154,7 @@ test("shows a build and the inbox as last seen with no connection, read-only, an
   await expect(page.getByRole("textbox", { name: "Title" })).toHaveValue("Cable chain");
   await expect(attempts.getByRole("listitem")).toHaveCount(2);
   await expect(attempts).toContainText("Brim and a hotter bed did it");
+  await expect(page.getByText("What worked · attempt 2")).toBeVisible();
   // Saved fields don't pretend to save.
   await expect(page.getByRole("textbox", { name: "Title" })).toHaveJSProperty("readOnly", true);
   await expect(page.getByRole("button", { name: "Finish build" })).toBeDisabled();

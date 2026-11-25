@@ -54,13 +54,12 @@ test("saves an attempt as a recipe, finds it on the spool page and in search, st
   await signIn(page);
   const { spoolId, buildId } = await seed(page);
 
-  // The attempt that worked is the newest, shown right there: no What worked card says it again. Save it from its menu.
+  // Save it from the What worked card (a slim one: the attempt's own card right below has the note).
   await page.goto(`/builds/${buildId}`);
   await expect(page.getByRole("textbox", { name: "Title" })).toHaveValue("Recipe tugboat");
   const card = page.getByRole("region", { name: "What worked" });
-  await expect(card).toHaveCount(0);
-  await page.getByRole("button", { name: "Options for attempt 1" }).click();
-  await page.getByText("Save as recipe", { exact: true }).click();
+  await expect(card.getByText("Slow outer wall did it")).toHaveCount(0);
+  await card.getByRole("button", { name: "Save as recipe" }).click();
   const save = page.getByRole("dialog", { name: "Save as a recipe" });
   // The name is offered from the spool's finish and the material.
   await expect(save.getByRole("textbox", { name: "Name it" })).toHaveValue("Silk PLA");
