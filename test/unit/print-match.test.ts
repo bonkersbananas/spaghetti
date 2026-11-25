@@ -411,7 +411,7 @@ describe("a copy's number after a name that ends in a number", () => {
 
   it("knows the earlier print by its own name, number and all", () => {
     const [best] = scorePrint({ name: "pot_4color_30mm(5)-12", startedAt: START }, [pot]);
-    expect(best?.reasons.map((reason) => reason.kind)).toEqual(expect.arrayContaining(["printed", "file"]));
+    expect(best?.reasons.map((reason) => reason.kind)).toEqual(["printed"]);
   });
 
   it("still keeps different numbers apart, however they end", () => {
@@ -419,6 +419,11 @@ describe("a copy's number after a name that ends in a number", () => {
     for (const name of ["pot_4color_30mm(5)-24", "pot_4color_40mm(5)-12-2", "pot_4color_40mm(5)-12"]) {
       expect(scorePrint({ name, startedAt: START }, [sizes])).toEqual([]);
     }
+  });
+
+  it("never reads a pair of sizes as a copy of the first", () => {
+    const box = build({ id: "box", prints: [{ name: "box-20", attempt: 1 }], files: [{ id: "b", name: "box.3mf" }] });
+    expect(scorePrint({ name: "box-20-10", startedAt: START }, [box])).toEqual([]);
   });
 
   it("never reads a number as a copy of a different one", () => {
