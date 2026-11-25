@@ -749,6 +749,10 @@ html:has(.gp-lightbox:target) {
   color: var(--sg-ink-soft);
 }
 
+.gp-changeline-pieces {
+  flex: 1;
+}
+
 .gp-changeline-icon {
   flex: none;
   margin-top: 0.125rem;
@@ -799,10 +803,201 @@ html:has(.gp-lightbox:target) {
   color: var(--sg-basil-ink);
 }
 
-/* The details under an attempt's story (the app's attempt entry): after a hairline, straight on the card. */
-.gp-details {
-  padding-top: 0.875rem;
-  box-shadow: inset 0 1px 0 var(--sg-hairline);
+/* The build's settings, said once under its summary: the filaments, then one wrapping line of the rest. */
+.gp-printed {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-top: 1.75rem;
+}
+
+.gp-printed-line {
+  font-size: var(--sg-text-small);
+  line-height: var(--sg-text-small-lh);
+  color: var(--sg-ink-soft);
+  font-variant-numeric: tabular-nums;
+}
+
+/*
+ * Earlier attempts as short rows: each run of them on one quiet cream surface, divided by hairlines (the one place a
+ * line is allowed, between rows inside one surface). A card in the middle ends the run.
+ */
+.gp-rows {
+  overflow: hidden;
+  border-radius: var(--gp-radius-lg);
+  background: var(--sg-cream);
+  box-shadow: var(--sg-shadow-soft);
+}
+
+.gp-rows > ul {
+  /* The last row's hairline falls outside the surface and is clipped. */
+  margin-bottom: -1px;
+}
+
+.gp-row {
+  box-shadow: 0 1px 0 var(--sg-hairline);
+}
+
+.gp-row-head {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.875rem 1.25rem;
+  list-style: none;
+  cursor: pointer;
+}
+
+.gp-row-head::-webkit-details-marker {
+  display: none;
+}
+
+.gp-row-img {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 4.25rem;
+  height: 4.25rem;
+  border-radius: 0.75rem;
+  object-fit: cover;
+}
+
+/* No photo: its file's plate on the render ground, else its outcome's icon on that outcome's soft ground. */
+.gp-row-plate {
+  padding: 0.25rem;
+  background: var(--sg-render-tile);
+}
+
+.gp-row-plate .gp-plate-img {
+  filter: var(--sg-render-shadow-tile);
+}
+
+.gp-row-none {
+  font-size: 1.5rem;
+  background: color-mix(in srgb, var(--sg-ink) 6%, transparent);
+  color: var(--sg-ink-soft);
+}
+
+.gp-row-none--success {
+  background: var(--sg-basil-soft);
+  color: var(--sg-basil-ink);
+}
+
+.gp-row-none--failed {
+  background: var(--sg-tomato-soft);
+  color: var(--sg-tomato-ink);
+}
+
+.gp-row-none--partial,
+.gp-row-none--printing {
+  background: var(--sg-semolina-soft);
+  color: var(--sg-semolina-ink);
+}
+
+.gp-row-text {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 0.125rem;
+  min-width: 0;
+}
+
+.gp-row-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.125rem 0.625rem;
+}
+
+.gp-row-title {
+  font-weight: 600;
+}
+
+.gp-row-sub,
+.gp-row-said {
+  font-size: var(--sg-text-small);
+  line-height: var(--sg-text-small-lh);
+  color: var(--sg-ink-faint);
+}
+
+/* What went wrong and what changed, in whole pieces: two lines at most, and one that doesn't fit is dropped whole. */
+.gp-row-said {
+  display: block;
+  max-height: calc(2 * var(--sg-text-small-lh));
+  color: var(--sg-ink-soft);
+}
+
+.gp-row-said--note {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.gp-row-chevron {
+  flex: none;
+  font-size: 1rem;
+  color: var(--sg-ink-faint);
+  transition: transform 0.2s ease;
+}
+
+.gp-row details[open] .gp-row-chevron {
+  transform: rotate(180deg);
+}
+
+.gp-row-open {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  padding: 0.25rem 1.25rem 1.5rem;
+}
+
+.gp-row-open .gp-attempt-photos {
+  margin: 0 -1.25rem;
+}
+
+/* An outcome in words only: icon and colour, no pill, so a column of them isn't the loudest thing on the page. */
+.gp-outcome--quiet {
+  padding: 0;
+  background: none;
+}
+
+/* The build's settings, once: labels faint, values in ink. */
+.gp-k {
+  color: var(--sg-ink-faint);
+}
+
+.gp-v {
+  color: var(--sg-ink);
+}
+
+@media (min-width: 48rem) {
+  .gp-rows > ul {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  /* Once one is open the run is a single column again, so its hairlines run the whole width. */
+  .gp-rows:has(details[open]) > ul {
+    display: block;
+  }
+
+  .gp-row-head {
+    padding: 1rem 1.75rem;
+  }
+
+  .gp-row-img {
+    width: 6rem;
+    height: 6rem;
+    border-radius: 0.875rem;
+  }
+
+  .gp-row-open {
+    padding: 0.25rem 1.75rem 1.75rem;
+  }
+
+  .gp-row-open .gp-attempt-photos {
+    margin: 0;
+  }
 }
 
 /* The settings someone would print it with: the filaments over a grid of label and value. */
