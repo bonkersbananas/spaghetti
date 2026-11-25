@@ -3748,6 +3748,66 @@ export const shots: Shot[] = [
     },
   },
   {
+    // Done as a photo grid: the seed's finished builds, the newest two large.
+    name: "builds-done",
+    path: "/builds",
+    fullPage: true,
+    prepare: async (page) => {
+      await page.getByRole("heading", { name: /^Done/ }).waitFor();
+      await page.getByRole("list", { name: "Done" }).scrollIntoViewIfNeeded();
+      await page.waitForTimeout(600);
+    },
+  },
+  {
+    // One finished build: it leads on its own, large.
+    name: "builds-done-one",
+    path: "/builds",
+    fullPage: true,
+    prepare: async (page) => {
+      let kept = false;
+      await keepBuilds(page, (item) => {
+        if (item.stage !== "done") return item.stage === "building";
+        if (kept) return false;
+        kept = true;
+        return true;
+      });
+      await page.getByRole("heading", { name: /^Done/ }).waitFor();
+      await page.waitForTimeout(600);
+    },
+    cleanup: unmockToday,
+  },
+  {
+    // Forty finished builds (the seed's, copied): calm and quick, the newest two large, no photo shown as a note card.
+    name: "builds-done-forty",
+    path: "/builds",
+    fullPage: true,
+    prepare: async (page) => {
+      await page.route(/\/api\/items\?stage=/, async (route) => {
+        const response = await route.fetch();
+        const json = (await response.json()) as {
+          items: Array<{ id: string; stage: string; title: string | null; finishedAt: number | null; photos: unknown[] }>;
+        };
+        const done = json.items.filter((item) => item.stage === "done");
+        const copies = Array.from({ length: 40 }, (_, index) => {
+          const from = done[index % done.length];
+          const bare = index % 9 === 4;
+          return {
+            ...from,
+            id: `${from.id.slice(0, -4)}${String(index).padStart(4, "0")}`,
+            finishedAt: (from.finishedAt ?? 0) - index * 86_400_000,
+            ...(bare ? { photos: [], files: [], attempts: [] } : {}),
+          };
+        });
+        json.items = [...json.items.filter((item) => item.stage !== "done"), ...copies];
+        await route.fulfill({ response, json });
+      });
+      await page.reload({ waitUntil: "networkidle" });
+      await page.getByRole("heading", { name: /^Done/ }).waitFor();
+      await page.waitForTimeout(800);
+    },
+    cleanup: unmockToday,
+  },
+  {
     // No builds at all: the empty state, and no floating New build beside its button.
     name: "builds-empty",
     path: "/builds",

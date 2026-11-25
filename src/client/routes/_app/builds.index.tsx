@@ -2,7 +2,7 @@ import type { Person } from "@shared/api";
 import { useQuery, useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { lazy, type ReactNode, Suspense, useEffect, useMemo, useState } from "react";
-import { BuildCard, BuildRow } from "@/components/builds/BuildCard";
+import { BuildCard, BuildRow, BuildTile } from "@/components/builds/BuildCard";
 import { LazyStartBuildSheet } from "@/components/builds/LazyStartBuildSheet";
 import { SpoolStrand } from "@/components/illustrations/SpoolStrand";
 import { PageHeader } from "@/components/shell/PageHeader";
@@ -11,6 +11,7 @@ import { ActionBar } from "@/components/ui/ActionBar";
 import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { PlusIcon } from "@/components/ui/icons";
+import { photoTileGrid } from "@/components/ui/PhotoTile";
 import { Reflow } from "@/components/ui/Reflow";
 import { Section as PageSection } from "@/components/ui/Section";
 import { CardSkeleton, Skeleton } from "@/components/ui/Skeleton";
@@ -38,6 +39,9 @@ export const Route = createFileRoute("/_app/builds/")({
 
 /** The same grid as the ideas inbox: two columns on phones, more on desktop. */
 const grid = "grid grid-cols-2 gap-3 md:grid-cols-3 md:gap-5 xl:grid-cols-4";
+
+/** How many of the newest finished builds are drawn large. */
+const LARGE_DONE = 2;
 
 /** What was worked on most recently first. */
 const byActivity = (a: ItemView, b: ItemView) => lastActivity(b) - lastActivity(a);
@@ -140,13 +144,10 @@ function Builds() {
           )}
           {done.length > 0 && (
             <Section title="Done" count={done.length} quiet>
-              <ul
-                data-picks
-                className="grid grid-cols-1 gap-1 md:grid-cols-2 md:gap-x-6 xl:grid-cols-3"
-                aria-label="Done"
-              >
-                {done.map((item) => (
-                  <BuildRow key={item.id} item={item} />
+              <ul data-picks className={photoTileGrid} aria-label="Done">
+                {/* The newest two lead, larger; the rest follow as a field of pictures. */}
+                {done.map((item, index) => (
+                  <BuildTile key={item.id} item={item} large={index < LARGE_DONE} />
                 ))}
               </ul>
             </Section>

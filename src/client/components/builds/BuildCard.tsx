@@ -9,6 +9,7 @@ import { Chip } from "@/components/ui/Chip";
 import { BuildsIcon } from "@/components/ui/icons";
 import { MetaList } from "@/components/ui/MetaList";
 import { PhotoRow } from "@/components/ui/PhotoRow";
+import { PhotoTile } from "@/components/ui/PhotoTile";
 import { ReactionGlance } from "@/components/ui/ReactionGlance";
 import { useReflow } from "@/components/ui/Reflow";
 import { useTagOptions } from "@/lib/builds";
@@ -163,5 +164,24 @@ export function BuildRow({ item }: { item: ItemView }) {
         </span>
       </PhotoRow>
     </li>
+  );
+}
+
+/**
+ * A finished build as a picture with its name and when it was done under it (Done on Builds): its cover, as the page
+ * leads with it (the best photo, else the newest plate render, else its note as a card). `large` for the newest few.
+ */
+export function BuildTile({ item, large }: { item: ItemView; large?: boolean }) {
+  const cover = coverOf(item);
+  const title = item.title || item.note.split("\n")[0] || "Untitled build";
+  return (
+    <PhotoTile
+      link={{ to: "/builds/$buildId", params: { buildId: item.id } }}
+      photo={coverPhoto(cover, cover.kind === "plate" ? plateAlt(item) : photoAlt(item))}
+      note={item.note || title}
+      title={title}
+      meta={`Done ${inlineTime(item.finishedAt ?? item.updatedAt)}`}
+      large={large}
+    />
   );
 }
