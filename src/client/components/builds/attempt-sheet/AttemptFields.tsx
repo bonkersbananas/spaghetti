@@ -311,10 +311,10 @@ export function AttemptFields(props: FieldsProps) {
       </div>
     </Fragment>
   );
-  // On a phone the sheet reads bottom-up: what is done standing at the printer (the note, the photos, and "How did it
-  // go?" last) sits at the foot, under the thumb, and the rarely changed settings are above. Desktop reads top-down.
-  // The sheet opens at its foot, where the thumb is: the part that reads bottom-up starts scrolled to its end, and
-  // goes back there when what sits below the outcome grows (its hint) or the keyboard comes up for the note.
+  // On a phone what is done standing at the printer (the photos, the note, "How did it go?" and its tiles, then the tags
+  // an answer adds) sits at the foot, under the thumb, and the rarely changed settings are above. Desktop reads top-down.
+  // The sheet opens scrolled to its end, and keeps there while its height settles (a hint arriving); the first press
+  // ends that, so an answer's tags never scroll the sheet.
   const root = useRef<HTMLDivElement>(null);
   const touched = useRef(false);
   // Scrolls the sheet's body to its end and keeps it there while its height settles (the sheet's own opening, the
