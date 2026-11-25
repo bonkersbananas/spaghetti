@@ -91,6 +91,37 @@ test("a print that is off the bed asks how it went, on the build, the builds lis
     .toEqual([]);
 });
 
+test("Partly on a print the printer flagged as spaghetti takes no Spaghetti tag along, and offers it", async ({
+  page,
+}) => {
+  const { itemId, attemptId } = await build(
+    page,
+    {},
+    { endedAt: Date.now() - 10 * 60_000, suggestedFailureTag: "spaghetti" },
+  );
+  await page.goto(`/builds/${itemId}`);
+  await page
+    .getByRole("listitem")
+    .filter({ hasText: "Attempt 1" })
+    .first()
+    .getByRole("radio", { name: "Partly" })
+    .click();
+  const sheet = page.getByRole("dialog");
+  await expect(sheet.getByRole("radio", { name: "Partly", checked: true })).toBeVisible();
+  // Offered, marked as the printer's, not taken.
+  const tag = sheet.getByRole("button", { name: "Spaghetti · printer" });
+  await expect(tag).toHaveAttribute("aria-pressed", "false");
+  await expect
+    .poll(async () => (await attemptOf(page, itemId, attemptId)).outcome, { timeout: 10_000 })
+    .toBe("partial");
+  expect((await attemptOf(page, itemId, attemptId)).failureTags).toEqual([]);
+  // One tap takes it.
+  await tag.click();
+  await expect
+    .poll(async () => (await attemptOf(page, itemId, attemptId)).failureTags, { timeout: 10_000 })
+    .toEqual(["spaghetti"]);
+});
+
 test("Worked on a print off the bed takes no suggested tag along", async ({ page }) => {
   const { itemId, attemptId } = await build(
     page,

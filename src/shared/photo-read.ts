@@ -50,9 +50,10 @@ const sameSet = (a: readonly string[], b: readonly string[]) =>
 /**
  * The tags an answer to "How did it go?" brings along (decision 0023). Claude's suggested tags and success notes come
  * only with the outcome Claude suggested: picking another outcome is just picking, and they stay offered, marked, one
- * tap each. The printer's suggested failure tag comes with any answer but Worked. Nothing is ever added over what the
+ * tap each. The printer's suggested failure tag (Spaghetti, or Other for a print that stopped) comes only with the
+ * Spaghetti answer, like Claude's: on another it stays offered, marked. Nothing is ever added over what the
  * person already chose; leaving an answer for another takes off what came along with it untouched (never a failure
- * tag on Worked, never Claude's Spaghetti tags on Partly).
+ * tag on Worked, never a Spaghetti tag on Partly unless the person took it).
  */
 export function takenWith(
   picked: Outcome,
@@ -71,12 +72,12 @@ export function takenWith(
       if (failureTags.length && sameSet(failureTags, read.failureTags)) failureTags = [];
       if (successNotes.length && sameSet(successNotes, read.successNotes)) successNotes = [];
     }
-    if (picked === "success" && printerTag && sameSet(failureTags, [printerTag])) failureTags = [];
+    if (picked !== "failed" && printerTag && sameSet(failureTags, [printerTag])) failureTags = [];
   }
   const claude = read?.outcome === picked ? read : null;
   if (picked !== "success" && failureTags.length === 0) {
     if (claude?.failureTags.length) failureTags = [...claude.failureTags];
-    else if (printerTag) failureTags = [printerTag];
+    else if (picked === "failed" && printerTag) failureTags = [printerTag];
   }
   if (picked !== "failed" && successNotes.length === 0 && claude?.successNotes.length)
     successNotes = [...claude.successNotes];
