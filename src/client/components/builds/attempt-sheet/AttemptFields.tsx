@@ -343,7 +343,7 @@ export function AttemptFields(props: FieldsProps) {
   useEffect(() => toEnd(false), []);
 
   // Partly or Spaghetti picked: the person's own words come first, so the note takes the focus (on a laptop typing
-  // goes straight in; on a phone the keyboard comes up with the note right above the answer). Picked in the sheet,
+  // goes straight in; on a phone the keyboard comes up with the note, which sits above the tiles). Picked in the sheet,
   // it is inside the tap, so iOS raises the keyboard; picked on a card, the card's tap holds the keyboard with a
   // stand-in (lib/keyboard-proxy.ts) and the note takes the focus from it once the sheet has slid up, so nothing jumps.
   const mountedAt = useRef(performance.now());
@@ -373,9 +373,8 @@ export function AttemptFields(props: FieldsProps) {
     return () => window.clearTimeout(timer);
   }, [outcome]);
 
-  // After Partly or Spaghetti the note comes right after the answer (on a phone, under the question and over the
-  // tiles), then the photos the tags speak of, then the few tags; otherwise the photos and the plate come first. The
-  // note is focused after the blocks move (a layout effect), so it keeps the focus.
+  // Desktop: after Partly or Spaghetti the note comes right after the answer, then the photos the tags speak of, then
+  // the few tags; otherwise the photos and the plate come first. A phone has one order whatever the answer.
   const blocks = isDesktop
     ? withTags
       ? [
