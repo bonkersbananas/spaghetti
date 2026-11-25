@@ -173,6 +173,17 @@ export function printKey(name: string | null | undefined): string {
 /** "uobf fit test ring 2" → "uobf fit test ring": a trailing small number some browsers add to a copy ("ring-2"). */
 const withoutCopyNumber = (key: string) => key.replace(/ (\d{1,2})$/, "");
 
+/**
+ * Whether `copy` is `name` with a browser's copy number (one digit: "-2") added after a number that is part of the
+ * name, or after two: "ring 12 2" of "ring 12" and of "ring". One way only, and a two-digit tail is never one, so
+ * "gear 12" is never "gear 24" and a size pair "box 20 10" is not "box 20".
+ */
+function isCopyOf(copy: string, name: string): boolean {
+  const once = copy.replace(/ \d$/, "");
+  if (once === copy) return false;
+  return once === name || once.replace(/ \d{1,2}$/, "") === name;
+}
+
 /** A name that says nothing about the thing: "Untitled", "Model", "Part 2" (a copy of one is no better). */
 const meaningless = (key: string) => MEANINGLESS.has(key) || MEANINGLESS.has(withoutCopyNumber(key));
 
@@ -253,6 +264,8 @@ function overlap(a: string, b: string): number {
 function nameMatch(print: string, other: string, share: number): "same" | "variant" | "like" | null {
   if (!print || !other) return null;
   if (print === other) return "same";
+  // A copy's number comes first: "multicolor-12-2" is a copy of "multicolor-12" even though they have numbers.
+  if (isCopyOf(print, other) || isCopyOf(other, print)) return "variant";
   // Different sizes, counts or years are different things, never a match.
   if (numbersDiffer(print, other)) return null;
   if (withoutCopyNumber(print) === other || print === withoutCopyNumber(other)) return "variant";

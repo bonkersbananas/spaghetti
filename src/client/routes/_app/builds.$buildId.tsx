@@ -35,7 +35,7 @@ import { RecipeSheet } from "@/components/recipes/RecipeSheet";
 import { SaveRecipeSheet } from "@/components/recipes/SaveRecipe";
 import { DetailBar } from "@/components/shell/DetailBar";
 import { ActionBar } from "@/components/ui/ActionBar";
-import { ActionMenuItem, MoreMenu } from "@/components/ui/ActionMenu";
+import { ActionMenuAskRow, ActionMenuItem, MoreMenu } from "@/components/ui/ActionMenu";
 import { Avatar, ViaText } from "@/components/ui/Avatar";
 import { Button, IconButton } from "@/components/ui/Button";
 import { Chip } from "@/components/ui/Chip";
@@ -569,14 +569,37 @@ function Build({ item }: { item: ItemView }) {
   // While a print is on the bed (decision 0066), ending the whole build is one menu away, not a button beside the
   // print's own question: standing at the printer, the thumb finds "How did it go?" and nothing that closes the build.
   // Once the print has its answer they are back where they were.
-  const closeMenu = active && printing && (
+  const endsBuild = active && printing;
+  // "Back to Ideas" lives here too: a sentence that says what it does, a menu away from the back link (it asks first).
+  const closeMenu = (endsBuild || scrapsToIdea) && (
     <MoreMenu label="More for this build" title="Build" description={title.trim() || "Untitled build"}>
-      <ActionMenuItem icon={FinishIcon} disabled={readOnly} onSelect={() => finishBuild(queryClient, item)}>
-        Finish build
-      </ActionMenuItem>
-      <ActionMenuItem icon={ShelveIcon} disabled={readOnly} onSelect={() => shelveBuild(queryClient, item)}>
-        Shelve build
-      </ActionMenuItem>
+      {endsBuild && (
+        <>
+          <ActionMenuItem icon={FinishIcon} disabled={readOnly} onSelect={() => finishBuild(queryClient, item)}>
+            Finish build
+          </ActionMenuItem>
+          <ActionMenuItem icon={ShelveIcon} disabled={readOnly} onSelect={() => shelveBuild(queryClient, item)}>
+            Shelve build
+          </ActionMenuItem>
+        </>
+      )}
+      {scrapsToIdea && (
+        <ActionMenuAskRow
+          icon={IdeasIcon}
+          disabled={readOnly}
+          question="Back to Ideas?"
+          detail={
+            attemptCount > 0
+              ? `Its ${attemptCount === 1 ? "attempt goes" : `${attemptCount} attempts go`} with it`
+              : undefined
+          }
+          verb="Back to Ideas"
+          onConfirm={remove}
+          onAsk={() => setDeleting(true)}
+        >
+          Turn back into an idea
+        </ActionMenuAskRow>
+      )}
     </MoreMenu>
   );
   const stageActions = (
@@ -608,11 +631,18 @@ function Build({ item }: { item: ItemView }) {
 
   // What worked last time, or that nothing has yet. Under the title and its chips on a phone, where the page is long and
   // this is the answer; at the end of the column on a keyboard, beside the attempts.
+  const workedRecipes = worked
+    ? recipesFor(allRecipes, { material: settingsMaterial(worked.settings) }).slice(0, 2)
+    : [];
+  // Said once: an attempt that is a card on this page (the newest always is) has its note and tags right there, so the
+  // What worked card keeps only the settings line and the recipes; one folded into a row keeps its note and tags too.
   const answer = worked ? (
     <WhatWorked
+      compact={isCard(worked)}
       attempt={worked}
       onOpen={() => openSheet(worked.id)}
-      recipes={recipesFor(allRecipes, { material: settingsMaterial(worked.settings) }).slice(0, 2)}
+      material={settingsMaterial(worked.settings)}
+      recipes={workedRecipes}
       saved={allRecipes.some((recipe) => recipe.source?.attemptId === worked.id)}
       onSaveRecipe={recipeSource(worked) && (() => setSavingRecipe(recipeSource(worked) ?? null))}
       onOpenRecipe={setOpenRecipe}
@@ -627,7 +657,7 @@ function Build({ item }: { item: ItemView }) {
         <h1 className="sr-only">{title.trim() || "Untitled build"}</h1>
         <DetailBar back={back} title={title.trim() || "Untitled build"} hideBackOnPhone={deleting}>
           {!deleting && <SaveStatus state={saveState} className="mr-2" />}
-          {deleting || closeMenu ? null : isDesktop ? (
+          {deleting || endsBuild ? null : isDesktop ? (
             <span className="mr-2 flex items-center gap-2">{stageActions}</span>
           ) : (
             active && (
@@ -648,7 +678,7 @@ function Build({ item }: { item: ItemView }) {
             what="build"
             verb={scrapsToIdea ? "Back to Ideas" : "Delete"}
             question={scrapsToIdea ? "Back to Ideas?" : undefined}
-            labelled={scrapsToIdea}
+            askOnly={scrapsToIdea}
             icon={scrapsToIdea ? IdeasIcon : undefined}
             detail={
               scrapsToIdea && attemptCount > 0
@@ -1120,6 +1150,8 @@ function NothingWorked({ tries, closest, onOpen }: { tries: number; closest?: At
  * for its material, and "Save as recipe" to keep these settings under a name.
  */
 function WhatWorked({
+  compact,
+  material,
   attempt,
   onOpen,
   recipes,
@@ -1127,6 +1159,10 @@ function WhatWorked({
   onSaveRecipe,
   onOpenRecipe,
 }: {
+  /** The attempt is a card on this page already: its note and tags aren't said again. */
+  compact?: boolean;
+  /** Its material ("PLA"), which the recipes below are for. */
+  material: string | null;
   attempt: AttemptView;
   onOpen: () => void;
   recipes: Recipe[];
@@ -1154,8 +1190,10 @@ function WhatWorked({
           className="text-small text-ink-soft"
           filamentClassName="text-ink"
         />
-        {attempt.note && <span className="text-body text-ink line-clamp-3 md:line-clamp-none">{attempt.note}</span>}
-        {attempt.successNotes.length > 0 && (
+        {!compact && attempt.note && (
+          <span className="text-body text-ink line-clamp-3 md:line-clamp-none">{attempt.note}</span>
+        )}
+        {!compact && attempt.successNotes.length > 0 && (
           <span className="flex flex-wrap gap-1.5">
             {attempt.successNotes.map((slug) => (
               <Chip key={slug} tone="basil" icon={CheckIcon} className="bg-cream/70">
@@ -1167,6 +1205,11 @@ function WhatWorked({
       </button>
       {(recipes.length > 0 || onSaveRecipe || saved) && (
         <div className="flex flex-col gap-1 px-4 pb-3">
+          {recipes.length > 0 && (
+            <Overline tone="basil" className="pt-1">
+              Recipes for {material ?? "this filament"}
+            </Overline>
+          )}
           {recipes.map((recipe) => (
             <button
               key={recipe.id}

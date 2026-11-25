@@ -374,9 +374,10 @@ export function UnreadBadge({ count }: { count: number }) {
 export function coverPhoto(
   cover: Cover,
   alt: string,
+  variant: "thumb" | "large" = "thumb",
 ): { id?: string; src: string; alt: string; color?: string; fit?: "contain" } | undefined {
   if (cover.kind === "photo")
-    return { id: cover.photo.id, src: photoSrc(cover.photo.id, "thumb"), alt, color: cover.photo.color || undefined };
+    return { id: cover.photo.id, src: photoSrc(cover.photo.id, variant), alt, color: cover.photo.color || undefined };
   if (cover.kind === "plate") return { src: fileThumbSrc(cover.file), alt, fit: "contain" };
   return undefined;
 }

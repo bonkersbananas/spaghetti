@@ -1,7 +1,7 @@
 import { createContext, type ReactNode, type RefObject, use, useState } from "react";
 import { cn } from "@/lib/cn";
 import { useIsDesktop } from "@/lib/use-media-query";
-import { IconButton } from "./Button";
+import { Button, IconButton } from "./Button";
 import { CheckIcon, type Icon, MoreIcon } from "./icons";
 import { PopoverAnchor, PopoverPanel, PopoverRoot, PopoverTrigger } from "./Popover";
 import { Sheet } from "./Sheet";
@@ -157,6 +157,8 @@ interface ActionMenuItemProps {
   /** The choice it is now: a check at the row's end. */
   current?: boolean;
   onSelect: () => void;
+  /** The menu stays open after the choice (the row asks in place). */
+  keepOpen?: boolean;
   /** Removes or deletes: tomato words, and the last row. */
   tone?: "danger";
   /** Can't be done right now (offline, a saved thing is read-only): shown, faint, and does nothing. */
@@ -170,6 +172,7 @@ export function ActionMenuItem({
   picture,
   current,
   onSelect,
+  keepOpen,
   tone,
   disabled,
   children,
@@ -181,7 +184,7 @@ export function ActionMenuItem({
       disabled={disabled}
       aria-current={current || undefined}
       onClick={() => {
-        close();
+        if (!keepOpen) close();
         onSelect();
       }}
       className={cn(
@@ -193,5 +196,79 @@ export function ActionMenuItem({
       <span className="min-w-0 flex-1">{children}</span>
       {current && <CheckIcon size={18} aria-hidden className="text-ink-soft shrink-0" />}
     </button>
+  );
+}
+
+interface ActionMenuAskRowProps {
+  icon?: Icon;
+  /** The row's words while it waits to be chosen: "Turn back into an idea". */
+  children: ReactNode;
+  /** The question it turns into on a phone: "Back to Ideas?". */
+  question: string;
+  /** What else goes with it, under the question. */
+  detail?: string;
+  /** The tomato-free primary button's words: "Back to Ideas". */
+  verb: string;
+  /** Does it, once confirmed in the sheet (a phone). */
+  onConfirm: () => void;
+  /** Where the page asks itself (desktop's popover closes and the page's own question takes over). */
+  onAsk: () => void;
+  disabled?: boolean;
+}
+
+/**
+ * A row that asks before it acts, in place (decision 0062's two steps). In a phone's sheet the row turns into its
+ * question with "Keep" and the verb, under the thumb that chose it; on desktop the popover closes and the page asks.
+ */
+export function ActionMenuAskRow({
+  icon,
+  children,
+  question,
+  detail,
+  verb,
+  onConfirm,
+  onAsk,
+  disabled,
+}: ActionMenuAskRowProps) {
+  const close = use(CloseContext);
+  const isDesktop = useIsDesktop();
+  const [asking, setAsking] = useState(false);
+  if (!asking || isDesktop) {
+    return (
+      <ActionMenuItem
+        icon={icon}
+        disabled={disabled}
+        onSelect={() => {
+          if (isDesktop) onAsk();
+          else setAsking(true);
+        }}
+        keepOpen={!isDesktop}
+      >
+        {children}
+      </ActionMenuItem>
+    );
+  }
+  return (
+    <div className="flex flex-col gap-3 px-3 py-2">
+      <p className="text-body text-ink font-semibold">{question}</p>
+      {detail && <p className="text-small text-ink-soft -mt-2">{detail}</p>}
+      <div className="flex gap-2">
+        <Button variant="secondary" className="flex-1" onClick={() => setAsking(false)}>
+          Keep
+        </Button>
+        <Button
+          variant="primary"
+          icon={icon}
+          className="flex-1"
+          onClick={() => {
+            setAsking(false);
+            close();
+            onConfirm();
+          }}
+        >
+          {verb}
+        </Button>
+      </div>
+    </div>
   );
 }

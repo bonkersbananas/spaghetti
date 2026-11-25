@@ -18,17 +18,25 @@ function ConfirmDeleteDemo() {
 function BackToIdeasDemo() {
   const [asking, setAsking] = useState(false);
   return (
-    <ConfirmDelete
-      asking={asking}
-      onAskingChange={setAsking}
-      onConfirm={() => toast.message("Back in Ideas")}
-      what="build"
-      verb="Back to Ideas"
-      question="Back to Ideas?"
-      detail="Its 2 attempts go with it"
-      labelled
-      icon={Icons.IdeasIcon}
-    />
+    // Idle it is a row in the build's "More" menu; asking, the question takes the top bar's place.
+    <div className="flex items-center gap-3">
+      {!asking && (
+        <Button variant="quiet" icon={Icons.IdeasIcon} onClick={() => setAsking(true)}>
+          Back to Ideas
+        </Button>
+      )}
+      <ConfirmDelete
+        asking={asking}
+        onAskingChange={setAsking}
+        onConfirm={() => toast.message("Back in Ideas")}
+        what="build"
+        verb="Back to Ideas"
+        question="Back to Ideas?"
+        detail="Its 2 attempts go with it"
+        askOnly
+        icon={Icons.IdeasIcon}
+      />
+    </div>
   );
 }
 

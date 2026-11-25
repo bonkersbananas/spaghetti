@@ -83,6 +83,28 @@ test("one tap on 'Looks right' keeps what the label said", async ({ page }) => {
   expect(spool.colorName).toBe("Jade White");
 });
 
+test("the fields fill in even when every answer of the pantry takes longer than the polling interval", async ({
+  page,
+}) => {
+  // The page asks for the pantry again every few seconds while a label is read; an answer slower than that must be
+  // waited for, not cancelled by the next ask (a busy server did that in CI, and the card never came).
+  await page.route("**/api/spools", async (route) => {
+    if (route.request().method() !== "GET") return route.continue();
+    const response = await route.fetch();
+    await new Promise((resolve) => setTimeout(resolve, 4000));
+    await route.fulfill({ response }).catch(() => {});
+  });
+  await page.goto("/pantry");
+  await page
+    .getByRole("button", { name: /^Add (a )?spool$/ })
+    .first()
+    .click();
+  await page.getByRole("dialog", { name: "New spool" }).getByTestId("spool-photo-input").setInputFiles(jade);
+  await expect(page.getByRole("region", { name: "What Claude read" })).toContainText("Nozzle 190–230 °C", {
+    timeout: 20_000,
+  });
+});
+
 test("keeps what was typed and fills the rest", async ({ page }) => {
   const id = await addSpool(page, { brand: "Sunlu" });
   await readFrom(page, id, jade);
