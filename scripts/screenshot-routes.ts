@@ -3785,11 +3785,11 @@ export const shots: Shot[] = [
       await page.route(/\/api\/items\?stage=/, async (route) => {
         const response = await route.fetch();
         const json = (await response.json()) as {
-          items: Array<{ id: string; stage: string; title: string | null; finishedAt: number | null; photos: unknown[] }>;
+          items: Array<Record<string, unknown> & { id: string; stage: string; finishedAt: number | null }>;
         };
         const done = json.items.filter((item) => item.stage === "done");
         const copies = Array.from({ length: 40 }, (_, index) => {
-          const from = done[index % done.length];
+          const from = done[index % done.length] as (typeof done)[number];
           const bare = index % 9 === 4;
           return {
             ...from,
