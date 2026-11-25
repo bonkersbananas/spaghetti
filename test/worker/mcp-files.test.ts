@@ -208,7 +208,7 @@ describe("add_file", () => {
     // Sixty pictures each just under their own 4 MB limit: a quarter of a megabyte as a file, 240 MB unpacked.
     const entries: Record<string, Uint8Array> = { "Metadata/slice_info.config": strToU8("<config/>") };
     for (let n = 1; n <= 60; n++) entries[`Metadata/plate_${n}.png`] = new Uint8Array(4 * 1024 * 1024 - 1);
-    const bomb = zipSync(entries, { level: 9 });
+    const bomb = zipSync(entries, { level: 1 });
     expect(bomb.length).toBeLessThan(1024 * 1024);
     const refused = await callTool(token, "add_file", {
       build_id: buildId,
