@@ -226,8 +226,8 @@ describe("Claude names an idea saved without a title", () => {
     await asPerson("/api/items", { method: "POST", json: { id: itemId, photos: 1 } });
     // The screens know at once.
     expect((await getItem(itemId)).titleJob?.status).toBe("naming");
-    // The photo comes a little after the job's first wait; the job waits for it and reads it.
-    await new Promise((resolve) => setTimeout(resolve, 3000));
+    // The photo comes a little after the job's first wait (250 ms in the tests); the job waits for it and reads it.
+    await new Promise((resolve) => setTimeout(resolve, 600));
     await uploadPhoto(itemId, uuid(), cookie);
     await settled();
     expect((await getItem(itemId)).title).toBe("Spool holder for the shelf");

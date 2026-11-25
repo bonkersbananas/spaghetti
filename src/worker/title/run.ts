@@ -20,6 +20,11 @@ const DAY_MS = 24 * 60 * 60 * 1000;
  * after it, so the first save gives the rest of the capture a moment to arrive.
  */
 export const SETTLE_MS = 2500;
+/** TITLES_SETTLE_MS shortens the wait (the tests set it, so they don't each sit out 2.5 s); unset it is SETTLE_MS. */
+function settleFor(env: Env): number {
+  const set = Number(env.TITLES_SETTLE_MS);
+  return env.TITLES_SETTLE_MS && Number.isFinite(set) && set >= 0 ? set : SETTLE_MS;
+}
 /**
  * A capture that said its photos were on their way may still be sending the first when the wait is over: the job
  * looks for it every half second for this long more before it gives up (a slow connection).
@@ -145,7 +150,7 @@ export async function runTitle(
   env: Env,
   itemId: string,
   db: Db = getDb(env.DB),
-  { settleMs = SETTLE_MS, timeoutMs = WAIT_UNTIL_TIMEOUT_MS } = {},
+  { settleMs = settleFor(env), timeoutMs = WAIT_UNTIL_TIMEOUT_MS } = {},
 ): Promise<void> {
   const apiKey = env.ANTHROPIC_API_KEY?.trim();
   if (!apiKey) return;
