@@ -21,7 +21,7 @@ import {
 import type { BridgeProgress } from "@shared/bridge";
 import { bestPhoto, finalPhoto } from "@shared/cover";
 import type { AttemptPart } from "@shared/parts";
-import { isOffTheBed, livePrintProgress, printProgress } from "@shared/print-progress";
+import { bedOrderKey, compareBedOrder, livePrintProgress, printProgress } from "@shared/print-progress";
 import { type QueryClient, queryOptions, useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
 import { toast } from "@/components/ui/Toast";
@@ -406,9 +406,10 @@ export function lastActivity(item: ItemView): number {
 }
 
 /**
- * Every attempt on the bed that still has no outcome. Prints still printing come first (the one that should be
- * done by now, then the newest), then the ones the printer says are off the bed and wait for "how did it go?".
- * Today lists them all; the sidebar shows the first.
+ * Every attempt on the bed that still has no outcome, in the one order every screen uses (Today, Builds, the Journal's
+ * Now, the Printer page, the sidebar): the prints off the bed that wait for "how did it go?" first, newest ended
+ * first, since someone standing at the printer needs those; then the print still printing that should be done by now,
+ * then the other prints, newest first.
  */
 export function printingAttempts(
   items: ItemView[],
@@ -421,16 +422,15 @@ export function printingAttempts(
     if (item.stage !== "building") continue;
     for (const attempt of item.attempts) if (attempt.outcome === null) found.push({ item, attempt });
   }
-  const rank = (attempt: AttemptView) =>
-    isOffTheBed(attempt)
-      ? 2
-      : (
-            (live?.attemptId === attempt.id ? livePrintProgress(live, now) : null) ??
-            printProgress(attempt.printedAt, attempt.settings.estimatedMinutes, now)
-          ).state === "due"
-        ? 0
-        : 1;
-  return found.sort((a, b) => rank(a.attempt) - rank(b.attempt) || b.attempt.printedAt - a.attempt.printedAt);
+  const key = (attempt: AttemptView) =>
+    bedOrderKey(
+      attempt,
+      (
+        (live?.attemptId === attempt.id ? livePrintProgress(live, now) : null) ??
+        printProgress(attempt.printedAt, attempt.settings.estimatedMinutes, now)
+      ).state,
+    );
+  return found.sort((a, b) => compareBedOrder(key(a.attempt), key(b.attempt)));
 }
 
 /**

@@ -205,11 +205,27 @@ describe("reading a print from its photo", () => {
   it("is capped per day for the workspace", async () => {
     const web = stubClaude();
     const { itemId, attemptId } = await startPrint();
-    for (let i = 0; i < PHOTO_READS_PER_DAY; i++) {
-      await uploadPhoto(itemId, uuid(), cookie, { attemptId });
-      await vi.waitFor(async () => expect((await rows()).every((r) => r.status !== "reading")).toBe(true));
+    // One photo is read for real; the rest of the day's reads are put in place as copies of its rows, rather than
+    // uploaded and read one by one (thirty round trips, slow on a busy runner). The cap counts rows with a ran_at today.
+    await uploadPhoto(itemId, uuid(), cookie, { attemptId });
+    await vi.waitFor(async () => expect((await rows()).every((r) => r.status !== "reading")).toBe(true));
+    expect(web.bodies).toHaveLength(1);
+    const columns = async (table: string) =>
+      (await env.DB.prepare(`PRAGMA table_info(${table})`).all<{ name: string }>()).results.map((c) => c.name);
+    const original = String((await rows())[0]?.photo_id);
+    const copyOf = (table: string, names: string[], key: string, from: string) =>
+      env.DB.prepare(
+        `INSERT INTO ${table} (${names.join(", ")}) SELECT ${names.map((c) => (c === key ? "?1" : c)).join(", ")} FROM ${table} WHERE ${from} = ?2`,
+      );
+    const [photoColumns, readColumns] = [await columns("photos"), await columns("photo_reads")];
+    for (let i = 1; i < PHOTO_READS_PER_DAY; i++) {
+      const copy = uuid();
+      await env.DB.batch([
+        copyOf("photos", photoColumns, "id", "id").bind(copy, original),
+        copyOf("photo_reads", readColumns, "photo_id", "photo_id").bind(copy, original),
+      ]);
     }
-    expect(web.bodies).toHaveLength(PHOTO_READS_PER_DAY);
+    expect(await rows()).toHaveLength(PHOTO_READS_PER_DAY);
     web.bodies.length = 0;
     await uploadPhoto(itemId, uuid(), cookie, { attemptId });
     await vi.waitFor(async () => expect((await rows()).some((r) => r.run_outcome === "cap")).toBe(true));
