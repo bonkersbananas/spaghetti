@@ -128,8 +128,8 @@ export function EditAttempt({
       printing && value.settings.actualMinutes === undefined
         ? elapsedIfPlausible(attempt.printedAt, value.settings.estimatedMinutes)
         : undefined;
-    // Claude's tags and notes come only with the outcome Claude suggested; the printer's tag with any answer but
-    // Worked (decision 0023). They are the person's to take off; the others stay offered, marked, one tap each.
+    // Claude's tags and notes come only with the outcome Claude suggested; the printer's tag only with Spaghetti
+    // (decision 0023). They are the person's to take off; the others stay offered, marked, one tap each.
     const taken = takenWith(outcome, value, {
       read: answering.current ? claudeRead : null,
       printerTag: attempt.suggestedFailureTag,

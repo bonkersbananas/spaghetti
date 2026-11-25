@@ -64,6 +64,8 @@ export function TagPicker({
   const offered = suggestions.filter((slug) => value.includes(slug) || !hide.includes(slug));
   const isPrinters = (slug: string) => (suggestedBy === "printer" ? true : slug === printerSuggested);
   const claudeOffered = offered.filter((slug) => !isPrinters(slug));
+  // Both sources among the chips: the one line names both, so a "· printer" chip doesn't read as Claude's.
+  const both = claudeOffered.length > 0 && offered.some(isPrinters);
   const tone = kind === "failure" ? "tomato" : "basil";
 
   const rank = (slug: string) => {
@@ -101,8 +103,12 @@ export function TagPicker({
       {claudeOffered.length > 0 && (
         <ClaudeLine className="-mt-1 px-0.5">
           {claudeOffered.some((slug) => value.includes(slug))
-            ? "Claude's guess from the photo. Tap to take any off."
-            : "Claude's guess from the photo: tap any that fit."}
+            ? both
+              ? "The printer's and Claude's guesses. Tap to take any off."
+              : "Claude's guess from the photo. Tap to take any off."
+            : both
+              ? "The printer's and Claude's guesses: tap any that fit."
+              : "Claude's guess from the photo: tap any that fit."}
         </ClaudeLine>
       )}
       <div className="flex flex-wrap gap-2">
