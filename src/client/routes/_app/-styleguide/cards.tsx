@@ -7,7 +7,7 @@ import { ClaudeLine } from "@/components/ui/ClaudeLine";
 import * as Icons from "@/components/ui/icons";
 import { LinkCard } from "@/components/ui/LinkCard";
 import { MiniCard } from "@/components/ui/MiniCard";
-import { PhotoTile, photoTileGrid } from "@/components/ui/PhotoTile";
+import { PrintTile, printTileGrid } from "@/components/ui/PrintTile";
 import { Reflow } from "@/components/ui/Reflow";
 
 import { toast } from "@/components/ui/Toast";
@@ -178,37 +178,40 @@ export function CardSection() {
       </div>
       <div className="mt-10">
         <Label>
-          Photo tiles, for finished prints (Done on Builds): the picture with its name and date under it, no card. The
-          newest two are `large` (two columns wide, 4:3); the rest are squares, two across on a phone, four from md, six
-          from xl. A build without a photo shows its note as a card; a long name ends in …
+          Print tiles, for finished prints (Done on Builds): the picture with its name and date under it, no card. The
+          newest are `lead` tiles (4:3, the first on a phone, two from md, three from xl); the rest are squares, two
+          across on a phone, three from md, six from xl. A print with only a note shows it as a card, and when that note
+          is the title the caption is just the date; a long name takes two lines and ends in …
         </Label>
-        <ul className={photoTileGrid}>
-          <PhotoTile
-            large
+        <ul className={printTileGrid}>
+          <PrintTile
+            lead={0}
             link={{ to: "/styleguide" }}
             photo={{ src: dragonPhoto, alt: "A red articulated dragon on the print bed" }}
             title="Articulated dragon"
-            meta="Done 3 h ago"
+            meta="3 h ago"
           />
-          <PhotoTile
-            large
+          <PrintTile
+            lead={1}
             link={{ to: "/styleguide" }}
             photo={{ src: vasePhoto, alt: "A gold silk-PLA vase" }}
             title="Spiral vase in silk PLA, maybe 0.6 nozzle, with a very long name"
-            meta="Done yesterday"
+            meta="Yesterday"
           />
-          <PhotoTile
+          <PrintTile
+            lead={2}
             link={{ to: "/styleguide" }}
             photo={{ src: planterPhoto, alt: "A green planter" }}
             title="Planter"
-            meta="Done Nov 12"
+            meta="Nov 12"
           />
-          <PhotoTile
+          <PrintTile
             link={{ to: "/styleguide" }}
-            note="Hook for the bike helmet"
-            title="Helmet hook"
-            meta="Done Oct 31"
+            photo={{ src: planterPhoto, alt: "A green planter" }}
+            title="Drawer bins, 42 mm grid"
+            meta="Sep 27"
           />
+          <PrintTile link={{ to: "/styleguide" }} note="Hook for the bike helmet" meta="Oct 31" />
         </ul>
       </div>
       <div className="mt-10">

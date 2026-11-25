@@ -11,7 +11,7 @@ import { ActionBar } from "@/components/ui/ActionBar";
 import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { PlusIcon } from "@/components/ui/icons";
-import { photoTileGrid } from "@/components/ui/PhotoTile";
+import { printTileGrid } from "@/components/ui/PrintTile";
 import { Reflow } from "@/components/ui/Reflow";
 import { Section as PageSection } from "@/components/ui/Section";
 import { CardSkeleton, Skeleton } from "@/components/ui/Skeleton";
@@ -40,8 +40,11 @@ export const Route = createFileRoute("/_app/builds/")({
 /** The same grid as the ideas inbox: two columns on phones, more on desktop. */
 const grid = "grid grid-cols-2 gap-3 md:grid-cols-3 md:gap-5 xl:grid-cols-4";
 
-/** How many of the newest finished builds are drawn large. */
-const LARGE_DONE = 2;
+/** The newest three finished builds lead, large (the grid decides how many show so by width). */
+const LEADING = [0, 1, 2] as const;
+
+/** Done shows this many, then "N more": a long list of finished prints stays a calm field, not a wall. */
+const DONE_SHOWN = 11;
 
 /** What was worked on most recently first. */
 const byActivity = (a: ItemView, b: ItemView) => lastActivity(b) - lastActivity(a);
@@ -63,6 +66,7 @@ function Builds() {
   const queryClient = useQueryClient();
   const fromScratch = useNewBuild();
   const [picking, setPicking] = useState(false);
+  const [allDone, setAllDone] = useState(false);
   const newBuild = () => setPicking(true);
   useHotkeys({ buildStart: isPending ? undefined : newBuild });
   // A blank build left by closing the tab on it is cleared at the next visit.
@@ -80,6 +84,9 @@ function Builds() {
   const onBedIds = new Set(onBed.map(({ item }) => item.id));
   const inProgress = items.filter((item) => item.stage === "building" && !onBedIds.has(item.id)).sort(byActivity);
   const done = items.filter((item) => item.stage === "done").sort(byFinished);
+  // A few over the limit are all shown: "2 more" would hide less than the button costs.
+  const shownDone = allDone || done.length <= DONE_SHOWN + 3 ? done : done.slice(0, DONE_SHOWN);
+  const hiddenDone = done.length - shownDone.length;
   const shelved = items.filter((item) => item.stage === "shelved").sort(byFinished);
 
   return (
@@ -144,12 +151,16 @@ function Builds() {
           )}
           {done.length > 0 && (
             <Section title="Done" count={done.length} quiet>
-              <ul data-picks className={photoTileGrid} aria-label="Done">
-                {/* The newest two lead, larger; the rest follow as a field of pictures. */}
-                {done.map((item, index) => (
-                  <BuildTile key={item.id} item={item} large={index < LARGE_DONE} />
+              <ul data-picks className={printTileGrid} aria-label="Done">
+                {shownDone.map((item, index) => (
+                  <BuildTile key={item.id} item={item} lead={LEADING[index]} />
                 ))}
               </ul>
+              {hiddenDone > 0 && (
+                <Button variant="quiet" size="sm" className="mt-4" onClick={() => setAllDone(true)}>
+                  {hiddenDone} more
+                </Button>
+              )}
             </Section>
           )}
           {shelved.length > 0 && (
