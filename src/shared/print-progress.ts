@@ -92,3 +92,20 @@ export const isOffTheBed = (attempt: { outcome: unknown; endedAt: number | null 
 export function offTheBedLabel(endedAt: number): string {
   return `Off the bed at ${clockTime(endedAt)}`;
 }
+
+/**
+ * Where a print with no outcome sits among the prints on the bed, the same on every screen: off the bed and waiting
+ * for "how did it go?" first (the one that ended last first), then the print that should be done by now, then the
+ * rest (the newest first). Sort by `rank` ascending, then `recency` descending.
+ */
+export function bedOrderKey(
+  attempt: { outcome: unknown; endedAt: number | null; printedAt: number },
+  state: PrintProgressState,
+): { rank: number; recency: number } {
+  if (isOffTheBed(attempt)) return { rank: 0, recency: attempt.endedAt ?? 0 };
+  return { rank: state === "due" ? 1 : 2, recency: attempt.printedAt };
+}
+
+/** Sorts prints by their `bedOrderKey`s: the order every screen lists the prints on the bed in. */
+export const compareBedOrder = (a: { rank: number; recency: number }, b: { rank: number; recency: number }) =>
+  a.rank - b.rank || b.recency - a.recency;
