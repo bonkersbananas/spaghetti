@@ -670,7 +670,8 @@ function AttemptRow({ token, attempt, shown }: { token: string; attempt: GuestAt
           <Icon name="chevron" class="gp-row-chevron" />
         </summary>
         <div class="gp-row-open">
-          <Pieces pieces={metaOf(attempt)} class="gp-attempt-meta" />
+          {/* The date is on the row above: what the attempt took and used comes first here. */}
+          <Pieces pieces={metaOf(attempt).slice(1)} class="gp-attempt-meta" />
           <AttemptPhotos token={token} shown={shown} />
           <AttemptBody token={token} attempt={attempt} />
         </div>

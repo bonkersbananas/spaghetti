@@ -976,9 +976,9 @@ html:has(.gp-lightbox:target) {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  /* An open row has the room of both. */
-  .gp-row:has(details[open]) {
-    grid-column: 1 / -1;
+  /* Once one is open the run is a single column again, so its hairlines run the whole width. */
+  .gp-rows:has(details[open]) > ul {
+    display: block;
   }
 
   .gp-row-head {
