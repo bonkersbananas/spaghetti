@@ -1582,6 +1582,60 @@ async function fourAttemptBuild(page: Page) {
   await page.getByRole("heading", { level: 2, name: /^Attempts/ }).waitFor();
 }
 
+/**
+ * A build where the attempt that worked (attempt 2) isn't the newest: a failure and a partly came after it. What worked
+ * stays on its page, as the settings line with its recipe links, since the story shows the later attempts first.
+ */
+async function workedEarlierBuild(page: Page) {
+  const headers = { Origin: new URL(page.url()).origin };
+  const id = crypto.randomUUID();
+  modelItems.push(id);
+  await page.request.post("/api/items", {
+    headers,
+    data: { id, title: "Cookie stamp", note: "A star, for the dough.", stage: "building" },
+  });
+  const base = { bedType: "Textured PEI Plate", nozzleDiameter: 0.4, layerHeight: 0.2, nozzleTemperature: 220 };
+  const HOUR = 3_600_000;
+  const attempts = [
+    { outcome: "failed", ago: 5 * 24 * HOUR, note: "Lifted at a corner.", settings: { ...base, bedTemperature: 55 } },
+    {
+      outcome: "success",
+      ago: 4 * 24 * HOUR,
+      note: "Brim and a hotter bed did it. Clean all the way up.",
+      successNotes: ["settings-worth-reusing"],
+      settings: { ...base, bedTemperature: 60, brim: true },
+    },
+    {
+      outcome: "partial",
+      ago: 2 * 24 * HOUR,
+      note: "Tried 0.12 mm: slower, rougher.",
+      settings: { ...base, layerHeight: 0.12 },
+    },
+    {
+      outcome: "failed",
+      ago: 6 * HOUR,
+      note: "Warped when the door was open.",
+      settings: { ...base, bedTemperature: 60 },
+    },
+  ];
+  for (const attempt of attempts) {
+    const created = await page.request.post(`/api/items/${id}/attempts`, {
+      headers,
+      data: {
+        id: crypto.randomUUID(),
+        outcome: attempt.outcome,
+        printedAt: SEED_NOW - attempt.ago,
+        note: attempt.note,
+        successNotes: attempt.successNotes ?? [],
+        settings: attempt.settings,
+      },
+    });
+    if (!created.ok()) throw new Error(`Adding an attempt to the worked-earlier build failed: ${created.status()}`);
+  }
+  await page.goto(`/builds/${id}`);
+  await page.getByRole("heading", { level: 2, name: /^Attempts/ }).waitFor();
+}
+
 /** A build with a print on the bed, opened on its "How did it go?" sheet (a phone's thumb-reach order). */
 async function finishSheet(page: Page) {
   const headers = { Origin: new URL(page.url()).origin };
@@ -3847,6 +3901,26 @@ export const shots: Shot[] = [
     },
   },
   { name: "build", path: `/builds/${SEED_BUILD_IDS.tugboat}`, fullPage: true },
+  // What worked is said once (a done build, a one-attempt build, one where the worked attempt isn't the newest) and
+  // Back to Ideas waits in the top bar's menu.
+  { name: "build-said-once-done", path: `/builds/${SEED_IDS.headphoneStand}`, fullPage: true },
+  { name: "build-said-once-one-attempt", path: `/builds/${SEED_IDS.lithophane}`, fullPage: true },
+  {
+    name: "build-said-once-earlier",
+    path: "/builds",
+    prepare: workedEarlierBuild,
+    fullPage: true,
+    cleanup: removeModelItems,
+  },
+  {
+    name: "build-topbar-menu",
+    path: `/builds/${SEED_IDS.headphoneStand}`,
+    beforeShot: async (page) => {
+      await page.getByRole("button", { name: "More for this build" }).click();
+      await page.getByRole("button", { name: "Back to Ideas" }).waitFor();
+      await page.waitForTimeout(500);
+    },
+  },
   // A build with four attempts (fourAttemptBuild): its top, its attempts (the newest a full card, the earlier ones
   // compact rows) and one earlier row opened in place.
   {

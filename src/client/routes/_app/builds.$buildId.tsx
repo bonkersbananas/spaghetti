@@ -631,6 +631,7 @@ function Build({ item }: { item: ItemView }) {
     workedIsNewest && workedRecipes.length === 0 ? null : (
       <WhatWorked
         compact={workedLeads}
+        recipesOnly={workedIsNewest}
         attempt={worked}
         onOpen={() => openSheet(worked.id)}
         recipes={workedRecipes}
@@ -1143,6 +1144,7 @@ function NothingWorked({ tries, closest, onOpen }: { tries: number; closest?: At
  */
 function WhatWorked({
   compact,
+  recipesOnly,
   attempt,
   onOpen,
   recipes,
@@ -1152,6 +1154,8 @@ function WhatWorked({
 }: {
   /** The attempt is a card on this page already: its note and tags aren't said again. */
   compact?: boolean;
+  /** It is the newest attempt, shown right here: only the recipes for its material are left to say. */
+  recipesOnly?: boolean;
   attempt: AttemptView;
   onOpen: () => void;
   recipes: Recipe[];
@@ -1166,32 +1170,38 @@ function WhatWorked({
   const readOnly = useReadOnly();
   return (
     <section aria-label="What worked" className="bg-basil-soft/60 flex flex-col rounded-lg">
-      <button
-        type="button"
-        onClick={onOpen}
-        className="pressable focus-ring hover:bg-basil-soft flex flex-col gap-2 rounded-lg p-4 text-left"
-      >
-        <Overline tone="basil">What worked · attempt {attempt.number}</Overline>
-        <SettingsLine
-          filaments={filaments}
-          parts={settings}
-          name={filamentLabel}
-          className="text-small text-ink-soft"
-          filamentClassName="text-ink"
-        />
-        {!compact && attempt.note && (
-          <span className="text-body text-ink line-clamp-3 md:line-clamp-none">{attempt.note}</span>
-        )}
-        {!compact && attempt.successNotes.length > 0 && (
-          <span className="flex flex-wrap gap-1.5">
-            {attempt.successNotes.map((slug) => (
-              <Chip key={slug} tone="basil" icon={CheckIcon} className="bg-cream/70">
-                {tagLabel("success", slug, successOptions)}
-              </Chip>
-            ))}
-          </span>
-        )}
-      </button>
+      {recipesOnly ? (
+        <Overline tone="basil" className="px-4 pt-4 pb-1">
+          Recipes that worked
+        </Overline>
+      ) : (
+        <button
+          type="button"
+          onClick={onOpen}
+          className="pressable focus-ring hover:bg-basil-soft flex flex-col gap-2 rounded-lg p-4 text-left"
+        >
+          <Overline tone="basil">What worked · attempt {attempt.number}</Overline>
+          <SettingsLine
+            filaments={filaments}
+            parts={settings}
+            name={filamentLabel}
+            className="text-small text-ink-soft"
+            filamentClassName="text-ink"
+          />
+          {!compact && attempt.note && (
+            <span className="text-body text-ink line-clamp-3 md:line-clamp-none">{attempt.note}</span>
+          )}
+          {!compact && attempt.successNotes.length > 0 && (
+            <span className="flex flex-wrap gap-1.5">
+              {attempt.successNotes.map((slug) => (
+                <Chip key={slug} tone="basil" icon={CheckIcon} className="bg-cream/70">
+                  {tagLabel("success", slug, successOptions)}
+                </Chip>
+              ))}
+            </span>
+          )}
+        </button>
+      )}
       {(recipes.length > 0 || onSaveRecipe || saved) && (
         <div className="flex flex-col gap-1 px-4 pb-3">
           {recipes.map((recipe) => (
