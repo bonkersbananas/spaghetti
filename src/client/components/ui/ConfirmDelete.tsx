@@ -1,5 +1,4 @@
 import { useEffect, useRef } from "react";
-import { useIsDesktop } from "@/lib/use-media-query";
 import { Button, IconButton } from "./Button";
 import { type Icon, TrashIcon } from "./icons";
 
@@ -21,11 +20,8 @@ interface ConfirmDeleteProps {
   icon?: Icon;
   /** The question, when "{verb} this {what}?" doesn't fit: "Back to Ideas?". */
   question?: string;
-  /**
-   * Shows the verb beside the icon when idle (a quiet button) on desktop, for an action people must find by its words.
-   * On a phone the icon alone, named for screen readers, so the detail bar's back link keeps its room.
-   */
-  labelled?: boolean;
+  /** Idle, nothing shows: the page asks from a menu row or a key, and the question and its two buttons take this place. */
+  askOnly?: boolean;
   /** What else goes with it, said beside the question: "Its 2 attempts go with it". */
   detail?: string;
 }
@@ -47,10 +43,9 @@ export function ConfirmDelete({
   icon = TrashIcon,
   question,
   detail,
-  labelled,
+  askOnly,
 }: ConfirmDeleteProps) {
   const root = useRef<HTMLSpanElement>(null);
-  const isDesktop = useIsDesktop();
   const confirm = useRef<HTMLButtonElement>(null);
   const keep = useRef<HTMLButtonElement>(null);
   const trash = useRef<HTMLButtonElement>(null);
@@ -97,22 +92,7 @@ export function ConfirmDelete({
     };
   }, [asking]);
 
-  // Labelled on desktop; on a phone its glyph alone (with its name for screen readers), so the back link keeps room.
-  if (!asking && labelled && isDesktop) {
-    return (
-      <Button
-        ref={trash}
-        variant="quiet"
-        icon={icon}
-        title={title ?? verb}
-        onClick={() => onAskingChange(true)}
-        disabled={disabled}
-        aria-keyshortcuts={ariaKeyshortcuts}
-      >
-        {question ? verb : `${verb} ${what}`}
-      </Button>
-    );
-  }
+  if (!asking && askOnly) return null;
   if (!asking) {
     return (
       <IconButton
