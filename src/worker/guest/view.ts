@@ -466,7 +466,8 @@ export function itemView(item: Item, custom: { failure: TagDefinition[]; success
         : null,
     };
   });
-  const baseline = [...item.attempts].reverse().find((attempt) => attempt.outcome === "success") ?? item.attempts.at(-1);
+  const baseline =
+    [...item.attempts].reverse().find((attempt) => attempt.outcome === "success") ?? item.attempts.at(-1);
   const summary = summarizeBuild(item.attempts);
   const count = item.attempts.length;
   const totals = [
