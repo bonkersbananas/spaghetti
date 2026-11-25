@@ -110,7 +110,8 @@ test("a build that began as an idea goes back to Ideas from its header, and Undo
   });
   await page.goto(`/builds/${id}`);
   await expect(page.getByRole("textbox", { name: "Title" })).toHaveValue("Flexi hummingbird");
-  await page.getByRole("button", { name: "Back to Ideas" }).click();
+  await page.getByRole("button", { name: "More for this build" }).click();
+  await page.getByRole("button", { name: "Turn back into an idea" }).click();
   await expect(page.getByText("Its attempt goes with it")).toBeVisible();
   await page.getByRole("button", { name: "Back to Ideas", exact: true }).click();
   tapped.resolve();

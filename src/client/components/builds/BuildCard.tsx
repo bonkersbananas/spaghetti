@@ -9,6 +9,7 @@ import { Chip } from "@/components/ui/Chip";
 import { BuildsIcon } from "@/components/ui/icons";
 import { MetaList } from "@/components/ui/MetaList";
 import { PhotoRow } from "@/components/ui/PhotoRow";
+import { PrintTile } from "@/components/ui/PrintTile";
 import { ReactionGlance } from "@/components/ui/ReactionGlance";
 import { useReflow } from "@/components/ui/Reflow";
 import { useTagOptions } from "@/lib/builds";
@@ -163,5 +164,27 @@ export function BuildRow({ item }: { item: ItemView }) {
         </span>
       </PhotoRow>
     </li>
+  );
+}
+
+/**
+ * A finished build as a picture with its name and when it was done under it (Done on Builds): its cover, as the page
+ * leads with it. `lead` for the newest few, drawn large (with the photo's large size, not the thumbnail).
+ */
+export function BuildTile({ item, lead }: { item: ItemView; lead?: 0 | 1 | 2 }) {
+  const cover = coverOf(item);
+  const title = item.title || item.note.split("\n")[0] || "Untitled build";
+  const alt = cover.kind === "plate" ? plateAlt(item) : photoAlt(item);
+  const photo = coverPhoto(cover, alt, lead === undefined ? "thumb" : "large");
+  return (
+    <PrintTile
+      link={{ to: "/builds/$buildId", params: { buildId: item.id } }}
+      photo={photo}
+      note={cover.kind === "note" ? cover.text : title}
+      // A note card that is the title standing in already says it: the caption is only the date.
+      title={cover.kind === "note" && cover.fromTitle ? undefined : title}
+      meta={inlineTime(item.finishedAt ?? item.updatedAt)}
+      lead={lead}
+    />
   );
 }
