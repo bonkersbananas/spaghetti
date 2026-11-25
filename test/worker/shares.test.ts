@@ -539,6 +539,41 @@ describe("a build's story", () => {
     expect(html).not.toContain("Temperatures");
   });
 
+  it("folds earlier attempts of a long build into rows, and says whose settings it gives once", async () => {
+    const item = await createItem({ title: "Hook" });
+    const set = (bed: number) => ({ layerHeight: 0.2, bedTemperature: bed });
+    await addAttempt(item.id, { outcome: "failed", failureTags: ["warping"], settings: set(50) });
+    await addAttempt(item.id, { outcome: "failed", settings: set(55) });
+    await addAttempt(item.id, { outcome: "success", note: "Clean.", settings: set(60) });
+    await addAttempt(item.id, { outcome: "failed", settings: set(60) });
+    await addAttempt(item.id, { outcome: "partial", settings: set(60) });
+    const { html } = await guest(`/s/${(await share("items", item.id)).token}`);
+    // Cards: the one that worked and the newest. Rows: the other three, in two runs around the card.
+    expect(html.match(/<li class="gp-attempt /g)).toHaveLength(2);
+    expect(html.match(/<li class="gp-row">/g)).toHaveLength(3);
+    expect(html.match(/<li class="gp-rows">/g)).toHaveLength(2);
+    const at = (text: string) => html.indexOf(text);
+    expect(at(">Attempt 2<")).toBeLessThan(at(">Attempt 3<"));
+    expect(at(">Attempt 3<")).toBeLessThan(at(">Attempt 4<"));
+    expect(at(">Attempt 4<")).toBeLessThan(at(">Attempt 5<"));
+    // The settings are attempt 3's, the one that worked; attempt 1 says how it differed (bed 60 → 50), without an attempt "0".
+    expect(html).toContain("attempt 3, the one that worked");
+    expect(html).toMatch(/Compared with the settings above/);
+    expect(html).toMatch(/bed 60 → 50/);
+    expect(html).not.toContain("Changed since attempt 0");
+    // A row leads with what went wrong.
+    expect(html).toMatch(/gp-row-said[^>]*>.*?Warping/);
+  });
+
+  it("says the settings are the latest try's when nothing worked yet", async () => {
+    const item = await createItem({ title: "Hook" });
+    await addAttempt(item.id, { outcome: "failed", settings: { bedTemperature: 50 } });
+    await addAttempt(item.id, { outcome: "partial", settings: { bedTemperature: 60 } });
+    const { html } = await guest(`/s/${(await share("items", item.id)).token}`);
+    expect(html).toContain("How the latest try was set up · attempt 2");
+    expect(html.match(/<li class="gp-row">/g)).toBeNull();
+  });
+
   it("leaves out a tag that only repeats the outcome, and gives each place a photo shows its own way back", async () => {
     const item = await createItem({ title: "Tugboat" });
     const failed = await addAttempt(item.id, { outcome: "failed", failureTags: ["spaghetti", "bed-adhesion"] });
