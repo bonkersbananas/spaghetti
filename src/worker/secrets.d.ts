@@ -10,6 +10,8 @@ interface Env {
   WEBHOOKS_ON_WRITE?: string;
   /** "off" stops a save from asking Claude to name an untitled idea (the Worker tests only; decision 0070). */
   TITLES_ON_SAVE?: string;
+  /** Milliseconds the naming job waits for the rest of a capture (the Worker tests shorten it). Absent: 2.5 s. */
+  TITLES_SETTLE_MS?: string;
   /** "off" stops a print the bridge filed from asking Claude which build it is (the Worker tests only; decision 0080). */
   PRINT_MATCH_ON_FILE?: string;
   /** Only the e2e tests and screenshots set this: webhooks may go to http://127.0.0.1 (a stand-in receiver). Never set it for real. */
@@ -26,6 +28,7 @@ declare namespace Cloudflare {
     WEBHOOKS_ALLOW_LOCAL?: string;
     WEBHOOKS_ON_WRITE?: string;
     TITLES_ON_SAVE?: string;
+    TITLES_SETTLE_MS?: string;
     PRINT_MATCH_ON_FILE?: string;
   }
 }
