@@ -89,7 +89,7 @@ test("choosing something else is just picking it: no suggested tags come along",
 
 test("Partly where Claude said Spaghetti: nothing of Claude's comes along, it stays offered, and words come first", {
   tag: "@phone",
-}, async ({ page }) => {
+}, async ({ page, isMobile }) => {
   const { itemId, attemptId } = await offTheBed(page, "Spaghetti comb");
   await addPhoto(page, itemId, attemptId);
   await page.goto(`/builds/${itemId}`);
@@ -102,8 +102,10 @@ test("Partly where Claude said Spaghetti: nothing of Claude's comes along, it st
   const adhesion = sheet.getByRole("button", { name: /Bed adhesion.*suggested/ });
   await expect(adhesion).toHaveAttribute("aria-pressed", "false");
   await expect(sheet.getByText("Claude's guess from the photo: tap any that fit.")).toBeVisible();
-  // The note has the focus: the person's words go straight in, and are kept without Done.
+  // On a laptop the note has the focus: the person's words go straight in, and are kept without Done. A phone's
+  // keyboard would cover the tiles and the tags, so the note waits for a tap there.
   const note = sheet.getByRole("textbox", { name: "Note" });
+  if (isMobile) await note.click();
   await expect(note).toBeFocused();
   await page.keyboard.type("Top half fine, the hooks drooped");
   await expect

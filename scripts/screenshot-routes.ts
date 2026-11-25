@@ -8360,6 +8360,20 @@ export const shots: Shot[] = [
     },
   },
   {
+    // Partly tapped: the tags are in view above Done, and nothing above them moved.
+    name: "attempt-finish-partly",
+    path: "/builds",
+    prepare: async (page) => {
+      const sheet = await finishSheet(page);
+      await sheet.getByRole("radio", { name: "Partly" }).click();
+      await page.waitForTimeout(1500);
+    },
+    cleanup: async (page) => {
+      await page.keyboard.press("Escape");
+      await removeModelItems(page);
+    },
+  },
+  {
     // A printer print with Claude's suggestion hinted on its button, before any answer.
     name: "attempt-finish-claude-open",
     path: "/builds",

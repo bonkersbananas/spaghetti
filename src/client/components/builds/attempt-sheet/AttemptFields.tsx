@@ -9,7 +9,6 @@ import { Disclosure } from "@/components/ui/Disclosure";
 import { TextArea } from "@/components/ui/Field";
 import { SettingsIcon } from "@/components/ui/icons";
 import type { AttemptView } from "@/lib/items";
-import { keyboardProxy } from "@/lib/keyboard-proxy";
 import { usePrinterSetup } from "@/lib/pantry-queries";
 import { useIsDesktop } from "@/lib/use-media-query";
 import { NotEnoughNote } from "../NotEnoughNote";
@@ -19,9 +18,6 @@ import { summarizeSettings } from "../settings";
 import { TagPicker } from "../TagPicker";
 import { ChangeChips, chipMarks } from "./ChangeChips";
 import { PlateParts } from "./PlateParts";
-
-/** How long a phone's sheet takes to slide up (vaul's 500 ms, and a beat): a note focused before then would jump. */
-const SHEET_SETTLE_MS = 600;
 
 export interface FieldsProps {
   outcome: Outcome | null;
@@ -84,6 +80,8 @@ export interface FieldsProps {
 
 export function AttemptFields(props: FieldsProps) {
   const { outcome, previous, settings } = props;
+  /** Logging a new attempt, not answering a print. */
+  const isNew = !!props.changeChips;
   const isDesktop = useIsDesktop();
   const withTags = outcome === "failed" || outcome === "partial";
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -239,7 +237,7 @@ export function AttemptFields(props: FieldsProps) {
       onChange={props.onSuccessNotes}
       suggested={props.suggestedSuccessNotes}
       suggestedBy="claude"
-      compact={withTags}
+      compact={withTags || !isDesktop}
     />
   );
   const tagsBlock = (
@@ -311,10 +309,9 @@ export function AttemptFields(props: FieldsProps) {
       </div>
     </Fragment>
   );
-  // On a phone what is done standing at the printer (the photos, the note, "How did it go?" and its tiles, then the tags
-  // an answer adds) sits at the foot, under the thumb, and the rarely changed settings are above. Desktop reads top-down.
-  // The sheet opens scrolled to its end, and keeps there while its height settles (a hint arriving); the first press
-  // ends that, so an answer's tags never scroll the sheet.
+  // Answering a print on a phone: the sheet opens at its top, photos first, and keeps that whatever is tapped. Logging a
+  // new attempt: the sheet opens scrolled to its end, where the thumb is (the photos, the note, the tiles), and stays
+  // there while its height settles (a hint arriving); the first press ends that. Desktop reads top-down.
   const root = useRef<HTMLDivElement>(null);
   const touched = useRef(false);
   // Scrolls the sheet's body to its end and keeps it there while its height settles (the sheet's own opening, the
@@ -340,37 +337,21 @@ export function AttemptFields(props: FieldsProps) {
   };
   // Only as it opens: an answer tapped later adds its tags under the tiles and leaves the sheet where it is.
   // biome-ignore lint/correctness/useExhaustiveDependencies: on opening.
-  useEffect(() => toEnd(false), []);
+  useEffect(() => (isNew ? toEnd(false) : () => {}), []);
 
-  // Partly or Spaghetti picked: the person's own words come first, so the note takes the focus (on a laptop typing
-  // goes straight in; on a phone the keyboard comes up with the note, which sits above the tiles). Picked in the sheet,
-  // it is inside the tap, so iOS raises the keyboard; picked on a card, the card's tap holds the keyboard with a
-  // stand-in (lib/keyboard-proxy.ts) and the note takes the focus from it once the sheet has slid up, so nothing jumps.
-  const mountedAt = useRef(performance.now());
+  // Partly or Spaghetti picked on a laptop: the person's own words come first, so the note takes the focus and typing
+  // goes straight in. Not on a phone: its keyboard would cover the tile just tapped and every tag, so the tags come
+  // first and the note is one tap away.
   const lastOutcome = useRef(outcome);
   // biome-ignore lint/correctness/useExhaustiveDependencies: when the outcome changes.
   useLayoutEffect(() => {
     const from = lastOutcome.current;
     lastOutcome.current = outcome;
     const note = noteRef.current;
-    if (from === outcome || !withTags || props.readOnly === "all" || !note) return;
-    const settling = isDesktop ? 0 : SHEET_SETTLE_MS - (performance.now() - mountedAt.current);
+    if (from === outcome || !withTags || props.readOnly === "all" || !note || !isDesktop) return;
     // With the caret after what is already written, so new words add to it.
-    const focusNote = (preventScroll: boolean) => {
-      note.focus({ preventScroll });
-      note.setSelectionRange(note.value.length, note.value.length);
-    };
-    if (settling <= 0) {
-      focusNote(!isDesktop);
-      return;
-    }
-    const timer = window.setTimeout(() => {
-      // A field or button tapped meanwhile keeps the focus; the stand-in, the sheet itself or the answer give it up.
-      const held = document.activeElement;
-      if (!held || held === document.body || held === keyboardProxy() || held.matches("[role=dialog], [role=radio]"))
-        focusNote(true);
-    }, settling);
-    return () => window.clearTimeout(timer);
+    note.focus();
+    note.setSelectionRange(note.value.length, note.value.length);
   }, [outcome]);
 
   // Desktop: after Partly or Spaghetti the note comes right after the answer, then the photos the tags speak of, then
@@ -401,19 +382,35 @@ export function AttemptFields(props: FieldsProps) {
           notEnoughBlock,
           settingsBlock,
         ]
-    : // One order from the first frame: the photos, the note, the tiles; what an answer adds comes under the tiles.
-      [
-        fileBlock,
-        settingsBlock,
-        notEnoughBlock,
-        whenBlock,
-        coachBlock,
-        plateBlock,
-        photosBlock,
-        noteBlock,
-        outcomeBlock,
-        tagsBlock,
-      ];
+    : isNew
+      ? // Logging a new attempt: the file and the settings are the point, so they come first; the photos, the note and
+        // the tiles at the foot, under the thumb, and what an answer adds (the tags) under the tiles.
+        [
+          fileBlock,
+          settingsBlock,
+          notEnoughBlock,
+          whenBlock,
+          coachBlock,
+          plateBlock,
+          photosBlock,
+          noteBlock,
+          outcomeBlock,
+          tagsBlock,
+        ]
+      : // Answering a print: photos first, then the note, the tiles and the tags under them; the date, the file and the
+        // settings are the tail, one scroll away. The same from the first frame, whatever is tapped.
+        [
+          plateBlock,
+          photosBlock,
+          noteBlock,
+          outcomeBlock,
+          tagsBlock,
+          coachBlock,
+          whenBlock,
+          fileBlock,
+          notEnoughBlock,
+          settingsBlock,
+        ];
 
   return (
     // biome-ignore lint/a11y/noStaticElementInteractions: it only listens to keys that bubble up from the controls inside.
