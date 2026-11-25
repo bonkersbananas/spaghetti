@@ -406,9 +406,11 @@ export function CaptureSheet() {
               value={outcome}
               onChange={(next) => {
                 const picked = outcome === next ? null : next;
-                // The printer's guess starts picked (a tap takes it off), as in the attempt sheet.
-                const guess = picked && picked !== "success" && suggestedFailure && !failureTags.length;
-                setAnswer(picked, guess ? [suggestedFailure] : failureTags);
+                // The printer's guess starts picked with Spaghetti only (a tap takes it off), and leaves with it if
+                // untouched, as in the attempt sheet.
+                const guess = picked === "failed" && suggestedFailure && !failureTags.length;
+                const untouched = picked !== "failed" && suggestedFailure && failureTags.join() === suggestedFailure;
+                setAnswer(picked, guess ? [suggestedFailure] : untouched ? [] : failureTags);
               }}
             />
             {/* The same question the attempt sheet asks, right here: a failure is recorded without a trip to the build. */}

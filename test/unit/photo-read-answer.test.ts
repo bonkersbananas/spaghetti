@@ -30,13 +30,13 @@ describe("takenWith: what an answer takes from Claude's suggestion (decision 002
         expect(takenWith(picked, fresh, { read: reads[suggested], printerTag: null })).toEqual({});
       });
 
-  it("the printer's tag comes with any answer but Worked, Claude's taking its place when Claude's answer is picked", () => {
+  it("the printer's tag comes only with Spaghetti, Claude's taking its place when Claude's answer is picked", () => {
     const printerTag = "nozzle-clog";
     expect(takenWith("success", fresh, { read: null, printerTag })).toEqual({});
-    expect(takenWith("partial", fresh, { read: null, printerTag })).toEqual({ failureTags: [printerTag] });
+    expect(takenWith("partial", fresh, { read: null, printerTag })).toEqual({});
     expect(takenWith("failed", fresh, { read: null, printerTag })).toEqual({ failureTags: [printerTag] });
-    // Claude said Spaghetti, the person says Partly: the printer's tag, not Claude's.
-    expect(takenWith("partial", fresh, { read: reads.failed, printerTag })).toEqual({ failureTags: [printerTag] });
+    // Claude said Spaghetti, the person says Partly: neither Claude's tags nor the printer's.
+    expect(takenWith("partial", fresh, { read: reads.failed, printerTag })).toEqual({});
     expect(takenWith("failed", fresh, { read: reads.failed, printerTag })).toEqual({
       failureTags: ["spaghetti", "bed-adhesion"],
     });
@@ -66,5 +66,16 @@ describe("takenWith: what an answer takes from Claude's suggestion (decision 002
     const tookPrinter = { outcome: "partial" as const, failureTags: ["nozzle-clog"], successNotes: [] };
     expect(takenWith("success", tookPrinter, { read: null, printerTag: "nozzle-clog" })).toEqual({ failureTags: [] });
     expect(takenWith("failed", tookPrinter, { read: null, printerTag: "nozzle-clog" })).toEqual({});
+    // Spaghetti, then Partly: the printer's tag leaves if untouched, stays if the person changed it.
+    const tookSpaghettiTag = { outcome: "failed" as const, failureTags: ["spaghetti"], successNotes: [] };
+    expect(takenWith("partial", tookSpaghettiTag, { read: null, printerTag: "spaghetti" })).toEqual({
+      failureTags: [],
+    });
+    const addedTo = { ...tookSpaghettiTag, failureTags: ["spaghetti", "stringing"] };
+    expect(takenWith("partial", addedTo, { read: null, printerTag: "spaghetti" })).toEqual({});
+    // Back to Spaghetti: it comes again.
+    expect(takenWith("failed", { ...fresh, outcome: "partial" }, { read: null, printerTag: "spaghetti" })).toEqual({
+      failureTags: ["spaghetti"],
+    });
   });
 });
