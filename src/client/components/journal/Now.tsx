@@ -1,5 +1,4 @@
 import { creditedTo } from "@shared/attempts";
-import { isOffTheBed } from "@shared/print-progress";
 import { type QueryClient, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AnimatePresence, m, useReducedMotion } from "motion/react";
 import { use, useMemo } from "react";
@@ -35,15 +34,10 @@ export default function Now() {
   const live = useQuery(printerQuery).data?.bridge?.progress;
   const hasDueUpkeep = useDueUpkeep().length > 0;
   const hasScoutPicks = waitingPicks(useScout()).length > 0;
-  // The ones asking "how did it go?" lead: someone standing at the printer needs those first. (Stable: the rest keep their order.)
+  // The ones asking "how did it go?" lead (printingAttempts' order, the same on every screen).
   // Then the prints already answered that still ask which build they are, until someone places them.
   const onBed = useMemo(
-    () => [
-      ...printingAttempts(builds.items, now, live).sort(
-        (a, b) => Number(isOffTheBed(b.attempt)) - Number(isOffTheBed(a.attempt)),
-      ),
-      ...askingAttempts(builds.items, now),
-    ],
+    () => [...printingAttempts(builds.items, now, live), ...askingAttempts(builds.items, now)],
     [builds.items, now, live],
   );
   // One or two prints stack, each worth its height; from three they sit in a sideways row so the journal still starts

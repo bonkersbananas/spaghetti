@@ -107,6 +107,10 @@ test("a print that is off the bed asks how it went, with the three answers, inst
   await expect(card.getByText(/Off the bed at .* · how did it go\?/)).toBeVisible();
   await expect(card.getByRole("progressbar")).toHaveCount(0);
   await expect(card.getByRole("button", { name: "How did it go?" })).toHaveCount(0);
+  // It leads the bed, and has the camera button a printing card has.
+  await expect(bed.getByRole("article").first()).toContainText("Drawer divider");
+  await expect(card.getByRole("button", { name: "Snap this print" })).toBeVisible();
+  await expect(card.getByRole("button", { name: "Snap this print" })).toHaveCount(1);
   // The one still printing keeps its bar.
   await expect(bed.getByRole("article").filter({ hasText: "Still going" }).getByRole("progressbar")).toBeVisible();
 
@@ -116,7 +120,7 @@ test("a print that is off the bed asks how it went, with the three answers, inst
   await expect(sheet.getByRole("radio", { name: "Spaghetti" })).toBeChecked();
   await expect.poll(() => savedOutcome(page, id, attempt)).toBe("failed");
 
-  // The sidebar shows the print that is still printing before the one off the bed.
+  // The answered print is gone from the bed: the sidebar shows the one still printing.
   if (!isMobile) {
     await page.keyboard.press("Escape");
     await page.goto("/ideas");

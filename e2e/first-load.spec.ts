@@ -27,6 +27,7 @@ import { SEED_PASSWORD, SEED_USERS } from "../scripts/lib/local-app.ts";
  * Raise a screen's ceiling only for code that screen shows at once, and say why in the pull request.
  * 2026-11-15: /today and /journal +2: the "Since Thursday" gate on both (the block itself loads only when there is a catch-up, but its
  * lazy import adds its dependency list to the gate's chunk, about 1.5 kB gzip).
+ * 2026-11-25: /builds +1: Done as a photo grid (PrintTile and BuildTile, about 0.5 kB gzip; the Year's mosaic stays apart, it is another screen).
  * 2026-11-23: /ideas +1, /builds +1, /pantry +2 and /printer +2: the watcher that slices a model an agent added (lib/model-read.ts, about
  * 0.6 kB gzip) runs in the shell on every screen, like the one that resizes an agent's photos; loading it lazily only moved its chunk into the first load.
  * 2026-11-22: /today, /ideas, /journal and /search +1 to +2: the saved copy is repaired when read back and keyed to the build (sanitizeCached, appVersion), and the outbox drops an outcome it has no word for (about 0.4 kB gzip in the main bundle); the error screen's report loads with that screen.
@@ -63,7 +64,7 @@ const CEILING_KB = {
   "/sign-in": 185,
   "/today": 294,
   "/ideas": 266,
-  "/builds": 267,
+  "/builds": 268,
   "/journal": 280,
   "/search": 276,
   "/pantry": 262,

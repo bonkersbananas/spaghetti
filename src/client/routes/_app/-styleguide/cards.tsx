@@ -7,6 +7,7 @@ import { ClaudeLine } from "@/components/ui/ClaudeLine";
 import * as Icons from "@/components/ui/icons";
 import { LinkCard } from "@/components/ui/LinkCard";
 import { MiniCard } from "@/components/ui/MiniCard";
+import { PrintTile, printTileGrid } from "@/components/ui/PrintTile";
 import { Reflow } from "@/components/ui/Reflow";
 
 import { toast } from "@/components/ui/Toast";
@@ -173,6 +174,44 @@ export function CardSection() {
               sub="captured"
             />
           </Reflow>
+        </ul>
+      </div>
+      <div className="mt-10">
+        <Label>
+          Print tiles, for finished prints (Done on Builds): the picture with its name and date under it, no card. The
+          newest are `lead` tiles (4:3, the first on a phone, two from md, three from xl); the rest are squares, two
+          across on a phone, three from md, six from xl. A print with only a note shows it as a card, and when that note
+          is the title the caption is just the date; a long name takes two lines and ends in …
+        </Label>
+        <ul className={printTileGrid}>
+          <PrintTile
+            lead={0}
+            link={{ to: "/styleguide" }}
+            photo={{ src: dragonPhoto, alt: "A red articulated dragon on the print bed" }}
+            title="Articulated dragon"
+            meta="3 h ago"
+          />
+          <PrintTile
+            lead={1}
+            link={{ to: "/styleguide" }}
+            photo={{ src: vasePhoto, alt: "A gold silk-PLA vase" }}
+            title="Spiral vase in silk PLA, maybe 0.6 nozzle, with a very long name"
+            meta="Yesterday"
+          />
+          <PrintTile
+            lead={2}
+            link={{ to: "/styleguide" }}
+            photo={{ src: planterPhoto, alt: "A green planter" }}
+            title="Planter"
+            meta="Nov 12"
+          />
+          <PrintTile
+            link={{ to: "/styleguide" }}
+            photo={{ src: planterPhoto, alt: "A green planter" }}
+            title="Drawer bins, 42 mm grid"
+            meta="Sep 27"
+          />
+          <PrintTile link={{ to: "/styleguide" }} note="Hook for the bike helmet" meta="Oct 31" />
         </ul>
       </div>
       <div className="mt-10">

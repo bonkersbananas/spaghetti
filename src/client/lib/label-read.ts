@@ -27,7 +27,8 @@ export function pollWhileReading(queryClient: QueryClient) {
       polling = undefined;
       return;
     }
-    void queryClient.invalidateQueries({ queryKey: spoolsQuery.queryKey });
+    // A slow answer is waited for, not cancelled by the next tick (or it would never arrive).
+    void queryClient.invalidateQueries({ queryKey: spoolsQuery.queryKey }, { cancelRefetch: false });
   }, 2500);
 }
 
