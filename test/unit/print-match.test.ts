@@ -393,6 +393,40 @@ describe("numbers in names", () => {
   });
 });
 
+describe("a copy's number after a name that ends in a number", () => {
+  // A browser's "-2" on "pot_4color_30mm(5)-12" gives "pot_4color_30mm(5)-12-2": a copy of the same print.
+  const pot = build({
+    id: "pot",
+    title: "Flower pot",
+    files: [{ id: "pot-file", name: "pot_4color_30mm.3mf" }],
+    prints: [{ name: "pot_4color_30mm(5)-12", attempt: 1 }],
+  });
+  const other = build({ id: "other", title: "Gear 24", files: [{ id: "g", name: "gear-24.3mf" }] });
+
+  it("files the print with the earlier one and the file it comes from, not asking", () => {
+    const scored = scorePrint({ name: "pot_4color_30mm(5)-12-2", startedAt: START }, [pot, other]);
+    expect(scored[0]?.reasons.map((reason) => reason.kind)).toEqual(expect.arrayContaining(["printed", "file"]));
+    expect(placePrint(scored)).toMatchObject({ kind: "match", best: { itemId: "pot" } });
+  });
+
+  it("knows the earlier print by its own name, number and all", () => {
+    const [best] = scorePrint({ name: "pot_4color_30mm(5)-12", startedAt: START }, [pot]);
+    expect(best?.reasons.map((reason) => reason.kind)).toEqual(expect.arrayContaining(["printed", "file"]));
+  });
+
+  it("still keeps different numbers apart, however they end", () => {
+    const sizes = build({ id: "sizes", prints: [{ name: "pot_4color_30mm(5)-12", attempt: 1 }] });
+    for (const name of ["pot_4color_30mm(5)-24", "pot_4color_40mm(5)-12-2", "pot_4color_40mm(5)-12"]) {
+      expect(scorePrint({ name, startedAt: START }, [sizes])).toEqual([]);
+    }
+  });
+
+  it("never reads a number as a copy of a different one", () => {
+    const gear = build({ id: "gear", prints: [{ name: "gear-24", attempt: 1 }] });
+    expect(scorePrint({ name: "gear-12", startedAt: START }, [gear])).toEqual([]);
+  });
+});
+
 describe("Claude's reason", () => {
   it("reads as a few words after the colon", () => {
     expect(rowWords([{ kind: "claude", why: "Earlier prints in it had this name." }])).toBe(
