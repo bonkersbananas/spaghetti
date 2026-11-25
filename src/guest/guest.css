@@ -799,6 +799,136 @@ html:has(.gp-lightbox:target) {
   color: var(--sg-basil-ink);
 }
 
+/* The build's settings, said once under its summary: the filaments, then one wrapping line of the rest. */
+.gp-printed {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-top: 1.25rem;
+}
+
+.gp-printed-line {
+  font-size: var(--sg-text-small);
+  line-height: var(--sg-text-small-lh);
+  color: var(--sg-ink-soft);
+  font-variant-numeric: tabular-nums;
+}
+
+/* An earlier attempt as a short row: a small picture, its name and how it went, and one line of what changed. */
+.gp-row {
+  border-radius: var(--gp-radius-md);
+  background: var(--sg-cream);
+  box-shadow: var(--sg-shadow-soft);
+}
+
+.gp-row-head {
+  display: flex;
+  align-items: center;
+  gap: 0.875rem;
+  padding: 0.625rem 0.875rem 0.625rem 0.625rem;
+  list-style: none;
+  cursor: pointer;
+}
+
+.gp-row-head::-webkit-details-marker {
+  display: none;
+}
+
+div.gp-row-head {
+  cursor: default;
+}
+
+.gp-row-img {
+  flex: none;
+  width: 3.5rem;
+  height: 3.5rem;
+  border-radius: 0.625rem;
+  object-fit: cover;
+}
+
+.gp-row-none {
+  background: color-mix(in srgb, var(--sg-ink) 6%, transparent);
+}
+
+.gp-row-none--success {
+  background: var(--sg-basil-soft);
+}
+
+.gp-row-none--failed {
+  background: var(--sg-tomato-soft);
+}
+
+.gp-row-none--partial,
+.gp-row-none--printing {
+  background: var(--sg-semolina-soft);
+}
+
+.gp-row-text {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 0.125rem;
+  min-width: 0;
+}
+
+.gp-row-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.25rem 0.625rem;
+}
+
+.gp-row-title {
+  font-weight: 600;
+}
+
+.gp-row-sub,
+.gp-row-said {
+  font-size: var(--sg-text-small);
+  line-height: var(--sg-text-small-lh);
+  color: var(--sg-ink-faint);
+}
+
+.gp-row-said {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 1;
+  color: var(--sg-ink-soft);
+}
+
+.gp-row-chevron {
+  flex: none;
+  font-size: 1rem;
+  color: var(--sg-ink-faint);
+  transition: transform 0.2s ease;
+}
+
+.gp-row details[open] .gp-row-chevron {
+  transform: rotate(180deg);
+}
+
+.gp-row-open {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  padding: 0.25rem 1.25rem 1.25rem;
+}
+
+.gp-row-open:not(:has(*)) {
+  display: none;
+}
+
+.gp-row-open .gp-attempt-photos {
+  margin: 0 -1.25rem;
+}
+
+@media (min-width: 48rem) {
+  .gp-row-open .gp-attempt-photos {
+    margin: 0;
+  }
+}
+
 /* The details under an attempt's story (the app's attempt entry): after a hairline, straight on the card. */
 .gp-details {
   padding-top: 0.875rem;

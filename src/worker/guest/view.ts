@@ -31,7 +31,6 @@ import { slicingOfSlice } from "../../shared/slicing/model.ts";
 import { filamentWords, slicingSummary } from "../../shared/slicing/settings.ts";
 import { readSize } from "../../shared/slicing/size.ts";
 import { problemSentence, standInSentence } from "../../shared/slicing/words.ts";
-import { showsSettings } from "../../shared/story-settings.ts";
 import { formatDuration } from "../../shared/time.ts";
 import { changeName } from "../../shared/twists.ts";
 import { keepUnits } from "../../shared/typography.ts";
@@ -142,8 +141,7 @@ export interface GuestAttempt {
   changes: string[];
   wentWrong: string[];
   wentWell: string[];
-  /** The settings someone would print it with, in words; only where the app lists them (story-settings.ts). */
-  settings: GuestSetting[];
+  /** The filaments it printed with: for the file's colours; the page gives the build's settings once. */
   filaments: GuestFilament[];
   /** "Took 2 h 10 min", "38 g", "Failed at 40%". */
   results: string[];
@@ -179,6 +177,9 @@ export interface GuestBuild extends GuestBase {
   attempts: GuestAttempt[];
   /** "3 attempts: 1 spaghetti, 1 partly, 1 worked". */
   summary: string;
+  /** How it prints, given once for the whole build: the settings of the attempt that worked (else the newest). */
+  settings: GuestSetting[];
+  printedWith: GuestFilament[];
   /** "About 6 h 22 min", "At least 130 g". */
   totals: string[];
   /** What it is made of, and how far each part is. */
@@ -454,9 +455,6 @@ export function itemView(item: Item, custom: { failure: TagDefinition[]; success
       changes: index === 0 ? [] : attempt.changes.map((change) => keepUnits(change.text)),
       wentWrong: attempt.failureTags.map((slug) => tagLabel("failure", slug, custom.failure)).filter(notTheOutcome),
       wentWell: attempt.successNotes.map((slug) => tagLabel("success", slug, custom.success)).filter(notTheOutcome),
-      settings: showsSettings({ number, outcome: attempt.outcome, changes: attempt.changes })
-        ? guestSettings(attempt.settings)
-        : [],
       filaments: (attempt.settings.filaments ?? []).map(filamentOf),
       results: guestResults(attempt.settings),
       printed: attemptPartsLabel(attempt, item.parts),
@@ -468,6 +466,7 @@ export function itemView(item: Item, custom: { failure: TagDefinition[]; success
         : null,
     };
   });
+  const baseline = [...item.attempts].reverse().find((attempt) => attempt.outcome === "success") ?? item.attempts.at(-1);
   const summary = summarizeBuild(item.attempts);
   const count = item.attempts.length;
   const totals = [
@@ -483,6 +482,8 @@ export function itemView(item: Item, custom: { failure: TagDefinition[]; success
     startedAt: item.startedAt,
     finishedAt: item.finishedAt,
     attempts,
+    settings: baseline ? guestSettings(baseline.settings) : [],
+    printedWith: baseline ? (baseline.settings.filaments ?? []).map(filamentOf) : [],
     summary: count
       ? `${count} ${count === 1 ? "attempt" : "attempts"}${summary.words ? `: ${summary.words}` : ""}`
       : "No attempts yet",

@@ -1475,7 +1475,7 @@ async function buildKeeping(page: Page, files: number) {
  * on its page: what the compact rows of earlier attempts are for. Its photos are the headphone stand's, copied
  * through the API, so the seed (and every other screen) stays as it is.
  */
-async function fourAttemptBuild(page: Page) {
+async function fourAttemptBuild(page: Page, earlier = false) {
   const headers = { Origin: new URL(page.url()).origin };
   // A new one for each shot (removeModelItems deletes it after; a deleted id can't be made again).
   const id = crypto.randomUUID();
@@ -1497,7 +1497,44 @@ async function fourAttemptBuild(page: Page) {
     bedTemperature: 55,
   };
   const HOUR = 3_600_000;
+  // The eight-attempt shape (a build shared after a long weekend): four earlier ones, most with a photo or two.
+  const before = earlier
+    ? [
+        {
+          outcome: "failed",
+          ago: 9 * 24 * HOUR,
+          note: "First try, no brim. Gone by the second layer change.",
+          failureTags: ["bed-adhesion"],
+          settings: { ...base, bedTemperature: 50, estimatedMinutes: 250 },
+          photos: [0, 1],
+        },
+        {
+          outcome: "failed",
+          ago: 8 * 24 * HOUR,
+          failureTags: ["stringing"],
+          settings: { ...base, bedTemperature: 55, nozzleTemperature: 230, estimatedMinutes: 250 },
+          photos: [],
+        },
+        {
+          outcome: "partial",
+          ago: 7 * 24 * HOUR,
+          note: "Held, but the hook is soft where it bends.",
+          failureTags: ["weak-layers"],
+          settings: { ...base, infillDensity: 25, estimatedMinutes: 255 },
+          photos: [2],
+        },
+        {
+          outcome: "failed",
+          ago: 6 * 24 * HOUR,
+          note: "The nozzle clogged halfway. Cleaned it and moved on.",
+          failureTags: ["clog"],
+          settings: { ...base, estimatedMinutes: 250, failedAtPercent: 52 },
+          photos: [],
+        },
+      ]
+    : [];
   const attempts = [
+    ...before,
     {
       outcome: "failed",
       ago: 4 * 24 * HOUR,
@@ -2470,6 +2507,28 @@ export const shots: Shot[] = [
     fullPage: true,
     prepare: openShared("items", SEED_BUILD_IDS.tugboat),
     cleanup: unshareAll,
+  },
+  {
+    // A build shared after a long weekend: eight attempts, the newest and the one that worked as cards, six short rows.
+    name: "shared-build-many",
+    path: "/sign-in",
+    signedOut: true,
+    fullPage: true,
+    prepare: async (page) => {
+      const origin = new URL(page.url() || "http://127.0.0.1").origin;
+      await page.request.post("/api/session", {
+        data: { username: "alex", password: "spaghetti-al-dente" },
+        headers: { Origin: origin },
+      });
+      await fourAttemptBuild(page, true);
+      const token = await guestShare(page, "items", page.url().split("/").pop() as string);
+      await page.goto(`/s/${token}`);
+      await page.locator("h1").first().waitFor();
+    },
+    cleanup: async (page) => {
+      await unshareAll(page);
+      await asAlex(page, () => removeModelItems(page));
+    },
   },
   {
     // A print that came off the bed with nobody saying how it went: a neutral "Off the bed", not the pulsing Printing.

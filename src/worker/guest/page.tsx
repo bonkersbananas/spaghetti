@@ -558,8 +558,40 @@ function Tags({ wrong, well }: { wrong: string[]; well: string[] }) {
   );
 }
 
+/** The words of an attempt: what changed, its note, its tags and its file. Settings are the build's, said once. */
+function AttemptBody({ token, attempt }: { token: string; attempt: GuestAttempt }) {
+  return (
+    <div class="gp-attempt-body">
+      <ChangeLine changes={attempt.changes} number={attempt.number} />
+      <Note text={attempt.note} class="gp-note--attempt" />
+      <Tags wrong={attempt.wentWrong} well={attempt.wentWell} />
+      {attempt.file && <AttemptFile token={token} file={attempt.file} />}
+    </div>
+  );
+}
+
+const tone = (attempt: GuestAttempt) => attempt.outcome ?? (attempt.offBed ? "offbed" : "printing");
+
+const metaOf = (attempt: GuestAttempt) =>
+  [guestDate(attempt.printedAt), ...attempt.results, ...(attempt.printed ? [attempt.printed] : [])].join(" · ");
+
+function AttemptPhotos({ token, shown }: { token: string; shown: Shown[] }) {
+  if (!shown.length) return null;
+  return (
+    <ul class={`gp-attempt-photos ${shown.length % 2 ? "gp-attempt-photos--odd" : ""}`}>
+      {shown.map((place) => (
+        <li>
+          <Zoomable shown={place}>
+            <Picture token={token} photo={place.photo} alt={place.alt} sizes="(min-width: 48rem) 15rem, 70vw" />
+          </Zoomable>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+/** An attempt as a card: the newest and the ones that worked, photos first. */
 function Attempt({ token, attempt, shown }: { token: string; attempt: GuestAttempt; shown: Shown[] }) {
-  const settings = attempt.settings.length > 0;
   return (
     <li class={`gp-attempt ${shown.length ? "gp-attempt--photos" : ""}`}>
       <div class="gp-attempt-head">
@@ -567,35 +599,71 @@ function Attempt({ token, attempt, shown }: { token: string; attempt: GuestAttem
           <OutcomeBadge attempt={attempt} />
           <h3 class="gp-attempt-title">Attempt {attempt.number}</h3>
         </div>
-        <p class="gp-attempt-meta">
-          {[guestDate(attempt.printedAt), ...attempt.results, ...(attempt.printed ? [attempt.printed] : [])].join(
-            " · ",
-          )}
-        </p>
+        <p class="gp-attempt-meta">{metaOf(attempt)}</p>
       </div>
-      {shown.length > 0 && (
-        <ul class={`gp-attempt-photos ${shown.length % 2 ? "gp-attempt-photos--odd" : ""}`}>
-          {shown.map((place) => (
-            <li>
-              <Zoomable shown={place}>
-                <Picture token={token} photo={place.photo} alt={place.alt} sizes="(min-width: 48rem) 15rem, 70vw" />
-              </Zoomable>
-            </li>
-          ))}
-        </ul>
-      )}
-      <div class="gp-attempt-body">
-        <ChangeLine changes={attempt.changes} number={attempt.number} />
-        <Note text={attempt.note} class="gp-note--attempt" />
-        <Tags wrong={attempt.wentWrong} well={attempt.wentWell} />
-        {attempt.file && <AttemptFile token={token} file={attempt.file} />}
-        {settings && (
-          <div class="gp-details">
-            <Settings settings={attempt.settings} filaments={attempt.filaments} />
-          </div>
-        )}
-      </div>
+      <AttemptPhotos token={token} shown={shown} />
+      <AttemptBody token={token} attempt={attempt} />
     </li>
+  );
+}
+
+/**
+ * An attempt as a short row: a small picture, "Attempt 3", how it went and a line of what changed or was said. It opens
+ * in place (a native details element, no script) to the whole attempt, so none is left out.
+ */
+function AttemptRow({ token, attempt, shown }: { token: string; attempt: GuestAttempt; shown: Shown[] }) {
+  const first = shown[0];
+  const line = attempt.changes.length ? attempt.changes.join(" · ") : attempt.note.replace(/\s+/g, " ");
+  const open = shown.length > 0 || attempt.note || attempt.changes.length || attempt.file;
+  const head = (
+    <>
+      {first ? (
+        <Picture token={token} photo={first.photo} alt="" sizes="4rem" class="gp-row-img" />
+      ) : (
+        <span class={`gp-row-img gp-row-none gp-row-none--${tone(attempt)}`} aria-hidden="true" />
+      )}
+      <span class="gp-row-text">
+        <span class="gp-row-line">
+          <OutcomeBadge attempt={attempt} />
+          <span class="gp-row-title">Attempt {attempt.number}</span>
+        </span>
+        <span class="gp-row-sub">{[guestDate(attempt.printedAt), ...attempt.results.slice(0, 1)].join(" · ")}</span>
+        {line && <span class="gp-row-said">{line}</span>}
+      </span>
+    </>
+  );
+  if (!open) {
+    return (
+      <li class="gp-row">
+        <div class="gp-row-head">{head}</div>
+      </li>
+    );
+  }
+  return (
+    <li class="gp-row">
+      <details>
+        <summary class="gp-row-head">
+          {head}
+          <Icon name="chevron" class="gp-row-chevron" />
+        </summary>
+        <div class="gp-row-open">
+          <AttemptPhotos token={token} shown={shown} />
+          <AttemptBody token={token} attempt={attempt} />
+        </div>
+      </details>
+    </li>
+  );
+}
+
+/** How the build prints, once: the filaments and the settings on one wrapping line. */
+function PrintedWith({ settings, filaments }: { settings: GuestSetting[]; filaments: GuestFilament[] }) {
+  if (!settings.length && !filaments.length) return null;
+  return (
+    <section class="gp-printed" aria-label="How it prints">
+      <p class="gp-overline">How it prints</p>
+      <Filaments filaments={filaments} />
+      <Pieces pieces={settings.map((row) => `${row.label} ${row.value}`)} class="gp-printed-line" />
+    </section>
   );
 }
 
@@ -670,6 +738,7 @@ function Story({ view, token, noteShown }: { view: GuestView; token: string; not
           {view.totals.length > 0 && <p class="gp-summary-totals">{view.totals.join(" · ")}</p>}
         </section>
       )}
+      {view.kind === "build" && <PrintedWith settings={view.settings} filaments={view.printedWith} />}
       {view.kind === "build" && <Parts parts={view.parts} />}
       {view.kind === "twist" && <Changes changes={view.changes} />}
       {view.kind === "twist" && view.recipe && (
@@ -711,6 +780,14 @@ export function GuestBody({ view, token }: { view: GuestView; token: string }) {
     }));
   const attempts =
     view.kind === "build" ? view.attempts.map((attempt) => ({ attempt, shown: ofAttempt(attempt) })) : [];
+  // Up to three attempts are all cards; more, and only the newest and the ones that worked are, the rest short rows.
+  const cards = new Set(
+    attempts.length <= 3
+      ? attempts.map(({ attempt }) => attempt.number)
+      : attempts
+          .filter(({ attempt }, index) => index === attempts.length - 1 || attempt.outcome === "success")
+          .map(({ attempt }) => attempt.number),
+  );
   // No photo but a note: the note leads, in the photo's place.
   const noteLeads = !gallery.length && Boolean(view.note);
   return (
@@ -726,9 +803,13 @@ export function GuestBody({ view, token }: { view: GuestView; token: string }) {
               Attempt by attempt
             </h2>
             <ol class="gp-attempt-list">
-              {attempts.map(({ attempt, shown }) => (
-                <Attempt token={token} attempt={attempt} shown={shown} />
-              ))}
+              {attempts.map(({ attempt, shown }) =>
+                cards.has(attempt.number) ? (
+                  <Attempt token={token} attempt={attempt} shown={shown} />
+                ) : (
+                  <AttemptRow token={token} attempt={attempt} shown={shown} />
+                ),
+              )}
             </ol>
           </section>
         )}

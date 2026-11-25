@@ -494,26 +494,26 @@ describe("photos through a link", () => {
 });
 
 describe("a build's story", () => {
-  it("tells each attempt with its outcome, notes, what went wrong and the settings to print it with", async () => {
+  it("tells each attempt with its outcome, notes and what went wrong, and the settings to print it with once", async () => {
     const item = await createItem({ title: "Paddle steamer" });
+    const settings = {
+      layerHeight: 0.2,
+      nozzleDiameter: 0.4,
+      bedType: "Textured PEI Plate",
+      supportEnabled: true,
+      supportType: "tree",
+      filaments: [{ type: "PLA", brand: "Bambu", colorName: "Jade white", colorHex: "#e8e8e0" }],
+    } as const;
     await addAttempt(item.id, {
       outcome: "failed",
       note: "Lifted at the corners",
       failureTags: ["warping"],
-      settings: {
-        layerHeight: 0.2,
-        nozzleDiameter: 0.4,
-        bedType: "Textured PEI Plate",
-        supportEnabled: true,
-        supportType: "tree",
-        filaments: [{ type: "PLA", brand: "Bambu", colorName: "Jade white", colorHex: "#e8e8e0" }],
-        bedTemperature: 55,
-      },
+      settings: { ...settings, bedTemperature: 55 },
     });
     await addAttempt(item.id, {
       outcome: "success",
       note: "Brim fixed it",
-      settings: { bedTemperature: 65, brim: true },
+      settings: { ...settings, bedTemperature: 65, brim: true },
     });
     const made = await share("items", item.id);
     const { html } = await guest(`/s/${made.token}`);
@@ -530,8 +530,10 @@ describe("a build's story", () => {
     expect(html).toContain("Jade white");
     expect(html).toContain("background-color:#e8e8e0");
     expect(html).toContain("2 attempts");
-    // Each temperature has its own cell, so none breaks over two lines of a narrow column.
-    expect(html).toMatch(/<dt>Bed temp<\/dt><dd>55\u00a0°C<\/dd>/);
+    // The settings are the attempt that worked's, given once for the build and not repeated under each attempt.
+    expect(html.match(/Layer height/g)).toHaveLength(1);
+    expect(html).toContain("Bed temp 65\u00a0°C");
+    expect(html).not.toContain("Bed temp 55");
     expect(html).not.toContain("Temperatures");
   });
 
