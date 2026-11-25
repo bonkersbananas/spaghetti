@@ -532,8 +532,10 @@ describe("a build's story", () => {
     expect(html).toContain("2 attempts");
     // The settings are the attempt that worked's, given once for the build and not repeated under each attempt.
     expect(html.match(/Layer height/g)).toHaveLength(1);
-    expect(html).toContain("Bed temp 65\u00a0°C");
-    expect(html).not.toContain("Bed temp 55");
+    expect(html).toMatch(/<span class="gp-k">Bed temp<\/span> <span class="gp-v">65\u00a0°C<\/span>/);
+    expect(html).toContain("attempt 2, the one that worked");
+    // The first attempt says how it differed from them.
+    expect(html).toContain("Compared with the settings above");
     expect(html).not.toContain("Temperatures");
   });
 

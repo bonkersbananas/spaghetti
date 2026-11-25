@@ -298,14 +298,25 @@ function Settings({ settings, filaments }: { settings: GuestSetting[]; filaments
  * Short pieces on one line, as the app's MetaList ("About 21 min · 3.3 g each · Sliced by Spaghetti"), that wraps
  * cleanly: each piece carries its dot in a gutter the row hangs into, so a dot never begins or ends a line.
  */
-function Pieces({ pieces, class: className, inline }: { pieces: string[]; class: string; inline?: boolean }) {
+function Pieces({
+  pieces,
+  class: className,
+  inline,
+  mark,
+}: {
+  pieces: Child[];
+  class: string;
+  inline?: boolean;
+  /** Each piece on the semolina highlight, as a change is marked. */
+  mark?: boolean;
+}) {
   if (!pieces.length) return null;
   const row = (
     <span class="gp-pieces-row">
       {pieces.map((piece, index) => (
         <span class="gp-piece">
           {index > 0 && <span class="gp-sr">, </span>}
-          {piece}
+          {mark ? <span class="gp-mark">{piece}</span> : piece}
         </span>
       ))}
     </span>
@@ -511,32 +522,30 @@ function Parts({ parts }: { parts: GuestPart[] }) {
 
 const OUTCOME_ICON: Record<string, GuestIconName> = { success: "worked", partial: "partly", failed: "spaghetti" };
 
-function OutcomeBadge({ attempt }: { attempt: GuestAttempt }) {
+function OutcomeBadge({ attempt, quiet }: { attempt: GuestAttempt; quiet?: boolean }) {
   const tone = attempt.outcome ?? (attempt.offBed ? "offbed" : "printing");
   return (
-    <span class={`gp-outcome gp-outcome--${tone}`}>
+    <span class={`gp-outcome gp-outcome--${tone} ${quiet ? "gp-outcome--quiet" : ""}`}>
       {attempt.outcome ? <Icon name={OUTCOME_ICON[attempt.outcome] as GuestIconName} /> : <span class="gp-dot" />}
       {attempt.outcomeLabel}
     </span>
   );
 }
 
-/** What changed since the attempt before, as the app's ChangeLine: the turning arrows, each change on semolina. */
-function ChangeLine({ changes, number }: { changes: string[]; number: number }) {
-  if (!changes.length) return null;
+/**
+ * What changed since the attempt before, as the app's ChangeLine: the turning arrows, each change on semolina. The first
+ * attempt says how it differed from the settings the page gives once; its pieces hang their dots like any other line.
+ */
+function ChangeLine({ attempt }: { attempt: GuestAttempt }) {
+  if (!attempt.changes.length) return null;
   return (
-    <p class="gp-changeline">
+    <div class="gp-changeline">
       <Icon name="changed" class="gp-changeline-icon" />
-      <span class="gp-sr">Changed since attempt {number - 1}: </span>
-      <span>
-        {changes.map((change, index) => (
-          <>
-            {index > 0 && <span aria-hidden="true"> · </span>}
-            <span class="gp-mark">{change}</span>
-          </>
-        ))}
+      <Pieces pieces={attempt.changes} mark class="gp-changeline-pieces" />
+      <span class="gp-sr">
+        {attempt.againstSummary ? "Compared with the settings above" : `Changed since attempt ${attempt.number - 1}`}
       </span>
-    </p>
+    </div>
   );
 }
 
@@ -562,7 +571,7 @@ function Tags({ wrong, well }: { wrong: string[]; well: string[] }) {
 function AttemptBody({ token, attempt }: { token: string; attempt: GuestAttempt }) {
   return (
     <div class="gp-attempt-body">
-      <ChangeLine changes={attempt.changes} number={attempt.number} />
+      <ChangeLine attempt={attempt} />
       <Note text={attempt.note} class="gp-note--attempt" />
       <Tags wrong={attempt.wentWrong} well={attempt.wentWell} />
       {attempt.file && <AttemptFile token={token} file={attempt.file} />}
@@ -572,8 +581,11 @@ function AttemptBody({ token, attempt }: { token: string; attempt: GuestAttempt 
 
 const tone = (attempt: GuestAttempt) => attempt.outcome ?? (attempt.offBed ? "offbed" : "printing");
 
-const metaOf = (attempt: GuestAttempt) =>
-  [guestDate(attempt.printedAt), ...attempt.results, ...(attempt.printed ? [attempt.printed] : [])].join(" · ");
+const metaOf = (attempt: GuestAttempt) => [
+  guestDate(attempt.printedAt),
+  ...attempt.results,
+  ...(attempt.printed ? [attempt.printed] : []),
+];
 
 function AttemptPhotos({ token, shown }: { token: string; shown: Shown[] }) {
   if (!shown.length) return null;
@@ -599,7 +611,7 @@ function Attempt({ token, attempt, shown }: { token: string; attempt: GuestAttem
           <OutcomeBadge attempt={attempt} />
           <h3 class="gp-attempt-title">Attempt {attempt.number}</h3>
         </div>
-        <p class="gp-attempt-meta">{metaOf(attempt)}</p>
+        <Pieces pieces={metaOf(attempt)} class="gp-attempt-meta" />
       </div>
       <AttemptPhotos token={token} shown={shown} />
       <AttemptBody token={token} attempt={attempt} />
@@ -607,39 +619,58 @@ function Attempt({ token, attempt, shown }: { token: string; attempt: GuestAttem
   );
 }
 
+/** What a row shows where its attempt has no photo: its file's plate on the render ground, else its outcome's icon. */
+function RowPicture({ token, attempt, shown }: { token: string; attempt: GuestAttempt; shown: Shown[] }) {
+  const first = shown[0];
+  if (first) return <Picture token={token} photo={first.photo} alt="" sizes="6rem" class="gp-row-img" />;
+  if (attempt.file?.thumb) {
+    return (
+      <span class="gp-row-img gp-row-plate" aria-hidden="true">
+        <img
+          class="gp-plate-img"
+          src={fileUrl(token, attempt.file.id, "thumb")}
+          alt=""
+          loading="lazy"
+          decoding="async"
+        />
+      </span>
+    );
+  }
+  return (
+    <span class={`gp-row-img gp-row-none gp-row-none--${tone(attempt)}`} aria-hidden="true">
+      {attempt.outcome ? <Icon name={OUTCOME_ICON[attempt.outcome] as GuestIconName} /> : <span class="gp-dot" />}
+    </span>
+  );
+}
+
 /**
- * An attempt as a short row: a small picture, "Attempt 3", how it went and a line of what changed or was said. It opens
- * in place (a native details element, no script) to the whole attempt, so none is left out.
+ * An attempt as a short row on a quiet surface: its picture, "Attempt 3" with how it went in a few words of colour, and
+ * what went wrong and changed in whole pieces (a piece that doesn't fit is dropped, never cut). It opens in place (a
+ * native details element, no script) to the whole attempt, so none is left out.
  */
 function AttemptRow({ token, attempt, shown }: { token: string; attempt: GuestAttempt; shown: Shown[] }) {
-  const first = shown[0];
-  const line = attempt.changes.length ? attempt.changes.join(" · ") : attempt.note.replace(/\s+/g, " ");
-  const head = (
-    <>
-      {first ? (
-        <Picture token={token} photo={first.photo} alt="" sizes="4rem" class="gp-row-img" />
-      ) : (
-        <span class={`gp-row-img gp-row-none gp-row-none--${tone(attempt)}`} aria-hidden="true" />
-      )}
-      <span class="gp-row-text">
-        <span class="gp-row-line">
-          <OutcomeBadge attempt={attempt} />
-          <span class="gp-row-title">Attempt {attempt.number}</span>
-        </span>
-        <span class="gp-row-sub">{[guestDate(attempt.printedAt), ...attempt.results.slice(0, 1)].join(" · ")}</span>
-        {line && <span class="gp-row-said">{line}</span>}
-      </span>
-    </>
-  );
+  const story = [...attempt.wentWrong.slice(0, 2), ...attempt.changes];
   return (
     <li class="gp-row">
       <details>
         <summary class="gp-row-head">
-          {head}
+          <RowPicture token={token} attempt={attempt} shown={shown} />
+          <span class="gp-row-text">
+            <span class="gp-row-line">
+              <OutcomeBadge attempt={attempt} quiet />
+              <span class="gp-row-title">Attempt {attempt.number}</span>
+            </span>
+            <span class="gp-row-sub">{guestDate(attempt.printedAt)}</span>
+            {story.length > 0 ? (
+              <Pieces pieces={story} class="gp-row-said" inline />
+            ) : (
+              attempt.note && <span class="gp-row-said gp-row-said--note">{attempt.note.replace(/\s+/g, " ")}</span>
+            )}
+          </span>
           <Icon name="chevron" class="gp-row-chevron" />
         </summary>
         <div class="gp-row-open">
-          <p class="gp-attempt-meta">{metaOf(attempt)}</p>
+          <Pieces pieces={metaOf(attempt)} class="gp-attempt-meta" />
           <AttemptPhotos token={token} shown={shown} />
           <AttemptBody token={token} attempt={attempt} />
         </div>
@@ -648,14 +679,37 @@ function AttemptRow({ token, attempt, shown }: { token: string; attempt: GuestAt
   );
 }
 
-/** How the build prints, once: the filaments and the settings on one wrapping line. */
-function PrintedWith({ settings, filaments }: { settings: GuestSetting[]; filaments: GuestFilament[] }) {
-  if (!settings.length && !filaments.length) return null;
+/** A setting as a piece: the label faint and the value in ink; a yes or no says itself in words. */
+function settingPiece({ label, value }: GuestSetting): Child {
+  const yes = value === "Yes";
+  const no = value === "No";
+  if (label === "Brim" && (yes || no)) return <span class="gp-v">{yes ? "brim" : "no brim"}</span>;
+  if (label === "Filament dried" && (yes || no))
+    return <span class="gp-v">{yes ? "dried filament" : "not dried"}</span>;
+  if (label === "Supports" && value === "None") return <span class="gp-v">no supports</span>;
+  return (
+    <>
+      <span class="gp-k">{label}</span> <span class="gp-v">{value}</span>
+    </>
+  );
+}
+
+/** How the build prints, once: the filaments and the settings on one wrapping line, and whose they are. */
+function PrintedWith({ build }: { build: GuestBuild }) {
+  const { settings, printedWith, settingsFrom } = build;
+  if (!settings.length && !printedWith.length) return null;
+  const title = !settingsFrom
+    ? "How it prints"
+    : settingsFrom.worked === "one"
+      ? `How it prints · attempt ${settingsFrom.number}, the one that worked`
+      : settingsFrom.worked === "latest"
+        ? `How it prints · attempt ${settingsFrom.number}, the latest that worked`
+        : `How the latest try was set up · attempt ${settingsFrom.number}`;
   return (
     <section class="gp-printed" aria-label="How it prints">
-      <p class="gp-overline">How it prints</p>
-      <Filaments filaments={filaments} />
-      <Pieces pieces={settings.map((row) => `${row.label} ${row.value}`)} class="gp-printed-line" />
+      <p class="gp-overline">{title}</p>
+      <Filaments filaments={printedWith} />
+      <Pieces pieces={settings.map(settingPiece)} class="gp-printed-line" />
     </section>
   );
 }
@@ -731,7 +785,7 @@ function Story({ view, token, noteShown }: { view: GuestView; token: string; not
           {view.totals.length > 0 && <p class="gp-summary-totals">{view.totals.join(" · ")}</p>}
         </section>
       )}
-      {view.kind === "build" && <PrintedWith settings={view.settings} filaments={view.printedWith} />}
+      {view.kind === "build" && <PrintedWith build={view} />}
       {view.kind === "build" && <Parts parts={view.parts} />}
       {view.kind === "twist" && <Changes changes={view.changes} />}
       {view.kind === "twist" && view.recipe && (
@@ -781,6 +835,16 @@ export function GuestBody({ view, token }: { view: GuestView; token: string }) {
           .filter(({ attempt }, index) => index === attempts.length - 1 || attempt.outcome === "success")
           .map(({ attempt }) => attempt.number),
   );
+  // Each run of rows shares one surface; a card between them starts a new run.
+  const blocks: Array<{ rows: typeof attempts; card?: never } | { rows?: never; card: (typeof attempts)[number] }> = [];
+  for (const entry of attempts) {
+    if (cards.has(entry.attempt.number)) blocks.push({ card: entry });
+    else {
+      const last = blocks.at(-1);
+      if (last?.rows) last.rows.push(entry);
+      else blocks.push({ rows: [entry] });
+    }
+  }
   // No photo but a note: the note leads, in the photo's place.
   const noteLeads = !gallery.length && Boolean(view.note);
   return (
@@ -796,11 +860,17 @@ export function GuestBody({ view, token }: { view: GuestView; token: string }) {
               Attempt by attempt
             </h2>
             <ol class="gp-attempt-list">
-              {attempts.map(({ attempt, shown }) =>
-                cards.has(attempt.number) ? (
-                  <Attempt token={token} attempt={attempt} shown={shown} />
+              {blocks.map((block) =>
+                block.rows ? (
+                  <li class="gp-rows">
+                    <ul>
+                      {block.rows.map(({ attempt, shown }) => (
+                        <AttemptRow token={token} attempt={attempt} shown={shown} />
+                      ))}
+                    </ul>
+                  </li>
                 ) : (
-                  <AttemptRow token={token} attempt={attempt} shown={shown} />
+                  <Attempt token={token} attempt={block.card.attempt} shown={block.card.shown} />
                 ),
               )}
             </ol>

@@ -2,6 +2,7 @@ import { and, desc, eq, isNull } from "drizzle-orm";
 import type { AttemptFile, Item } from "../../shared/api.ts";
 import {
   type AttemptSettings,
+  changesSince,
   isOutcome,
   type Outcome,
   outcomeLabel as outcomeWordOf,
@@ -137,6 +138,8 @@ export interface GuestAttempt {
   printedAt: number;
   note: string;
   photos: GuestPhoto[];
+  /** The first attempt's changes are against the build's settings (given once), not an attempt before it. */
+  againstSummary: boolean;
   /** "Bed 60 → 65 °C": what changed since the attempt before. */
   changes: string[];
   wentWrong: string[];
@@ -180,6 +183,8 @@ export interface GuestBuild extends GuestBase {
   /** How it prints, given once for the whole build: the settings of the attempt that worked (else the newest). */
   settings: GuestSetting[];
   printedWith: GuestFilament[];
+  /** Whose settings they are: "one" attempt worked, "latest" of several that worked, or none did (the newest's). */
+  settingsFrom: { number: number; worked: "one" | "latest" | null } | null;
   /** "About 6 h 22 min", "At least 130 g". */
   totals: string[];
   /** What it is made of, and how far each part is. */
@@ -438,6 +443,8 @@ export function itemView(item: Item, custom: { failure: TagDefinition[]; success
   };
   if (item.stage === "idea") return { kind: "idea", ...base, capturedAt: item.createdAt };
 
+  const baseline =
+    [...item.attempts].reverse().find((attempt) => attempt.outcome === "success") ?? item.attempts.at(-1);
   const attempts: GuestAttempt[] = item.attempts.map((attempt, index) => {
     const number = index + 1;
     const outcomeText = outcomeWordOf(attempt.outcome) ?? (isOffTheBed(attempt) ? "Off the bed" : "Printing");
@@ -452,7 +459,14 @@ export function itemView(item: Item, custom: { failure: TagDefinition[]; success
       printedAt: attempt.printedAt,
       note: attempt.note.trim(),
       photos: onlyPhotos(shown.filter((photo) => photo.attemptId === attempt.id).map(guestPhoto)),
-      changes: index === 0 ? [] : attempt.changes.map((change) => keepUnits(change.text)),
+      // The first attempt has none before it: where the summary's settings are another attempt's, it says how it differed.
+      changes:
+        index > 0
+          ? attempt.changes.map((change) => keepUnits(change.text))
+          : baseline && baseline !== attempt
+            ? changesSince(baseline.settings, attempt).map((change) => keepUnits(change.text))
+            : [],
+      againstSummary: index === 0,
       wentWrong: attempt.failureTags.map((slug) => tagLabel("failure", slug, custom.failure)).filter(notTheOutcome),
       wentWell: attempt.successNotes.map((slug) => tagLabel("success", slug, custom.success)).filter(notTheOutcome),
       filaments: (attempt.settings.filaments ?? []).map(filamentOf),
@@ -466,8 +480,6 @@ export function itemView(item: Item, custom: { failure: TagDefinition[]; success
         : null,
     };
   });
-  const baseline =
-    [...item.attempts].reverse().find((attempt) => attempt.outcome === "success") ?? item.attempts.at(-1);
   const summary = summarizeBuild(item.attempts);
   const count = item.attempts.length;
   const totals = [
@@ -484,6 +496,17 @@ export function itemView(item: Item, custom: { failure: TagDefinition[]; success
     finishedAt: item.finishedAt,
     attempts,
     settings: baseline ? guestSettings(baseline.settings) : [],
+    settingsFrom: baseline
+      ? {
+          number: item.attempts.indexOf(baseline) + 1,
+          worked:
+            baseline.outcome !== "success"
+              ? null
+              : item.attempts.filter((attempt) => attempt.outcome === "success").length > 1
+                ? "latest"
+                : "one",
+        }
+      : null,
     printedWith: baseline ? (baseline.settings.filaments ?? []).map(filamentOf) : [],
     summary: count
       ? `${count} ${count === 1 ? "attempt" : "attempts"}${summary.words ? `: ${summary.words}` : ""}`

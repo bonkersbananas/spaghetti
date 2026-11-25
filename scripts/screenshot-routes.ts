@@ -231,6 +231,19 @@ async function unshareAll(page: Page) {
   else await asAlex(page, run);
 }
 
+/** Shares a new eight-attempt build (fourAttemptBuild) and opens its guest page. */
+async function openSharedMany(page: Page, earlier: boolean | "worked") {
+  const origin = new URL(page.url() || "http://127.0.0.1").origin;
+  await page.request.post("/api/session", {
+    data: { username: "alex", password: "spaghetti-al-dente" },
+    headers: { Origin: origin },
+  });
+  await fourAttemptBuild(page, earlier);
+  const token = await guestShare(page, "items", page.url().split("/").pop() as string);
+  await page.goto(`/s/${token}`);
+  await page.locator("h1").first().waitFor();
+}
+
 /** Opens a guest's page for a seeded thing and waits for its photos. */
 const openShared = (kind: "items" | "twists", id: string) => async (page: Page) => {
   const token = await guestShare(page, kind, id);
@@ -1475,7 +1488,7 @@ async function buildKeeping(page: Page, files: number) {
  * on its page: what the compact rows of earlier attempts are for. Its photos are the headphone stand's, copied
  * through the API, so the seed (and every other screen) stays as it is.
  */
-async function fourAttemptBuild(page: Page, earlier = false) {
+async function fourAttemptBuild(page: Page, earlier: boolean | "worked" = false) {
   const headers = { Origin: new URL(page.url()).origin };
   // A new one for each shot (removeModelItems deletes it after; a deleted id can't be made again).
   const id = crypto.randomUUID();
@@ -1524,10 +1537,11 @@ async function fourAttemptBuild(page: Page, earlier = false) {
           photos: [],
         },
         {
-          outcome: "partial",
+          outcome: earlier === "worked" ? "success" : "partial",
           ago: 7 * 24 * HOUR,
           note: "Held, but the hook is soft where it bends.",
-          failureTags: ["weak-layers"],
+          failureTags: earlier === "worked" ? [] : ["weak-layers"],
+          successNotes: earlier === "worked" ? ["great-first-layer"] : [],
           settings: { ...base, infillDensity: 25, estimatedMinutes: 255 },
           photos: [2],
         },
@@ -2522,16 +2536,21 @@ export const shots: Shot[] = [
     path: "/sign-in",
     signedOut: true,
     fullPage: true,
+    prepare: (page) => openSharedMany(page, true),
+    cleanup: async (page) => {
+      await unshareAll(page);
+      await asAlex(page, () => removeModelItems(page));
+    },
+  },
+  {
+    // The same build with one that worked in the middle: a card between two runs of rows, and one row opened in place.
+    name: "shared-build-many-worked",
+    path: "/sign-in",
+    signedOut: true,
+    fullPage: true,
     prepare: async (page) => {
-      const origin = new URL(page.url() || "http://127.0.0.1").origin;
-      await page.request.post("/api/session", {
-        data: { username: "alex", password: "spaghetti-al-dente" },
-        headers: { Origin: origin },
-      });
-      await fourAttemptBuild(page, true);
-      const token = await guestShare(page, "items", page.url().split("/").pop() as string);
-      await page.goto(`/s/${token}`);
-      await page.locator("h1").first().waitFor();
+      await openSharedMany(page, "worked");
+      await page.locator(".gp-row summary").nth(1).click();
     },
     cleanup: async (page) => {
       await unshareAll(page);
