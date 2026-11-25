@@ -2111,6 +2111,14 @@ async function mockScout(page: Page, mode: "none" | "answered" | "one") {
   await page.getByRole("heading", { level: 1 }).waitFor();
 }
 
+/** Scrolls a heading to the top of the screen, motion settled, for a viewport shot of the section under it. */
+async function scrollToHeading(page: Page, name: RegExp) {
+  const heading = page.getByRole("heading", { name }).first();
+  await heading.waitFor();
+  await heading.evaluate((element) => element.scrollIntoView({ block: "start" }));
+  await page.waitForTimeout(800);
+}
+
 /** The builds list with only the builds `keep` takes (for the Builds list's empty sections). */
 async function keepBuilds(
   page: Page,
@@ -3745,6 +3753,88 @@ export const shots: Shot[] = [
       await card.waitFor();
       await page.waitForTimeout(400);
     },
+  },
+  {
+    // Done as a photo grid: the seed's finished builds, the newest ones large, scrolled to its heading.
+    name: "builds-done",
+    path: "/builds",
+    prepare: async (page) => {
+      await scrollToHeading(page, /^Done/);
+    },
+  },
+  {
+    // The shelf under it (a viewport shot: a full page draws the tab bar over it).
+    name: "builds-shelf",
+    path: "/builds",
+    prepare: async (page) => {
+      await scrollToHeading(page, /^On the shelf/);
+    },
+  },
+  {
+    // One finished build: it leads on its own, large.
+    name: "builds-done-one",
+    path: "/builds",
+    prepare: async (page) => {
+      let kept = false;
+      await keepBuilds(page, (item) => {
+        if (item.stage !== "done") return item.stage === "building";
+        if (kept) return false;
+        kept = true;
+        return true;
+      });
+      await scrollToHeading(page, /^Done/);
+    },
+    cleanup: unmockToday,
+  },
+  {
+    // A finished build with no photo but a plate render (the towel hook, finished), among the rest.
+    name: "builds-done-plate",
+    path: "/builds",
+    prepare: async (page) => {
+      await page.route(/\/api\/items\?stage=/, async (route) => {
+        const response = await route.fetch();
+        const json = (await response.json()) as {
+          items: Array<{ id: string; stage: string; finishedAt?: number | null; photos?: unknown[] }>;
+        };
+        for (const item of json.items) {
+          if (item.id === SEED_BUILD_IDS.towelHook)
+            Object.assign(item, { stage: "done", finishedAt: Date.now(), photos: [] });
+        }
+        await route.fulfill({ response, json });
+      });
+      await page.reload({ waitUntil: "networkidle" });
+      await scrollToHeading(page, /^Done/);
+    },
+    cleanup: unmockToday,
+  },
+  {
+    // Forty finished builds (the seed's, copied; some without a picture): eleven show, then "N more".
+    name: "builds-done-forty",
+    path: "/builds",
+    prepare: async (page) => {
+      await page.route(/\/api\/items\?stage=/, async (route) => {
+        const response = await route.fetch();
+        const json = (await response.json()) as {
+          items: Array<Record<string, unknown> & { id: string; stage: string; finishedAt: number | null }>;
+        };
+        const done = json.items.filter((item) => item.stage === "done");
+        const copies = Array.from({ length: 40 }, (_, index) => {
+          const from = done[index % done.length] as (typeof done)[number];
+          const bare = index % 9 === 4;
+          return {
+            ...from,
+            id: `${from.id.slice(0, -4)}${String(index).padStart(4, "0")}`,
+            finishedAt: (from.finishedAt ?? 0) - index * 86_400_000,
+            ...(bare ? { photos: [], files: [], attempts: [] } : {}),
+          };
+        });
+        json.items = [...json.items.filter((item) => item.stage !== "done"), ...copies];
+        await route.fulfill({ response, json });
+      });
+      await page.reload({ waitUntil: "networkidle" });
+      await scrollToHeading(page, /^Done/);
+    },
+    cleanup: unmockToday,
   },
   {
     // No builds at all: the empty state, and no floating New build beside its button.
