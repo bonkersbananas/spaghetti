@@ -67,7 +67,7 @@ test("counts a spool down from a slicer file, weighs it, warns when it is short 
     await entry.dispatchEvent("dragenter", { dataTransfer });
     await entry.dispatchEvent("drop", { dataTransfer });
   }
-  const sheet = page.getByRole("dialog", { name: "Finish attempt 1" });
+  const sheet = page.getByRole("dialog", { name: "Attempt 1" });
   await sheet
     .getByRole("region", { name: "Which plate?" })
     .getByRole("button", { name: /Cable clips/ })

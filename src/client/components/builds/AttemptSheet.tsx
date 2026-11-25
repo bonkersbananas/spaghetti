@@ -70,7 +70,9 @@ export function AttemptSheet({
         open={open}
         onOpenChange={onOpenChange}
         desktop="panel"
-        title={printing ? `Finish attempt ${attempt.number}` : `Attempt ${attempt.number}`}
+        // A phone's sheet has one height from its first frame: an answer adds its tags under the tiles without moving them.
+        tall
+        title={`Attempt ${attempt.number}`}
         // The build's name, as the new attempt's sheet says it: when it printed is the when line's to say.
         description={
           [item.title, printing && attempt.endedAt !== null ? lowerFirst(offTheBedLabel(attempt.endedAt)) : ""]

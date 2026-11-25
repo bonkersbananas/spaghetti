@@ -203,7 +203,7 @@ export function EditAttempt({
       {library.input}
       {slicer.picker.input}
       <AttemptFields
-        outcomeLabel={printing ? "Finished? How did it go?" : "How did it go?"}
+        outcomeLabel="How did it go?"
         readOnly={readOnly}
         outcome={value.outcome}
         onOutcome={finish}

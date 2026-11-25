@@ -243,7 +243,7 @@ test("a print on the bed has one way to log it; closing the build waits in the â
   // Desktop's A asks the same question.
   if (isMobile) await ask.click();
   else await page.keyboard.press("a");
-  const sheet = page.getByRole("dialog", { name: "Finish attempt 1" });
+  const sheet = page.getByRole("dialog", { name: "Attempt 1" });
   await sheet.getByRole("radio", { name: "Worked" }).click();
   await sheet.getByRole("button", { name: /^(Done|Finish attempt)$/ }).click();
   await expect(sheet).toBeHidden();
@@ -522,8 +522,8 @@ test("on a phone the outcome and the photo tiles sit at the foot of the sheet, a
   const start = sheet.getByRole("button", { name: "Start print" });
   await expect(radio).toBeVisible();
   const [r, n, t, s] = await Promise.all([radio, note, take, start].map((l) => l.boundingBox()));
-  // Bottom-up: the note, then the photo tiles, then the outcome, then the button.
-  expect(n && t && r && s && n.y < t.y && t.y < r.y && r.y < s.y).toBe(true);
+  // Bottom-up: the photo tiles, then the note, then the outcome, then the button.
+  expect(n && t && r && s && t.y < n.y && n.y < r.y && r.y < s.y).toBe(true);
   await expect(sheet.getByText("Starting now")).toBeVisible();
   await radio.click();
   await expect(sheet.getByRole("button", { name: /Printed just now/ })).toBeVisible();

@@ -1594,7 +1594,7 @@ async function finishSheet(page: Page) {
   });
   await page.goto(`/builds/${id}`);
   await page.getByRole("button", { name: "How did it go?" }).first().click();
-  const sheet = page.getByRole("dialog", { name: /^Finish attempt 1/ });
+  const sheet = page.getByRole("dialog", { name: /^Attempt 1/ });
   await sheet.waitFor();
   await page.waitForTimeout(700);
   return sheet;
@@ -7584,7 +7584,7 @@ export const shots: Shot[] = [
     prepare: async (page) => {
       await page.getByTestId("not-enough").waitFor();
       await page.getByRole("button", { name: "How did it go?" }).first().click();
-      await page.getByRole("dialog", { name: /^Finish attempt/ }).waitFor();
+      await page.getByRole("dialog", { name: /^Attempt/ }).waitFor();
       await page.waitForTimeout(900);
     },
     cleanup: async (page) => {
@@ -8331,6 +8331,51 @@ export const shots: Shot[] = [
     cleanup: async (page) => {
       await page.keyboard.press("Escape");
       await removeModelItems(page);
+    },
+  },
+  {
+    // The finish sheet of a hand-logged print as it opens, before any answer: the layout every answer keeps.
+    name: "attempt-finish-open",
+    path: "/builds",
+    prepare: async (page) => {
+      await finishSheet(page);
+      await page.waitForTimeout(1200);
+    },
+    cleanup: async (page) => {
+      await page.keyboard.press("Escape");
+      await removeModelItems(page);
+    },
+  },
+  {
+    // Worked tapped: nothing above the tiles moves; the sheet only gains what Worked adds under them.
+    name: "attempt-finish-worked",
+    path: "/builds",
+    prepare: async (page) => {
+      const sheet = await finishSheet(page);
+      await sheet.getByRole("radio", { name: "Worked" }).click();
+      await page.waitForTimeout(1500);
+    },
+    cleanup: async (page) => {
+      await page.keyboard.press("Escape");
+      await removeModelItems(page);
+    },
+  },
+  {
+    // A printer print with Claude's suggestion hinted on its button, before any answer.
+    name: "attempt-finish-claude-open",
+    path: "/builds",
+    prepare: async (page) => {
+      await printWithPhoto(page, "Hinge pin, partly");
+      await openOffBedSheet(page);
+      await page
+        .getByRole("dialog")
+        .getByRole("radio", { name: /Partly suggested/ })
+        .waitFor({ timeout: 30_000 });
+      await page.waitForTimeout(1200);
+    },
+    cleanup: async (page) => {
+      await page.keyboard.press("Escape");
+      await removePhotoReadBuilds(page);
     },
   },
   // pnpm new route adds its screens above this line.

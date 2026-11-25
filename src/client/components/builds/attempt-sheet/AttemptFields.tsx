@@ -149,16 +149,14 @@ export function AttemptFields(props: FieldsProps) {
     withOffer
   );
 
-  // The question and its answer. On a phone after Partly or Spaghetti it also holds the note, under the question
-  // and right above the tiles: "How did it go?" heads the person's words and the answer as one group, so the note
-  // never reads as part of the tags above it.
-  const outcomeGroup = (note: ReactNode) => (
+  // The question and its answer: the label is the button's own words that brought the person here. On a phone it
+  // never moves once the sheet is open: what an answer adds (the tags) comes under the tiles, not around them.
+  const outcomeBlock = (
     <Fragment key="outcomeBlock">
       <fieldset disabled={props.readOnly === "all"} className="contents">
         <div className="flex flex-col gap-3">
           {props.ask}
           <p className="text-small text-ink-soft px-0.5 font-semibold">{props.outcomeLabel}</p>
-          {note}
           <OutcomePicker value={outcome} onChange={props.onOutcome} suggested={props.suggestedOutcome} />
           {props.outcomeHint}
           {props.estimate}
@@ -166,7 +164,6 @@ export function AttemptFields(props: FieldsProps) {
       </fieldset>
     </Fragment>
   );
-  const outcomeBlock = outcomeGroup(null);
   const plateBlock = (
     <Fragment key="plateBlock">
       {props.plate && (
@@ -191,15 +188,7 @@ export function AttemptFields(props: FieldsProps) {
           aria-label="Note"
           className="scroll-mb-3"
           minRows={1}
-          // The tags ask "What went wrong?" / "What worked?"; after a print that went wrong the note comes first and
-          // asks in plain words.
-          placeholder={
-            withTags
-              ? "What happened? In your own words."
-              : outcome
-                ? "One line is plenty."
-                : "A line about this attempt"
-          }
+          placeholder="A line about this attempt"
           maxLength={500}
           enterKeyHint="done"
           onFocus={(event) => {
@@ -256,8 +245,7 @@ export function AttemptFields(props: FieldsProps) {
   const tagsBlock = (
     <Fragment key="tagsBlock">
       <fieldset disabled={props.readOnly === "all"} className="contents">
-        {/* What went wrong sits nearest the note: under it on desktop, right above it on a phone (read bottom-up). */}
-        {isDesktop ? [failurePicker, successPicker] : [successPicker, failurePicker]}
+        {[failurePicker, successPicker]}
       </fieldset>
     </Fragment>
   );
@@ -350,13 +338,9 @@ export function AttemptFields(props: FieldsProps) {
       watcher.disconnect();
     };
   };
-  const opened = useRef(false);
-  // biome-ignore lint/correctness/useExhaustiveDependencies: on opening, and when the outcome changes.
-  useEffect(() => {
-    const first = !opened.current;
-    opened.current = true;
-    return toEnd(!first);
-  }, [outcome]);
+  // Only as it opens: an answer tapped later adds its tags under the tiles and leaves the sheet where it is.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: on opening.
+  useEffect(() => toEnd(false), []);
 
   // Partly or Spaghetti picked: the person's own words come first, so the note takes the focus (on a laptop typing
   // goes straight in; on a phone the keyboard comes up with the note right above the answer). Picked in the sheet,
@@ -418,37 +402,27 @@ export function AttemptFields(props: FieldsProps) {
           notEnoughBlock,
           settingsBlock,
         ]
-    : withTags
-      ? [
-          fileBlock,
-          settingsBlock,
-          notEnoughBlock,
-          whenBlock,
-          coachBlock,
-          plateBlock,
-          photosBlock,
-          tagsBlock,
-          outcomeGroup(noteBlock),
-        ]
-      : [
-          fileBlock,
-          settingsBlock,
-          notEnoughBlock,
-          whenBlock,
-          coachBlock,
-          noteBlock,
-          plateBlock,
-          photosBlock,
-          tagsBlock,
-          outcomeBlock,
-        ];
+    : // One order from the first frame: the photos, the note, the tiles; what an answer adds comes under the tiles.
+      [
+        fileBlock,
+        settingsBlock,
+        notEnoughBlock,
+        whenBlock,
+        coachBlock,
+        plateBlock,
+        photosBlock,
+        noteBlock,
+        outcomeBlock,
+        tagsBlock,
+      ];
 
   return (
     // biome-ignore lint/a11y/noStaticElementInteractions: it only listens to keys that bubble up from the controls inside.
     <div
       ref={root}
       onPointerDownCapture={(event) => {
-        if ((event.target as HTMLElement).closest("[role=radiogroup]") === null) touched.current = true;
+        // Any press ends the settling: what a tap adds (the tags) must not scroll the sheet under the finger.
+        touched.current = true;
       }}
       className="flex flex-col gap-5 max-md:pb-2"
       data-capture

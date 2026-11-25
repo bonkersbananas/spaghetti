@@ -353,7 +353,7 @@ test("the attempt's sheet asks it too: answering the outcome leaves the question
 
   // "How did it go?" from Today or the Journal lands here.
   await page.goto(`/builds/${ownId}?attempt=${attemptId}&finish=1`);
-  // "Finish attempt 1" until the answer is saved, "Attempt 1" after.
+  // The sheet is "Attempt 1" before and after the answer.
   const sheet = page.getByRole("dialog", { name: /attempt 1$/i });
   const question = sheet.getByRole("region", { name: "Is this Herb planter?" });
   await expect(question).toBeVisible();

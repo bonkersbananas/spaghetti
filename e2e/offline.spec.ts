@@ -385,7 +385,7 @@ test("finishes a print that is printing with no signal: outcome, note and photo 
   const finish = page.getByRole("button", { name: "How did it go?" });
   await expect(finish).toBeEnabled();
   await finish.click();
-  const sheet = page.getByRole("dialog", { name: "Finish attempt 2" });
+  const sheet = page.getByRole("dialog", { name: "Attempt 2" });
   await sheet.getByTestId("photo-input").setInputFiles("e2e/fixtures/tugboat.jpg");
   await expect(sheet.getByRole("img", { name: "Attempt photo 1" })).toBeVisible();
   await sheet.getByRole("radio", { name: "Worked" }).click();
@@ -435,7 +435,7 @@ test("a finish queued offline adds its note to the one on the server, even with 
   await context.setOffline(true);
   await page.reload();
   await page.getByRole("button", { name: "How did it go?" }).click();
-  const sheet = page.getByRole("dialog", { name: "Finish attempt 2" });
+  const sheet = page.getByRole("dialog", { name: "Attempt 2" });
   await sheet.getByRole("radio", { name: "Worked" }).click();
   await sheet.getByRole("textbox", { name: "Note" }).press("End");
   await sheet.getByRole("textbox", { name: "Note" }).pressSequentially(" and a hotter bed");
@@ -472,7 +472,7 @@ test("a finish queued offline keeps the other person's outcome, adds the photo a
   await context.setOffline(true);
   await page.reload();
   await page.getByRole("button", { name: "How did it go?" }).click();
-  const sheet = page.getByRole("dialog", { name: "Finish attempt 2" });
+  const sheet = page.getByRole("dialog", { name: "Attempt 2" });
   await sheet.getByTestId("photo-input").setInputFiles("e2e/fixtures/tugboat.jpg");
   await expect(sheet.getByRole("img", { name: "Attempt photo 1" })).toBeVisible();
   await sheet.getByRole("radio", { name: "Spaghetti" }).click();
@@ -618,7 +618,7 @@ test("Today opens with no connection from what was last seen, and a print can st
   await expect(bed.getByRole("heading", { name: "Bath tugboat" })).toBeVisible();
   // Finishing goes through the outbox, so it is still possible next to the printer.
   await bed.getByRole("button", { name: "How did it go?" }).click();
-  await expect(page.getByRole("dialog", { name: "Finish attempt 1" })).toBeVisible();
+  await expect(page.getByRole("dialog", { name: "Attempt 1" })).toBeVisible();
 });
 
 // A page from the previous build whose route chunk is gone after a deploy. No service worker in these two, so
