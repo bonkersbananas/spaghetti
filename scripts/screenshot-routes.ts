@@ -2111,7 +2111,6 @@ async function mockScout(page: Page, mode: "none" | "answered" | "one") {
   await page.getByRole("heading", { level: 1 }).waitFor();
 }
 
-/** The builds list with only the builds `keep` takes (for the Builds list's empty sections). */
 /** Scrolls a heading to the top of the screen, motion settled, for a viewport shot of the section under it. */
 async function scrollToHeading(page: Page, name: RegExp) {
   const heading = page.getByRole("heading", { name }).first();
@@ -2120,6 +2119,7 @@ async function scrollToHeading(page: Page, name: RegExp) {
   await page.waitForTimeout(800);
 }
 
+/** The builds list with only the builds `keep` takes (for the Builds list's empty sections). */
 async function keepBuilds(
   page: Page,
   keep: (item: { id: string; stage: string; attempts?: Array<{ outcome: string | null }> }) => boolean,
