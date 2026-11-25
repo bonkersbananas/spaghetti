@@ -1498,7 +1498,15 @@ async function fourAttemptBuild(page: Page, earlier = false) {
   };
   const HOUR = 3_600_000;
   // The eight-attempt shape (a build shared after a long weekend): four earlier ones, most with a photo or two.
-  const before = earlier
+  const before: {
+    outcome: string;
+    ago: number;
+    note?: string;
+    failureTags?: string[];
+    successNotes?: string[];
+    settings: object;
+    photos: number[];
+  }[] = earlier
     ? [
         {
           outcome: "failed",
