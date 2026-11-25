@@ -614,7 +614,6 @@ function Attempt({ token, attempt, shown }: { token: string; attempt: GuestAttem
 function AttemptRow({ token, attempt, shown }: { token: string; attempt: GuestAttempt; shown: Shown[] }) {
   const first = shown[0];
   const line = attempt.changes.length ? attempt.changes.join(" · ") : attempt.note.replace(/\s+/g, " ");
-  const open = shown.length > 0 || attempt.note || attempt.changes.length || attempt.file;
   const head = (
     <>
       {first ? (
@@ -632,13 +631,6 @@ function AttemptRow({ token, attempt, shown }: { token: string; attempt: GuestAt
       </span>
     </>
   );
-  if (!open) {
-    return (
-      <li class="gp-row">
-        <div class="gp-row-head">{head}</div>
-      </li>
-    );
-  }
   return (
     <li class="gp-row">
       <details>
@@ -647,6 +639,7 @@ function AttemptRow({ token, attempt, shown }: { token: string; attempt: GuestAt
           <Icon name="chevron" class="gp-row-chevron" />
         </summary>
         <div class="gp-row-open">
+          <p class="gp-attempt-meta">{metaOf(attempt)}</p>
           <AttemptPhotos token={token} shown={shown} />
           <AttemptBody token={token} attempt={attempt} />
         </div>

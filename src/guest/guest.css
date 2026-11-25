@@ -929,12 +929,6 @@ div.gp-row-head {
   }
 }
 
-/* The details under an attempt's story (the app's attempt entry): after a hairline, straight on the card. */
-.gp-details {
-  padding-top: 0.875rem;
-  box-shadow: inset 0 1px 0 var(--sg-hairline);
-}
-
 /* The settings someone would print it with: the filaments over a grid of label and value. */
 .gp-settings {
   display: flex;
