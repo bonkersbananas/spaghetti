@@ -120,9 +120,9 @@ WCAG AA: 4.5:1 for text, and the same for the initials on avatars; 3:1 for icons
 | An open tick box on a sheet | 3:1 | 3.6 | 4.6 |
 | An offer's dashed ring | 3:1 | 3.5 | 5.1 |
 | An off switch's knob on its track | 3:1 | 4.5 | 7.4 |
-| An off switch's edge on a sheet | 3:1 | 5.6 | 5.6 |
-| An off switch's edge on a card | 3:1 | 5.6 | 6.2 |
-| An off switch's edge on paper | 3:1 | 5.1 | 6.9 |
+| An off switch's edge on a sheet | 3:1 | 3.6 | 4.6 |
+| An off switch's edge on a card | 3:1 | 3.6 | 4.8 |
+| An off switch's edge on paper | 3:1 | 3.5 | 5.1 |
 | A suggested failure tag's dashed ring on a sheet | 3:1 | 4.7 | 3.0 |
 | A suggested success note's dashed ring on a sheet | 3:1 | 3.1 | 3.1 |
 | A suggested tag's words on a sheet | 4.5:1 | 7.2 | 7.7 |
@@ -271,7 +271,7 @@ All in `src/client/components/ui`, all shown in `/styleguide`.
 - **Kbd** — keyboard hints, hidden on phones (`always` for the shortcut list).
 - **PaletteSurface / PaletteDialog** — the command palette: a search box over grouped rows (photo or icon, name, a line of meta, an outcome chip or the row's shortcut), the picked row on a quiet fill, key hints along the bottom. See Keyboard and the command palette.
 - **ShortcutList** — every shortcut from the registry, grouped by screen.
-- **Toggle** — an on/off setting that takes effect at once, no save button: the whole row (label, an optional quiet hint, the switch) is one `role="switch"` target of at least 48 px. Off is the well track with a 1 px inset edge and a knob, both `switch-off` (ink-faint, 3:1 or more against the track and the sheet in both themes); on is `select` with an `on-select` knob. The hint is where a reason goes when it can't be turned on (blocked in the browser, iPhone not installed). `oneLine` keeps the row to its label (the hint is only read aloud): for a hint that just repeats the switch, as on the phone's wishlist.
+- **Toggle** — an on/off setting that takes effect at once, no save button: the whole row (label, an optional quiet hint, the switch) is one `role="switch"` target of at least 48 px. Off is the `well` track with a 1 px inset edge in ink at 55 % (as an open tick box, 3:1 or more on the sheet, card and paper) and a 20 px knob of `switch-off` (ink-faint, 3:1 or more against the track, an even 4 px gap all round); on is `select` with an `on-select` knob. The hint is where a reason goes when it can't be turned on (blocked in the browser, iPhone not installed). `oneLine` keeps the row to its label (the hint is only read aloud): for a hint that just repeats the switch, as on the phone's wishlist.
 - **NotificationPreview** — a picture of a "how did it go?" notification (the app mark, title, body and, where the platform has them, Worked / Partly / Spaghetti buttons). Only a picture, in settings and the styleguide; the system draws the real one.
 - **Notifications** is a Sheet from the account menu: "Notify this device" (permission is asked for only when it is turned on), "Also tell me about {name}'s prints", a test notification, and the preview. Quiet hours (22:00 to 07:00 in the device's time zone) are said in the hint, not configurable.
 - **Change password** is a Sheet with a form, opened from the account menu (the popover on desktop, the account sheet on phones): current password, new password, one quiet "Show" toggle instead of a confirm field, a hidden username for password managers, and its submit button in the sheet footer. A wrong current password is said under its field and nothing typed is cleared.

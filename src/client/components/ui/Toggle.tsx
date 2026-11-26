@@ -37,15 +37,17 @@ export function Toggle({ checked, onChange, label, hint, oneLine, disabled, clas
         aria-hidden
         className={cn(
           "rounded-pill duration-fast relative h-7 w-12 shrink-0 transition-colors group-disabled:opacity-50",
-          // The inverse of the page, like a selected chip: tomato stays the one action color. Off keeps a visible
-          // edge and a knob of switch-off (3:1 on the track), so an off setting never reads as a missing one.
-          checked ? "bg-select" : "bg-well ring-switch-off ring-1 ring-inset",
+          // The inverse of the page, like a selected chip: tomato stays the one action color. Off keeps a quiet edge
+          // (ink at 55 %, as an open tick box) and a knob of switch-off (3:1 on the track), so an off setting never
+          // reads as a missing one.
+          checked ? "bg-select" : "bg-well ring-ink/55 ring-1 ring-inset",
         )}
       >
         <span
           className={cn(
             "rounded-pill shadow-soft duration-fast absolute top-0.5 left-0.5 size-6 transition-transform ease-out",
-            checked ? "bg-on-select translate-x-5" : "bg-switch-off",
+            // Off, the knob is 20 px (24 scaled to 83 %) with an even 4 px gap all round; on, it grows to 24 px at the end.
+            checked ? "bg-on-select translate-x-5" : "bg-switch-off scale-83",
           )}
         />
       </span>

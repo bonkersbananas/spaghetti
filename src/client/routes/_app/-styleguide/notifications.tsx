@@ -26,8 +26,9 @@ export function NotificationSection() {
         <Panel className="flex flex-col gap-3">
           <Label>Toggle</Label>
           <p className="text-small text-ink-faint">
-            The whole row is the switch. Off is a track with an edge and a knob you can see (3:1 against each other and
-            the sheet); on is the inverse of the page. A reason it can't be turned on goes in the hint.
+            The whole row is the switch. Off is a track with a quiet edge and a smaller knob you can see (3:1 against
+            the track and the sheet); on is the inverse of the page, its knob full size. A reason it can't be turned on
+            goes in the hint.
           </p>
           <Toggle
             label="Notify this device"
