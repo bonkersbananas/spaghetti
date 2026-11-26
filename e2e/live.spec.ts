@@ -304,7 +304,7 @@ test("the attempt sheet follows the other person's edits and the printer's repor
     .locator(`[data-attempt-id="${printing}"]`)
     .getByRole("button", { name: /Open$/ })
     .click({ position: { x: 6, y: 6 } });
-  const finishing = page.getByRole("dialog", { name: "Finish attempt 2" });
+  const finishing = page.getByRole("dialog", { name: "Attempt 2" });
   await expect(finishing).toBeVisible();
   const reported = await samPage.request.patch(`/api/attempts/${printing}`, {
     headers,

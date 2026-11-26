@@ -116,7 +116,7 @@ test("reads a dropped slicer file onto an attempt and keeps it", async ({ page, 
     await entry.dispatchEvent("drop", { dataTransfer });
   }
 
-  const sheet = page.getByRole("dialog", { name: "Finish attempt 1" });
+  const sheet = page.getByRole("dialog", { name: "Attempt 1" });
   await expect(sheet).toBeVisible();
   // Two plates: one tap says which.
   await sheet

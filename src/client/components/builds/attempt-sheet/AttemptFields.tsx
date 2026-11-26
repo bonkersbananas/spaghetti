@@ -9,7 +9,6 @@ import { Disclosure } from "@/components/ui/Disclosure";
 import { TextArea } from "@/components/ui/Field";
 import { SettingsIcon } from "@/components/ui/icons";
 import type { AttemptView } from "@/lib/items";
-import { keyboardProxy } from "@/lib/keyboard-proxy";
 import { usePrinterSetup } from "@/lib/pantry-queries";
 import { useIsDesktop } from "@/lib/use-media-query";
 import { NotEnoughNote } from "../NotEnoughNote";
@@ -19,9 +18,6 @@ import { summarizeSettings } from "../settings";
 import { TagPicker } from "../TagPicker";
 import { ChangeChips, chipMarks } from "./ChangeChips";
 import { PlateParts } from "./PlateParts";
-
-/** How long a phone's sheet takes to slide up (vaul's 500 ms, and a beat): a note focused before then would jump. */
-const SHEET_SETTLE_MS = 600;
 
 export interface FieldsProps {
   outcome: Outcome | null;
@@ -84,6 +80,8 @@ export interface FieldsProps {
 
 export function AttemptFields(props: FieldsProps) {
   const { outcome, previous, settings } = props;
+  /** Logging a new attempt, not answering a print. */
+  const isNew = !!props.changeChips;
   const isDesktop = useIsDesktop();
   const withTags = outcome === "failed" || outcome === "partial";
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -149,16 +147,14 @@ export function AttemptFields(props: FieldsProps) {
     withOffer
   );
 
-  // The question and its answer. On a phone after Partly or Spaghetti it also holds the note, under the question
-  // and right above the tiles: "How did it go?" heads the person's words and the answer as one group, so the note
-  // never reads as part of the tags above it.
-  const outcomeGroup = (note: ReactNode) => (
+  // The question and its answer: the label is the button's own words that brought the person here. On a phone it
+  // never moves once the sheet is open: what an answer adds (the tags) comes under the tiles, not around them.
+  const outcomeBlock = (
     <Fragment key="outcomeBlock">
       <fieldset disabled={props.readOnly === "all"} className="contents">
         <div className="flex flex-col gap-3">
           {props.ask}
           <p className="text-small text-ink-soft px-0.5 font-semibold">{props.outcomeLabel}</p>
-          {note}
           <OutcomePicker value={outcome} onChange={props.onOutcome} suggested={props.suggestedOutcome} />
           {props.outcomeHint}
           {props.estimate}
@@ -166,7 +162,6 @@ export function AttemptFields(props: FieldsProps) {
       </fieldset>
     </Fragment>
   );
-  const outcomeBlock = outcomeGroup(null);
   const plateBlock = (
     <Fragment key="plateBlock">
       {props.plate && (
@@ -191,15 +186,7 @@ export function AttemptFields(props: FieldsProps) {
           aria-label="Note"
           className="scroll-mb-3"
           minRows={1}
-          // The tags ask "What went wrong?" / "What worked?"; after a print that went wrong the note comes first and
-          // asks in plain words.
-          placeholder={
-            withTags
-              ? "What happened? In your own words."
-              : outcome
-                ? "One line is plenty."
-                : "A line about this attempt"
-          }
+          placeholder="A line about this attempt"
           maxLength={500}
           enterKeyHint="done"
           onFocus={(event) => {
@@ -250,14 +237,13 @@ export function AttemptFields(props: FieldsProps) {
       onChange={props.onSuccessNotes}
       suggested={props.suggestedSuccessNotes}
       suggestedBy="claude"
-      compact={withTags}
+      compact={withTags || !isDesktop}
     />
   );
   const tagsBlock = (
     <Fragment key="tagsBlock">
       <fieldset disabled={props.readOnly === "all"} className="contents">
-        {/* What went wrong sits nearest the note: under it on desktop, right above it on a phone (read bottom-up). */}
-        {isDesktop ? [failurePicker, successPicker] : [successPicker, failurePicker]}
+        {[failurePicker, successPicker]}
       </fieldset>
     </Fragment>
   );
@@ -323,10 +309,9 @@ export function AttemptFields(props: FieldsProps) {
       </div>
     </Fragment>
   );
-  // On a phone the sheet reads bottom-up: what is done standing at the printer (the note, the photos, and "How did it
-  // go?" last) sits at the foot, under the thumb, and the rarely changed settings are above. Desktop reads top-down.
-  // The sheet opens at its foot, where the thumb is: the part that reads bottom-up starts scrolled to its end, and
-  // goes back there when what sits below the outcome grows (its hint) or the keyboard comes up for the note.
+  // Answering a print on a phone: the sheet opens at its top, photos first, and keeps that whatever is tapped. Logging a
+  // new attempt: the sheet opens scrolled to its end, where the thumb is (the photos, the note, the tiles), and stays
+  // there while its height settles (a hint arriving); the first press ends that. Desktop reads top-down.
   const root = useRef<HTMLDivElement>(null);
   const touched = useRef(false);
   // Scrolls the sheet's body to its end and keeps it there while its height settles (the sheet's own opening, the
@@ -350,48 +335,27 @@ export function AttemptFields(props: FieldsProps) {
       watcher.disconnect();
     };
   };
-  const opened = useRef(false);
-  // biome-ignore lint/correctness/useExhaustiveDependencies: on opening, and when the outcome changes.
-  useEffect(() => {
-    const first = !opened.current;
-    opened.current = true;
-    return toEnd(!first);
-  }, [outcome]);
+  // Only as it opens: an answer tapped later adds its tags under the tiles and leaves the sheet where it is.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: on opening.
+  useEffect(() => (isNew ? toEnd(false) : () => {}), []);
 
-  // Partly or Spaghetti picked: the person's own words come first, so the note takes the focus (on a laptop typing
-  // goes straight in; on a phone the keyboard comes up with the note right above the answer). Picked in the sheet,
-  // it is inside the tap, so iOS raises the keyboard; picked on a card, the card's tap holds the keyboard with a
-  // stand-in (lib/keyboard-proxy.ts) and the note takes the focus from it once the sheet has slid up, so nothing jumps.
-  const mountedAt = useRef(performance.now());
+  // Partly or Spaghetti picked on a laptop: the person's own words come first, so the note takes the focus and typing
+  // goes straight in. Not on a phone: its keyboard would cover the tile just tapped and every tag, so the tags come
+  // first and the note is one tap away.
   const lastOutcome = useRef(outcome);
   // biome-ignore lint/correctness/useExhaustiveDependencies: when the outcome changes.
   useLayoutEffect(() => {
     const from = lastOutcome.current;
     lastOutcome.current = outcome;
     const note = noteRef.current;
-    if (from === outcome || !withTags || props.readOnly === "all" || !note) return;
-    const settling = isDesktop ? 0 : SHEET_SETTLE_MS - (performance.now() - mountedAt.current);
+    if (from === outcome || !withTags || props.readOnly === "all" || !note || !isDesktop) return;
     // With the caret after what is already written, so new words add to it.
-    const focusNote = (preventScroll: boolean) => {
-      note.focus({ preventScroll });
-      note.setSelectionRange(note.value.length, note.value.length);
-    };
-    if (settling <= 0) {
-      focusNote(!isDesktop);
-      return;
-    }
-    const timer = window.setTimeout(() => {
-      // A field or button tapped meanwhile keeps the focus; the stand-in, the sheet itself or the answer give it up.
-      const held = document.activeElement;
-      if (!held || held === document.body || held === keyboardProxy() || held.matches("[role=dialog], [role=radio]"))
-        focusNote(true);
-    }, settling);
-    return () => window.clearTimeout(timer);
+    note.focus();
+    note.setSelectionRange(note.value.length, note.value.length);
   }, [outcome]);
 
-  // After Partly or Spaghetti the note comes right after the answer (on a phone, under the question and over the
-  // tiles), then the photos the tags speak of, then the few tags; otherwise the photos and the plate come first. The
-  // note is focused after the blocks move (a layout effect), so it keeps the focus.
+  // Desktop: after Partly or Spaghetti the note comes right after the answer, then the photos the tags speak of, then
+  // the few tags; otherwise the photos and the plate come first. A phone has one order whatever the answer.
   const blocks = isDesktop
     ? withTags
       ? [
@@ -418,8 +382,10 @@ export function AttemptFields(props: FieldsProps) {
           notEnoughBlock,
           settingsBlock,
         ]
-    : withTags
-      ? [
+    : isNew
+      ? // Logging a new attempt: the file and the settings are the point, so they come first; the photos, the note and
+        // the tiles at the foot, under the thumb, and what an answer adds (the tags) under the tiles.
+        [
           fileBlock,
           settingsBlock,
           notEnoughBlock,
@@ -427,20 +393,23 @@ export function AttemptFields(props: FieldsProps) {
           coachBlock,
           plateBlock,
           photosBlock,
-          tagsBlock,
-          outcomeGroup(noteBlock),
-        ]
-      : [
-          fileBlock,
-          settingsBlock,
-          notEnoughBlock,
-          whenBlock,
-          coachBlock,
           noteBlock,
+          outcomeBlock,
+          tagsBlock,
+        ]
+      : // Answering a print: photos first, then the note, the tiles and the tags under them; the date, the file and the
+        // settings are the tail, one scroll away. The same from the first frame, whatever is tapped.
+        [
           plateBlock,
           photosBlock,
-          tagsBlock,
+          noteBlock,
           outcomeBlock,
+          tagsBlock,
+          coachBlock,
+          whenBlock,
+          fileBlock,
+          notEnoughBlock,
+          settingsBlock,
         ];
 
   return (
@@ -448,7 +417,8 @@ export function AttemptFields(props: FieldsProps) {
     <div
       ref={root}
       onPointerDownCapture={(event) => {
-        if ((event.target as HTMLElement).closest("[role=radiogroup]") === null) touched.current = true;
+        // Any press ends the settling: what a tap adds (the tags) must not scroll the sheet under the finger.
+        touched.current = true;
       }}
       className="flex flex-col gap-5 max-md:pb-2"
       data-capture

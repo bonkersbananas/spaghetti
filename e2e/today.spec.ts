@@ -64,7 +64,7 @@ test("shows the print on the bed with its progress, and How did it go? opens tha
 
   await bed.getByRole("button", { name: "How did it go?" }).click();
   await expect(page).toHaveURL(new RegExp(`/builds/${id}`));
-  await expect(page.getByRole("dialog", { name: "Finish attempt 1" })).toBeVisible();
+  await expect(page.getByRole("dialog", { name: "Attempt 1" })).toBeVisible();
   // The parameter is spent: closing the sheet doesn't leave a link that reopens it.
   await expect(page).not.toHaveURL(/finish=/);
 });
@@ -82,7 +82,7 @@ test("asks how it went once the print should be done: the answer opens the sheet
   expect(await savedOutcome(page, id, attempt)).toBeNull();
   await bed.getByRole("radio", { name: "Worked" }).click();
   // The sheet is where the photo, the tags and a word get added: it opens, with the outcome chosen.
-  const sheet = page.getByRole("dialog", { name: "Finish attempt 1" });
+  const sheet = page.getByRole("dialog", { name: "Attempt 1" });
   await expect(sheet).toBeVisible();
   await expect(sheet.getByRole("radio", { name: "Worked" })).toBeChecked();
   // ...and its autosave keeps it.
@@ -116,7 +116,7 @@ test("a print that is off the bed asks how it went, with the three answers, inst
 
   await card.getByRole("radio", { name: "Spaghetti" }).click();
   await expect(page).toHaveURL(new RegExp(`/builds/${id}`));
-  const sheet = page.getByRole("dialog", { name: "Finish attempt 1" });
+  const sheet = page.getByRole("dialog", { name: "Attempt 1" });
   await expect(sheet.getByRole("radio", { name: "Spaghetti" })).toBeChecked();
   await expect.poll(() => savedOutcome(page, id, attempt)).toBe("failed");
 
