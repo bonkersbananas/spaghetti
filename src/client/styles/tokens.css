@@ -328,6 +328,8 @@
   --color-on-veil: var(--sg-on-veil);
   --color-select: var(--sg-select);
   --color-on-select: var(--sg-on-select);
+  /* An off switch's knob and the edge of its track: ink-faint, 3:1 or more against the track and the sheet in both themes. */
+  --color-switch-off: var(--sg-ink-faint);
   --color-toast: var(--sg-toast);
   --color-toast-fg: var(--sg-toast-fg);
   --color-shade: var(--sg-shade);

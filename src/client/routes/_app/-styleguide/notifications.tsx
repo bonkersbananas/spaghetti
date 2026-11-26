@@ -26,7 +26,8 @@ export function NotificationSection() {
         <Panel className="flex flex-col gap-3">
           <Label>Toggle</Label>
           <p className="text-small text-ink-faint">
-            The whole row is the switch. A reason it can't be turned on goes in the hint.
+            The whole row is the switch. Off is a track with an edge and a knob you can see (3:1 against each other and
+            the sheet); on is the inverse of the page. A reason it can't be turned on goes in the hint.
           </p>
           <Toggle
             label="Notify this device"
@@ -42,6 +43,7 @@ export function NotificationSection() {
             disabled
             onChange={() => undefined}
           />
+          <Toggle label="Disabled, on" checked disabled onChange={() => undefined} />
           <Label>iPhone in Safari: the switch is a hint</Label>
           <AddToHomeScreenHint />
           <Button icon={BellIcon} className="mt-2 self-start" onClick={() => setOpen(true)}>
