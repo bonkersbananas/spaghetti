@@ -89,7 +89,11 @@ export async function coachNotebook(
   const shown = pictures.slice(0, COACH_MAX_PHOTOS);
   if (shown.length) {
     lines.push(
-      `Pictures of this print are attached (${shown.length}), their own close-ups first${shown.some(isCameraFrame) ? ", then the printer camera's wide frame" : ""}.`,
+      `Pictures of this print are attached (${shown.length}): ${
+        shown.every(isCameraFrame)
+          ? "only the printer camera's wide frame, taken from far away"
+          : `their own close-ups first${shown.some(isCameraFrame) ? ", then the printer camera's wide frame" : ""}`
+      }.`,
     );
   }
   const file = await db
