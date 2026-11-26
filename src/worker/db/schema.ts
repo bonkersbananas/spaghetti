@@ -604,6 +604,10 @@ export const coachRuns = sqliteTable("coach_runs", {
   claimedAt: integer("claimed_at", { mode: "timestamp_ms" }),
   tries: integer("tries").notNull().default(0),
   createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
+  /** How many times Claude was asked (at most two: once the answer is quiet, once more if it grew after that). */
+  runs: integer("runs").notNull().default(0),
+  /** What the last run was given (note, tags, photos), to tell whether the answer grew after it. */
+  basis: text("basis"),
   /** When the call to Claude was made (what the cap counts). */
   ranAt: integer("ran_at", { mode: "timestamp_ms" }),
   /** "done", or why not: nothing, refusal, api_error, timeout, cap… (worker/coach/claude.ts). */

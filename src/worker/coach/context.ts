@@ -1,7 +1,7 @@
 /**
  * What the coach is told: the attempt that went wrong, the build's earlier attempts, what worked for the same
- * material elsewhere in the notebook, and how dry the spools are. Plain text, in the notebook's own words
- * (shared/story.ts); never a photo, and nothing it would need a person's details for.
+ * material elsewhere in the notebook, and how dry the spools are. Text in the notebook's own words
+ * (shared/story.ts), plus the attempt's newest pictures (worker/coach/run.ts attaches them); nothing it would need a person's details for.
  */
 import { and, desc, eq, inArray, isNull } from "drizzle-orm";
 import { type AttemptSettings, outcomeLabel, tagLabel } from "../../shared/attempts.ts";
@@ -9,11 +9,23 @@ import { dryingWindow } from "../../shared/drying.ts";
 import { recipesFor, settingsMaterial } from "../../shared/recipes.ts";
 import { describeResults, describeSettings } from "../../shared/story.ts";
 import type { Db } from "../db/index.ts";
-import { type Attempt, attemptFiles, attempts, items, recipes, spools } from "../db/schema.ts";
+import { type Attempt, attemptFiles, attempts, items, photos, recipes, spools } from "../db/schema.ts";
 import { toApiAttempts } from "../http.ts";
 import { readsByAttempt, toApiPhotoRead } from "../photo-read/run.ts";
 
 const DAY = 24 * 3_600_000;
+/** How many pictures the coach looks at. */
+export const COACH_MAX_PHOTOS = 3;
+
+export interface CoachPhoto {
+  id: string;
+  contentType: string;
+  width: number;
+  height: number;
+}
+
+/** The printer camera's end-of-print frame is always 1920x1080: far-off, so the people's own photos come first. */
+const isCameraFrame = (photo: { width: number; height: number }) => photo.width === 1920 && photo.height === 1080;
 
 function sentence(attempt: Attempt, change: string[]): string[] {
   const lines = [`Outcome: ${outcomeLabel(attempt.outcome)?.toLowerCase() ?? "not answered yet"}.`];
@@ -37,7 +49,7 @@ export async function coachNotebook(
   db: Db,
   attemptId: string,
   now: number,
-): Promise<{ text: string; attempt: Attempt } | null> {
+): Promise<{ text: string; attempt: Attempt; photos: CoachPhoto[]; basis: string } | null> {
   const found = await db
     .select({ attempt: attempts, title: items.title, note: items.note })
     .from(attempts)
@@ -61,6 +73,25 @@ export async function coachNotebook(
   const read = toApiPhotoRead((await readsByAttempt(db, [attempt.id])).get(attempt.id) ?? []);
   if (read?.status === "read" && read.reason) lines.push(`What a look at its photo showed: ${read.reason}`);
   if (attempt.suggestedFailureTag) lines.push(`The printer reported: ${attempt.suggestedFailureTag}.`);
+  // The attempt's pictures, newest first, the people's own close-ups ahead of the printer's far-off camera frame.
+  const pictures = (
+    await db
+      .select({
+        id: photos.id,
+        contentType: photos.contentType,
+        width: photos.width,
+        height: photos.height,
+      })
+      .from(photos)
+      .where(and(eq(photos.attemptId, attempt.id), isNull(photos.deletedAt)))
+      .orderBy(desc(photos.createdAt), desc(photos.id))
+  ).sort((a, b) => Number(isCameraFrame(a)) - Number(isCameraFrame(b)));
+  const shown = pictures.slice(0, COACH_MAX_PHOTOS);
+  if (shown.length) {
+    lines.push(
+      `Pictures of this print are attached (${shown.length}), their own close-ups first${shown.some(isCameraFrame) ? ", then the printer camera's wide frame" : ""}.`,
+    );
+  }
   const file = await db
     .select({ name: attemptFiles.name, plate: attemptFiles.plate, plateCount: attemptFiles.plateCount })
     .from(attemptFiles)
@@ -144,5 +175,13 @@ export async function coachNotebook(
       }
     }
   }
-  return { text: lines.join("\n"), attempt };
+  // What this was told that people can add to afterwards: if it differs later, the answer grew.
+  const basis = JSON.stringify([
+    attempt.note.trim(),
+    attempt.outcome,
+    attempt.failureTags,
+    attempt.successNotes,
+    shown.map((photo) => photo.id),
+  ]);
+  return { text: lines.join("\n"), attempt, photos: shown, basis };
 }
