@@ -119,6 +119,10 @@ WCAG AA: 4.5:1 for text, and the same for the initials on avatars; 3:1 for icons
 | An open tick box on a card | 3:1 | 3.6 | 4.8 |
 | An open tick box on a sheet | 3:1 | 3.6 | 4.6 |
 | An offer's dashed ring | 3:1 | 3.5 | 5.1 |
+| An off switch's knob on its track | 3:1 | 4.5 | 7.4 |
+| An off switch's edge on a sheet | 3:1 | 5.6 | 5.6 |
+| An off switch's edge on a card | 3:1 | 5.6 | 6.2 |
+| An off switch's edge on paper | 3:1 | 5.1 | 6.9 |
 | A suggested failure tag's dashed ring on a sheet | 3:1 | 4.7 | 3.0 |
 | A suggested success note's dashed ring on a sheet | 3:1 | 3.1 | 3.1 |
 | A suggested tag's words on a sheet | 4.5:1 | 7.2 | 7.7 |
