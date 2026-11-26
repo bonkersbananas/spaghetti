@@ -341,6 +341,19 @@ describe("the failure coach", () => {
       expect(coachBody).not.toContain("camera's wide frame");
     });
 
+    it("says what is there when the only picture is the camera's frame", async () => {
+      const { bodies } = stubClaude();
+      const { itemId, attemptId } = await startPrint();
+      const frame = uuid();
+      await uploadPhoto(itemId, frame, cookie, { attemptId });
+      await env.DB.prepare("UPDATE photos SET width = 1920, height = 1080 WHERE id = ?").bind(frame).run();
+      await answer(attemptId, "partial");
+      await settled(itemId, attemptId);
+      const body = bodies.find((b) => b.includes("What should they try")) ?? "";
+      expect(body).toContain("only the printer camera's wide frame");
+      expect(body).not.toContain("close-ups first");
+    });
+
     it("takes up what arrives after the first run, once, and keeps the first answer if that fails", async () => {
       const { bodies } = stubClaude();
       const { itemId, attemptId } = await startPrint();
@@ -392,7 +405,7 @@ describe("the failure coach", () => {
       next = { json: { suggestions: [good.suggestions[0]] } };
       await resumeCoaches(env as never);
       expect((await getAttempt(other.itemId, other.attemptId))?.coach?.items.map((i) => [i.id, i.dismissed])).toEqual([
-        ["s1", false],
+        ["r2-s1", false],
       ]);
     });
 
@@ -436,6 +449,38 @@ describe("the failure coach", () => {
       release();
       await settled(itemId, attemptId);
       expect(bodies).toHaveLength(1);
+    });
+
+    it("keeps the first suggestions when the second look has nothing, and gives a second round ids of its own", async () => {
+      let next: Answer = { json: good };
+      stubClaude(() => next);
+      const first = await startPrint();
+      await answer(first.attemptId, "failed");
+      await settled(first.itemId, first.attemptId);
+      await asPerson(`/api/attempts/${first.attemptId}/coach/s1`, { method: "PUT", json: { dismissed: true } });
+      await asPerson(`/api/attempts/${first.attemptId}`, { method: "PATCH", json: { note: "more" } });
+      next = { json: { suggestions: [] } };
+      await resumeCoaches(env as never);
+      expect((await getAttempt(first.itemId, first.attemptId))?.coach?.items.map((i) => [i.id, i.dismissed])).toEqual([
+        ["s1", true],
+        ["s2", false],
+      ]);
+      expect(await runs(first.attemptId)).toMatchObject({ status: "done", runs: 2 });
+
+      const second = await startPrint();
+      next = { json: good };
+      await answer(second.attemptId, "failed");
+      await settled(second.itemId, second.attemptId);
+      await asPerson(`/api/attempts/${second.attemptId}`, { method: "PATCH", json: { note: "more" } });
+      await resumeCoaches(env as never);
+      const items = (await getAttempt(second.itemId, second.attemptId))?.coach?.items ?? [];
+      expect(items.map((i) => i.id)).toEqual(["r2-s1", "r2-s2"]);
+      // A dismissal from a screen that still shows the first round finds nothing to hide.
+      const stale = await asPerson(`/api/attempts/${second.attemptId}/coach/s1`, {
+        method: "PUT",
+        json: { dismissed: true },
+      });
+      expect(stale.status).toBe(404);
     });
   });
 });

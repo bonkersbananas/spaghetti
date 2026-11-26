@@ -226,7 +226,7 @@ export async function runCoach(
     const note = item.note?.trim() || null;
     if (!settings && !note) continue;
     suggestions.push({
-      id: `s${suggestions.length + 1}`,
+      id: `${again ? "r2-" : ""}s${suggestions.length + 1}`,
       title: item.title.trim(),
       why: item.why.trim(),
       settings,
@@ -234,12 +234,13 @@ export async function runCoach(
     });
     if (suggestions.length === COACH_MAX_ITEMS) break;
   }
-  // New suggestions have new ids: what was dismissed from the first round no longer applies.
-  const fresh = again ? { dismissed: [] } : {};
   if (!suggestions.length) {
-    return settle(db, row, { status: "nothing", suggestions: [], ...fresh, ...record, runOutcome: "nothing" });
+    // The second look that has nothing to add leaves the first one's suggestions (and dismissals) as they are.
+    if (again) return settle(db, row, {});
+    return settle(db, row, { status: "nothing", ...record, runOutcome: "nothing" });
   }
-  await settle(db, row, { status: "done", suggestions, ...fresh, ...record });
+  // The second look's suggestions have ids of their own ("r2-s1"), so a dismissal of the first round's can't hit them.
+  await settle(db, row, { status: "done", suggestions, ...(again ? { dismissed: [] } : {}), ...record });
 }
 
 /** The cron's fallback: coaches nobody is working on any more are picked up, and answers that grew get their one more look. */
