@@ -192,6 +192,10 @@ test("on phones Up next is one compact strip, in queue order, above the inbox", 
   expect(new Set(cards.map(Math.round)).size).toBe(1);
   expect(await strip.evaluate((el) => el.scrollWidth > el.clientWidth)).toBe(true);
   await expect(page.getByRole("heading", { name: "Plain inbox idea" })).toBeInViewport();
+  // Photos first: the inbox's first card starts in the top half, with Wishlists a pill in the header, not a row.
+  await expect(page.locator("main header").getByRole("link", { name: /^Wishlists/ })).toBeVisible();
+  const first = await page.getByRole("list", { name: "Ideas" }).getByRole("listitem").first().boundingBox();
+  expect(first && viewport && first.y < viewport.height / 2).toBe(true);
 
   // A tap opens the idea.
   await strip.getByRole("link", { name: /Bravo/ }).click();
