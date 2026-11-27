@@ -17,10 +17,12 @@ export function targetArgs({ remote, persistTo }: Target): string[] {
 }
 
 /** Runs wrangler, returning stdout. Throws with its output if it fails. */
-export function wrangler(args: string[], { quiet = true } = {}): string {
+export function wrangler(args: string[], { quiet = true, cwd = root } = {}): string {
   const result = spawnSync(bin, args, {
-    cwd: root,
+    cwd,
     encoding: "utf8",
+    // Reads of a whole table (the search index in a backup) are far over spawnSync's default 1 MiB.
+    maxBuffer: 1024 * 1024 * 1024,
     env: { ...process.env, CI: "1", WRANGLER_SEND_METRICS: "false" },
     stdio: quiet ? "pipe" : "inherit",
   });

@@ -62,7 +62,7 @@ Check a deploy with `curl https://spaghetti.day/api/health`, which answers `{"ok
 pnpm db:export --remote --output backup.sql
 ```
 
-This exports every table and the search index's own SQL (see `scripts/db-export.ts`). Restore into an empty D1 with `wrangler d1 execute DB --file backup.sql`. Photos live in R2 and aren't in the export.
+This exports the schema (tables, indexes, views, triggers and the search index) as the database holds it, every table's rows and the search index's rows (see `scripts/lib/db-backup.ts`; `test/unit/db-backup.test.ts` restores one into an empty database and compares). Restore into an empty D1 with `wrangler d1 execute DB --file backup.sql`. Photos live in R2 and aren't in the export.
 
 ## Adding or resetting a person
 
