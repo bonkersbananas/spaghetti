@@ -24,10 +24,6 @@ export const OUTCOME_LABELS: Record<Outcome, string> = {
 export const outcomeLabel = (outcome: unknown): string | null => (isOutcome(outcome) ? OUTCOME_LABELS[outcome] : null);
 
 /**
- * What to say of an attempt that has no (known) outcome: "off the bed" once the printer says it stopped, else
- * "printing". Capitalise it where it starts a sentence.
- */
-/**
  * Whether "Which build is this?" is still asked of a print (decision 0076): only while its build is in progress. A
  * build that is done or shelved has settled where its prints are, so none of them asks any more.
  */
@@ -36,6 +32,10 @@ export const asksWhichBuild = (
   attempt: { print?: { asking: boolean } | null } | null | undefined,
 ): boolean => item?.stage === "building" && !!attempt?.print?.asking;
 
+/**
+ * What to say of an attempt that has no (known) outcome: "off the bed" once the printer says it stopped, else
+ * "printing". Capitalise it where it starts a sentence.
+ */
 export const unansweredWord = (attempt: { endedAt?: number | null }): "off the bed" | "printing" =>
   attempt.endedAt != null ? "off the bed" : "printing";
 
