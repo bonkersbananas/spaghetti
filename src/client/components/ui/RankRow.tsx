@@ -1,8 +1,9 @@
 import { Link, type LinkProps } from "@tanstack/react-router";
 import { type ReactNode, useState } from "react";
 import { cn } from "@/lib/cn";
-import { IdeasIcon, NoteIcon } from "./icons";
+import { IdeasIcon } from "./icons";
 import { MetaList } from "./MetaList";
+import { NoteCardThumb } from "./NoteCardThumb";
 import { NoteFace } from "./NoteFace";
 import { Photo } from "./Photo";
 
@@ -12,6 +13,8 @@ interface RankRowProps {
   /** The picture: a photo, else the note on a small index card, else the idea glyph. */
   photo?: { src: string; color?: string };
   note?: string;
+  /** A note that is only a link: its site's letter (linkLetter), drawn as LinkCard's tile instead of the note card. */
+  letter?: string;
   title: string;
   /** Short pieces for the line under the name ("for Mila", "2 days ago"), wrapped by MetaList. */
   meta?: string[];
@@ -30,7 +33,19 @@ interface RankRowProps {
  * shows a small index card with a pencil: its words would be too small), the name and a meta line as one link, then the row's actions and its drag handle. The top place wears a small semolina
  * medal. A lifted row floats on `shadow-float` while it moves.
  */
-export function RankRow({ rank, photo, note, title, meta, link, actions, handle, lifted, className }: RankRowProps) {
+export function RankRow({
+  rank,
+  photo,
+  note,
+  letter,
+  title,
+  meta,
+  link,
+  actions,
+  handle,
+  lifted,
+  className,
+}: RankRowProps) {
   return (
     <div
       data-lifted={lifted || undefined}
@@ -59,8 +74,8 @@ export function RankRow({ rank, photo, note, title, meta, link, actions, handle,
               imgClassName="pointer-events-none"
             />
           ) : note ? (
-            // Too small for the note's words: an index card with its rule and a pencil says "a note" instead.
-            <NoteCardThumb size={22} />
+            // Too small for the note's words: the note card in miniature says "a note" instead (a link's letter tile).
+            <NoteCardThumb letter={letter} />
           ) : (
             <span className="text-ink-faint flex size-full items-center justify-center">
               <IdeasIcon size={22} />
@@ -110,16 +125,6 @@ export function RankMark({
       )}
     >
       {rank}
-    </span>
-  );
-}
-
-/** A note-only idea's picture at thumbnail size: an index card with its rule and a pencil. Fills its parent. */
-function NoteCardThumb({ size }: { size: number }) {
-  return (
-    <span className="paper-grain bg-note text-ink-faint relative flex size-full items-center justify-center">
-      <span className="bg-tomato/25 absolute inset-x-2 top-2.5 h-px md:inset-x-3 md:top-3.5" />
-      <NoteIcon size={size} />
     </span>
   );
 }

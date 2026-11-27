@@ -9,9 +9,9 @@ import { photoSrc } from "@/lib/previews";
 import { useWishlists, wishedIdeas } from "@/lib/wishlist";
 
 /**
- * The way to the wishlists on a phone, where the tab bar has no room for them: one quiet line on Ideas, under Up
- * next, with your top picks' photos as three small overlapping squares (rounded, never round: a circle is a person
- * here) and how long each list is ("Wishlists · yours 5, Sam's 4").
+ * The way to the wishlists on a phone, where the tab bar has no room for them: a pill in the Ideas header, beside the
+ * title, with your top two picks' photos as small overlapping squares (rounded, never round: a circle is a
+ * person here) and the word. How long each list is ("yours 5, Sam's 4") is in its name for a screen reader.
  */
 export function WishlistLink({
   me,
@@ -39,40 +39,60 @@ export function WishlistLink({
       count: wishedIdeas(list, ideas).length,
     }))
     .filter((list) => list.name && list.count > 0);
-  const covers = mine.flatMap((item) => (item.photos[0] ? [item.photos[0]] : [])).slice(0, 3);
   const counts = [
     mine.length ? `yours ${mine.length}` : "pick yours",
     ...theirs.map((list) => `${list.name}'s ${list.count}`),
   ];
   return (
+    <WishlistPill
+      covers={mine.flatMap((item) => (item.photos[0] ? [item.photos[0]] : [])).slice(0, 2)}
+      counts={counts.join(", ")}
+      className={className}
+    />
+  );
+}
+
+/** The pill itself: the covers (or a semolina star while none has a photo), "Wishlists" and a chevron. */
+export function WishlistPill({
+  covers,
+  counts,
+  to = "/wishlist",
+  className,
+}: {
+  covers: { id: string; color?: string | null }[];
+  /** Said after the word to a screen reader: "yours 5, Sam's 4". */
+  counts?: string;
+  to?: "/wishlist" | "/styleguide";
+  className?: string;
+}) {
+  return (
     <Link
-      to="/wishlist"
+      to={to}
       className={cn(
-        "pressable focus-ring duration-fast hover:bg-ink/4 -mx-2 flex h-14 items-center gap-3 rounded-lg px-2 transition-colors",
+        "pressable focus-ring touch-target bg-cream shadow-soft hover:bg-lifted text-small text-ink relative flex h-9 items-center gap-2 rounded-full pr-2.5 pl-1 font-semibold",
         className,
       )}
     >
       {covers.length ? (
         <span className="flex shrink-0 pl-2" aria-hidden>
           {covers.map((photo) => (
-            <span key={photo.id} className="ring-paper -ml-2 size-9 overflow-hidden rounded-sm ring-2">
+            <span key={photo.id} className="ring-cream -ml-2 size-7 overflow-hidden rounded-xs ring-2">
               <Photo src={photoSrc(photo.id, "thumb")} alt="" color={photo.color || undefined} className="size-full" />
             </span>
           ))}
         </span>
       ) : (
         <span
-          className="bg-semolina-soft text-semolina-ink flex size-9 shrink-0 items-center justify-center rounded-sm"
+          className="bg-semolina-soft text-semolina-ink flex size-7 shrink-0 items-center justify-center rounded-xs"
           aria-hidden
         >
-          <WishIcon size={16} weight="fill" />
+          <WishIcon size={14} weight="fill" />
         </span>
       )}
-      <span className="text-body min-w-0 flex-1 truncate">
-        <span className="text-ink font-semibold">Wishlists</span>
-        <span className="text-ink-faint"> · {counts.join(", ")}</span>
-      </span>
-      <NextIcon size={18} className="text-ink-faint shrink-0" aria-hidden />
+      Wishlists
+      {counts && <span className="sr-only">, {counts}</span>}
+      {/* A way to another page, not a filter of this one: the chevron says it goes somewhere. */}
+      <NextIcon size={14} weight="bold" className="text-ink-faint -ml-1 shrink-0" aria-hidden />
     </Link>
   );
 }

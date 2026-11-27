@@ -192,6 +192,10 @@ test("on phones Up next is one compact strip, in queue order, above the inbox", 
   expect(new Set(cards.map(Math.round)).size).toBe(1);
   expect(await strip.evaluate((el) => el.scrollWidth > el.clientWidth)).toBe(true);
   await expect(page.getByRole("heading", { name: "Plain inbox idea" })).toBeInViewport();
+  // Photos first: the inbox's first card starts in the top half, with Wishlists a pill in the header, not a row.
+  await expect(page.locator("main header").getByRole("link", { name: /^Wishlists/ })).toBeVisible();
+  const first = await page.getByRole("list", { name: "Ideas" }).getByRole("listitem").first().boundingBox();
+  expect(first && viewport && first.y < viewport.height / 2).toBe(true);
 
   // A tap opens the idea.
   await strip.getByRole("link", { name: /Bravo/ }).click();
@@ -253,6 +257,7 @@ test("the model filters narrow the inbox beside its heading, not Up next", async
   await page.goto("/ideas");
   const rest = page.getByRole("region", { name: "The rest" });
   const inbox = page.getByRole("list", { name: "Ideas" });
+  await expect(rest.getByRole("button", { name: /^Has a model/ })).toHaveAttribute("aria-pressed", "false");
   await rest.getByRole("button", { name: /^Has a model/ }).click();
   await expect(rest.getByRole("button", { name: /^Has a model/ })).toHaveAttribute("aria-pressed", "true");
   await expect(inbox.getByText("Bins")).toBeVisible();
@@ -272,4 +277,5 @@ test("the model filters narrow the inbox beside its heading, not Up next", async
   ).toBeVisible();
   await rest.getByRole("button", { name: /^Needs designing/ }).click();
   await expect(inbox.getByText("Bins")).toBeVisible();
+  await expect(rest.getByRole("button", { name: /^Needs designing/ })).toHaveAttribute("aria-pressed", "false");
 });

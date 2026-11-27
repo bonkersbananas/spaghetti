@@ -11,6 +11,7 @@ import { RecentlyDeletedLink } from "@/components/shell/RecentlyDeletedLink";
 import { Button } from "@/components/ui/Button";
 import { ToggleChip } from "@/components/ui/Chip";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { ChipRow } from "@/components/ui/FilterChips";
 import { PlusIcon } from "@/components/ui/icons";
 import { Reflow } from "@/components/ui/Reflow";
 import { Section } from "@/components/ui/Section";
@@ -26,7 +27,7 @@ import { peopleQuery, sessionQuery } from "@/lib/queries";
 import { dropUpNext, moveUpNext, setUpNext, splitQueue } from "@/lib/up-next";
 import { useAfterPaint, useIsDesktop } from "@/lib/use-media-query";
 
-// The way to the wishlists on phones: on demand, so desktop (which has the sidebar) never loads it.
+// The way to the wishlists on phones, a pill in the header: on demand, so desktop (which has the sidebar) never loads it.
 const WishlistLink = lazy(() =>
   import("@/components/wishlist/WishlistLink").then((m) => ({ default: m.WishlistLink })),
 );
@@ -46,8 +47,9 @@ function Ideas() {
   const after = useAfterPaint();
   const { items: all, isPending, error, refetch } = useIdeas();
   const { queue, rest: inbox } = splitQueue(all);
-  // "Has a model" / "Needs designing", beside The rest: one tap each, tap again to see everything. They narrow the
-  // inbox, not Up next (already picked), and are only offered once an idea there has a model.
+  // "Has a model" / "Needs designing", beside The rest: the shared filter row (ChipRow), one tap each, tap again to
+  // see everything; ink means a filter is narrowing the grid. They narrow the inbox, not Up next (already picked), and
+  // are only offered once an idea there has a model.
   const [modelFilter, setModelFilter] = useState<"model" | "design" | null>(null);
   const modelCount = inbox.filter((item) => modelOf(item)).length;
   const filter = modelCount > 0 ? modelFilter : null;
@@ -60,7 +62,7 @@ function Ideas() {
   const me = user?.id;
   const { landed } = useCapture();
   const arrived = useArrived();
-  // Up next and the wishlists come first, so on a phone an idea you just captured can land under the fold: bring it
+  // Up next comes first, so on a phone an idea you just captured can land under the fold: bring it
   // into view, so you see it land.
   useEffect(() => {
     if (!landed) return;
@@ -131,8 +133,8 @@ function Ideas() {
     />
   );
   const filters = modelCount > 0 && (
-    // biome-ignore lint/a11y/useSemanticElements: a group of toggle buttons, not a form fieldset.
-    <div role="group" aria-label="Filter ideas" className="flex flex-wrap items-center gap-2 max-md:py-1.5">
+    // No padding of its own from md, where the row sits on the heading's baseline as the old group did.
+    <ChipRow label="Filter ideas" className="min-w-0 flex-1 md:py-0">
       <ToggleChip
         selected={filter === "model"}
         count={modelCount}
@@ -147,7 +149,7 @@ function Ideas() {
       >
         Needs designing
       </ToggleChip>
-    </div>
+    </ChipRow>
   );
   const grid = (
     <>
@@ -167,7 +169,19 @@ function Ideas() {
 
   return (
     <>
-      <PageHeader title="Ideas" subtitle="The inbox. Every print starts as a half-thought." />
+      <PageHeader
+        title="Ideas"
+        subtitle="The inbox. Every print starts as a half-thought."
+        phoneAside={
+          !isDesktop &&
+          me && (
+            // Its own boundary, so the header never waits for it; it grows leftwards, so search and the avatar stay put.
+            <Suspense fallback={null}>
+              <WishlistLink me={me} ideas={all} people={people ?? []} />
+            </Suspense>
+          )
+        }
+      />
       {isPending ? (
         <div className={gridClass} aria-hidden>
           {Array.from({ length: 8 }, (_, index) => (
@@ -177,12 +191,6 @@ function Ideas() {
         </div>
       ) : all.length || started.length ? (
         <>
-          {!isDesktop && me && (
-            // Its own boundary, holding its place, so the grid never waits for it or jumps when it lands.
-            <Suspense fallback={<div className="mb-6 h-14" aria-hidden />}>
-              <WishlistLink me={me} ideas={all} people={people ?? []} className="mb-6" />
-            </Suspense>
-          )}
           {queue.length > 0 && (
             <Section id="up-next-heading" title="Up next" count={queue.length} className="mb-8 md:mb-10">
               <UpNextStrip

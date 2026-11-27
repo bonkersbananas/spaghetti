@@ -19,12 +19,15 @@ export function CardMenu({
   name,
   item,
   compact,
+  slim,
 }: {
   menu: UpNextMenu;
   name: string;
   item: ItemView;
   /** On a mini card: a small round button over the photo's top-right corner, not under the card; with a mouse it shows on hover or focus, on touch screens always. */
   compact?: boolean;
+  /** On a one-line mini card (MiniCard `slim`, phones): a quiet "…" at the card's right end, centred on its line. */
+  slim?: boolean;
 }) {
   const isDesktop = useIsDesktop();
   const [open, setOpen] = useState(false);
@@ -106,12 +109,14 @@ export function CardMenu({
             }
       }
       className={
-        compact
-          ? "pressable focus-ring touch-target bg-veil text-on-veil absolute top-2 right-2 flex size-7 items-center justify-center rounded-full backdrop-blur-md [@media(hover:hover)_and_(pointer:fine)]:opacity-0 [@media(hover:hover)_and_(pointer:fine)]:transition-opacity [@media(hover:hover)_and_(pointer:fine)]:group-focus-within/mini:opacity-100 [@media(hover:hover)_and_(pointer:fine)]:group-hover/mini:opacity-100 [@media(hover:hover)_and_(pointer:fine)]:data-[state=open]:opacity-100"
-          : "pressable focus-ring touch-target text-ink-soft hover:bg-ink/5 hover:text-ink absolute right-1 bottom-3 flex size-10 items-center justify-center rounded-full transition-colors"
+        slim
+          ? "pressable focus-ring touch-target text-ink-faint hover:text-ink absolute top-1/2 right-2 flex size-6 -translate-y-1/2 items-center justify-center rounded-full"
+          : compact
+            ? "pressable focus-ring touch-target bg-veil text-on-veil absolute top-2 right-2 flex size-7 items-center justify-center rounded-full backdrop-blur-md [@media(hover:hover)_and_(pointer:fine)]:opacity-0 [@media(hover:hover)_and_(pointer:fine)]:transition-opacity [@media(hover:hover)_and_(pointer:fine)]:group-focus-within/mini:opacity-100 [@media(hover:hover)_and_(pointer:fine)]:group-hover/mini:opacity-100 [@media(hover:hover)_and_(pointer:fine)]:data-[state=open]:opacity-100"
+            : "pressable focus-ring touch-target text-ink-soft hover:bg-ink/5 hover:text-ink absolute right-1 bottom-3 flex size-10 items-center justify-center rounded-full transition-colors"
       }
     >
-      <MoreIcon size={compact ? 16 : 20} weight="bold" aria-hidden />
+      <MoreIcon size={compact || slim ? 16 : 20} weight="bold" aria-hidden />
     </button>
   );
   if (!isDesktop) {

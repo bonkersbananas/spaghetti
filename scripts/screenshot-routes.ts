@@ -3710,7 +3710,7 @@ export const shots: Shot[] = [
     cleanup: (page) => setQueue(page, 2),
   },
   {
-    // "Needs designing" picked beside The rest: the ink pill around the label and its count.
+    // "Needs designing" picked beside The rest: the ink pill moves from All to it.
     name: "ideas-needs-designing",
     path: "/ideas",
     prepare: async (page) => {
@@ -3732,14 +3732,15 @@ export const shots: Shot[] = [
       });
       await page.reload();
       await page.getByRole("button", { name: /^Needs designing/ }).click();
-      await page.getByText(/Tap “Needs designing” again/).waitFor();
+      // Main says "Tap “Needs designing” again", the filter row with All "Tap All".
+      await page.getByText(/Tap (“Needs designing” again|All) to see every idea/).waitFor();
       await page.evaluate(() => window.scrollTo({ top: 0, behavior: "instant" }));
       await page.waitForTimeout(400);
     },
     cleanup: unmockToday,
   },
   {
-    // The phone's Wishlists line when you haven't picked any yet.
+    // The phone's Wishlists pill in the header when you haven't picked any yet: the semolina star for covers.
     name: "ideas-wishlists-none",
     path: "/ideas",
     width: 390,
@@ -3747,12 +3748,78 @@ export const shots: Shot[] = [
     cleanup: unmockToday,
   },
   {
-    // The phone's Wishlists line when Sam keeps theirs private: only yours is counted.
+    // The phone's Wishlists pill when Sam keeps theirs private: only yours is counted (for a screen reader).
     name: "ideas-wishlists-private",
     path: "/ideas",
     width: 390,
     prepare: (page) => mockWishlists(page, "private"),
     cleanup: unmockToday,
+  },
+  // Ideas shows photos sooner on a phone (the third look, choice 3): Wishlists is a pill in the header, one tap from
+  // the inbox. This is the tap: the wishlists it opens.
+  {
+    name: "ideas-wishlists-open",
+    path: "/ideas",
+    width: 390,
+    prepare: async (page) => {
+      await page.getByRole("link", { name: /^Wishlists/ }).click();
+      await waitForWishlist(page);
+    },
+  },
+  {
+    // Nothing in Up next: the inbox comes straight under the header.
+    name: "ideas-up-next-none",
+    path: "/ideas",
+    prepare: async (page) => {
+      await setQueue(page, 0);
+      await page.reload();
+      await page.getByRole("list", { name: "Ideas" }).waitFor();
+      await page.waitForTimeout(500);
+      await page.evaluate(() => {
+        for (const animation of document.getAnimations()) animation.finish();
+      });
+    },
+    cleanup: (page) => setQueue(page, 2),
+  },
+  {
+    // A model-only idea in Up next: no photo, so its slicer file's plate is the cover, on the render ground.
+    name: "ideas-up-next-model",
+    path: "/ideas",
+    prepare: async (page) => {
+      // First in the queue, so the phone's strip shows it whole.
+      const headers = { Origin: new URL(page.url()).origin };
+      await setQueue(page, 0);
+      for (const id of [SEED_IDS.bigTugboat, ...SEED_QUEUE]) {
+        await page.request.patch(`/api/items/${id}`, { headers, data: { upNext: true } });
+      }
+      await page.route(/\/api\/items\?stage=idea/, async (route) => {
+        const response = await route.fetch();
+        const json = (await response.json()) as { items: Array<{ id: string; photos: unknown[] }> };
+        const items = json.items.map((item) => (item.id === SEED_IDS.bigTugboat ? { ...item, photos: [] } : item));
+        await route.fulfill({ response, json: { ...json, items } });
+      });
+      await page.reload();
+      await page.getByRole("heading", { level: 2, name: /^Up next\s*3$/ }).waitFor();
+      await page.waitForTimeout(500);
+      await page.evaluate(() => {
+        for (const animation of document.getAnimations()) animation.finish();
+      });
+    },
+    cleanup: async (page) => {
+      await unmockToday(page);
+      await setQueue(page, 2);
+    },
+  },
+  {
+    // The filter chips reached with the keyboard: the focus ring on "Has a model" (desktop's way through the page).
+    name: "ideas-filter-focus",
+    path: "/ideas",
+    width: 1440,
+    why: "Keyboard focus is the desktop's; phones tap.",
+    prepare: async (page) => {
+      await page.getByRole("button", { name: /^Has a model/ }).focus();
+      await page.waitForTimeout(300);
+    },
   },
   {
     // A long inbox (two-digit counts beside The rest), at the narrowest phones too (--width 375).

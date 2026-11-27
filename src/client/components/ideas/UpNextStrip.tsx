@@ -1,14 +1,17 @@
+import { modelOf } from "@shared/model-mark";
 import { relativeTime } from "@shared/time";
 import { useQuery } from "@tanstack/react-query";
-import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { NextIcon, PreviousIcon } from "@/components/ui/icons";
 import { MiniCard, type MiniDrag } from "@/components/ui/MiniCard";
+import { linkLetter } from "@/components/ui/NoteCardThumb";
 import { Reflow } from "@/components/ui/Reflow";
 import { cn } from "@/lib/cn";
 import { itemName } from "@/lib/item-name";
 import type { ItemView } from "@/lib/items";
 import { fileThumbSrc, photoSrc } from "@/lib/previews";
 import { unreadQuery } from "@/lib/unread-comments";
+import { useIsDesktop } from "@/lib/use-media-query";
 import { cardName, photoAlt, plateAlt, plateCover, shortenLinks, type UpNextMenu } from "./IdeaCard";
 
 const CardMenu = lazy(() => import("./CardMenu").then((m) => ({ default: m.CardMenu })));
@@ -24,17 +27,22 @@ interface UpNextStripProps {
 
 /**
  * Up next: one row of small cards in queue order that scrolls sideways with snap, so the queue stays one tap (or
- * click) away without taking the top of the screen. The cards show only the cover (no photo swiping), so a sideways
+ * click) away without taking the top of the screen. On a phone each card is one line (MiniCard `slim`). The cards show only the cover (no photo swiping), so a sideways
  * drag always scrolls the strip; each card's "…" holds the same menu as a full card (on desktop it shows on hover
  * or focus). Past the edge, the next card peeks out; on desktop two arrows scroll it for a mouse without a sideways wheel.
  */
 export function UpNextStrip({ queue, menuFor, landed, dragFor }: UpNextStripProps) {
   const unread = useQuery(unreadQuery).data?.threads;
+  // On a phone each card is one slim line, so the strip doesn't push the inbox's first photo down the screen.
+  const slim = !useIsDesktop();
   const scroller = useRef<HTMLUListElement>(null);
   const [edges, setEdges] = useState({ start: false, end: false });
+  // Whether the strip sits at its start, as it opens: read on scroll, never by a layout of its own.
+  const atStart = useRef(true);
   const measure = useCallback(() => {
     const el = scroller.current;
     if (!el) return;
+    atStart.current = el.scrollLeft <= 4;
     setEdges({ start: el.scrollLeft > 4, end: el.scrollLeft + el.clientWidth < el.scrollWidth - 4 });
   }, []);
   // biome-ignore lint/correctness/useExhaustiveDependencies: measure again when cards come or go.
@@ -52,6 +60,15 @@ export function UpNextStrip({ queue, menuFor, landed, dragFor }: UpNextStripProp
       window.removeEventListener("resize", measure);
     };
   }, [measure, queue.length]);
+  // A new queue order (the server's answer after the cached one, the other person moving a card) makes scroll snap
+  // follow the card it had snapped to, wherever it went: from the start, that can open the strip on its end. A strip
+  // that was at its start stays there; one scrolled by hand keeps following its card.
+  const order = queue.map((item) => item.id).join();
+  // biome-ignore lint/correctness/useExhaustiveDependencies: runs when the order changes.
+  useLayoutEffect(() => {
+    const el = scroller.current;
+    if (el && atStart.current && el.scrollLeft !== 0) el.scrollLeft = 0;
+  }, [order]);
   const page = (by: 1 | -1) =>
     scroller.current?.scrollBy({ left: by * scroller.current.clientWidth * 0.8, behavior: "smooth" });
   const arrow =
@@ -77,6 +94,8 @@ export function UpNextStrip({ queue, menuFor, landed, dragFor }: UpNextStripProp
                 key={item.id}
                 id={item.id}
                 gridScale
+                slim={slim}
+                letter={slim && !cover && !plate ? linkLetter(item.note, modelOf(item)) : undefined}
                 unread={unread?.some((thread) => thread.itemId === item.id)}
                 landing={landed?.(item)}
                 drag={dragFor?.(item)}
@@ -94,7 +113,7 @@ export function UpNextStrip({ queue, menuFor, landed, dragFor }: UpNextStripProp
                 corner={
                   item.pending ? undefined : (
                     <Suspense fallback={null}>
-                      <CardMenu compact menu={menuFor(item, index)} item={item} name={name} />
+                      <CardMenu compact={!slim} slim={slim} menu={menuFor(item, index)} item={item} name={name} />
                     </Suspense>
                   )
                 }

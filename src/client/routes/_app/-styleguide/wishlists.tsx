@@ -3,6 +3,7 @@ import { WishingBowl } from "@/components/illustrations/WishingBowl";
 import { IconButton } from "@/components/ui/Button";
 import { BuildsIcon } from "@/components/ui/icons";
 import { DragHandle, PickTile, RankRow } from "@/components/ui/RankRow";
+import { WishlistPill } from "@/components/wishlist/WishlistLink";
 import { photoSrc } from "@/lib/previews";
 import { useSamplePictures } from "./journal";
 import { Label, Section } from "./shared";
@@ -21,7 +22,7 @@ export function WishlistsSection() {
     <Section
       id="wishlists"
       title="Wishlists"
-      note="RankRow: a place in a ranked list (the first on a semolina medal), the picture, the name, then actions and the DragHandle, which the arrow keys move too. Lifted while it is dragged. PickTile: an idea to pick, wearing its place once picked. Every tile is the same square and keeps to its cell; one without a photo shows its note (a link in words), and its caption is left out when the face already says it."
+      note="RankRow: a place in a ranked list (the first on a semolina medal), the picture, the name, then actions and the DragHandle, which the arrow keys move too. Lifted while it is dragged. PickTile: an idea to pick, wearing its place once picked. WishlistPill: the way in on a phone, beside the Ideas title. Every tile is the same square and keeps to its cell; one without a photo shows its note (a link in words), and its caption is left out when the face already says it."
     >
       <div className="grid grid-cols-1 gap-8 md:grid-cols-2">
         <div className="flex flex-col gap-2">
@@ -46,6 +47,15 @@ export function WishlistsSection() {
           />
           <RankRow
             rank={3}
+            note="https://www.ikea.com/se/en/p/skadis-pegboard-white-20320802/"
+            letter="I"
+            title="Skadis pegboard white"
+            meta={["ikea.com", "Sep 2"]}
+            link={link}
+            actions={start("Skadis pegboard")}
+          />
+          <RankRow
+            rank={4}
             title="Hook for the bike helmet"
             meta={["3 weeks ago"]}
             link={link}
@@ -87,6 +97,17 @@ export function WishlistsSection() {
               rank={null}
               onToggle={noop}
             />
+          </div>
+          <Label>
+            The way in on a phone: a pill in the Ideas header (your picks' covers, or a star before you have any)
+          </Label>
+          <div className="flex items-center gap-3">
+            <WishlistPill
+              to="/styleguide"
+              covers={ready ? [{ id: "sample-tugboat-photo" }] : []}
+              counts="yours 5, Sam's 4"
+            />
+            <WishlistPill to="/styleguide" covers={[]} counts="pick yours" />
           </div>
           <Label>Empty</Label>
           <WishingBowl />

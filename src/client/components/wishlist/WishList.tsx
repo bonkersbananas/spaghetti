@@ -1,3 +1,4 @@
+import { modelOf } from "@shared/model-mark";
 import { relativeTime } from "@shared/time";
 import { moveBy } from "@shared/wishlist";
 import { useQueryClient } from "@tanstack/react-query";
@@ -6,6 +7,7 @@ import { Reorder, useDragControls } from "motion/react";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Button, IconButton } from "@/components/ui/Button";
 import { BuildsIcon } from "@/components/ui/icons";
+import { linkLetter } from "@/components/ui/NoteCardThumb";
 import { DragHandle, RankRow } from "@/components/ui/RankRow";
 import { startBuild } from "@/lib/builds";
 import { useForLine } from "@/lib/for-whom";
@@ -29,6 +31,7 @@ const rowProps = (
     title: name.text,
     photo: cover ? { src: photoSrc(cover.id, "thumb"), color: cover.color || undefined } : undefined,
     note: item.note.trim() || undefined,
+    letter: linkLetter(item.note, modelOf(item)),
     meta: [...(forLine(item.forWhom) ? [forLine(item.forWhom) as string] : []), relativeTime(item.createdAt)],
     link: { to: "/ideas/$ideaId", params: { ideaId: item.id } } as const,
   };
