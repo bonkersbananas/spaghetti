@@ -516,8 +516,10 @@ function receiveHook(request: IncomingMessage, response: ServerResponse, receive
   });
 }
 
-/** The cheapest price of the products the screenshots' shopping list links, in kronor (others keep the fixture's). */
-/** The pages found for some of the seed's things, so a match used in a shot shows a believable price (not product 1's 7 699 kr). */
+/**
+ * The pages found for some of the seed's things, so a match used in a shot shows a believable price (not product 1's
+ * 7 699 kr).
+ */
 const SEEDED_PAGES: Record<string, number> = {
   "PTFE tube, 1 m": 15011231,
   "Bed adhesion spray": 15011232,
@@ -525,6 +527,7 @@ const SEEDED_PAGES: Record<string, number> = {
   "Hardened steel nozzle, 0.4 mm": 15011234,
 };
 
+/** The cheapest price of the products the screenshots' shopping list links, in kronor (others keep the fixture's). */
 const PRODUCT_PRICES: Record<string, number> = {
   15011231: 89,
   15011232: 159,
