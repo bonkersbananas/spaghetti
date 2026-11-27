@@ -567,7 +567,7 @@ export interface Shot {
 
 /** The long file name a printer might give a print, and the title a person gave its build. */
 const LONG_PRINT = { title: "Candle holder", file: "gold-reindeer-tealight-holder-v4(3)-12-2" };
-const longPrint: { items: string[]; hadBridge: boolean; agent: boolean } = {
+const longPrint: { items: string[]; hadBridge: boolean; agent: string | null } = {
   items: [],
   hadBridge: false,
   agent: false,
@@ -577,12 +577,13 @@ const longPrint: { items: string[]; hadBridge: boolean; agent: boolean } = {
 async function fileLongPrint(page: Page) {
   const headers = { Origin: new URL(page.url()).origin };
   longPrint.hadBridge = !!((await (await page.request.get("/api/printer")).json()) as { bridge?: unknown }).bridge;
+  const agent = crypto.randomUUID();
   const made = await page.request.post("/api/agents", {
     headers,
-    data: { name: "Printer bridge", scopes: ["read", "attempts", "printer"] },
+    data: { id: agent, name: "Printer bridge", scopes: ["read", "attempts", "printer"] },
   });
   const { token } = (await made.json()) as { token: string };
-  longPrint.agent = true;
+  longPrint.agent = agent;
   const bridge = { ...headers, Authorization: `Bearer ${token}` };
   await page.request.put("/api/printer/bridge", { headers: bridge, data: {} });
   const id = crypto.randomUUID();
@@ -605,13 +606,13 @@ async function forgetLongPrint(page: Page) {
   const headers = { Origin: new URL(page.url()).origin };
   for (const id of longPrint.items.splice(0)) await page.request.delete(`/api/items/${id}`, { headers });
   if (!longPrint.hadBridge) await page.request.delete("/api/printer/bridge", { headers });
+  // Only the token this made (the agent stays: there is no way to remove one, so these shots come last).
   const { agents } = (await (await page.request.get("/api/agents")).json()) as {
     agents: Array<{ id: string; tokens: Array<{ id: string }> }>;
   };
-  for (const agent of agents)
-    for (const token of agent.tokens)
-      await page.request.delete(`/api/agents/${agent.id}/tokens/${token.id}`, { headers });
-  longPrint.agent = false;
+  for (const token of agents.find((one) => one.id === longPrint.agent)?.tokens ?? [])
+    await page.request.delete(`/api/agents/${longPrint.agent}/tokens/${token.id}`, { headers });
+  longPrint.agent = null;
 }
 
 /** An idea made through the API with this note (no draft is started: only a capture starts one by itself). */
@@ -4108,54 +4109,6 @@ export const shots: Shot[] = [
       });
     },
   },
-  ...[
-    { name: "search-long-name-tail", q: "12-2" },
-    { name: "search-long-name-middle", q: "tealight" },
-  ].map(
-    ({ name, q }): Shot => ({
-      // A long file name, cut around the match ("12-2" at its tail, "tealight" in its middle), under a build whose own
-      // title matched nothing: the line stays on one line, with the … on the cut side only.
-      name,
-      path: `/search?q=${encodeURIComponent(q)}`,
-      width: 390,
-      why: "the palette's version is palette-long-name-*",
-      prepare: async (page) => {
-        await fileLongPrint(page);
-        await page.reload();
-        await page
-          .getByRole("link", { name: new RegExp(LONG_PRINT.title) })
-          .first()
-          .waitFor();
-        await page.getByRole("searchbox", { name: "Search" }).blur();
-      },
-      cleanup: forgetLongPrint,
-    }),
-  ),
-  ...[
-    { name: "palette-long-name-tail", q: "12-2" },
-    { name: "palette-long-name-middle", q: "tealight" },
-  ].map(
-    ({ name, q }): Shot => ({
-      name,
-      path: "/ideas",
-      width: 1440,
-      prepare: async (page) => {
-        await fileLongPrint(page);
-        await page.reload();
-        await page.locator("h1").first().waitFor();
-        await page.keyboard.press("ControlOrMeta+k");
-        await page.getByRole("combobox", { name: "Jump to or run" }).pressSequentially(q);
-        await page
-          .getByRole("option", { name: new RegExp(LONG_PRINT.title) })
-          .first()
-          .waitFor();
-      },
-      cleanup: async (page) => {
-        await page.keyboard.press("Escape");
-        await forgetLongPrint(page);
-      },
-    }),
-  ),
   {
     // The words matched the title ("star") and, for "3c", only the file name: the line shows, because "3c" is
     // explained by nothing else on the row.
@@ -9111,6 +9064,55 @@ export const shots: Shot[] = [
       await page.waitForTimeout(600);
     },
   },
+  // Last: these file a print through a bridge agent of their own, which stays in the seed (the Agents shots come before).
+  ...[
+    { name: "search-long-name-tail", q: "12-2" },
+    { name: "search-long-name-middle", q: "tealight" },
+  ].map(
+    ({ name, q }): Shot => ({
+      // A long file name, cut around the match ("12-2" at its tail, "tealight" in its middle), under a build whose own
+      // title matched nothing: the line stays on one line, with the … on the cut side only.
+      name,
+      path: `/search?q=${encodeURIComponent(q)}`,
+      width: 390,
+      why: "the palette's version is palette-long-name-*",
+      prepare: async (page) => {
+        await fileLongPrint(page);
+        await page.reload();
+        await page
+          .getByRole("link", { name: new RegExp(LONG_PRINT.title) })
+          .first()
+          .waitFor();
+        await page.getByRole("searchbox", { name: "Search" }).blur();
+      },
+      cleanup: forgetLongPrint,
+    }),
+  ),
+  ...[
+    { name: "palette-long-name-tail", q: "12-2" },
+    { name: "palette-long-name-middle", q: "tealight" },
+  ].map(
+    ({ name, q }): Shot => ({
+      name,
+      path: "/ideas",
+      width: 1440,
+      prepare: async (page) => {
+        await fileLongPrint(page);
+        await page.reload();
+        await page.locator("h1").first().waitFor();
+        await page.keyboard.press("ControlOrMeta+k");
+        await page.getByRole("combobox", { name: "Jump to or run" }).pressSequentially(q);
+        await page
+          .getByRole("option", { name: new RegExp(LONG_PRINT.title) })
+          .first()
+          .waitFor();
+      },
+      cleanup: async (page) => {
+        await page.keyboard.press("Escape");
+        await forgetLongPrint(page);
+      },
+    }),
+  ),
 ];
 
 /**
