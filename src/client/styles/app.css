@@ -667,3 +667,26 @@ input[type="search"]::-webkit-search-cancel-button {
   -webkit-appearance: none;
   appearance: none;
 }
+
+/*
+ * A control over the 3D view's stage or a picture (IconButton variant="stage"). By day cream glass on shadow-soft.
+ * At night every surface token (even a sheet's tile) is darker than the lit plate and reads as a hole, so it is lit
+ * glass instead, a step above whatever is behind it, with raised's lit top edge: elevation is lifting, not shadow.
+ */
+.sg-on-stage {
+  background-color: color-mix(in srgb, var(--sg-cream) 90%, transparent);
+  box-shadow: var(--sg-shadow-soft);
+}
+[data-theme="dark"] .sg-on-stage {
+  background-color: color-mix(in srgb, var(--sg-ink) 18%, transparent);
+  box-shadow: var(--sg-shadow-raised);
+  backdrop-filter: blur(12px);
+}
+@media (hover: hover) and (pointer: fine) {
+  .sg-on-stage:hover {
+    background-color: var(--sg-cream);
+  }
+  [data-theme="dark"] .sg-on-stage:hover {
+    background-color: color-mix(in srgb, var(--sg-ink) 26%, transparent);
+  }
+}

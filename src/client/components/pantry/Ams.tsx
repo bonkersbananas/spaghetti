@@ -5,7 +5,7 @@ import { daysAgo } from "@shared/time";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { type DragEvent, lazy, Suspense, useState } from "react";
 import { DryIt } from "@/components/pantry/DryIt";
-import { ToggleChip } from "@/components/ui/Chip";
+import { OfferChip } from "@/components/ui/ForOffer";
 import { DriedIcon, PlusIcon } from "@/components/ui/icons";
 import { MetaList } from "@/components/ui/MetaList";
 import { RemainingMeter } from "@/components/ui/RemainingMeter";
@@ -74,6 +74,39 @@ function useSlotDrop(slot: string, onDropSpool: SlotProps["onDropSpool"], readOn
     },
   };
   return { over, handlers };
+}
+
+/**
+ * An empty bay in its place in the unit, quiet: only its faint label and a small plus on a soft inset, no bay surface,
+ * no dashed ring, so what is loaded leads while every slot keeps the position it has on the machine. The whole column
+ * opens the slot's sheet, and takes a dropped spool on desktop.
+ */
+function QuietSlot({
+  slot,
+  onOpen,
+  onDropSpool,
+  readOnly,
+}: Pick<SlotProps, "slot" | "onOpen" | "onDropSpool" | "readOnly">) {
+  const { over, handlers } = useSlotDrop(slot, onDropSpool, readOnly);
+  return (
+    <button
+      type="button"
+      data-slot={slot}
+      data-empty=""
+      aria-label={`${slot} empty, load a spool`}
+      onClick={() => onOpen(slot)}
+      disabled={readOnly}
+      {...handlers}
+      className={cn(
+        "pressable focus-ring bg-ink/2 text-ink-faint duration-fast flex min-h-16 min-w-0 flex-col items-center justify-center gap-1.5 rounded-lg py-3 transition-colors disabled:cursor-default",
+        !readOnly && "hover:bg-ink/5 hover:text-ink-soft",
+        over && "shadow-ring bg-semolina-soft/60 text-semolina-ink",
+      )}
+    >
+      <span className="text-caption tabular font-semibold tracking-wider uppercase">{slot}</span>
+      {!readOnly && <PlusIcon size={16} weight="bold" aria-hidden />}
+    </button>
+  );
 }
 
 /** One slot: the spool in it, drawn as a spool, or an empty bay. Tap to change it, or drop a spool on it. */
@@ -178,34 +211,27 @@ function Slot({ slot, spool, onOpen, onDropSpool, shape = "bay", readOnly, unkno
 }
 
 /**
- * An empty slot in the one quiet line under the loaded ones: its name on a chip, a tap to fill it, a drop target on
- * desktop. The plus is left to the desktop, where the line has the room: on a phone the four chips and External fit
- * one line without it.
+ * The external holder when it is empty: one quiet line in its place ("External · + Load"), an offer rather than a
+ * row of nothing. The line takes a dropped spool on desktop.
  */
-function EmptySlotChip({
-  slot,
-  onOpen,
-  onDropSpool,
-  readOnly,
-}: Pick<SlotProps, "slot" | "onOpen" | "onDropSpool" | "readOnly">) {
-  const { over, handlers } = useSlotDrop(slot, onDropSpool, readOnly);
-  const external = slot === EXTERNAL_SLOT;
+function QuietExternal({ onOpen, onDropSpool, readOnly }: Pick<SlotProps, "onOpen" | "onDropSpool" | "readOnly">) {
+  const { over, handlers } = useSlotDrop(EXTERNAL_SLOT, onDropSpool, readOnly);
   return (
-    <ToggleChip
-      data-slot={slot}
+    <section
+      aria-label="External spool"
+      data-slot={EXTERNAL_SLOT}
       data-empty=""
-      aria-label={`${external ? "External" : slot} empty, load a spool`}
-      onClick={() => onOpen(slot)}
-      disabled={readOnly}
-      className={cn(
-        "tabular disabled:cursor-default md:pl-2.5",
-        over && "shadow-ring bg-semolina-soft text-semolina-ink",
-      )}
       {...handlers}
+      className={cn(
+        "duration-fast flex items-center gap-3 rounded-xl px-4 py-1 transition-shadow",
+        over && "shadow-ring bg-semolina-soft/60",
+      )}
     >
-      <PlusIcon size={14} weight="bold" aria-hidden className="max-md:hidden" />
-      {external ? "External" : slot}
-    </ToggleChip>
+      <span className="text-caption text-ink-faint tabular font-semibold tracking-wider uppercase">External</span>
+      <OfferChip aria-label="External empty, load a spool" disabled={readOnly} onClick={() => onOpen(EXTERNAL_SLOT)}>
+        Load
+      </OfferChip>
+    </section>
   );
 }
 
@@ -225,10 +251,10 @@ interface AmsLoadoutProps {
 }
 
 /**
- * The AMS as it is loaded: each unit's loaded slots with their spools' colors, and the external spool holder. The
- * empty slots fold into one quiet line of chips under them ("Empty: A2 A3 A4 External"), so what is loaded leads; a
- * full unit is its four bays. Tap a slot (or an empty one's chip) to change it; on desktop, drag a spool from the
- * pantry (or another slot) onto it.
+ * The AMS as it is loaded: each unit as its four slots in their places, the loaded ones as bays with their spools'
+ * colors and the empty ones quiet (a faint label and a plus), and the external spool holder (a row, or one quiet
+ * "External · + Load" line when it is empty). Tap a slot to change it; on desktop, drag a spool from the pantry (or
+ * another slot) onto it.
  */
 export function AmsLoadout({ readOnly, onSlot, onAddSpool, slots: given, className }: AmsLoadoutProps) {
   const queryClient = useQueryClient();
@@ -246,11 +272,9 @@ export function AmsLoadout({ readOnly, onSlot, onAddSpool, slots: given, classNa
     const id = slots[slot];
     return id ? byId.get(id) : undefined;
   };
-  // A slot with a spool the bridge sees but the pantry can't place isn't empty: it asks "Which spool?" on its bay.
-  const filled = (slot: string) => !!spoolIn(slot) || !!unknownTray(slot);
-  const fold = !onSlot;
+  // Empty slots are drawn quiet in their places; picking where a spool goes (onSlot) draws every bay as a bay.
+  const quiet = !onSlot;
   const units = amsUnitLetters(printer.data?.setup.amsUnits ?? 1);
-  const empty = fold ? [...units.flatMap(unitSlots), EXTERNAL_SLOT].filter((slot) => !filled(slot)) : [];
 
   const open = (slot: string) => {
     if (onSlot) return onSlot(slot, spoolIn(slot));
@@ -268,10 +292,7 @@ export function AmsLoadout({ readOnly, onSlot, onAddSpool, slots: given, classNa
   return (
     <div className={cn("flex flex-col gap-3 md:gap-4", className)} data-ams>
       {units.map((letter) => {
-        const shown = unitSlots(letter).filter((slot) => !fold || filled(slot));
         const loaded = unitSlots(letter).filter((slot) => spoolIn(slot)).length;
-        // A unit with nothing in it is only its chips in the empty line.
-        if (shown.length === 0) return null;
         return (
           <section
             key={letter}
@@ -282,30 +303,33 @@ export function AmsLoadout({ readOnly, onSlot, onAddSpool, slots: given, classNa
               <h3 className="text-small text-ink font-sans font-semibold">AMS {letter}</h3>
               <span className="text-caption text-ink-faint">AMS 2 Pro · {loaded} of 4 loaded</span>
             </div>
-            <div
-              className={cn(
-                "grid gap-2 md:gap-3",
-                // The loaded bays share the unit's width; a lone spool is a wide row, as the external one is.
-                ["grid-cols-1", "grid-cols-2", "grid-cols-3", "grid-cols-4"][shown.length - 1],
+            {/* Four fixed columns in slot order, as on the machine: people load by position. */}
+            <div className="grid grid-cols-4 gap-2 md:gap-3">
+              {unitSlots(letter).map((slot) =>
+                quiet && !spoolIn(slot) && !unknownTray(slot) ? (
+                  <QuietSlot key={slot} slot={slot} onOpen={open} onDropSpool={drop} readOnly={readOnly} />
+                ) : (
+                  <Slot
+                    key={slot}
+                    slot={slot}
+                    spool={spoolIn(slot)}
+                    onOpen={open}
+                    onDropSpool={drop}
+                    readOnly={readOnly}
+                    unknown={unknownTray(slot)}
+                  />
+                ),
               )}
-            >
-              {shown.map((slot) => (
-                <Slot
-                  key={slot}
-                  slot={slot}
-                  spool={spoolIn(slot)}
-                  onOpen={open}
-                  onDropSpool={drop}
-                  readOnly={readOnly}
-                  unknown={unknownTray(slot)}
-                  shape={shown.length === 1 ? "row" : "bay"}
-                />
-              ))}
             </div>
+            {quiet && loaded === 0 && !unitSlots(letter).some(unknownTray) && (
+              <p className="text-small text-ink-faint mt-3 px-1">An empty pot. Pick a slot to load a spool.</p>
+            )}
           </section>
         );
       })}
-      {(!fold || filled(EXTERNAL_SLOT)) && (
+      {quiet && !spoolIn(EXTERNAL_SLOT) && !unknownTray(EXTERNAL_SLOT) ? (
+        <QuietExternal onOpen={open} onDropSpool={drop} readOnly={readOnly} />
+      ) : (
         <section aria-label="External spool" className="bg-cream shadow-soft rounded-xl p-2">
           <Slot
             slot={EXTERNAL_SLOT}
@@ -317,25 +341,6 @@ export function AmsLoadout({ readOnly, onSlot, onAddSpool, slots: given, classNa
             unknown={unknownTray(EXTERNAL_SLOT)}
           />
         </section>
-      )}
-      {empty.length > 0 && (
-        // biome-ignore lint/a11y/useSemanticElements: a line of chips, not a form fieldset
-        <div
-          role="group"
-          aria-label="Empty slots"
-          data-empty-slots
-          className="flex flex-wrap items-center gap-x-2 gap-y-2 px-1"
-        >
-          {empty.length === units.length * 4 + 1 ? (
-            // Every slot free: the words take their own line on a phone, so the five chips stay one row under them.
-            <span className="text-small text-ink-faint mr-1 max-md:basis-full">Nothing loaded</span>
-          ) : (
-            <span className="text-small text-ink-faint mr-1">Empty</span>
-          )}
-          {empty.map((slot) => (
-            <EmptySlotChip key={slot} slot={slot} onOpen={open} onDropSpool={drop} readOnly={readOnly} />
-          ))}
-        </div>
       )}
       {!onSlot && !readOnly && sheetAsked && (
         <Suspense fallback={null}>

@@ -8658,12 +8658,44 @@ export const shots: Shot[] = [
   },
   { name: "workshop", path: "/workshop", fullPage: true },
   {
-    // One spool in the AMS: the Printer tile shows it over its slot and says "1 of 4 loaded".
+    // One spool in the AMS: the Printer tile shows it in A1's place and says "1 of 4 loaded".
     name: "workshop-ams-partly",
     path: "/workshop",
     fullPage: true,
     prepare: async (page) => {
       await unloadSlots(page, ["A2", "A3", "A4", "Ext"]);
+      await page.waitForLoadState("networkidle");
+      await page
+        .locator("main")
+        .getByRole("link", { name: /^Printer/ })
+        .filter({ hasText: /due|in order/ })
+        .waitFor();
+    },
+    cleanup: restoreSlots,
+  },
+  {
+    // A3 free: the tile keeps the other three discs in their places, a faint dot in A3's.
+    name: "workshop-ams-gap",
+    path: "/workshop",
+    fullPage: true,
+    prepare: async (page) => {
+      await unloadSlots(page, ["A3"]);
+      await page.waitForLoadState("networkidle");
+      await page
+        .locator("main")
+        .getByRole("link", { name: /^Printer/ })
+        .filter({ hasText: /due|in order/ })
+        .waitFor();
+    },
+    cleanup: restoreSlots,
+  },
+  {
+    // Nothing loaded: the printer's glyph and "AMS empty", no placeholders.
+    name: "workshop-ams-empty",
+    path: "/workshop",
+    fullPage: true,
+    prepare: async (page) => {
+      await unloadSlots(page, ["A1", "A2", "A3", "A4", "Ext"]);
       await page.waitForLoadState("networkidle");
       await page
         .locator("main")

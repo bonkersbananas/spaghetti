@@ -129,15 +129,15 @@ export interface IconButtonProps extends Omit<ComponentPropsWithRef<"button">, "
   /** Required: icon buttons have no visible text. */
   label: string;
   /**
-   * `stage`: a round control over a picture or the 3D view's stage (play on the viewer): cream at 90 % on
-   * `shadow-soft`, like the chips over the stage, with the icon in full ink so it reads on any colour behind it. At
+   * `stage`: a round control over a picture or the 3D view's stage (play on the viewer): cream glass on
+   * `shadow-soft` by day, lit glass with a lit top edge at night (`sg-on-stage` in app.css), the icon in full ink. At
    * `md` it is 44 px on phones and 36 px with a mouse, with a 44 px hit area on any touch screen.
    */
   variant?: "quiet" | "secondary" | "primary" | "stage";
   size?: ButtonSize;
 }
 
-const iconVariants = { ...variants, stage: "bg-cream/90 text-ink shadow-soft hover:bg-cream" };
+const iconVariants = { ...variants, stage: "sg-on-stage text-ink" };
 
 const iconButtonSizes: Record<ButtonSize, string> = { sm: "size-8", md: "size-11 md:size-9", lg: "size-14" };
 const iconButtonRadii: Record<ButtonSize, string> = { sm: "rounded-sm", md: "rounded-md", lg: "rounded-lg" };

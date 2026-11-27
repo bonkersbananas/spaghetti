@@ -312,11 +312,12 @@ export function PantrySection() {
       <Label>The AMS as it is loaded here (live): bays are columns below lg, rows from lg</Label>
       <AmsLoadout readOnly className="md:max-w-3xl" />
       <Label>
-        Partly empty (only the first spool loaded here): what is loaded leads, a lone spool is a wide row, and the free
-        slots are one line of chips that each open their slot
+        Partly empty (only the first spool loaded here): every slot keeps its place, the empty ones quiet (a faint label
+        and a plus that open the slot; read-only here, so no plus), and an empty external holder is one "External · +
+        Load" line
       </Label>
       <AmsLoadout readOnly slots={firstLoaded} className="md:max-w-3xl" />
-      <Label>Nothing loaded: no unit card, only the line</Label>
+      <Label>Nothing loaded: the unit with four quiet slots and its one pasta line</Label>
       <AmsLoadout readOnly slots={NOTHING_LOADED} className="md:max-w-3xl" />
       <Label>The printer bridge, in one quiet line: connected, no printer, last heard, not set up</Label>
       <div className="flex flex-col gap-2">

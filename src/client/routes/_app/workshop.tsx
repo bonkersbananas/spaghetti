@@ -44,13 +44,15 @@ function Workshop() {
   // The pictures are drawn smaller on a phone, where the tile is as wide as the screen but short (72 px wells), so all four tiles show at once.
   const isDesktop = useIsDesktop();
 
-  // The first AMS unit's loaded spools, each over its slot; an empty bay is left out rather than drawn as a ring, so
-  // the tile shows what is in the printer. With nothing loaded (or no AMS) it is the printer's glyph.
+  // The first AMS unit's four slots in their places, as on the machine: a loaded one as its spool's disc, a free one
+  // as a faint dot (never a dashed ring), so the tile shows what is in the printer and where. With nothing loaded
+  // (or no AMS) it is the printer's glyph.
   const unit = printer ? amsUnitLetters(printer.setup.amsUnits)[0] : undefined;
-  const loaded = (unit ? unitSlots(unit) : []).flatMap((slot) => {
-    const spool = spools?.find((candidate) => candidate.id === printer?.slots[slot]);
-    return spool ? [{ slot, spool }] : [];
-  });
+  const bays = (unit ? unitSlots(unit) : []).map((slot) => ({
+    slot,
+    spool: spools?.find((candidate) => candidate.id === printer?.slots[slot]),
+  }));
+  const loaded = bays.filter((bay) => bay.spool).length;
   const pictured = toBuy.filter((thing) => thing.picture);
   const shown = pictured.slice(0, PICTURES);
 
@@ -79,7 +81,7 @@ function Workshop() {
   const printerLine =
     printer && spools && unit ? (
       <>
-        {loaded.length === 4 ? "AMS full" : loaded.length ? `${loaded.length} of 4 loaded` : "AMS empty"}
+        {loaded ? `${loaded} of 4 loaded` : "AMS empty"}
         {" · "}
         {chores}
       </>
@@ -120,18 +122,30 @@ function Workshop() {
           title="Printer"
           summary={printerLine}
           visual={
-            loaded.length > 0 ? (
-              <span className="flex items-end justify-center gap-3 md:gap-5">
-                {loaded.map(({ slot, spool }) => (
-                  <span key={slot} data-slot-disc className="flex flex-col items-center gap-1">
-                    <SpoolDisc
-                      size={isDesktop ? "lg" : "md"}
-                      color={spool.colorHex}
-                      colors={spool.colors}
-                      // A firmer rim at this size, so a black spool doesn't vanish on the dark well.
-                      className="ring-2 md:ring-1"
-                    />
-                    <span className="text-caption text-ink-faint tabular font-semibold tracking-wider uppercase">
+            loaded > 0 ? (
+              <span className="grid w-full max-w-sm grid-cols-4 gap-2">
+                {bays.map(({ slot, spool }) => (
+                  <span key={slot} data-slot-disc={spool ? "" : undefined} className="flex flex-col items-center gap-1">
+                    {spool ? (
+                      <SpoolDisc
+                        size={isDesktop ? "lg" : "md"}
+                        color={spool.colorHex}
+                        colors={spool.colors}
+                        // A firmer rim at this size, so a black spool doesn't vanish on the dark well.
+                        className="ring-2 md:ring-1"
+                      />
+                    ) : (
+                      // A free bay: a faint dot where its spool would sit, as tall as a disc so the labels line up.
+                      <span className="flex size-11 items-center justify-center md:size-16">
+                        <span className="bg-ink/15 size-1.5 rounded-full" />
+                      </span>
+                    )}
+                    <span
+                      className={cn(
+                        "text-caption tabular font-semibold tracking-wider uppercase",
+                        spool ? "text-ink-faint" : "text-ink-ghost",
+                      )}
+                    >
                       {slot}
                     </span>
                   </span>
