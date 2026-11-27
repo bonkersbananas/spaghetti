@@ -3306,7 +3306,8 @@ export const shots: Shot[] = [
     name: "ideas-names",
     path: "/ideas",
     prepare: async (page) => {
-      const card = page.locator(`a[href="/ideas/${SEED_IDS.gridfinity}"]`).first();
+      // The link idea's card and, under it, the photo with no words.
+      const card = page.locator(`a[href="/ideas/${SEED_IDS.gearSet}"]`).first();
       await card.waitFor();
       await card.evaluate((element) => element.scrollIntoView({ block: "center" }));
     },
@@ -3358,7 +3359,10 @@ export const shots: Shot[] = [
       await page.locator(`a[href="/ideas/${SEED_IDS.gridfinity}"]`).first().waitFor();
       await page.keyboard.press("ControlOrMeta+k");
       await page.getByRole("combobox", { name: "Jump to or run" }).pressSequentially("gridfinity");
-      await page.getByRole("group", { name: "Ideas" }).waitFor();
+      await page
+        .getByRole("option", { name: /gridfinity/i })
+        .first()
+        .waitFor();
     },
     cleanup: async (page) => {
       await page.keyboard.press("Escape");
