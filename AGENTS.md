@@ -219,7 +219,7 @@ When two pull requests add a migration, the second to merge renumbers. Merge mai
 ### Parts and quantities
 
 - Optional ([0022](docs/decisions/0022-parts-are-optional-counts-live-on-attempts.md)): `parts` table (`item.parts`), hard-deleted (the app's undo PUTs the same id back), and `attempts.parts` JSON `[{ partId, count }]`. The rules (tidying and grouping object names, progress, labels, counts per outcome) are pure in `shared/parts.ts`; `lib/parts.ts` has the optimistic writes; the UI is `components/builds/parts/` (`PartsSection` on the build page, `PartsEditor` lazy) and `attempt-sheet/PlateParts` (the sheet's `parts` field, `useOutcomeCounts`). An attempt's slicer file stores its plate's object names (`attempt_files.objects`), which feed "Parts from the file" and the preselected plate parts.
-- Part names are searchable through the item row's `tags` column (the `search_item_tags` view and triggers in migration 0018; `scripts/db-export.ts` re-creates them).
+- Part names are searchable through the item row's `tags` column (the `search_item_tags` view and triggers in migration 0018).
 
 ### Recipes
 
@@ -234,9 +234,9 @@ When two pull requests add a migration, the second to merge renumbers. Merge mai
 ### Journal and search
 
 - The journal (`GET /api/journal`) is one SQL query over every event (attempts, ideas captured, builds started, finished, shelved), newest first, paged with a keyset cursor; the client groups it by month, then day (last 7 days) or week (`groupJournal` in `shared/journal.ts`). Filters live in the URL.
-- Search is an FTS5 table, `search`, written by hand in `migrations/0003_search.sql` (drizzle-kit doesn't know virtual tables, so it isn't in `schema.ts`; routes query it with raw SQL through `c.env.DB`). Triggers on `items` and `attempts` keep it up to date; the `search_attempt_docs` view says what an attempt's row contains. If you add a column that should be searchable, add a migration that recreates the view and triggers and refills the index, and point `scripts/db-export.ts` at it.
+- Search is an FTS5 table, `search`, written by hand in `migrations/0003_search.sql` (drizzle-kit doesn't know virtual tables, so it isn't in `schema.ts`; routes query it with raw SQL through `c.env.DB`). Triggers on `items` and `attempts` keep it up to date; the `search_attempt_docs` view says what an attempt's row contains. If you add a column that should be searchable, add a migration that recreates the view and triggers and refills the index (the backup copies the schema as the database holds it, so `pnpm db:export` needs no change).
 - `shared/search.ts` turns a query into an FTS5 MATCH (every word quoted, prefix matching, PLA/PA/PC/ABS as whole words, tag labels mapped to slugs, two neighbouring words also tried as one: "hot dog" finds "hotdog") and highlights matches on the client the same way. The `printed` column (migration 0058) holds the name the printer gave a print (`print_jobs.name`): an attempt's row has its own, an item's row all of its live attempts', kept up to date by triggers on `print_jobs` and `attempts`. `shared/search-intent.ts` adds plurals ("lids" also reads "lid"), Swedish twins and a split of one typed word into two when nothing matched.
-- `wrangler d1 export` refuses databases with virtual tables: use `pnpm db:export`.
+- `wrangler d1 export` refuses databases with virtual tables, leaves out indexes, views and triggers, and writes a table's rows before the tables they point at exist: use `pnpm db:export` (`scripts/lib/db-backup.ts` reads the schema from `sqlite_master`, takes the rows from `wrangler d1 export --no-schema`, dumps the search index's rows, then creates views and triggers). `test/unit/db-backup.test.ts` restores a backup into an empty local D1 and compares the two.
 
 ### Change feed and live updates
 
