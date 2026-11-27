@@ -8457,6 +8457,35 @@ export const shots: Shot[] = [
     },
   },
   {
+    // "Match prices": every page Claude found, in one sheet, one already used and one turned down.
+    name: "shopping-match-prices",
+    path: "/shopping",
+    prepare: async (page) => {
+      await page.getByRole("button", { name: "Match prices" }).click({ timeout: 20_000 });
+      const sheet = page.getByRole("dialog", { name: "Match prices" });
+      await sheet.getByRole("list", { name: "Pages to check" }).waitFor();
+      await page.waitForTimeout(400);
+    },
+    cleanup: async (page) => {
+      await page.keyboard.press("Escape");
+    },
+  },
+  {
+    // A thing ticked off: it went to Bought, and the toast holds its Undo.
+    name: "shopping-ticked",
+    path: "/shopping",
+    prepare: async (page) => {
+      await page.getByRole("checkbox", { name: "Bought: Hex key set" }).click();
+      await page.getByRole("button", { name: "Undo" }).waitFor();
+      await page.waitForTimeout(400);
+    },
+    cleanup: async (page) => {
+      // Back on the list for the next shot, whether or not the toast is still up.
+      await page.getByRole("list", { name: "Bought" }).getByRole("checkbox", { name: "Bought: Hex key set" }).click();
+      await page.getByRole("list", { name: "To buy" }).getByText("Hex key set").waitFor();
+    },
+  },
+  {
     // Filament bought, three at once and a nozzle: the filament rows offer the pantry, the nozzle nothing.
     name: "shopping-bought-filament",
     path: "/shopping",

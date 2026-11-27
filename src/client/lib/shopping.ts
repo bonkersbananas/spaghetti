@@ -351,6 +351,27 @@ export async function dismissSuggestion(queryClient: QueryClient, id: string) {
   keepServer(queryClient, shoppingItem);
 }
 
+/** What's still to buy with a Prisjakt page Claude found, waiting for someone to confirm it: "Match prices". */
+export function useToMatch(toBuy: ShoppingItem[]): ShoppingItem[] {
+  const enabled = usePriceSuggestionsEnabled();
+  return enabled ? toBuy.filter((item) => !item.priceLink && item.suggestion && item.suggestState === "found") : [];
+}
+
+/**
+ * The Undo of a tick: the thing back on the list, and in the place it had (`order`, what was to buy then), not on
+ * top, so the list reads as it did before the slip.
+ */
+export async function untick(queryClient: QueryClient, id: string, order: string[], userId: string | null) {
+  const item = queryClient.getQueryData<ShoppingItem[]>(shoppingQuery.queryKey)?.find((i) => i.id === id);
+  if (!item || item.boughtAt === null) return;
+  await setBought(queryClient, item, false, userId);
+  const { toBuy } = splitShopping(queryClient.getQueryData<ShoppingItem[]>(shoppingQuery.queryKey) ?? []);
+  const now = toBuy.map((i) => i.id);
+  // Added since: still on top. The rest in the order they had.
+  const ids = [...now.filter((i) => !order.includes(i)), ...order.filter((i) => now.includes(i))];
+  if (ids.join() !== now.join()) await reorderShopping(queryClient, ids);
+}
+
 export const usePriceSuggestionsEnabled = () => useQuery(featuresQuery).data?.priceSuggestions === true;
 
 /** A bought thing became this spool ("Add to pantry"): the row says so, for both people. */

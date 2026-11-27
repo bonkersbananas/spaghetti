@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 import { cn } from "@/lib/cn";
 import { Button } from "./Button";
 import { ClaudeLine } from "./ClaudeLine";
-import { ExternalIcon, PriceIcon } from "./icons";
+import { CheckIcon, ExternalIcon, PriceIcon } from "./icons";
 
 interface SuggestionCardProps {
   /** What the suggested page is called. */
@@ -54,4 +54,64 @@ export function SuggestionCard({ title, href, onUse, onDismiss, disabled, classN
 /** A quiet line for a search on its way or one that found nothing. */
 export function SuggestionNote({ children }: { children: ReactNode }) {
   return <p className="text-small text-ink-faint">{children}</p>;
+}
+
+interface MatchRowProps {
+  /** The thing on the list, as it is called there. */
+  name: string;
+  /** What the page Claude found is called. */
+  title: string | null;
+  /** The page, opened in a new tab to check first. */
+  href: string;
+  /** Answered here: the row stays where it is (so the next one doesn't slide under a thumb) and says so. */
+  answer?: "used" | "dismissed";
+  onUse: () => void;
+  onDismiss: () => void;
+  disabled?: boolean;
+}
+
+/**
+ * One of several pages to confirm at once ("Match prices"): the thing's name, the page Claude found as a link to check,
+ * and "Use it" or "Not this one". Calmer than a `SuggestionCard`: the sheet's description says once who found them.
+ */
+export function MatchRow({ name, title, href, answer, onUse, onDismiss, disabled }: MatchRowProps) {
+  return (
+    <div className="flex flex-col gap-2 py-3 md:flex-row md:items-center md:gap-4">
+      <div className="flex min-w-0 flex-1 flex-col">
+        <p className="text-body text-ink font-semibold break-words">{name}</p>
+        <a
+          href={href}
+          target="_blank"
+          rel="noreferrer noopener"
+          className="focus-ring touch-target text-small text-ink-soft pressable relative inline-flex items-center gap-1.5 self-start rounded-xs py-1 hover:underline hover:underline-offset-4"
+        >
+          <PriceIcon size={16} className="text-ink-faint shrink-0" aria-hidden />
+          <span className="min-w-0 break-words">{title ?? "A page on Prisjakt"}</span>
+          <ExternalIcon size={12} weight="bold" className="text-ink-faint shrink-0" aria-hidden />
+          <span className="sr-only"> (opens Prisjakt in a new tab)</span>
+        </a>
+      </div>
+      {answer ? (
+        <p role="status" className="text-small text-ink-faint flex min-h-11 shrink-0 items-center gap-1.5 md:min-h-10">
+          {answer === "used" ? (
+            <>
+              <CheckIcon size={14} weight="bold" className="text-basil-ink" aria-hidden />
+              Matched: prices on their way
+            </>
+          ) : (
+            "Not this one"
+          )}
+        </p>
+      ) : (
+        <div className="-ml-0.5 flex shrink-0 items-center gap-2">
+          <Button variant="secondary" disabled={disabled} onClick={onUse}>
+            Use it
+          </Button>
+          <Button variant="quiet" disabled={disabled} onClick={onDismiss}>
+            Not this one
+          </Button>
+        </div>
+      )}
+    </div>
+  );
 }

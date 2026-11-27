@@ -73,13 +73,15 @@ export function TickBox({ checked, onChange, label, disabled, className }: TickB
 interface ChecklistRowProps {
   /** The TickBox. */
   tick: ReactNode;
-  /** A small picture of the thing (Thumb), between the tick box and the name. */
+  /** A small picture of the thing (Thumb), between the tick box and the name, from `sm` (a phone's line is the name's). Only when there is one: no empty tile. */
   thumb?: ReactNode;
-  /** The name, usually a button that opens the thing. */
+  /** The name, usually a `ChecklistName` that opens the thing. */
   children: ReactNode;
-  /** A line under the name: links (LinkChip), who and when. */
+  /** What sits at the line's end, quiet: the price found, who got it and when. */
+  aside?: ReactNode;
+  /** A second line under the name, only for something to do there ("Add to pantry"). */
   meta?: ReactNode;
-  /** The DragHandle, last, under the thumb. */
+  /** The DragHandle, last on the line. */
   handle?: ReactNode;
   /** Ticked off: the name steps back. */
   done?: boolean;
@@ -91,14 +93,16 @@ interface ChecklistRowProps {
 }
 
 /**
- * One line of a checklist (the shopping list): the tick box, the name with a line of links or detail under it, and a
- * drag handle. Rows sit on `checklistSurface`, an inset hairline between them; a lifted row floats on
- * `shadow-float` while it moves.
+ * One line of a checklist (the shopping list): the tick box, a picture only when the thing has one, the name on one
+ * line (cut with an ellipsis; the whole of it is a tap away), something quiet at the line's end and a drag handle.
+ * Rows sit on `checklistSurface`, an inset hairline between them; a lifted row floats on `shadow-float` while it
+ * moves.
  */
 export function ChecklistRow({
   tick,
   thumb,
   children,
+  aside,
   meta,
   handle,
   done,
@@ -111,19 +115,47 @@ export function ChecklistRow({
       data-done={done || undefined}
       data-lifted={lifted || undefined}
       className={cn(
-        "after:bg-hairline relative flex items-start gap-1 rounded-lg py-1.5 pr-1 pl-1.5 after:absolute after:right-4 after:bottom-0 after:left-14 after:h-px md:gap-2 md:pr-2",
+        "after:bg-hairline relative flex flex-col rounded-lg py-0.5 pl-1.5 after:absolute after:right-4 after:bottom-0 after:left-14 after:h-px",
+        // A row without a handle keeps its last words off the card's edge.
+        handle ? "pr-1 md:pr-2" : "pr-4",
         (lifted || last) && "after:hidden",
         lifted && "bg-lifted shadow-float z-10",
         className,
       )}
     >
-      {tick}
-      {thumb && <div className="shrink-0 py-1 pr-1.5">{thumb}</div>}
-      <div className="flex min-w-0 flex-1 flex-col gap-1 py-1">
-        <div className={cn("min-w-0", done && "text-ink-faint")}>{children}</div>
-        {meta && <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">{meta}</div>}
+      <div className="flex min-w-0 items-center gap-1 md:gap-2">
+        {tick}
+        {/* On a phone the line is the name's: the picture waits for the thing's sheet. */}
+        {thumb && <div className="hidden shrink-0 pr-1 sm:flex">{thumb}</div>}
+        <div className={cn("min-w-0 flex-1", done && "text-ink-faint")}>{children}</div>
+        {aside && <div className="text-small text-ink-faint flex shrink-0 items-center gap-1.5 pl-2">{aside}</div>}
+        {handle}
       </div>
-      {handle}
+      {meta && <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 pb-1.5 pl-12">{meta}</div>}
     </div>
+  );
+}
+
+interface ChecklistNameProps {
+  /** The whole name: the line shows what fits, with an ellipsis, and the title holds the rest for a pointer. */
+  children: string;
+  onOpen: () => void;
+  done?: boolean;
+}
+
+/** A checklist row's name: one line, a button that opens the thing (where its whole name is). */
+export function ChecklistName({ children, onOpen, done }: ChecklistNameProps) {
+  return (
+    <button
+      type="button"
+      onClick={onOpen}
+      title={children}
+      className={cn(
+        "focus-ring touch-target hover:decoration-ink/25 text-body relative -mx-1 block max-w-full truncate rounded-xs px-1 py-1.5 text-left hover:underline hover:underline-offset-4",
+        done ? "text-ink-faint decoration-ink/30 line-through" : "text-ink font-semibold",
+      )}
+    >
+      {children}
+    </button>
   );
 }

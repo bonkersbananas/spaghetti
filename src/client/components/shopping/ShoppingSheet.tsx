@@ -4,8 +4,9 @@ import { isWebLink, SHOPPING_LINK_MAX, SHOPPING_NAME_MAX } from "@shared/shoppin
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { Button } from "@/components/ui/Button";
-import { TextField } from "@/components/ui/Field";
+import { TextArea, TextField } from "@/components/ui/Field";
 import { CheckIcon, LinkIcon, PriceIcon, SameAgainIcon, TrashIcon, UndoIcon } from "@/components/ui/icons";
+import { LinkChip } from "@/components/ui/LinkChip";
 import { checkedWords, OfferRow } from "@/components/ui/Prices";
 import { Sheet } from "@/components/ui/Sheet";
 import { SuggestionCard, SuggestionNote } from "@/components/ui/Suggestion";
@@ -24,7 +25,7 @@ import {
   usePriceSuggestionsEnabled,
 } from "@/lib/shopping";
 import { useLiveFields } from "@/lib/use-autosave";
-import { PriceSearchLink, useShoppingName } from "./ShoppingRow";
+import { PriceSearchLink, shopName, useShoppingName } from "./ShoppingRow";
 
 /**
  * A thing on the shopping list, open: its name, the shop's link and its Prisjakt page, all autosaved. "Got it" ticks
@@ -107,6 +108,21 @@ function ShoppingBody({ item }: { item: ShoppingItem }) {
   );
   return (
     <div className="flex flex-col gap-5">
+      {(item.link || item.priceLink) && (
+        // The row is one line now: the shop and the Prisjakt page are opened from here.
+        <div className="flex flex-wrap items-center gap-2">
+          {item.link && (
+            <LinkChip href={item.link} quietArrow>
+              {shopName(item.link)}
+            </LinkChip>
+          )}
+          {item.priceLink && (
+            <LinkChip href={item.priceLink} icon={PriceIcon} quietArrow>
+              Prisjakt
+            </LinkChip>
+          )}
+        </div>
+      )}
       <PriceBlock item={item} name={shown} readOnly={readOnly} />
       <SuggestionBlock
         item={item}
@@ -116,14 +132,22 @@ function ShoppingBody({ item }: { item: ShoppingItem }) {
         }}
       />
       <fieldset disabled={readOnly} className="contents">
-        <TextField
+        {/* The whole name, however long: the list cuts it to one line. One paragraph: Enter adds no line. */}
+        <TextArea
           label="Name"
+          minRows={1}
           value={value.name}
           placeholder={shown}
           maxLength={SHOPPING_NAME_MAX}
           saveState={saveState}
           enterKeyHint="done"
-          onChange={(event) => change({ name: event.target.value })}
+          onKeyDown={(event) => {
+            if (event.key === "Enter") {
+              event.preventDefault();
+              event.currentTarget.blur();
+            }
+          }}
+          onChange={(event) => change({ name: event.target.value.replace(/\s*\n\s*/g, " ") })}
         />
         <TextField
           label="Shop"

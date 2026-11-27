@@ -1,4 +1,5 @@
 import type { Person, ShoppingItem } from "@shared/api";
+import { formatKr } from "@shared/prisjakt";
 import { priceSearchUrl, shoppingName, tidyPageTitle } from "@shared/shopping";
 import { filamentFromName } from "@shared/shopping-filament";
 import { inlineTime } from "@shared/time";
@@ -7,13 +8,10 @@ import { Link } from "@tanstack/react-router";
 import { lazy, type ReactNode, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { Avatar } from "@/components/ui/Avatar";
 import { Button } from "@/components/ui/Button";
-import { ChecklistRow, TickBox } from "@/components/ui/Checklist";
-import { Chip } from "@/components/ui/Chip";
+import { ChecklistName, ChecklistRow, TickBox } from "@/components/ui/Checklist";
 import { PantryIcon, PriceIcon } from "@/components/ui/icons";
 import { LinkChip } from "@/components/ui/LinkChip";
-import { PriceLine } from "@/components/ui/Prices";
 import { Thumb } from "@/components/ui/Thumb";
-import { cn } from "@/lib/cn";
 import { spoolsQuery } from "@/lib/pantry-queries";
 import { linkPreviewQuery } from "@/lib/queries";
 import { canEdit } from "@/lib/read-only";
@@ -50,7 +48,8 @@ interface ShoppingRowProps {
   item: ShoppingItem;
   /** Who ticked it off, for a bought row. */
   boughtBy?: Person;
-  onTick: (bought: boolean) => void;
+  /** With the name as the row shows it (a bare link's page title), for the toast. */
+  onTick: (bought: boolean, name: string) => void;
   onOpen: () => void;
   readOnly?: boolean;
   handle?: ReactNode;
@@ -59,8 +58,9 @@ interface ShoppingRowProps {
 }
 
 /**
- * A thing on the shopping list: the tick box, its name (a button that opens it), and under it the shop and its
- * Prisjakt page as link chips. A bought row says who got it and when, and its name steps back.
+ * A thing on the shopping list, on one line: the tick box, its picture when it has one, its name (a button that opens
+ * it, where the whole name, the shop and its Prisjakt page are) and the cheapest price found. A bought row says who
+ * got it and when at the line's end, and its name steps back; bought filament offers the pantry under it.
  */
 export function ShoppingRow({ item, boughtBy, onTick, onOpen, readOnly, handle, lifted, last }: ShoppingRowProps) {
   const name = useShoppingName(item);
@@ -76,8 +76,8 @@ export function ShoppingRow({ item, boughtBy, onTick, onOpen, readOnly, handle, 
   // A tick shows at once and the row stays a beat, so the check is seen landing before it moves to Bought.
   const [ticking, setTicking] = useState(false);
   const pause = useRef<number | null>(null);
-  const tickRef = useRef(onTick);
-  tickRef.current = onTick;
+  const tickRef = useRef((next: boolean) => onTick(next, name));
+  tickRef.current = (next: boolean) => onTick(next, name);
   function send() {
     pause.current = null;
     tickRef.current(true);
@@ -92,7 +92,7 @@ export function ShoppingRow({ item, boughtBy, onTick, onOpen, readOnly, handle, 
       setTicking(false);
       return;
     }
-    if (!next || bought) return onTick(next);
+    if (!next || bought) return onTick(next, name);
     setTicking(true);
     pause.current = window.setTimeout(send, TICK_PAUSE);
   }
@@ -111,93 +111,62 @@ export function ShoppingRow({ item, boughtBy, onTick, onOpen, readOnly, handle, 
       sendNow();
     };
   }, []);
-  const cheapest = item.prices?.offers[0];
-  const matched = !item.priceLink && !bought && item.suggestState === "found";
-  const links = (
-    <>
-      {item.prices && !bought && (
-        <PriceLine price={item.prices.lowest} shop={cheapest?.shop} className="-mt-1.5 w-full" />
-      )}
-      {matched && (
-        // Claude's guess, not yet anyone's choice: the dashed chip, which opens the sheet to confirm it.
-        <button type="button" onClick={onOpen} className="focus-ring touch-target pressable rounded-pill relative">
-          <Chip suggested icon={PriceIcon}>
-            Prisjakt match?
-          </Chip>
-        </button>
-      )}
-      {item.link && (
-        <LinkChip href={item.link} quietArrow>
-          {shopName(item.link)}
-        </LinkChip>
-      )}
-      {item.priceLink && (
-        // With a price in the line above, the chip is just the word (no coin): both chips then fit on one phone line.
-        <LinkChip href={item.priceLink} icon={item.prices && !bought ? undefined : PriceIcon} quietArrow>
-          Prisjakt
-        </LinkChip>
-      )}
-    </>
-  );
+  const first = boughtBy?.name.split(" ")[0];
   return (
     <ChecklistRow
       done={bought}
-      thumb={<Thumb src={item.picture?.url ?? null} alt="" faded={bought} />}
+      thumb={item.picture ? <Thumb src={item.picture.url} alt="" faded={bought} /> : undefined}
       lifted={lifted}
       last={last}
       tick={<TickBox checked={bought || ticking} onChange={tick} disabled={readOnly} label={`Bought: ${name}`} />}
-      meta={
+      aside={
         bought ? (
-          // Right under the name: a line of words, not a row of chips.
-          <span className="text-small text-ink-faint -mt-1.5 inline-flex flex-wrap items-center gap-x-3 gap-y-0.5">
-            <span className="inline-flex items-center gap-1.5">
-              {boughtBy && <Avatar person={boughtBy} size="xs" decorative />}
-              <span>
-                {boughtBy ? `${boughtBy.name.split(" ")[0]} got it` : "Got it"}{" "}
-                {item.boughtAt && inlineTime(item.boughtAt)}
-              </span>
+          // Who got it and when, quiet at the line's end.
+          <>
+            {boughtBy && <Avatar person={boughtBy} size="xs" decorative />}
+            <span>
+              <span className="sr-only">{first ? `${first} got it ` : "Got it "}</span>
+              {item.boughtAt && inlineTime(item.boughtAt)}
             </span>
-            {filament &&
-              (inPantry ? (
-                <Link
-                  to="/pantry/$spoolId"
-                  params={{ spoolId: inPantry }}
-                  className="focus-ring touch-target hover:text-ink decoration-ink/25 relative inline-flex items-center gap-1 rounded-xs underline underline-offset-4"
-                >
-                  <PantryIcon size={14} aria-hidden />
-                  In the pantry
-                </Link>
-              ) : (
-                !readOnly && (
-                  <Button
-                    variant="quiet"
-                    size="sm"
-                    icon={PantryIcon}
-                    onClick={() => canEdit() && setAdding(true)}
-                    className="touch-target relative -ml-2.5"
-                  >
-                    Add to pantry
-                  </Button>
-                )
-              ))}
+          </>
+        ) : item.prices ? (
+          // The cheapest price found, quietly: the shops and when it was checked are in its sheet.
+          <span className="text-ink-soft tabular-nums">
+            <span className="sr-only">Cheapest found: </span>
+            {formatKr(item.prices.lowest)}
           </span>
-        ) : item.link || item.priceLink || matched ? (
-          links
         ) : undefined
+      }
+      meta={
+        filament &&
+        (inPantry ? (
+          <Link
+            to="/pantry/$spoolId"
+            params={{ spoolId: inPantry }}
+            className="focus-ring touch-target text-small text-ink-faint hover:text-ink decoration-ink/25 relative inline-flex items-center gap-1 rounded-xs underline underline-offset-4"
+          >
+            <PantryIcon size={14} aria-hidden />
+            In the pantry
+          </Link>
+        ) : (
+          !readOnly && (
+            <Button
+              variant="quiet"
+              size="sm"
+              icon={PantryIcon}
+              onClick={() => canEdit() && setAdding(true)}
+              className="touch-target relative -ml-2.5"
+            >
+              Add to pantry
+            </Button>
+          )
+        ))
       }
       handle={handle}
     >
-      <button
-        type="button"
-        onClick={onOpen}
-        className={cn(
-          "focus-ring touch-target hover:decoration-ink/25 relative -mx-1 block max-w-full rounded-xs px-1 py-1.5 text-left break-words hover:underline hover:underline-offset-4",
-          "text-body",
-          bought ? "text-ink-faint decoration-ink/30 line-through" : "text-ink font-semibold",
-        )}
-      >
+      <ChecklistName onOpen={onOpen} done={bought}>
         {name}
-      </button>
+      </ChecklistName>
       {adding && filament && (
         <Suspense fallback={null}>
           <AddSpoolSheet

@@ -6,15 +6,17 @@ import { type FormEvent, lazy, type RefObject, Suspense, useEffect, useLayoutEff
 import { EmptyBasket } from "@/components/illustrations/EmptyBasket";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { ShoppingRow, useShoppingName } from "@/components/shopping/ShoppingRow";
+import { AskLine, AskName } from "@/components/ui/AskLine";
 import { Button } from "@/components/ui/Button";
 import { checklistSurface } from "@/components/ui/Checklist";
 import { DragHandle } from "@/components/ui/DragHandle";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { TextField } from "@/components/ui/Field";
-import { PlusIcon } from "@/components/ui/icons";
+import { PlusIcon, PriceIcon } from "@/components/ui/icons";
 import { Kbd } from "@/components/ui/Kbd";
 import { Section } from "@/components/ui/Section";
 import { Skeleton } from "@/components/ui/Skeleton";
+import { toast } from "@/components/ui/Toast";
 import { cn } from "@/lib/cn";
 import { tap } from "@/lib/haptics";
 import { shortcutCaps, useHotkeys } from "@/lib/hotkeys";
@@ -28,10 +30,15 @@ import {
   reorderShopping,
   replayTicks,
   setBought,
+  untick,
   useShopping,
+  useToMatch,
 } from "@/lib/shopping";
 
-// Opened with a tap: its own chunk.
+// Opened with a tap: their own chunks.
+const MatchPricesSheet = lazy(() =>
+  import("@/components/shopping/MatchPricesSheet").then((m) => ({ default: m.MatchPricesSheet })),
+);
 const ShoppingSheet = lazy(() =>
   import("@/components/shopping/ShoppingSheet").then((m) => ({ default: m.ShoppingSheet })),
 );
@@ -77,10 +84,20 @@ function Shopping() {
   const field = useRef<HTMLInputElement>(null);
   const byId = new Map(people?.map((person) => [person.id, person]));
   // Without the session yet the tick still counts: the server knows who it is, and its copy replaces this one.
-  const tick = (item: ShoppingItem, next: boolean) => {
+  const tick = (item: ShoppingItem, next: boolean, name: string) => {
     keepFocusOnTick();
     void setBought(queryClient, item, next, me?.id ?? null);
+    // Bought sits below the list on a phone and beside it on a laptop: the undo is in the toast, where the thumb is.
+    const order = toBuy.map((thing) => thing.id);
+    if (next && canEdit())
+      toast.undo("Bought", {
+        id: "shopping-tick",
+        description: name,
+        onUndo: () => void untick(queryClient, item.id, order, me?.id ?? null),
+      });
   };
+  const toMatch = useToMatch(toBuy);
+  const [matching, setMatching] = useState(false);
 
   // A tick a closed page left waiting for its thing's add goes out now that the list is the server's.
   // Once per visit: later changes of the list are this page's own ticks, which are still on their way.
@@ -102,9 +119,10 @@ function Shopping() {
   return (
     <>
       <PageHeader title="Shopping list" subtitle="What the printer needs next." />
-      <div className="max-w-content flex flex-col gap-12 md:gap-16">
+      <div className="max-w-content xl:max-w-wide flex flex-col gap-12 md:gap-16 xl:grid xl:grid-cols-[minmax(0,1fr)_minmax(0,22rem)] xl:items-start xl:gap-x-14">
         <div className="flex flex-col gap-4 md:gap-5">
           <AddToList fieldRef={field} disabled={readOnly || !me} userId={me?.id} />
+          {!readOnly && toMatch.length > 0 && <MatchOffer count={toMatch.length} onOpen={() => setMatching(true)} />}
           {isPending && !data ? (
             <Skeleton className="h-60 w-full rounded-lg" aria-hidden />
           ) : toBuy.length ? (
@@ -146,7 +164,7 @@ function Shopping() {
                     boughtBy={item.boughtBy ? byId.get(item.boughtBy) : undefined}
                     readOnly={readOnly}
                     last={index === shownBought.length - 1}
-                    onTick={(next) => tick(item, next)}
+                    onTick={(next, name) => tick(item, next, name)}
                     onOpen={() => setOpenId(item.id)}
                   />
                 </li>
@@ -162,6 +180,7 @@ function Shopping() {
       </div>
       <Suspense fallback={null}>
         {openId && <ShoppingSheet itemId={openId} onOpenChange={(open) => !open && setOpenId(null)} />}
+        {matching && <MatchPricesSheet ids={toMatch.map((item) => item.id)} onClose={() => setMatching(false)} />}
       </Suspense>
     </>
   );
@@ -235,7 +254,7 @@ function ToBuyList({
 }: {
   items: ShoppingItem[];
   readOnly: boolean;
-  onTick: (item: ShoppingItem, bought: boolean) => void;
+  onTick: (item: ShoppingItem, bought: boolean, name: string) => void;
   onOpen: (id: string) => void;
 }) {
   const queryClient = useQueryClient();
@@ -305,7 +324,7 @@ function ToBuyList({
                 moveShopping(queryClient, items, id, step);
                 setSaid(`${name}, now ${at + 1} of ${order.length}.`);
               }}
-              onTick={(next) => onTick(item, next)}
+              onTick={(next, name) => onTick(item, next, name)}
               onOpen={() => onOpen(id)}
             />
           );
@@ -329,7 +348,7 @@ interface ToBuyRowProps {
   onDragStart: () => void;
   onDragEnd: () => void;
   onMove: (step: -1 | 1, name: string) => void;
-  onTick: (bought: boolean) => void;
+  onTick: (bought: boolean, name: string) => void;
   onOpen: () => void;
 }
 
@@ -383,5 +402,25 @@ function ToBuyRow({
         }
       />
     </Reorder.Item>
+  );
+}
+
+/**
+ * One offer for the whole list, at its top, in place of a chip on every row: Claude found Prisjakt pages for some
+ * things, and one tap opens them all to check, each used only once someone says so.
+ */
+function MatchOffer({ count, onOpen }: { count: number; onOpen: () => void }) {
+  return (
+    <AskLine
+      icon={PriceIcon}
+      detail="Claude found their Prisjakt pages to check."
+      actions={
+        <Button variant="secondary" size="sm" onClick={onOpen}>
+          Match prices
+        </Button>
+      }
+    >
+      <AskName>{count === 1 ? "One thing" : `${count} things`}</AskName> could show their prices
+    </AskLine>
   );
 }
