@@ -1,4 +1,5 @@
 import type { AttemptMoved } from "@shared/api";
+import { asksWhichBuild } from "@shared/attempts";
 import { filedWords, namesIn, readableTitle, rowWords, sharedWords } from "@shared/print-match";
 import { inlineTime } from "@shared/time";
 import { useQuery } from "@tanstack/react-query";
@@ -56,7 +57,7 @@ export default function PrintPlace({ item, attempt, where, follow, className }: 
   const print = attempt.print;
 
   let content: React.ReactNode = null;
-  if (print?.asking) {
+  if (asksWhichBuild(item, attempt)) {
     content = (
       <WhichBuild
         item={item}
@@ -306,6 +307,6 @@ export function JournalAsk({ itemId, attemptId }: { itemId: string; attemptId: s
   const { items } = useBuilds();
   const item = items.find((one) => one.id === itemId);
   const attempt = item?.attempts.find((one) => one.id === attemptId);
-  if (!item || !attempt?.print?.asking) return null;
+  if (!item || !attempt || !asksWhichBuild(item, attempt)) return null;
   return <PrintPlace item={item} attempt={attempt} where="card" />;
 }

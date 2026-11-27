@@ -1,5 +1,5 @@
 import type { Person } from "@shared/api";
-import type { Outcome } from "@shared/attempts";
+import { asksWhichBuild, type Outcome } from "@shared/attempts";
 import { isOffTheBed } from "@shared/print-progress";
 import { showsSettings } from "@shared/story-settings";
 import { fullTime, relativeTime } from "@shared/time";
@@ -257,7 +257,7 @@ export const AttemptEntry = forwardRef<HTMLLIElement, AttemptEntryProps>(functio
               )}
             </div>
 
-            {item && (attempt.print?.asking || attempt.print?.reasons.length || attempt.moved) && (
+            {item && (asksWhichBuild(item, attempt) || attempt.print?.reasons.length || attempt.moved) && (
               // Above the open button, so its offers and links work.
               <Suspense fallback={null}>
                 <PrintPlace item={item} attempt={attempt} where="entry" className="pointer-events-auto relative z-10" />
@@ -324,7 +324,7 @@ export const AttemptEntry = forwardRef<HTMLLIElement, AttemptEntryProps>(functio
                 className={cn(
                   "relative flex flex-col gap-3",
                   // Right under the printer's question, its wash is edge enough: no rule between the two.
-                  attempt.print?.asking &&
+                  asksWhichBuild(item, attempt) &&
                     !attempt.note &&
                     !lead &&
                     !attempt.changes.length &&

@@ -1,5 +1,5 @@
 import type { JournalEntry as Entry, Item, Person, Photo as PhotoData } from "@shared/api";
-import { isOutcome, outcomeLabel, tagLabel } from "@shared/attempts";
+import { asksWhichBuild, isOutcome, outcomeLabel, tagLabel } from "@shared/attempts";
 import { dateFormat } from "@shared/date-format";
 import { attemptPartsLabel } from "@shared/parts";
 import { isOffTheBed, offTheBedLabel } from "@shared/print-progress";
@@ -68,7 +68,10 @@ interface JournalEntryProps {
 export const JournalEntry = forwardRef<HTMLAnchorElement, JournalEntryProps>(function JournalEntry(props, ref) {
   if (props.entry.kind !== "attempt") return <EventRow {...props} ref={ref} />;
   if (props.compact) return <AttemptRow {...props} ref={ref} />;
-  const asking = props.item.attempts.find((one) => one.id === props.entry.attemptId)?.print?.asking;
+  const asking = asksWhichBuild(
+    props.item,
+    props.item.attempts.find((one) => one.id === props.entry.attemptId),
+  );
   if (!asking) return <AttemptCard {...props} ref={ref} />;
   // Still asking which build it is (decision 0076): the same line as on its card on the bed, right under this one (a
   // link can't hold its buttons). Its code comes only with such a print.

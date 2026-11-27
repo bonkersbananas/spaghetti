@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   type AttemptSettings,
+  asksWhichBuild,
   byPrintTime,
   carryOver,
   changesSince,
@@ -393,5 +394,17 @@ describe("where the build's story lists settings", () => {
     expect(showsSettings({ number: 2, outcome: "partial", changes: changed })).toBe(false);
     expect(showsSettings({ number: 3, outcome: "failed", changes: changed })).toBe(false);
     expect(showsSettings({ number: 3, outcome: null, changes: changed })).toBe(false);
+  });
+});
+
+describe("asksWhichBuild", () => {
+  const asking = { print: { asking: true } };
+  it("asks only while the build is in progress", () => {
+    expect(asksWhichBuild({ stage: "building" }, asking)).toBe(true);
+    expect(asksWhichBuild({ stage: "done" }, asking)).toBe(false);
+    expect(asksWhichBuild({ stage: "shelved" }, asking)).toBe(false);
+    expect(asksWhichBuild({ stage: "building" }, { print: { asking: false } })).toBe(false);
+    expect(asksWhichBuild({ stage: "building" }, { print: null })).toBe(false);
+    expect(asksWhichBuild(undefined, asking)).toBe(false);
   });
 });
