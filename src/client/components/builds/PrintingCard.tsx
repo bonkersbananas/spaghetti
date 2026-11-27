@@ -471,8 +471,8 @@ export function PrintingCard({
                         variant="secondary"
                         size="sm"
                         onClick={() => finish()}
-                        // Held pressed until the sheet is up: the tap's answer in the frame it happened.
-                        data-pressed={opening === "ask" ? "" : undefined}
+                        // Held pressed until the sheet is up: the tap's answer in the frame it happened ("held": touch-press leaves it).
+                        data-pressed={opening === "ask" ? "held" : undefined}
                         className="shrink-0"
                       >
                         How did it go?
