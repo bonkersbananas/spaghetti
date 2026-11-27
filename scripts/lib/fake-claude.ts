@@ -516,7 +516,16 @@ function receiveHook(request: IncomingMessage, response: ServerResponse, receive
 }
 
 /** The cheapest price of the products the screenshots' shopping list links, in kronor (others keep the fixture's). */
-const PRODUCT_PRICES: Record<string, number> = { 13366548: 149, 12086734: 249, 14402211: 259 };
+const PRODUCT_PRICES: Record<string, number> = {
+  13366548: 149,
+  12086734: 249,
+  14402211: 259,
+  15011223: 329,
+  15011224: 279,
+  15011225: 449,
+  15011226: 299,
+  15011227: 189,
+};
 
 /** Each seeded product gets its own picture (the shopping tile shows several side by side); others by their number. */
 const productImage = (product: string) => {
