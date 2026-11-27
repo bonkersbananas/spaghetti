@@ -115,9 +115,7 @@ test("Finish build leads the open page with the final print at once, not the pho
   await expect(page.getByText("Final print", { exact: true })).toBeVisible();
 });
 
-test("the move sheet says every build with a print on the bed is on the bed, not only the newest", async ({
-  page,
-}) => {
+test("the move sheet says every build with a print on the bed is on the bed, not only the newest", async ({ page }) => {
   const first = await build(page, "Spool holder");
   await attempt(page, first, { printedAt: Date.now() - 20 * 60_000 });
   const second = await build(page, "Desk clamp");
