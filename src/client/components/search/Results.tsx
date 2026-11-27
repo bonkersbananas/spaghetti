@@ -157,7 +157,7 @@ function PrintNameLine({ name, terms }: { name: string | null; terms: readonly S
     <span className="text-small text-ink-faint flex items-center gap-1.5">
       <PrinterIcon size={14} aria-hidden className="text-ink-faint shrink-0" />
       <span className="sr-only">Printed as </span>
-      <Highlight text={excerpt(name, terms)} terms={terms} className="min-w-0 truncate" />
+      <Highlight text={excerpt(name, terms, 28)} terms={terms} className="min-w-0 truncate" />
     </span>
   );
 }
