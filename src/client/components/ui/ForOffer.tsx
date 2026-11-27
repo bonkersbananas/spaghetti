@@ -28,8 +28,11 @@ export function ForOffer({ name, onName, onAsk, firstNameOnPhones = false }: For
       aria-label={`For ${name}`}
       more={<OfferMore label="For someone else" onClick={onAsk} />}
     >
-      For {rest ? name.slice(0, space) : name}
-      {rest && <span className="whitespace-pre max-md:hidden">{rest}</span>}
+      {/* One inline run, so the button's gap never opens between the first name and the rest. */}
+      <span>
+        For {rest ? name.slice(0, space) : name}
+        {rest && <span className="max-md:hidden">{rest}</span>}
+      </span>
     </OfferChip>
   );
 }
