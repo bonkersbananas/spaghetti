@@ -54,7 +54,7 @@ export function IdeaTitleChips({ item, forWhom, setForWhom, readOnly }: IdeaTitl
       />
       {/* Pulled left so the quiet toggles' words line up with the title; the row runs to the screen's edge on phones. */}
       <div className="-ml-2.5">
-        <ChipRow label="About this idea" className="items-center md:gap-1">
+        <ChipRow label="About this idea" className="items-center md:gap-1 md:py-0">
           <ToggleChip
             selected={item.upNext !== null}
             appearance="quiet"
