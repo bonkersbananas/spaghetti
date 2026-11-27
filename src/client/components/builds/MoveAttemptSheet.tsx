@@ -10,7 +10,6 @@ import { MetaList } from "@/components/ui/MetaList";
 import { Overline } from "@/components/ui/Overline";
 import { PickRow } from "@/components/ui/PickRow";
 import { Sheet } from "@/components/ui/Sheet";
-import { findPrinting } from "@/lib/builds";
 import { type AttemptView, type ItemView, useBuilds, useIdeas } from "@/lib/items";
 import { type MoveTarget, offerLines, suggestionsQuery, useMoveAttempt } from "@/lib/print-moves";
 import { itemName } from "@/lib/recent";
@@ -77,8 +76,6 @@ export function MoveAttemptSheet({ open, onOpenChange, item, attempt, notThis, f
         : [],
     };
   }, [builds, ideas, suggestions, item.id, search, notThis]);
-
-  const onBed = findPrinting(builds);
 
   function close(next: boolean) {
     onOpenChange(next);
@@ -202,7 +199,7 @@ export function MoveAttemptSheet({ open, onOpenChange, item, attempt, notThis, f
                 photo={pictureOf(build)}
                 glyph={{ icon: BuildsIcon }}
                 title={nameOf(build)}
-                meta={<BuildMeta build={build} printing={onBed?.item.id === build.id ? onBed.attempt : undefined} />}
+                meta={<BuildMeta build={build} />}
                 current={enterTakes(build)}
                 onSelect={() => moveTo({ item: build })}
               />

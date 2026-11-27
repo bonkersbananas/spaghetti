@@ -54,9 +54,12 @@ export function useLeft(attempt: AttemptView | undefined): string | null {
   return (progress.label.split(" · ").at(-1) ?? progress.label).replace(/^[Aa]bout /, "");
 }
 
-export function BuildMeta({ build, printing }: { build: ItemView; printing?: AttemptView }) {
-  const left = useLeft(printing);
+export function BuildMeta({ build }: { build: ItemView }) {
   const last = build.attempts.at(-1);
+  // Its print on the bed, if any: every build says so, not just the newest print (a print started by hand, or
+  // another still waiting while the printer runs the next one).
+  const printing = build.attempts.findLast((attempt) => attempt.outcome === null && !isOffTheBed(attempt));
+  const left = useLeft(printing);
   const count = build.attempts.length;
   const pieces: ReactNode[] = [];
   if (printing) {

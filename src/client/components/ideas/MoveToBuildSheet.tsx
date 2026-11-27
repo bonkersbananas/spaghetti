@@ -56,7 +56,6 @@ export function MoveToBuildSheet({ open, onOpenChange, idea, onMoved }: MoveToBu
   const [picked, setPicked] = useState<ItemView | null>(null);
   const [search, setSearch] = useState("");
 
-  const onBed = findPrinting(items);
   const { active, finished } = useMemo(() => {
     const query = search.trim().toLowerCase();
     const ready = items
@@ -107,7 +106,6 @@ export function MoveToBuildSheet({ open, onOpenChange, idea, onMoved }: MoveToBu
   const attempts = picked?.attempts.filter((attempt) => !attempt.pending).toReversed() ?? [];
 
   const row = (build: ItemView, quiet?: boolean) => {
-    const printing = onBed?.item.id === build.id ? onBed.attempt : undefined;
     const picture = pictureOf(build);
     return (
       <PickRow
@@ -123,7 +121,7 @@ export function MoveToBuildSheet({ open, onOpenChange, idea, onMoved }: MoveToBu
               <span>{relativeTime(build.finishedAt ?? build.updatedAt)}</span>
             </MetaList>
           ) : (
-            <BuildMeta build={build} printing={printing} />
+            <BuildMeta build={build} />
           )
         }
         onSelect={() => choose(build)}

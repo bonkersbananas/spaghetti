@@ -70,6 +70,21 @@ const journal = async (query = "") =>
   (await (await request(`/api/journal${query}`, { cookie: carl })).json<JournalResponse>()).entries;
 
 describe("a print from the printer", () => {
+  it("doesn't finish or shelve its build: the journal's finished row isn't via the bridge", async () => {
+    const { ownId, attemptId } = await printerPrints("hinge-v2");
+    expect(
+      (await request(`/api/attempts/${attemptId}`, { method: "PATCH", cookie: carl, json: { outcome: "success" } }))
+        .status,
+    ).toBe(200);
+    expect(
+      (await request(`/api/items/${ownId}`, { method: "PATCH", cookie: carl, json: { stage: "done" } })).status,
+    ).toBe(200);
+    const rows = (await journal()).filter((one) => one.itemId === ownId);
+    // The printer did start it.
+    expect(rows.find((one) => one.kind === "started")?.via).not.toBeNull();
+    expect(rows.find((one) => one.kind === "finished")).toMatchObject({ via: null });
+  });
+
   it("is the printer's, not the person who paired the bridge", async () => {
     const { ownId, attemptId } = await printerPrints();
     const item = await itemOf(ownId);
