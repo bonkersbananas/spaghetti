@@ -87,8 +87,15 @@ export function AddSpoolSheet({
   // What the person has set themselves: a label read may fill the rest, and the starting material and weight.
   const [touched, setTouched] = useState<ReadonlySet<string>>(new Set());
 
-  // Moves on at each open, close and save: a photo still waiting for the features knows the sheet it came from is gone.
+  // Moves on at each open, close and save, and when the sheet goes (some callers unmount it rather than close it, and
+  // the page can go): a photo still waiting for the features knows the sheet it came from is gone.
   const turn = useRef(0);
+  useEffect(
+    () => () => {
+      turn.current++;
+    },
+    [],
+  );
   // biome-ignore lint/correctness/useExhaustiveDependencies: only when it opens.
   useEffect(() => {
     turn.current++;
