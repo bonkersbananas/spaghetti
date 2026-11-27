@@ -350,7 +350,8 @@ export function PrintingCard({
             <h3
               className={cn(
                 "font-display text-ink min-w-0 flex-1 break-words",
-                inRow ? "line-clamp-2 max-md:line-clamp-1" : "line-clamp-2",
+                // Beside the small square two lines cost nothing: the square is taller.
+                inRow && lead ? "line-clamp-2 max-md:line-clamp-1" : "line-clamp-2",
                 compact ? "text-lead md:text-title" : "text-title",
               )}
             >
