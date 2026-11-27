@@ -21,6 +21,8 @@ export function wrangler(args: string[], { quiet = true, cwd = root } = {}): str
   const result = spawnSync(bin, args, {
     cwd,
     encoding: "utf8",
+    // Reads of a whole table (the search index in a backup) are far over spawnSync's default 1 MiB.
+    maxBuffer: 1024 * 1024 * 1024,
     env: { ...process.env, CI: "1", WRANGLER_SEND_METRICS: "false" },
     stdio: quiet ? "pipe" : "inherit",
   });
