@@ -1,4 +1,4 @@
-import type { Outcome } from "@shared/attempts";
+import { asksWhichBuild, type Outcome } from "@shared/attempts";
 import { offTheBedLabel } from "@shared/print-progress";
 import { useNavigate } from "@tanstack/react-router";
 import { AnimatePresence, m, useReducedMotion } from "motion/react";
@@ -129,7 +129,7 @@ export function AttemptSheet({
               // thumb's reach): answering the outcome leaves it be, and a move takes the sheet along to the build the
               // print went to, which opens it again there.
               ask={
-                attempt.print?.asking && (
+                asksWhichBuild(item, attempt) && (
                   <Suspense fallback={<div aria-hidden className="bg-ink/4 h-12 rounded-md" />}>
                     <PrintPlace
                       item={item}

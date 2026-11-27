@@ -1,3 +1,4 @@
+import { asksWhichBuild } from "@shared/attempts";
 import { readableTitle } from "@shared/print-match";
 import { relativeTime } from "@shared/time";
 import { useQuery } from "@tanstack/react-query";
@@ -45,7 +46,7 @@ export function MoveAttemptSheet({ open, onOpenChange, item, attempt, notThis, f
   const [search, setSearch] = useState("");
   const { data: suggestions } = useQuery({ ...suggestionsQuery(attempt.id), enabled: open });
   const print = attempt.print;
-  const asking = !!print?.asking;
+  const asking = asksWhichBuild(item, attempt);
   // The print went into this build by a match: "its own build" brings back the one the printer made.
   const ownElsewhere = !!print && print.ownItemId !== item.id;
 

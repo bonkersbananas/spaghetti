@@ -1,5 +1,5 @@
 import type { Person } from "@shared/api";
-import { creditedTo, type Outcome } from "@shared/attempts";
+import { asksWhichBuild, creditedTo, type Outcome } from "@shared/attempts";
 import { attemptPartsLabel } from "@shared/parts";
 import { isOffTheBed } from "@shared/print-progress";
 import { Link, useNavigate } from "@tanstack/react-router";
@@ -169,7 +169,7 @@ export function PrintingCard({
   const partsLabel = attemptPartsLabel(attempt, item.parts);
   const filaments = attempt.settings.filaments ?? [];
   // The printer asks which build this is, or says why it put it in this one.
-  const asking = !!attempt.print?.asking;
+  const asking = asksWhichBuild(item, attempt);
   const placed = !asking && !!attempt.print?.reasons.length;
 
   // "Snap this print": on a phone the camera opens at once and the photo lands in the capture sheet already aimed at

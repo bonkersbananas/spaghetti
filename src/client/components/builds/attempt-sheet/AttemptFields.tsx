@@ -3,7 +3,7 @@ import { type AttemptSettings, describeChanges, OUTCOMES, type Outcome } from "@
 import { showsNotEnoughNote } from "@shared/not-enough-rule";
 import type { AttemptPart } from "@shared/parts";
 import { printerHints } from "@shared/spools";
-import { Fragment, type ReactNode, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { Fragment, type ReactNode, useLayoutEffect, useRef, useState } from "react";
 import { Caution, FromFileMark } from "@/components/ui/Caution";
 import { Disclosure } from "@/components/ui/Disclosure";
 import { TextArea } from "@/components/ui/Field";
@@ -309,35 +309,8 @@ export function AttemptFields(props: FieldsProps) {
       </div>
     </Fragment>
   );
-  // Answering a print on a phone: the sheet opens at its top, photos first, and keeps that whatever is tapped. Logging a
-  // new attempt: the sheet opens scrolled to its end, where the thumb is (the photos, the note, the tiles), and stays
-  // there while its height settles (a hint arriving); the first press ends that. Desktop reads top-down.
-  const root = useRef<HTMLDivElement>(null);
-  const touched = useRef(false);
-  // Scrolls the sheet's body to its end and keeps it there while its height settles (the sheet's own opening, the
-  // settings, a hint arriving): a watcher on the content's size for a moment, not one scroll on mount.
-  const toEnd = (force: boolean) => {
-    if (isDesktop || !root.current) return () => {};
-    let body: HTMLElement | null = root.current.parentElement;
-    while (body && getComputedStyle(body).overflowY !== "auto") body = body.parentElement;
-    const scroller = body;
-    if (!scroller) return () => {};
-    const go = () => {
-      if (force || !touched.current) scroller.scrollTo({ top: scroller.scrollHeight });
-    };
-    go();
-    const watcher = new ResizeObserver(go);
-    watcher.observe(root.current);
-    watcher.observe(scroller);
-    const stop = window.setTimeout(() => watcher.disconnect(), 900);
-    return () => {
-      window.clearTimeout(stop);
-      watcher.disconnect();
-    };
-  };
-  // Only as it opens: an answer tapped later adds its tags under the tiles and leaves the sheet where it is.
-  // biome-ignore lint/correctness/useExhaustiveDependencies: on opening.
-  useEffect(() => (isNew ? toEnd(false) : () => {}), []);
+  // Every sheet opens at its top (PR 690) and stays where the person scrolls it: answering a print starts at its photos,
+  // logging a new attempt at its file and settings, with Claude's ideas and the tiles under them.
 
   // Partly or Spaghetti picked on a laptop: the person's own words come first, so the note takes the focus and typing
   // goes straight in. Not on a phone: its keyboard would cover the tile just tapped and every tag, so the tags come
@@ -415,11 +388,6 @@ export function AttemptFields(props: FieldsProps) {
   return (
     // biome-ignore lint/a11y/noStaticElementInteractions: it only listens to keys that bubble up from the controls inside.
     <div
-      ref={root}
-      onPointerDownCapture={(event) => {
-        // Any press ends the settling: what a tap adds (the tags) must not scroll the sheet under the finger.
-        touched.current = true;
-      }}
       className="flex flex-col gap-5 max-md:pb-2"
       data-capture
       onKeyDown={(event) => {

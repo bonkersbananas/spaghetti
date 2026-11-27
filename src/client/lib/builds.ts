@@ -12,6 +12,7 @@ import type {
 import type { SettingsMerge } from "@shared/attempt-fields";
 import {
   type AttemptSettings,
+  asksWhichBuild,
   BUILT_IN_TAGS,
   type Outcome,
   slugify,
@@ -444,7 +445,7 @@ export const askingAttempts = (items: ItemView[], now = Date.now()) =>
       item.stage === "idea" || item.pending
         ? []
         : item.attempts
-            .filter((one) => one.outcome !== null && one.print?.asking && now - one.printedAt < 12e8)
+            .filter((one) => one.outcome !== null && asksWhichBuild(item, one) && now - one.printedAt < 12e8)
             .map((attempt) => ({ item, attempt })),
     )
     .sort((a, b) => b.attempt.printedAt - a.attempt.printedAt);
