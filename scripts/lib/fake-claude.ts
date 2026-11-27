@@ -129,8 +129,9 @@ const labels = {
 async function answerSearch(body: string, response: import("node:http").ServerResponse) {
   const raw = /Find the Prisjakt page for this thing[^{]*(\{.*\})/.exec(body)?.[1] ?? "";
   const asked = raw.toLowerCase();
-  // The suggested page is called what the thing is called.
-  const named = /name\\?":\\?"((?:[^"\\]|\\.)*?)\\?"/.exec(raw)?.[1]?.replace(/\\"/g, '"') ?? "";
+  // The suggested page is called as a product page is: the thing's name in the shop's words, the brand first.
+  const askedName = /name\\?":\\?"((?:[^"\\]|\\.)*?)\\?"/.exec(raw)?.[1]?.replace(/\\"/g, '"') ?? "";
+  const named = askedName ? `Bambu Lab ${askedName} · spare part` : "";
   if (asked.includes("slow")) await new Promise((resolve) => setTimeout(resolve, SLOW_MS));
   response.setHeader("Content-Type", "application/json");
   if (asked.includes("broken")) {

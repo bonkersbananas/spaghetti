@@ -108,21 +108,6 @@ function ShoppingBody({ item }: { item: ShoppingItem }) {
   );
   return (
     <div className="flex flex-col gap-5">
-      {(item.link || item.priceLink) && (
-        // The row is one line now: the shop and the Prisjakt page are opened from here.
-        <div className="flex flex-wrap items-center gap-2">
-          {item.link && (
-            <LinkChip href={item.link} quietArrow>
-              {shopName(item.link)}
-            </LinkChip>
-          )}
-          {item.priceLink && (
-            <LinkChip href={item.priceLink} icon={PriceIcon} quietArrow>
-              Prisjakt
-            </LinkChip>
-          )}
-        </div>
-      )}
       <PriceBlock item={item} name={shown} readOnly={readOnly} />
       <SuggestionBlock
         item={item}
@@ -182,6 +167,17 @@ function ShoppingBody({ item }: { item: ShoppingItem }) {
           onChange={(event) => change({ priceLink: event.target.value })}
         />
       </fieldset>
+      {(item.link || item.priceLink) && (
+        // The row is one line: the shop and the Prisjakt page are opened from here, under the links they are.
+        <div className="flex flex-wrap items-center gap-2">
+          {item.link && <LinkChip href={item.link}>{shopName(item.link)}</LinkChip>}
+          {item.priceLink && (
+            <LinkChip href={item.priceLink} icon={PriceIcon}>
+              Prisjakt
+            </LinkChip>
+          )}
+        </div>
+      )}
     </div>
   );
 }

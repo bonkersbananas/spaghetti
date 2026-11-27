@@ -76,7 +76,7 @@ interface MatchRowProps {
  */
 export function MatchRow({ name, title, href, answer, onUse, onDismiss, disabled }: MatchRowProps) {
   return (
-    <div className="flex flex-col gap-2 py-3 md:flex-row md:items-center md:gap-4">
+    <div className="flex flex-col gap-1.5 py-3 md:flex-row md:items-center md:gap-4">
       <div className="flex min-w-0 flex-1 flex-col">
         <p className="text-body text-ink font-semibold break-words">{name}</p>
         <a
@@ -86,13 +86,16 @@ export function MatchRow({ name, title, href, answer, onUse, onDismiss, disabled
           className="focus-ring touch-target text-small text-ink-soft pressable relative inline-flex items-center gap-1.5 self-start rounded-xs py-1 hover:underline hover:underline-offset-4"
         >
           <PriceIcon size={16} className="text-ink-faint shrink-0" aria-hidden />
-          <span className="min-w-0 break-words">{title ?? "A page on Prisjakt"}</span>
-          <ExternalIcon size={12} weight="bold" className="text-ink-faint shrink-0" aria-hidden />
-          <span className="sr-only"> (opens Prisjakt in a new tab)</span>
+          <span className="min-w-0 break-words">
+            {title ?? "A page on Prisjakt"}
+            {/* In the words, so it follows the last one when the title wraps. */}
+            <ExternalIcon size={12} weight="bold" className="text-ink-faint ml-1 inline align-baseline" aria-hidden />
+            <span className="sr-only"> (opens Prisjakt in a new tab)</span>
+          </span>
         </a>
       </div>
       {answer ? (
-        <p role="status" className="text-small text-ink-faint flex min-h-11 shrink-0 items-center gap-1.5 md:min-h-10">
+        <p role="status" className="text-small text-ink-faint flex min-h-8 shrink-0 items-center gap-1.5 md:min-h-8">
           {answer === "used" ? (
             <>
               <CheckIcon size={14} weight="bold" className="text-basil-ink" aria-hidden />
@@ -103,11 +106,11 @@ export function MatchRow({ name, title, href, answer, onUse, onDismiss, disabled
           )}
         </p>
       ) : (
-        <div className="-ml-0.5 flex shrink-0 items-center gap-2">
-          <Button variant="secondary" disabled={disabled} onClick={onUse}>
+        <div className="flex shrink-0 items-center gap-2">
+          <Button variant="secondary" size="sm" className="touch-target relative" disabled={disabled} onClick={onUse}>
             Use it
           </Button>
-          <Button variant="quiet" disabled={disabled} onClick={onDismiss}>
+          <Button variant="quiet" size="sm" className="touch-target relative" disabled={disabled} onClick={onDismiss}>
             Not this one
           </Button>
         </div>

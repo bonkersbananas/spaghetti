@@ -8589,6 +8589,21 @@ export const shots: Shot[] = [
     },
   },
   {
+    // A long product name, cut on the list, whole in its sheet: the name field wraps.
+    name: "shopping-long-name-sheet",
+    path: "/shopping",
+    prepare: async (page) => {
+      await page
+        .getByRole("button", {
+          name: "AMS Lite replacement feeder assembly with hub and buffer, complete kit",
+          exact: true,
+        })
+        .click();
+      await page.getByRole("dialog").getByRole("list", { name: "Cheapest offers" }).waitFor({ timeout: 20_000 });
+      await page.waitForTimeout(300);
+    },
+  },
+  {
     // A thing with a Prisjakt page, open: its picture, the cheapest price found and the offers, as tappable rows.
     name: "shopping-prices-sheet",
     path: "/shopping",

@@ -139,6 +139,7 @@ export function ChecklistSection() {
                     lifted={row.id === "pla"}
                     last={index === rows.length - 1}
                     thumb={row.picture ? <Thumb src="/icon-192.png" alt="" faded={done} /> : undefined}
+                    pictureRoom
                     tick={
                       <TickBox
                         checked={done}

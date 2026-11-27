@@ -163,6 +163,7 @@ function Shopping() {
                     item={item}
                     boughtBy={item.boughtBy ? byId.get(item.boughtBy) : undefined}
                     readOnly={readOnly}
+                    pictureRoom={shownBought.some((thing) => thing.picture)}
                     last={index === shownBought.length - 1}
                     onTick={(next, name) => tick(item, next, name)}
                     onOpen={() => setOpenId(item.id)}
@@ -281,6 +282,7 @@ function ToBuyList({
   }, [focusId]);
 
   const byId = new Map(items.map((item) => [item.id, item]));
+  const pictureRoom = items.some((item) => item.picture);
   const sortable = !readOnly && items.length > 1;
 
   return (
@@ -303,6 +305,7 @@ function ToBuyList({
               place={index + 1}
               last={index === order.length - 1}
               lifted={dragging === id}
+              pictureRoom={pictureRoom}
               readOnly={readOnly}
               sortable={sortable}
               handleRef={(node) => {
@@ -342,6 +345,7 @@ interface ToBuyRowProps {
   place: number;
   last: boolean;
   lifted: boolean;
+  pictureRoom: boolean;
   readOnly: boolean;
   sortable: boolean;
   handleRef: (node: HTMLButtonElement | null) => void;
@@ -357,6 +361,7 @@ function ToBuyRow({
   place,
   last,
   lifted,
+  pictureRoom,
   readOnly,
   sortable,
   handleRef,
@@ -383,6 +388,7 @@ function ToBuyRow({
         item={item}
         readOnly={readOnly}
         lifted={lifted}
+        pictureRoom={pictureRoom}
         last={last}
         onTick={onTick}
         onOpen={onOpen}

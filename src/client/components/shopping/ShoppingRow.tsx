@@ -53,6 +53,8 @@ interface ShoppingRowProps {
   onOpen: () => void;
   readOnly?: boolean;
   handle?: ReactNode;
+  /** Some row of its list has a picture: keep the room, so the names line up. */
+  pictureRoom?: boolean;
   lifted?: boolean;
   last?: boolean;
 }
@@ -62,7 +64,17 @@ interface ShoppingRowProps {
  * it, where the whole name, the shop and its Prisjakt page are) and the cheapest price found. A bought row says who
  * got it and when at the line's end, and its name steps back; bought filament offers the pantry under it.
  */
-export function ShoppingRow({ item, boughtBy, onTick, onOpen, readOnly, handle, lifted, last }: ShoppingRowProps) {
+export function ShoppingRow({
+  item,
+  boughtBy,
+  onTick,
+  onOpen,
+  readOnly,
+  handle,
+  pictureRoom,
+  lifted,
+  last,
+}: ShoppingRowProps) {
   const name = useShoppingName(item);
   const bought = item.boughtAt !== null;
   // A bought spool of filament offers the pantry: the sheet opens with what its name says.
@@ -116,6 +128,7 @@ export function ShoppingRow({ item, boughtBy, onTick, onOpen, readOnly, handle, 
     <ChecklistRow
       done={bought}
       thumb={item.picture ? <Thumb src={item.picture.url} alt="" faded={bought} /> : undefined}
+      pictureRoom={pictureRoom}
       lifted={lifted}
       last={last}
       tick={<TickBox checked={bought || ticking} onChange={tick} disabled={readOnly} label={`Bought: ${name}`} />}

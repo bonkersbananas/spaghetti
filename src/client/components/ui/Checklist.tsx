@@ -75,6 +75,11 @@ interface ChecklistRowProps {
   tick: ReactNode;
   /** A small picture of the thing (Thumb), between the tick box and the name, from `sm` (a phone's line is the name's). Only when there is one: no empty tile. */
   thumb?: ReactNode;
+  /**
+   * Some row of the list has a picture: a row without one keeps the picture's room empty (from `sm`), so every name
+   * starts at the same edge. Room, not a tile: nothing is drawn there.
+   */
+  pictureRoom?: boolean;
   /** The name, usually a `ChecklistName` that opens the thing. */
   children: ReactNode;
   /** What sits at the line's end, quiet: the price found, who got it and when. */
@@ -101,6 +106,7 @@ interface ChecklistRowProps {
 export function ChecklistRow({
   tick,
   thumb,
+  pictureRoom,
   children,
   aside,
   meta,
@@ -126,12 +132,26 @@ export function ChecklistRow({
       <div className="flex min-w-0 items-center gap-1 md:gap-2">
         {tick}
         {/* On a phone the line is the name's: the picture waits for the thing's sheet. */}
-        {thumb && <div className="hidden shrink-0 pr-1 sm:flex">{thumb}</div>}
+        {thumb ? (
+          <div className="hidden shrink-0 pr-1 sm:flex">{thumb}</div>
+        ) : (
+          pictureRoom && <div aria-hidden className="box-content hidden size-8 shrink-0 pr-1 sm:block" />
+        )}
         <div className={cn("min-w-0 flex-1", done && "text-ink-faint")}>{children}</div>
         {aside && <div className="text-small text-ink-faint flex shrink-0 items-center gap-1.5 pl-2">{aside}</div>}
         {handle}
       </div>
-      {meta && <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 pb-1.5 pl-12">{meta}</div>}
+      {meta && (
+        // Starts where the name does: past the tick box, and the picture's room when there is one.
+        <div
+          className={cn(
+            "flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 pb-1.5 pl-12 md:pl-13",
+            (thumb || pictureRoom) && "sm:pl-21 md:pl-24",
+          )}
+        >
+          {meta}
+        </div>
+      )}
     </div>
   );
 }
