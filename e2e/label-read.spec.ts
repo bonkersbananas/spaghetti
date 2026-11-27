@@ -130,6 +130,35 @@ test("a label photo picked before the page knows Claude can read it is still rea
   });
 });
 
+test("a label photo still waiting for that answer is dropped when the sheet closes first", async ({ page }) => {
+  let release = () => {};
+  const held = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  let answered = false;
+  await page.route("**/api/features", async (route) => {
+    await held;
+    await route.continue().catch(() => {});
+    answered = true;
+  });
+  await page.goto("/pantry");
+  await page
+    .getByRole("button", { name: /^Add (a )?spool$/ })
+    .first()
+    .click();
+  const sheet = page.getByRole("dialog", { name: "New spool" });
+  await sheet.getByTestId("spool-photo-input").setInputFiles(jade);
+  await sheet.getByRole("button", { name: "Close" }).click();
+  await expect(sheet).toBeHidden();
+  release();
+  await expect.poll(() => answered).toBe(true);
+  // The answer is in: give the waiting pick its chance to (wrongly) save, then check the pantry stays empty.
+  await expect(page.getByRole("button", { name: /^Add (a )?spool$/ }).first()).toBeVisible();
+  await page.evaluate(() => new Promise((resolve) => setTimeout(resolve, 300)));
+  expect(await spoolsByApi(page)).toHaveLength(0);
+  await expect(page).toHaveURL(/\/pantry$/);
+});
+
 test("a photo taken on the spool's page before the page knows Claude can read it is still read", async ({ page }) => {
   let release = () => {};
   const held = new Promise<void>((resolve) => {

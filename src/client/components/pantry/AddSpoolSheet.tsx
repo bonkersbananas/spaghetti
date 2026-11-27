@@ -87,8 +87,11 @@ export function AddSpoolSheet({
   // What the person has set themselves: a label read may fill the rest, and the starting material and weight.
   const [touched, setTouched] = useState<ReadonlySet<string>>(new Set());
 
+  // Moves on at each open, close and save: a photo still waiting for the features knows the sheet it came from is gone.
+  const turn = useRef(0);
   // biome-ignore lint/correctness/useExhaustiveDependencies: only when it opens.
   useEffect(() => {
+    turn.current++;
     if (!open) return;
     setTapped(null);
     setAllProducts(false);
@@ -110,7 +113,15 @@ export function AddSpoolSheet({
     // With Claude's key, a photo here is the label to read: the spool is saved with it at once. One picked before the
     // features answered waits for them, then saves with the sheet as it is by then.
     if (labelReads) save(file);
-    else void labelReadsEnabled(queryClient).then((read) => (read ? saveRef.current(file) : setPhoto(file)));
+    else {
+      // Unless, by then, the sheet closed or saved (the counter moves on both): the photo is then dropped.
+      const at = turn.current;
+      void labelReadsEnabled(queryClient).then((read) => {
+        if (turn.current !== at) return;
+        if (read) saveRef.current(file);
+        else setPhoto(file);
+      });
+    }
   };
   const camera = useFilePicker({ camera: true, onFiles: pickPhoto, testId: "spool-camera-input" });
   const library = useFilePicker({ onFiles: pickPhoto, testId: "spool-photo-input" });
@@ -157,6 +168,7 @@ export function AddSpoolSheet({
 
   function save(label?: File) {
     if (!user || (!label && !draft.material.trim())) return;
+    turn.current++;
     const read = label
       ? {
           placeholders: (["material", "netGrams"] as const).filter(
