@@ -129,8 +129,9 @@ const labels = {
 async function answerSearch(body: string, response: import("node:http").ServerResponse) {
   const raw = /Find the Prisjakt page for this thing[^{]*(\{.*\})/.exec(body)?.[1] ?? "";
   const asked = raw.toLowerCase();
-  // The suggested page is called what the thing is called.
-  const named = /name\\?":\\?"((?:[^"\\]|\\.)*?)\\?"/.exec(raw)?.[1]?.replace(/\\"/g, '"') ?? "";
+  // The suggested page is called as a product page is: the thing's name in the shop's words, the brand first.
+  const askedName = /name\\?":\\?"((?:[^"\\]|\\.)*?)\\?"/.exec(raw)?.[1]?.replace(/\\"/g, '"') ?? "";
+  const named = askedName ? `Bambu Lab ${askedName} · spare part` : "";
   if (asked.includes("slow")) await new Promise((resolve) => setTimeout(resolve, SLOW_MS));
   response.setHeader("Content-Type", "application/json");
   if (asked.includes("broken")) {
@@ -139,7 +140,7 @@ async function answerSearch(body: string, response: import("node:http").ServerRe
     return;
   }
   const refused = asked.includes("refused");
-  const product = asked.includes("second") ? 2 : 1;
+  const product = SEEDED_PAGES[askedName] ?? (asked.includes("second") ? 2 : 1);
   const url = `https://www.prisjakt.nu/produkt.php?p=${product}`;
   const none = asked.includes("nomatch");
   const answer = asked.includes("invented")
@@ -515,8 +516,32 @@ function receiveHook(request: IncomingMessage, response: ServerResponse, receive
   });
 }
 
+/**
+ * The pages found for some of the seed's things, so a match used in a shot shows a believable price (not product 1's
+ * 7 699 kr).
+ */
+const SEEDED_PAGES: Record<string, number> = {
+  "PTFE tube, 1 m": 15011231,
+  "Bed adhesion spray": 15011232,
+  "PLA Silk, gold, 1 kg": 15011233,
+  "Hardened steel nozzle, 0.4 mm": 15011234,
+};
+
 /** The cheapest price of the products the screenshots' shopping list links, in kronor (others keep the fixture's). */
-const PRODUCT_PRICES: Record<string, number> = { 13366548: 149, 12086734: 249, 14402211: 259 };
+const PRODUCT_PRICES: Record<string, number> = {
+  15011231: 89,
+  15011232: 159,
+  15011233: 279,
+  15011234: 229,
+  13366548: 149,
+  12086734: 249,
+  14402211: 259,
+  15011223: 329,
+  15011224: 279,
+  15011225: 449,
+  15011226: 299,
+  15011227: 189,
+};
 
 /** Each seeded product gets its own picture (the shopping tile shows several side by side); others by their number. */
 const productImage = (product: string) => {

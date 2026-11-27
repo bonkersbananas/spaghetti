@@ -8457,6 +8457,67 @@ export const shots: Shot[] = [
     },
   },
   {
+    // "Match prices": every page Claude found, in one sheet, one already used and one turned down.
+    name: "shopping-match-prices",
+    path: "/shopping",
+    prepare: async (page) => {
+      await page.getByRole("button", { name: "Match prices" }).click({ timeout: 20_000 });
+      const sheet = page.getByRole("dialog", { name: "Match prices" });
+      await sheet.getByRole("list", { name: "Pages to check" }).waitFor();
+      await page.waitForTimeout(400);
+    },
+    cleanup: async (page) => {
+      await page.keyboard.press("Escape");
+    },
+  },
+  {
+    // Two of them answered: one used (its price read from the page), one turned down; both stay where they were.
+    name: "shopping-match-prices-answered",
+    path: "/shopping",
+    prepare: async (page) => {
+      await page.getByRole("button", { name: "Match prices" }).click({ timeout: 20_000 });
+      const sheet = page.getByRole("dialog", { name: "Match prices" });
+      const row = (name: string) => sheet.getByRole("listitem").filter({ hasText: `For “${name}”` });
+      await row("PTFE tube, 1 m").getByRole("button", { name: "Use it" }).click();
+      await row("Velcro cable ties, 50 pcs").getByRole("button", { name: "Not this one" }).click();
+      // The page is read in the background and the list refreshed: its price arrives in the row.
+      await row("PTFE tube, 1 m")
+        .getByText(/Matched ·/)
+        .waitFor({ timeout: 30_000 })
+        .catch(() => undefined);
+      await page.waitForTimeout(400);
+    },
+    cleanup: async (page) => {
+      await page.keyboard.press("Escape");
+    },
+  },
+  {
+    // Long product names on the list: two balanced lines, price and handle level with the first.
+    name: "shopping-long-names",
+    path: "/shopping",
+    prepare: async (page) => {
+      await page
+        .getByRole("button", { name: /^Digital caliper, 150 mm/ })
+        .evaluate((name) => name.scrollIntoView({ block: "center" }));
+      await page.waitForTimeout(400);
+    },
+  },
+  {
+    // A thing ticked off: it went to Bought, and the toast holds its Undo.
+    name: "shopping-ticked",
+    path: "/shopping",
+    prepare: async (page) => {
+      await page.getByRole("checkbox", { name: "Bought: Hex key set" }).click();
+      await page.getByRole("button", { name: "Undo" }).waitFor();
+      await page.waitForTimeout(400);
+    },
+    cleanup: async (page) => {
+      // Back on the list for the next shot, whether or not the toast is still up.
+      await page.getByRole("list", { name: "Bought" }).getByRole("checkbox", { name: "Bought: Hex key set" }).click();
+      await page.getByRole("list", { name: "To buy" }).getByText("Hex key set").waitFor();
+    },
+  },
+  {
     // Filament bought, three at once and a nozzle: the filament rows offer the pantry, the nozzle nothing.
     name: "shopping-bought-filament",
     path: "/shopping",
@@ -8557,6 +8618,21 @@ export const shots: Shot[] = [
     prepare: async (page) => {
       await page.getByRole("button", { name: "Hardened steel nozzle, 0.4 mm", exact: true }).click();
       await page.getByRole("dialog").getByLabel("Prisjakt", { exact: true }).waitFor();
+    },
+  },
+  {
+    // A long product name, cut on the list, whole in its sheet: the name field wraps.
+    name: "shopping-long-name-sheet",
+    path: "/shopping",
+    prepare: async (page) => {
+      await page
+        .getByRole("button", {
+          name: "AMS Lite replacement feeder assembly with hub and buffer, complete kit",
+          exact: true,
+        })
+        .click();
+      await page.getByRole("dialog").getByRole("list", { name: "Cheapest offers" }).waitFor({ timeout: 20_000 });
+      await page.waitForTimeout(300);
     },
   },
   {

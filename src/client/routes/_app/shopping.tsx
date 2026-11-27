@@ -8,13 +8,16 @@ import { PageHeader } from "@/components/shell/PageHeader";
 import { ShoppingRow, useShoppingName } from "@/components/shopping/ShoppingRow";
 import { Button } from "@/components/ui/Button";
 import { checklistSurface } from "@/components/ui/Checklist";
+import { ClaudeLine } from "@/components/ui/ClaudeLine";
 import { DragHandle } from "@/components/ui/DragHandle";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { TextField } from "@/components/ui/Field";
 import { PlusIcon } from "@/components/ui/icons";
 import { Kbd } from "@/components/ui/Kbd";
+import { OfferCard } from "@/components/ui/OfferCard";
 import { Section } from "@/components/ui/Section";
 import { Skeleton } from "@/components/ui/Skeleton";
+import { toast } from "@/components/ui/Toast";
 import { cn } from "@/lib/cn";
 import { tap } from "@/lib/haptics";
 import { shortcutCaps, useHotkeys } from "@/lib/hotkeys";
@@ -28,10 +31,16 @@ import {
   reorderShopping,
   replayTicks,
   setBought,
+  untick,
   useShopping,
+  useToMatch,
 } from "@/lib/shopping";
+import { useMediaQuery } from "@/lib/use-media-query";
 
-// Opened with a tap: its own chunk.
+// Opened with a tap: their own chunks.
+const MatchPricesSheet = lazy(() =>
+  import("@/components/shopping/MatchPricesSheet").then((m) => ({ default: m.MatchPricesSheet })),
+);
 const ShoppingSheet = lazy(() =>
   import("@/components/shopping/ShoppingSheet").then((m) => ({ default: m.ShoppingSheet })),
 );
@@ -63,6 +72,13 @@ function keepFocusOnTick() {
   }, 100);
 }
 
+/** A name for one line of a toast: a long product name is cut at a word, with an ellipsis. */
+function shortName(name: string, most = 26): string {
+  if (name.length <= most) return name;
+  const cut = name.slice(0, most + 1).replace(/[\s,;:·–-]+\S*$/, "");
+  return `${cut.length > most / 2 ? cut : name.slice(0, most)}…`;
+}
+
 /** Bought things shown before "Show all". */
 const BOUGHT_SHOWN = 8;
 
@@ -77,10 +93,20 @@ function Shopping() {
   const field = useRef<HTMLInputElement>(null);
   const byId = new Map(people?.map((person) => [person.id, person]));
   // Without the session yet the tick still counts: the server knows who it is, and its copy replaces this one.
-  const tick = (item: ShoppingItem, next: boolean) => {
+  const tick = (item: ShoppingItem, next: boolean, name: string) => {
     keepFocusOnTick();
     void setBought(queryClient, item, next, me?.id ?? null);
+    // Bought sits below the list on a phone and beside it on a laptop: the undo is in the toast, where the thumb is.
+    const order = toBuy.map((thing) => thing.id);
+    if (next && canEdit())
+      // One line, so it covers no more of the list than it must, right where the thumb ticks next.
+      toast.undo(`${shortName(name)} bought`, {
+        id: "shopping-tick",
+        onUndo: () => void untick(queryClient, item.id, order, me?.id ?? null),
+      });
   };
+  const toMatch = useToMatch(toBuy);
+  const [matching, setMatching] = useState(false);
 
   // A tick a closed page left waiting for its thing's add goes out now that the list is the server's.
   // Once per visit: later changes of the list are this page's own ticks, which are still on their way.
@@ -99,12 +125,17 @@ function Shopping() {
   );
 
   const shownBought = allBought ? bought : bought.slice(0, BOUGHT_SHOWN);
+  const wide = useMediaQuery("(min-width: 80rem)");
   return (
     <>
       <PageHeader title="Shopping list" subtitle="What the printer needs next." />
-      <div className="max-w-content flex flex-col gap-12 md:gap-16">
-        <div className="flex flex-col gap-4 md:gap-5">
+      {/* On a laptop, two columns: the field and the offer over the list, and Bought beside the list, level with it. */}
+      <div className="max-w-content xl:max-w-wide flex flex-col xl:grid xl:grid-cols-[minmax(0,1fr)_minmax(0,22rem)] xl:items-start xl:gap-x-14 xl:gap-y-5">
+        <div className="flex flex-col gap-4 md:gap-5 xl:col-start-1 xl:row-start-1">
           <AddToList fieldRef={field} disabled={readOnly || !me} userId={me?.id} />
+          {!readOnly && toMatch.length > 0 && <MatchOffer count={toMatch.length} onOpen={() => setMatching(true)} />}
+        </div>
+        <div className="mt-4 md:mt-5 xl:col-start-1 xl:row-start-2 xl:mt-0">
           {isPending && !data ? (
             <Skeleton className="h-60 w-full rounded-lg" aria-hidden />
           ) : toBuy.length ? (
@@ -130,7 +161,9 @@ function Shopping() {
           <Section
             id="shopping-bought"
             title="Bought"
-            size="title"
+            // Beside the list it steps back: a caption, and rows on the page rather than a second card.
+            size={wide ? "overline" : "title"}
+            className="mt-12 md:mt-16 xl:col-start-2 xl:row-start-2 xl:mt-0"
             count={bought.length}
             aside={
               <Button variant="quiet" size="sm" disabled={readOnly} onClick={() => removeShopping(queryClient, bought)}>
@@ -138,7 +171,7 @@ function Shopping() {
               </Button>
             }
           >
-            <ul className={checklistSurface} aria-label="Bought">
+            <ul className={wide ? undefined : checklistSurface} aria-label="Bought">
               {shownBought.map((item, index) => (
                 <li key={item.id}>
                   <ShoppingRow
@@ -146,7 +179,7 @@ function Shopping() {
                     boughtBy={item.boughtBy ? byId.get(item.boughtBy) : undefined}
                     readOnly={readOnly}
                     last={index === shownBought.length - 1}
-                    onTick={(next) => tick(item, next)}
+                    onTick={(next, name) => tick(item, next, name)}
                     onOpen={() => setOpenId(item.id)}
                   />
                 </li>
@@ -162,6 +195,7 @@ function Shopping() {
       </div>
       <Suspense fallback={null}>
         {openId && <ShoppingSheet itemId={openId} onOpenChange={(open) => !open && setOpenId(null)} />}
+        {matching && <MatchPricesSheet ids={toMatch.map((item) => item.id)} onClose={() => setMatching(false)} />}
       </Suspense>
     </>
   );
@@ -235,7 +269,7 @@ function ToBuyList({
 }: {
   items: ShoppingItem[];
   readOnly: boolean;
-  onTick: (item: ShoppingItem, bought: boolean) => void;
+  onTick: (item: ShoppingItem, bought: boolean, name: string) => void;
   onOpen: (id: string) => void;
 }) {
   const queryClient = useQueryClient();
@@ -305,7 +339,7 @@ function ToBuyList({
                 moveShopping(queryClient, items, id, step);
                 setSaid(`${name}, now ${at + 1} of ${order.length}.`);
               }}
-              onTick={(next) => onTick(item, next)}
+              onTick={(next, name) => onTick(item, next, name)}
               onOpen={() => onOpen(id)}
             />
           );
@@ -329,7 +363,7 @@ interface ToBuyRowProps {
   onDragStart: () => void;
   onDragEnd: () => void;
   onMove: (step: -1 | 1, name: string) => void;
-  onTick: (bought: boolean) => void;
+  onTick: (bought: boolean, name: string) => void;
   onOpen: () => void;
 }
 
@@ -383,5 +417,23 @@ function ToBuyRow({
         }
       />
     </Reorder.Item>
+  );
+}
+
+/**
+ * One offer for the whole list, at its top, in place of a chip on every row: Claude found Prisjakt pages for some
+ * things, and one tap opens them all to check, each used only once someone says so.
+ */
+function MatchOffer({ count, onOpen }: { count: number; onOpen: () => void }) {
+  return (
+    <OfferCard
+      title={count === 1 ? "One price to match" : `${count} prices to match`}
+      detail={<ClaudeLine>Claude found the pages</ClaudeLine>}
+      action={
+        <Button variant="secondary" size="sm" className="touch-target relative" onClick={onOpen}>
+          Match prices
+        </Button>
+      }
+    />
   );
 }

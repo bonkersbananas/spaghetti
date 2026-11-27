@@ -23,14 +23,20 @@ test("shopping: add a name and links, tick it off and back, edit it, delete with
   await add(page, `${name} https://eu.store.bambulab.com/products/liquid-glue https://www.prisjakt.nu/produkt.php?p=1`);
 
   const row = toBuy(page).getByRole("listitem").filter({ hasText: name });
-  await expect(row.getByRole("link", { name: /bambulab\.com/ })).toHaveAttribute(
+  // One line: the links are a tap away, in its sheet.
+  await expect(row.getByRole("link")).toHaveCount(0);
+  await row.getByRole("button", { name, exact: true }).click();
+  const opened = page.getByRole("dialog");
+  await expect(opened.getByRole("link", { name: /bambulab\.com/ })).toHaveAttribute(
     "href",
     "https://eu.store.bambulab.com/products/liquid-glue",
   );
-  await expect(row.getByRole("link", { name: /Prisjakt/ })).toHaveAttribute(
+  await expect(opened.getByRole("link", { name: /^Prisjakt/ })).toHaveAttribute(
     "href",
     "https://www.prisjakt.nu/produkt.php?p=1",
   );
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("dialog")).toHaveCount(0);
 
   // Ticked off: it moves to Bought, and survives a reload.
   await row.getByRole("checkbox", { name: `Bought: ${name}` }).click();
@@ -60,7 +66,39 @@ test("shopping: add a name and links, tick it off and back, edit it, delete with
   await page.getByRole("button", { name: "Undo" }).click();
   const back = toBuy(page).getByRole("listitem").filter({ hasText: renamed });
   await expect(back).toBeVisible();
-  await expect(back.getByRole("link", { name: /bambulab\.com/ })).toHaveCount(0);
+  await back.getByRole("button", { name: renamed, exact: true }).click();
+  await expect(page.getByRole("dialog").getByRole("link", { name: /bambulab\.com/ })).toHaveCount(0);
+  await page.getByRole("dialog").getByRole("button", { name: "Delete" }).click();
+});
+
+test("shopping: a tick says so in a toast, and its Undo puts the thing back where it was", {
+  tag: "@phone",
+}, async ({ page }) => {
+  await signIn(page);
+  await page.goto("/shopping");
+  const [first, middle, last] = ["Spare PEI plate", "Spare nozzle wipe", "Spare cutter"].map((n) => `${n} ${tag()}`);
+  for (const name of [last, middle, first]) await add(page, name as string);
+  const names = toBuy(page).getByRole("button", { name: new RegExp(`^(${[first, middle, last].join("|")})$`) });
+  await expect(names).toHaveText([first, middle, last] as string[]);
+
+  await toBuy(page)
+    .getByRole("checkbox", { name: `Bought: ${middle}` })
+    .click();
+  await expect(bought(page).getByRole("checkbox", { name: `Bought: ${middle}` })).toBeChecked();
+  const toast = page.locator("[data-sonner-toast]").filter({ hasText: "Bought" });
+  await expect(toast).toContainText(middle as string);
+  await toast.getByRole("button", { name: "Undo" }).click();
+
+  // Back in its place between the other two, not on top, and the server agrees.
+  await expect(names).toHaveText([first, middle, last] as string[]);
+  await expect(bought(page).getByText(middle as string)).toHaveCount(0);
+  await page.reload();
+  await expect(names).toHaveText([first, middle, last] as string[]);
+  for (const name of [first, middle, last]) {
+    await toBuy(page).getByRole("button", { name, exact: true }).click();
+    await page.getByRole("dialog").getByRole("button", { name: "Delete" }).click();
+    await expect(page.getByRole("dialog")).toHaveCount(0);
+  }
 });
 
 test("shopping: unticking within the pause keeps it on the list", async ({ page }) => {
@@ -151,22 +189,34 @@ test("shopping: what's added or ticked while an order is being saved stays", asy
 
 test("shopping: a Prisjakt page is suggested for a name, confirmed, and its picture and cheapest offers show", {
   tag: "@phone",
-}, async ({ page }) => {
+}, async ({ page, isMobile }) => {
   test.setTimeout(60_000);
   await signIn(page);
   await page.goto("/shopping");
   const name = `PLA Basic black ${tag()}`;
   await add(page, name);
   const row = toBuy(page).getByRole("listitem").filter({ hasText: name });
-  // The search runs in the background; the row hints at a match without using it.
+  // The search runs in the background; one offer at the top of the list says a match waits, without using it.
   await page.evaluate(() => window.dispatchEvent(new Event("focus")));
-  await expect(row.getByRole("button", { name: "Prisjakt match?" })).toBeVisible({ timeout: 20_000 });
-  await expect(row.getByRole("link", { name: /Prisjakt/ })).toHaveCount(0);
+  const offer = page.getByRole("button", { name: "Match prices" });
+  await expect(offer).toBeVisible({ timeout: 20_000 });
+  await expect(row.getByRole("button", { name: "Prisjakt match?" })).toHaveCount(0);
 
-  await row.getByRole("button", { name: "Prisjakt match?" }).click();
+  // Its page, among the others found, is used only once someone says so.
+  await offer.click();
+  const matches = page.getByRole("dialog", { name: "Match prices" });
+  const match = matches.getByRole("listitem").filter({ hasText: name });
+  // Other things' pages may have been found first: this one's joins the open sheet once its search answers.
+  await expect(match.getByRole("link")).toHaveAttribute("href", "https://www.prisjakt.nu/produkt.php?p=1", {
+    timeout: 20_000,
+  });
+  await match.getByRole("button", { name: "Use it" }).click();
+  await expect(match.getByRole("status")).toContainText("Matched");
+  await matches.getByRole("button", { name: "Done" }).click();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+
+  await row.getByRole("button", { name, exact: true }).click();
   const sheet = page.getByRole("dialog");
-  await expect(sheet.getByText("Is this it?")).toBeVisible();
-  await sheet.getByRole("button", { name: "Use it" }).click();
 
   // The page is read in the background: the cheapest offers, as found, with a link to the product page.
   await expect(sheet.getByRole("list", { name: "Cheapest offers" })).toBeVisible({ timeout: 20_000 });
@@ -179,9 +229,13 @@ test("shopping: a Prisjakt page is suggested for a name, confirmed, and its pict
   await page.keyboard.press("Escape");
   await expect(page.getByRole("dialog")).toHaveCount(0);
   await expect(row).toContainText("7\u00a0699\u00a0kr");
-  // The picture really loads in its slot (also on a phone), and the line under the name is short.
-  await expect(row.locator("img")).toBeVisible();
-  await expect.poll(() => row.locator("img").evaluate((img: HTMLImageElement) => img.naturalWidth)).toBeGreaterThan(0);
+  // The picture really loads, beside the name on a laptop (a phone's line is the name's: it is in the sheet there),
+  // and the row stays one line: just the price.
+  const picture = isMobile ? page.getByRole("dialog").locator("img") : row.locator("img");
+  if (isMobile) await row.getByRole("button", { name, exact: true }).click();
+  await expect(picture).toBeVisible();
+  await expect.poll(() => picture.evaluate((img: HTMLImageElement) => img.naturalWidth)).toBeGreaterThan(0);
+  if (isMobile) await page.keyboard.press("Escape");
   await expect(row).not.toContainText("checked today");
 });
 
@@ -193,7 +247,8 @@ test("shopping: 'Not this one' drops a suggested page, and a name with no match 
   await add(page, name);
   const row = toBuy(page).getByRole("listitem").filter({ hasText: name });
   await page.evaluate(() => window.dispatchEvent(new Event("focus")));
-  await row.getByRole("button", { name: "Prisjakt match?" }).click({ timeout: 20_000 });
+  await expect(page.getByRole("button", { name: "Match prices" })).toBeVisible({ timeout: 20_000 });
+  await row.getByRole("button", { name, exact: true }).click();
   const sheet = page.getByRole("dialog");
   await sheet.getByRole("button", { name: "Not this one" }).click();
   await expect(sheet.getByText("Is this it?")).toHaveCount(0);

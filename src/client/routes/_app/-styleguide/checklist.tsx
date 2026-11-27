@@ -1,17 +1,28 @@
+import { formatKr } from "@shared/prisjakt";
 import { useState } from "react";
-import { ChecklistRow, checklistSurface, TickBox } from "@/components/ui/Checklist";
+import { Button } from "@/components/ui/Button";
+import { ChecklistName, ChecklistRow, checklistSurface, TickBox } from "@/components/ui/Checklist";
+import { ClaudeLine } from "@/components/ui/ClaudeLine";
 import { DragHandle } from "@/components/ui/DragHandle";
 import { PriceIcon } from "@/components/ui/icons";
 import { LinkChip } from "@/components/ui/LinkChip";
+import { OfferCard } from "@/components/ui/OfferCard";
 import { OfferRow, PriceLine } from "@/components/ui/Prices";
-import { SuggestionCard } from "@/components/ui/Suggestion";
+import { SpoolDisc } from "@/components/ui/SpoolDisc";
+import { MatchRow, SuggestionCard } from "@/components/ui/Suggestion";
 import { Thumb } from "@/components/ui/Thumb";
 import { Label, Panel, Section } from "./shared";
 
 const rows = [
-  { id: "glue", name: "Liquid glue for the build plate", shop: "bambulab.com", price: true },
-  { id: "pla", name: "PLA Basic, black ×2", shop: null, price: true },
-  { id: "nozzle", name: "Hardened steel nozzle, 0.4 mm", shop: "bambulab.com", price: false },
+  { id: "glue", name: "Liquid glue for the build plate", price: 149, picture: true },
+  { id: "pla", name: "PLA Basic, sunflower yellow ×2", price: null, picture: false, color: "#f5c518" }, // design-lint-ignore: a filament's colour is data
+  {
+    id: "caliper",
+    name: "Digital caliper, 150 mm, stainless steel with LCD display and depth rod",
+    price: null,
+    picture: false,
+  },
+  { id: "nozzle", name: "Hardened steel nozzle, 0.4 mm", price: 249, picture: true },
 ];
 
 /** The shopping list's pieces: tick boxes, drag handles, link chips and the rows built from them. */
@@ -21,7 +32,7 @@ export function ChecklistSection() {
     <Section
       id="checklist"
       title="Checklist"
-      note="A list to tick off and sort, such as the shopping list. A row is the tick box, an optional picture, the name (a button that opens it), a line of link chips or the cheapest price found, and the drag handle; rows sit on one soft surface with an inset hairline between them. Prices are always found at a time (“checked today”), never a promise; a suggested page is never used until someone taps Use it."
+      note="A list to tick off and sort, such as the shopping list. A row is the tick box, the thing's colour (a spool disc, for a filament) or its 48 px picture from sm, only when it has one (never an empty tile or slot), the name (a button that opens it; two balanced lines at most, then an ellipsis), something quiet at the end of its first line (the cheapest price found, when it was bought) and the drag handle; rows sit on one soft surface with an inset hairline between them. Pages to confirm are one offer card for the whole list, not a chip on every row. Prices are always found at a time (“checked today”), never a promise; a suggested page is never used until someone taps Use it."
     >
       <div className="flex flex-col gap-6">
         <Panel className="flex flex-wrap items-center gap-6">
@@ -82,6 +93,43 @@ export function ChecklistSection() {
               onDismiss={() => undefined}
             />
           </div>
+          <div className="flex flex-col gap-1">
+            <Label>Match prices: one offer for the list</Label>
+            <OfferCard
+              title="8 prices to match"
+              detail={<ClaudeLine>Claude found the pages</ClaudeLine>}
+              action={
+                <Button variant="secondary" size="sm">
+                  Match prices
+                </Button>
+              }
+            />
+          </div>
+          <div className="flex flex-col gap-1">
+            <Label>Match rows, in the Match prices sheet</Label>
+            <ul className="divide-hairline flex flex-col divide-y">
+              <li>
+                <MatchRow
+                  name="Silica gel for the dry box"
+                  title="Silica gel, 1 kg, orange indicating"
+                  href="https://www.prisjakt.nu/"
+                  onUse={() => undefined}
+                  onDismiss={() => undefined}
+                />
+              </li>
+              <li>
+                <MatchRow
+                  name="PTFE tube, 1 m"
+                  title="Bambu Lab PTFE tube 1 m"
+                  href="https://www.prisjakt.nu/"
+                  answer="used"
+                  price="249 kr"
+                  onUse={() => undefined}
+                  onDismiss={() => undefined}
+                />
+              </li>
+            </ul>
+          </div>
           <ul className={checklistSurface} aria-label="A shopping list">
             {rows.map((row, index) => {
               const done = !!ticked[row.id];
@@ -91,6 +139,8 @@ export function ChecklistSection() {
                     done={done}
                     lifted={row.id === "pla"}
                     last={index === rows.length - 1}
+                    swatch={"color" in row && row.color ? <SpoolDisc color={row.color} size="sm" /> : undefined}
+                    thumb={row.picture ? <Thumb src="/icon-192.png" alt="" faded={done} /> : undefined}
                     tick={
                       <TickBox
                         checked={done}
@@ -98,19 +148,12 @@ export function ChecklistSection() {
                         label={`Bought: ${row.name}`}
                       />
                     }
-                    meta={
+                    aside={
                       done ? (
-                        <span className="text-small text-ink-faint">Sam got it just now</span>
-                      ) : (
-                        <>
-                          {row.shop && <LinkChip href="https://eu.store.bambulab.com/">{row.shop}</LinkChip>}
-                          {row.price && (
-                            <LinkChip href="https://www.prisjakt.nu/" icon={PriceIcon}>
-                              Prisjakt
-                            </LinkChip>
-                          )}
-                        </>
-                      )
+                        "just now"
+                      ) : row.price ? (
+                        <span className="text-ink-soft tabular-nums">{formatKr(row.price)}</span>
+                      ) : undefined
                     }
                     handle={
                       <DragHandle
@@ -121,21 +164,17 @@ export function ChecklistSection() {
                       />
                     }
                   >
-                    <span
-                      className={
-                        done
-                          ? "text-body text-ink-faint decoration-ink/30 line-through"
-                          : "text-body text-ink font-semibold"
-                      }
-                    >
+                    <ChecklistName done={done} onOpen={() => undefined}>
                       {row.name}
-                    </span>
+                    </ChecklistName>
                   </ChecklistRow>
                 </li>
               );
             })}
           </ul>
-          <p className="text-small text-ink-faint mt-3">The second row is lifted, as it looks mid-drag.</p>
+          <p className="text-small text-ink-faint mt-3">
+            The second row is lifted, as it looks mid-drag; the third has a name too long for its line.
+          </p>
         </Panel>
       </div>
     </Section>
