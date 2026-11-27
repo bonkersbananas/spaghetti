@@ -128,15 +128,19 @@ export interface IconButtonProps extends Omit<ComponentPropsWithRef<"button">, "
   icon: Icon;
   /** Required: icon buttons have no visible text. */
   label: string;
-  variant?: "quiet" | "secondary" | "primary";
+  /**
+   * `stage`: a round control over a picture or the 3D view's stage (play on the viewer): cream at 90 % on
+   * `shadow-soft`, like the chips over the stage, with the icon in full ink so it reads on any colour behind it. At
+   * `md` it is 44 px on phones and 36 px with a mouse, with a 44 px hit area on any touch screen.
+   */
+  variant?: "quiet" | "secondary" | "primary" | "stage";
   size?: ButtonSize;
 }
 
-const iconButtonSizes: Record<ButtonSize, string> = {
-  sm: "size-8 rounded-sm",
-  md: "size-11 rounded-md md:size-9",
-  lg: "size-14 rounded-lg",
-};
+const iconVariants = { ...variants, stage: "bg-cream/90 text-ink shadow-soft hover:bg-cream" };
+
+const iconButtonSizes: Record<ButtonSize, string> = { sm: "size-8", md: "size-11 md:size-9", lg: "size-14" };
+const iconButtonRadii: Record<ButtonSize, string> = { sm: "rounded-sm", md: "rounded-md", lg: "rounded-lg" };
 
 export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(function IconButton(
   { icon: IconComponent, label, variant = "quiet", size = "md", className, type = "button", ...props },
@@ -150,9 +154,11 @@ export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(functio
       title={label}
       className={cn(
         "pressable focus-ring inline-flex shrink-0 items-center justify-center",
-        variants[variant],
+        iconVariants[variant],
         iconButtonSizes[size],
-        hitArea(size, className),
+        variant === "stage" ? "rounded-full" : iconButtonRadii[size],
+        // Over a stage it may sit on a touch laptop at its desktop size: the 44 px hit area at every size.
+        hitArea(variant === "stage" ? "sm" : size, className),
         className,
       )}
       {...props}

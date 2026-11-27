@@ -44,10 +44,13 @@ function Workshop() {
   // The pictures are drawn smaller on a phone, where the tile is as wide as the screen but short (72 px wells), so all four tiles show at once.
   const isDesktop = useIsDesktop();
 
-  // The first AMS unit as the printer has it, drawn as the unit: four bays, an empty ring in a free one (the printer's
-  // slots hold only the loaded ones). Nothing without an AMS.
+  // The first AMS unit's loaded spools, each over its slot; an empty bay is left out rather than drawn as a ring, so
+  // the tile shows what is in the printer. With nothing loaded (or no AMS) it is the printer's glyph.
   const unit = printer ? amsUnitLetters(printer.setup.amsUnits)[0] : undefined;
-  const slots = unit ? unitSlots(unit) : [];
+  const loaded = (unit ? unitSlots(unit) : []).flatMap((slot) => {
+    const spool = spools?.find((candidate) => candidate.id === printer?.slots[slot]);
+    return spool ? [{ slot, spool }] : [];
+  });
   const pictured = toBuy.filter((thing) => thing.picture);
   const shown = pictured.slice(0, PICTURES);
 
@@ -66,13 +69,23 @@ function Workshop() {
       </>
     )
   ) : null;
-  const printerLine = printer ? (
+  const chores = printer ? (
     due.length ? (
       <Attention>{`${plural(due.length, "chore")} due`}</Attention>
     ) : (
       "All in order"
     )
   ) : null;
+  const printerLine =
+    printer && spools && unit ? (
+      <>
+        {loaded.length === 4 ? "AMS full" : loaded.length ? `${loaded.length} of 4 loaded` : "AMS empty"}
+        {" · "}
+        {chores}
+      </>
+    ) : (
+      chores
+    );
   // The newest twist says how things stand; its picture (and the one before it) lean on each other like prints on a desk.
   const newest = twists?.[0];
   const twistPictures = (twists ?? []).flatMap((twist) => (twist.source.photo ? [twist.source.photo] : [])).slice(0, 2);
@@ -107,26 +120,22 @@ function Workshop() {
           title="Printer"
           summary={printerLine}
           visual={
-            slots.length > 0 ? (
-              <span className="grid w-full max-w-sm grid-cols-4 gap-2">
-                {slots.map((slot) => {
-                  const spoolId = printer?.slots[slot];
-                  return (
-                    <span key={slot} className="flex flex-col items-center gap-1">
-                      <SpoolDisc
-                        size={isDesktop ? "lg" : "md"}
-                        color={spools?.find((spool) => spool.id === spoolId)?.colorHex}
-                        colors={spools?.find((spool) => spool.id === spoolId)?.colors}
-                        empty={!spoolId}
-                        // A firmer rim at this size, so a black spool doesn't vanish on the dark well.
-                        className={spoolId ? "ring-2 md:ring-1" : undefined}
-                      />
-                      <span className="text-caption text-ink-faint tabular font-semibold tracking-wider uppercase">
-                        {slot}
-                      </span>
+            loaded.length > 0 ? (
+              <span className="flex items-end justify-center gap-3 md:gap-5">
+                {loaded.map(({ slot, spool }) => (
+                  <span key={slot} data-slot-disc className="flex flex-col items-center gap-1">
+                    <SpoolDisc
+                      size={isDesktop ? "lg" : "md"}
+                      color={spool.colorHex}
+                      colors={spool.colors}
+                      // A firmer rim at this size, so a black spool doesn't vanish on the dark well.
+                      className="ring-2 md:ring-1"
+                    />
+                    <span className="text-caption text-ink-faint tabular font-semibold tracking-wider uppercase">
+                      {slot}
                     </span>
-                  );
-                })}
+                  </span>
+                ))}
               </span>
             ) : (
               <PrinterIcon size={44} className="text-ink-faint" />

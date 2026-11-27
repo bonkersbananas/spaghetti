@@ -434,11 +434,12 @@ export default function PrintViewer({
           </div>
         )}
         {state === "ready" && count > 1 && (
+          // Thumb-sized on a phone (44 px, its middle level with the colours control beside it), 36 px for a mouse.
           <IconButton
             icon={PlayIcon}
             label="Build it up again"
-            size="sm"
-            className="bg-cream/90 shadow-soft absolute right-3 bottom-3"
+            variant="stage"
+            className="absolute right-3 bottom-3"
             onClick={() => replay()}
           />
         )}

@@ -2556,6 +2556,33 @@ async function unmockToday(page: Page) {
   await page.unrouteAll({ behavior: "ignoreErrors" });
 }
 
+/** The spools taken out of the AMS for a shot (slot and spool), for `restoreSlots` to load back. */
+const unloadedSlots: Array<{ slot: string; spoolId: string }> = [];
+
+/** Takes the spools out of these slots (the seed fills A1-A4 and the external holder) and reloads the page. */
+async function unloadSlots(page: Page, slots: string[]) {
+  const headers = { Origin: new URL(page.url()).origin };
+  const printer = (await (await page.request.get("/api/printer")).json()) as { slots: Record<string, string> };
+  for (const slot of slots) {
+    const spoolId = printer.slots[slot];
+    if (!spoolId) continue;
+    unloadedSlots.push({ slot, spoolId });
+    await page.request.put(`/api/printer/slots/${slot}`, { headers, data: { spoolId: null } });
+  }
+  await page.reload();
+}
+
+/** Waits until a slot shows as empty, on main (a dashed "Empty" bay) as on a branch that folds it into the line. */
+async function slotShownEmpty(page: Page, slot: string) {
+  await page.locator(`[data-slot="${slot}"][data-empty], [data-slot="${slot}"]:has-text("Empty")`).first().waitFor();
+}
+
+async function restoreSlots(page: Page) {
+  const headers = { Origin: new URL(page.url()).origin };
+  for (const { slot, spoolId } of unloadedSlots.splice(0))
+    await page.request.put(`/api/printer/slots/${slot}`, { headers, data: { spoolId } });
+}
+
 /**
  * The screens `pnpm screenshots` captures, at 390×844 and 1440×900.
  * Add your feature's screens here.
@@ -7774,6 +7801,37 @@ export const shots: Shot[] = [
     },
   },
   {
+    // The AMS partly empty, as it often is: one spool in A1, A2-A4 and the external holder free. The loaded bay
+    // leads as a wide row and the empty slots are one line of chips under it.
+    name: "pantry-ams-partly",
+    path: "/pantry",
+    prepare: async (page) => {
+      await unloadSlots(page, ["A2", "A3", "A4", "Ext"]);
+      await slotShownEmpty(page, "Ext");
+    },
+    cleanup: restoreSlots,
+  },
+  {
+    // One bay free (A3): the three loaded bays share the unit's width, the external holder stays, and A3 is the line.
+    name: "pantry-ams-gap",
+    path: "/pantry",
+    prepare: async (page) => {
+      await unloadSlots(page, ["A3"]);
+      await slotShownEmpty(page, "A3");
+    },
+    cleanup: restoreSlots,
+  },
+  {
+    // Nothing in the printer: no unit card, only the line of slots to fill.
+    name: "pantry-ams-empty",
+    path: "/pantry",
+    prepare: async (page) => {
+      await unloadSlots(page, ["A1", "A2", "A3", "A4", "Ext"]);
+      await slotShownEmpty(page, "A1");
+    },
+    cleanup: restoreSlots,
+  },
+  {
     // Desktop only: the pantry as a list (the choice is remembered per device, so cards come back after).
     name: "pantry-list",
     path: "/pantry",
@@ -8599,6 +8657,22 @@ export const shots: Shot[] = [
     },
   },
   { name: "workshop", path: "/workshop", fullPage: true },
+  {
+    // One spool in the AMS: the Printer tile shows it over its slot and says "1 of 4 loaded".
+    name: "workshop-ams-partly",
+    path: "/workshop",
+    fullPage: true,
+    prepare: async (page) => {
+      await unloadSlots(page, ["A2", "A3", "A4", "Ext"]);
+      await page.waitForLoadState("networkidle");
+      await page
+        .locator("main")
+        .getByRole("link", { name: /^Printer/ })
+        .filter({ hasText: /due|in order/ })
+        .waitFor();
+    },
+    cleanup: restoreSlots,
+  },
   {
     // A new notebook: no spools, nothing loaded, nothing due, nothing to buy.
     name: "workshop-empty",

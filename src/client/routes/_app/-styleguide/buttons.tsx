@@ -93,6 +93,10 @@ export function ButtonSection() {
           <IconButton icon={Icons.CloseIcon} label="Close" />
           <IconButton icon={Icons.CameraIcon} label="Take photo" variant="secondary" />
           <IconButton icon={Icons.PlusIcon} label="New idea" variant="primary" size="lg" />
+          {/* Over a picture or the 3D view's stage: round, 44 px on phones (play on the viewer). */}
+          <span className="sg-stage rounded-md p-3">
+            <IconButton icon={Icons.PlayIcon} label="Build it up again" variant="stage" />
+          </span>
           <ShareLinkButton kind="item" id="5eed0000-0000-4000-8000-000000000006" title="Desk tidy-up" what="idea" />
           <span className="text-small text-ink-faint hidden items-center gap-2 md:flex">
             Keyboard hints: <Kbd keys={["G", "I"]} /> <Kbd keys={["/"]} />

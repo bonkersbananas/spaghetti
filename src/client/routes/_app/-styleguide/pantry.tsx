@@ -1,6 +1,7 @@
 import type { Spool } from "@shared/api";
 import { emptyLabelSpool, NO_LABEL } from "@shared/label-read";
 import { type SpoolLike, spoolLabel } from "@shared/spools";
+import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { EstimateLine } from "@/components/builds/Estimate";
 import { FileCard, PlateThumb } from "@/components/builds/SlicerFile";
@@ -20,6 +21,7 @@ import { FromLabel } from "@/components/ui/FromLabel";
 import { RemainingMeter } from "@/components/ui/RemainingMeter";
 import { SpoolColourField, type SpoolColourValue } from "@/components/ui/SpoolColourField";
 import { SpoolDisc } from "@/components/ui/SpoolDisc";
+import { printerQuery } from "@/lib/pantry-queries";
 import { Label, Panel, SAMPLE_COLOR, Section } from "./shared";
 
 const WHITE = "#f4f1ea"; // design-lint-ignore: a filament color is data
@@ -67,7 +69,13 @@ const sampleSpool: Spool = {
   updatedAt: Date.now(),
 };
 
+const NOTHING_LOADED: Record<string, string> = {};
+
 export function PantrySection() {
+  // The live AMS with only its first loaded slot kept, for the partly empty state.
+  const loadedSlots = useQuery(printerQuery).data?.slots ?? {};
+  const first = Object.keys(loadedSlots).sort()[0];
+  const firstLoaded = first ? { [first]: loadedSlots[first] as string } : NOTHING_LOADED;
   const [nozzle, setNozzle] = useState<number | undefined>(310);
   const [weight, setWeight] = useState<number | null>(1000);
   const [colourValue, setColourValue] = useState<SpoolColourValue>({ colorHex: null, colors: PINK_GOLD });
@@ -303,6 +311,13 @@ export function PantrySection() {
       </div>
       <Label>The AMS as it is loaded here (live): bays are columns below lg, rows from lg</Label>
       <AmsLoadout readOnly className="md:max-w-3xl" />
+      <Label>
+        Partly empty (only the first spool loaded here): what is loaded leads, a lone spool is a wide row, and the free
+        slots are one line of chips that each open their slot
+      </Label>
+      <AmsLoadout readOnly slots={firstLoaded} className="md:max-w-3xl" />
+      <Label>Nothing loaded: no unit card, only the line</Label>
+      <AmsLoadout readOnly slots={NOTHING_LOADED} className="md:max-w-3xl" />
       <Label>The printer bridge, in one quiet line: connected, no printer, last heard, not set up</Label>
       <div className="flex flex-col gap-2">
         {[
