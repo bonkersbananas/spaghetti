@@ -140,7 +140,7 @@ async function answerSearch(body: string, response: import("node:http").ServerRe
     return;
   }
   const refused = asked.includes("refused");
-  const product = asked.includes("second") ? 2 : 1;
+  const product = SEEDED_PAGES[askedName] ?? (asked.includes("second") ? 2 : 1);
   const url = `https://www.prisjakt.nu/produkt.php?p=${product}`;
   const none = asked.includes("nomatch");
   const answer = asked.includes("invented")
@@ -517,7 +517,19 @@ function receiveHook(request: IncomingMessage, response: ServerResponse, receive
 }
 
 /** The cheapest price of the products the screenshots' shopping list links, in kronor (others keep the fixture's). */
+/** The pages found for some of the seed's things, so a match used in a shot shows a believable price (not product 1's 7 699 kr). */
+const SEEDED_PAGES: Record<string, number> = {
+  "PTFE tube, 1 m": 15011231,
+  "Bed adhesion spray": 15011232,
+  "PLA Silk, gold, 1 kg": 15011233,
+  "Hardened steel nozzle, 0.4 mm": 15011234,
+};
+
 const PRODUCT_PRICES: Record<string, number> = {
+  15011231: 89,
+  15011232: 159,
+  15011233: 279,
+  15011234: 229,
   13366548: 149,
   12086734: 249,
   14402211: 259,

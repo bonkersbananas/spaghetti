@@ -96,9 +96,8 @@ export function ChecklistSection() {
           <div className="flex flex-col gap-1">
             <Label>Match prices: one offer for the list</Label>
             <OfferCard
-              icon={PriceIcon}
-              title="8 things could show prices"
-              detail={<ClaudeLine>Claude found their Prisjakt pages</ClaudeLine>}
+              title="8 prices to match"
+              detail={<ClaudeLine>Claude found the pages</ClaudeLine>}
               action={
                 <Button variant="secondary" size="sm">
                   Match prices

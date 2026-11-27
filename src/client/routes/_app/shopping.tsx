@@ -12,7 +12,7 @@ import { ClaudeLine } from "@/components/ui/ClaudeLine";
 import { DragHandle } from "@/components/ui/DragHandle";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { TextField } from "@/components/ui/Field";
-import { PlusIcon, PriceIcon } from "@/components/ui/icons";
+import { PlusIcon } from "@/components/ui/icons";
 import { Kbd } from "@/components/ui/Kbd";
 import { OfferCard } from "@/components/ui/OfferCard";
 import { Section } from "@/components/ui/Section";
@@ -427,9 +427,8 @@ function ToBuyRow({
 function MatchOffer({ count, onOpen }: { count: number; onOpen: () => void }) {
   return (
     <OfferCard
-      icon={PriceIcon}
-      title={`${count === 1 ? "One thing" : `${count} things`} could show prices`}
-      detail={<ClaudeLine>Claude found their Prisjakt pages</ClaudeLine>}
+      title={count === 1 ? "One price to match" : `${count} prices to match`}
+      detail={<ClaudeLine>Claude found the pages</ClaudeLine>}
       action={
         <Button variant="secondary" size="sm" className="touch-target relative" onClick={onOpen}>
           Match prices

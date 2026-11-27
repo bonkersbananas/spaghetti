@@ -5,7 +5,7 @@ import type { Icon } from "./icons";
 interface OfferCardProps {
   /** A small glyph of what is offered (the coins for prices). */
   icon?: Icon;
-  /** What is in it for them, in a few words: "8 things could show their prices". */
+  /** What is in it for them, in a few words: "8 prices to match". */
   title: ReactNode;
   /** One quiet line under it: who found it, a `ClaudeLine` when it was Claude. */
   detail?: ReactNode;
