@@ -40,10 +40,10 @@ export const UNTITLED = { idea: "Untitled idea", build: "Untitled build" } as co
 /** Longer than any screen shows on one line: they clamp or truncate, but a name still ends on a whole word. */
 export const NAME_MAX = 120;
 
-/** "A very long first line of a note that goes on…": cut on a word, with an ellipsis. */
+/** "A very long first line of a note that goes on…": cut on a word (one in the last 40 letters), with an ellipsis. */
 export function clipName(text: string, max = NAME_MAX): string {
   const flat = text.replace(/\s+/g, " ").trim();
-  return flat.length <= max ? flat : `${flat.slice(0, max - 1).replace(/[\s.,;:!?-]*\s+\S*$/, "")}…`;
+  return flat.length <= max ? flat : `${flat.slice(0, max - 1).replace(/[\s.,;:!?-]*\s+\S{0,40}$/, "")}…`;
 }
 
 /** The link a line is, when it is only that link (a pasted address); else null. links.ts's findLinks, for one line. */

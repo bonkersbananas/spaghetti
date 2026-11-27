@@ -64,6 +64,10 @@ describe("itemName: one name for an idea, everywhere", () => {
     expect(name.length).toBeLessThanOrEqual(120);
     expect(name.endsWith("word…")).toBe(true);
     expect(clipName("short")).toBe("short");
+    // A space only early in the line: the line is cut at the limit, not down to its first word.
+    const unbroken = clipName(`Hello ${"x".repeat(200)}`);
+    expect(unbroken.length).toBe(120);
+    expect(unbroken.startsWith("Hello xxx")).toBe(true);
   });
 });
 
