@@ -1,5 +1,6 @@
 import { and, eq, inArray } from "drizzle-orm";
 import { leadingLink } from "../shared/item-name.ts";
+import { linkName } from "../shared/link-name.ts";
 import { checkLinkUrl } from "../shared/link-safety.ts";
 import { modelMarkOf } from "../shared/model-mark.ts";
 import type { Db } from "./db/index.ts";
@@ -22,22 +23,22 @@ function previewKeys(url: string): string[] {
 }
 
 /**
- * The page title of the link each untitled thing's note starts with, from the previews the Worker has kept
- * (`Item.linkTitle`): what shared/item-name.ts names it by. Things with a title, or with no leading link, or whose
- * page was never read, are left out.
+ * What the link each untitled thing's note starts with is called (`Item.linkTitle`, what shared/item-name.ts names it
+ * by): its page's title from the previews the Worker has kept, else what its address says (shared/link-name.ts).
+ * Things with a title, with no leading link, or whose link says nothing, are left out.
  */
 export async function linkTitles(
   db: Db,
   rows: ReadonlyArray<{ id: string; title: string | null; note: string }>,
 ): Promise<Map<string, string>> {
-  const wanted = new Map<string, string[]>();
+  const wanted = new Map<string, { link: string; keys: string[] }>();
   for (const row of rows) {
     if (row.title?.trim()) continue;
     const link = leadingLink(row.note);
-    if (link) wanted.set(row.id, previewKeys(link));
+    if (link) wanted.set(row.id, { link, keys: previewKeys(link) });
   }
-  const keys = [...new Set([...wanted.values()].flat())];
-  if (!keys.length) return new Map();
+  if (!wanted.size) return new Map();
+  const keys = [...new Set([...wanted.values()].flatMap((entry) => entry.keys))];
   const found = new Map<string, string>();
   for (let i = 0; i < keys.length; i += CHUNK) {
     const previews = await db
@@ -47,8 +48,8 @@ export async function linkTitles(
     for (const preview of previews) if (preview.title?.trim()) found.set(preview.url, preview.title.trim());
   }
   const titles = new Map<string, string>();
-  for (const [id, urls] of wanted) {
-    const title = urls.map((url) => found.get(url)).find(Boolean);
+  for (const [id, { link, keys: urls }] of wanted) {
+    const title = linkName(link, urls.map((url) => found.get(url)).find(Boolean));
     if (title) titles.set(id, title);
   }
   return titles;

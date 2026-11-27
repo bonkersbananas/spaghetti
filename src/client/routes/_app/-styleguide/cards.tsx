@@ -7,6 +7,7 @@ import { ClaudeLine } from "@/components/ui/ClaudeLine";
 import * as Icons from "@/components/ui/icons";
 import { LinkCard } from "@/components/ui/LinkCard";
 import { MiniCard } from "@/components/ui/MiniCard";
+import { NameSourceLine } from "@/components/ui/NameSourceLine";
 import { PrintTile, printTileGrid } from "@/components/ui/PrintTile";
 import { Reflow } from "@/components/ui/Reflow";
 
@@ -141,6 +142,28 @@ export function CardSection() {
             meta="A photo, no words"
             aspect="portrait"
           />
+        </div>
+        <Label>
+          On its page the title field stays empty with the name as its placeholder (a step smaller on a phone), one
+          quiet line says where it came from (NameSourceLine), and the link card leaves out the title the heading
+          already says
+        </Label>
+        <div className="max-w-content flex flex-col gap-3">
+          <p className="font-display text-headline text-ink-faint max-md:text-title font-semibold">
+            Gridfinity baseplate, 4x4
+          </p>
+          <NameSourceLine from="link" className="-mt-2" />
+          <LinkCard
+            url="https://makerworld.com/en/models/1234567-gridfinity-baseplate"
+            model={{
+              kind: "page",
+              site: "makerworld",
+              name: "MakerWorld",
+              url: "https://makerworld.com/en/models/1234567-gridfinity-baseplate",
+            }}
+            titleShownAbove
+          />
+          <NameSourceLine from="note" />
         </div>
       </div>
       <div className="mt-10">

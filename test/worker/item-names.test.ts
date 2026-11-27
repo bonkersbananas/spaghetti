@@ -43,8 +43,9 @@ const keepPreview = (url: string, title: string, failed = 0) =>
 describe("an untitled link idea's name", () => {
   it("is its page's title in the item, the list and search, while its own title stays empty", async () => {
     const idea = await createItem({ title: null, note: LINK });
-    expect(idea.linkTitle).toBeNull();
-    await keepPreview(LINK, PAGE_TITLE);
+    // Before anyone read the page: what its address says.
+    expect(idea.linkTitle).toBe("Gridfinity baseplate");
+    await keepPreview(LINK, `${PAGE_TITLE} | MakerWorld`);
 
     const one = (await (await request(`/api/items/${idea.id}`, { cookie })).json<ItemResponse>()).item;
     expect(one.title).toBeNull();
@@ -59,7 +60,7 @@ describe("an untitled link idea's name", () => {
     expect(hit?.item.linkTitle).toBe(PAGE_TITLE);
   });
 
-  it("finds a model page's preview under its cleaned address, and leaves out failed reads and titled ideas", async () => {
+  it("finds a model page's preview under its cleaned address, reads the address on a failed read, and skips titled ideas", async () => {
     const tracked = await createItem({ title: null, note: `${LINK}?from=search#profileId-1` });
     const failed = await createItem({ title: null, note: "https://www.printables.com/model/99-hook" });
     const titled = await createItem({ title: "Desk tidy-up", note: LINK });
@@ -69,7 +70,7 @@ describe("an untitled link idea's name", () => {
     const list = (await (await request("/api/items?stage=idea", { cookie })).json<ItemsResponse>()).items;
     const byId = new Map(list.map((item) => [item.id, item]));
     expect(byId.get(tracked.id)?.linkTitle).toBe(PAGE_TITLE);
-    expect(byId.get(failed.id)?.linkTitle).toBeNull();
+    expect(byId.get(failed.id)?.linkTitle).toBe("Hook");
     expect(byId.get(titled.id)?.linkTitle).toBeNull();
   });
 

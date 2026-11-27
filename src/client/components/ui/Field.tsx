@@ -244,6 +244,11 @@ export interface TextAreaProps extends ComponentPropsWithRef<"textarea"> {
   /** "plain" for writing surfaces such as notes: no well, just text. "title" for an editable heading. */
   appearance?: "surface" | "plain" | "title";
   minRows?: number;
+  /**
+   * `appearance="title"`: the placeholder is a name borrowed from the note or its link (shared/item-name.ts), which can
+   * run long. While it shows, a phone sets it a step smaller (`text-title`), so it never towers over the page.
+   */
+  borrowedPlaceholder?: boolean;
 }
 
 /**
@@ -255,7 +260,19 @@ const nativeSizing = typeof CSS !== "undefined" && CSS.supports("field-sizing", 
 
 /** A textarea that grows with its text, so notes never scroll inside a box. */
 export const TextArea = forwardRef<HTMLTextAreaElement, TextAreaProps>(function TextArea(
-  { label, hint, error, saveState, appearance = "surface", minRows = 3, className, id, onInput, ...props },
+  {
+    label,
+    hint,
+    error,
+    saveState,
+    appearance = "surface",
+    minRows = 3,
+    borrowedPlaceholder,
+    className,
+    id,
+    onInput,
+    ...props
+  },
   forwardedRef,
 ) {
   const autoId = useId();
@@ -327,6 +344,7 @@ export const TextArea = forwardRef<HTMLTextAreaElement, TextAreaProps>(function 
             "text-lead text-ink placeholder:text-ink-faint md:text-body w-full bg-transparent focus:shadow-none",
           appearance === "title" &&
             "font-display text-headline text-ink placeholder:text-ink-faint w-full bg-transparent font-semibold focus:shadow-none",
+          appearance === "title" && borrowedPlaceholder && "max-md:placeholder-shown:text-title",
           error && "shadow-ring-error focus:shadow-ring-error",
         )}
         {...props}

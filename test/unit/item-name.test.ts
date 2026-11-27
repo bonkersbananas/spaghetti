@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { clipName, itemName, leadingLink, nameOf, noteAfterName, UNTITLED } from "../../src/shared/item-name.ts";
+import { linkName } from "../../src/shared/link-name.ts";
 
 const GRIDFINITY = "https://makerworld.com/en/models/1234567-gridfinity-baseplate";
 
@@ -12,8 +13,8 @@ describe("itemName: one name for an idea, everywhere", () => {
     });
   });
 
-  it("names a link idea by its page's title, tidied of the site's name", () => {
-    expect(itemName({ title: null, note: GRIDFINITY, linkTitle: "Gridfinity baseplate, 4x4 | MakerWorld" })).toEqual({
+  it("names a link idea by what the Worker says its link is called", () => {
+    expect(itemName({ title: null, note: GRIDFINITY, linkTitle: "Gridfinity baseplate, 4x4" })).toEqual({
       text: "Gridfinity baseplate, 4x4",
       titled: false,
       from: "link",
@@ -26,9 +27,9 @@ describe("itemName: one name for an idea, everywhere", () => {
 
   it("falls back to the words in a link's address while its page is unread", () => {
     expect(itemName({ title: null, note: GRIDFINITY })).toMatchObject({ text: "Gridfinity baseplate", from: "link" });
-    expect(
-      nameOf({ title: null, note: "https://www.printables.com/model/1577248-carrying-handle-for-ikea-antilop" }),
-    ).toBe("Carrying handle for IKEA Antilop");
+    expect(nameOf({ title: null, note: "https://www.ikea.com/se/en/p/skadis-pegboard-white-20320802" })).toBe(
+      "Skadis pegboard white",
+    );
   });
 
   it("never names a thing by a raw address", () => {
@@ -84,5 +85,16 @@ describe("noteAfterName", () => {
     ).toBe("Two of them");
     expect(noteAfterName({ title: null, note: "Hook\nfor the helmet" })).toBe("for the helmet");
     expect(noteAfterName({ title: null, note: "" })).toBe("");
+  });
+});
+
+describe("linkName (the Worker's reading of a link)", () => {
+  it("tidies a page's title of its site's name, else reads the address", () => {
+    expect(linkName(GRIDFINITY, "Gridfinity baseplate, 4x4 | MakerWorld")).toBe("Gridfinity baseplate, 4x4");
+    expect(linkName("https://www.printables.com/model/1577248-carrying-handle-for-ikea-antilop")).toBe(
+      "Carrying handle for IKEA Antilop",
+    );
+    expect(linkName(GRIDFINITY)).toBe("Gridfinity baseplate");
+    expect(linkName("https://makerworld.com/en/models/1234567")).toBeNull();
   });
 });

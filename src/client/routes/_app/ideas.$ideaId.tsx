@@ -1,5 +1,6 @@
 import { itemName, leadingLink } from "@shared/item-name";
-import { modelOf } from "@shared/model-mark";
+import { linkName } from "@shared/link-name";
+import { modelOf, sameModel } from "@shared/model-mark";
 import { fullTime, inlineTime } from "@shared/time";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
@@ -24,6 +25,7 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { TextArea } from "@/components/ui/Field";
 import { BuildsIcon, CommentIcon, MoveIntoIcon, SlicerFileIcon, TrashIcon, TwistIcon } from "@/components/ui/icons";
 import { LinkCard } from "@/components/ui/LinkCard";
+import { NameSourceLine } from "@/components/ui/NameSourceLine";
 import { useNaming } from "@/components/ui/NamingSign";
 import { NoteField } from "@/components/ui/NoteField";
 import { NoteLinks } from "@/components/ui/NoteLinks";
@@ -311,8 +313,10 @@ const Idea = memo(function Idea({ item }: { item: ItemView }) {
   const modelPicture = modelPhoto ? { src: photoSrc(modelPhoto.id, "thumb"), color: modelPhoto.color } : undefined;
   // Its one name (shared/item-name.ts): what its cards, search and the palette call it, while the title stays empty.
   const lead = leadingLink(settledNote);
-  const { data: leadPreview } = useQuery({ ...linkPreviewQuery(lead ?? ""), enabled: !!lead && !item.linkTitle });
-  const name = itemName({ title, note: settledNote, stage: "idea", linkTitle: item.linkTitle ?? leadPreview?.title });
+  // The page's title as soon as this page has it (its link card asks for the same preview), else the Worker's name.
+  const { data: leadPreview } = useQuery({ ...linkPreviewQuery(lead ?? ""), enabled: !!lead });
+  const linkTitle = lead && leadPreview?.title ? linkName(lead, leadPreview.title) : item.linkTitle;
+  const name = itemName({ title, note: settledNote, stage: "idea", linkTitle });
   useDocumentTitle(name.text);
   const alt = photoAlt({ title, note, linkTitle: item.linkTitle });
   // Claude's title (decision 0070), for as long as it is still what it wrote: marked, and faded in when it arrives here.
@@ -411,6 +415,7 @@ const Idea = memo(function Idea({ item }: { item: ItemView }) {
                 aria-label="Title"
                 // The name it goes by, until someone types one: tidying up is one tap.
                 placeholder={naming ? "Naming…" : name.text}
+                borrowedPlaceholder={!naming && (name.from === "link" || name.from === "note")}
                 minRows={1}
                 maxLength={200}
                 readOnly={titleKeep.readOnly}
@@ -432,6 +437,7 @@ const Idea = memo(function Idea({ item }: { item: ItemView }) {
                 {photos.some((photo) => !photo.attemptId) ? "Looking at the photo…" : "Reading the note…"}
               </ClaudeLine>
             )}
+            {!naming && !title.trim() && !reading && <NameSourceLine from={name.from} className="-mt-2 md:-mt-1.5" />}
             {named && (
               <ClaudeLine className={cn("-mt-2 md:-mt-1.5", untitled && "sg-arrive")}>Named by Claude</ClaudeLine>
             )}
@@ -456,6 +462,12 @@ const Idea = memo(function Idea({ item }: { item: ItemView }) {
                 url={linkedModel.url}
                 model={linkedModel}
                 picture={modelPicture}
+                titleShownAbove={
+                  !title.trim() &&
+                  name.from === "link" &&
+                  !!lead &&
+                  (lead === linkedModel.url || sameModel(lead, linkedModel.url))
+                }
                 className="max-w-content my-1"
               />
             )}

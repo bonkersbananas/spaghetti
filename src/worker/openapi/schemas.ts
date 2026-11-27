@@ -231,7 +231,9 @@ export const Item = z
       .string()
       .nullable()
       .optional()
-      .describe("The page title of the link an untitled idea's note starts with, once read: what it is called by."),
+      .describe(
+        "What the link an untitled idea's note starts with is called (its page's title once read, else its address's words).",
+      ),
     titleJob: z
       .object({
         status: z.enum(["naming", "done"]),

@@ -40,6 +40,7 @@ export function LinkCard({
   url,
   model,
   picture,
+  titleShownAbove,
   className,
 }: {
   url: string;
@@ -47,6 +48,11 @@ export function LinkCard({
   model?: ModelMark;
   /** The model's own picture (the draft's), in place of the site's letter tile. */
   picture?: { src: string; color?: string };
+  /**
+   * The page's heading already says the link's title (an untitled idea named from its link, shared/item-name.ts): the
+   * card leaves its title line out and keeps "Model on Printables" and the site, so the name is said once.
+   */
+  titleShownAbove?: boolean;
   className?: string;
 }) {
   const { data, isPending } = useQuery({ ...linkPreviewQuery(url), enabled: model?.kind !== "file" });
@@ -81,15 +87,17 @@ export function LinkCard({
             {model.kind === "page" ? `Model on ${model.name}` : `${modelPlace(model)}, ready to print`}
           </span>
         )}
-        <span
-          key={title ? "titled" : "bare"}
-          className={cn(
-            "text-body text-ink line-clamp-2 font-semibold break-words",
-            title && waited.current && "sg-fade-in",
-          )}
-        >
-          {title ?? softSlashes(shortUrl(url))}
-        </span>
+        {!titleShownAbove && (
+          <span
+            key={title ? "titled" : "bare"}
+            className={cn(
+              "text-body text-ink line-clamp-2 font-semibold break-words",
+              title && waited.current && "sg-fade-in",
+            )}
+          >
+            {title ?? softSlashes(shortUrl(url))}
+          </span>
+        )}
         <span className="text-small text-ink-faint truncate">
           {site}
           {model?.via && ` · via ${hostOf(model.via)}`}

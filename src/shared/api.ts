@@ -378,8 +378,9 @@ export interface Item {
    */
   titleJob?: TitleJobState | null;
   /**
-   * The page title of the link an untitled thing's note starts with, once the Worker has read that page: what it is
-   * called by (shared/item-name.ts). Null otherwise; absent on items this device made.
+   * What the link an untitled thing's note starts with is called (shared/link-name.ts): its page's title once the
+   * Worker has read that page, else its address's words. What it is called by (shared/item-name.ts). Null otherwise;
+   * absent on items this device made.
    */
   linkTitle?: string | null;
   /** Who reacted to it, and how (shared/reactions.ts). Absent in a copy saved by an older version. */

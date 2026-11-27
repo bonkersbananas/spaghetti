@@ -4,17 +4,16 @@
  * its card and another on its page (docs/design.md, "One name").
  *
  * 1. A title someone typed (or Claude gave it) always wins.
- * 2. A note that starts with a link (an idea pasted from MakerWorld or Printables): the linked page's title, which the
- *    Worker knows once anyone looked (`Item.linkTitle`), else the words in its address ("Skadis pegboard white").
+ * 2. A note that starts with a link (an idea pasted from MakerWorld or Printables): what the Worker says the link is
+ *    called (`Item.linkTitle`, link-name.ts: its page's title once anyone looked, else its address's words), else, on a
+ *    copy this device made, the words in its address's last part ("Skadis pegboard white").
  * 3. Else the note's first line (an address with no words in it is skipped: a raw address is never a name).
  * 4. Else, a photo or a file and no words: "Untitled idea" or "Untitled build", the same quiet name on every screen.
  *
  * The name is never written into the idea: its title stays empty, so the page's title field shows the name as its
- * placeholder and tidying up later is one tap. Pure and tiny: every first load reads it.
+ * placeholder and tidying up later is one tap. Pure and tiny, a leaf: every first load reads it, so the heavier reading
+ * of a link (a page title's site suffix, Printables' casing) is link-name.ts's, on the Worker.
  */
-import { tidyPageTitle } from "./capture.ts";
-import { findLinks, linkWords } from "./links.ts";
-import { printablesTitleFromLink } from "./model-name.ts";
 
 /** Where a name came from: `title` is the only one that is the thing's own. */
 export type NameSource = "title" | "link" | "note" | "none";
@@ -31,7 +30,7 @@ export interface Nameable {
   note?: string | null;
   /** "idea", or a build's stage: only the last-resort name tells them apart. */
   stage?: string;
-  /** The page title of the link the note starts with, when the Worker has read it (`Item.linkTitle`). */
+  /** What the link the note starts with is called, as the Worker read it (`Item.linkTitle`). */
   linkTitle?: string | null;
 }
 
@@ -50,11 +49,10 @@ export function clipName(text: string, max = NAME_MAX): string {
   return `${head.slice(0, space > max * 0.6 ? space : head.length).replace(/[\s.,;:!?-]+$/, "")}…`;
 }
 
-/** The link a line is, when it is only that link (a pasted address); else null. */
+/** The link a line is, when it is only that link (a pasted address); else null. links.ts's findLinks, for one line. */
 function bareLink(line: string): string | null {
   const text = line.trim();
-  const [only] = findLinks(text);
-  return only && only.start === 0 && only.end === text.length ? only.url : null;
+  return /^https?:\/\/[^\s<>"']+[^\s<>"'.,;:!?)\]]$/i.test(text) ? text : null;
 }
 
 /** The link the note starts with, when its first line is only that link; else null. */
@@ -63,22 +61,37 @@ export function leadingLink(note: string | null | undefined): string | null {
   return first ? bareLink(first) : null;
 }
 
-/** What a link is called: its page's title when known, else the words in its address. Null when it has none. */
-export function linkName(url: string, pageTitle?: string | null): string | null {
-  const page = pageTitle?.replace(/\s+/g, " ").trim();
-  if (page) return tidyPageTitle(page) ?? page;
-  // Only the address's last part can name the thing: "makerworld.com/en/models/123" is not called "Models".
+/**
+ * The words in a link's last part ("…/p/skadis-pegboard-white-20320802" is "Skadis pegboard white"), or null: numbers,
+ * ids ("thing:12345") and a file's extension are not words. links.ts's linkWords, for the last part only:
+ * "makerworld.com/en/models/123" is not called "Models".
+ */
+export function addressName(url: string): string | null {
   const [path = ""] = url.split(/[?#]/);
   const parts = path.replace(/\/+$/, "").split("/");
-  const last = parts.length > 3 ? parts.at(-1) : undefined;
-  return printablesTitleFromLink(url) ?? (last ? linkWords(`${parts[2]}/${last}`)?.words : undefined) ?? null;
+  return parts.length > 3 ? partWords(parts.at(-1) ?? "") : null;
+}
+
+/** The words in one part of an address ("skadis-pegboard-white-20320802" is "Skadis pegboard white"), or null. */
+export function partWords(part: string): string | null {
+  let decoded = part;
+  try {
+    decoded = decodeURIComponent(part);
+  } catch {}
+  const tokens = decoded.replace(/\.[a-z0-9]{2,5}$/i, "").split(/[-_+.:\s]+/);
+  const words = tokens.filter((word) => /\p{L}/u.test(word) && !/\d{3,}/.test(word));
+  // An id with a short prefix ("thing:12345") is not a name.
+  const idOnly = words.length === 1 && tokens.length > 1 && (words[0]?.length ?? 0) <= 5;
+  if (!words.length || words.join("").length <= 2 || idOnly) return null;
+  const text = words.slice(0, 8).join(" ").toLowerCase();
+  return text.charAt(0).toUpperCase() + text.slice(1);
 }
 
 export function itemName(item: Nameable): ItemName {
   const title = item.title?.trim();
   if (title) return { text: title, titled: true, from: "title" };
   const link = leadingLink(item.note);
-  const fromLink = link ? linkName(link, item.linkTitle) : null;
+  const fromLink = link ? item.linkTitle?.replace(/\s+/g, " ").trim() || addressName(link) : null;
   if (fromLink) return { text: clipName(fromLink), titled: false, from: "link" };
   // A raw address is never a name: a link with no words to read gives way to the note's next line.
   const line = item.note?.split("\n").find((l) => l.trim() && !(link && bareLink(l)));
