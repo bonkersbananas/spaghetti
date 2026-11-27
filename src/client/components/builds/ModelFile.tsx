@@ -31,9 +31,7 @@ import {
   Children,
   type ComponentPropsWithRef,
   isValidElement,
-  lazy,
   type ReactNode,
-  Suspense,
   useEffect,
   useMemo,
   useRef,
@@ -56,6 +54,7 @@ import { siteName } from "@/lib/drafts";
 import { shortcutCaps, useHotkeys } from "@/lib/hotkeys";
 import { type AttemptFileView, itemQuery } from "@/lib/items";
 import { printerQuery, spoolsQuery } from "@/lib/pantry-queries";
+import { preloaded } from "@/lib/preloaded";
 import { fileThumbSrc } from "@/lib/previews";
 import { recipesQuery } from "@/lib/recipes-query";
 import type { SlicerFileDraft } from "@/lib/slicer-files";
@@ -794,10 +793,13 @@ function plateFigures(prefill: { estimatedMinutes?: number; weightGrams?: number
     .join(" · ");
 }
 
-/** The settings, loaded the first time they open: a phone's sheet, or a desktop's panel. */
-const loadSettings = () => import("./SliceSettings");
-
-const SliceSettingsSheet = lazy(loadSettings);
+/**
+ * The settings, warmed once the card can slice and loaded at the latest the first time they open: a phone's sheet, or
+ * a desktop's panel. They render straight from the loaded module, not through React.lazy, which suspended at that
+ * first open even with the code in and held the sheet back ~300 ms after the tap (see lib/preloaded.ts).
+ */
+const settingsSheet = preloaded(() => import("./SliceSettings"));
+const loadSettings = () => settingsSheet.start();
 
 export default function ModelFileCard({
   file,
@@ -843,6 +845,8 @@ export default function ModelFileCard({
       }
     : null;
   useWarmSoon(() => (target ? loadSettings() : Promise.resolve()));
+  const SliceSettingsSheet = settingsSheet.use()?.default;
+  if (sheet && !SliceSettingsSheet) void loadSettings();
   // Ordered for the filament it has when they arrive, and kept so: picking a recipe for another filament doesn't
   // move its chip to the front under the finger.
   // biome-ignore lint/correctness/useExhaustiveDependencies: ordered once for each list of recipes.
@@ -1003,30 +1007,28 @@ export default function ModelFileCard({
   return (
     <>
       {card}
-      {sheet && panel && (
-        <Suspense fallback={null}>
-          <SliceSettingsSheet
-            open={sheet}
-            onOpenChange={setSheet}
-            {...panel}
-            // The result is its foot: under the thumb on a phone, where the sheet covers the card; on desktop the
-            // panel's foot says it too, beside the card, with its Undo and Stop.
-            result={
-              <SliceResult
-                state={state}
-                thumbSrc={thumbSrc}
-                prefill={prefill}
-                phone
-                plateNote={plateNote}
-                copies={{
-                  value: settings.copies,
-                  onChange: (next) => change_(slicingFor({ copies: next }, settings)),
-                }}
-                {...actions}
-              />
-            }
-          />
-        </Suspense>
+      {sheet && panel && SliceSettingsSheet && (
+        <SliceSettingsSheet
+          open={sheet}
+          onOpenChange={setSheet}
+          {...panel}
+          // The result is its foot: under the thumb on a phone, where the sheet covers the card; on desktop the
+          // panel's foot says it too, beside the card, with its Undo and Stop.
+          result={
+            <SliceResult
+              state={state}
+              thumbSrc={thumbSrc}
+              prefill={prefill}
+              phone
+              plateNote={plateNote}
+              copies={{
+                value: settings.copies,
+                onChange: (next) => change_(slicingFor({ copies: next }, settings)),
+              }}
+              {...actions}
+            />
+          }
+        />
       )}
     </>
   );

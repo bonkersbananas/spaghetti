@@ -21,14 +21,18 @@ import { useListPicker } from "@/lib/list-picker";
 import { loadSlot } from "@/lib/pantry";
 import { spoolsQuery } from "@/lib/pantry-queries";
 import { COMPACT_ABOVE, type PantryDensity, type PantryView, usePantryDensity, usePantryView } from "@/lib/pantry-view";
+import { preloaded } from "@/lib/preloaded";
 import { canEdit, useReadOnly } from "@/lib/read-only";
 import { recipesQuery } from "@/lib/recipes-query";
 import { useRunningLow } from "@/lib/running-low";
 import { useIsDesktop } from "@/lib/use-media-query";
+import { useWarmSoon } from "@/lib/warm-soon";
 
-const AddSpoolSheet = lazy(() =>
-  import("@/components/pantry/AddSpoolSheet").then((m) => ({ default: m.AddSpoolSheet })),
-);
+// The sheet is not part of the pantry's first load: it is fetched just after the page, or at the first key press or
+// touch, and mounts the first time it opens, straight from the loaded module (through React.lazy it suspended at that
+// first open, and React held its reveal back ~300 ms after the tap: see lib/preloaded.ts).
+const addSpoolSheet = preloaded(() => import("@/components/pantry/AddSpoolSheet"));
+const warmAddSpoolSheet = () => addSpoolSheet.start();
 
 export const Route = createFileRoute("/_app/pantry/")({
   validateSearch: (search: Record<string, unknown>): { add?: boolean } =>
@@ -92,9 +96,12 @@ function Pantry() {
   const [adding, setAdding] = useState<{ open: boolean; slot: string | null }>({ open: !!add, slot: null });
   // Offline, the pantry is only for reading (see lib/read-only.ts).
   const readOnly = useReadOnly();
-  // The sheet is loaded the first time it is asked for: the pantry's first load doesn't carry it.
-  const [sheetLoaded, setSheetLoaded] = useState(!!add);
-  if (adding.open && !sheetLoaded) setSheetLoaded(true);
+  const [sheetWanted, setSheetWanted] = useState(!!add);
+  if (adding.open && !sheetWanted) setSheetWanted(true);
+  useWarmSoon(warmAddSpoolSheet);
+  const loadedSheet = addSpoolSheet.use();
+  if (sheetWanted && !loadedSheet) void warmAddSpoolSheet();
+  const AddSpoolSheet = sheetWanted ? loadedSheet?.AddSpoolSheet : undefined;
   const openAdd = (slot: string | null = null) => canEdit() && setAdding({ open: true, slot });
   useHotkeys({ pantryAdd: () => openAdd() });
 
@@ -268,22 +275,20 @@ function Pantry() {
           </Button>
         </ActionBar>
       )}
-      {sheetLoaded && (
-        <Suspense fallback={null}>
-          <AddSpoolSheet
-            open={adding.open}
-            onOpenChange={(open) => setAdding((current) => ({ ...current, open }))}
-            stayPut={!!adding.slot}
-            slot={adding.slot}
-            onAdded={(spool, saved) => {
-              const slot = adding.slot;
-              if (!slot) return;
-              void loadSlot(queryClient, slot, spool.id, saved);
-              // Loaded with the first spool added to a slot, not with the page.
-              void import("@/lib/next-slot").then((m) => m.offerNextSlot(queryClient, slot, openAdd));
-            }}
-          />
-        </Suspense>
+      {AddSpoolSheet && (
+        <AddSpoolSheet
+          open={adding.open}
+          onOpenChange={(open) => setAdding((current) => ({ ...current, open }))}
+          stayPut={!!adding.slot}
+          slot={adding.slot}
+          onAdded={(spool, saved) => {
+            const slot = adding.slot;
+            if (!slot) return;
+            void loadSlot(queryClient, slot, spool.id, saved);
+            // Loaded with the first spool added to a slot, not with the page.
+            void import("@/lib/next-slot").then((m) => m.offerNextSlot(queryClient, slot, openAdd));
+          }}
+        />
       )}
     </>
   );
