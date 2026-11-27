@@ -1,7 +1,7 @@
 import type { Person } from "@shared/api";
 import { useQuery, useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { lazy, type ReactNode, Suspense, useEffect, useMemo, useState } from "react";
+import { type ReactNode, useEffect, useMemo, useState } from "react";
 import { BuildCard, BuildRow, BuildTile } from "@/components/builds/BuildCard";
 import { LazyStartBuildSheet } from "@/components/builds/LazyStartBuildSheet";
 import { SpoolStrand } from "@/components/illustrations/SpoolStrand";
@@ -22,16 +22,17 @@ import { type ItemView, sweepUntouched, useBuilds } from "@/lib/items";
 import { useListPicker } from "@/lib/list-picker";
 import { useArrived } from "@/lib/live";
 import { printerQuery } from "@/lib/pantry-queries";
+import { preloaded } from "@/lib/preloaded";
 import { peopleQuery, sessionQuery } from "@/lib/queries";
 import { unreadQuery } from "@/lib/unread-comments";
 import { useIsDesktop } from "@/lib/use-media-query";
 import { useNow } from "@/lib/use-now";
 
 // The printing cards come with their own code (progress, outcome buttons, the camera): only a list with something on
-// the bed loads it, so the first load stays as light as the grid.
-const BedCards = lazy(() =>
-  import("@/components/builds/PrintingCard").then((module) => ({ default: module.BedCards })),
-);
+// the bed loads it, so the first load stays as light as the grid. They render straight from the loaded module, not
+// through React.lazy: that suspended at each first draw of the page, even with the code in from the Journal or Today,
+// and React held the cards back ~300 ms behind their skeleton (see lib/preloaded.ts).
+const bedCards = preloaded(() => import("@/components/builds/PrintingCard"));
 
 export const Route = createFileRoute("/_app/builds/")({
   component: Builds,
@@ -81,6 +82,8 @@ function Builds() {
   const unread = (itemId: string) => threads?.find((thread) => thread.itemId === itemId)?.count ?? 0;
 
   const onBed = useMemo(() => printingAttempts(items, now, live), [items, now, live]);
+  const BedCards = bedCards.use()?.BedCards;
+  if (onBed.length > 0 && !BedCards) void bedCards.start();
   const onBedIds = new Set(onBed.map(({ item }) => item.id));
   const inProgress = items.filter((item) => item.stage === "building" && !onBedIds.has(item.id)).sort(byActivity);
   const done = items.filter((item) => item.stage === "done").sort(byFinished);
@@ -117,12 +120,14 @@ function Builds() {
           {/* Only what is physically on the plate; with nothing there the section isn't drawn. */}
           {onBed.length > 0 && (
             <Section title="On the bed" count={onBed.length > 1 ? onBed.length : undefined}>
-              <Suspense fallback={<Skeleton className="h-44 rounded-lg" />}>
-                {/* J and K walk these too, before the In progress grid. */}
+              {BedCards ? (
+                // J and K walk these too, before the In progress grid.
                 <div data-picks>
                   <BedCards prints={onBed} people={byId} via={via} unread={unread} spread />
                 </div>
-              </Suspense>
+              ) : (
+                <Skeleton className="h-44 rounded-lg" />
+              )}
             </Section>
           )}
           {/* Everything in progress on the bed: no section for nothing, as with an empty bed. */}
