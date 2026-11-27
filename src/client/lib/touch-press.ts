@@ -24,7 +24,9 @@ export function followTouchPress() {
   const clear = () => {
     clearTimeout(timer);
     clearTimeout(release);
-    for (const element of marked) element.removeAttribute("data-pressed");
+    // "held" is a screen's own (a button kept pressed while what it opens arrives): its owner takes it off.
+    for (const element of marked)
+      if (element.getAttribute("data-pressed") !== "held") element.removeAttribute("data-pressed");
     marked = [];
     down = undefined;
   };

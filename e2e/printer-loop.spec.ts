@@ -156,3 +156,28 @@ test("moving a print with Which build? from the keyboard keeps the focus on its 
   await expect(moved.getByRole("button", { name: "How did it go?" })).toBeVisible();
   await expect.poll(() => moved.evaluate((node) => node.contains(document.activeElement))).toBe(true);
 });
+
+test("a bed card's How did it go? stays held on a phone until the build page arrives @phone", async ({
+  page,
+  isMobile,
+}) => {
+  test.skip(!isMobile, "The held look after a lift is the phone's");
+  const id = await build(page, "Hinge pin");
+  await attempt(page, id, { printedAt: Date.now() - 5 * 60_000 });
+  // The build page's code is slow to come: the tap's answer must not end before it does.
+  const held: Array<() => void> = [];
+  await page.route(/\/assets\/builds\._buildId-[\w-]+\.js$/, (route) => {
+    held.push(() => void route.continue().catch(() => {}));
+  });
+  await page.goto("/journal");
+  const ask = page.locator("article").filter({ hasText: "Hinge pin" }).getByRole("button", { name: "How did it go?" });
+  await expect(ask).toBeVisible();
+  await ask.tap();
+  await expect(ask).toHaveAttribute("data-pressed", "held");
+  // Past touch-press's own release of a quick tap (110 ms), it still looks pressed.
+  await page.waitForTimeout(400);
+  await expect(ask).toHaveAttribute("data-pressed", "held");
+  for (const release of held.splice(0)) release();
+  await page.unroute(/\/assets\/builds\._buildId-[\w-]+\.js$/);
+  await expect(page.getByRole("dialog", { name: "Attempt 1" })).toBeVisible();
+});
