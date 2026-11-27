@@ -21449,7 +21449,7 @@
             ]
           },
           "linkTitle": {
-            "description": "The page title of the link an untitled idea's note starts with, once read: what it is called by.",
+            "description": "What the link an untitled idea's note starts with is called (its page's title once read, else its address's words).",
             "type": [
               "string",
               "null"

@@ -43,10 +43,7 @@ export const NAME_MAX = 120;
 /** "A very long first line of a note that goes on…": cut on a word, with an ellipsis. */
 export function clipName(text: string, max = NAME_MAX): string {
   const flat = text.replace(/\s+/g, " ").trim();
-  if (flat.length <= max) return flat;
-  const head = flat.slice(0, max - 1);
-  const space = head.lastIndexOf(" ");
-  return `${head.slice(0, space > max * 0.6 ? space : head.length).replace(/[\s.,;:!?-]+$/, "")}…`;
+  return flat.length <= max ? flat : `${flat.slice(0, max - 1).replace(/[\s.,;:!?-]*\s+\S*$/, "")}…`;
 }
 
 /** The link a line is, when it is only that link (a pasted address); else null. links.ts's findLinks, for one line. */
@@ -104,16 +101,12 @@ export function itemName(item: Nameable): ItemName {
  * note for a titled thing; after the link or line that named it (a wordless link before it included) otherwise.
  */
 export function noteAfterName(item: Nameable): string {
-  const note = item.note?.trim() ?? "";
   const name = itemName(item);
-  if (name.titled) return note;
-  if (name.from === "none") return "";
-  const lines = note.split("\n");
-  const link = leadingLink(note);
+  const lines = (item.note ?? "").trim().split("\n");
+  if (name.titled) return lines.join("\n");
+  // The lines up to the one it is named by go: a note's line may come after a wordless link.
   const at =
-    name.from === "link"
-      ? lines.findIndex((l) => l.trim())
-      : lines.findIndex((l) => l.trim() && !(link && bareLink(l)));
+    name.from === "none" ? lines.length : lines.findIndex((l) => l.trim() && (name.from === "link" || !bareLink(l)));
   return lines
     .slice(at + 1)
     .join("\n")

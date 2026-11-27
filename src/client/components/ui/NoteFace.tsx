@@ -1,5 +1,4 @@
 import { addressName } from "@shared/item-name";
-import { linkWords } from "@shared/links";
 import { type NoteSize, noteSize } from "@shared/notes";
 import { keepUnits } from "@shared/typography";
 import { Fragment, type ReactNode, useCallback, useLayoutEffect, useRef } from "react";
@@ -96,11 +95,17 @@ export function NoteFace({
 }: NoteFaceProps) {
   const measured = useWholeLines();
   const bare = BARE_LINK.test(note.trim());
-  const words = bare ? linkWords(note) : undefined;
+  // Its site, as links.ts's shortUrl says it ("printables.com"), read here so the face needs nothing more.
+  const site = bare
+    ? note
+        .trim()
+        .replace(/^https?:\/\/(www\.)?/i, "")
+        .split("/")[0]
+    : undefined;
   // What the link is called by the one rule (shared/item-name.ts): its page's title when given, else its address's words.
   const named =
     linkName ?? (bare ? addressName(/^https?:\/\//i.test(note.trim()) ? note.trim() : `https://${note.trim()}`) : null);
-  const link = words && named ? { site: words.site, words: named } : undefined;
+  const link = site && named ? { site, words: named } : undefined;
   const text = link?.words ?? note;
   const order: NoteSize[] = ["xl", "lg", "md", "sm"];
   const sized = noteSize(text);
@@ -120,19 +125,6 @@ export function NoteFace({
           <p className="font-display text-ink text-caption line-clamp-3 leading-snug font-normal break-words whitespace-pre-line">
             {link ? keepUnits(text) : breakAfterSlashes(keepUnits(note))}
           </p>
-        ) : link ? (
-          // Measured as a note is: the name takes the lines the face has, and its site stays right under the last.
-          <div ref={measured} className="min-h-0 flex-1 overflow-hidden">
-            <p
-              className={cn(
-                "font-display text-ink line-clamp-3 font-normal break-words whitespace-pre-line",
-                compact === "fill" ? miniSizes[face] : sizes[face],
-              )}
-            >
-              {keepUnits(text)}
-            </p>
-            <p className="text-caption text-ink-faint mt-1.5 truncate">{link.site}</p>
-          </div>
         ) : (
           // The box is measured; the note inside it is exactly as many lines tall as fit, so no line shows partly.
           <div ref={measured} className="min-h-0 flex-1 overflow-hidden">
@@ -143,8 +135,10 @@ export function NoteFace({
               )}
             >
               {/* A number keeps its unit on the line ("42 mm"); an address may break after its slashes. */}
-              {breakAfterSlashes(keepUnits(note))}
+              {link ? keepUnits(text) : breakAfterSlashes(keepUnits(note))}
             </p>
+            {/* A link's site stays right under its name's last line: the measure leaves it room. */}
+            {link && <p className="text-caption text-ink-faint mt-1.5 truncate">{link.site}</p>}
           </div>
         )}
         {/* Only a note short enough to leave the foot empty: a title-only idea or a few words: most of the card is empty. */}
@@ -155,14 +149,7 @@ export function NoteFace({
           />
         )}
         {link && compact === "tile" && (
-          <p
-            className={cn(
-              "text-caption text-ink-faint mt-1.5 shrink-0 truncate",
-              compact === "tile" && "max-md:hidden",
-            )}
-          >
-            {link.site}
-          </p>
+          <p className="text-caption text-ink-faint mt-1.5 shrink-0 truncate max-md:hidden">{link.site}</p>
         )}
       </div>
     </div>
