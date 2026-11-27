@@ -1,6 +1,6 @@
 import type { AttemptFile, AttemptHit, FixHit, ItemHit, Photo as PhotoData } from "@shared/api";
 import { outcomeLabel, type TagKind, tagLabel } from "@shared/attempts";
-import { itemName } from "@shared/item-name";
+import { itemName, noteAfterName } from "@shared/item-name";
 import { displayName } from "@shared/people";
 import { isOffTheBed } from "@shared/print-progress";
 import { excerpt, highlight, printNameMatch, type SearchTerm, snippetSegments } from "@shared/search";
@@ -377,7 +377,7 @@ export const ItemResult = forwardRef<HTMLAnchorElement, ItemResultProps>(functio
   const name = itemName(item);
   const snippet = hit.snippet ? snippetSegments(hit.snippet) : null;
   // Under the name, the words it doesn't already say: an untitled thing's note goes on after the line it is named by.
-  const rest = name.titled ? item.note : item.note.trim().split("\n").slice(1).join("\n").trim();
+  const rest = noteAfterName(item);
   // A count goes with the name, as an attempt's number does ("· 3 attempts"); a time sits at the chips' end. Beside
   // two chips a count would wrap onto a line of its own on a phone.
   const count =

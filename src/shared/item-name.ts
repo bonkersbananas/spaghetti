@@ -86,5 +86,26 @@ export function itemName(item: Nameable): ItemName {
   return { text: item.stage && item.stage !== "idea" ? UNTITLED.build : UNTITLED.idea, titled: false, from: "none" };
 }
 
+/**
+ * The note's words after the line the thing is named by, so a row that shows the name doesn't say it twice: the whole
+ * note for a titled thing; after the link or line that named it (a wordless link before it included) otherwise.
+ */
+export function noteAfterName(item: Nameable): string {
+  const note = item.note?.trim() ?? "";
+  const name = itemName(item);
+  if (name.titled) return note;
+  if (name.from === "none") return "";
+  const lines = note.split("\n");
+  const link = leadingLink(note);
+  const at =
+    name.from === "link"
+      ? lines.findIndex((l) => l.trim())
+      : lines.findIndex((l) => l.trim() && !(link && bareLink(l)));
+  return lines
+    .slice(at + 1)
+    .join("\n")
+    .trim();
+}
+
 /** Just the name's words. */
 export const nameOf = (item: Nameable) => itemName(item).text;

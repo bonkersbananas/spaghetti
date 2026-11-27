@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { clipName, itemName, leadingLink, nameOf, UNTITLED } from "../../src/shared/item-name.ts";
+import { clipName, itemName, leadingLink, nameOf, noteAfterName, UNTITLED } from "../../src/shared/item-name.ts";
 
 const GRIDFINITY = "https://makerworld.com/en/models/1234567-gridfinity-baseplate";
 
@@ -72,5 +72,17 @@ describe("leadingLink", () => {
     expect(leadingLink(`See ${GRIDFINITY}`)).toBeNull();
     expect(leadingLink("")).toBeNull();
     expect(leadingLink(undefined)).toBeNull();
+  });
+});
+
+describe("noteAfterName", () => {
+  it("gives the note's words after the line the name came from, never the name again", () => {
+    expect(noteAfterName({ title: "Bins", note: "For the drawer" })).toBe("For the drawer");
+    expect(noteAfterName({ title: null, note: `${GRIDFINITY}\nIn blue` })).toBe("In blue");
+    expect(
+      noteAfterName({ title: null, note: "https://makerworld.com/en/models/1234567\nFor the drawer\nTwo of them" }),
+    ).toBe("Two of them");
+    expect(noteAfterName({ title: null, note: "Hook\nfor the helmet" })).toBe("for the helmet");
+    expect(noteAfterName({ title: null, note: "" })).toBe("");
   });
 });
