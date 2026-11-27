@@ -228,9 +228,14 @@ function QuietExternal({ onOpen, onDropSpool, readOnly }: Pick<SlotProps, "onOpe
       )}
     >
       <span className="text-caption text-ink-faint tabular font-semibold tracking-wider uppercase">External</span>
-      <OfferChip aria-label="External empty, load a spool" disabled={readOnly} onClick={() => onOpen(EXTERNAL_SLOT)}>
-        Load
-      </OfferChip>
+      {readOnly ? (
+        // Nothing can be loaded (offline): a fact, not a dead offer.
+        <span className="text-small text-ink-faint">Empty</span>
+      ) : (
+        <OfferChip aria-label="External empty, load a spool" onClick={() => onOpen(EXTERNAL_SLOT)}>
+          Load
+        </OfferChip>
+      )}
     </section>
   );
 }
@@ -321,7 +326,7 @@ export function AmsLoadout({ readOnly, onSlot, onAddSpool, slots: given, classNa
                 ),
               )}
             </div>
-            {quiet && loaded === 0 && !unitSlots(letter).some(unknownTray) && (
+            {quiet && !readOnly && loaded === 0 && !unitSlots(letter).some(unknownTray) && (
               <p className="text-small text-ink-faint mt-3 px-1">An empty pot. Pick a slot to load a spool.</p>
             )}
           </section>

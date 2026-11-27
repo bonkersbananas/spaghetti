@@ -313,11 +313,11 @@ export function PantrySection() {
       <AmsLoadout readOnly className="md:max-w-3xl" />
       <Label>
         Partly empty (only the first spool loaded here): every slot keeps its place, the empty ones quiet (a faint label
-        and a plus that open the slot; read-only here, so no plus), and an empty external holder is one "External · +
-        Load" line
+        and a plus that open the slot; read-only here, so no plus and the external holder says "Empty"; live, it is one
+        "External · + Load" line)
       </Label>
       <AmsLoadout readOnly slots={firstLoaded} className="md:max-w-3xl" />
-      <Label>Nothing loaded: the unit with four quiet slots and its one pasta line</Label>
+      <Label>Nothing loaded: the unit with four quiet slots (live, with one pasta line under them)</Label>
       <AmsLoadout readOnly slots={NOTHING_LOADED} className="md:max-w-3xl" />
       <Label>The printer bridge, in one quiet line: connected, no printer, last heard, not set up</Label>
       <div className="flex flex-col gap-2">
