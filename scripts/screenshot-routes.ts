@@ -3300,6 +3300,70 @@ export const shots: Shot[] = [
     cleanup: restoreDeskTidy,
   },
   { name: "ideas", path: "/ideas" },
+  // One name for each idea (shared/item-name.ts), the same on its card, its page, in search and in the palette: an
+  // untitled link idea goes by its page's title, a photo with no words by the quiet "Untitled idea".
+  {
+    name: "ideas-names",
+    path: "/ideas",
+    prepare: async (page) => {
+      const card = page.locator(`a[href="/ideas/${SEED_IDS.gridfinity}"]`).first();
+      await card.waitFor();
+      await card.evaluate((element) => element.scrollIntoView({ block: "center" }));
+    },
+  },
+  {
+    name: "idea-named-by-link",
+    path: `/ideas/${SEED_IDS.gridfinity}`,
+    prepare: async (page) => {
+      await page.getByRole("textbox", { name: "Title" }).waitFor();
+    },
+  },
+  {
+    name: "idea-named-by-link-long",
+    path: `/ideas/${SEED_IDS.amsRoller}`,
+    prepare: async (page) => {
+      await page.getByRole("textbox", { name: "Title" }).waitFor();
+    },
+  },
+  {
+    name: "idea-photo-only",
+    path: `/ideas/${SEED_IDS.gearSet}`,
+    prepare: async (page) => {
+      await page.getByRole("textbox", { name: "Title" }).waitFor();
+    },
+  },
+  {
+    name: "search-names",
+    path: "/search?q=gridfinity",
+    prepare: async (page) => {
+      await page.getByRole("region", { name: "Ideas" }).waitFor();
+      await page.getByRole("searchbox", { name: "Search" }).blur();
+    },
+  },
+  {
+    // A long page title wraps to two lines in search rather than being cut mid-address.
+    name: "search-names-long",
+    path: "/search?q=roller",
+    prepare: async (page) => {
+      await page.getByRole("region", { name: "Ideas" }).waitFor();
+      await page.getByRole("searchbox", { name: "Search" }).blur();
+    },
+  },
+  {
+    name: "palette-names",
+    path: "/ideas",
+    width: 1440,
+    why: "the palette is the desktop's (⌘K); a phone finds things in the Search tab, shot as search-names",
+    prepare: async (page) => {
+      await page.locator(`a[href="/ideas/${SEED_IDS.gridfinity}"]`).first().waitFor();
+      await page.keyboard.press("ControlOrMeta+k");
+      await page.getByRole("combobox", { name: "Jump to or run" }).pressSequentially("gridfinity");
+      await page.getByRole("group", { name: "Ideas" }).waitFor();
+    },
+    cleanup: async (page) => {
+      await page.keyboard.press("Escape");
+    },
+  },
   { name: "ideas-full", path: "/ideas", fullPage: true },
   {
     // A photo saved without a title, a few seconds later: Claude's title in its card (decision 0070).

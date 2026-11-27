@@ -67,7 +67,7 @@ export async function seedAll({
     // What the link in the desk tidy-up note calls itself. The sandbox can't fetch pages, and a screenshot
     // shouldn't depend on one: the preview cache is filled as if it had (stamped with the real clock, so it stays fresh).
     executeSql(
-      `INSERT OR REPLACE INTO link_previews (url, title, site, failed, fetched_at) VALUES ('https://makerworld.com/en/models/487213-drawer-bins', 'Drawer bins, 42 mm grid', 'MakerWorld', 0, ${Date.now()}), ('https://www.printables.com/model/512340-bath-tugboat', 'Bath tugboat, floats upright', 'Printables', 0, ${Date.now()});`,
+      `INSERT OR REPLACE INTO link_previews (url, title, site, failed, fetched_at) VALUES ('https://makerworld.com/en/models/487213-drawer-bins', 'Drawer bins, 42 mm grid', 'MakerWorld', 0, ${Date.now()}), ('https://www.printables.com/model/512340-bath-tugboat', 'Bath tugboat, floats upright', 'Printables', 0, ${Date.now()}), ('https://makerworld.com/en/models/1234567-gridfinity-baseplate', 'Gridfinity baseplate, 4x4 | MakerWorld', 'MakerWorld', 0, ${Date.now()}), ('https://www.printables.com/model/734512-ams-roller-spool-holder', 'Roller spool holder for the AMS, with bearings, quick-swap hubs and a drawer for desiccant', 'Printables', 0, ${Date.now()});`,
       { persistTo: stateDir },
     );
     await seedBridge(alex, origin);

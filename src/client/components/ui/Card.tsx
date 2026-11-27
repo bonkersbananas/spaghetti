@@ -220,7 +220,7 @@ export function Card({
         {chips && <div className="absolute bottom-2 left-2 flex flex-wrap gap-1.5">{chips}</div>}
       </div>
       <div className="flex flex-1 flex-col px-2 pt-2.5 pb-1.5">
-        {naming && !title ? (
+        {naming && (!title || standIn) ? (
           naming
         ) : heading ? (
           <Heading

@@ -116,6 +116,35 @@ export function CardSection() {
       </div>
       <div className="mt-10">
         <Label>
+          One name for each idea (shared/item-name.ts): a title someone typed; else an untitled link idea's page title,
+          said on its note face over the site; else the note's first words; else a photo with no words is the quiet
+          "Untitled idea" (`standIn`), the same on its page, in search and in the palette
+        </Label>
+        <div className="grid grid-cols-2 items-start gap-3 md:grid-cols-4 md:gap-5">
+          <Card
+            note="makerworld.com/en/models/1234567-gridfinity-baseplate"
+            linkName="Gridfinity baseplate, 4x4"
+            meta="Its page's title"
+            aspect="portrait"
+          />
+          <Card
+            note="printables.com/model/734512-ams-roller-spool-holder"
+            linkName="Roller spool holder for the AMS, with bearings, quick-swap hubs and a drawer for desiccant"
+            meta="A long one wraps"
+            aspect="portrait"
+          />
+          <Card note="Hook for the bike helmet" meta="Its note's first words" aspect="portrait" />
+          <Card
+            photo={{ src: dragonPhoto, alt: "Photo of an idea" }}
+            title="Untitled idea"
+            standIn
+            meta="A photo, no words"
+            aspect="portrait"
+          />
+        </div>
+      </div>
+      <div className="mt-10">
+        <Label>
           Mini cards, for a row that scrolls sideways with snap (Up next, which stays small: decision 0065): the cover
           only, so a drag never fights a photo swipe, the title under it (a word too long for the line is hyphenated),
           room for a menu button in the corner, and a note-only idea's note filling the face
