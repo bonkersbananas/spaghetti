@@ -197,7 +197,10 @@ function EmptySlotChip({
       aria-label={`${external ? "External" : slot} empty, load a spool`}
       onClick={() => onOpen(slot)}
       disabled={readOnly}
-      className={cn("tabular disabled:cursor-default md:pl-2.5", over && "shadow-ring bg-semolina-soft text-semolina-ink")}
+      className={cn(
+        "tabular disabled:cursor-default md:pl-2.5",
+        over && "shadow-ring bg-semolina-soft text-semolina-ink",
+      )}
       {...handlers}
     >
       <PlusIcon size={14} weight="bold" aria-hidden className="max-md:hidden" />
