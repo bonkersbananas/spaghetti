@@ -261,3 +261,35 @@ test("sliding off the capture button after the hold cancels it", { tag: "@phone"
   await expect(page.getByRole("dialog", { name: "New idea" })).toBeVisible();
   expect(chosen).toBe(false);
 });
+
+test("on a phone the idea's chips sit on one line and every chip keeps its 44 px tap", { tag: "@phone" }, async ({
+  page,
+  isMobile,
+}) => {
+  test.skip(!isMobile, "On desktop the row wraps and nothing clips it");
+  const origin = new URL(page.url()).origin;
+  const id = crypto.randomUUID();
+  await page.request.post("/api/items", { headers: { Origin: origin }, data: { id, note: "A comb for the cables" } });
+  await page.goto(`/ideas/${id}`);
+  const row = page.getByRole("group", { name: "About this idea" });
+  await expect(row.getByRole("button", { name: "Up next" })).toBeVisible();
+  const taps = () =>
+    row.evaluate((group) => {
+      // Inside the sideways scroller (which clips both ways) each chip must still answer 7 px above and below itself.
+      const missed = Array.from(group.querySelectorAll<HTMLElement>("button"))
+        .filter((button) => {
+          const box = button.getBoundingClientRect();
+          const x = box.x + box.width / 2;
+          return [box.top - 7, box.bottom + 7].some((y) => document.elementFromPoint(x, y) !== button);
+        })
+        .map((button) => button.getAttribute("aria-label") ?? button.textContent);
+      const tops = new Set(Array.from(group.children, (chip) => Math.round(chip.getBoundingClientRect().top)));
+      return { missed, lines: tops.size, scrollsDown: group.scrollHeight > group.clientHeight };
+    });
+  // With the "For …" offer, and with someone named (two chips only).
+  expect(await taps()).toEqual({ missed: [], lines: 1, scrollsDown: false });
+  await page.request.patch(`/api/items/${id}`, { headers: { Origin: origin }, data: { forWhom: "the kitchen" } });
+  await page.reload();
+  await expect(page.getByRole("textbox", { name: "For" })).toHaveValue("the kitchen");
+  expect(await taps()).toEqual({ missed: [], lines: 1, scrollsDown: false });
+});

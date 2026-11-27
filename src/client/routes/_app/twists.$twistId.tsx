@@ -29,7 +29,6 @@ import { SaveStatus } from "@/components/ui/SaveStatus";
 import { Section } from "@/components/ui/Section";
 import { ShareLinkButton } from "@/components/ui/ShareLinkButton";
 import { Skeleton } from "@/components/ui/Skeleton";
-import { cn } from "@/lib/cn";
 import { shortcutCaps, useHotkeys } from "@/lib/hotkeys";
 import { useBuilds } from "@/lib/items";
 import { useBackTo } from "@/lib/origin";
@@ -350,14 +349,9 @@ function TwistBody({ twist }: { twist: Twist }) {
         </div>
         {!isDesktop && printNote && <div aria-hidden className="h-14" />}
         {!isDesktop && (
-          <ActionBar>
-            <div
-              className={cn(
-                "flex min-w-0 flex-1 flex-col gap-2",
-                // The caution is part of the bar's own surface, so the page never shows round it.
-                printNote && "bg-paper shadow-raised rounded-2xl p-2.5",
-              )}
-            >
+          <ActionBar surface="tray">
+            {/* The caution sits on the tray itself, over the button: the tray is the surface, so no box of its own. */}
+            <div className="flex min-w-0 flex-1 flex-col gap-2">
               {printNote && <Caution>{printNote}</Caution>}
               <Button
                 variant="primary"

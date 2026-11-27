@@ -53,9 +53,10 @@ export function IdeaTitleChips({ item, forWhom, setForWhom, readOnly }: IdeaTitl
         onOpen={() => setAsking(true)}
         onDone={() => setAsking(false)}
       />
-      {/* Pulled left so the quiet toggles' words line up with the title; the row runs to the screen's edge on phones. */}
+      {/* Pulled left so the quiet toggles' words line up with the title; the row runs to the screen's edge on phones.
+        There the row (a scroller, which clips) is as tall as the chips' 44 px tap areas, its padding cancelled by margins. */}
       <div className="-ml-2.5">
-        <ChipRow label="About this idea" className="items-center max-md:-my-1 md:gap-1 md:py-0">
+        <ChipRow label="About this idea" className="items-center max-md:-my-2 max-md:py-2 md:gap-1 md:py-0">
           <ToggleChip
             selected={item.upNext !== null}
             appearance="quiet"
@@ -82,6 +83,8 @@ export function IdeaTitleChips({ item, forWhom, setForWhom, readOnly }: IdeaTitl
               onName={setForWhom}
               onAsk={() => setAsking(true)}
               firstNameOnPhones
+              // As tall as the quiet toggles beside it on a phone, so the offer isn't the row's biggest shape.
+              className="max-md:h-7"
             />
           )}
         </ChipRow>

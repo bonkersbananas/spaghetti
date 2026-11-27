@@ -111,11 +111,12 @@ export function ControlSection() {
           </div>
           <p className="text-body text-ink-soft">
             <code className="text-small">surface="tray"</code>, for a screen's own actions over page text (an idea's
-            "Start building", a build's "Log attempt"): a cream surface of its own, rounded at the top and casting
-            upward, that sits on the tab bar as one dock. A list's floating add-action keeps the page's paper.
+            "Start building", a build's "Log attempt", a twist's "Print it"): a shelf of cream, no rounder than its
+            button, with as much room above the button as at its sides; the tab bar under it turns the same solid cream,
+            so the two are one surface. A list's floating add-action keeps the page's paper.
           </p>
           <div className="bg-paper overflow-hidden rounded-md pt-6">
-            <div className="bg-cream shadow-bar flex items-center gap-3 rounded-t-xl px-5 py-3">
+            <div className="bg-cream shadow-bar flex items-center gap-3 rounded-t-lg px-5 pt-5 pb-3">
               <Button variant="quiet" className="shrink-0">
                 Add to a build
               </Button>

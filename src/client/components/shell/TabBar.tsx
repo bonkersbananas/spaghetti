@@ -3,6 +3,7 @@ import { useRef, useState } from "react";
 import { CameraIcon, PlusIcon } from "@/components/ui/icons";
 import { UnreadDot } from "@/components/ui/UnreadDot";
 import { useCapture } from "@/lib/capture";
+import { cn } from "@/lib/cn";
 import { holdKeyboard } from "@/lib/keyboard-proxy";
 import { scrollToTop } from "@/lib/scroll-top";
 import { useAnyUnread } from "@/lib/unread-comments";
@@ -154,7 +155,11 @@ export function TabBar() {
     <nav
       aria-label="Sections"
       style={{ paddingBottom: "var(--sg-tabbar-foot)" }}
-      className="sg-tabbar bg-cream/92 shadow-bar fixed inset-x-0 bottom-0 z-30 backdrop-blur-xl md:hidden"
+      className={cn(
+        "sg-tabbar bg-cream/92 shadow-bar fixed inset-x-0 bottom-0 z-30 backdrop-blur-xl md:hidden",
+        // Under an ActionBar tray the two are one solid surface: no edge or shadow of the tab bar's own between them.
+        "[html[data-action-tray]_&]:bg-cream [html[data-action-tray]_&]:shadow-none",
+      )}
     >
       <div className="h-tabbar-row mx-auto flex max-w-lg items-stretch px-2">
         <Tab {...ideas} />

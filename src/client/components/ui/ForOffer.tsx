@@ -11,6 +11,8 @@ interface ForOfferProps {
   onAsk: () => void;
   /** On phones say only the first name ("For Sam"), so a row of chips stays on one line; taking it still names them in full. */
   firstNameOnPhones?: boolean;
+  /** Onto the offer's ring, such as `max-md:h-7` to match quiet chips beside it. */
+  className?: string;
 }
 
 /**
@@ -18,12 +20,18 @@ interface ForOfferProps {
  * its end to write someone else in the `ForField` line. Once someone is named the page shows the "for Sam" line
  * instead.
  */
-export function ForOffer({ name, onName, onAsk, firstNameOnPhones = false }: ForOfferProps) {
-  if (!name) return <OfferChip onClick={onAsk}>For someone</OfferChip>;
+export function ForOffer({ name, onName, onAsk, firstNameOnPhones = false, className }: ForOfferProps) {
+  if (!name)
+    return (
+      <OfferChip onClick={onAsk} className={className}>
+        For someone
+      </OfferChip>
+    );
   const space = name.indexOf(" ");
   const rest = firstNameOnPhones && space > 0 ? name.slice(space) : "";
   return (
     <OfferChip
+      className={className}
       onClick={() => onName(name)}
       aria-label={`For ${name}`}
       more={<OfferMore label="For someone else" onClick={onAsk} />}
