@@ -185,11 +185,15 @@ export async function attemptHits(db: Db, ids: string[]): Promise<AttemptHit[]> 
   if (!ids.length) return [];
   const rows = await db.select().from(attempts).where(inArray(attempts.id, ids));
   const itemIds = unique(rows.map((row) => row.itemId));
-  const [itemRows, siblings, partRows, printer] = await Promise.all([
+  const [itemRows, siblings, partRows, printer, jobRows] = await Promise.all([
     db.select().from(items).where(inArray(items.id, itemIds)),
     liveAttempts(db, itemIds),
     db.select().from(parts).where(inArray(parts.itemId, itemIds)),
     printerAgents(db),
+    db
+      .select({ attemptId: printJobs.attemptId, name: printJobs.name })
+      .from(printJobs)
+      .where(inArray(printJobs.attemptId, ids)),
   ]);
   const itemPhotos = await livePhotos(db, itemIds, new Set(siblings.map((row) => row.id)));
   const byId = new Map(rows.map((row) => [row.id, row]));
@@ -241,6 +245,7 @@ export async function attemptHits(db: Db, ids: string[]): Promise<AttemptHit[]> 
           partRows.filter((part) => part.itemId === item.id),
         ),
         photo: photo ? toApiPhoto(photo) : null,
+        printName: jobRows.find((job) => job.attemptId === attempt.id)?.name || null,
       },
     ];
   });
@@ -257,6 +262,12 @@ async function itemHits(
     db.select().from(items).where(inArray(items.id, ids)),
     liveAttempts(db, ids),
   ]);
+  // By build, not by attempt: a build can have many prints, and D1 takes at most 100 bound values in a query.
+  const jobs = await db
+    .select({ attemptId: printJobs.attemptId, name: printJobs.name })
+    .from(printJobs)
+    .innerJoin(attempts, eq(attempts.id, printJobs.attemptId))
+    .where(inArray(attempts.itemId, ids));
   const itemPhotos = await livePhotos(db, ids, new Set(itemAttempts.map((row) => row.id)));
   return found.flatMap(({ id, snippet, comment }) => {
     const item = rows.find((row) => row.id === id);
@@ -288,6 +299,12 @@ async function itemHits(
         snippet,
         comment,
         photo: photo ? toApiPhoto(photo) : null,
+        printNames: unique(
+          [...own]
+            .sort((a, b) => b.printedAt.getTime() - a.printedAt.getTime())
+            .flatMap((row) => jobs.filter((job) => job.attemptId === row.id).map((job) => job.name ?? ""))
+            .filter(Boolean),
+        ),
       },
     ];
   });

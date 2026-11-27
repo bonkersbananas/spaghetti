@@ -639,6 +639,8 @@ export interface AttemptHit {
   photo: Photo | null;
   /** In search: the failure coach's suggestion that matched the words (not saved on the attempt). */
   coachIdea?: string | null;
+  /** The name the printer gave this attempt's print ("gnome_hat(2)-7"), when it came from the printer: search shows it when only it matched. */
+  printName?: string | null;
 }
 
 /**
@@ -674,6 +676,8 @@ export interface ItemHit {
   /** Set when the hit is a comment in its thread, not the item's own words: the snippet is that comment's. */
   comment: { id: string; authorId: string; via: string | null; createdAt: number } | null;
   photo: Photo | null;
+  /** The names the printer gave this build's prints, newest first: search shows one when only it matched. */
+  printNames?: string[];
 }
 
 /** GET /api/search?q=&outcome=&material=&tag=&person= */

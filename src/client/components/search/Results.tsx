@@ -2,7 +2,7 @@ import type { AttemptFile, AttemptHit, FixHit, ItemHit, Photo as PhotoData } fro
 import { outcomeLabel, type TagKind, tagLabel } from "@shared/attempts";
 import { displayName } from "@shared/people";
 import { isOffTheBed } from "@shared/print-progress";
-import { highlight, type SearchTerm, snippetSegments } from "@shared/search";
+import { excerpt, highlight, printNameMatch, type SearchTerm, snippetSegments } from "@shared/search";
 import { inlineTime, relativeTime } from "@shared/time";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { LinkProps } from "@tanstack/react-router";
@@ -20,6 +20,7 @@ import {
   FinishIcon,
   type Icon,
   IdeasIcon,
+  PrinterIcon,
   ShelveIcon,
 } from "@/components/ui/icons";
 import { PhotoRow } from "@/components/ui/PhotoRow";
@@ -145,6 +146,22 @@ interface AttemptResultProps {
   action?: ReactNode;
 }
 
+/**
+ * The file name the printer gave a print, as one quiet line, when the words matched only that (a build with a title
+ * of its own, found by "v2" or "40mm"): without it a result looks like a wrong one. Cut around the match, so the
+ * match stays in view on a phone.
+ */
+function PrintNameLine({ name, terms }: { name: string | null; terms: readonly SearchTerm[] }) {
+  if (!name) return null;
+  return (
+    <span className="text-small text-ink-faint flex items-center gap-1.5">
+      <PrinterIcon size={14} aria-hidden className="text-ink-faint shrink-0" />
+      <span className="sr-only">Printed as </span>
+      <Highlight text={excerpt(name, terms, 28)} terms={terms} className="min-w-0 truncate" />
+    </span>
+  );
+}
+
 /** An attempt found: how it went, the note, the tags and filaments that matched. */
 export const AttemptResult = forwardRef<HTMLAnchorElement, AttemptResultProps>(function AttemptResult(
   { hit, terms, selected, onHover, onOpen, action },
@@ -161,6 +178,20 @@ export const AttemptResult = forwardRef<HTMLAnchorElement, AttemptResultProps>(f
     .sort((x, y) => Number(matches(y)) - Number(matches(x)))
     // Beside a button the line is shorter: three, so it stays one line next to it.
     .slice(0, action ? 3 : 4);
+  const shownName = printNameMatch(
+    hit.printName ? [hit.printName] : [],
+    [
+      title,
+      attempt.note,
+      hit.coachIdea ?? "",
+      hit.partsLabel ?? "",
+      ...attempt.failureTags.map((slug) => tagLabel("failure", slug, failureOptions)),
+      ...attempt.successNotes.map((slug) => tagLabel("success", slug, successOptions)),
+      ...settings,
+      ...filaments.map((f) => [f.colorName, f.brand, f.type].filter(Boolean).join(" ")),
+    ],
+    terms,
+  );
   const row = (
     <ResultRow
       ref={ref}
@@ -217,6 +248,7 @@ export const AttemptResult = forwardRef<HTMLAnchorElement, AttemptResultProps>(f
           ))}
         </TagRow>
       )}
+      <PrintNameLine name={shownName} terms={terms} />
       {(filaments.length > 0 || settings.length > 0) && (
         <SettingsLine
           filaments={filaments}
@@ -354,6 +386,19 @@ export const ItemResult = forwardRef<HTMLAnchorElement, ItemResultProps>(functio
           ? null
           : count
         : `Started ${inlineTime(item.startedAt ?? item.createdAt)}`;
+  const shownName = printNameMatch(
+    hit.printNames ?? [],
+    [
+      title ?? "",
+      item.note,
+      hit.snippet
+        ? snippetSegments(hit.snippet)
+            .map((piece) => piece.text)
+            .join("")
+        : "",
+    ],
+    terms,
+  );
   return (
     <ResultRow
       ref={ref}
@@ -403,6 +448,7 @@ export const ItemResult = forwardRef<HTMLAnchorElement, ItemResultProps>(functio
           <Highlight text={item.note} terms={terms} className="text-body text-ink-soft line-clamp-2" />
         ))
       )}
+      <PrintNameLine name={shownName} terms={terms} />
     </ResultRow>
   );
 });
