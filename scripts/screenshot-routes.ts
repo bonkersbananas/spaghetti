@@ -4060,6 +4060,34 @@ export const shots: Shot[] = [
     },
   },
   {
+    // Found only by the file name its print had ("star-ornament-3c"): the row says so in one quiet line.
+    name: "search-print-name",
+    path: "/search?q=3c",
+    prepare: async (page) => {
+      await page
+        .getByRole("link", { name: /Star ornament/ })
+        .first()
+        .waitFor();
+      await page.getByRole("searchbox", { name: "Search" }).blur();
+    },
+  },
+  {
+    name: "palette-print-name",
+    path: "/ideas",
+    width: 1440,
+    prepare: async (page) => {
+      await page.keyboard.press("ControlOrMeta+k");
+      await page.getByRole("combobox", { name: "Jump to or run" }).pressSequentially("3c");
+      await page
+        .getByRole("option", { name: /Star ornament/ })
+        .first()
+        .waitFor();
+    },
+    cleanup: async (page) => {
+      await page.keyboard.press("Escape");
+    },
+  },
+  {
     // The stage's word in search: a build between prints.
     name: "search-in-progress",
     path: "/search?q=chain",

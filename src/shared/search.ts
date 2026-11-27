@@ -128,6 +128,39 @@ export function highlight(text: string, terms: readonly SearchTerm[]): Segment[]
   return segments;
 }
 
+/**
+ * The print file name worth showing under a result: the first of `names` with a word that some term matches, when
+ * that term matches nothing the row already shows (`visible`). A result whose own words matched needs no line.
+ */
+export function printNameMatch(
+  names: readonly string[],
+  visible: readonly string[],
+  terms: readonly SearchTerm[],
+): string | null {
+  const seen = (text: string, term: SearchTerm) => words(text).some((word) => matchesTerm(word, [term]));
+  const open = terms.filter((term) => !visible.some((text) => seen(text, term)));
+  if (!open.length) return null;
+  return names.find((name) => open.some((term) => seen(name, term))) ?? null;
+}
+
+/**
+ * A long text cut to fit `max` characters around its first matched word, with … where it was cut, so a match at
+ * the end of a long file name ("…-v4(3)-12-2") stays in view instead of being truncated away.
+ */
+export function excerpt(text: string, terms: readonly SearchTerm[], max = 34): string {
+  if (text.length <= max) return text;
+  let at = 0;
+  for (const found of text.matchAll(/[\p{L}\p{N}]+/gu)) {
+    if (matchesTerm(found[0], terms)) {
+      at = found.index ?? 0;
+      break;
+    }
+  }
+  const start = Math.max(0, Math.min(at - Math.floor(max / 4), text.length - max));
+  const end = Math.min(text.length, start + max);
+  return `${start > 0 ? "…" : ""}${text.slice(start, end)}${end < text.length ? "…" : ""}`;
+}
+
 /** The markers FTS5's snippet() puts around matched words in a long note. */
 export const SNIPPET_OPEN = "\u{E000}";
 export const SNIPPET_CLOSE = "\u{E001}";

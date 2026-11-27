@@ -1,6 +1,6 @@
 import type { AttemptHit, FixHit, ItemHit, Spool } from "@shared/api";
 import { isOffTheBed } from "@shared/print-progress";
-import { highlight, searchTerms, words } from "@shared/search";
+import { excerpt, highlight, printNameMatch, searchTerms, words } from "@shared/search";
 import { isShortcut, keycaps, type ShortcutId, shortcutKeys } from "@shared/shortcuts";
 import { inlineTime, relativeTime } from "@shared/time";
 import { addWeeks, mondayOf } from "@shared/week";
@@ -452,9 +452,12 @@ function itemEntry(
   const id = `item-${hit.item.id}`;
   const name = itemName(hit.item, hit.item.stage === "idea" ? "idea" : "build");
   const isIdea = hit.item.stage === "idea";
+  const file = printNameMatch(hit.printNames ?? [], [name, hit.item.note], terms);
   const meta: ReactNode = isIdea
     ? `Idea · captured ${inlineTime(hit.item.createdAt)}`
     : `${stageWords[hit.item.stage]}${hit.attempts ? ` · ${hit.attempts} ${hit.attempts === 1 ? "attempt" : "attempts"}` : ""}`;
+  // Found only by the name the printer gave a print: the line says so, cut around the match.
+  const subtitle: ReactNode = file ? <Highlight text={`${meta} · ${excerpt(file, terms, 26)}`} terms={terms} /> : meta;
   return {
     id,
     group,
@@ -463,7 +466,7 @@ function itemEntry(
       id,
       label: name,
       title: <Highlight text={name} terms={terms} />,
-      subtitle: meta,
+      subtitle,
       photo: rowPicture(cached, hit.photo),
       icon: isIdea ? IdeasIcon : BuildsIcon,
       trailing: !isIdea && hit.lastOutcome ? <OutcomeChip outcome={hit.lastOutcome} /> : undefined,
@@ -500,6 +503,9 @@ function attemptEntry(
   // The settings the words matched ("bed 70 °C"), so the row shows why it was found.
   const all = summarizeSettings(hit.attempt.settings);
   const matched = all.filter((part) => highlight(part, terms).some((piece) => piece.match)).slice(0, 2);
+  // Found only by the name the printer gave the print: say so, cut around the match (the row is one line).
+  const file = printNameMatch(hit.printName ? [hit.printName] : [], [name, hit.attempt.note, ...all], terms);
+  if (file) matched.push(excerpt(file, terms, 26));
   return {
     id,
     group,

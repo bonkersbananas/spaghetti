@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
+  excerpt,
   ftsQuery,
   highlight,
+  printNameMatch,
   SNIPPET_CLOSE,
   SNIPPET_OPEN,
   searchTerms,
@@ -82,5 +84,37 @@ describe("highlight", () => {
       { text: " holder for the ", match: false },
       { text: "shelf", match: true },
     ]);
+  });
+});
+
+describe("printNameMatch", () => {
+  const terms = (query: string) => searchTerms(query);
+  it("returns the file name only when a word matched nothing else on the row", () => {
+    const name = "holder-40mm-v2(5)-12-2";
+    expect(printNameMatch([name], ["Reindeer tealight holder"], terms("40mm"))).toBe(name);
+    expect(printNameMatch([name], ["Reindeer tealight holder"], terms("holder 40mm"))).toBe(name);
+    // The row's own words matched every word: nothing to explain.
+    expect(printNameMatch([name], ["Hook v2"], terms("v2"))).toBeNull();
+    expect(printNameMatch([name], ["Holder 40mm"], terms("holder 40mm"))).toBeNull();
+    // The name doesn't match either.
+    expect(printNameMatch([name], ["Reindeer"], terms("lid"))).toBeNull();
+    expect(printNameMatch([], ["Reindeer"], terms("40mm"))).toBeNull();
+  });
+
+  it("takes the first of several names that has the word", () => {
+    expect(printNameMatch(["gnome-a", "gnome-b-v2", "gnome-c-v2"], ["Gnome"], terms("v2"))).toBe("gnome-b-v2");
+  });
+});
+
+describe("excerpt", () => {
+  const terms = (query: string) => searchTerms(query);
+  it("leaves a short name alone and cuts a long one around the match", () => {
+    expect(excerpt("hook-v2", terms("v2"))).toBe("hook-v2");
+    const long = "garden-gnome-hat-3color-40mm-multicolor(5)-12-2-final";
+    const cut = excerpt(long, terms("12"), 24);
+    expect(cut.length).toBeLessThanOrEqual(26);
+    expect(cut).toContain("12");
+    expect(cut.startsWith("…")).toBe(true);
+    expect(excerpt(long, terms("garden"), 24).startsWith("garden")).toBe(true);
   });
 });

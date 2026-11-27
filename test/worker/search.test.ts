@@ -434,6 +434,17 @@ describe("search reads words the way people type them", () => {
       }
     });
 
+    it("tells which file name a result had, for the row to show when only it matched", async () => {
+      const build = await createItem({ title: "Reindeer holder", stage: "building" });
+      const attempt = await logAttempt(build.id, { outcome: "success" });
+      const other = await logAttempt(build.id, { outcome: "failed" });
+      await printed(attempt.id, build.id, "holder-40mm-v2(5)");
+      const found = await search({ q: "40mm" });
+      expect(found.attempts.map((hit) => [hit.attempt.id, hit.printName])).toEqual([[attempt.id, "holder-40mm-v2(5)"]]);
+      expect(found.builds[0]?.printNames).toEqual(["holder-40mm-v2(5)"]);
+      expect(other.id).not.toBe(attempt.id);
+    });
+
     it("finds a build the printer named, when its title says nothing", async () => {
       const build = await createItem({ stage: "building" });
       const attempt = await logAttempt(build.id, { outcome: "failed", failureTags: ["stringing"] });
