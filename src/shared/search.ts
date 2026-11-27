@@ -12,6 +12,8 @@ export interface SearchTerm {
   prefix: boolean;
   /** Other words that mean the same ("skev" is "warping" in Swedish): any of them matches too, as a word start. */
   also?: string[];
+  /** Other words that mean the same, but only as whole words ("lids" is "lid", not every word that starts lid; "jul" is not July). */
+  whole?: string[];
 }
 
 /** At most this many words of a query are used. */
@@ -69,7 +71,10 @@ export function ftsQuery(
   ];
   const groups = terms.map((term) => {
     const token = ftsToken(term.text, term.prefix);
-    const others = (term.also ?? []).map((other) => ftsToken(other, true));
+    const others = [
+      ...(term.also ?? []).map((other) => ftsToken(other, true)),
+      ...(term.whole ?? []).map((other) => ftsToken(other, false)),
+    ];
     const viaLabel = tags
       .filter(
         (tag) =>

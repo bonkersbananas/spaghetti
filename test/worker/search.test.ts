@@ -464,11 +464,13 @@ describe("search reads words the way people type them", () => {
 
   it("finds a word typed as two, or two typed as one, and a plural", async () => {
     const bucket = await createItem({ title: "Hotdog holder", stage: "building" });
-    const ring = await createItem({ title: "Keyhole ring cover", stage: "idea" });
+    const ring = await createItem({ title: "Key Ring tag", stage: "idea" });
     const lid = await createItem({ title: "Jar lid", stage: "building" });
     expect(itemIds((await search({ q: "hot dog" })).builds)).toEqual([bucket.id]);
     expect(itemIds((await search({ q: "keyring" })).ideas)).toEqual([ring.id]);
     expect(itemIds((await search({ q: "lids" })).builds)).toEqual([lid.id]);
+    const pot = await createItem({ title: "Plant pot", stage: "idea" });
+    expect(itemIds((await search({ q: "plantpot" })).ideas)).toEqual([pot.id]);
     expect(itemIds((await search({ q: "jar lids" })).builds)).toEqual([lid.id]);
   });
 
@@ -477,5 +479,35 @@ describe("search reads words the way people type them", () => {
     const star = await createItem({ title: "Paper star", stage: "idea" });
     expect(itemIds((await search({ q: "lock" })).builds)).toEqual([lid.id]);
     expect(itemIds((await search({ q: "stjärna" })).ideas)).toEqual([star.id]);
+  });
+
+  it("reads a plural as its singular word, never as every word that starts like it", async () => {
+    const filament = await createItem({
+      title: "Spool holder",
+      note: "PETG wants the textured sheet",
+      stage: "building",
+    });
+    const plate = await createItem({ title: "Plate stand", note: "sturdy", stage: "building" });
+    const pet = await createItem({ title: "Pet bowl", stage: "idea" });
+    expect(itemIds((await search({ q: "pets" })).ideas)).toEqual([pet.id]);
+    expect(itemIds((await search({ q: "pets" })).builds)).not.toContain(filament.id);
+    expect(itemIds((await search({ q: "PLAs" })).builds)).not.toContain(plate.id);
+  });
+
+  it("keeps a noun that looks like filler, and a name that does", async () => {
+    const soda = await createItem({ title: "Soda can holder", stage: "building" });
+    await createItem({ title: "Plain holder", stage: "building" });
+    const bin = await createItem({ title: "Trash can lid", stage: "building" });
+    const gift = await createItem({ title: "Pen cup", stage: "idea" });
+    await request(`/api/items/${gift.id}`, { method: "PATCH", cookie, json: { forWhom: "Will" } });
+    expect(itemIds((await search({ q: "can holder" })).builds)).toEqual([soda.id]);
+    expect(itemIds((await search({ q: "trash can" })).builds)).toEqual([bin.id]);
+    expect(itemIds((await search({ q: "for Will" })).ideas)).toEqual([gift.id]);
+  });
+
+  it("does not read July as Christmas", async () => {
+    const star = await createItem({ title: "Jul star", stage: "idea" });
+    await createItem({ title: "July calendar", stage: "idea" });
+    expect(itemIds((await search({ q: "christmas" })).ideas)).toEqual([star.id]);
   });
 });

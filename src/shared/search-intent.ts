@@ -36,7 +36,7 @@ const FILLER = new Set(
     "in on to at from when where show find tell last time times again idea ideas build builds print prints printed " +
     "attempt attempts try tries thing things some any said say says wrote write told think thought " +
     "settings setting profile profiles parameters parameter params config configuration " +
-    "use used using got get make made should could would can will please " +
+    "should could would please " +
     "vad hur som med av en ett det den de vi jag mitt vart min mina om till fran och eller senast sist gang gangen " +
     "ide ideer bygge bygget utskrift forsok installning installningar installningarna profil profiler"
   ).split(" "),
@@ -137,8 +137,6 @@ const SYNONYMS: string[][] = [
   ["tree", "julgran"],
   ["christmas", "jul", "xmas"],
   ["keyring", "nyckelring", "keychain"],
-  ["snow", "sno"],
-  ["globe", "glob"],
   ["cable", "kabel"],
   ["stand", "stativ"],
   ["glasses", "glasogon"],
@@ -156,29 +154,41 @@ export function singular(word: string): string | null {
   return word.endsWith("s") ? word.slice(0, -1) : null;
 }
 
-/** The words a term also stands for. A short term must be the whole member: "gra" is not "grattis". */
-function alsoFor(term: SearchTerm): string[] {
-  if (!term.prefix && !/^[a-z]+$/.test(term.text)) return [];
-  const found = new Set<string>();
+/**
+ * The words a term also stands for: the plural's singular and synonyms of 4 letters or more start words, the
+ * singular and shorter synonyms ("jul", "vas") are whole words only, so "pets" is not every PETG and "jul" not
+ * July. A short term must be the whole member: "gra" is not "grattis".
+ */
+function alsoFor(term: SearchTerm): Pick<SearchTerm, "also" | "whole"> {
+  if (!term.prefix && !/^[a-z]+$/.test(term.text)) return {};
+  const also = new Set<string>();
+  const whole = new Set<string>();
   const one = term.prefix ? singular(term.text) : null;
-  if (one) found.add(one);
+  if (one) whole.add(one);
   for (const group of SYNONYMS) {
     const hit = group.some((member) =>
       term.text.length >= 4 && term.prefix
         ? member.startsWith(term.text) || (member.length >= 4 && term.text.startsWith(member))
         : member === term.text,
     );
-    if (hit) for (const member of group) if (member !== term.text) found.add(member);
+    if (!hit) continue;
+    for (const member of group) if (member !== term.text) (member.length <= 3 ? whole : also).add(member);
   }
-  return [...found];
+  return { ...(also.size ? { also: [...also] } : {}), ...(whole.size ? { whole: [...whole] } : {}) };
 }
 
 /** A decimal number ("0.4") is one word, so "0.4 nozzle" finds the nozzle size; anything else splits on punctuation. */
-const NUMBER_OR_WORD = /\p{N}+(?:\.\p{N}+)?(?![\p{L}\p{N}])|[\p{L}\p{N}]+/gu;
+const NUMBER_OR_WORD =
+  /\p{N}+\.\p{N}+(?:mm|cm|kg|m|g|c)(?![\p{L}\p{N}])|\p{N}+(?:\.\p{N}+)?(?![\p{L}\p{N}])|[\p{L}\p{N}]+/gu;
+/** A decimal with its unit glued on ("0.4mm", "1.75mm"): the number is what the index holds, the unit is dropped. */
+const DECIMAL_UNIT = /^(\d+\.\d+)(?:mm|cm|kg|m|g|c)$/;
 const DECIMAL = /^\d+\.\d+$/;
 
-/** Reads a typed question. `now` places time phrases. */
-export function parseQuery(query: string, now: number): ParsedQuery {
+/**
+ * Reads a typed question. `now` places time phrases. `names` are words that are someone's name here (people, who a
+ * build is for): filler and intent words are never dropped from them ("Will", "Sam").
+ */
+export function parseQuery(query: string, now: number, names: readonly string[] = []): ParsedQuery {
   // "0,4" is the decimal 0.4, and "Marie's" is Marie.
   let rest = fold(query)
     .replace(/(\d),(\d)/g, "$1.$2")
@@ -191,15 +201,19 @@ export function parseQuery(query: string, now: number): ParsedQuery {
   }
   let intent: Intent | null = null;
   const kept: string[] = [];
-  for (const word of rest.match(NUMBER_OR_WORD) ?? []) {
-    if (WORKED.has(word)) intent ??= "worked";
-    else if (FAILED.has(word)) intent ??= "failed";
-    else if (!FILLER.has(word) && (word.length > 1 || /\d/.test(word))) kept.push(word);
+  const glued = new Set<string>();
+  for (const typed of rest.match(NUMBER_OR_WORD) ?? []) {
+    const unit = DECIMAL_UNIT.exec(typed)?.[1];
+    const word = unit ?? typed;
+    if (unit) glued.add(unit);
+    const isName = names.includes(word);
+    if (!isName && WORKED.has(word)) intent ??= "worked";
+    else if (!isName && FAILED.has(word)) intent ??= "failed";
+    else if ((isName || !FILLER.has(word)) && (word.length > 1 || /\d/.test(word))) kept.push(word);
   }
   const terms = [...new Set(kept)].slice(0, MAX_TERMS).map((word): SearchTerm => {
-    const term = { text: word, prefix: !EXACT_WORDS.has(word) && !DECIMAL.test(word) };
-    const also = alsoFor(term);
-    return also.length ? { ...term, also } : term;
+    const term = { text: word, prefix: !EXACT_WORDS.has(word) && (!DECIMAL.test(word) || glued.has(word)) };
+    return { ...term, ...alsoFor(term) };
   });
   // Nothing left but filler ("for", "the"): search for what was typed, rather than for nothing.
   if (!terms.length && !intent && !when) {
@@ -265,30 +279,47 @@ export function correctWord(word: string, vocabulary: readonly string[]): string
 }
 
 /**
- * A word typed as one that the notebook has as two ("keyring" for "Key Ring"): the halves when each starts a known
- * word, else null.
+ * A word typed as one that the notebook has as two ("keyring" for "Key Ring"): the halves when each is a known word
+ * (`short` holds the known 3-letter words, which `vocabulary` leaves out), else when each starts one; null otherwise.
  */
-export function splitWord(word: string, vocabulary: readonly string[]): [string, string] | null {
+export function splitWord(
+  word: string,
+  vocabulary: readonly string[],
+  short: readonly string[] = [],
+): [string, string] | null {
   if (!/^[a-z]{6,}$/.test(word) || vocabulary.some((known) => known.startsWith(word))) return null;
-  for (let at = 3; at <= word.length - 3; at++) {
-    const [a, b] = [word.slice(0, at), word.slice(at)];
-    if (vocabulary.some((known) => known.startsWith(a)) && vocabulary.some((known) => known.startsWith(b))) {
-      return [a, b];
+  const whole = (half: string) => short.includes(half) || vocabulary.includes(half);
+  const starts = (half: string) => whole(half) || vocabulary.some((known) => known.startsWith(half));
+  for (const known of [whole, starts]) {
+    for (let at = 3; at <= word.length - 3; at++) {
+      const [a, b] = [word.slice(0, at), word.slice(at)];
+      if (known(a) && known(b)) return [a, b];
     }
   }
   return null;
 }
 
 /** The terms with the unknown ones corrected or split in two; null when nothing changed. */
-export function correctTerms(terms: readonly SearchTerm[], vocabulary: readonly string[]): SearchTerm[] | null {
+export function correctTerms(
+  terms: readonly SearchTerm[],
+  vocabulary: readonly string[],
+  short: readonly string[] = [],
+): SearchTerm[] | null {
   let changed = false;
   const next = terms.flatMap((term): SearchTerm[] => {
     const fixed = term.prefix ? correctWord(term.text, vocabulary) : null;
     if (fixed) {
       changed = true;
-      return [{ text: fixed, prefix: true, ...(term.also ? { also: term.also } : {}) }];
+      return [
+        {
+          text: fixed,
+          prefix: true,
+          ...(term.also ? { also: term.also } : {}),
+          ...(term.whole ? { whole: term.whole } : {}),
+        },
+      ];
     }
-    const halves = term.prefix ? splitWord(term.text, vocabulary) : null;
+    const halves = term.prefix ? splitWord(term.text, vocabulary, short) : null;
     if (!halves) return [term];
     changed = true;
     return halves.map((text) => ({ text, prefix: true }));
@@ -301,6 +332,7 @@ export const markTerms = (terms: readonly SearchTerm[]): SearchTerm[] =>
   terms.flatMap((term) => [
     { text: term.text, prefix: term.prefix },
     ...(term.also ?? []).map((text) => ({ text, prefix: true })),
+    ...(term.whole ?? []).map((text) => ({ text, prefix: false })),
   ]);
 
 /** Whether a text has a word for every term (or for a word it also stands for). */

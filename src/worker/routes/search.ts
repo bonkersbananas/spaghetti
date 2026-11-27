@@ -381,7 +381,7 @@ function spoolMatches(spool: Spool, terms: readonly SearchTerm[]) {
 }
 
 /** The words the notebook knows, most used first: what a mistyped word is corrected to. */
-async function vocabulary(db: Db, custom: Array<{ label: string }>): Promise<string[]> {
+async function vocabulary(db: Db, custom: Array<{ label: string }>): Promise<{ words: string[]; short: string[] }> {
   const [itemRows, spoolRows, printRows] = await Promise.all([
     db.select({ title: items.title, note: items.note }).from(items).where(isNull(items.deletedAt)).limit(2000),
     db
@@ -391,8 +391,12 @@ async function vocabulary(db: Db, custom: Array<{ label: string }>): Promise<str
     db.select({ name: printJobs.name }).from(printJobs).limit(2000),
   ]);
   const counts = new Map<string, number>();
+  const short = new Set<string>();
   const add = (text: string | null | undefined, weight = 1) => {
-    for (const word of words(text ?? "")) if (word.length >= 4) counts.set(word, (counts.get(word) ?? 0) + weight);
+    for (const word of words(text ?? "")) {
+      if (word.length >= 4) counts.set(word, (counts.get(word) ?? 0) + weight);
+      else if (word.length === 3 && /^[a-z]+$/.test(word)) short.add(word);
+    }
   };
   for (const row of itemRows) {
     add(row.title, 3);
@@ -402,7 +406,7 @@ async function vocabulary(db: Db, custom: Array<{ label: string }>): Promise<str
   for (const row of spoolRows) add(`${row.material} ${row.brand} ${row.color} ${row.finish}`, 2);
   for (const tag of [...BUILT_IN_TAGS.failure, ...BUILT_IN_TAGS.success, ...custom]) add(tag.label, 5);
   add(KNOWN_WORDS, 4);
-  return [...counts].sort((a, b) => b[1] - a[1]).map(([word]) => word);
+  return { words: [...counts].sort((a, b) => b[1] - a[1]).map(([word]) => word), short: [...short] };
 }
 
 /** The failure coach's suggestion that a search matched, shown under the attempt it was made for. */
@@ -751,8 +755,9 @@ export const searchRoutes = new Hono<AppEnv>()
     if (!parsed.success) return apiError(c, 400, "invalid", "That search couldn't be read.");
     const { q = "", closest: wantClosest, ...f } = parsed.data;
     const db = c.var.db;
-    const read = parseQuery(q, Date.now());
     const people = await db.select({ id: users.id, name: users.name }).from(users);
+    const forWhom = await db.selectDistinct({ name: items.forWhom }).from(items).where(isNull(items.deletedAt));
+    const read = parseQuery(q, Date.now(), words([...people, ...forWhom].map((row) => row.name ?? "").join(" ")));
     // Every word of a name counts ("Carl Oscar's idea": carl and oscar are both Carl Oscar).
     const nameWords = people.map((person) => ({ id: person.id, words: words(person.name) }));
     const named = splitNames(
@@ -785,7 +790,8 @@ export const searchRoutes = new Hono<AppEnv>()
     let corrected: string | null = null;
     if (!hasHits(result) && read.terms.length) {
       // Nothing found: a typo, maybe. Correct the words from what the notebook knows.
-      const fixed = correctTerms(read.terms, await vocabulary(db, custom));
+      const known = await vocabulary(db, custom);
+      const fixed = correctTerms(read.terms, known.words, known.short);
       if (fixed) {
         const retry = await ask(fixed);
         if (hasHits(retry)) {

@@ -1,4 +1,4 @@
--- Search finds a print by the name the printer gave it ("hotdog_hero_4color(5)", "fit-test-ring-v2").
+-- Search finds a print by the name the printer gave it ("gnome_hat_3color(5)", "ring-test-v2").
 --
 -- Prints made at the printer are filed under builds that have no title of their own, and a build's title is
 -- often the model's page title, while the file the person actually sliced is called something else. The
