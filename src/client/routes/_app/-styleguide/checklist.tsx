@@ -1,19 +1,21 @@
 import { formatKr } from "@shared/prisjakt";
 import { useState } from "react";
-import { AskLine, AskName } from "@/components/ui/AskLine";
 import { Button } from "@/components/ui/Button";
 import { ChecklistName, ChecklistRow, checklistSurface, TickBox } from "@/components/ui/Checklist";
+import { ClaudeLine } from "@/components/ui/ClaudeLine";
 import { DragHandle } from "@/components/ui/DragHandle";
 import { PriceIcon } from "@/components/ui/icons";
 import { LinkChip } from "@/components/ui/LinkChip";
+import { OfferCard } from "@/components/ui/OfferCard";
 import { OfferRow, PriceLine } from "@/components/ui/Prices";
+import { SpoolDisc } from "@/components/ui/SpoolDisc";
 import { MatchRow, SuggestionCard } from "@/components/ui/Suggestion";
 import { Thumb } from "@/components/ui/Thumb";
 import { Label, Panel, Section } from "./shared";
 
 const rows = [
   { id: "glue", name: "Liquid glue for the build plate", price: 149, picture: true },
-  { id: "pla", name: "PLA Basic, black ×2", price: null, picture: false },
+  { id: "pla", name: "PLA Basic, sunflower yellow ×2", price: null, picture: false, color: "#f5c518" }, // design-lint-ignore: a filament's colour is data
   {
     id: "caliper",
     name: "Digital caliper, 150 mm, stainless steel with LCD display and depth rod",
@@ -30,7 +32,7 @@ export function ChecklistSection() {
     <Section
       id="checklist"
       title="Checklist"
-      note="A list to tick off and sort, such as the shopping list. A row is one line: the tick box, a picture only when the thing has one (never an empty tile), the name (a button that opens it, cut with an ellipsis), something quiet at the end (the cheapest price found, when it was bought) and the drag handle; rows sit on one soft surface with an inset hairline between them. Pages to confirm are one offer for the whole list, not a chip on every row. Prices are always found at a time (“checked today”), never a promise; a suggested page is never used until someone taps Use it."
+      note="A list to tick off and sort, such as the shopping list. A row is the tick box, the thing's colour (a spool disc, for a filament) or its 48 px picture from sm, only when it has one (never an empty tile or slot), the name (a button that opens it; two balanced lines at most, then an ellipsis), something quiet at the end of its first line (the cheapest price found, when it was bought) and the drag handle; rows sit on one soft surface with an inset hairline between them. Pages to confirm are one offer card for the whole list, not a chip on every row. Prices are always found at a time (“checked today”), never a promise; a suggested page is never used until someone taps Use it."
     >
       <div className="flex flex-col gap-6">
         <Panel className="flex flex-wrap items-center gap-6">
@@ -93,17 +95,16 @@ export function ChecklistSection() {
           </div>
           <div className="flex flex-col gap-1">
             <Label>Match prices: one offer for the list</Label>
-            <AskLine
+            <OfferCard
               icon={PriceIcon}
-              detail="Claude found their Prisjakt pages to check."
-              actions={
+              title="8 things could show prices"
+              detail={<ClaudeLine>Claude found their Prisjakt pages</ClaudeLine>}
+              action={
                 <Button variant="secondary" size="sm">
                   Match prices
                 </Button>
               }
-            >
-              <AskName>8 things</AskName> could show their prices
-            </AskLine>
+            />
           </div>
           <div className="flex flex-col gap-1">
             <Label>Match rows, in the Match prices sheet</Label>
@@ -123,6 +124,7 @@ export function ChecklistSection() {
                   title="Bambu Lab PTFE tube 1 m"
                   href="https://www.prisjakt.nu/"
                   answer="used"
+                  price="249 kr"
                   onUse={() => undefined}
                   onDismiss={() => undefined}
                 />
@@ -138,8 +140,8 @@ export function ChecklistSection() {
                     done={done}
                     lifted={row.id === "pla"}
                     last={index === rows.length - 1}
+                    swatch={"color" in row && row.color ? <SpoolDisc color={row.color} size="sm" /> : undefined}
                     thumb={row.picture ? <Thumb src="/icon-192.png" alt="" faded={done} /> : undefined}
-                    pictureRoom
                     tick={
                       <TickBox
                         checked={done}

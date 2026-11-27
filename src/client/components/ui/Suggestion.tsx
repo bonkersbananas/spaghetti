@@ -65,41 +65,64 @@ interface MatchRowProps {
   href: string;
   /** Answered here: the row stays where it is (so the next one doesn't slide under a thumb) and says so. */
   answer?: "used" | "dismissed";
+  /** The cheapest price, once a used page has been read ("149 kr"). */
+  price?: string;
   onUse: () => void;
   onDismiss: () => void;
   disabled?: boolean;
 }
 
-/**
- * One of several pages to confirm at once ("Match prices"): the thing's name, the page Claude found as a link to check,
- * and "Use it" or "Not this one". Calmer than a `SuggestionCard`: the sheet's description says once who found them.
- */
-export function MatchRow({ name, title, href, answer, onUse, onDismiss, disabled }: MatchRowProps) {
+/** "A title of several words ↗": the arrow kept with the last word, so it never wraps onto a line of its own. */
+function TitleWithArrow({ title }: { title: string }) {
+  const at = title.trimEnd().lastIndexOf(" ");
+  const head = at > 0 ? title.slice(0, at + 1) : "";
+  const last = at > 0 ? title.slice(at + 1) : title;
   return (
-    <div className="flex flex-col gap-1.5 py-3 md:flex-row md:items-center md:gap-4">
-      <div className="flex min-w-0 flex-1 flex-col">
-        <p className="text-body text-ink font-semibold break-words">{name}</p>
+    <>
+      {head}
+      <span className="whitespace-nowrap">
+        {last}
+        <ExternalIcon size={12} weight="bold" className="text-ink-faint ml-1 inline align-baseline" aria-hidden />
+      </span>
+    </>
+  );
+}
+
+/**
+ * One of several pages to confirm at once ("Match prices"): the page Claude found, by its own title (a link to check
+ * it), the thing it would be for as a small caption under it, and "Use it" or "Not this one"; once used, the price
+ * read from it. Calmer than a `SuggestionCard`: the sheet's description says once who found them.
+ */
+export function MatchRow({ name, title, href, answer, price, onUse, onDismiss, disabled }: MatchRowProps) {
+  return (
+    <div className="flex flex-col gap-2 py-3 md:flex-row md:items-center md:gap-4">
+      <div className="flex min-w-0 flex-1 flex-col gap-0.5">
         <a
           href={href}
           target="_blank"
           rel="noreferrer noopener"
-          className="focus-ring touch-target text-small text-ink-soft pressable relative inline-flex items-center gap-1.5 self-start rounded-xs py-1 hover:underline hover:underline-offset-4"
+          className="focus-ring touch-target text-body text-ink pressable relative self-start rounded-xs font-semibold break-words hover:underline hover:underline-offset-4"
         >
-          <PriceIcon size={16} className="text-ink-faint shrink-0" aria-hidden />
-          <span className="min-w-0 break-words">
-            {title ?? "A page on Prisjakt"}
-            {/* In the words, so it follows the last one when the title wraps. */}
-            <ExternalIcon size={12} weight="bold" className="text-ink-faint ml-1 inline align-baseline" aria-hidden />
-            <span className="sr-only"> (opens Prisjakt in a new tab)</span>
-          </span>
+          <TitleWithArrow title={title ?? "A page on Prisjakt"} />
+          <span className="sr-only"> (opens Prisjakt in a new tab)</span>
         </a>
+        <p className="text-small text-ink-faint flex min-w-0 items-center gap-1.5">
+          <PriceIcon size={14} className="shrink-0" aria-hidden />
+          <span className="min-w-0 truncate">For “{name}”</span>
+        </p>
       </div>
       {answer ? (
-        <p role="status" className="text-small text-ink-faint flex min-h-8 shrink-0 items-center gap-1.5 md:min-h-8">
+        <p role="status" className="text-small text-ink-faint flex min-h-8 shrink-0 items-center gap-1.5">
           {answer === "used" ? (
             <>
               <CheckIcon size={14} weight="bold" className="text-basil-ink" aria-hidden />
-              Matched: prices on their way
+              {price ? (
+                <>
+                  Matched · <span className="text-ink-soft font-semibold tabular-nums">{price}</span>
+                </>
+              ) : (
+                "Matched: reading its prices…"
+              )}
             </>
           ) : (
             "Not this one"

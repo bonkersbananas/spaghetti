@@ -1,4 +1,5 @@
 import type { ShoppingItem } from "@shared/api";
+import { formatKr } from "@shared/prisjakt";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/Button";
@@ -88,6 +89,7 @@ function Match({
       title={suggestion.title}
       href={suggestion.url}
       answer={answer}
+      price={answer === "used" && item.prices ? formatKr(item.prices.lowest) : undefined}
       disabled={readOnly}
       onUse={() => {
         onAnswer("used");

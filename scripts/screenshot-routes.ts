@@ -8471,6 +8471,38 @@ export const shots: Shot[] = [
     },
   },
   {
+    // Two of them answered: one used (its price read from the page), one turned down; both stay where they were.
+    name: "shopping-match-prices-answered",
+    path: "/shopping",
+    prepare: async (page) => {
+      await page.getByRole("button", { name: "Match prices" }).click({ timeout: 20_000 });
+      const sheet = page.getByRole("dialog", { name: "Match prices" });
+      const row = (name: string) => sheet.getByRole("listitem").filter({ hasText: `For “${name}”` });
+      await row("PTFE tube, 1 m").getByRole("button", { name: "Use it" }).click();
+      await row("Velcro cable ties, 50 pcs").getByRole("button", { name: "Not this one" }).click();
+      // The page is read in the background and the list refreshed: its price arrives in the row.
+      await row("PTFE tube, 1 m")
+        .getByText(/Matched ·/)
+        .waitFor({ timeout: 30_000 })
+        .catch(() => undefined);
+      await page.waitForTimeout(400);
+    },
+    cleanup: async (page) => {
+      await page.keyboard.press("Escape");
+    },
+  },
+  {
+    // Long product names on the list: two balanced lines, price and handle level with the first.
+    name: "shopping-long-names",
+    path: "/shopping",
+    prepare: async (page) => {
+      await page
+        .getByRole("button", { name: /^Digital caliper, 150 mm/ })
+        .evaluate((name) => name.scrollIntoView({ block: "center" }));
+      await page.waitForTimeout(400);
+    },
+  },
+  {
     // A thing ticked off: it went to Bought, and the toast holds its Undo.
     name: "shopping-ticked",
     path: "/shopping",

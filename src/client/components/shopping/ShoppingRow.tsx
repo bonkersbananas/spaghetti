@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/Button";
 import { ChecklistName, ChecklistRow, TickBox } from "@/components/ui/Checklist";
 import { PantryIcon, PriceIcon } from "@/components/ui/icons";
 import { LinkChip } from "@/components/ui/LinkChip";
+import { SpoolDisc } from "@/components/ui/SpoolDisc";
 import { Thumb } from "@/components/ui/Thumb";
 import { spoolsQuery } from "@/lib/pantry-queries";
 import { linkPreviewQuery } from "@/lib/queries";
@@ -53,32 +54,22 @@ interface ShoppingRowProps {
   onOpen: () => void;
   readOnly?: boolean;
   handle?: ReactNode;
-  /** Some row of its list has a picture: keep the room, so the names line up. */
-  pictureRoom?: boolean;
   lifted?: boolean;
   last?: boolean;
 }
 
 /**
- * A thing on the shopping list, on one line: the tick box, its picture when it has one, its name (a button that opens
- * it, where the whole name, the shop and its Prisjakt page are) and the cheapest price found. A bought row says who
+ * A thing on the shopping list: the tick box, its colour when its name says one (a filament) or else its picture (from
+ * `sm`), its name (a button that opens it, where the whole name, the shop and its Prisjakt page are; two lines at
+ * most) and the cheapest price found. A bought row says who
  * got it and when at the line's end, and its name steps back; bought filament offers the pantry under it.
  */
-export function ShoppingRow({
-  item,
-  boughtBy,
-  onTick,
-  onOpen,
-  readOnly,
-  handle,
-  pictureRoom,
-  lifted,
-  last,
-}: ShoppingRowProps) {
+export function ShoppingRow({ item, boughtBy, onTick, onOpen, readOnly, handle, lifted, last }: ShoppingRowProps) {
   const name = useShoppingName(item);
   const bought = item.boughtAt !== null;
-  // A bought spool of filament offers the pantry: the sheet opens with what its name says.
-  const filament = useMemo(() => (bought ? filamentFromName(name) : null), [bought, name]);
+  // What its name says of a filament: its colour, before the name; bought, it offers the pantry with what it says.
+  const read = useMemo(() => filamentFromName(name), [name]);
+  const filament = bought ? read : null;
   const queryClient = useQueryClient();
   // The spool it became, for both people (the server drops it once the spool is gone; here it goes at once).
   const { data: spools } = useQuery({ ...spoolsQuery, enabled: !!item.spoolId });
@@ -127,8 +118,12 @@ export function ShoppingRow({
   return (
     <ChecklistRow
       done={bought}
+      swatch={
+        read?.colorHex ? (
+          <SpoolDisc color={read.colorHex} size="sm" className={bought ? "opacity-60" : undefined} />
+        ) : undefined
+      }
       thumb={item.picture ? <Thumb src={item.picture.url} alt="" faded={bought} /> : undefined}
-      pictureRoom={pictureRoom}
       lifted={lifted}
       last={last}
       tick={<TickBox checked={bought || ticking} onChange={tick} disabled={readOnly} label={`Bought: ${name}`} />}

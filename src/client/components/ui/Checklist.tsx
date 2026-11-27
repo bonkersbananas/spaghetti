@@ -73,20 +73,23 @@ export function TickBox({ checked, onChange, label, disabled, className }: TickB
 interface ChecklistRowProps {
   /** The TickBox. */
   tick: ReactNode;
-  /** A small picture of the thing (Thumb), between the tick box and the name, from `sm` (a phone's line is the name's). Only when there is one: no empty tile. */
-  thumb?: ReactNode;
   /**
-   * Some row of the list has a picture: a row without one keeps the picture's room empty (from `sm`), so every name
-   * starts at the same edge. Room, not a tile: nothing is drawn there.
+   * The thing's colour where it has one (a `SpoolDisc`, `sm`), before the name at every width: the spool to take off the
+   * shelf. Takes the picture's place.
    */
-  pictureRoom?: boolean;
+  swatch?: ReactNode;
+  /**
+   * The thing's picture (a 48 px `Thumb`) before the name, from `sm` (a phone's line is the name's). Only when there is
+   * one: no empty tile, and no room kept for it on the rows without.
+   */
+  thumb?: ReactNode;
   /** The name, usually a `ChecklistName` that opens the thing. */
   children: ReactNode;
-  /** What sits at the line's end, quiet: the price found, who got it and when. */
+  /** What sits at the end of the name's first line, quiet: the price found, who got it and when. */
   aside?: ReactNode;
-  /** A second line under the name, only for something to do there ("Add to pantry"). */
+  /** A line under the name, only for something to do there ("Add to pantry"). */
   meta?: ReactNode;
-  /** The DragHandle, last on the line. */
+  /** The DragHandle, last, level with the name's first line. */
   handle?: ReactNode;
   /** Ticked off: the name steps back. */
   done?: boolean;
@@ -98,15 +101,15 @@ interface ChecklistRowProps {
 }
 
 /**
- * One line of a checklist (the shopping list): the tick box, a picture only when the thing has one, the name on one
- * line (cut with an ellipsis; the whole of it is a tap away), something quiet at the line's end and a drag handle.
- * Rows sit on `checklistSurface`, an inset hairline between them; a lifted row floats on `shadow-float` while it
- * moves.
+ * One row of a checklist (the shopping list): the tick box, the thing's colour or picture when it has one, the name
+ * (one line, or two balanced ones for a long name, then an ellipsis; the whole of it is a tap away), something quiet at
+ * the end of its first line and a drag handle; tick box, aside and handle stay level with the first line. Rows sit
+ * on `checklistSurface`, an inset hairline between them; a lifted row floats on `shadow-float` while it moves.
  */
 export function ChecklistRow({
   tick,
+  swatch,
   thumb,
-  pictureRoom,
   children,
   aside,
   meta,
@@ -116,6 +119,7 @@ export function ChecklistRow({
   last,
   className,
 }: ChecklistRowProps) {
+  const picture = !swatch && thumb;
   return (
     <div
       data-done={done || undefined}
@@ -129,24 +133,21 @@ export function ChecklistRow({
         className,
       )}
     >
-      <div className="flex min-w-0 items-center gap-1 md:gap-2">
+      {/* Every piece is a 44 px line tall and centred on it, so all of them sit level with the name's first line. */}
+      <div className="flex min-w-0 items-start gap-1 md:gap-2">
         {tick}
-        {/* On a phone the line is the name's: the picture waits for the thing's sheet. */}
-        {thumb ? (
-          <div className="hidden shrink-0 pr-1 sm:flex">{thumb}</div>
-        ) : (
-          pictureRoom && <div aria-hidden className="box-content hidden size-8 shrink-0 pr-1 sm:block" />
-        )}
-        <div className={cn("min-w-0 flex-1", done && "text-ink-faint")}>{children}</div>
-        {aside && <div className="text-small text-ink-faint flex shrink-0 items-center gap-1.5 pl-2">{aside}</div>}
+        {swatch && <div className="flex h-11 shrink-0 items-center pr-1">{swatch}</div>}
+        {picture && <div className="-my-0.5 hidden h-12 shrink-0 items-center pr-1 sm:flex">{thumb}</div>}
+        <div className={cn("min-w-0 flex-1 py-1", done && "text-ink-faint")}>{children}</div>
+        {aside && <div className="text-small text-ink-faint flex h-11 shrink-0 items-center gap-1.5 pl-2">{aside}</div>}
         {handle}
       </div>
       {meta && (
-        // Starts where the name does: past the tick box, and the picture's room when there is one.
+        // Starts where the name does: past the tick box, and the colour or picture when there is one.
         <div
           className={cn(
-            "flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 pb-1.5 pl-12 md:pl-13",
-            (!!thumb || pictureRoom) && "sm:pl-21 md:pl-24",
+            "flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 pb-1.5",
+            swatch ? "pl-20 md:pl-22" : picture ? "pl-12 sm:pl-26 md:pl-28" : "pl-12 md:pl-13",
           )}
         >
           {meta}
@@ -157,13 +158,13 @@ export function ChecklistRow({
 }
 
 interface ChecklistNameProps {
-  /** The whole name: the line shows what fits, with an ellipsis, and the title holds the rest for a pointer. */
+  /** The whole name: the row shows two lines of it at most, with an ellipsis, and the title holds it all for a pointer. */
   children: string;
   onOpen: () => void;
   done?: boolean;
 }
 
-/** A checklist row's name: one line, a button that opens the thing (where its whole name is). */
+/** A checklist row's name: a button that opens the thing (where its whole name is), on two balanced lines at most. */
 export function ChecklistName({ children, onOpen, done }: ChecklistNameProps) {
   return (
     <button
@@ -171,11 +172,12 @@ export function ChecklistName({ children, onOpen, done }: ChecklistNameProps) {
       onClick={onOpen}
       title={children}
       className={cn(
-        "focus-ring touch-target hover:decoration-ink/25 text-body relative -mx-1 block max-w-full truncate rounded-xs px-1 py-1.5 text-left hover:underline hover:underline-offset-4",
+        "focus-ring touch-target hover:decoration-ink/25 text-body relative -mx-1 block max-w-full rounded-xs px-1 py-1.5 text-left hover:underline hover:underline-offset-4",
         done ? "text-ink-faint decoration-ink/30 line-through" : "text-ink font-semibold",
       )}
     >
-      {children}
+      {/* The clamp clips its own box only: the button's 44 px touch target is drawn outside it. */}
+      <span className="line-clamp-2 text-balance break-words">{children}</span>
     </button>
   );
 }
