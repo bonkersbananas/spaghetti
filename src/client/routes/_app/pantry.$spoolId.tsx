@@ -50,7 +50,7 @@ import { RowSkeleton, Skeleton } from "@/components/ui/Skeleton";
 import { SpoolColourField } from "@/components/ui/SpoolColourField";
 import { SpoolDisc } from "@/components/ui/SpoolDisc";
 import { shortcutCaps, useHotkeys } from "@/lib/hotkeys";
-import { pollWhileReading, requestLabelRead, useLabelReadsEnabled } from "@/lib/label-read";
+import { labelReadsEnabled, pollWhileReading, requestLabelRead, useLabelReadsEnabled } from "@/lib/label-read";
 import { useBackTo } from "@/lib/origin";
 import { deleteSpool, loadSlot, saveSpool, setSpoolPhoto } from "@/lib/pantry";
 import { spoolAttemptsQuery, spoolsQuery } from "@/lib/pantry-queries";
@@ -180,11 +180,12 @@ function SpoolPage({ spool }: { spool: Spool }) {
   const [weighing, setWeighing] = useState(false);
   const [settingWeight, setSettingWeight] = useState(false);
   const labelReads = useLabelReadsEnabled();
-  // With Claude's key, a photo taken here is the label: it is saved, then read.
+  // With Claude's key, a photo taken here is the label: it is saved, then read (asked as it is saved: the features
+  // may have answered only after the photo was picked).
   const takePhoto = async (file: File | undefined) => {
     if (!file) return;
     const saved = await setSpoolPhoto(queryClient, spool.id, file);
-    if (saved && labelReads) void requestLabelRead(queryClient, spool.id);
+    if (saved && (await labelReadsEnabled(queryClient))) void requestLabelRead(queryClient, spool.id);
   };
   const camera = useFilePicker({ camera: true, onFiles: ([file]) => void takePhoto(file) });
   const library = useFilePicker({ onFiles: ([file]) => void takePhoto(file) });
