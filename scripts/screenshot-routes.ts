@@ -3054,6 +3054,35 @@ export const shots: Shot[] = [
     },
     cleanup: unmockToday,
   },
+  // The phone Journal's first screen with every notice: the prints in their row, one line each for the comment, the
+  // upkeep and the offer to turn notifications on, then the picks and the filters.
+  {
+    name: "journal-now-notices",
+    path: "/journal",
+    width: 390,
+    prepare: async (page) => {
+      await prepareOffer(page, false);
+      await page.locator("section[aria-label='On the bed']").waitFor();
+      await page.waitForTimeout(1500);
+    },
+    cleanup: undoOffer,
+  },
+  // Now's row swiped to its end: the answered print asking which build beside the print on the bed, each card as tall
+  // as its own words.
+  {
+    name: "journal-now-row-end",
+    path: "/journal",
+    width: 390,
+    prepare: async (page) => {
+      const bed = page.locator("section[aria-label='On the bed']");
+      await bed.waitFor();
+      await page.waitForTimeout(1500);
+      await bed.evaluate((node) => node.scrollTo({ left: node.scrollWidth }));
+      await page.waitForTimeout(600);
+    },
+    // The router keeps scrolled elements for the entry: put the row back for the next /journal shot.
+    cleanup: (page) => page.locator("section[aria-label='On the bed']").evaluate((node) => node.scrollTo({ left: 0 })),
+  },
   // Today: full (two prints, one that should be done by now), partly empty, quiet and brand new.
   {
     name: "today",
