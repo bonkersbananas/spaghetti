@@ -2656,7 +2656,10 @@ async function prepareOffer(page: Page, scroll: boolean) {
   const offer = page.getByRole("region", { name: "Turn on notifications" });
   await offer.waitFor();
   if (scroll) await offer.evaluate((node) => node.scrollIntoView({ block: "center" }));
-  await page.waitForFunction(() => document.getAnimations().every((a) => a.playState !== "running"));
+  // Time-based ones only: a scroll-driven one (a chip row's fading ends) is "running" for as long as it is drawn.
+  await page.waitForFunction(() =>
+    document.getAnimations().every((a) => !(a.timeline instanceof DocumentTimeline) || a.playState !== "running"),
+  );
 }
 
 async function undoOffer(page: Page) {
