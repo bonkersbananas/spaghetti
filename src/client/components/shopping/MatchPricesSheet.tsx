@@ -29,7 +29,8 @@ export function MatchPricesSheet({ ids, onClose }: { ids: string[]; onClose: () 
   const [answers, setAnswers] = useState<Record<string, "used" | "dismissed">>({});
   const { data } = useQuery(shoppingQuery);
   const byId = new Map(data?.map((item) => [item.id, item]));
-  const left = shown.filter((id) => !answers[id]).length;
+  // A thing deleted meanwhile (by the other person) is gone from the sheet, and from what is left to check.
+  const left = shown.filter((id) => byId.has(id) && !answers[id]).length;
   return (
     <Sheet
       open
