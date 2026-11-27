@@ -30,6 +30,44 @@ test.afterEach(async ({ page }) => {
   for (const item of shoppingItems) await page.request.delete(`/api/shopping-items/${item.id}`, { headers });
 });
 
+test("empty slots stay in their places, quiet, one tap from loading them", { tag: "@phone" }, async ({ page }) => {
+  const headers = { Origin: origin(page) };
+  const teal = await addSpoolByApi(page, { material: "PLA", colorName: "Teal", colorHex: "#2c8a87" });
+  await addSpoolByApi(page, { material: "PETG", colorName: "Rose", colorHex: "#d98a9a" });
+  await page.request.put("/api/printer/slots/A1", { headers, data: { spoolId: teal } });
+
+  await page.goto("/pantry");
+  const unit = page.getByRole("region", { name: "AMS A" });
+  // Four columns in slot order, as on the machine: the loaded bay, then three quiet ones with no "Empty" word.
+  await expect(page.getByRole("button", { name: /^A1 Teal/ })).toBeVisible();
+  await expect(unit.locator("[data-slot]")).toHaveCount(4);
+  expect(await unit.locator("[data-slot]").evaluateAll((els) => els.map((el) => el.getAttribute("data-slot")))).toEqual(
+    ["A1", "A2", "A3", "A4"],
+  );
+  await expect(unit.locator("[data-empty]")).toHaveCount(3);
+  await expect(unit.getByText("Empty", { exact: true })).toHaveCount(0);
+  // The external holder is one quiet line: an offer to load it.
+  const external = page.getByRole("region", { name: "External spool" });
+  await expect(external).toHaveAttribute("data-empty", "");
+  await expect(external.getByRole("button", { name: "External empty, load a spool" })).toBeVisible();
+
+  // One tap on a quiet bay opens that slot's picker.
+  await page.getByRole("button", { name: "A3 empty, load a spool" }).click();
+  const sheet = page.getByRole("dialog", { name: "Slot A3" });
+  await sheet.getByRole("button", { name: /Rose/ }).click();
+  await expect(sheet).toBeHidden();
+  await expect(page.getByRole("button", { name: /^A3 Rose/ })).toBeVisible();
+  await expect(unit.locator("[data-empty]")).toHaveCount(2);
+
+  // Nothing in the printer: the unit card stays, with its four quiet slots.
+  await page.request.put("/api/printer/slots/A1", { headers, data: { spoolId: null } });
+  await page.request.put("/api/printer/slots/A3", { headers, data: { spoolId: null } });
+  await page.reload();
+  await expect(unit).toContainText("0 of 4 loaded");
+  await expect(unit.locator("[data-empty]")).toHaveCount(4);
+  await expect(unit.getByText("An empty pot.", { exact: false })).toBeVisible();
+});
+
 test("adds a spool to the pantry and loads it into the AMS", { tag: "@phone" }, async ({ page, isMobile }) => {
   await page.goto("/pantry");
   await expect(page.getByRole("heading", { name: "The pantry's bare" })).toBeVisible();
@@ -54,7 +92,7 @@ test("adds a spool to the pantry and loads it into the AMS", { tag: "@phone" }, 
     .toEqual(["Blue"]);
 
   // An empty slot: tap it and pick the spool.
-  await page.getByRole("button", { name: /^A3 Empty/ }).click();
+  await page.getByRole("button", { name: /^A3 empty/ }).click();
   const slot = page.getByRole("dialog", { name: "Slot A3" });
   await slot.getByRole("button", { name: /Blue/ }).click();
   await expect(slot).toBeHidden();
@@ -67,7 +105,7 @@ test("adds a spool to the pantry and loads it into the AMS", { tag: "@phone" }, 
   if (!isMobile) {
     await page
       .getByRole("link", { name: /Blue Polymaker PETG Matte/ })
-      .dragTo(page.getByRole("button", { name: /^A1 Empty/ }));
+      .dragTo(page.getByRole("button", { name: /^A1 empty/ }));
     await expect(page.getByRole("button", { name: /^A1 Blue/ })).toBeVisible();
     await expect
       .poll(async () => Object.keys((await (await page.request.get("/api/printer")).json()).slots))
@@ -398,7 +436,7 @@ test("filling the AMS: the colour picked is the colour saved, and the next slot 
   await expect(sheet).toBeHidden();
 
   // From an empty slot: the button names the slot.
-  await page.getByRole("button", { name: /^A1 Empty/ }).click();
+  await page.getByRole("button", { name: /^A1 empty/ }).click();
   await page.getByRole("dialog", { name: "Slot A1" }).getByRole("button", { name: "New spool" }).click();
   sheet = page.getByRole("dialog", { name: "New spool" });
   await sheet.getByRole("button", { name: "Bambu Lab PLA Basic · Jade white" }).click();

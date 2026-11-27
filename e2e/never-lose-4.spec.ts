@@ -123,16 +123,16 @@ test("a failed AMS slot change goes back alone, a slot loaded meanwhile stays", 
     await gate;
     return route.fulfill({ status: 500, json: { error: "nope" } });
   });
-  await page.getByRole("button", { name: /^A3 Empty/ }).click();
+  await page.getByRole("button", { name: /^A3 empty/ }).click();
   await page.getByRole("dialog", { name: "Slot A3" }).getByRole("button", { name: /Rose/ }).click();
   await expect.poll(() => held).toBe(1);
   await expect(page.getByRole("button", { name: /^A3 Rose/ })).toBeVisible();
-  await page.getByRole("button", { name: /^A1 Empty/ }).click();
+  await page.getByRole("button", { name: /^A1 empty/ }).click();
   await page.getByRole("dialog", { name: "Slot A1" }).getByRole("button", { name: /Teal/ }).click();
   await expect(page.getByRole("button", { name: /^A1 Teal/ })).toBeVisible();
   release();
   await expect(page.getByText("Couldn't change the AMS")).toBeVisible();
-  await expect(page.getByRole("button", { name: /^A3 Empty/ })).toBeVisible();
+  await expect(page.getByRole("button", { name: /^A3 empty/ })).toBeVisible();
   await expect(page.getByRole("button", { name: /^A1 Teal/ })).toBeVisible();
   await expect
     .poll(async () => Object.keys((await (await page.request.get("/api/printer")).json()).slots))
