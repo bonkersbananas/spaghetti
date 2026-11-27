@@ -199,6 +199,32 @@ export function CardSection() {
           </Reflow>
         </ul>
         <Label>
+          Slim mini cards (`slim`), Up next on a phone: one line, a small square cover beside a two-line name, the menu
+          at the right end; a note-only idea's cover is a page of the notebook in miniature
+        </Label>
+        <ul className="no-scrollbar relative mb-6 flex snap-x snap-proximity gap-3 overflow-x-auto py-1">
+          <Reflow>
+            <MiniCard
+              slim
+              link={{ to: "/styleguide" }}
+              photo={{ src: dragonPhoto, alt: "A red articulated dragon on the print bed" }}
+              title="Articulated dragon"
+            />
+            <MiniCard
+              slim
+              link={{ to: "/styleguide" }}
+              photo={{ src: vasePhoto, alt: "A gold silk-PLA vase" }}
+              title="Spiral vase in silk PLA, maybe 0.6 nozzle"
+            />
+            <MiniCard
+              slim
+              link={{ to: "/styleguide" }}
+              note="Replacement knob for the oven, 6 mm D-shaft. Measure the old one before it breaks completely."
+            />
+            <MiniCard slim link={{ to: "/styleguide" }} title="Untitled idea" standIn />
+          </Reflow>
+        </ul>
+        <Label>
           Mini cards with news, three across on a phone (`fill`): the title and one quiet line for what happened, as in
           "Since Thursday"
         </Label>

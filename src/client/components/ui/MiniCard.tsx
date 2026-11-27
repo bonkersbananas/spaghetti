@@ -47,6 +47,11 @@ interface MiniCardProps {
    * stays shorter than a full card, and its title in `text-body`: a strip that sits above that grid (Up next on Ideas).
    */
   gridScale?: boolean;
+  /**
+   * One line instead of a tile (Up next on a phone): a small square cover beside a two-line name, about 3.5 rem tall,
+   * so the strip keeps to one slim row and the grid under it starts high. Pass it on phones only.
+   */
+  slim?: boolean;
   /** The other person wrote here and you haven't read it: one quiet dot on the picture's corner (no count; the page has the thread). */
   unread?: boolean;
   /** Laid over the photo's top-right corner (the card's menu button). A link can't hold a button, so it is a sibling. */
@@ -74,6 +79,7 @@ export function MiniCard({
   roomy,
   fill,
   gridScale,
+  slim,
   unread,
   corner,
   landing,
@@ -84,9 +90,25 @@ export function MiniCard({
   className,
 }: MiniCardProps) {
   const heading = title || (photo ? note : undefined);
+  const reflow = useReflow(landing);
+  if (slim) {
+    return (
+      <SlimCard
+        link={link}
+        photo={photo}
+        name={title || linkName || note || meta || ""}
+        look={standIn ? "stand-in" : title ? "title" : "words"}
+        unread={unread}
+        corner={corner}
+        reflow={reflow}
+        ref={ref}
+        className={className}
+      />
+    );
+  }
   return (
     <m.li
-      {...useReflow(landing)}
+      {...reflow}
       ref={ref}
       className={cn(
         "group/mini relative shrink-0 snap-start list-none",
@@ -198,6 +220,77 @@ export function MiniCard({
           )}
         </Link>
       </div>
+      {corner}
+    </m.li>
+  );
+}
+
+/**
+ * A mini card on one line: the cover as a 3 rem square (a note's paper in miniature where there is no photo),
+ * the name beside it on two lines, and room on the right for the card's menu.
+ */
+function SlimCard({
+  link,
+  photo,
+  name,
+  look,
+  unread,
+  corner,
+  reflow,
+  ref,
+  className,
+}: {
+  link: LinkComponentProps<"a">;
+  photo?: MiniCardProps["photo"];
+  name: string;
+  /** A title in semibold; a note's own words, or a stand-in ("Untitled idea", quiet), in plain Figtree, as on Card. */
+  look: "title" | "words" | "stand-in";
+  unread?: boolean;
+  corner?: ReactNode;
+  reflow: ReturnType<typeof useReflow>;
+  ref?: Ref<HTMLLIElement>;
+  className?: string;
+}) {
+  return (
+    <m.li {...reflow} ref={ref} className={cn("group/mini relative w-48 shrink-0 snap-start list-none", className)}>
+      <Link
+        {...link}
+        className={cn(
+          "group pressable focus-ring bg-cream shadow-soft hover:bg-lifted flex h-14 w-full items-center gap-2.5 rounded-lg p-1",
+          corner ? "pr-9" : "pr-3",
+        )}
+      >
+        <span className="relative size-12 shrink-0 overflow-hidden rounded-md">
+          {photo ? (
+            <Photo
+              src={photo.src}
+              alt={photo.alt}
+              color={photo.color}
+              fit={photo.fit}
+              frame={photo.fit === "contain" ? "render" : undefined}
+              className={cn("size-full", photo.fit === "contain" && "p-1")}
+            />
+          ) : (
+            // A page of the notebook in miniature: the tomato rule, then three faint lines of writing.
+            <span aria-hidden className="paper-grain bg-note flex size-full flex-col gap-1.5 px-2 pt-2.5">
+              <span className="bg-tomato/25 mb-0.5 h-px w-full" />
+              <span className="bg-ink/15 h-0.5 w-full rounded-full" />
+              <span className="bg-ink/15 h-0.5 w-4/5 rounded-full" />
+              <span className="bg-ink/15 h-0.5 w-3/5 rounded-full" />
+            </span>
+          )}
+          {unread && <UnreadDot label="New comment" ring="ring-on-veil" className="absolute top-1 left-1 size-2" />}
+        </span>
+        <h3
+          className={cn(
+            "text-small line-clamp-2 min-w-0 leading-snug break-words",
+            look === "title" ? "text-ink font-semibold" : "font-sans font-medium",
+            look === "stand-in" ? "text-ink-faint" : "text-ink",
+          )}
+        >
+          {hyphenateLongWords(name, 10)}
+        </h3>
+      </Link>
       {corner}
     </m.li>
   );

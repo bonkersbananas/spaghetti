@@ -13,6 +13,11 @@ interface PageHeaderProps {
   subtitle?: ReactNode;
   /** Desktop actions on the right. Phones use the tab bar instead. */
   actions?: ReactNode;
+  /**
+   * On phones, a compact control before search and the avatar: a way to a place the tab bar has no room for (Ideas'
+   * Wishlists pill). Keep it short enough that the title, it, search and the avatar share 390 px.
+   */
+  phoneAside?: ReactNode;
   /** The phone's search button beside the avatar. Off on Search itself. */
   search?: boolean;
 }
@@ -22,7 +27,7 @@ interface PageHeaderProps {
  * and the account avatar sit top right (search is a tool, not a tab); on
  * desktop the page's actions do.
  */
-export function PageHeader({ title, subtitle, actions, search = true }: PageHeaderProps) {
+export function PageHeader({ title, subtitle, actions, phoneAside, search = true }: PageHeaderProps) {
   const { data: user } = useSuspenseQuery(sessionQuery);
   const [accountOpen, setAccountOpen] = useState(false);
 
@@ -32,6 +37,7 @@ export function PageHeader({ title, subtitle, actions, search = true }: PageHead
         <h1 className="text-display text-ink min-w-0">{title}</h1>
         {actions && <div className="hidden shrink-0 items-center gap-2 md:flex">{actions}</div>}
         <div className="flex shrink-0 items-center gap-1 md:hidden">
+          {phoneAside && <div className="mr-1 flex items-center">{phoneAside}</div>}
           {search && (
             // Search opens ready to type: the keyboard comes up inside the tap (iOS raises it only there), and the
             // search box takes it over once its screen is in (lib/keyboard-proxy.ts).

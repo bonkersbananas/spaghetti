@@ -3710,7 +3710,7 @@ export const shots: Shot[] = [
     cleanup: (page) => setQueue(page, 2),
   },
   {
-    // "Needs designing" picked beside The rest: the ink pill around the label and its count.
+    // "Needs designing" picked beside The rest: the ink pill moves from All to it.
     name: "ideas-needs-designing",
     path: "/ideas",
     prepare: async (page) => {
@@ -3732,14 +3732,15 @@ export const shots: Shot[] = [
       });
       await page.reload();
       await page.getByRole("button", { name: /^Needs designing/ }).click();
-      await page.getByText(/Tap “Needs designing” again/).waitFor();
+      // Main says "Tap “Needs designing” again", the filter row with All "Tap All".
+      await page.getByText(/Tap (“Needs designing” again|All) to see every idea/).waitFor();
       await page.evaluate(() => window.scrollTo({ top: 0, behavior: "instant" }));
       await page.waitForTimeout(400);
     },
     cleanup: unmockToday,
   },
   {
-    // The phone's Wishlists line when you haven't picked any yet.
+    // The phone's Wishlists pill in the header when you haven't picked any yet: the semolina star for covers.
     name: "ideas-wishlists-none",
     path: "/ideas",
     width: 390,
@@ -3747,12 +3748,23 @@ export const shots: Shot[] = [
     cleanup: unmockToday,
   },
   {
-    // The phone's Wishlists line when Sam keeps theirs private: only yours is counted.
+    // The phone's Wishlists pill when Sam keeps theirs private: only yours is counted (for a screen reader).
     name: "ideas-wishlists-private",
     path: "/ideas",
     width: 390,
     prepare: (page) => mockWishlists(page, "private"),
     cleanup: unmockToday,
+  },
+  // Ideas shows photos sooner on a phone (the third look, choice 3): Wishlists is a pill in the header, one tap from
+  // the inbox. This is the tap: the wishlists it opens.
+  {
+    name: "ideas-wishlists-open",
+    path: "/ideas",
+    width: 390,
+    prepare: async (page) => {
+      await page.getByRole("link", { name: /^Wishlists/ }).click();
+      await waitForWishlist(page);
+    },
   },
   {
     // A long inbox (two-digit counts beside The rest), at the narrowest phones too (--width 375).

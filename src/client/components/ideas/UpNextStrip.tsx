@@ -9,6 +9,7 @@ import { itemName } from "@/lib/item-name";
 import type { ItemView } from "@/lib/items";
 import { fileThumbSrc, photoSrc } from "@/lib/previews";
 import { unreadQuery } from "@/lib/unread-comments";
+import { useIsDesktop } from "@/lib/use-media-query";
 import { cardName, photoAlt, plateAlt, plateCover, shortenLinks, type UpNextMenu } from "./IdeaCard";
 
 const CardMenu = lazy(() => import("./CardMenu").then((m) => ({ default: m.CardMenu })));
@@ -24,12 +25,14 @@ interface UpNextStripProps {
 
 /**
  * Up next: one row of small cards in queue order that scrolls sideways with snap, so the queue stays one tap (or
- * click) away without taking the top of the screen. The cards show only the cover (no photo swiping), so a sideways
+ * click) away without taking the top of the screen. On a phone each card is one line (MiniCard `slim`). The cards show only the cover (no photo swiping), so a sideways
  * drag always scrolls the strip; each card's "…" holds the same menu as a full card (on desktop it shows on hover
  * or focus). Past the edge, the next card peeks out; on desktop two arrows scroll it for a mouse without a sideways wheel.
  */
 export function UpNextStrip({ queue, menuFor, landed, dragFor }: UpNextStripProps) {
   const unread = useQuery(unreadQuery).data?.threads;
+  // On a phone each card is one slim line, so the strip doesn't push the inbox's first photo down the screen.
+  const slim = !useIsDesktop();
   const scroller = useRef<HTMLUListElement>(null);
   const [edges, setEdges] = useState({ start: false, end: false });
   const measure = useCallback(() => {
@@ -77,6 +80,7 @@ export function UpNextStrip({ queue, menuFor, landed, dragFor }: UpNextStripProp
                 key={item.id}
                 id={item.id}
                 gridScale
+                slim={slim}
                 unread={unread?.some((thread) => thread.itemId === item.id)}
                 landing={landed?.(item)}
                 drag={dragFor?.(item)}
@@ -94,7 +98,7 @@ export function UpNextStrip({ queue, menuFor, landed, dragFor }: UpNextStripProp
                 corner={
                   item.pending ? undefined : (
                     <Suspense fallback={null}>
-                      <CardMenu compact menu={menuFor(item, index)} item={item} name={name} />
+                      <CardMenu compact={!slim} slim={slim} menu={menuFor(item, index)} item={item} name={name} />
                     </Suspense>
                   )
                 }
