@@ -181,3 +181,101 @@ test("a bed card's How did it go? stays held on a phone until the build page arr
   await page.unroute(/\/assets\/builds\._buildId-[\w-]+\.js$/);
   await expect(page.getByRole("dialog", { name: "Attempt 1" })).toBeVisible();
 });
+
+test("a new attempt's sheet on a phone opens at its top, Claude's first idea whole @phone", async ({
+  page,
+  isMobile,
+}) => {
+  test.skip(!isMobile, "The phone's sheet");
+  // "coach" in the title: the stand-in Claude suggests three ideas, which make the sheet taller than the screen.
+  const id = await build(page, "Hook rail coach");
+  await attempt(page, id, { outcome: "failed", printedAt: Date.now() - 3_600_000, note: "Corner lifted." });
+  await expect
+    .poll(async () => (await (await page.request.get(`/api/items/${id}`)).json()).item.attempts[0].coach?.status, {
+      timeout: 30_000,
+    })
+    .toBe("ready");
+  await page.goto(`/builds/${id}`);
+  await expect(page.getByRole("textbox", { name: "Title" })).toHaveValue("Hook rail coach");
+  await page.getByRole("button", { name: "Log attempt" }).last().tap();
+  const sheet = page.getByRole("dialog", { name: "Attempt 2" });
+  await expect(sheet).toBeVisible();
+  // Past the sheet's opening and anything that settles after it: still at the top, the file row first in view.
+  await page.waitForTimeout(1200);
+  const top = await sheet.evaluate((node) => {
+    const scroller = Array.from(node.querySelectorAll<HTMLElement>("*")).find(
+      (element) => getComputedStyle(element).overflowY === "auto" && element.scrollHeight > element.clientHeight,
+    );
+    return scroller?.scrollTop ?? 0;
+  });
+  expect(top).toBe(0);
+  await expect(sheet.getByText("Add a brim")).toBeVisible();
+  // The sheet does scroll: what it holds is taller than the screen, so a scroll to its end would have shown.
+  expect(
+    await sheet.evaluate((node) =>
+      Array.from(node.querySelectorAll<HTMLElement>("*")).some(
+        (element) => getComputedStyle(element).overflowY === "auto" && element.scrollHeight > element.clientHeight + 40,
+      ),
+    ),
+  ).toBe(true);
+  await expect(sheet.getByRole("button", { name: /Add the slicer file/ })).toBeInViewport();
+});
+
+test("What worked says the note when the attempt that worked has nothing else, and is gone when it says nothing @phone", async ({
+  page,
+}) => {
+  const withNote = await build(page, "Hook rail");
+  await attempt(page, withNote, {
+    outcome: "success",
+    printedAt: Date.now() - 3_600_000,
+    note: "Snug on the rail.",
+    settings: {},
+  });
+  await page.goto(`/builds/${withNote}`);
+  await expect(page.getByRole("textbox", { name: "Title" })).toHaveValue("Hook rail");
+  const card = page.getByRole("region", { name: "What worked" });
+  await expect(card).toContainText("What worked · attempt 1");
+  await expect(card).toContainText("Snug on the rail.");
+
+  const bare = await build(page, "Desk clamp");
+  await attempt(page, bare, { outcome: "success", printedAt: Date.now() - 3_600_000, settings: {} });
+  await page.goto(`/builds/${bare}`);
+  await expect(page.getByRole("textbox", { name: "Title" })).toHaveValue("Desk clamp");
+  await expect(page.getByText("Attempt 1", { exact: true }).first()).toBeVisible();
+  await expect(page.getByRole("region", { name: "What worked" })).toHaveCount(0);
+});
+
+test("a print stops asking which build it is once its build is done, on Today, the Journal and the build page @phone", async ({
+  page,
+  isMobile,
+}) => {
+  const { ownId, attemptId } = await bridgeFiles(page, "shelf-peg");
+  const headers = { Origin: origin(page) };
+  expect((await page.request.patch(`/api/attempts/${attemptId}`, { headers, data: { outcome: "success" } })).ok()).toBe(
+    true,
+  );
+  const where = isMobile ? "/journal" : "/today";
+  const question = page.getByRole("region", { name: /Nothing matched/ });
+  // Answered but not placed: it still asks.
+  await page.goto(where);
+  await expect(question.first()).toBeVisible();
+
+  expect((await page.request.patch(`/api/items/${ownId}`, { headers, data: { stage: "done" } })).ok()).toBe(true);
+  await page.goto(where);
+  await expect(page.locator("h1").first()).toBeVisible();
+  await expect(page.getByText("shelf-peg").first()).toBeVisible();
+  // The question's code comes lazily: give it the moment it takes to show where it would.
+  await page.waitForTimeout(1500);
+  await expect(question).toHaveCount(0);
+  if (!isMobile) {
+    await expect(page.getByText("Which build?", { exact: true })).toHaveCount(0);
+    await page.goto("/journal");
+    await expect(page.getByText("shelf-peg").first()).toBeVisible();
+    await page.waitForTimeout(1500);
+    await expect(question).toHaveCount(0);
+  }
+  await page.goto(`/builds/${ownId}`);
+  await expect(page.getByRole("textbox", { name: "Title" })).toHaveValue("shelf-peg");
+  await page.waitForTimeout(1500);
+  await expect(question).toHaveCount(0);
+});

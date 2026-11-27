@@ -1,5 +1,5 @@
 import type { Recipe } from "@shared/api";
-import { creditedTo, isOutcome, type Outcome, tagLabel } from "@shared/attempts";
+import { asksWhichBuild, creditedTo, isOutcome, type Outcome, tagLabel } from "@shared/attempts";
 import { beganAsIdea } from "@shared/deleted";
 import { modelOf } from "@shared/model-mark";
 import { attemptPartsLabel } from "@shared/parts";
@@ -335,7 +335,7 @@ function Build({ item }: { item: ItemView }) {
   const alwaysCard = (attempt: AttemptView) =>
     attempt.id === story[0]?.id ||
     attempt.outcome === null ||
-    !!attempt.print?.asking ||
+    asksWhichBuild(item, attempt) ||
     (story[0]?.outcome === null && attempt.id === newestAnswered?.id);
   const isCard = (attempt: AttemptView) => alwaysCard(attempt) || opened.includes(attempt.id);
   const openRow = (attemptId: string) => setOpened((ids) => (ids.includes(attemptId) ? ids : [...ids, attemptId]));
@@ -1215,6 +1215,13 @@ function WhatWorked({
   const settings = summarizeSettings(attempt.settings);
   const filaments = attempt.settings.filaments ?? [];
   const readOnly = useReadOnly();
+  const saysSettings = filaments.length > 0 || settings.length > 0;
+  // Said once: on a card the attempt's note and tags are right there, so this keeps to its settings, unless it has
+  // none, when its note and tags are what worked. With nothing at all to say there is no card.
+  const words = !compact || !saysSettings;
+  const note = words ? attempt.note.trim() : "";
+  const notes = words ? attempt.successNotes : [];
+  if (!saysSettings && !note && !notes.length && !recipes.length) return null;
   return (
     <section aria-label="What worked" className="bg-basil-soft/60 flex flex-col rounded-lg">
       <button
@@ -1223,19 +1230,19 @@ function WhatWorked({
         className="pressable focus-ring hover:bg-basil-soft flex flex-col gap-2 rounded-lg p-4 text-left"
       >
         <Overline tone="basil">What worked · attempt {attempt.number}</Overline>
-        <SettingsLine
-          filaments={filaments}
-          parts={settings}
-          name={filamentLabel}
-          className="text-small text-ink-soft"
-          filamentClassName="text-ink"
-        />
-        {!compact && attempt.note && (
-          <span className="text-body text-ink line-clamp-3 md:line-clamp-none">{attempt.note}</span>
+        {saysSettings && (
+          <SettingsLine
+            filaments={filaments}
+            parts={settings}
+            name={filamentLabel}
+            className="text-small text-ink-soft"
+            filamentClassName="text-ink"
+          />
         )}
-        {!compact && attempt.successNotes.length > 0 && (
+        {note && <span className="text-body text-ink line-clamp-3 md:line-clamp-none">{note}</span>}
+        {notes.length > 0 && (
           <span className="flex flex-wrap gap-1.5">
-            {attempt.successNotes.map((slug) => (
+            {notes.map((slug) => (
               <Chip key={slug} tone="basil" icon={CheckIcon} className="bg-cream/70">
                 {tagLabel("success", slug, successOptions)}
               </Chip>
