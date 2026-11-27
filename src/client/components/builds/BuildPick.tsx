@@ -58,7 +58,11 @@ export function BuildMeta({ build }: { build: ItemView }) {
   const last = build.attempts.at(-1);
   // Its print on the bed, if any: every build says so, not just the newest print (a print started by hand, or
   // another still waiting while the printer runs the next one).
-  const printing = build.attempts.findLast((attempt) => attempt.outcome === null && !isOffTheBed(attempt));
+  // Only a build in progress has a print on the bed (as every bed list counts it).
+  const printing =
+    build.stage === "building"
+      ? build.attempts.findLast((attempt) => attempt.outcome === null && !isOffTheBed(attempt))
+      : undefined;
   const left = useLeft(printing);
   const count = build.attempts.length;
   const pieces: ReactNode[] = [];
