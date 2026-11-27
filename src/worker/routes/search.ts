@@ -262,17 +262,12 @@ async function itemHits(
     db.select().from(items).where(inArray(items.id, ids)),
     liveAttempts(db, ids),
   ]);
-  const jobs = itemAttempts.length
-    ? await db
-        .select({ attemptId: printJobs.attemptId, name: printJobs.name })
-        .from(printJobs)
-        .where(
-          inArray(
-            printJobs.attemptId,
-            itemAttempts.map((row) => row.id),
-          ),
-        )
-    : [];
+  // By build, not by attempt: a build can have many prints, and D1 takes at most 100 bound values in a query.
+  const jobs = await db
+    .select({ attemptId: printJobs.attemptId, name: printJobs.name })
+    .from(printJobs)
+    .innerJoin(attempts, eq(attempts.id, printJobs.attemptId))
+    .where(inArray(attempts.itemId, ids));
   const itemPhotos = await livePhotos(db, ids, new Set(itemAttempts.map((row) => row.id)));
   return found.flatMap(({ id, snippet, comment }) => {
     const item = rows.find((row) => row.id === id);
