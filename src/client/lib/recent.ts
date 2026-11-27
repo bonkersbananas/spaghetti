@@ -1,3 +1,4 @@
+import { type Nameable, nameOf } from "@shared/item-name";
 import { useEffect } from "react";
 
 const KEY = "sg-recent-items";
@@ -42,9 +43,9 @@ export function forgetItem(id: string) {
   }
 }
 
-/** What an idea or build is called in lists: its title, else the first line of its note. */
-export function itemName(item: { title: string | null; note?: string }, kind: "idea" | "build"): string {
-  return item.title?.trim() || item.note?.trim().split("\n")[0]?.slice(0, 80) || `Untitled ${kind}`;
+/** What an idea or build is called in lists, by the one rule (shared/item-name.ts), as words. */
+export function itemName(item: Nameable, kind: "idea" | "build"): string {
+  return nameOf({ ...item, stage: kind });
 }
 
 /** Remembers the idea or build on screen. */

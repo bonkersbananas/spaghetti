@@ -1,4 +1,4 @@
-import { linkWords } from "@shared/links";
+import { addressName } from "@shared/item-name";
 import { type NoteSize, noteSize } from "@shared/notes";
 import { keepUnits } from "@shared/typography";
 import { Fragment, type ReactNode, useCallback, useLayoutEffect, useRef } from "react";
@@ -41,6 +41,11 @@ interface NoteFaceProps {
   onCut?: (cut: boolean) => void;
   /** A tall face: a short note leaves its foot empty, so a loose strand of spaghetti is doodled there. */
   doodle?: boolean;
+  /**
+   * What a note that is only a link is called (its page's title, by shared/item-name.ts): said over its site in place
+   * of the words in its address, so the face reads as the idea's name does everywhere else.
+   */
+  linkName?: string;
 }
 
 /**
@@ -54,7 +59,10 @@ function useWholeLines() {
     if (!el) return;
     const observer = new ResizeObserver(() => {
       const note = el.firstElementChild as HTMLElement;
-      const lines = Math.floor((el.clientHeight + 1) / Number.parseFloat(getComputedStyle(note).lineHeight));
+      // A foot under the note in the same box (a link's site) keeps its room: the note ends a line above it.
+      const foot = note.nextElementSibling as HTMLElement | null;
+      const room = foot ? foot.offsetHeight + Number.parseFloat(getComputedStyle(foot).marginTop) : 0;
+      const lines = Math.floor((el.clientHeight + 1 - room) / Number.parseFloat(getComputedStyle(note).lineHeight));
       if (lines > 0) note.style.webkitLineClamp = String(lines);
     });
     // The note too: a note edited into another size step changes its line height, not the box.
@@ -74,9 +82,30 @@ function useWholeLines() {
  * what it links to in words ("Skadis pegboard white") over its site, not the
  * address. Fills its parent.
  */
-export function NoteFace({ note, size, className, compact, clearBottom, maxSize, doodle, onCut }: NoteFaceProps) {
+export function NoteFace({
+  note,
+  size,
+  className,
+  compact,
+  clearBottom,
+  maxSize,
+  doodle,
+  onCut,
+  linkName,
+}: NoteFaceProps) {
   const measured = useWholeLines();
-  const link = BARE_LINK.test(note.trim()) ? linkWords(note) : undefined;
+  const bare = BARE_LINK.test(note.trim());
+  // Its site, as links.ts's shortUrl says it ("printables.com"), read here so the face needs nothing more.
+  const site = bare
+    ? note
+        .trim()
+        .replace(/^https?:\/\/(www\.)?/i, "")
+        .split("/")[0]
+    : undefined;
+  // What the link is called by the one rule (shared/item-name.ts): its page's title when given, else its address's words.
+  const named =
+    linkName ?? (bare ? addressName(/^https?:\/\//i.test(note.trim()) ? note.trim() : `https://${note.trim()}`) : null);
+  const link = site && named ? { site, words: named } : undefined;
   const text = link?.words ?? note;
   const order: NoteSize[] = ["xl", "lg", "md", "sm"];
   const sized = noteSize(text);
@@ -92,13 +121,8 @@ export function NoteFace({ note, size, className, compact, clearBottom, maxSize,
         <span aria-hidden className="bg-tomato/25 mb-note-rule h-px w-full shrink-0" />
         {compact === "tile" ? (
           <TileText text={keepUnits(text)} onCut={onCut} />
-        ) : link || compact === true ? (
-          <p
-            className={cn(
-              "font-display text-ink font-normal break-words whitespace-pre-line",
-              compact === true ? "text-caption line-clamp-3 leading-snug" : cn(sizes[face], "line-clamp-3"),
-            )}
-          >
+        ) : compact === true ? (
+          <p className="font-display text-ink text-caption line-clamp-3 leading-snug font-normal break-words whitespace-pre-line">
             {link ? keepUnits(text) : breakAfterSlashes(keepUnits(note))}
           </p>
         ) : (
@@ -111,8 +135,10 @@ export function NoteFace({ note, size, className, compact, clearBottom, maxSize,
               )}
             >
               {/* A number keeps its unit on the line ("42 mm"); an address may break after its slashes. */}
-              {breakAfterSlashes(keepUnits(note))}
+              {link ? keepUnits(text) : breakAfterSlashes(keepUnits(note))}
             </p>
+            {/* A link's site stays right under its name's last line: the measure leaves it room. */}
+            {link && <p className="text-caption text-ink-faint mt-1.5 truncate">{link.site}</p>}
           </div>
         )}
         {/* Only a note short enough to leave the foot empty: a title-only idea or a few words: most of the card is empty. */}
@@ -122,15 +148,8 @@ export function NoteFace({ note, size, className, compact, clearBottom, maxSize,
             className="note-strand bg-tomato/25 pointer-events-none absolute bottom-[8cqi] left-[8cqi] aspect-[100/44] w-[34cqi]"
           />
         )}
-        {link && compact !== true && (
-          <p
-            className={cn(
-              "text-caption text-ink-faint mt-1.5 shrink-0 truncate",
-              compact === "tile" && "max-md:hidden",
-            )}
-          >
-            {link.site}
-          </p>
+        {link && compact === "tile" && (
+          <p className="text-caption text-ink-faint mt-1.5 shrink-0 truncate max-md:hidden">{link.site}</p>
         )}
       </div>
     </div>

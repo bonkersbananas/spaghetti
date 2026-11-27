@@ -63,6 +63,7 @@ import {
 import type { AppEnv } from "../env.ts";
 import { apiError, toApiPhoto } from "../http.ts";
 import { gramsFor } from "../ledger.ts";
+import { linkTitles } from "../link-titles.ts";
 import { creditedSql, itemCreditedSql, printerAgents } from "../prints.ts";
 import { liveRecipes } from "./recipes.ts";
 import { toApiSpool } from "./spools.ts";
@@ -268,7 +269,10 @@ async function itemHits(
     .from(printJobs)
     .innerJoin(attempts, eq(attempts.id, printJobs.attemptId))
     .where(inArray(attempts.itemId, ids));
-  const itemPhotos = await livePhotos(db, ids, new Set(itemAttempts.map((row) => row.id)));
+  const [itemPhotos, pageTitles] = await Promise.all([
+    livePhotos(db, ids, new Set(itemAttempts.map((row) => row.id))),
+    linkTitles(db, rows),
+  ]);
   return found.flatMap(({ id, snippet, comment }) => {
     const item = rows.find((row) => row.id === id);
     if (!item) return [];
@@ -292,6 +296,7 @@ async function itemHits(
           createdAt: item.createdAt.getTime(),
           startedAt: item.startedAt?.getTime() ?? null,
           finishedAt: item.finishedAt?.getTime() ?? null,
+          linkTitle: pageTitles.get(item.id) ?? null,
         },
         attempts: own.length,
         lastOutcome: (last?.row.outcome ?? null) as Outcome | null,

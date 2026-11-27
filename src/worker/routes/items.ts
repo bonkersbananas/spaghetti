@@ -43,6 +43,7 @@ import {
 } from "../db/schema.ts";
 import type { AppEnv } from "../env.ts";
 import { apiError, toApiFile, toApiItem, toApiPhoto } from "../http.ts";
+import { linkTitles } from "../link-titles.ts";
 import { photoReadsEnabled, readsByAttempt, runRead, startRead, toApiPhotoRead } from "../photo-read/run.ts";
 import { photoKey, photoOwner } from "../photos.ts";
 import { mergedTarget, printerAgents, printNowIn, printViews, withPrintViews } from "../prints.ts";
@@ -269,32 +270,36 @@ export async function loadItems(db: Db, where: ReturnType<typeof and>) {
     )
   ).flat();
   const twistIds = [...new Set(rows.flatMap((row) => (row.twistId ? [row.twistId] : [])))];
-  const [itemFileSlices, coaches, reactionsByItem, twistPicture, jobs, prints, printer] = await Promise.all([
-    Promise.all(
-      slices.map((ids) =>
-        db
-          .select()
-          .from(itemFiles)
-          .where(and(inArray(itemFiles.itemId, ids), isNull(itemFiles.deletedAt)))
-          .orderBy(asc(itemFiles.createdAt), asc(itemFiles.id)),
+  const [itemFileSlices, coaches, reactionsByItem, twistPicture, jobs, prints, printer, pageTitles] = await Promise.all(
+    [
+      Promise.all(
+        slices.map((ids) =>
+          db
+            .select()
+            .from(itemFiles)
+            .where(and(inArray(itemFiles.itemId, ids), isNull(itemFiles.deletedAt)))
+            .orderBy(asc(itemFiles.createdAt), asc(itemFiles.id)),
+        ),
       ),
-    ),
-    coachesByAttempt(db, [...liveAttempts]),
-    reactionsFor(
-      db,
-      rows.map((row) => row.id),
-    ),
-    // A build that prints a twist falls back to the twist's picture for its cover (shared/cover.ts).
-    twistPictures(db, twistIds),
-    // Claude's naming jobs (decisions 0070, 0072): the title it gave, or that it is naming an idea right now.
-    titleJobs(
-      db,
-      rows.flatMap((row) => (row.title || row.stage === "idea" ? [row.id] : [])),
-    ),
-    // How the printer bridge placed its prints, and who moved an attempt here (decision 0076).
-    printViews(db, attemptSlices.flat()),
-    printerAgents(db),
-  ]);
+      coachesByAttempt(db, [...liveAttempts]),
+      reactionsFor(
+        db,
+        rows.map((row) => row.id),
+      ),
+      // A build that prints a twist falls back to the twist's picture for its cover (shared/cover.ts).
+      twistPictures(db, twistIds),
+      // Claude's naming jobs (decisions 0070, 0072): the title it gave, or that it is naming an idea right now.
+      titleJobs(
+        db,
+        rows.flatMap((row) => (row.title || row.stage === "idea" ? [row.id] : [])),
+      ),
+      // How the printer bridge placed its prints, and who moved an attempt here (decision 0076).
+      printViews(db, attemptSlices.flat()),
+      printerAgents(db),
+      // What an untitled idea pasted from a model page is called: that page's title (shared/item-name.ts).
+      linkTitles(db, rows),
+    ],
+  );
   const reads = new Map<string, PhotoRead>();
   for (const [attemptId, rows] of await readsByAttempt(db, [...liveAttempts])) {
     const read = toApiPhotoRead(rows);
@@ -334,6 +339,7 @@ export async function loadItems(db: Db, where: ReturnType<typeof and>) {
       claudeTitle: row.title && jobs.get(row.id)?.title === row.title ? row.title : null,
       // While Claude names an untitled idea the screens show it in place of the title; "done" once it ran, whatever came of it.
       titleJob: titleJobView(row.title, jobs.get(row.id)),
+      linkTitle: pageTitles.get(row.id) ?? null,
     };
   });
 }

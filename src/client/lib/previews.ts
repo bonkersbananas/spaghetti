@@ -1,6 +1,7 @@
 import type { AttemptFile, PhotoVariant } from "@shared/api";
 import { fileThumbUrl, photoUrl } from "@shared/api";
 import { type Coverable, newestPictured, pickCover, type Cover as SharedCover } from "@shared/cover";
+import { itemName, type Nameable } from "@shared/item-name";
 import type { PhotoView } from "./items";
 
 /**
@@ -68,14 +69,14 @@ export function newestPlate(
 /** A file with a plate picture: on the server, or drawn on this device. */
 const pictured = (file: Pick<AttemptFile, "id" | "hasThumb">) => file.hasThumb || hasPreview(file.id);
 
-/** What a photo shows, for screen readers: the title, else the start of the note. */
-export function photoAlt(item: { title: string | null; note: string }): string {
-  const text = item.title || item.note.split("\n")[0]?.slice(0, 80);
-  return text ? `Photo: ${text}` : "Photo of an idea";
+/** What a photo shows, for screen readers: the thing's name (shared/item-name.ts), when it has words. */
+export function photoAlt(item: Nameable): string {
+  const name = itemName(item);
+  return name.from === "none" ? "Photo of an idea" : `Photo: ${name.text}`;
 }
 
 /** What a plate picture shows, for screen readers. */
-export function plateAlt(item: { title: string | null; note: string }): string {
-  const text = item.title || item.note.split("\n")[0]?.slice(0, 80);
-  return text ? `Slicer preview: ${text}` : "Slicer preview of an idea";
+export function plateAlt(item: Nameable): string {
+  const name = itemName(item);
+  return name.from === "none" ? "Slicer preview of an idea" : `Slicer preview: ${name.text}`;
 }

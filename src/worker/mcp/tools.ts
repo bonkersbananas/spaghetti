@@ -29,6 +29,7 @@ import {
   unansweredWord,
 } from "../../shared/attempts.ts";
 import { COMMENT_MAX } from "../../shared/comments.ts";
+import { nameOf } from "../../shared/item-name.ts";
 import { OUTCOME_FILTERS } from "../../shared/journal.ts";
 import type { ScoutResponse } from "../../shared/scout.ts";
 import { SLOT_PATTERN } from "../../shared/spools.ts";
@@ -133,7 +134,7 @@ const outcomeWord = (outcome: string | null, endedAt?: number | null) =>
   outcomeLabel(outcome) ?? unansweredWord({ endedAt });
 
 function itemLine(hit: ItemHit): string {
-  const name = hit.item.title?.trim() || hit.item.note.split("\n")[0]?.slice(0, 80) || "Untitled";
+  const name = nameOf(hit.item);
   const attempts = hit.attempts
     ? `, ${hit.attempts} ${hit.attempts === 1 ? "attempt" : "attempts"}, last ${outcomeWord(hit.lastOutcome, hit.lastEndedAt)}`
     : "";

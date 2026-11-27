@@ -3299,7 +3299,168 @@ export const shots: Shot[] = [
     },
     cleanup: restoreDeskTidy,
   },
-  { name: "ideas", path: "/ideas" },
+  {
+    name: "ideas",
+    path: "/ideas",
+    prepare: async (page) => {
+      // The cards' corner menus come in their own chunk a beat later: on a touch screen they always show.
+      await page.locator('button[aria-label^="Options for"]').first().waitFor();
+    },
+  },
+  // One name for each idea (shared/item-name.ts), the same on its card, its page, in search and in the palette: an
+  // untitled link idea goes by its page's title, a photo with no words by the quiet "Untitled idea".
+  {
+    name: "ideas-names",
+    path: "/ideas",
+    prepare: async (page) => {
+      await page.locator('button[aria-label^="Options for"]').first().waitFor();
+      // The link idea's card and, under it, the photo with no words.
+      const card = page.locator(`a[href="/ideas/${SEED_IDS.gearSet}"]`).first();
+      await card.waitFor();
+      await card.evaluate((element) => element.scrollIntoView({ block: "center" }));
+    },
+  },
+  {
+    name: "idea-named-by-link",
+    path: `/ideas/${SEED_IDS.gridfinity}`,
+    prepare: async (page) => {
+      await page.getByRole("textbox", { name: "Title" }).waitFor();
+    },
+  },
+  {
+    name: "idea-named-by-link-long",
+    path: `/ideas/${SEED_IDS.amsRoller}`,
+    prepare: async (page) => {
+      await page.getByRole("textbox", { name: "Title" }).waitFor();
+    },
+  },
+  {
+    // The plain "Untitled idea" placeholder: a photo and no words, so no line says where a name came from.
+    name: "idea-photo-only",
+    path: `/ideas/${SEED_IDS.gearSet}`,
+    prepare: async (page) => {
+      const title = page.getByRole("textbox", { name: "Title" });
+      await title.waitFor();
+      await title.evaluate((element) => element.scrollIntoView({ block: "center" }));
+    },
+  },
+  {
+    // Scrolled down (a short window, so the page scrolls): the top bar keeps its controls and no title of its own; the
+    // name is the heading's and the tab's.
+    name: "idea-named-by-link-scrolled",
+    path: `/ideas/${SEED_IDS.amsRoller}`,
+    prepare: async (page) => {
+      const size = page.viewportSize();
+      if (size) await page.setViewportSize({ width: size.width, height: 560 });
+      await page.getByRole("textbox", { name: "Title" }).waitFor();
+      await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
+      await page.waitForTimeout(400);
+    },
+    cleanup: async (page) => {
+      const size = page.viewportSize();
+      if (size) await page.setViewportSize({ width: size.width, height: size.width < 768 ? 844 : 900 });
+    },
+  },
+  {
+    // Up next with borrowed names: a link idea (its page's title), the photo with no words, the long link title.
+    name: "ideas-up-next-names",
+    path: "/ideas",
+    prepare: async (page) => {
+      const headers = { Origin: new URL(page.url()).origin };
+      await setQueue(page, 0);
+      for (const id of [SEED_IDS.gridfinity, SEED_IDS.gearSet, SEED_IDS.amsRoller]) {
+        await page.request.patch(`/api/items/${id}`, { headers, data: { upNext: true } });
+      }
+      await page.reload();
+      await page.getByRole("heading", { level: 2, name: /^Up next\s*3$/ }).waitFor();
+      await page.locator('[aria-label="Up next"] button[aria-label^="Options for"]').first().waitFor();
+      await page.waitForTimeout(500);
+      await page.evaluate(() => {
+        for (const animation of document.getAnimations()) animation.finish();
+      });
+    },
+    cleanup: async (page) => {
+      await setQueue(page, 2);
+    },
+  },
+  {
+    // Untitled ideas in bulk, as production has them (about half: photo-only and link-only mixed), so the quiet
+    // names can be judged as a field: every other photo idea loses its words, and the two link ideas come in four.
+    name: "ideas-untitled-many",
+    path: "/ideas",
+    prepare: async (page) => {
+      await page.route(/\/api\/items\?stage=idea/, async (route) => {
+        const response = await route.fetch();
+        type Row = { id: string; title: string | null; note: string; photos: unknown[]; upNext: number | null };
+        const json = (await response.json()) as { items: Row[] };
+        let photoIdeas = 0;
+        const items = json.items.map((item) =>
+          item.photos.length && item.upNext === null && photoIdeas++ % 2 === 0
+            ? { ...item, title: null, note: "", claudeTitle: null, linkTitle: null }
+            : item,
+        );
+        const links = [
+          ["https://makerworld.com/en/models/2201190-cable-comb", "Cable comb for the desk, 6 slots"],
+          ["https://www.printables.com/model/88124-nozzle-holder", "Nozzle holder for the X2D, 12 slots"],
+          ["https://makerworld.com/en/models/1830042-ams-spool-holder", "AMS spool holder"],
+          ["https://www.printables.com/model/55120-headphone-hook", "Under-desk headphone hook"],
+        ].map(([note, linkTitle], i) => ({
+          ...(json.items.find((item) => item.id === SEED_IDS.gridfinity) as Row),
+          id: `${SEED_IDS.gridfinity.slice(0, -2)}9${i}`,
+          note,
+          linkTitle,
+        }));
+        await route.fulfill({ response, json: { ...json, items: [...items, ...links] } });
+      });
+      await page.reload();
+      const rest = page.getByRole("heading", { level: 2, name: /^The rest/ });
+      await rest.waitFor();
+      await page.locator('button[aria-label^="Options for"]').first().waitFor();
+      await page.waitForTimeout(500);
+      await page.evaluate(() => {
+        for (const animation of document.getAnimations()) animation.finish();
+      });
+      await rest.evaluate((element) => element.scrollIntoView({ block: "start" }));
+    },
+    cleanup: async (page) => {
+      await page.unrouteAll({ behavior: "ignoreErrors" });
+    },
+  },
+  {
+    name: "search-names",
+    path: "/search?q=gridfinity",
+    prepare: async (page) => {
+      await page.getByRole("region", { name: "Ideas" }).waitFor();
+      await page.getByRole("searchbox", { name: "Search" }).blur();
+    },
+  },
+  {
+    // A long page title wraps to two lines in search rather than being cut mid-address.
+    name: "search-names-long",
+    path: "/search?q=roller",
+    prepare: async (page) => {
+      await page.getByRole("region", { name: "Ideas" }).waitFor();
+      await page.getByRole("searchbox", { name: "Search" }).blur();
+    },
+  },
+  {
+    name: "palette-names",
+    path: "/ideas",
+    width: 1440,
+    why: "the palette is the desktop's (⌘K); a phone finds things in the Search tab, shot as search-names",
+    prepare: async (page) => {
+      await page.locator(`a[href="/ideas/${SEED_IDS.gridfinity}"]`).first().waitFor();
+      await page.keyboard.press("ControlOrMeta+k");
+      await page.getByRole("combobox", { name: "Jump to or run" }).pressSequentially("gridfinity");
+      await page
+        .getByRole("option", { name: /gridfinity/i })
+        .first()
+        .waitFor();
+    },
+    cleanup: async (page) => {
+      await page.keyboard.press("Escape");
+    },
+  },
   { name: "ideas-full", path: "/ideas", fullPage: true },
   {
     // A photo saved without a title, a few seconds later: Claude's title in its card (decision 0070).

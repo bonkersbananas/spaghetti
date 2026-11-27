@@ -1,4 +1,6 @@
-import { modelOf } from "@shared/model-mark";
+import { itemName, leadingLink } from "@shared/item-name";
+import { linkName } from "@shared/link-name";
+import { modelOf, sameModel } from "@shared/model-mark";
 import { fullTime, inlineTime } from "@shared/time";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
@@ -23,6 +25,7 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { TextArea } from "@/components/ui/Field";
 import { BuildsIcon, CommentIcon, MoveIntoIcon, SlicerFileIcon, TrashIcon, TwistIcon } from "@/components/ui/icons";
 import { LinkCard } from "@/components/ui/LinkCard";
+import { NameSourceLine } from "@/components/ui/NameSourceLine";
 import { useNaming } from "@/components/ui/NamingSign";
 import { NoteField } from "@/components/ui/NoteField";
 import { NoteLinks } from "@/components/ui/NoteLinks";
@@ -35,6 +38,7 @@ import { useVia } from "@/lib/agents";
 import { startBuild } from "@/lib/builds";
 import { useCaptureHere } from "@/lib/capture";
 import { cn } from "@/lib/cn";
+import { useDocumentTitle } from "@/lib/document-title";
 import { announceDraft } from "@/lib/drafts";
 import { ariaShortcuts, shortcutCaps, useHotkeys } from "@/lib/hotkeys";
 import { deleteItem, type ItemView, useIdeas, useItem, useItemFields } from "@/lib/items";
@@ -44,9 +48,9 @@ import { useScreenActions } from "@/lib/palette";
 import { spoolsQuery } from "@/lib/pantry-queries";
 import { photoSrc } from "@/lib/previews";
 import { keepOrigin } from "@/lib/previous-path";
-import { peopleQuery, sessionQuery } from "@/lib/queries";
+import { linkPreviewQuery, peopleQuery, sessionQuery } from "@/lib/queries";
 import { canEdit, useKeepEditing, useReadOnly } from "@/lib/read-only";
-import { itemName, useRememberItem } from "@/lib/recent";
+import { itemName as listName, useRememberItem } from "@/lib/recent";
 import { recipesQuery } from "@/lib/recipes-query";
 import { useSlicerDropTarget } from "@/lib/slicer-drop";
 import { useStickyColumn } from "@/lib/sticky-column";
@@ -259,7 +263,7 @@ const Idea = memo(function Idea({ item }: { item: ItemView }) {
   useRememberItem({
     id: item.id,
     kind: "idea",
-    title: itemName(item, "idea"),
+    title: listName(item, "idea"),
     photo: photos[0] ? { id: photos[0].id, color: photos[0].color } : null,
   });
 
@@ -307,7 +311,14 @@ const Idea = memo(function Idea({ item }: { item: ItemView }) {
   const linkedModel = model && !model.url.startsWith("/api/files/") ? model : null;
   const modelPhoto = item.draft?.applied.includes("photos") ? photos.find((photo) => !photo.attemptId) : undefined;
   const modelPicture = modelPhoto ? { src: photoSrc(modelPhoto.id, "thumb"), color: modelPhoto.color } : undefined;
-  const alt = photoAlt({ title, note });
+  // Its one name (shared/item-name.ts): what its cards, search and the palette call it, while the title stays empty.
+  const lead = leadingLink(settledNote);
+  // The page's title as soon as this page has it (its link card asks for the same preview), else the Worker's name.
+  const { data: leadPreview } = useQuery({ ...linkPreviewQuery(lead ?? ""), enabled: !!lead });
+  const linkTitle = lead && leadPreview?.title ? linkName(lead, leadPreview.title) : item.linkTitle;
+  const name = itemName({ title, note: settledNote, stage: "idea", linkTitle });
+  useDocumentTitle(name.text);
+  const alt = photoAlt({ title, note, linkTitle: item.linkTitle });
   // Claude's title (decision 0070), for as long as it is still what it wrote: marked, and faded in when it arrives here.
   const named = !!item.claudeTitle && title === item.claudeTitle;
   const [untitled] = useState(!item.title);
@@ -315,12 +326,12 @@ const Idea = memo(function Idea({ item }: { item: ItemView }) {
   const naming = useNaming(item) && !title.trim();
 
   return (
-    <PullToGo back={back} title={title.trim() || "Untitled idea"}>
+    <PullToGo back={back} title={name.text}>
       <article className="pb-6">
-        <h1 className="sr-only">{title.trim() || "Untitled idea"}</h1>
-        <DetailBar back={back} title={title.trim() || "Untitled idea"}>
+        <h1 className="sr-only">{name.text}</h1>
+        <DetailBar back={back} title={name.text}>
           {!deleting && <SaveStatus state={saveState} className="mr-2" />}
-          {!deleting && <ShareLinkButton kind="item" id={item.id} title={title.trim()} what="idea" />}
+          {!deleting && <ShareLinkButton kind="item" id={item.id} title={name.text} what="idea" />}
           <ConfirmDelete
             asking={deleting}
             onAskingChange={setDeleting}
@@ -365,7 +376,7 @@ const Idea = memo(function Idea({ item }: { item: ItemView }) {
                 index={selectedIndex}
                 onIndexChange={select}
                 alt={alt}
-                largeTitle={itemName(item, "idea")}
+                largeTitle={name.text}
                 withStrip
                 className="-mx-5 md:mx-0"
               />
@@ -379,7 +390,11 @@ const Idea = memo(function Idea({ item }: { item: ItemView }) {
           )}
           {plate && (
             <div ref={stickyColumn} className="sticky-column flex flex-col gap-4 md:min-w-0 md:flex-2 lg:flex-4">
-              <PlateCover file={plate} alt={plateAlt({ title, note })} className="-mx-5 md:mx-0" />
+              <PlateCover
+                file={plate}
+                alt={plateAlt({ title, note, linkTitle: item.linkTitle })}
+                className="-mx-5 md:mx-0"
+              />
               <AddFirstPhotos itemId={item.id} small />
             </div>
           )}
@@ -398,7 +413,9 @@ const Idea = memo(function Idea({ item }: { item: ItemView }) {
               <TextArea
                 appearance="title"
                 aria-label="Title"
-                placeholder={naming ? "Naming…" : "Untitled idea"}
+                // The name it goes by, until someone types one: tidying up is one tap.
+                placeholder={naming ? "Naming…" : name.text}
+                borrowedPlaceholder={!naming && (name.from === "link" || name.from === "note")}
                 minRows={1}
                 maxLength={200}
                 readOnly={titleKeep.readOnly}
@@ -420,6 +437,7 @@ const Idea = memo(function Idea({ item }: { item: ItemView }) {
                 {photos.some((photo) => !photo.attemptId) ? "Looking at the photo…" : "Reading the note…"}
               </ClaudeLine>
             )}
+            {!naming && !title.trim() && !reading && <NameSourceLine from={name.from} className="-mt-2 md:-mt-1.5" />}
             {named && (
               <ClaudeLine className={cn("-mt-2 md:-mt-1.5", untitled && "sg-arrive")}>Named by Claude</ClaudeLine>
             )}
@@ -444,6 +462,12 @@ const Idea = memo(function Idea({ item }: { item: ItemView }) {
                 url={linkedModel.url}
                 model={linkedModel}
                 picture={modelPicture}
+                titleShownAbove={
+                  !title.trim() &&
+                  name.from === "link" &&
+                  !!lead &&
+                  (lead === linkedModel.url || sameModel(lead, linkedModel.url))
+                }
                 className="max-w-content my-1"
               />
             )}

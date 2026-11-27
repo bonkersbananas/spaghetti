@@ -40,6 +40,11 @@ export const SEED_IDS = {
   spoolHolder: "5eed0000-0000-4000-8000-000000000010",
   cableChain: "5eed0000-0000-4000-8000-000000000012",
   bigTugboat: "5eed0000-0000-4000-8000-000000000030",
+  /** Untitled link ideas: named by their pages' titles (the second one long). */
+  gridfinity: "5eed0000-0000-4000-8000-000000000016",
+  /** A photo and no words: "Untitled idea". */
+  gearSet: "5eed0000-0000-4000-8000-000000000007",
+  amsRoller: "5eed0000-0000-4000-8000-000000000017",
 };
 
 export const SEED_IDEAS: SeedIdea[] = [
@@ -106,7 +111,7 @@ export const SEED_IDEAS: SeedIdea[] = [
     ],
   },
   {
-    id: "5eed0000-0000-4000-8000-000000000007",
+    id: SEED_IDS.gearSet,
     by: "alex",
     ago: 3 * DAY,
     photos: [{ file: "gear-set.svg", color: "#5f7058" }],
@@ -148,6 +153,22 @@ export const SEED_IDEAS: SeedIdea[] = [
     ago: 12 * DAY,
     title: "Cable chain",
     note: "For the back of the X2D. Check the clearance to the wall first.",
+    photos: [],
+  },
+  {
+    // Pasted from MakerWorld and never named: it goes by its page's title (seed/index.ts keeps the page's preview).
+    id: SEED_IDS.gridfinity,
+    by: "sam",
+    ago: 2 * DAY + 5 * HOUR,
+    note: "https://makerworld.com/en/models/1234567-gridfinity-baseplate",
+    photos: [],
+  },
+  {
+    // A page whose title runs long: it wraps, on cards and in search, rather than being cut mid-word.
+    id: SEED_IDS.amsRoller,
+    by: "alex",
+    ago: 8 * DAY,
+    note: "https://www.printables.com/model/734512-ams-roller-spool-holder",
     photos: [],
   },
   {

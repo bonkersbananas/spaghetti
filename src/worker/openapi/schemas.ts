@@ -227,6 +227,13 @@ export const Item = z
       .nullable()
       .optional()
       .describe("The title Claude gave an idea saved without one; the title is still Claude's while it says this."),
+    linkTitle: z
+      .string()
+      .nullable()
+      .optional()
+      .describe(
+        "What the link an untitled idea's note starts with is called (its page's title once read, else its address's words).",
+      ),
     titleJob: z
       .object({
         status: z.enum(["naming", "done"]),

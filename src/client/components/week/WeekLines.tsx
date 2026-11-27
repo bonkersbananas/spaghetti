@@ -1,4 +1,5 @@
 import type { Person } from "@shared/api";
+import { nameOf } from "@shared/item-name";
 import { gramsText } from "@shared/ledger";
 import type { Week, WeekStage } from "@shared/week";
 import { commentsLine, ideasLine } from "@shared/week-lines";
@@ -144,7 +145,7 @@ export function WeekLines({ week, people }: WeekLinesProps) {
               total={week.ideas.length}
               items={week.ideas.slice(0, 2).map((idea) => (
                 <ItemLink key={idea.id} id={idea.id} stage={idea.stage}>
-                  {short(name(idea.title, idea.note || "Untitled"))}
+                  {short(nameOf({ ...idea, stage: "idea" }))}
                 </ItemLink>
               ))}
             />

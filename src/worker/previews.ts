@@ -1,8 +1,10 @@
 import { and, eq, isNull } from "drizzle-orm";
 import { bestPhoto } from "../shared/cover.ts";
+import { itemName } from "../shared/item-name.ts";
 import { hasPhotoMetadata, stripPhotoMetadata } from "../shared/photo-metadata.ts";
 import { getDb } from "./db/index.ts";
 import { attempts, items, photos, twists } from "./db/schema.ts";
+import { linkTitles } from "./link-titles.ts";
 import { setPageHeaders } from "./page-headers.ts";
 import { photoKey } from "./photos.ts";
 
@@ -86,7 +88,7 @@ export async function findPreview(env: Env, kind: PreviewKind, id: string): Prom
   }
   const [rows, pics, tries] = await db.batch([
     db
-      .select({ title: items.title, note: items.note, coverPhotoId: items.coverPhotoId })
+      .select({ title: items.title, note: items.note, stage: items.stage, coverPhotoId: items.coverPhotoId })
       .from(items)
       .where(and(eq(items.id, id), isNull(items.deletedAt)))
       .limit(1),
@@ -120,7 +122,14 @@ export async function findPreview(env: Env, kind: PreviewKind, id: string): Prom
     }));
   // The photo its page and cards lead with: the same rule as the app's (shared/cover.ts).
   const photo = bestPhoto(live, tries, item.coverPhotoId);
-  return { ...words(item.title, item.note), photoId: photo?.id ?? null, contentType: photo?.contentType ?? null };
+  // Its name in the app (shared/item-name.ts): a link idea unfurls with its page's title. A thing with nothing to be
+  // called by stays generic, as an unknown id does ("Untitled idea" would only say that it exists).
+  const name = itemName({ ...item, linkTitle: (await linkTitles(db, [{ id, ...item }])).get(id) });
+  const named =
+    name.from === "link"
+      ? words(name.text, item.note.trim().split("\n").slice(1).join("\n"))
+      : words(item.title, item.note);
+  return { ...named, photoId: photo?.id ?? null, contentType: photo?.contentType ?? null };
 }
 
 const esc = (text: string) =>

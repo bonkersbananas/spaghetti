@@ -7,6 +7,7 @@ import { ClaudeLine } from "@/components/ui/ClaudeLine";
 import * as Icons from "@/components/ui/icons";
 import { LinkCard } from "@/components/ui/LinkCard";
 import { MiniCard } from "@/components/ui/MiniCard";
+import { NameSourceLine } from "@/components/ui/NameSourceLine";
 import { PrintTile, printTileGrid } from "@/components/ui/PrintTile";
 import { Reflow } from "@/components/ui/Reflow";
 
@@ -112,6 +113,57 @@ export function CardSection() {
             meta="sm · longer, fades at the end"
             aspect="portrait"
           />
+        </div>
+      </div>
+      <div className="mt-10">
+        <Label>
+          One name for each idea (shared/item-name.ts): a title someone typed; else an untitled link idea's page title,
+          said on its note face over the site; else the note's first words; else a photo with no words is the quiet
+          "Untitled idea" (`standIn`), the same on its page, in search and in the palette
+        </Label>
+        <div className="grid grid-cols-2 items-start gap-3 md:grid-cols-4 md:gap-5">
+          <Card
+            note="makerworld.com/en/models/1234567-gridfinity-baseplate"
+            linkName="Gridfinity baseplate, 4x4"
+            meta="Its page's title"
+            aspect="portrait"
+          />
+          <Card
+            note="printables.com/model/734512-ams-roller-spool-holder"
+            linkName="Roller spool holder for the AMS, with bearings, quick-swap hubs and a drawer for desiccant"
+            meta="A long one wraps"
+            aspect="portrait"
+          />
+          <Card note="Hook for the bike helmet" meta="Its note's first words" aspect="portrait" />
+          <Card
+            photo={{ src: dragonPhoto, alt: "Photo of an idea" }}
+            title="Untitled idea"
+            standIn
+            meta="A photo, no words"
+            aspect="portrait"
+          />
+        </div>
+        <Label>
+          On its page the title field stays empty with the name as its placeholder (a step smaller on a phone), one
+          quiet line says where it came from (NameSourceLine), and the link card leaves out the title the heading
+          already says
+        </Label>
+        <div className="max-w-content flex flex-col gap-3">
+          <p className="font-display text-headline text-ink-faint max-md:text-title font-semibold">
+            Gridfinity baseplate, 4x4
+          </p>
+          <NameSourceLine from="link" className="-mt-2" />
+          <LinkCard
+            url="https://makerworld.com/en/models/1234567-gridfinity-baseplate"
+            model={{
+              kind: "page",
+              site: "makerworld",
+              name: "MakerWorld",
+              url: "https://makerworld.com/en/models/1234567-gridfinity-baseplate",
+            }}
+            titleShownAbove
+          />
+          <NameSourceLine from="note" />
         </div>
       </div>
       <div className="mt-10">

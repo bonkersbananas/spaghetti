@@ -1,5 +1,6 @@
 import type { AttemptFile, AttemptHit, FixHit, ItemHit, Photo as PhotoData } from "@shared/api";
 import { outcomeLabel, type TagKind, tagLabel } from "@shared/attempts";
+import { itemName, noteAfterName } from "@shared/item-name";
 import { displayName } from "@shared/people";
 import { isOffTheBed } from "@shared/print-progress";
 import { excerpt, highlight, printNameMatch, type SearchTerm, snippetSegments } from "@shared/search";
@@ -372,7 +373,11 @@ export const ItemResult = forwardRef<HTMLAnchorElement, ItemResultProps>(functio
   const { data: me } = useQuery(sessionQuery);
   const look = stageLook[item.stage];
   const title = item.title?.trim();
+  // The name it has everywhere (shared/item-name.ts): a link idea's page title, never its raw address.
+  const name = itemName(item);
   const snippet = hit.snippet ? snippetSegments(hit.snippet) : null;
+  // Under the name, the words it doesn't already say: an untitled thing's note goes on after the line it is named by.
+  const rest = noteAfterName(item);
   // A count goes with the name, as an attempt's number does ("· 3 attempts"); a time sits at the chips' end. Beside
   // two chips a count would wrap onto a line of its own on a phone.
   const count =
@@ -381,10 +386,7 @@ export const ItemResult = forwardRef<HTMLAnchorElement, ItemResultProps>(functio
     item.stage === "idea"
       ? `Captured ${inlineTime(item.createdAt)}`
       : count
-        ? // An untitled build has no name for the count to follow: it stays at the chips' end.
-          title
-          ? null
-          : count
+        ? null
         : `Started ${inlineTime(item.startedAt ?? item.createdAt)}`;
   const shownName = printNameMatch(
     hit.printNames ?? [],
@@ -417,12 +419,16 @@ export const ItemResult = forwardRef<HTMLAnchorElement, ItemResultProps>(functio
         {item.stage !== "idea" && hit.lastOutcome && <OutcomeChip outcome={hit.lastOutcome} />}
         {meta && <span className="text-small text-ink-faint ml-auto shrink-0">{meta}</span>}
       </span>
-      {title && (
-        <span className="text-body text-ink truncate font-semibold">
-          <Highlight text={title} terms={terms} />
-          {count && <span className="text-small text-ink-faint font-medium"> · {count}</span>}
-        </span>
-      )}
+      {/* Two lines, then an ellipsis: a long page title wraps rather than being cut mid-word. */}
+      <span
+        className={cn(
+          "text-body line-clamp-2 break-words",
+          name.from === "none" ? "text-ink-faint font-medium" : "text-ink font-semibold",
+        )}
+      >
+        <Highlight text={name.text} terms={terms} />
+        {count && <span className="text-small text-ink-faint font-medium"> · {count}</span>}
+      </span>
       {hit.comment && snippet ? (
         // Found in the thread: who said it and when, then their words.
         <span className="flex min-w-0 flex-col gap-0.5">
@@ -441,11 +447,11 @@ export const ItemResult = forwardRef<HTMLAnchorElement, ItemResultProps>(functio
           <Highlight segments={snippet} className="text-body text-ink-soft line-clamp-2" />
         </span>
       ) : (
-        item.note &&
-        (snippet ? (
+        rest &&
+        (snippet && name.titled ? (
           <Highlight segments={snippet} className="text-body text-ink-soft line-clamp-2" />
         ) : (
-          <Highlight text={item.note} terms={terms} className="text-body text-ink-soft line-clamp-2" />
+          <Highlight text={rest} terms={terms} className="text-body text-ink-soft line-clamp-2" />
         ))
       )}
       <PrintNameLine name={shownName} terms={terms} />

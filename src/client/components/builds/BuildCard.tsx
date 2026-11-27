@@ -1,5 +1,6 @@
 import type { Person } from "@shared/api";
 import { tagLabel } from "@shared/attempts";
+import { itemName } from "@shared/item-name";
 import { isOffTheBed, offTheBedLabel } from "@shared/print-progress";
 import { inlineTime, relativeTime } from "@shared/time";
 import { m } from "motion/react";
@@ -139,7 +140,7 @@ export function BuildRow({ item }: { item: ItemView }) {
   const cover = coverOf(item);
   const ended = item.finishedAt ?? item.updatedAt;
   const attempts = item.attempts.length;
-  const title = item.title || item.note.split("\n")[0] || "Untitled build";
+  const title = itemName(item).text;
   return (
     <li className="list-none">
       <PhotoRow
@@ -173,7 +174,7 @@ export function BuildRow({ item }: { item: ItemView }) {
  */
 export function BuildTile({ item, lead }: { item: ItemView; lead?: 0 | 1 | 2 }) {
   const cover = coverOf(item);
-  const title = item.title || item.note.split("\n")[0] || "Untitled build";
+  const title = itemName(item).text;
   const alt = cover.kind === "plate" ? plateAlt(item) : photoAlt(item);
   const photo = coverPhoto(cover, alt, lead === undefined ? "thumb" : "large");
   return (
