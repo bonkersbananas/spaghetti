@@ -2,13 +2,7 @@ import type { SearchResponse, WhatWorkedResponse } from "@shared/api";
 import { keepPreviousData, queryOptions } from "@tanstack/react-query";
 import { api } from "./api";
 
-/** The search box's id, so "/" can focus it from anywhere. */
-export const SEARCH_BOX_ID = "search-box";
-
-/** Focuses the search box once it is on the page. */
-export function focusSearch() {
-  requestAnimationFrame(() => document.getElementById(SEARCH_BOX_ID)?.focus());
-}
+export { focusSearch, SEARCH_BOX_ID } from "./focus-search";
 
 /**
  * Search results for a query and filters. The results answer `q`, which the

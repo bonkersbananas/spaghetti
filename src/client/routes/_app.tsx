@@ -10,6 +10,7 @@ import { sections, workshop } from "@/components/shell/sections";
 import { TabBar } from "@/components/shell/TabBar";
 import { CaptureProvider, useCapture, useGlobalCapture } from "@/lib/capture";
 import { CONTENT_ID, focusContent } from "@/lib/focus-content";
+import { focusSearch } from "@/lib/focus-search";
 import { useHotkeys } from "@/lib/hotkeys";
 import { connectOutbox } from "@/lib/items";
 import { useLiveUpdates } from "@/lib/live";
@@ -21,9 +22,8 @@ import { usePasskeyOffer } from "@/lib/passkey-offer";
 import { followUnresizedPhotos } from "@/lib/photo-resize";
 import { preloaded } from "@/lib/preloaded";
 import { openedDirectly } from "@/lib/previous-path";
-import { resyncPush, useServiceWorkerMessages } from "@/lib/push";
 import { rememberedUser, sessionQuery } from "@/lib/queries";
-import { focusSearch } from "@/lib/search";
+import { useServiceWorkerMessages } from "@/lib/sw-messages";
 import { useIsDesktop } from "@/lib/use-media-query";
 import { forgetEndedSession, isSigningOut } from "@/lib/use-sign-out";
 import { useWhenIdle } from "@/lib/when-idle";
@@ -142,7 +142,7 @@ function Shell() {
     void router.preloadRoute({ to: "/ideas/$ideaId", params: { ideaId: "-" } });
     void import("@/components/ideas/CardMenu");
     // A device the server lost track of is signed up for notifications again.
-    void resyncPush().catch(() => undefined);
+    void import("@/lib/push").then((m) => m.resyncPush()).catch(() => undefined);
   });
   const { setPaletteOpen, setHelpOpen } = usePalette();
   const isDesktop = useIsDesktop();

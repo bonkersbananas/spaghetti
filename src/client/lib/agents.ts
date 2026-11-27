@@ -1,16 +1,12 @@
 import type { AgentInfo, AgentScope, AgentsResponse, AgentTokenInfo, NewTokenResponse } from "@shared/agents";
-import { type QueryClient, queryOptions, useQuery } from "@tanstack/react-query";
+import { type QueryClient, useQuery } from "@tanstack/react-query";
 import { useCallback, useSyncExternalStore } from "react";
 import { toast } from "@/components/ui/Toast";
+import { agentsQuery } from "./agents-query";
 import { api } from "./api";
 import { canEdit } from "./read-only";
 
-/** Every agent (so "via Claude for Alex" can be said), with tokens only for the signed-in person's own. */
-export const agentsQuery = queryOptions({
-  queryKey: ["agents"] as const,
-  queryFn: async () => (await api<AgentsResponse>("/agents")).agents,
-  staleTime: 5 * 60 * 1000,
-});
+export { agentsQuery };
 
 /** Looks up an agent's name for "via …": `via(item.createdVia)`. Undefined for a person's own work (or an agent not known yet). */
 export function useVia(): (agentId: string | null | undefined) => string | undefined {
