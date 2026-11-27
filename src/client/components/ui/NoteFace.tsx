@@ -1,3 +1,4 @@
+import { linkName as sharedLinkName } from "@shared/item-name";
 import { linkWords } from "@shared/links";
 import { type NoteSize, noteSize } from "@shared/notes";
 import { keepUnits } from "@shared/typography";
@@ -41,6 +42,11 @@ interface NoteFaceProps {
   onCut?: (cut: boolean) => void;
   /** A tall face: a short note leaves its foot empty, so a loose strand of spaghetti is doodled there. */
   doodle?: boolean;
+  /**
+   * What a note that is only a link is called (its page's title, by shared/item-name.ts): said over its site in place
+   * of the words in its address, so the face reads as the idea's name does everywhere else.
+   */
+  linkName?: string;
 }
 
 /**
@@ -74,9 +80,25 @@ function useWholeLines() {
  * what it links to in words ("Skadis pegboard white") over its site, not the
  * address. Fills its parent.
  */
-export function NoteFace({ note, size, className, compact, clearBottom, maxSize, doodle, onCut }: NoteFaceProps) {
+export function NoteFace({
+  note,
+  size,
+  className,
+  compact,
+  clearBottom,
+  maxSize,
+  doodle,
+  onCut,
+  linkName,
+}: NoteFaceProps) {
   const measured = useWholeLines();
-  const link = BARE_LINK.test(note.trim()) ? linkWords(note) : undefined;
+  const bare = BARE_LINK.test(note.trim());
+  const words = bare ? linkWords(note) : undefined;
+  // What the link is called by the one rule (shared/item-name.ts): its page's title when given, else its address's words.
+  const named =
+    linkName ??
+    (bare ? sharedLinkName(/^https?:\/\//i.test(note.trim()) ? note.trim() : `https://${note.trim()}`) : null);
+  const link = words && named ? { site: words.site, words: named } : undefined;
   const text = link?.words ?? note;
   const order: NoteSize[] = ["xl", "lg", "md", "sm"];
   const sized = noteSize(text);

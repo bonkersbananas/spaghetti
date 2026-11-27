@@ -1,4 +1,5 @@
 import type { Outcome } from "@shared/attempts";
+import { itemName } from "@shared/item-name";
 import { useLocation, useNavigate } from "@tanstack/react-router";
 import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { OutcomePicker } from "@/components/builds/Outcome";
@@ -52,7 +53,8 @@ function useCaptureTarget(): Target {
     return {
       kind: "item",
       itemId: pageItem.id,
-      name: pageItem.title || (isBuild ? "this build" : "this idea"),
+      // Its one name (shared/item-name.ts), or "this idea" when it has nothing to be called by.
+      name: itemName(pageItem).from === "none" ? (isBuild ? "this build" : "this idea") : itemName(pageItem).text,
       isBuild,
     };
   }

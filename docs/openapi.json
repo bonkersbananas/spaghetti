@@ -21448,6 +21448,13 @@
               "null"
             ]
           },
+          "linkTitle": {
+            "description": "The page title of the link an untitled idea's note starts with, once read: what it is called by.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "titleJob": {
             "description": "An untitled idea's naming by Claude: naming while it works on the title, done once it ran.",
             "anyOf": [

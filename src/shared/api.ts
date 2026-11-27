@@ -377,6 +377,11 @@ export interface Item {
    * "done" once it ran, whatever came of it. Null when it was never asked, and for an idea with a title.
    */
   titleJob?: TitleJobState | null;
+  /**
+   * The page title of the link an untitled thing's note starts with, once the Worker has read that page: what it is
+   * called by (shared/item-name.ts). Null otherwise; absent on items this device made.
+   */
+  linkTitle?: string | null;
   /** Who reacted to it, and how (shared/reactions.ts). Absent in a copy saved by an older version. */
   reactions?: Reaction[];
 }
@@ -665,7 +670,10 @@ export interface FixHit extends AttemptHit {
 
 /** An idea or a build found by search. */
 export interface ItemHit {
-  item: Pick<Item, "id" | "stage" | "title" | "note" | "createdBy" | "createdAt" | "startedAt" | "finishedAt">;
+  item: Pick<
+    Item,
+    "id" | "stage" | "title" | "note" | "createdBy" | "createdAt" | "startedAt" | "finishedAt" | "linkTitle"
+  >;
   /** How many attempts it has, and how the last one went. */
   attempts: number;
   lastOutcome: Outcome | null;

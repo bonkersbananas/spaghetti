@@ -35,6 +35,13 @@ export interface CardProps {
   /** Optional: ideas don't need a title. Falls back to the note. */
   title?: string | null;
   /**
+   * The title is a stand-in, not the thing's own ("Untitled idea", shared/item-name.ts): set quiet, in faint ink, so
+   * a grid of them reads as calm placeholders rather than a row of headings.
+   */
+  standIn?: boolean;
+  /** A note that is only a link: what it is called (its page's title), said on the note face (NoteFace `linkName`). */
+  linkName?: string;
+  /**
    * Stands where the title will land while there is none yet: Claude's "Naming…" (`NamingSign`, decision 0072). The
    * title fades in when it comes.
    */
@@ -91,6 +98,8 @@ export function Card({
   photos,
   onPhotoChange,
   title,
+  standIn,
+  linkName,
   naming,
   note,
   chips,
@@ -120,7 +129,7 @@ export function Card({
   // A note card already shows its note; below a photo the note stands in for a title.
   const heading = title || (noteCard ? null : note);
   // A title that comes to a card drawn without one (Claude naming an idea just saved) fades in where it lands.
-  const [untitled] = useState(!title);
+  const [untitled] = useState(!title || standIn);
   const rootClass = cn(
     "group bg-cream shadow-soft flex w-full flex-col rounded-lg p-1.5 text-left",
     (onClick || link) && "pressable focus-ring hover:shadow-raised hover:bg-lifted cursor-pointer",
@@ -177,6 +186,7 @@ export function Card({
           <NoteFace
             note={note ?? ""}
             maxSize="lg"
+            linkName={linkName}
             clearBottom={!!mark}
             doodle={(aspect === "portrait" || aspect === "tall") && !chips}
           />
@@ -220,7 +230,8 @@ export function Card({
               // Notes standing in for a title read as text, not as a heading, and get a third line
               // so they aren't cut off mid-thought. Real titles stay at two.
               title ? "line-clamp-2" : "line-clamp-3 font-sans font-medium",
-              title && untitled && "sg-arrive",
+              standIn && "text-ink-faint font-sans font-medium",
+              title && !standIn && untitled && "sg-arrive",
             )}
           >
             {heading}

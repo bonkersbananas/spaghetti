@@ -11,6 +11,7 @@ import { useReflow } from "@/components/ui/Reflow";
 import { UploadBadge } from "@/components/ui/UploadBadge";
 import { cn } from "@/lib/cn";
 import { useForLine } from "@/lib/for-whom";
+import { itemName } from "@/lib/item-name";
 import type { ItemView } from "@/lib/items";
 import { useOutbox } from "@/lib/outbox";
 import { coverOf, newestPlate, photoAlt, photoSrc, plateAlt } from "@/lib/previews";
@@ -33,6 +34,23 @@ const NamingSign = lazy(() => import("@/components/ui/NamingSign"));
  */
 export function plateCover(item: Pick<ItemView, "files">): AttemptFile | undefined {
   return newestPlate({ files: item.files, attempts: [] });
+}
+
+/**
+ * What an idea's card calls it, by the one rule (shared/item-name.ts), as Card's and MiniCard's props. A note that is
+ * only its link, on the card's face, says the name over its site, and nothing repeats it below; a photo or a file and
+ * no words get the quiet "Untitled idea"; a note's first words stand in on their own.
+ */
+export function cardName(
+  item: ItemView,
+  faceIsNote: boolean,
+): { title?: string; standIn?: boolean; linkName?: string } {
+  const name = itemName(item);
+  const onlyLink = /^https?:\/\/\S+$/.test(item.note.trim());
+  if (faceIsNote && onlyLink && (name.from === "link" || (name.from === "title" && modelOf(item)?.kind === "page")))
+    return { linkName: name.text };
+  if (name.from === "note") return {};
+  return { title: name.text, standIn: name.from === "none" };
 }
 
 /** Where an idea's uploads stand, summed up for its card. */
@@ -88,13 +106,7 @@ export function IdeaCard({ item, person, via, landing, menu, headingLevel = 2, r
     showing && showing !== item.photos[0]?.id && item.photos.some((photo) => photo.id === showing)
       ? showing
       : undefined;
-  // An idea whose note is only its model link and that has a name (the page's, or from the link): the card face
-  // says that name, as it does for a title-only idea, instead of the link's words with the title repeated below.
-  const namedLink =
-    cover.kind === "note" &&
-    !!item.title?.trim() &&
-    model?.kind === "page" &&
-    /^https?:\/\/\S+$/.test(item.note.trim());
+  const name = cardName(item, cover.kind === "note");
   return (
     <m.li {...useReflow(landing)} ref={ref} className="group/idea relative list-none">
       <div className="h-full rounded-lg">
@@ -108,9 +120,9 @@ export function IdeaCard({ item, person, via, landing, menu, headingLevel = 2, r
           headingLevel={headingLevel}
           reserveEnd={!!menu && !item.pending}
           photo={coverPhoto(cover, cover.kind === "plate" ? plateAlt(item) : photoAlt(item))}
-          title={
-            namedLink ? undefined : item.title || (item.draft?.status === "reading" ? "Reading the page…" : item.title)
-          }
+          {...name}
+          {...(item.draft?.status === "reading" &&
+            !item.title?.trim() && { title: "Reading the page…", standIn: true })}
           naming={
             // The server says while Claude names it (decision 0072); the sparkle and the timeout load only then.
             item.titleJob?.status === "naming" && (
@@ -120,7 +132,7 @@ export function IdeaCard({ item, person, via, landing, menu, headingLevel = 2, r
             )
           }
           // Links read better short on a card: printables.com/model/123.
-          note={namedLink ? (item.title ?? undefined) : item.note ? shortenLinks(item.note) : undefined}
+          note={item.note ? shortenLinks(item.note) : undefined}
           unread={unread}
           photos={
             item.photos.length > 1
@@ -146,11 +158,7 @@ export function IdeaCard({ item, person, via, landing, menu, headingLevel = 2, r
       {menu && !item.pending && (
         // Its own boundary: the menu's code must never hold the whole list back (the page waited for it, 300 ms, on every first visit).
         <Suspense fallback={null}>
-          <CardMenu
-            menu={menu}
-            item={item}
-            name={item.title || item.note.split("\n")[0]?.slice(0, 120) || "this idea"}
-          />
+          <CardMenu menu={menu} item={item} name={itemName(item).text} />
         </Suspense>
       )}
     </m.li>

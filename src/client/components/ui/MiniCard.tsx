@@ -27,6 +27,10 @@ interface MiniCardProps {
   /** Stands in for a missing photo, as a small note face. */
   note?: string;
   title?: string;
+  /** The title is a stand-in ("Untitled idea"): set quiet, as on Card. */
+  standIn?: boolean;
+  /** A note that is only a link: what it is called, on the note face (NoteFace `linkName`). */
+  linkName?: string;
   /** Under the cover when there is no title to show (as on Card): the time. */
   meta?: string;
   /** One quiet line under the title: what happened to it ("worked"). */
@@ -64,6 +68,8 @@ export function MiniCard({
   photo,
   note,
   title,
+  standIn,
+  linkName,
   sub,
   roomy,
   fill,
@@ -153,7 +159,12 @@ export function MiniCard({
               // Laid over its box, so a long note fills the card's face instead of making the row taller.
               <div className="absolute inset-0">
                 {/* Room for the corner menu where it always shows (touch screens); with a mouse it shows on hover only. */}
-                <NoteFace note={note} compact="fill" className="pt-7 [@media(hover:hover)_and_(pointer:fine)]:pt-0" />
+                <NoteFace
+                  note={note}
+                  linkName={linkName}
+                  compact="fill"
+                  className="pt-7 [@media(hover:hover)_and_(pointer:fine)]:pt-0"
+                />
               </div>
             ) : (
               <div className="bg-well text-ink-ghost flex size-full items-center justify-center">
@@ -172,7 +183,8 @@ export function MiniCard({
                     roomy ? "truncate" : "line-clamp-2 min-h-[2lh]",
                     gridScale && "md:text-body md:min-h-0",
                     // A note standing in for a title is set as on Card: plain Figtree, not a title.
-                    title ? "text-ink font-semibold" : "text-ink font-sans font-medium",
+                    title && !standIn ? "text-ink font-semibold" : "font-sans font-medium",
+                    standIn ? "text-ink-faint" : "text-ink",
                   )}
                 >
                   {/* A word too long for the card's line breaks with a hyphen, not mid-word with none. */}

@@ -13,6 +13,7 @@ import {
   tagLabel,
 } from "../../shared/attempts.ts";
 import { bestPhoto } from "../../shared/cover.ts";
+import { itemName } from "../../shared/item-name.ts";
 import { checkLinkUrl } from "../../shared/link-safety.ts";
 import {
   modelLetter,
@@ -418,9 +419,6 @@ function guestModel(item: Pick<Item, "note" | "draft">): GuestModel | null {
   };
 }
 
-const untitled = (title: string | null | undefined, note: string, fallback: string) =>
-  title?.trim() || note.trim().split(/\r?\n/)[0]?.trim().slice(0, 100) || fallback;
-
 /** An idea or a build, as a guest sees it. */
 export function itemView(item: Item, custom: { failure: TagDefinition[]; success: TagDefinition[] }): GuestView {
   const model = guestModel(item);
@@ -434,7 +432,8 @@ export function itemView(item: Item, custom: { failure: TagDefinition[]; success
     ),
   );
   const base = {
-    title: untitled(item.title, note, item.stage === "idea" ? "An idea" : "A build"),
+    // The name it has in the app (shared/item-name.ts): a link idea is its page's title here too.
+    title: itemName(item).text,
     note: note.trim(),
     photos: lead,
     cover: lead[0] ?? null,

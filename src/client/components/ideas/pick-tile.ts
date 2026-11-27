@@ -1,4 +1,4 @@
-import { linkWords } from "@shared/links";
+import { itemName } from "@shared/item-name";
 import { modelOf } from "@shared/model-mark";
 import { coverPhoto } from "@/components/ui/Card";
 import type { ItemView } from "@/lib/items";
@@ -18,26 +18,17 @@ export interface IdeaTile {
   label: string;
 }
 
-/** The first line of a note, an address said in words. */
-function firstLine(note: string): string | undefined {
-  const line = note
-    .split("\n")
-    .find((l) => l.trim())
-    ?.trim();
-  if (!line) return undefined;
-  return (/^https?:\/\/\S+$/.test(line) ? linkWords(line)?.words : undefined) ?? shortenLinks(line);
-}
-
-/** The cover by the one rule (coverOf), and the name the Ideas grid card gives it. */
+/** The cover by the one rule (coverOf), and the name the Ideas grid card gives it (shared/item-name.ts). */
 export function ideaTile(idea: ItemView): IdeaTile {
   const cover = coverOf(idea);
   const photo = coverPhoto(cover, "");
-  const title = idea.title?.trim();
-  const name = title || firstLine(idea.note) || "An idea without words";
-  if (photo) return { photo, caption: name, label: name };
-  // A note card: an idea whose note is only its model link and that has a name shows the name, as the grid card does.
-  const namedLink = !!title && modelOf(idea)?.kind === "page" && /^https?:\/\/\S+$/.test(idea.note.trim());
-  const face = namedLink ? title : idea.note.trim() ? shortenLinks(idea.note.trim()) : (title ?? "");
-  if (title && title !== face) return { note: face, caption: title, label: name };
-  return { note: face, cutCaption: name, label: name };
+  const name = itemName(idea);
+  if (photo) return { photo, caption: name.text, label: name.text };
+  // A note card: an idea whose note is only its link, and that link names it, shows the name, as the grid card does.
+  const onlyLink = /^https?:\/\/\S+$/.test(idea.note.trim());
+  const namedLink = onlyLink && (name.from === "link" || (name.from === "title" && modelOf(idea)?.kind === "page"));
+  if (name.from === "none") return { note: "", caption: name.text, label: name.text };
+  const face = namedLink ? name.text : idea.note.trim() ? shortenLinks(idea.note.trim()) : name.text;
+  if (name.titled && name.text !== face) return { note: face, caption: name.text, label: name.text };
+  return { note: face, cutCaption: name.text, label: name.text };
 }

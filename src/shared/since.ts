@@ -3,6 +3,7 @@
  * tests. A visit after this long away starts a catch-up; it stays for the rest of the day.
  */
 import type { Item, JournalEntry } from "./api.ts";
+import { itemName } from "./item-name.ts";
 
 export { AWAY_MS, CATCH_UP_MS } from "./since-times.ts";
 
@@ -116,7 +117,15 @@ export function catchUp(
     const [latest = "captured", ...earlier] = news;
     const before = earlier.find((what) => what !== "printing" && what !== "captured");
     const what = latest === "printing" && before ? `${before}, printing again` : latest;
-    rows.push({ itemId: id, item, stage: item.stage, title: item.title || firstWords(item.note), what });
+    // Its one name (item-name.ts); a note's first words are cut shorter here, where a row has one line for them.
+    const name = itemName(item);
+    rows.push({
+      itemId: id,
+      item,
+      stage: item.stage,
+      title: name.from === "note" ? firstWords(name.text) : name.text,
+      what,
+    });
   }
   return { sentence, lines: rows.slice(0, lines), total: rows.length };
 }

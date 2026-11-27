@@ -5,10 +5,11 @@ import { NextIcon, PreviousIcon } from "@/components/ui/icons";
 import { MiniCard, type MiniDrag } from "@/components/ui/MiniCard";
 import { Reflow } from "@/components/ui/Reflow";
 import { cn } from "@/lib/cn";
+import { itemName } from "@/lib/item-name";
 import type { ItemView } from "@/lib/items";
 import { fileThumbSrc, photoSrc } from "@/lib/previews";
 import { unreadQuery } from "@/lib/unread-comments";
-import { photoAlt, plateAlt, plateCover, shortenLinks, type UpNextMenu } from "./IdeaCard";
+import { cardName, photoAlt, plateAlt, plateCover, shortenLinks, type UpNextMenu } from "./IdeaCard";
 
 const CardMenu = lazy(() => import("./CardMenu").then((m) => ({ default: m.CardMenu })));
 
@@ -70,7 +71,7 @@ export function UpNextStrip({ queue, menuFor, landed, dragFor }: UpNextStripProp
           {queue.map((item, index) => {
             const cover = item.photos[0];
             const plate = cover ? undefined : plateCover(item);
-            const name = item.title || item.note.split("\n")[0]?.slice(0, 120) || "this idea";
+            const name = itemName(item).text;
             return (
               <MiniCard
                 key={item.id}
@@ -88,7 +89,7 @@ export function UpNextStrip({ queue, menuFor, landed, dragFor }: UpNextStripProp
                       : undefined
                 }
                 note={item.note ? shortenLinks(item.note) : undefined}
-                title={item.title || undefined}
+                {...cardName(item, !cover && !plate)}
                 meta={relativeTime(item.createdAt)}
                 corner={
                   item.pending ? undefined : (
