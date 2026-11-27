@@ -200,7 +200,8 @@ export function CardSection() {
         </ul>
         <Label>
           Slim mini cards (`slim`), Up next on a phone: one line, a small square cover beside a two-line name, the menu
-          at the right end; a note-only idea's cover is a page of the notebook in miniature
+          at the right end; a note-only idea's cover is NoteCardThumb, the index card with a pencil (as on wishlist
+          rows)
         </Label>
         <ul className="no-scrollbar relative mb-6 flex snap-x snap-proximity gap-3 overflow-x-auto py-1">
           <Reflow>

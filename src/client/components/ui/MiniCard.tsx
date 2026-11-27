@@ -4,6 +4,7 @@ import { m } from "motion/react";
 import type { ReactNode, Ref } from "react";
 import { cn } from "@/lib/cn";
 import { ImageIcon } from "./icons";
+import { NoteCardThumb } from "./NoteCardThumb";
 import { NoteFace } from "./NoteFace";
 import { Photo } from "./Photo";
 import { useReflow } from "./Reflow";
@@ -226,7 +227,7 @@ export function MiniCard({
 }
 
 /**
- * A mini card on one line: the cover as a 3 rem square (a note's paper in miniature where there is no photo),
+ * A mini card on one line: the cover as a 3 rem square (NoteCardThumb where there is no photo),
  * the name beside it on two lines, and room on the right for the card's menu.
  */
 function SlimCard({
@@ -271,12 +272,8 @@ function SlimCard({
               className={cn("size-full", photo.fit === "contain" && "p-1")}
             />
           ) : (
-            // A page of the notebook in miniature: the tomato rule, then three faint lines of writing.
-            <span aria-hidden className="paper-grain bg-note flex size-full flex-col gap-1.5 px-2 pt-2.5">
-              <span className="bg-tomato/25 mb-0.5 h-px w-full" />
-              <span className="bg-ink/15 h-0.5 w-full rounded-full" />
-              <span className="bg-ink/15 h-0.5 w-4/5 rounded-full" />
-              <span className="bg-ink/15 h-0.5 w-3/5 rounded-full" />
+            <span aria-hidden className="block size-full">
+              <NoteCardThumb size={18} />
             </span>
           )}
           {unread && <UnreadDot label="New comment" ring="ring-on-veil" className="absolute top-1 left-1 size-2" />}

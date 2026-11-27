@@ -1,6 +1,6 @@
 import { relativeTime } from "@shared/time";
 import { useQuery } from "@tanstack/react-query";
-import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { NextIcon, PreviousIcon } from "@/components/ui/icons";
 import { MiniCard, type MiniDrag } from "@/components/ui/MiniCard";
 import { Reflow } from "@/components/ui/Reflow";
@@ -35,9 +35,12 @@ export function UpNextStrip({ queue, menuFor, landed, dragFor }: UpNextStripProp
   const slim = !useIsDesktop();
   const scroller = useRef<HTMLUListElement>(null);
   const [edges, setEdges] = useState({ start: false, end: false });
+  // Whether the strip sits at its start, as it opens: read on scroll, never by a layout of its own.
+  const atStart = useRef(true);
   const measure = useCallback(() => {
     const el = scroller.current;
     if (!el) return;
+    atStart.current = el.scrollLeft <= 4;
     setEdges({ start: el.scrollLeft > 4, end: el.scrollLeft + el.clientWidth < el.scrollWidth - 4 });
   }, []);
   // biome-ignore lint/correctness/useExhaustiveDependencies: measure again when cards come or go.
@@ -55,6 +58,15 @@ export function UpNextStrip({ queue, menuFor, landed, dragFor }: UpNextStripProp
       window.removeEventListener("resize", measure);
     };
   }, [measure, queue.length]);
+  // A new queue order (the server's answer after the cached one, the other person moving a card) makes scroll snap
+  // follow the card it had snapped to, wherever it went: from the start, that can open the strip on its end. A strip
+  // that was at its start stays there; one scrolled by hand keeps following its card.
+  const order = queue.map((item) => item.id).join();
+  // biome-ignore lint/correctness/useExhaustiveDependencies: runs when the order changes.
+  useLayoutEffect(() => {
+    const el = scroller.current;
+    if (el && atStart.current && el.scrollLeft !== 0) el.scrollLeft = 0;
+  }, [order]);
   const page = (by: 1 | -1) =>
     scroller.current?.scrollBy({ left: by * scroller.current.clientWidth * 0.8, behavior: "smooth" });
   const arrow =

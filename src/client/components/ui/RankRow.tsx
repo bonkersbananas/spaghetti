@@ -1,8 +1,9 @@
 import { Link, type LinkProps } from "@tanstack/react-router";
 import { type ReactNode, useState } from "react";
 import { cn } from "@/lib/cn";
-import { IdeasIcon, NoteIcon } from "./icons";
+import { IdeasIcon } from "./icons";
 import { MetaList } from "./MetaList";
+import { NoteCardThumb } from "./NoteCardThumb";
 import { NoteFace } from "./NoteFace";
 import { Photo } from "./Photo";
 
@@ -110,16 +111,6 @@ export function RankMark({
       )}
     >
       {rank}
-    </span>
-  );
-}
-
-/** A note-only idea's picture at thumbnail size: an index card with its rule and a pencil. Fills its parent. */
-function NoteCardThumb({ size }: { size: number }) {
-  return (
-    <span className="paper-grain bg-note text-ink-faint relative flex size-full items-center justify-center">
-      <span className="bg-tomato/25 absolute inset-x-2 top-2.5 h-px md:inset-x-3 md:top-3.5" />
-      <NoteIcon size={size} />
     </span>
   );
 }
