@@ -55,6 +55,7 @@ import {
   type Photo,
   parts,
   photos,
+  printJobs,
   spools,
   tags,
   users,
@@ -294,9 +295,10 @@ async function itemHits(
 
 /**
  * bm25 weights per column (kind, ref_id, item_id, title, body, tags,
- * materials, settings): a title or a tag says more than a word in a note.
+ * materials, settings, printed): a title, a tag or the name a print was
+ * given says more than a word in a note.
  */
-const RANK = "bm25(search, 0, 0, 0, 8.0, 3.0, 5.0, 5.0, 2.0)";
+const RANK = "bm25(search, 0, 0, 0, 8.0, 3.0, 5.0, 5.0, 2.0, 6.0)";
 const LIMIT = { items: 12, attempts: 30 };
 
 const hasHits = (r: SearchResponse) =>
@@ -380,12 +382,13 @@ function spoolMatches(spool: Spool, terms: readonly SearchTerm[]) {
 
 /** The words the notebook knows, most used first: what a mistyped word is corrected to. */
 async function vocabulary(db: Db, custom: Array<{ label: string }>): Promise<string[]> {
-  const [itemRows, spoolRows] = await Promise.all([
+  const [itemRows, spoolRows, printRows] = await Promise.all([
     db.select({ title: items.title, note: items.note }).from(items).where(isNull(items.deletedAt)).limit(2000),
     db
       .select({ material: spools.material, brand: spools.brand, color: spools.colorName, finish: spools.finish })
       .from(spools)
       .where(isNull(spools.deletedAt)),
+    db.select({ name: printJobs.name }).from(printJobs).limit(2000),
   ]);
   const counts = new Map<string, number>();
   const add = (text: string | null | undefined, weight = 1) => {
@@ -395,6 +398,7 @@ async function vocabulary(db: Db, custom: Array<{ label: string }>): Promise<str
     add(row.title, 3);
     add(row.note);
   }
+  for (const row of printRows) add(row.name);
   for (const row of spoolRows) add(`${row.material} ${row.brand} ${row.color} ${row.finish}`, 2);
   for (const tag of [...BUILT_IN_TAGS.failure, ...BUILT_IN_TAGS.success, ...custom]) add(tag.label, 5);
   add(KNOWN_WORDS, 4);

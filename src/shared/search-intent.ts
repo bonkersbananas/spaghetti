@@ -36,6 +36,7 @@ const FILLER = new Set(
     "in on to at from when where show find tell last time times again idea ideas build builds print prints printed " +
     "attempt attempts try tries thing things some any said say says wrote write told think thought " +
     "settings setting profile profiles parameters parameter params config configuration " +
+    "use used using got get make made should could would can will please " +
     "vad hur som med av en ett det den de vi jag mitt vart min mina om till fran och eller senast sist gang gangen " +
     "ide ideer bygge bygget utskrift forsok installning installningar installningarna profil profiler"
   ).split(" "),
@@ -128,12 +129,39 @@ const SYNONYMS: string[][] = [
   ["surface", "yta"],
   ["overhang", "overhang"],
   ["spaghetti", "spagetti"],
+  ["lid", "lock", "cover"],
+  ["box", "lada"],
+  ["holder", "hallare", "stativ"],
+  ["star", "stjarna"],
+  ["vase", "vas"],
+  ["tree", "julgran"],
+  ["christmas", "jul", "xmas"],
+  ["keyring", "nyckelring", "keychain"],
+  ["snow", "sno"],
+  ["globe", "glob"],
+  ["cable", "kabel"],
+  ["stand", "stativ"],
+  ["glasses", "glasogon"],
+  ["earring", "orhang"],
 ];
+
+/**
+ * The singular of a plural typed in English ("lids" is "lid", "boxes" is "box", "batteries" is "battery"): a word
+ * start finds the other way round already ("vase" finds "vases"), so only the longer word needs help.
+ */
+export function singular(word: string): string | null {
+  if (!/^[a-z]{4,}$/.test(word) || word.endsWith("ss") || word.endsWith("us") || word.endsWith("is")) return null;
+  if (word.endsWith("ies") && word.length > 4) return `${word.slice(0, -3)}y`;
+  if (/(?:ch|sh|x|z|ss)es$/.test(word)) return word.slice(0, -2);
+  return word.endsWith("s") ? word.slice(0, -1) : null;
+}
 
 /** The words a term also stands for. A short term must be the whole member: "gra" is not "grattis". */
 function alsoFor(term: SearchTerm): string[] {
   if (!term.prefix && !/^[a-z]+$/.test(term.text)) return [];
   const found = new Set<string>();
+  const one = term.prefix ? singular(term.text) : null;
+  if (one) found.add(one);
   for (const group of SYNONYMS) {
     const hit = group.some((member) =>
       term.text.length >= 4 && term.prefix
@@ -146,7 +174,7 @@ function alsoFor(term: SearchTerm): string[] {
 }
 
 /** A decimal number ("0.4") is one word, so "0.4 nozzle" finds the nozzle size; anything else splits on punctuation. */
-const NUMBER_OR_WORD = /\p{N}+(?:\.\p{N}+)?(?![\p{L}])|[\p{L}\p{N}]+/gu;
+const NUMBER_OR_WORD = /\p{N}+(?:\.\p{N}+)?(?![\p{L}\p{N}])|[\p{L}\p{N}]+/gu;
 const DECIMAL = /^\d+\.\d+$/;
 
 /** Reads a typed question. `now` places time phrases. */
@@ -236,14 +264,34 @@ export function correctWord(word: string, vocabulary: readonly string[]): string
   return best?.word ?? null;
 }
 
-/** The terms with the unknown ones corrected; null when nothing changed. */
+/**
+ * A word typed as one that the notebook has as two ("keyring" for "Key Ring"): the halves when each starts a known
+ * word, else null.
+ */
+export function splitWord(word: string, vocabulary: readonly string[]): [string, string] | null {
+  if (!/^[a-z]{6,}$/.test(word) || vocabulary.some((known) => known.startsWith(word))) return null;
+  for (let at = 3; at <= word.length - 3; at++) {
+    const [a, b] = [word.slice(0, at), word.slice(at)];
+    if (vocabulary.some((known) => known.startsWith(a)) && vocabulary.some((known) => known.startsWith(b))) {
+      return [a, b];
+    }
+  }
+  return null;
+}
+
+/** The terms with the unknown ones corrected or split in two; null when nothing changed. */
 export function correctTerms(terms: readonly SearchTerm[], vocabulary: readonly string[]): SearchTerm[] | null {
   let changed = false;
-  const next = terms.map((term) => {
+  const next = terms.flatMap((term): SearchTerm[] => {
     const fixed = term.prefix ? correctWord(term.text, vocabulary) : null;
-    if (!fixed) return term;
+    if (fixed) {
+      changed = true;
+      return [{ text: fixed, prefix: true, ...(term.also ? { also: term.also } : {}) }];
+    }
+    const halves = term.prefix ? splitWord(term.text, vocabulary) : null;
+    if (!halves) return [term];
     changed = true;
-    return { text: fixed, prefix: true, ...(term.also ? { also: term.also } : {}) };
+    return halves.map((text) => ({ text, prefix: true }));
   });
   return changed ? next : null;
 }

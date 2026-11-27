@@ -411,3 +411,71 @@ describe("search finds what was said in a thread", () => {
     expect((await search({ q: "unrelated" })).twists).toEqual([]);
   });
 });
+
+describe("search reads words the way people type them", () => {
+  describe("a print's name from the printer", () => {
+    /** What the bridge files: a print job named as the printer's file. */
+    async function printed(attemptId: string, itemId: string, name: string) {
+      await env.DB.prepare(
+        "INSERT INTO print_jobs (attempt_id, name, placed, reasons, item_id, created_at) VALUES (?, ?, 'new', '[]', ?, ?)",
+      )
+        .bind(attemptId, name, itemId, Date.now())
+        .run();
+    }
+
+    it("finds the build and the attempt by a part of the file name, with a copy suffix and underscores", async () => {
+      const build = await createItem({ title: "Gnome garden figure", stage: "building" });
+      const attempt = await logAttempt(build.id, { outcome: "success", settings: pla });
+      await printed(attempt.id, build.id, "gnome_hat_3color_40mm(2)-7-2");
+      for (const q of ["gnome hat", "3color", "gnome_hat_3color_40mm(2)", "40mm"]) {
+        const found = await search({ q });
+        expect(ids(found.attempts), q).toEqual([attempt.id]);
+        expect(itemIds(found.builds), q).toEqual([build.id]);
+      }
+    });
+
+    it("finds a build the printer named, when its title says nothing", async () => {
+      const build = await createItem({ stage: "building" });
+      const attempt = await logAttempt(build.id, { outcome: "failed", failureTags: ["stringing"] });
+      await printed(attempt.id, build.id, "tomato-keychain-v2");
+      const found = await search({ q: "tomato keychain" });
+      expect(itemIds(found.builds)).toEqual([build.id]);
+      expect(ids(found.attempts)).toEqual([attempt.id]);
+    });
+
+    it("follows a rename, a move to another build and a removed print", async () => {
+      const from = await createItem({ title: "Origin", stage: "building" });
+      const to = await createItem({ title: "Destination", stage: "building" });
+      const attempt = await logAttempt(from.id, { outcome: "success" });
+      await printed(attempt.id, from.id, "widget-clip");
+      expect(itemIds((await search({ q: "widget" })).builds)).toEqual([from.id]);
+
+      await env.DB.prepare("UPDATE print_jobs SET name = ? WHERE attempt_id = ?").bind("gadget-clip", attempt.id).run();
+      expect((await search({ q: "widget" })).attempts).toEqual([]);
+      expect(itemIds((await search({ q: "gadget" })).builds)).toEqual([from.id]);
+
+      await env.DB.prepare("UPDATE attempts SET item_id = ? WHERE id = ?").bind(to.id, attempt.id).run();
+      expect(itemIds((await search({ q: "gadget" })).builds)).toEqual([to.id]);
+
+      await env.DB.prepare("DELETE FROM print_jobs WHERE attempt_id = ?").bind(attempt.id).run();
+      expect((await search({ q: "gadget" })).builds).toEqual([]);
+    });
+  });
+
+  it("finds a word typed as two, or two typed as one, and a plural", async () => {
+    const bucket = await createItem({ title: "Hotdog holder", stage: "building" });
+    const ring = await createItem({ title: "Keyhole ring cover", stage: "idea" });
+    const lid = await createItem({ title: "Jar lid", stage: "building" });
+    expect(itemIds((await search({ q: "hot dog" })).builds)).toEqual([bucket.id]);
+    expect(itemIds((await search({ q: "keyring" })).ideas)).toEqual([ring.id]);
+    expect(itemIds((await search({ q: "lids" })).builds)).toEqual([lid.id]);
+    expect(itemIds((await search({ q: "jar lids" })).builds)).toEqual([lid.id]);
+  });
+
+  it("answers a Swedish word with its English twin", async () => {
+    const lid = await createItem({ title: "Salt shaker lid", stage: "building" });
+    const star = await createItem({ title: "Paper star", stage: "idea" });
+    expect(itemIds((await search({ q: "lock" })).builds)).toEqual([lid.id]);
+    expect(itemIds((await search({ q: "stjärna" })).ideas)).toEqual([star.id]);
+  });
+});

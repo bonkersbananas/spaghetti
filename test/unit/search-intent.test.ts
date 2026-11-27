@@ -1,6 +1,14 @@
 import { describe, expect, it } from "vitest";
 import { ftsQuery, highlight } from "../../src/shared/search.ts";
-import { correctWord, distance, markTerms, parseQuery, splitNames, whenRange } from "../../src/shared/search-intent.ts";
+import {
+  correctWord,
+  distance,
+  markTerms,
+  parseQuery,
+  splitNames,
+  splitWord,
+  whenRange,
+} from "../../src/shared/search-intent.ts";
 
 // Wednesday 11 November 2026, noon UTC.
 const NOW = Date.UTC(2026, 10, 11, 12);
@@ -43,6 +51,22 @@ describe("parseQuery", () => {
     const read = parseQuery("0,4 nozzle", NOW);
     expect(read.terms[0]).toEqual({ text: "0.4", prefix: false });
     expect(ftsQuery(read.terms)).toBe('"0 4" AND ("nozzle"* OR "munstycke"*)');
+  });
+
+  it("reads a plural as its singular too, and two words as one compound too", () => {
+    const lids = parseQuery("lids", NOW);
+    expect(lids.terms[0]?.also).toContain("lid");
+    expect(parseQuery("boxes", NOW).terms[0]?.also).toContain("box");
+    expect(parseQuery("batteries", NOW).terms[0]?.also).toContain("battery");
+    expect(parseQuery("class", NOW).terms[0]?.also).toBeUndefined();
+    expect(ftsQuery(parseQuery("hot dog", NOW).terms)).toBe('("hot"* AND "dog"*) OR ("hotdog"*)');
+    // Numbers and short words are never glued.
+    expect(ftsQuery(parseQuery("v3 ring", NOW).terms)).toBe('"v3"* AND "ring"*');
+  });
+
+  it("keeps a number with its unit whole", () => {
+    expect(parseQuery("40mm lid", NOW).terms.map((term) => term.text)).toEqual(["40mm", "lid"]);
+    expect(parseQuery("3color 210c", NOW).terms.map((term) => term.text)).toEqual(["3color", "210c"]);
   });
 
   it("expands synonyms, which are marked too", () => {
@@ -97,5 +121,14 @@ describe("correctWord", () => {
     expect(correctWord("pla", vocabulary)).toBeNull(); // too short
     expect(correctWord("0.4", vocabulary)).toBeNull();
     expect(correctWord("qzxvbn", vocabulary)).toBeNull();
+  });
+});
+
+describe("splitWord", () => {
+  it("splits a word typed as one when both halves start known words", () => {
+    const vocabulary = ["keychain", "ring", "tugboat"];
+    expect(splitWord("keyring", vocabulary)).toEqual(["key", "ring"]);
+    expect(splitWord("tugboat", vocabulary)).toBeNull(); // known already
+    expect(splitWord("qzxvbnm", vocabulary)).toBeNull();
   });
 });

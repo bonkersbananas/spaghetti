@@ -53,8 +53,8 @@ appendFileSync(
     `--> statement-breakpoint\n${readFileSync(join(root, "migrations/0022_comment-search.sql"), "utf8")}`,
 );
 // Later migrations that changed the index, in order (found by name: their numbers move when branches merge).
-const searchMigrations = readdirSync(join(root, "migrations")).filter((name) =>
-  name.endsWith("_search_settings_coach.sql"),
+const searchMigrations = readdirSync(join(root, "migrations")).filter(
+  (name) => name.endsWith("_search_settings_coach.sql") || name.endsWith("_search_print_names.sql"),
 );
 for (const name of searchMigrations) {
   appendFileSync(output, `\n--> statement-breakpoint\n${readFileSync(join(root, "migrations", name), "utf8")}`);

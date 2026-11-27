@@ -67,22 +67,33 @@ export function ftsQuery(
     ...BUILT_IN_TAGS.success.map((tag) => ({ ...tag, kind: "success" as const })),
     ...customTags,
   ];
-  return terms
-    .map((term) => {
-      const token = ftsToken(term.text, term.prefix);
-      const others = (term.also ?? []).map((other) => ftsToken(other, true));
-      const viaLabel = tags
-        .filter(
-          (tag) =>
-            words(tag.label).some((word) => (term.prefix ? word.startsWith(term.text) : word === term.text)) &&
-            !words(tag.slug).some((word) => word.startsWith(term.text)),
-        )
-        .map((tag) => `tags : "${words(tag.slug).join(" ")}"`);
-      const options = [token, ...others, ...viaLabel];
-      return options.length > 1 ? `(${options.join(" OR ")})` : token;
-    })
-    .join(" AND ");
+  const groups = terms.map((term) => {
+    const token = ftsToken(term.text, term.prefix);
+    const others = (term.also ?? []).map((other) => ftsToken(other, true));
+    const viaLabel = tags
+      .filter(
+        (tag) =>
+          words(tag.label).some((word) => (term.prefix ? word.startsWith(term.text) : word === term.text)) &&
+          !words(tag.slug).some((word) => word.startsWith(term.text)),
+      )
+      .map((tag) => `tags : "${words(tag.slug).join(" ")}"`);
+    const options = [token, ...others, ...viaLabel];
+    return options.length > 1 ? `(${options.join(" OR ")})` : token;
+  });
+  // Two words typed apart may be one word in the index ("hot dog" is "hotdog" in a file name, "key ring" is
+  // "keyring"): each neighbouring pair of plain words is also tried as the one word.
+  const alternatives = [groups.join(" AND ")];
+  for (let i = 0; i + 1 < terms.length; i++) {
+    const [a, b] = [terms[i], terms[i + 1]];
+    if (!a || !b || !joinable(a) || !joinable(b)) continue;
+    const joined = ftsToken(a.text + b.text, b.prefix);
+    alternatives.push([...groups.slice(0, i), joined, ...groups.slice(i + 2)].join(" AND "));
+  }
+  return alternatives.length > 1 ? alternatives.map((one) => `(${one})`).join(" OR ") : (alternatives[0] ?? "");
 }
+
+/** A plain word of letters, long enough to be half of a compound ("dog", not "v3" or "0.4"). */
+const joinable = (term: SearchTerm) => term.prefix && /^[a-z]{3,}$/.test(term.text);
 
 /** One word as an FTS5 string; "0.4" is the phrase "0 4", which is how the index splits it. */
 function ftsToken(text: string, prefix: boolean) {
