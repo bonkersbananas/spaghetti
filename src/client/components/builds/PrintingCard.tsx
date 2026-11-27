@@ -4,7 +4,7 @@ import { attemptPartsLabel } from "@shared/parts";
 import { isOffTheBed } from "@shared/print-progress";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { AnimatePresence, m, useReducedMotion } from "motion/react";
-import { Fragment, lazy, Suspense, useRef } from "react";
+import { Fragment, lazy, Suspense, useRef, useState } from "react";
 import { AutoHeight } from "@/components/ui/AutoHeight";
 import { Avatar, ViaText } from "@/components/ui/Avatar";
 import { Button, IconButton } from "@/components/ui/Button";
@@ -14,6 +14,7 @@ import { BuildsIcon, CameraIcon } from "@/components/ui/icons";
 import { MetaList } from "@/components/ui/MetaList";
 import { PrintProgress } from "@/components/ui/PrintProgress";
 import { Swatch } from "@/components/ui/Swatch";
+import { afterPaint } from "@/lib/after-paint";
 import { useCapture } from "@/lib/capture";
 import { cn } from "@/lib/cn";
 import { useHasCamera } from "@/lib/has-camera";
@@ -206,12 +207,21 @@ export function PrintingCard({
     />
   );
 
-  const finish = (outcome?: Outcome) =>
-    void navigate({
-      to: "/builds/$buildId",
-      params: { buildId: item.id },
-      search: { attempt: attempt.id, finish: outcome ?? "1" },
+  // The tap answers in its own frame (the tile picked, the button held), and the build page with its sheet follows
+  // after that paint: drawn in the same task, the page held the tap's response back past 100 ms on a phone.
+  const [opening, setOpening] = useState<Outcome | "ask" | null>(null);
+  const finish = (outcome?: Outcome) => {
+    if (opening) return;
+    setOpening(outcome ?? "ask");
+    afterPaint(() => {
+      void navigate({
+        to: "/builds/$buildId",
+        params: { buildId: item.id },
+        search: { attempt: attempt.id, finish: outcome ?? "1" },
+      }).finally(() => setOpening(null));
     });
+  };
+  const picked = opening === "ask" ? null : opening;
 
   const to = { to: "/builds/$buildId", params: { buildId: item.id }, search: { attempt: attempt.id } } as const;
 
@@ -398,6 +408,7 @@ export function PrintingCard({
             <OffTheBed
               endedAt={attempt.endedAt}
               onPick={(outcome) => finish(outcome)}
+              picked={picked}
               photoRead={attempt.photoRead}
               withTags={false}
               // Offline a saved build can't be changed (decision 0005), as in the attempt sheet: no photo then.
@@ -456,7 +467,14 @@ export function PrintingCard({
                   >
                     {!readOnly && snapButton}
                     {!due && (
-                      <Button variant="secondary" size="sm" onClick={() => finish()} className="shrink-0">
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        onClick={() => finish()}
+                        // Held pressed until the sheet is up: the tap's answer in the frame it happened.
+                        data-pressed={opening === "ask" ? "" : undefined}
+                        className="shrink-0"
+                      >
                         How did it go?
                       </Button>
                     )}
@@ -468,7 +486,7 @@ export function PrintingCard({
                 <div className="pointer-events-auto flex flex-col gap-2 md:mt-auto">
                   <p className="text-body text-ink font-semibold">How did it go?</p>
                   <OutcomePicker
-                    value={null}
+                    value={picked}
                     onChange={(outcome) => {
                       finish(outcome);
                     }}

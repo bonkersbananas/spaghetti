@@ -245,6 +245,51 @@ test("the taps people make most answer quickly on a mid-range phone", async ({ b
   await context.close();
 });
 
+test("answering a print from its card on the bed answers within a frame on a mid-range phone", async ({
+  browser,
+  baseURL,
+}) => {
+  test.setTimeout(120_000);
+  const context = await browser.newContext({ baseURL, ...PHONE });
+  await installProbe(context);
+  const page = await context.newPage();
+  await signIn(page);
+  await clearIdeas(page);
+  const headers = { Origin: origin(page) };
+  const id = crypto.randomUUID();
+  await page.request.post("/api/items", { headers, data: { id, title: "Hinge pin", stage: "building" } });
+  await page.request.post(`/api/items/${id}/attempts`, {
+    headers,
+    data: { id: crypto.randomUUID(), settings: { estimatedMinutes: 90 } },
+  });
+  const tap: TapResult[] = [];
+  for (let run = 0; run < 3; run++) {
+    // The Journal's Now holds the print on the bed: its "How did it go?" opens the build with the answer sheet.
+    await page.goto("/journal");
+    const ask = page
+      .locator("article")
+      .filter({ hasText: "Hinge pin" })
+      .getByRole("button", { name: "How did it go?" });
+    await ask.waitFor();
+    await page.waitForTimeout(2500);
+    await throttle(page, { network: false });
+    tap.push(await tapLatency(page, () => ask.tap(), onScreen("[role=dialog] [role=radio]")));
+    await throttle(page, { cpu: 1, network: false });
+  }
+  const inp = median(tap.map((r) => r.inp));
+  const shown = median(tap.map((r) => r.shown));
+  console.log(
+    `Bed card "How did it go?" on a phone, 4x CPU: input to paint ${inp.toFixed(0)} ms, to the sheet ${shown.toFixed(0)} ms`,
+  );
+  // The tap paints its answer (the button held) before the build page and its sheet are drawn.
+  // About 30 ms here (it was over 200 while the build page was drawn in the tap's own task): 100 holds on a busy runner.
+  expect(inp, "input to the next paint").toBeLessThan(100);
+  expect(shown, "tap to the sheet").toBeGreaterThan(0);
+  expect(shown, "tap to the sheet").toBeLessThan(TAP_BUDGET_MS.shown);
+  await clearIdeas(page);
+  await context.close();
+});
+
 test("capturing, queueing and starting an idea answer quickly on a mid-range phone", async ({ browser, baseURL }) => {
   test.setTimeout(180_000);
   const context = await browser.newContext({ baseURL, ...PHONE });

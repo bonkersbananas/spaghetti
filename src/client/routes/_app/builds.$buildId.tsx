@@ -9,7 +9,7 @@ import { fullTime, inlineTime } from "@shared/time";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { AnimatePresence } from "motion/react";
-import { lazy, Suspense, useEffect, useRef, useState } from "react";
+import { lazy, Suspense, startTransition, useEffect, useRef, useState } from "react";
 import { AttemptEntry } from "@/components/builds/AttemptEntry";
 import { AttemptRow } from "@/components/builds/AttemptRow";
 import { AttemptSheet } from "@/components/builds/AttemptSheet";
@@ -148,14 +148,7 @@ function BuildDetail() {
       <h1 className="sr-only">Build</h1>
       <DetailBar back={back} />
       {isPending || isIdea ? (
-        <div className="flex flex-col gap-6 md:flex-row md:gap-10" aria-hidden>
-          <Skeleton className="-mx-5 aspect-4/3 w-[calc(100%+2.5rem)] rounded-none md:mx-0 md:w-auto md:flex-2 md:rounded-xl lg:flex-4" />
-          <div className="flex flex-col gap-3 md:flex-3 lg:flex-5">
-            <Skeleton className="h-8 w-3/4" />
-            <Skeleton className="h-28 w-full rounded-lg" />
-            <Skeleton className="h-28 w-full rounded-lg" />
-          </div>
-        </div>
+        <BuildSkeleton />
       ) : (
         <EmptyState
           illustration={<EmptyPot />}
@@ -177,6 +170,20 @@ function BuildDetail() {
   );
 }
 
+/** The page's shape while it loads, or for the moment it follows a sheet that opened first. */
+function BuildSkeleton() {
+  return (
+    <div className="flex flex-col gap-6 md:flex-row md:gap-10" aria-hidden>
+      <Skeleton className="-mx-5 aspect-4/3 w-[calc(100%+2.5rem)] rounded-none md:mx-0 md:w-auto md:flex-2 md:rounded-xl lg:flex-4" />
+      <div className="flex flex-col gap-3 md:flex-3 lg:flex-5">
+        <Skeleton className="h-8 w-3/4" />
+        <Skeleton className="h-28 w-full rounded-lg" />
+        <Skeleton className="h-28 w-full rounded-lg" />
+      </div>
+    </div>
+  );
+}
+
 function Build({ item }: { item: ItemView }) {
   const stickyColumn = useStickyColumn();
   const queryClient = useQueryClient();
@@ -184,6 +191,12 @@ function Build({ item }: { item: ItemView }) {
   const isDesktop = useIsDesktop();
   const readOnly = useReadOnly(item.pending);
   const { new: isNew, attempt: linkedAttempt, finish: finishParam } = Route.useSearch();
+  // The page was opened to answer one print ("How did it go?" or an outcome on its card), as it arrived.
+  const [arrivingToAnswer] = useState(() => {
+    if (!finishParam || !linkedAttempt) return undefined;
+    const attempt = item.attempts.find((candidate) => candidate.id === linkedAttempt);
+    return attempt && (attempt.outcome === null || finishParam === "open") ? attempt : undefined;
+  });
   const { data: people } = useQuery(peopleQuery);
   const byId = new Map(people?.map((person) => [person.id, person]));
   useCaptureHere(item);
@@ -256,18 +269,31 @@ function Build({ item }: { item: ItemView }) {
     file?: { file: File; key: number } | null;
     /** An outcome picked already: on the attempt's card (a print off the bed) or on Today's "How did it go?". */
     outcome?: Outcome | null;
-  }>({ open: false, attemptId: null });
+  }>(() =>
+    arrivingToAnswer
+      ? { open: true, attemptId: arrivingToAnswer.id, file: null, outcome: isOutcome(finishParam) ? finishParam : null }
+      : { open: false, attemptId: null },
+  );
+  // Answering from a card (Today, the Journal's Now, Builds): the tap's first frame is the sheet, and the page behind
+  // it follows a moment later in a transition that yields, so the tap answers within a frame on a slow phone too.
+  const [bodyShown, setBodyShown] = useState(!arrivingToAnswer);
+  useEffect(() => {
+    if (bodyShown) return;
+    const frame = requestAnimationFrame(() => startTransition(() => setBodyShown(true)));
+    return () => cancelAnimationFrame(frame);
+  }, [bodyShown]);
   const openSheet = (attemptId: string | null, outcome?: Outcome) =>
     setSheet({ open: true, attemptId, file: null, outcome: outcome ?? null });
   // Today's Finish: open the attempt's sheet (with its outcome picked, if it came with one), then drop the
   // parameter so closing the sheet doesn't leave a link that reopens it.
   // biome-ignore lint/correctness/useExhaustiveDependencies: once per arrival.
   useEffect(() => {
-    if (!finishParam || !linkedAttempt) return;
+    if (!finishParam || !linkedAttempt || !bodyShown) return;
     const attempt = item.attempts.find((candidate) => candidate.id === linkedAttempt);
     if (!attempt) return;
-    // "open": the sheet followed its print here from another build (it moved), answered or not.
-    if (attempt.outcome === null || finishParam === "open")
+    // "open": the sheet followed its print here from another build (it moved), answered or not. Opened already when
+    // the page arrived for it.
+    if ((attempt.outcome === null || finishParam === "open") && !(sheet.open && sheet.attemptId === attempt.id))
       openSheet(attempt.id, isOutcome(finishParam) ? finishParam : undefined);
     void navigate({
       to: "/builds/$buildId",
@@ -275,7 +301,7 @@ function Build({ item }: { item: ItemView }) {
       search: { attempt: linkedAttempt },
       replace: true,
     });
-  }, [finishParam, linkedAttempt, item.attempts.length]);
+  }, [finishParam, linkedAttempt, item.attempts.length, bodyShown]);
   // A .3mf dropped on the build starts a new attempt from it; dropped on an attempt, it goes on that one.
   useSlicerDropTarget((file, attemptId) => {
     const onto = attemptId ? item.attempts.find((attempt) => attempt.id === attemptId) : undefined;
@@ -693,371 +719,382 @@ function Build({ item }: { item: ItemView }) {
           />
         </DetailBar>
 
-        <div className="flex flex-col gap-8 md:flex-row md:items-start md:gap-10 lg:gap-14">
-          {/* The build: its best photo large, its title and notes. */}
-          <div ref={stickyColumn} className="sticky-column flex min-w-0 flex-col gap-4 md:flex-2 lg:flex-4">
-            {gallery.length > 0 ? (
-              <div className="relative">
-                <PhotoViewer
-                  photos={gallery}
-                  index={photoIndex}
-                  onIndexChange={selectPhoto}
-                  alt={alt}
-                  className="-mx-5 md:mx-0"
-                  capOnPhone={item.attempts.length > 0}
-                  largeTitle={itemName(item, "build")}
-                  withStrip
-                />
-                {shownAttempt && !(item.stage === "done" && shownPhoto?.id === hero?.id) && (
-                  // Whose photo it is, where "Final print" sits: the attempt's name with how it went (and the printer's mark when it took the print).
-                  <Chip
-                    tone={isOutcome(shownAttempt.outcome) ? outcomeTones[shownAttempt.outcome] : "neutral"}
-                    icon={isOutcome(shownAttempt.outcome) ? outcomeIcons[shownAttempt.outcome] : undefined}
-                    onPhoto
-                    className="shadow-soft absolute top-3 left-3"
-                  >
-                    {shownAttempt.fromPrinter && <PrinterMark size="xs" decorative />}
-                    Attempt {shownAttempt.number}
-                  </Chip>
-                )}
-                {item.stage === "done" && hero && gallery[photoIndex]?.id === hero.id && (
-                  <Chip tone="basil" icon={FinishIcon} className="shadow-soft absolute top-3 left-3">
-                    Final print
-                  </Chip>
-                )}
-              </div>
-            ) : null}
-            {gallery.length > 0 && (
-              // The build's own photos (they reorder), then its attempts' (marked with their number), and a finished build's
-              // cover is its final photo, not the first.
-              <PhotoStrip
-                itemId={item.id}
-                photos={own}
-                attemptPhotos={attemptPhotos}
-                onCoverAttemptPhoto={(id) => setCover(queryClient, item.id, id)}
-                selectedId={gallery[photoIndex]?.id}
-                onSelect={(id) => setPicked({ id, lead: leadPhotoId })}
-                fixedCover={item.stage === "done" && !!item.coverPhotoId}
-                coverId={item.coverPhotoId}
-                onClearCover={() => setCover(queryClient, item.id, null)}
-              />
-            )}
-            {gallery.length === 0 &&
-              (plate ? (
-                // No photo yet, but a plate picture: it is the cover, where the idea had it and at its size, with
-                // the add-photo wells row-sized under it, as on the idea page. The first photo takes its place.
-                <>
-                  <PlateCover file={plate} alt={plateAlt({ title, note })} className="-mx-5 md:mx-0" />
-                  <AddFirstPhotos itemId={item.id} small />
-                </>
-              ) : (
-                <AddFirstPhotos itemId={item.id} />
-              ))}
-
-            <div className="flex flex-col gap-3 md:pt-2">
-              <TextArea
-                appearance="title"
-                aria-label="Title"
-                placeholder="Untitled build"
-                minRows={1}
-                maxLength={200}
-                // A new build from scratch: name it first (or don't).
-                autoFocus={isNew && isDesktop && !item.title}
-                readOnly={titleKeep.readOnly}
-                onFocus={titleKeep.onFocus}
-                onBlur={titleKeep.onBlur}
-                value={title}
-                onChange={(event) => setTitle(event.target.value.replace(/\n/g, " "))}
-                onKeyDown={(event) => {
-                  if (event.key === "Enter" || event.key === "Escape") {
-                    event.preventDefault();
-                    event.currentTarget.blur();
-                  }
-                }}
-              />
-              <BuildTitleLine
-                item={item}
-                printing={printing}
-                celebrate={justFinished}
-                forWhom={forWhom}
-                setForWhom={setForWhom}
-                readOnly={readOnly}
-              >
-                {!active && !isDesktop && (
-                  <Button
-                    variant="quiet"
-                    size="sm"
-                    icon={ReopenIcon}
-                    disabled={readOnly}
-                    onClick={() => reopenBuild(queryClient, item)}
-                  >
-                    {item.stage === "done" ? "Reopen" : "Pick up again"}
-                  </Button>
-                )}
-              </BuildTitleLine>
-              {/* No photo and no plate picture: on a phone one slim line here, not two tiles above the title. */}
-              {gallery.length === 0 && !plate && <AddFirstPhotos itemId={item.id} row />}
-              {/* What worked leads on a phone; when nothing has, the build's own note stays first (below). */}
-              {!isDesktop && worked && answer}
-              <NoteField
-                value={note}
-                onChange={setNote}
-                readOnly={readOnly}
-                placeholder="Notes for the whole build: the plan, a link, what to try next…"
-                model={model}
-                modelCardBelow
-                className="mt-1"
-              />
-              <NoteLinks note={note} model={model} />
-              {/* The quiet action under the model, as on an idea: keep it as a twist, or open the one it prints. */}
-              {(model || existingTwistId || onlyOpenable(item.files) || !item.parts.length || !item.files?.length) && (
-                <div className="-mx-3 -mt-1 flex flex-wrap items-center gap-x-1">
-                  {(model || existingTwistId) && (
-                    <Button
-                      variant="quiet"
-                      icon={TwistIcon}
-                      disabled={readOnly || !user || !twists}
-                      onClick={saveAsTwist}
+        {!bodyShown ? (
+          <BuildSkeleton />
+        ) : (
+          <div className="flex flex-col gap-8 md:flex-row md:items-start md:gap-10 lg:gap-14">
+            {/* The build: its best photo large, its title and notes. */}
+            <div ref={stickyColumn} className="sticky-column flex min-w-0 flex-col gap-4 md:flex-2 lg:flex-4">
+              {gallery.length > 0 ? (
+                <div className="relative">
+                  <PhotoViewer
+                    photos={gallery}
+                    index={photoIndex}
+                    onIndexChange={selectPhoto}
+                    alt={alt}
+                    className="-mx-5 md:mx-0"
+                    capOnPhone={item.attempts.length > 0}
+                    largeTitle={itemName(item, "build")}
+                    withStrip
+                  />
+                  {shownAttempt && !(item.stage === "done" && shownPhoto?.id === hero?.id) && (
+                    // Whose photo it is, where "Final print" sits: the attempt's name with how it went (and the printer's mark when it took the print).
+                    <Chip
+                      tone={isOutcome(shownAttempt.outcome) ? outcomeTones[shownAttempt.outcome] : "neutral"}
+                      icon={isOutcome(shownAttempt.outcome) ? outcomeIcons[shownAttempt.outcome] : undefined}
+                      onPhoto
+                      className="shadow-soft absolute top-3 left-3"
                     >
-                      {existingTwistId ? "Twist" : "Save as twist"}
-                    </Button>
+                      {shownAttempt.fromPrinter && <PrinterMark size="xs" decorative />}
+                      Attempt {shownAttempt.number}
+                    </Chip>
                   )}
-                  {/* The first file: once the build has one, "Add a file" ends its Files list instead. */}
-                  {!item.files?.length && (
-                    <Button
-                      variant="quiet"
-                      icon={SlicerFileIcon}
-                      disabled={readOnly || item.pending}
-                      onClick={filePicker.open}
-                    >
-                      Add a file
-                    </Button>
-                  )}
-                  <OpenOnlyFile files={item.files} />
-                  {!item.parts.length && !editingParts && (
-                    <AddPartsButton disabled={readOnly || item.pending} onClick={() => setEditingParts(true)} />
+                  {item.stage === "done" && hero && gallery[photoIndex]?.id === hero.id && (
+                    <Chip tone="basil" icon={FinishIcon} className="shadow-soft absolute top-3 left-3">
+                      Final print
+                    </Chip>
                   )}
                 </div>
+              ) : null}
+              {gallery.length > 0 && (
+                // The build's own photos (they reorder), then its attempts' (marked with their number), and a finished build's
+                // cover is its final photo, not the first.
+                <PhotoStrip
+                  itemId={item.id}
+                  photos={own}
+                  attemptPhotos={attemptPhotos}
+                  onCoverAttemptPhoto={(id) => setCover(queryClient, item.id, id)}
+                  selectedId={gallery[photoIndex]?.id}
+                  onSelect={(id) => setPicked({ id, lead: leadPhotoId })}
+                  fixedCover={item.stage === "done" && !!item.coverPhotoId}
+                  coverId={item.coverPhotoId}
+                  onClearCover={() => setCover(queryClient, item.id, null)}
+                />
               )}
-              {!isDesktop && !worked && answer}
-            </div>
-
-            <BuildSummary
-              attempts={item.attempts}
-              photos={item.photos}
-              open={active}
-              onPick={pickAttempt}
-              selected={selected}
-            />
-
-            {filePicker.input}
-            {!!item.files?.length && (
-              <ItemFiles
-                itemId={item.id}
-                files={item.files}
-                readOnly={readOnly || item.pending}
-                folded={item.attempts.length > 0 && !isDesktop}
-                onAdd={filePicker.open}
-              />
-            )}
-
-            <PartsSection
-              editing={editingParts}
-              onEditing={setEditingParts}
-              item={item}
-              active={active}
-              readOnly={readOnly}
-              onFinishBuild={() => finishBuild(queryClient, item)}
-            />
-
-            {isDesktop && answer}
-          </div>
-
-          {/* The story: every attempt, newest first. */}
-          {/* The story column: what happened, then the conversation about it, a section apart at every width. */}
-          <div className="flex min-w-0 flex-col gap-12 md:flex-3 md:gap-16 lg:flex-5">
-            <Section
-              id="story"
-              title="Attempts"
-              count={item.attempts.length || undefined}
-              aside={
-                // A print on the bed is asked about on its own card, so the section offers nothing beside it.
-                isDesktop &&
-                !printing && (
-                  <Button
-                    variant={finishNext ? "secondary" : "primary"}
-                    icon={PlusIcon}
-                    shortcut={shortcutCaps("buildLog")}
-                    onClick={primary}
-                  >
-                    {finishNext ? "Log another try" : "Log attempt"}
-                  </Button>
-                )
-              }
-            >
-              {/* One child: the list and what follows it keep their own spacing, not the section's gap. */}
-              <div className="flex flex-col">
-                {story.length === 0 ? (
-                  <EmptyState
-                    size="none"
-                    className="bg-ink/3 max-w-none rounded-xl px-4 py-10"
-                    illustration={<SpoolStrand />}
-                    title="The water's still heating"
-                  >
-                    Log the first attempt when it comes off the bed, or start one now and finish it when the print is
-                    done.
-                  </EmptyState>
+              {gallery.length === 0 &&
+                (plate ? (
+                  // No photo yet, but a plate picture: it is the cover, where the idea had it and at its size, with
+                  // the add-photo wells row-sized under it, as on the idea page. The first photo takes its place.
+                  <>
+                    <PlateCover file={plate} alt={plateAlt({ title, note })} className="-mx-5 md:mx-0" />
+                    <AddFirstPhotos itemId={item.id} small />
+                  </>
                 ) : (
-                  <ol aria-label="Attempts, newest first" className="flex flex-col">
-                    <AnimatePresence initial={false}>
-                      {shownStory.map((attempt, index) => {
-                        const ref = (el: HTMLLIElement | null) => {
-                          if (el) entryRefs.current.set(attempt.id, el);
-                          else entryRefs.current.delete(attempt.id);
-                        };
-                        const photos = item.photos.filter((photo) => photo.attemptId === attempt.id);
-                        const person = byId.get(creditedTo(attempt) ?? "");
-                        const onCompare = comparePredecessor(attempt.id) ? () => openCompare(attempt.id) : undefined;
-                        const onSaveRecipe =
-                          recipeSource(attempt) && !allRecipes.some((recipe) => recipe.source?.attemptId === attempt.id)
-                            ? () => setSavingRecipe(recipeSource(attempt) ?? null)
-                            : undefined;
-                        const onMove = readOnly || attempt.pending ? undefined : () => setMoving(attempt.id);
-                        if (!isCard(attempt))
-                          return (
-                            <AttemptRow
-                              key={attempt.id}
-                              ref={ref}
-                              attempt={attempt}
-                              photos={photos}
-                              person={person}
-                              selected={attempt.id === selected}
-                              onExpand={() => {
-                                focusAfter.current = attempt.id;
-                                openRow(attempt.id);
-                              }}
-                              onCompare={onCompare}
-                              onSaveRecipe={onSaveRecipe}
-                              onMove={onMove}
-                            />
-                          );
-                        const fold = !alwaysCard(attempt);
-                        return (
-                          <AttemptEntry
-                            key={attempt.id}
-                            ref={ref}
-                            attempt={attempt}
-                            partsLabel={attemptPartsLabel(attempt, item.parts)}
-                            photos={photos}
-                            heroId={leadPhotoId}
-                            onFold={
-                              fold
-                                ? () => {
-                                    focusAfter.current = attempt.id;
-                                    setOpened((ids) => ids.filter((id) => id !== attempt.id));
-                                  }
-                                : undefined
-                            }
-                            onPhotos={readOnly ? undefined : (files) => addPhotosToItem(item.id, files, attempt.id)}
-                            readOnly={readOnly || attempt.pending}
-                            person={person}
-                            via={via(attempt.createdVia)}
-                            selected={attempt.id === selected}
-                            first={index === 0}
-                            onOpen={() => {
-                              setSelected(attempt.id);
-                              openSheet(attempt.id);
-                            }}
-                            onFinish={(outcome) => openSheet(attempt.id, outcome)}
-                            askOnCard={isDesktop}
-                            askShortcut={shortcutCaps("buildLog")}
-                            onCompare={onCompare}
-                            onSaveRecipe={onSaveRecipe}
-                            item={item}
-                            onMove={onMove}
-                          />
-                        );
-                      })}
-                    </AnimatePresence>
-                  </ol>
-                )}
+                  <AddFirstPhotos itemId={item.id} />
+                ))}
 
-                {folds && (
-                  // On the rail like the line under it, so it reads as part of the story, not a stray button.
-                  <div className="mb-1 flex items-center gap-3 pl-0.5">
-                    <span className="bg-ink/10 size-3 shrink-0 rounded-full" aria-hidden />
+              <div className="flex flex-col gap-3 md:pt-2">
+                <TextArea
+                  appearance="title"
+                  aria-label="Title"
+                  placeholder="Untitled build"
+                  minRows={1}
+                  maxLength={200}
+                  // A new build from scratch: name it first (or don't).
+                  autoFocus={isNew && isDesktop && !item.title}
+                  readOnly={titleKeep.readOnly}
+                  onFocus={titleKeep.onFocus}
+                  onBlur={titleKeep.onBlur}
+                  value={title}
+                  onChange={(event) => setTitle(event.target.value.replace(/\n/g, " "))}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" || event.key === "Escape") {
+                      event.preventDefault();
+                      event.currentTarget.blur();
+                    }
+                  }}
+                />
+                <BuildTitleLine
+                  item={item}
+                  printing={printing}
+                  celebrate={justFinished}
+                  forWhom={forWhom}
+                  setForWhom={setForWhom}
+                  readOnly={readOnly}
+                >
+                  {!active && !isDesktop && (
                     <Button
                       variant="quiet"
                       size="sm"
-                      icon={ExpandIcon}
-                      onClick={() => setShowEarlier(true)}
-                      className="-ml-2"
+                      icon={ReopenIcon}
+                      disabled={readOnly}
+                      onClick={() => reopenBuild(queryClient, item)}
                     >
-                      {story.length - SHOWN_ATTEMPTS} earlier attempts
+                      {item.stage === "done" ? "Reopen" : "Pick up again"}
                     </Button>
+                  )}
+                </BuildTitleLine>
+                {/* No photo and no plate picture: on a phone one slim line here, not two tiles above the title. */}
+                {gallery.length === 0 && !plate && <AddFirstPhotos itemId={item.id} row />}
+                {/* What worked leads on a phone; when nothing has, the build's own note stays first (below). */}
+                {!isDesktop && worked && answer}
+                <NoteField
+                  value={note}
+                  onChange={setNote}
+                  readOnly={readOnly}
+                  placeholder="Notes for the whole build: the plan, a link, what to try next…"
+                  model={model}
+                  modelCardBelow
+                  className="mt-1"
+                />
+                <NoteLinks note={note} model={model} />
+                {/* The quiet action under the model, as on an idea: keep it as a twist, or open the one it prints. */}
+                {(model ||
+                  existingTwistId ||
+                  onlyOpenable(item.files) ||
+                  !item.parts.length ||
+                  !item.files?.length) && (
+                  <div className="-mx-3 -mt-1 flex flex-wrap items-center gap-x-1">
+                    {(model || existingTwistId) && (
+                      <Button
+                        variant="quiet"
+                        icon={TwistIcon}
+                        disabled={readOnly || !user || !twists}
+                        onClick={saveAsTwist}
+                      >
+                        {existingTwistId ? "Twist" : "Save as twist"}
+                      </Button>
+                    )}
+                    {/* The first file: once the build has one, "Add a file" ends its Files list instead. */}
+                    {!item.files?.length && (
+                      <Button
+                        variant="quiet"
+                        icon={SlicerFileIcon}
+                        disabled={readOnly || item.pending}
+                        onClick={filePicker.open}
+                      >
+                        Add a file
+                      </Button>
+                    )}
+                    <OpenOnlyFile files={item.files} />
+                    {!item.parts.length && !editingParts && (
+                      <AddPartsButton disabled={readOnly || item.pending} onClick={() => setEditingParts(true)} />
+                    )}
                   </div>
                 )}
-                <div className="text-small text-ink-faint mt-1 flex items-center gap-3 pl-0.5">
-                  <span className="bg-ink/10 flex size-3 items-center justify-center rounded-full" aria-hidden />
-                  {item.fromPrinter ? (
-                    <PrinterMark size="xs" decorative />
-                  ) : (
-                    creator && <Avatar person={creator} size="xs" via={madeVia} />
-                  )}
-                  {fromIdea && <IdeasIcon size={16} className="-mr-1.5 shrink-0" aria-hidden />}
-                  <p>
-                    {item.fromPrinter ? (
-                      // The printer made it for a print, not whoever paired the bridge (decision 0076).
-                      "Made by the printer "
-                    ) : fromIdea ? (
-                      <>
-                        {creator ? `${who(creator)} captured` : "Captured"} as an idea {inlineTime(item.createdAt)}
-                        {madeVia && (
-                          <>
-                            {" "}
-                            <ViaText name={madeVia} person={creator?.name} />
-                          </>
-                        )}
-                        , building since{" "}
-                      </>
-                    ) : creator ? (
-                      `${who(creator)} started `
-                    ) : (
-                      "Started "
-                    )}
-                    <time dateTime={new Date(started).toISOString()} title={fullTime(started)}>
-                      {inlineTime(started)}
-                    </time>
-                    {!fromIdea && !item.fromPrinter && madeVia && (
-                      <>
-                        {" "}
-                        <ViaText name={madeVia} person={creator?.name} />
-                      </>
-                    )}
-                  </p>
-                </div>
+                {!isDesktop && !worked && answer}
               </div>
-              {!item.pending && (
-                <ItemReactions
+
+              <BuildSummary
+                attempts={item.attempts}
+                photos={item.photos}
+                open={active}
+                onPick={pickAttempt}
+                selected={selected}
+              />
+
+              {filePicker.input}
+              {!!item.files?.length && (
+                <ItemFiles
                   itemId={item.id}
-                  reactions={item.reactions}
-                  noun="build"
-                  readOnly={readOnly}
-                  className="mt-4"
+                  files={item.files}
+                  readOnly={readOnly || item.pending}
+                  folded={item.attempts.length > 0 && !isDesktop}
+                  onAdd={filePicker.open}
                 />
               )}
-            </Section>
-            {!item.pending && afterPaint && <CommentThread itemId={item.id} writeAsk={writeAsk} readOnly={readOnly} />}
-            {/* On a phone the closing actions stay the last thing on the page, quiet beside the primary action bar. */}
-            {!isDesktop && active && !printing && (
-              <div className="-mt-6 flex items-center justify-center gap-3 md:-mt-8">{stageActions}</div>
-            )}
+
+              <PartsSection
+                editing={editingParts}
+                onEditing={setEditingParts}
+                item={item}
+                active={active}
+                readOnly={readOnly}
+                onFinishBuild={() => finishBuild(queryClient, item)}
+              />
+
+              {isDesktop && answer}
+            </div>
+
+            {/* The story: every attempt, newest first. */}
+            {/* The story column: what happened, then the conversation about it, a section apart at every width. */}
+            <div className="flex min-w-0 flex-col gap-12 md:flex-3 md:gap-16 lg:flex-5">
+              <Section
+                id="story"
+                title="Attempts"
+                count={item.attempts.length || undefined}
+                aside={
+                  // A print on the bed is asked about on its own card, so the section offers nothing beside it.
+                  isDesktop &&
+                  !printing && (
+                    <Button
+                      variant={finishNext ? "secondary" : "primary"}
+                      icon={PlusIcon}
+                      shortcut={shortcutCaps("buildLog")}
+                      onClick={primary}
+                    >
+                      {finishNext ? "Log another try" : "Log attempt"}
+                    </Button>
+                  )
+                }
+              >
+                {/* One child: the list and what follows it keep their own spacing, not the section's gap. */}
+                <div className="flex flex-col">
+                  {story.length === 0 ? (
+                    <EmptyState
+                      size="none"
+                      className="bg-ink/3 max-w-none rounded-xl px-4 py-10"
+                      illustration={<SpoolStrand />}
+                      title="The water's still heating"
+                    >
+                      Log the first attempt when it comes off the bed, or start one now and finish it when the print is
+                      done.
+                    </EmptyState>
+                  ) : (
+                    <ol aria-label="Attempts, newest first" className="flex flex-col">
+                      <AnimatePresence initial={false}>
+                        {shownStory.map((attempt, index) => {
+                          const ref = (el: HTMLLIElement | null) => {
+                            if (el) entryRefs.current.set(attempt.id, el);
+                            else entryRefs.current.delete(attempt.id);
+                          };
+                          const photos = item.photos.filter((photo) => photo.attemptId === attempt.id);
+                          const person = byId.get(creditedTo(attempt) ?? "");
+                          const onCompare = comparePredecessor(attempt.id) ? () => openCompare(attempt.id) : undefined;
+                          const onSaveRecipe =
+                            recipeSource(attempt) &&
+                            !allRecipes.some((recipe) => recipe.source?.attemptId === attempt.id)
+                              ? () => setSavingRecipe(recipeSource(attempt) ?? null)
+                              : undefined;
+                          const onMove = readOnly || attempt.pending ? undefined : () => setMoving(attempt.id);
+                          if (!isCard(attempt))
+                            return (
+                              <AttemptRow
+                                key={attempt.id}
+                                ref={ref}
+                                attempt={attempt}
+                                photos={photos}
+                                person={person}
+                                selected={attempt.id === selected}
+                                onExpand={() => {
+                                  focusAfter.current = attempt.id;
+                                  openRow(attempt.id);
+                                }}
+                                onCompare={onCompare}
+                                onSaveRecipe={onSaveRecipe}
+                                onMove={onMove}
+                              />
+                            );
+                          const fold = !alwaysCard(attempt);
+                          return (
+                            <AttemptEntry
+                              key={attempt.id}
+                              ref={ref}
+                              attempt={attempt}
+                              partsLabel={attemptPartsLabel(attempt, item.parts)}
+                              photos={photos}
+                              heroId={leadPhotoId}
+                              onFold={
+                                fold
+                                  ? () => {
+                                      focusAfter.current = attempt.id;
+                                      setOpened((ids) => ids.filter((id) => id !== attempt.id));
+                                    }
+                                  : undefined
+                              }
+                              onPhotos={readOnly ? undefined : (files) => addPhotosToItem(item.id, files, attempt.id)}
+                              readOnly={readOnly || attempt.pending}
+                              person={person}
+                              via={via(attempt.createdVia)}
+                              selected={attempt.id === selected}
+                              first={index === 0}
+                              onOpen={() => {
+                                setSelected(attempt.id);
+                                openSheet(attempt.id);
+                              }}
+                              onFinish={(outcome) => openSheet(attempt.id, outcome)}
+                              askOnCard={isDesktop}
+                              askShortcut={shortcutCaps("buildLog")}
+                              onCompare={onCompare}
+                              onSaveRecipe={onSaveRecipe}
+                              item={item}
+                              onMove={onMove}
+                            />
+                          );
+                        })}
+                      </AnimatePresence>
+                    </ol>
+                  )}
+
+                  {folds && (
+                    // On the rail like the line under it, so it reads as part of the story, not a stray button.
+                    <div className="mb-1 flex items-center gap-3 pl-0.5">
+                      <span className="bg-ink/10 size-3 shrink-0 rounded-full" aria-hidden />
+                      <Button
+                        variant="quiet"
+                        size="sm"
+                        icon={ExpandIcon}
+                        onClick={() => setShowEarlier(true)}
+                        className="-ml-2"
+                      >
+                        {story.length - SHOWN_ATTEMPTS} earlier attempts
+                      </Button>
+                    </div>
+                  )}
+                  <div className="text-small text-ink-faint mt-1 flex items-center gap-3 pl-0.5">
+                    <span className="bg-ink/10 flex size-3 items-center justify-center rounded-full" aria-hidden />
+                    {item.fromPrinter ? (
+                      <PrinterMark size="xs" decorative />
+                    ) : (
+                      creator && <Avatar person={creator} size="xs" via={madeVia} />
+                    )}
+                    {fromIdea && <IdeasIcon size={16} className="-mr-1.5 shrink-0" aria-hidden />}
+                    <p>
+                      {item.fromPrinter ? (
+                        // The printer made it for a print, not whoever paired the bridge (decision 0076).
+                        "Made by the printer "
+                      ) : fromIdea ? (
+                        <>
+                          {creator ? `${who(creator)} captured` : "Captured"} as an idea {inlineTime(item.createdAt)}
+                          {madeVia && (
+                            <>
+                              {" "}
+                              <ViaText name={madeVia} person={creator?.name} />
+                            </>
+                          )}
+                          , building since{" "}
+                        </>
+                      ) : creator ? (
+                        `${who(creator)} started `
+                      ) : (
+                        "Started "
+                      )}
+                      <time dateTime={new Date(started).toISOString()} title={fullTime(started)}>
+                        {inlineTime(started)}
+                      </time>
+                      {!fromIdea && !item.fromPrinter && madeVia && (
+                        <>
+                          {" "}
+                          <ViaText name={madeVia} person={creator?.name} />
+                        </>
+                      )}
+                    </p>
+                  </div>
+                </div>
+                {!item.pending && (
+                  <ItemReactions
+                    itemId={item.id}
+                    reactions={item.reactions}
+                    noun="build"
+                    readOnly={readOnly}
+                    className="mt-4"
+                  />
+                )}
+              </Section>
+              {!item.pending && afterPaint && (
+                <CommentThread itemId={item.id} writeAsk={writeAsk} readOnly={readOnly} />
+              )}
+              {/* On a phone the closing actions stay the last thing on the page, quiet beside the primary action bar. */}
+              {!isDesktop && active && !printing && (
+                <div className="-mt-6 flex items-center justify-center gap-3 md:-mt-8">{stageActions}</div>
+              )}
+            </div>
           </div>
-        </div>
+        )}
 
         {/* A print still printing is asked about here, within thumb reach (its card shows only how far along it is);
             one that is off the bed asks on the attempt itself, with its three answers: one question, never two. */}
-        {!isDesktop && (active || printing) && !(printing && isOffTheBed(printing)) && (
+        {bodyShown && !isDesktop && (active || printing) && !(printing && isOffTheBed(printing)) && (
           <ActionBar>
             {finishNext ? (
               // As the idea's bar: the second action a quiet word on the left, the one primary on the thumb's side.

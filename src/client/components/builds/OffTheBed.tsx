@@ -17,6 +17,8 @@ interface OffTheBedProps {
   onPick?: (outcome: Outcome) => void;
   /** What Claude made of the print's photo: a gentle hint on the matching button, never picked for anyone. */
   photoRead?: PhotoRead | null;
+  /** The outcome just tapped, shown picked while its sheet opens (a card that leads to the build page). */
+  picked?: Outcome | null;
   /** Show the tags Claude would add under its reason. Today leaves them for the sheet. */
   withTags?: boolean;
   /**
@@ -39,6 +41,7 @@ interface OffTheBedProps {
 export function OffTheBed({
   endedAt,
   onPick,
+  picked = null,
   photoRead,
   withTags = true,
   onPhotos,
@@ -90,7 +93,7 @@ export function OffTheBed({
       </div>
       {onPick && (
         <OutcomePicker
-          value={null}
+          value={picked}
           onChange={(outcome) => {
             onPick(outcome);
           }}
