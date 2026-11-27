@@ -24,7 +24,8 @@ interface IdeaTitleChipsProps {
 /**
  * What sits under an idea's title: the "for Sam" line once someone is named, then one row of chips: the two toggles
  * (Up next, My wishlist) and, while nobody is named, the dashed "For Sam" offer. On a phone the row stays one line and
- * scrolls sideways (`ChipRow`), the toggles first, so a long name never pushes the offer onto a second line.
+ * scrolls sideways (`ChipRow`), the toggles first, and the offer says only the first name there ("For Sam"), so
+ * a long name never pushes it onto a second line or past the screen's edge.
  */
 export function IdeaTitleChips({ item, forWhom, setForWhom, readOnly }: IdeaTitleChipsProps) {
   const queryClient = useQueryClient();
@@ -54,7 +55,7 @@ export function IdeaTitleChips({ item, forWhom, setForWhom, readOnly }: IdeaTitl
       />
       {/* Pulled left so the quiet toggles' words line up with the title; the row runs to the screen's edge on phones. */}
       <div className="-ml-2.5">
-        <ChipRow label="About this idea" className="items-center md:gap-1 md:py-0">
+        <ChipRow label="About this idea" className="items-center max-md:-my-1 md:gap-1 md:py-0">
           <ToggleChip
             selected={item.upNext !== null}
             appearance="quiet"
@@ -76,7 +77,12 @@ export function IdeaTitleChips({ item, forWhom, setForWhom, readOnly }: IdeaTitl
             My wishlist
           </ToggleChip>
           {!forWhom.trim() && !asking && !locked && (
-            <ForOffer name={other && displayName(other)} onName={setForWhom} onAsk={() => setAsking(true)} />
+            <ForOffer
+              name={other && displayName(other)}
+              onName={setForWhom}
+              onAsk={() => setAsking(true)}
+              firstNameOnPhones
+            />
           )}
         </ChipRow>
       </div>
