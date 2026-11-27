@@ -60,8 +60,8 @@ export function NotificationSection() {
           </p>
           <NotificationOffer onTurnOn={() => undefined} onDismiss={() => undefined} />
           <p className="text-small text-ink-faint">
-            On the phone's Journal it is one quiet line among Now's notices (`layout="line"`), as tall as the comment
-            and upkeep lines beside it: the close is "Not now".
+            On the phone's Journal it is one quiet line among Now's notices, as tall as the comment and upkeep lines
+            beside it: the close is "Not now".
           </p>
           <NotificationOffer layout="line" onTurnOn={() => undefined} onDismiss={() => undefined} />
         </Panel>

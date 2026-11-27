@@ -143,8 +143,8 @@ export function TodaySection() {
             {/* Phones only: from md a PrintingCard is the row of Today and Builds. */}
             <div className="flex flex-col gap-4 md:hidden">
               <Label>
-                In the phone Journal's sideways row (three prints or more): the short picture and every part on one line
-                (`inRow`), so each card ends where its own words end
+                In the phone Journal's sideways row (three prints or more): the short picture and every part on one
+                line, so each card ends where its own words end
               </Label>
               <div className="no-scrollbar -mx-5 flex items-start gap-3 overflow-x-auto px-5 py-2">
                 <div className="w-[85%] shrink-0">
