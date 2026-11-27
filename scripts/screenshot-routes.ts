@@ -3054,6 +3054,9 @@ export const shots: Shot[] = [
       await mockToday(page, { builds: "all", journal: "all", spools: "all", ideas: "all", noPictures: true });
       await page.locator("section[aria-label='On the bed']").waitFor();
       await page.waitForTimeout(1500);
+      // The reload gets back a scroll an earlier /journal shot left: show the top.
+      await page.evaluate(() => window.scrollTo(0, 0));
+      await page.waitForTimeout(300);
     },
     cleanup: unmockToday,
   },
