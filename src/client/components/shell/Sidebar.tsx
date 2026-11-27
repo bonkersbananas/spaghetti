@@ -147,12 +147,14 @@ function SidebarAccount({ user }: { user: Person }) {
   const keepFocus = () => {
     hadFocus.current = document.activeElement?.hasAttribute("data-account-button") ?? false;
   };
-  // lazy-account's own list of chunks is about 2 kB gzip: it loads with the menu, not with the first screen.
+  // lazy-account's own list of chunks is about 2 kB gzip: it loads with the menu, not with the first screen. The
+  // loaded component itself, not React.lazy: lazy suspends once even with its code in, and the Suspense fallback (a
+  // second look-alike, for up to 300 ms) left focus on the page's body, where a shortcut pressed then started from.
   const wanted = () => {
     void import("./lazy-account").then(async (module) => {
-      await module.loadAccountMenu();
+      const { default: AccountMenu } = await module.loadAccountMenu();
       keepFocus();
-      setMenu(() => module.AccountMenu);
+      setMenu(() => AccountMenu);
     });
   };
   useWhenIdle(wanted);
