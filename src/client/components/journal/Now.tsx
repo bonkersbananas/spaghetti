@@ -49,8 +49,14 @@ export default function Now() {
       {/* The catch-up after a while away sits above Now. Here rather than in the Journal, so its gate stays out of the
           Journal's first load (desktop never shows it there) and arrives with the rest of the block. */}
       <Since />
-      {/* The whole block is hidden (and takes no margin with it) while none of its parts has anything to show. */}
-      <Section id="now" title="Now" size="overline" className="mb-8 [&:not(:has(.now-parts>:not(:empty)))]:hidden">
+      {/* The whole block is hidden (and takes no margin with it) while none of its parts has anything to show (the
+          notices count by their lines: the offer's place is always there, empty until it has something). */}
+      <Section
+        id="now"
+        title="Now"
+        size="overline"
+        className="mb-8 [&:not(:has(.now-parts>:not(:empty):not(.now-notices))):not(:has(.now-notices>:not(:empty)))]:hidden"
+      >
         <div className="now-parts flex flex-col gap-3">
           <AnimatePresence initial={false}>
             {onBed.length > 0 && (
@@ -82,9 +88,14 @@ export default function Now() {
                       >
                         <PrintingCard
                           compact
-                          // An answered print asking which build is a small square: a photo cover would lead with a tall picture and leave
-                          // the cards beside it floating over blank space in the row.
-                          lead={attempt.outcome !== null ? undefined : onBed.length === 2 ? "short" : "wide"}
+                          // In the sideways row every card has the same build (the short picture, each part on one
+                          // line: PrintingCard's `inRow`), so each ends where its own words end and none is left
+                          // floating over a block of blank beside a taller neighbour. Stacked, an answered print
+                          // asking which build is a small square: a picture would only push the notebook down.
+                          lead={
+                            row ? "short" : attempt.outcome !== null ? undefined : onBed.length === 2 ? "short" : "wide"
+                          }
+                          inRow={row}
                           item={item}
                           attempt={attempt}
                           person={people?.find((person) => person.id === creditedTo(attempt))}
@@ -97,14 +108,16 @@ export default function Now() {
               </m.div>
             )}
           </AnimatePresence>
-          {/* The two quiet lines sit together: each row already has its own 44 px of room. */}
-          <div className="-my-1 empty:hidden">
-            <CommentsLine bare />
-            {hasDueUpkeep && <UpkeepLine />}
+          {/* The notices (what the other person wrote, upkeep that is due, the offer to turn notifications on) sit
+              together, one line each: each row already has its own 44 px of room. The picks and the notebook's filters
+              come under them. */}
+          <div className="now-notices -my-1 [&:not(:has(>:not(:empty)))]:hidden">
+            <CommentsLine bare oneLine />
+            {hasDueUpkeep && <UpkeepLine oneLine />}
+            {/* Under the prints: it never competes with a print waiting for its answer. */}
+            <NotificationsOfferGate layout="line" className="empty:hidden" />
           </div>
           <div className="empty:hidden">{hasScoutPicks && <ScoutRow />}</div>
-          {/* Under the prints and the lines: it never competes with a print waiting for its answer. */}
-          <NotificationsOfferGate />
         </div>
       </Section>
     </>

@@ -140,6 +140,35 @@ export function TodaySection() {
             </Label>
             <PrintingCard item={running} attempt={running.attempts[0] as ItemView["attempts"][number]} person={alex} />
             <PrintingCard item={due} attempt={due.attempts[0] as ItemView["attempts"][number]} person={sam} compact />
+            {/* Phones only: from md a PrintingCard is the row of Today and Builds. */}
+            <div className="flex flex-col gap-4 md:hidden">
+              <Label>
+                In the phone Journal's sideways row (three prints or more): the short picture and every part on one
+                line, so each card ends where its own words end
+              </Label>
+              <div className="no-scrollbar -mx-5 flex items-start gap-3 overflow-x-auto px-5 py-2">
+                <div className="w-[85%] shrink-0">
+                  <PrintingCard
+                    item={running}
+                    attempt={running.attempts[0] as ItemView["attempts"][number]}
+                    person={alex}
+                    compact
+                    lead="short"
+                    inRow
+                  />
+                </div>
+                <div className="w-[85%] shrink-0">
+                  <PrintingCard
+                    item={due}
+                    attempt={due.attempts[0] as ItemView["attempts"][number]}
+                    person={sam}
+                    compact
+                    lead="short"
+                    inRow
+                  />
+                </div>
+              </div>
+            </div>
             <Label>The sidebar's now-printing card</Label>
             <div className="w-60">
               <NowPrintingCard item={running} attempt={running.attempts[0] as ItemView["attempts"][number]} />

@@ -18,7 +18,14 @@ const hinted = () => {
  * that the offer applies, the card's place is kept from the first paint (the card fills it, or the place closes if it
  * no longer applies); otherwise the card waits for the next visit.
  */
-export function NotificationsOfferGate({ className }: { className?: string }) {
+export function NotificationsOfferGate({
+  className,
+  layout = "card",
+}: {
+  className?: string;
+  /** The offer's shape (NotificationOffer's `layout`): the place held for it is its height. */
+  layout?: "card" | "line";
+}) {
   const [show] = useState(hinted);
   const [later, setLater] = useState(false);
   const [resolved, setResolved] = useState(false);
@@ -42,12 +49,17 @@ export function NotificationsOfferGate({ className }: { className?: string }) {
   }, []);
   const holding = show && !resolved;
   return (
-    <div className={cn(className ?? "empty:hidden", holding && "min-h-24 md:min-h-[10.5rem]")}>
+    <div
+      className={cn(
+        className ?? "empty:hidden",
+        holding && (layout === "line" ? "min-h-11" : "min-h-24 md:min-h-[10.5rem]"),
+      )}
+    >
       {/* Not empty while the place is held, or the callers' empty:hidden would take it away. */}
       {holding && <span aria-hidden />}
       {later && (
         <Suspense fallback={null}>
-          <NotificationsOffer show={show} onResolved={onResolved} />
+          <NotificationsOffer show={show} onResolved={onResolved} layout={layout} />
         </Suspense>
       )}
     </div>

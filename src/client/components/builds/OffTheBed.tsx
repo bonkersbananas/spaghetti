@@ -1,6 +1,6 @@
 import type { Outcome } from "@shared/attempts";
 import type { PhotoRead } from "@shared/photo-read";
-import { offTheBedLabel } from "@shared/print-progress";
+import { offTheBedLabel, offTheBedTime } from "@shared/print-progress";
 import { type ReactNode, useRef } from "react";
 import { Button } from "@/components/ui/Button";
 import { CameraIcon, FinishIcon } from "@/components/ui/icons";
@@ -28,6 +28,13 @@ interface OffTheBedProps {
   onPhotos?: (files: File[]) => void;
   /** A camera button of the caller's own (the card's "Snap this print"), beside the sentence; it replaces "Take photo". */
   snap?: ReactNode;
+  /**
+   * Phones, a card in Now's sideways row whose picture carries the "Off the bed" badge: the sentence is its time and the
+   * question on one line ("11:45 AM · how did it go?"), so the card is as tall as the cards beside it.
+   */
+  brief?: boolean;
+  /** Phones: Claude's reason is left for the sheet (Now's row), the suggested answer keeping its sparkle. */
+  reasonHidden?: boolean;
   /** The keys that open the attempt's sheet from the page ("A" on a build), shown after the question on desktop. */
   shortcut?: string[];
   className?: string;
@@ -46,6 +53,8 @@ export function OffTheBed({
   withTags = true,
   onPhotos,
   snap,
+  brief = false,
+  reasonHidden = false,
   shortcut,
   className,
 }: OffTheBedProps) {
@@ -58,8 +67,16 @@ export function OffTheBed({
       <div className={cn("flex justify-between gap-x-3 gap-y-1", snap ? "items-start" : "flex-wrap items-center")}>
         <p className={cn("text-small text-ink-soft flex gap-2", snap ? "min-w-0 flex-1 items-start" : "items-center")}>
           <FinishIcon size={16} className={cn("text-ink-faint shrink-0", !!snap && "mt-0.5")} aria-hidden />
-          <span>
-            <span className="text-ink font-semibold">{offTheBedLabel(endedAt)}</span> · how did it go?
+          <span className={cn(brief && "max-md:truncate")}>
+            {brief ? (
+              <>
+                <span className="text-ink font-semibold md:hidden">{offTheBedTime(endedAt)}</span>
+                <span className="text-ink font-semibold max-md:hidden">{offTheBedLabel(endedAt)}</span>
+              </>
+            ) : (
+              <span className="text-ink font-semibold">{offTheBedLabel(endedAt)}</span>
+            )}{" "}
+            · how did it go?
           </span>
           {shortcut && <Kbd keys={shortcut} />}
         </p>
@@ -101,7 +118,9 @@ export function OffTheBed({
           suggested={photoRead?.outcome ?? null}
         />
       )}
-      {photoRead && <PhotoReadNote read={photoRead} withTags={withTags} />}
+      {photoRead && (
+        <PhotoReadNote read={photoRead} withTags={withTags} className={cn(reasonHidden && "max-md:hidden")} />
+      )}
     </div>
   );
 }

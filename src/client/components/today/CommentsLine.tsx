@@ -5,6 +5,7 @@ import { Link } from "@tanstack/react-router";
 import { CommentIcon } from "@/components/ui/icons";
 import { QuietRowContent, quietRowClass } from "@/components/ui/QuietRow";
 import { Section } from "@/components/ui/Section";
+import { cn } from "@/lib/cn";
 import { peopleQuery } from "@/lib/queries";
 import { unreadQuery } from "@/lib/unread-comments";
 
@@ -13,7 +14,16 @@ import { unreadQuery } from "@/lib/unread-comments";
  * under a label that counts them when there are several (or, `counted`, with the count after the line), leading to the thread with that comment lit. Nothing when all is read.
  * It sits under what is on the bed, a block of its own under a quiet label: a note on the fridge, not a notification.
  */
-export default function CommentsLine({ bare = false, counted = false }: { bare?: boolean; counted?: boolean }) {
+export default function CommentsLine({
+  bare = false,
+  counted = false,
+  oneLine = false,
+}: {
+  bare?: boolean;
+  counted?: boolean;
+  /** One line on phones too, cut short (the phone's Now block: the thread has the rest). */
+  oneLine?: boolean;
+}) {
   const { data } = useQuery(unreadQuery);
   const { data: people } = useQuery(peopleQuery);
   const line = data
@@ -29,9 +39,23 @@ export default function CommentsLine({ bare = false, counted = false }: { bare?:
   const search = { thread: 1, comment: thread.latestId } as never;
   const row = (
     <QuietRowContent icon={CommentIcon} iconClassName={counted ? undefined : "text-tomato-ink"}>
-      <span className="md:block md:truncate">
-        <span className="text-ink font-semibold">{line.lead}</span>
-        {line.quote && <span>: {line.quote}</span>}
+      <span className={cn("md:block md:truncate", oneLine && "flex min-w-0 md:flex")}>
+        {oneLine ? (
+          // On one line who and where take at most half of it (the colon stays with them), so what they wrote keeps
+          // the rest.
+          <>
+            <span className="text-ink flex max-w-1/2 min-w-0 shrink-0 font-semibold">
+              <span className="truncate">{line.lead}</span>
+              {line.quote && ":"}
+            </span>
+            {line.quote && <span className="min-w-0 flex-1 truncate pl-1">{line.quote}</span>}
+          </>
+        ) : (
+          <>
+            <span className="text-ink font-semibold">{line.lead}</span>
+            {line.quote && <span>: {line.quote}</span>}
+          </>
+        )}
         {/* In the "needs you" strip there is no label to carry the count. */}
         {counted && line.total > 1 && <span className="text-ink-faint"> · {line.total} new</span>}
       </span>

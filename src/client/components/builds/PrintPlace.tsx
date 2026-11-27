@@ -32,6 +32,11 @@ interface PrintPlaceProps {
   where: "card" | "entry" | "sheet";
   /** Follows the print to the build it went to, whichever way it moved (the attempt's sheet reopens there). */
   follow?: (toId: string) => void;
+  /**
+   * A card in the phone Journal's sideways row: when nothing matched, only the two answers, on one line ("Nothing
+   * matched this print." is still the question's name), so the card is no taller than a print on the bed.
+   */
+  brief?: boolean;
   className?: string;
 }
 
@@ -42,7 +47,7 @@ interface PrintPlaceProps {
  * way to change it opens the same sheet, and every move has an Undo. The card on the bed and the attempt on the build
  * page ask in the same words.
  */
-export default function PrintPlace({ item, attempt, where, follow, className }: PrintPlaceProps) {
+export default function PrintPlace({ item, attempt, where, follow, brief = false, className }: PrintPlaceProps) {
   const [open, setOpen] = useState(false);
   // The sheet's code comes with the first tap.
   const [asked, setAsked] = useState(false);
@@ -67,6 +72,7 @@ export default function PrintPlace({ item, attempt, where, follow, className }: 
         readOnly={readOnly}
         // The card, the build page and the Journal show the printer's mark beside the title already.
         glyph={where === "sheet"}
+        brief={brief}
       />
     );
   } else if (where === "sheet") {
@@ -125,6 +131,7 @@ interface WhichBuildProps {
   follow?: (toId: string) => void;
   readOnly: boolean;
   glyph: boolean;
+  brief?: boolean;
 }
 
 /**
@@ -135,7 +142,7 @@ interface WhichBuildProps {
  * "Which build?" opens the sheet and "Keep it as its own" answers it in one tap. While the guesses are on their way
  * the line keeps its room.
  */
-function WhichBuild({ item, attempt, onMore, follow, readOnly, glyph }: WhichBuildProps) {
+function WhichBuild({ item, attempt, onMore, follow, readOnly, glyph, brief }: WhichBuildProps) {
   const { data: suggestions, isPending } = useQuery(suggestionsQuery(attempt.id));
   const { items: builds } = useBuilds();
   const { items: ideas } = useIdeas();
@@ -175,6 +182,7 @@ function WhichBuild({ item, attempt, onMore, follow, readOnly, glyph }: WhichBui
       onKeep={() => moves.keep()}
       disabled={readOnly}
       glyph={glyph}
+      brief={brief}
     />
   );
 }
@@ -197,6 +205,8 @@ interface WhichBuildLineProps {
   disabled?: boolean;
   /** The printer's glyph before the question: off where the card shows the printer's mark already. */
   glyph?: boolean;
+  /** When nothing matched: the answers alone, the words kept for screen readers (PrintPlace's `brief`). */
+  brief?: boolean;
 }
 
 /** The question as it reads, on the card, the build page and the attempt's sheet alike (the styleguide shows it). */
@@ -211,6 +221,7 @@ export function WhichBuildLine({
   onKeep,
   disabled,
   glyph = true,
+  brief = false,
 }: WhichBuildLineProps) {
   const icon = glyph ? PrinterIcon : undefined;
   // The magnifier only where the sheet opens on a field to search in (the desktop's).
@@ -226,6 +237,7 @@ export function WhichBuildLine({
     return (
       <AskLine
         icon={icon}
+        wordsHidden={brief}
         actions={
           <>
             {another("Which build?", "secondary")}

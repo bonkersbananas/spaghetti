@@ -53,6 +53,14 @@ interface PrintingCardProps {
    */
   lead?: "wide" | "short";
   /**
+   * Phones only, with `compact`: one card of the Journal's sideways row of prints (Now). Each part keeps to one line
+   * (under a picture the name; "11:45 AM · how did it go?" beside the "Off the bed" badge; the attempt and its spools;
+   * "Which build?" and "Keep it as its own"), and Claude's reason is left for the sheet, so the cards side by side come
+   * out about as tall and each ends where its own words end, rather than one leaving a block of blank beside a taller
+   * neighbour.
+   */
+  inRow?: boolean;
+  /**
    * From `lg`: `row` (Today's column: the picture on two fifths, the text beside it), `half` (one print across the
    * Builds list: the picture on half the card, 16:9), or the picture on top for prints side by side, `wide` (two
    * across, 16:9) or `stack` (three across, 4:3), so the focal cards' pictures are never smaller than the grid's below.
@@ -130,6 +138,7 @@ export function PrintingCard({
   via,
   compact = false,
   lead: leadAsked,
+  inRow = false,
   desktop = "row",
   unread = 0,
 }: PrintingCardProps) {
@@ -305,6 +314,14 @@ export function PrintingCard({
               )}
             />
           )}
+          {/* An answered print in the row (asking which build) says its answer on its picture, as a Journal card does,
+              so its words under it are only the question. */}
+          {answered && lead && (
+            <OutcomeChip
+              outcome={attempt.outcome}
+              className="shadow-soft pointer-events-none absolute bottom-2 left-2 z-20 md:hidden"
+            />
+          )}
           {offBed && lead && (
             <OutcomeChip
               outcome={null}
@@ -334,7 +351,9 @@ export function PrintingCard({
           <div className="flex items-start gap-3">
             <h3
               className={cn(
-                "font-display text-ink line-clamp-2 min-w-0 flex-1 break-words",
+                "font-display text-ink min-w-0 flex-1 break-words",
+                // Beside the small square two lines cost nothing: the square is taller.
+                inRow && lead ? "line-clamp-2 max-md:line-clamp-1" : "line-clamp-2",
                 compact ? "text-lead md:text-title" : "text-title",
               )}
             >
@@ -365,15 +384,17 @@ export function PrintingCard({
           <div
             className={cn(
               "text-small text-ink-faint flex min-w-0 flex-col gap-0.5",
-              lead && "max-md:flex-row max-md:items-center max-md:gap-x-2",
+              // In Now's row the attempt and the spools share one line too (beside the small square, so the name
+              // keeps its two lines and the card its height).
+              (lead || inRow) && "max-md:flex-row max-md:items-center max-md:gap-x-2",
             )}
           >
-            <MetaList>
+            <MetaList className={cn(inRow && "max-md:shrink-0")}>
               <span className="whitespace-nowrap">Attempt {attempt.number}</span>
               {partsLabel && <span>{partsLabel}</span>}
             </MetaList>
             {/* One line for the spools, however many: the first named, "+1" for the rest, so every card has the same rhythm. */}
-            {lead && filaments.length > 0 && (
+            {(lead || inRow) && filaments.length > 0 && (
               <span aria-hidden className="md:hidden">
                 ·
               </span>
@@ -397,12 +418,12 @@ export function PrintingCard({
               kept while its code comes (the size of its line), so the card doesn't jump. */}
           {asking && (
             <Suspense fallback={<div aria-hidden className="bg-ink/4 h-12 rounded-md" />}>
-              <PrintPlace item={item} attempt={attempt} where="card" className="pointer-events-auto" />
+              <PrintPlace item={item} attempt={attempt} where="card" brief={inRow} className="pointer-events-auto" />
             </Suspense>
           )}
           {answered ? (
             // The outcome is in: only which build is left, and the question above says it.
-            <OutcomeChip outcome={attempt.outcome} className="self-start md:mt-auto" />
+            <OutcomeChip outcome={attempt.outcome} className={cn("self-start md:mt-auto", lead && "max-md:hidden")} />
           ) : offBed && attempt.endedAt !== null ? (
             // The printer says it stopped: no bar to draw, only the calm question and the three answers.
             <OffTheBed
@@ -411,6 +432,8 @@ export function PrintingCard({
               picked={picked}
               photoRead={attempt.photoRead}
               withTags={false}
+              brief={inRow && !!lead}
+              reasonHidden={inRow}
               // Offline a saved build can't be changed (decision 0005), as in the attempt sheet: no photo then.
               snap={
                 readOnly ? undefined : (
@@ -493,7 +516,10 @@ export function PrintingCard({
                     size="md"
                     suggested={attempt.photoRead?.outcome ?? null}
                   />
-                  {attempt.photoRead?.status === "read" && <PhotoReadNote read={attempt.photoRead} withTags={false} />}
+                  {/* Left for the sheet in Now's row: the suggested answer keeps its sparkle. */}
+                  {attempt.photoRead?.status === "read" && (
+                    <PhotoReadNote read={attempt.photoRead} withTags={false} className={cn(inRow && "max-md:hidden")} />
+                  )}
                 </div>
               )}
             </>

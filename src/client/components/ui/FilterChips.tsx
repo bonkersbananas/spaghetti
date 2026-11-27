@@ -4,7 +4,9 @@ import { Overline } from "./Overline";
 
 /**
  * A row of chips: on phones it scrolls sideways under the thumb, edge to
- * edge; on desktop it wraps. For filters and suggestions.
+ * edge, its ends fading while there is more that way (`fade-ends-x`), so no
+ * chip is ever cut off without a cue; on desktop it wraps. For filters and
+ * suggestions.
  */
 export function ChipRow({
   label,
@@ -26,7 +28,7 @@ export function ChipRow({
       className={cn(
         wrap
           ? "flex flex-wrap gap-2 py-1"
-          : "no-scrollbar -mx-5 flex gap-2 overflow-x-auto px-5 py-1 md:mx-0 md:flex-wrap md:overflow-visible md:px-0",
+          : "no-scrollbar fade-ends-x -mx-5 flex gap-2 overflow-x-auto px-5 py-1 md:mx-0 md:flex-wrap md:overflow-visible md:mask-none md:px-0",
         className,
       )}
     >
