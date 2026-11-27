@@ -146,7 +146,7 @@ export function ChecklistRow({
         <div
           className={cn(
             "flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 pb-1.5 pl-12 md:pl-13",
-            (thumb || pictureRoom) && "sm:pl-21 md:pl-24",
+            (!!thumb || pictureRoom) && "sm:pl-21 md:pl-24",
           )}
         >
           {meta}
