@@ -1,6 +1,14 @@
 import { describe, expect, it } from "vitest";
 import { ftsQuery, highlight } from "../../src/shared/search.ts";
-import { correctWord, distance, markTerms, parseQuery, splitNames, whenRange } from "../../src/shared/search-intent.ts";
+import {
+  correctWord,
+  distance,
+  markTerms,
+  parseQuery,
+  splitNames,
+  splitWord,
+  whenRange,
+} from "../../src/shared/search-intent.ts";
 
 // Wednesday 11 November 2026, noon UTC.
 const NOW = Date.UTC(2026, 10, 11, 12);
@@ -43,6 +51,47 @@ describe("parseQuery", () => {
     const read = parseQuery("0,4 nozzle", NOW);
     expect(read.terms[0]).toEqual({ text: "0.4", prefix: false });
     expect(ftsQuery(read.terms)).toBe('"0 4" AND ("nozzle"* OR "munstycke"*)');
+  });
+
+  it("reads a plural as its singular too, and two words as one compound too", () => {
+    const lids = parseQuery("lids", NOW);
+    // The singular is a whole word: "pets" is not every PETG, "PLAs" is not "plate".
+    expect(lids.terms[0]?.whole).toEqual(["lid"]);
+    expect(lids.terms[0]?.also).toBeUndefined();
+    expect(parseQuery("boxes", NOW).terms[0]?.whole).toContain("box");
+    expect(parseQuery("batteries", NOW).terms[0]?.whole).toContain("battery");
+    expect(parseQuery("class", NOW).terms[0]?.whole).toBeUndefined();
+    expect(ftsQuery(parseQuery("pets", NOW).terms)).toBe('("pets"* OR "pet")');
+    expect(ftsQuery(parseQuery("PLAs", NOW).terms)).toBe('("plas"* OR "pla")');
+    expect(ftsQuery(parseQuery("hot dog", NOW).terms)).toBe('("hot"* AND "dog"*) OR ("hotdog"*)');
+    // Numbers and short words are never glued.
+    expect(ftsQuery(parseQuery("v3 ring", NOW).terms)).toBe('"v3"* AND "ring"*');
+  });
+
+  it("keeps nouns and names that look like filler", () => {
+    expect(parseQuery("can holder", NOW).terms.map((term) => term.text)).toEqual(["can", "holder"]);
+    expect(parseQuery("trash can", NOW).terms.map((term) => term.text)).toEqual(["trash", "can"]);
+    expect(parseQuery("Will's idea", NOW, ["will"]).terms.map((term) => term.text)).toEqual(["will"]);
+    // A name is never filler or intent, whatever the word is otherwise.
+    expect(parseQuery("the best idea", NOW, ["best"]).terms.map((term) => term.text)).toEqual(["best"]);
+  });
+
+  it("keeps a decimal with its unit as the number", () => {
+    const read = parseQuery("0.4mm nozzle 1.75mm", NOW);
+    expect(read.terms.map((term) => term.text)).toEqual(["0.4", "nozzle", "1.75"]);
+    expect(read.terms[0]?.prefix).toBe(true); // a file name holds "0.4mm" as 0 and 4mm
+    expect(parseQuery("0.4 nozzle", NOW).terms[0]?.prefix).toBe(false);
+  });
+
+  it("matches short synonyms as whole words only", () => {
+    expect(parseQuery("christmas", NOW).terms[0]?.whole).toContain("jul");
+    expect(ftsQuery(parseQuery("christmas", NOW).terms)).toContain('"jul")');
+    expect(ftsQuery(parseQuery("christmas", NOW).terms)).not.toContain('"jul"*');
+  });
+
+  it("keeps a number with its unit whole", () => {
+    expect(parseQuery("40mm lid", NOW).terms.map((term) => term.text)).toEqual(["40mm", "lid"]);
+    expect(parseQuery("3color 210c", NOW).terms.map((term) => term.text)).toEqual(["3color", "210c"]);
   });
 
   it("expands synonyms, which are marked too", () => {
@@ -97,5 +146,17 @@ describe("correctWord", () => {
     expect(correctWord("pla", vocabulary)).toBeNull(); // too short
     expect(correctWord("0.4", vocabulary)).toBeNull();
     expect(correctWord("qzxvbn", vocabulary)).toBeNull();
+  });
+});
+
+describe("splitWord", () => {
+  it("splits a word typed as one when both halves start known words", () => {
+    const vocabulary = ["keychain", "ring", "tugboat"];
+    expect(splitWord("keyring", vocabulary)).toEqual(["key", "ring"]);
+    // A 3-letter half is a whole known word (the list keeps those apart).
+    expect(splitWord("hotdog", ["hotel", "stand"], ["hot", "dog"])).toEqual(["hot", "dog"]);
+    expect(splitWord("plantpot", ["plant", "planter"], ["pot"])).toEqual(["plant", "pot"]);
+    expect(splitWord("tugboat", vocabulary)).toBeNull(); // known already
+    expect(splitWord("qzxvbnm", vocabulary)).toBeNull();
   });
 });
