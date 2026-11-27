@@ -2671,6 +2671,35 @@ async function undoOffer(page: Page) {
   });
 }
 
+let calmIdeaId: string | null = null;
+
+/** The idea for the idea-calm-* shots: a model link, three comments, Up next and the wishlist on, nobody named. */
+async function calmIdea(page: Page) {
+  const id = await newModelIdea(page, GOOD_LINK);
+  calmIdeaId = id;
+  const headers = { Origin: new URL(page.url()).origin };
+  for (const body of [
+    "Looks promising",
+    "Can we do it in PETG?",
+    "Yes, after the spool arrives. The jade white is nearly out.",
+  ])
+    await page.request.post(`/api/items/${id}/comments`, { headers, data: { id: crypto.randomUUID(), body } });
+  await openIdea(page, id);
+  await page.getByRole("button", { name: "Up next" }).click();
+  await page.getByRole("button", { name: "My wishlist" }).click();
+  // The toggles' undo toasts would sit over the bar: wait them out.
+  await page.getByText(/On your wishlist/).waitFor();
+  await page.waitForFunction(() => !document.querySelector("[data-sonner-toast]"), undefined, { timeout: 20_000 });
+  await page.locator("section[aria-labelledby^='thread-']").getByRole("list", { name: "Comments" }).waitFor();
+  await page.waitForTimeout(500);
+}
+
+async function forgetCalmIdea(page: Page) {
+  if (!calmIdeaId) return;
+  await page.request.delete(`/api/items/${calmIdeaId}`, { headers: { Origin: new URL(page.url()).origin } });
+  calmIdeaId = null;
+}
+
 export const shots: Shot[] = [
   { name: "sign-in", path: "/sign-in", signedOut: true },
   // A public link as a guest sees it (decision 0075): no app around it, photos first, read-only.
@@ -9274,6 +9303,36 @@ export const shots: Shot[] = [
       },
     }),
   ),
+  // A calmer idea page on a phone: one line of chips under the title and an action bar with a surface of its own.
+  // The longest row there is: Up next and the wishlist on and nobody named yet (so "For Sam Okafor" is offered too),
+  // on an idea with a model link and a thread, at the top and scrolled to its end under the bar.
+  ...["idea-calm-top", "idea-calm-end"].map(
+    (name): Shot => ({
+      name,
+      path: "/ideas",
+      prepare: async (page) => {
+        await calmIdea(page);
+        if (name === "idea-calm-end") {
+          await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
+          await page.waitForTimeout(400);
+        }
+      },
+      cleanup: forgetCalmIdea,
+    }),
+  ),
+  {
+    // A build's own action bar ("Log attempt") on the same tray, scrolled to the end of its thread.
+    name: "build-actionbar-end",
+    path: `/builds/${SEED_BUILD_IDS.cableChain}`,
+    width: 390,
+    why: "desktop has no action bar: its actions are in the page (build)",
+    prepare: async (page) => {
+      await page.locator("h1").first().waitFor({ state: "attached" });
+      await page.locator("[data-action-bar]").waitFor();
+      await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
+      await page.waitForTimeout(400);
+    },
+  },
 ];
 
 /**

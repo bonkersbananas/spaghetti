@@ -540,7 +540,7 @@ const Idea = memo(function Idea({ item }: { item: ItemView }) {
           </Suspense>
         )}
         {!isDesktop && (
-          <ActionBar>
+          <ActionBar surface="tray">
             {/* One primary: starting a build. Moving into an existing one is the quiet word beside it. */}
             {/* Medium and with no icon, so "Start building" keeps its full pill (padding even on both sides) at 390. */}
             <Button variant="quiet" className="shrink-0" disabled={readOnly} onClick={move}>
