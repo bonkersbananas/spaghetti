@@ -570,7 +570,7 @@ const LONG_PRINT = { title: "Candle holder", file: "gold-reindeer-tealight-holde
 const longPrint: { items: string[]; hadBridge: boolean; agent: string | null } = {
   items: [],
   hadBridge: false,
-  agent: false,
+  agent: null,
 };
 
 /** As the printer bridge does: a print filed in a build of its own, which a person then gave a title. Undone by `forgetLongPrint`. */
