@@ -1095,7 +1095,7 @@ function Build({ item }: { item: ItemView }) {
         {/* A print still printing is asked about here, within thumb reach (its card shows only how far along it is);
             one that is off the bed asks on the attempt itself, with its three answers: one question, never two. */}
         {bodyShown && !isDesktop && (active || printing) && !(printing && isOffTheBed(printing)) && (
-          <ActionBar>
+          <ActionBar surface="tray">
             {finishNext ? (
               // As the idea's bar: the second action a quiet word on the left, the one primary on the thumb's side.
               <>

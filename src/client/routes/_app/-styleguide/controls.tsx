@@ -109,6 +109,22 @@ export function ControlSection() {
               Log attempt
             </Button>
           </div>
+          <p className="text-body text-ink-soft">
+            <code className="text-small">surface="tray"</code>, for a screen's own actions over page text (an idea's
+            "Start building", a build's "Log attempt", a twist's "Print it"): a shelf of cream, no rounder than its
+            button, with as much room above the button as at its sides; the tab bar under it turns the same solid cream,
+            so the two are one surface. A list's floating add-action keeps the page's paper.
+          </p>
+          <div className="bg-paper overflow-hidden rounded-md pt-6">
+            <div className="bg-cream shadow-bar flex items-center gap-3 rounded-t-lg px-5 pt-5 pb-3">
+              <Button variant="quiet" className="shrink-0">
+                Add to a build
+              </Button>
+              <Button variant="primary" size="lg" icon={Icons.BuildsIcon} className="min-w-0 flex-1 px-4">
+                Start building
+              </Button>
+            </div>
+          </div>
         </Panel>
       </div>
     </Section>

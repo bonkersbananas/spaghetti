@@ -9,6 +9,10 @@ interface ForOfferProps {
   onName: (name: string) => void;
   /** Someone else: the page opens its empty `ForField` with the focus in it. */
   onAsk: () => void;
+  /** On phones say only the first name ("For Sam"), so a row of chips stays on one line; taking it still names them in full. */
+  firstNameOnPhones?: boolean;
+  /** Onto the offer's ring, such as `max-md:h-7` to match quiet chips beside it. */
+  className?: string;
 }
 
 /**
@@ -16,11 +20,27 @@ interface ForOfferProps {
  * its end to write someone else in the `ForField` line. Once someone is named the page shows the "for Sam" line
  * instead.
  */
-export function ForOffer({ name, onName, onAsk }: ForOfferProps) {
-  if (!name) return <OfferChip onClick={onAsk}>For someone</OfferChip>;
+export function ForOffer({ name, onName, onAsk, firstNameOnPhones = false, className }: ForOfferProps) {
+  if (!name)
+    return (
+      <OfferChip onClick={onAsk} className={className}>
+        For someone
+      </OfferChip>
+    );
+  const space = name.indexOf(" ");
+  const rest = firstNameOnPhones && space > 0 ? name.slice(space) : "";
   return (
-    <OfferChip onClick={() => onName(name)} more={<OfferMore label="For someone else" onClick={onAsk} />}>
-      For {name}
+    <OfferChip
+      className={className}
+      onClick={() => onName(name)}
+      aria-label={`For ${name}`}
+      more={<OfferMore label="For someone else" onClick={onAsk} />}
+    >
+      {/* One inline run, so the button's gap never opens between the first name and the rest. */}
+      <span>
+        For {rest ? name.slice(0, space) : name}
+        {rest && <span className="max-md:hidden">{rest}</span>}
+      </span>
     </OfferChip>
   );
 }

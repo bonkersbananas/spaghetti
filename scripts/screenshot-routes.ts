@@ -2671,6 +2671,46 @@ async function undoOffer(page: Page) {
   });
 }
 
+let calmIdeaId: string | null = null;
+
+/** The idea for the idea-calm-* shots: a model link, three comments, Up next and the wishlist on, nobody named. */
+async function calmIdea(page: Page) {
+  const id = await newModelIdea(page, GOOD_LINK);
+  calmIdeaId = id;
+  const headers = { Origin: new URL(page.url()).origin };
+  for (const body of [
+    "Looks promising",
+    "Can we do it in PETG?",
+    "Yes, after the spool arrives. The jade white is nearly out.",
+  ])
+    await page.request.post(`/api/items/${id}/comments`, { headers, data: { id: crypto.randomUUID(), body } });
+  await openIdea(page, id);
+  await page.getByRole("button", { name: "Up next" }).click();
+  await page.getByRole("button", { name: "My wishlist" }).click();
+  // The toggles' undo toasts would sit over the bar: wait them out.
+  await page.getByText(/On your wishlist/).waitFor();
+  await page.waitForFunction(() => !document.querySelector("[data-sonner-toast]"), undefined, { timeout: 20_000 });
+  await page.locator("section[aria-labelledby^='thread-']").getByRole("list", { name: "Comments" }).waitFor();
+  await page.waitForTimeout(500);
+}
+
+/** Scrolls to the page's end (less `short` px), again once lazy parts below have grown it, and lets it settle. */
+async function scrollToEnd(page: Page, short: number) {
+  for (let pass = 0; pass < 2; pass++) {
+    await page.evaluate(
+      (by) => window.scrollTo({ top: document.documentElement.scrollHeight - innerHeight - by, behavior: "instant" }),
+      short,
+    );
+    await page.waitForTimeout(400);
+  }
+}
+
+async function forgetCalmIdea(page: Page) {
+  if (!calmIdeaId) return;
+  await page.request.delete(`/api/items/${calmIdeaId}`, { headers: { Origin: new URL(page.url()).origin } });
+  calmIdeaId = null;
+}
+
 export const shots: Shot[] = [
   { name: "sign-in", path: "/sign-in", signedOut: true },
   // A public link as a guest sees it (decision 0075): no app around it, photos first, read-only.
@@ -9272,6 +9312,79 @@ export const shots: Shot[] = [
         await page.keyboard.press("Escape");
         await forgetLongPrint(page);
       },
+    }),
+  ),
+  // A calmer idea page on a phone: one line of chips under the title and an action bar with a surface of its own.
+  // The longest row there is: Up next and the wishlist on and nobody named yet (so "For Sam" is offered too), on an
+  // idea with a model link and a thread: at the top, mid-thread with the words running under the tray, and at its end.
+  ...(["top", "mid", "end"] as const).map(
+    (at): Shot => ({
+      name: `idea-calm-${at}`,
+      path: "/ideas",
+      ...(at === "mid" ? { width: 390 as const, why: "the words under the phone's tray" } : {}),
+      prepare: calmIdea,
+      beforeShot: async (page) => {
+        // The pointer away from the page, so no hover wash sits on a button at 1440.
+        await page.mouse.move(0, 0);
+        if (at !== "top") await scrollToEnd(page, at === "mid" ? 140 : 0);
+      },
+      cleanup: forgetCalmIdea,
+    }),
+  ),
+  {
+    // The same row on a narrower phone (375 px): still one line; what doesn't fit scrolls sideways.
+    name: "idea-calm-375",
+    path: "/ideas",
+    width: 390,
+    why: "a narrower phone",
+    prepare: async (page) => {
+      await page.setViewportSize({ width: 375, height: 812 });
+      await calmIdea(page);
+    },
+    beforeShot: (page) => page.mouse.move(0, 0),
+    cleanup: async (page) => {
+      await page.setViewportSize({ width: 390, height: 844 });
+      await forgetCalmIdea(page);
+    },
+  },
+  {
+    // The other person with a long first name: the offer names them by it, and the row scrolls rather than wraps.
+    name: "idea-calm-long-name",
+    path: "/ideas",
+    width: 390,
+    why: "the phone's one-line row",
+    prepare: async (page) => {
+      await page.route("**/api/people", async (route) => {
+        const response = await route.fetch();
+        const body = (await response.json()) as { people: Array<{ name: string }> };
+        for (const person of body.people) if (person.name.startsWith("Sam")) person.name = "Bartholomew Okafor";
+        await route.fulfill({ response, json: body });
+      });
+      await page.evaluate(() => localStorage.clear());
+      await calmIdea(page);
+      await page.getByRole("button", { name: "For Bartholomew Okafor" }).waitFor();
+    },
+    beforeShot: (page) => page.mouse.move(0, 0),
+    cleanup: async (page) => {
+      await page.unroute("**/api/people");
+      await forgetCalmIdea(page);
+    },
+  },
+  ...[
+    // A build's own action bar on the same tray, at the end of its page: "Log attempt" (a warped PETG try), and
+    // "Log another try" beside "Finish build" after one that worked.
+    { name: "build-tray-end", id: SEED_BUILD_IDS.cableChain },
+    { name: "build-tray-two-end", id: SEED_IDS.desiccantHook },
+  ].map(
+    ({ name, id }): Shot => ({
+      name,
+      path: `/builds/${id}`,
+      width: 390,
+      why: "desktop has no action bar: its actions are in the page (build)",
+      prepare: async (page) => {
+        await page.locator("[data-action-bar]").waitFor();
+      },
+      beforeShot: (page) => scrollToEnd(page, 0),
     }),
   ),
 ];
