@@ -221,26 +221,44 @@ test("a new attempt's sheet on a phone opens at its top, Claude's first idea who
   await expect(sheet.getByRole("button", { name: /Add the slicer file/ })).toBeInViewport();
 });
 
-test("What worked says the note when the attempt that worked has nothing else, and is gone when it says nothing @phone", async ({
+test("What worked says only what isn't already in view: no card beside a lone attempt, its note when it is further down @phone", async ({
   page,
 }) => {
-  const withNote = await build(page, "Hook rail");
-  await attempt(page, withNote, {
+  const ms = 3_600_000;
+  // One attempt, no settings: its card says Worked and its note right there, so there is no What worked card.
+  const lone = await build(page, "Hook rail");
+  await attempt(page, lone, {
     outcome: "success",
-    printedAt: Date.now() - 3_600_000,
+    printedAt: Date.now() - ms,
     note: "Snug on the rail.",
     settings: {},
   });
-  await page.goto(`/builds/${withNote}`);
+  await page.goto(`/builds/${lone}`);
   await expect(page.getByRole("textbox", { name: "Title" })).toHaveValue("Hook rail");
-  const card = page.getByRole("region", { name: "What worked" });
-  await expect(card).toContainText("What worked · attempt 1");
-  await expect(card).toContainText("Snug on the rail.");
+  await expect(page.getByText("Snug on the rail.")).toHaveCount(1);
+  await expect(page.getByRole("region", { name: "What worked" })).toHaveCount(0);
 
-  const bare = await build(page, "Desk clamp");
-  await attempt(page, bare, { outcome: "success", printedAt: Date.now() - 3_600_000, settings: {} });
-  await page.goto(`/builds/${bare}`);
+  // Three attempts, the one in the middle worked: it is a row further down, so the card says its note.
+  const three = await build(page, "Desk clamp");
+  await attempt(page, three, { outcome: "failed", printedAt: Date.now() - 3 * ms, settings: {} });
+  await attempt(page, three, {
+    outcome: "success",
+    printedAt: Date.now() - 2 * ms,
+    note: "Tight on the desk.",
+    settings: {},
+  });
+  await attempt(page, three, { outcome: "partial", printedAt: Date.now() - ms, settings: {} });
+  await page.goto(`/builds/${three}`);
   await expect(page.getByRole("textbox", { name: "Title" })).toHaveValue("Desk clamp");
+  const card = page.getByRole("region", { name: "What worked" });
+  await expect(card).toContainText("What worked · attempt 2");
+  await expect(card).toContainText("Tight on the desk.");
+
+  // One attempt that worked with nothing to say: no card either.
+  const bare = await build(page, "Spool holder");
+  await attempt(page, bare, { outcome: "success", printedAt: Date.now() - ms, settings: {} });
+  await page.goto(`/builds/${bare}`);
+  await expect(page.getByRole("textbox", { name: "Title" })).toHaveValue("Spool holder");
   await expect(page.getByText("Attempt 1", { exact: true }).first()).toBeVisible();
   await expect(page.getByRole("region", { name: "What worked" })).toHaveCount(0);
 });

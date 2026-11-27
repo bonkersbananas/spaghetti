@@ -668,6 +668,7 @@ function Build({ item }: { item: ItemView }) {
   const answer = worked ? (
     <WhatWorked
       compact={isCard(worked)}
+      only={item.attempts.length === 1}
       attempt={worked}
       onOpen={() => openSheet(worked.id)}
       material={settingsMaterial(worked.settings)}
@@ -1191,6 +1192,7 @@ function NothingWorked({ tries, closest, onOpen }: { tries: number; closest?: At
  */
 function WhatWorked({
   compact,
+  only,
   material,
   attempt,
   onOpen,
@@ -1201,6 +1203,8 @@ function WhatWorked({
 }: {
   /** The attempt is a card on this page already: its note and tags aren't said again. */
   compact?: boolean;
+  /** It is the build's only attempt: its card is right beside this one. */
+  only?: boolean;
   /** Its material ("PLA"), which the recipes below are for. */
   material: string | null;
   attempt: AttemptView;
@@ -1216,12 +1220,13 @@ function WhatWorked({
   const filaments = attempt.settings.filaments ?? [];
   const readOnly = useReadOnly();
   const saysSettings = filaments.length > 0 || settings.length > 0;
-  // Said once: on a card the attempt's note and tags are right there, so this keeps to its settings, unless it has
-  // none, when its note and tags are what worked. With nothing at all to say there is no card.
+  // Said once: the card shows only what the reader can't already see nearby. On a card the attempt's note and tags are
+  // right there, so this keeps to its settings; with none, its note and tags are what worked, unless the attempt is
+  // the build's only one (its card, saying Worked and its note, is right there): then, as with nothing to say, no card.
+  if (!saysSettings && (only || (!attempt.note.trim() && !attempt.successNotes.length)) && !recipes.length) return null;
   const words = !compact || !saysSettings;
   const note = words ? attempt.note.trim() : "";
   const notes = words ? attempt.successNotes : [];
-  if (!saysSettings && !note && !notes.length && !recipes.length) return null;
   return (
     <section aria-label="What worked" className="bg-basil-soft/60 flex flex-col rounded-lg">
       <button
