@@ -271,7 +271,13 @@ test("offers notifications to a person with none, turns them on from the card, a
   await visitOffered(page, isMobile);
   const offer = page.getByRole("region", { name: "Turn on notifications" });
   await expect(offer).toBeVisible();
-  await expect(offer).toContainText("gets its answer while it");
+  if (isMobile) {
+    // On the phone's Journal it is one quiet line among Now's notices, not a card that pushes the notebook down.
+    await expect(offer).toContainText("Hear when a print is done");
+    expect((await offer.boundingBox())?.height).toBeLessThanOrEqual(48);
+  } else {
+    await expect(offer).toContainText("gets its answer while it");
+  }
   await offer.getByRole("button", { name: "Turn on" }).click();
   await expect(page.getByText("Notifications are on")).toBeVisible();
   await expect(offer).toHaveCount(0);

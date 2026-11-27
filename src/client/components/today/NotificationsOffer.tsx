@@ -16,7 +16,15 @@ import { OFFER_HINT } from "./offer-hint";
  * It never moves what is already on the screen: the first time this device finds the offer applies, it only
  * remembers that (OFFER_HINT) and shows it from the next visit, when the gate has kept its place from the first paint.
  */
-export default function NotificationsOffer({ show, onResolved }: { show: boolean; onResolved: () => void }) {
+export default function NotificationsOffer({
+  show,
+  onResolved,
+  layout,
+}: {
+  show: boolean;
+  onResolved: () => void;
+  layout?: "card" | "line";
+}) {
   const queryClient = useQueryClient();
   const device = usePushDevice();
   const dismiss = useMutation({
@@ -45,6 +53,7 @@ export default function NotificationsOffer({ show, onResolved }: { show: boolean
   if (!applies || !show) return null;
   return (
     <NotificationOffer
+      layout={layout}
       busy={device.turnOn.isPending}
       onDismiss={() => dismiss.mutate()}
       onTurnOn={() =>

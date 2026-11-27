@@ -2,10 +2,14 @@ import { dueLine } from "@shared/upkeep";
 import { Link } from "@tanstack/react-router";
 import { ClockIcon } from "@/components/ui/icons";
 import { QuietRowContent, quietRowClass } from "@/components/ui/QuietRow";
+import { cn } from "@/lib/cn";
 import { useDueUpkeep } from "@/lib/upkeep";
 
-/** At most one quiet line when something is due, leading to the Printer page. Nothing when all is well. */
-export default function UpkeepLine() {
+/**
+ * At most one quiet line when something is due, leading to the Printer page. Nothing when all is well. `oneLine` cuts
+ * it short rather than wrapping (the phone's Now block: the Printer page has the rest).
+ */
+export default function UpkeepLine({ oneLine = false }: { oneLine?: boolean }) {
   const due = useDueUpkeep();
   const line = dueLine(
     due.map((task) => ({
@@ -19,8 +23,10 @@ export default function UpkeepLine() {
   return (
     <Link to="/printer" className={quietRowClass}>
       <QuietRowContent icon={ClockIcon}>
-        <span className="text-ink font-semibold">{line.text}</span>
-        {line.more && <span className="text-ink-faint">. {line.more}</span>}
+        <span className={cn(oneLine && "block truncate")}>
+          <span className="text-ink font-semibold">{line.text}</span>
+          {line.more && <span className="text-ink-faint">. {line.more}</span>}
+        </span>
       </QuietRowContent>
     </Link>
   );

@@ -55,10 +55,15 @@ export function NotificationSection() {
         <Panel className="flex flex-col gap-3">
           <Label>Offer to turn notifications on</Label>
           <p className="text-small text-ink-faint">
-            Once, last in Today (the phone's Now block), for a person with no push on any device where this one can
-            subscribe. "Not now" is for good.
+            Once, last in Today (on a phone, with the notices of the Journal's Now block), for a person with no push on
+            any device where this one can subscribe. "Not now" is for good.
           </p>
           <NotificationOffer onTurnOn={() => undefined} onDismiss={() => undefined} />
+          <p className="text-small text-ink-faint">
+            On the phone's Journal it is one quiet line among Now's notices (`layout="line"`), as tall as the comment
+            and upkeep lines beside it: the close is "Not now".
+          </p>
+          <NotificationOffer layout="line" onTurnOn={() => undefined} onDismiss={() => undefined} />
         </Panel>
         <Panel className="flex flex-col gap-4">
           <Label>Notification preview</Label>

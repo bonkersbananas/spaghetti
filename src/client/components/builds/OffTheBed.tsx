@@ -28,6 +28,11 @@ interface OffTheBedProps {
   onPhotos?: (files: File[]) => void;
   /** A camera button of the caller's own (the card's "Snap this print"), beside the sentence; it replaces "Take photo". */
   snap?: ReactNode;
+  /**
+   * Phones: the sentence is only when it came off the bed, on one line, and Claude's reason is one line too: a card in
+   * Now's sideways row, as tall as the cards beside it. The three answers still ask how it went (their group's name).
+   */
+  brief?: boolean;
   /** The keys that open the attempt's sheet from the page ("A" on a build), shown after the question on desktop. */
   shortcut?: string[];
   className?: string;
@@ -46,6 +51,7 @@ export function OffTheBed({
   withTags = true,
   onPhotos,
   snap,
+  brief = false,
   shortcut,
   className,
 }: OffTheBedProps) {
@@ -58,8 +64,9 @@ export function OffTheBed({
       <div className={cn("flex justify-between gap-x-3 gap-y-1", snap ? "items-start" : "flex-wrap items-center")}>
         <p className={cn("text-small text-ink-soft flex gap-2", snap ? "min-w-0 flex-1 items-start" : "items-center")}>
           <FinishIcon size={16} className={cn("text-ink-faint shrink-0", !!snap && "mt-0.5")} aria-hidden />
-          <span>
-            <span className="text-ink font-semibold">{offTheBedLabel(endedAt)}</span> · how did it go?
+          <span className={cn(brief && "max-md:truncate")}>
+            <span className="text-ink font-semibold">{offTheBedLabel(endedAt)}</span>
+            <span className={cn(brief && "max-md:hidden")}> · how did it go?</span>
           </span>
           {shortcut && <Kbd keys={shortcut} />}
         </p>
@@ -101,7 +108,7 @@ export function OffTheBed({
           suggested={photoRead?.outcome ?? null}
         />
       )}
-      {photoRead && <PhotoReadNote read={photoRead} withTags={withTags} />}
+      {photoRead && <PhotoReadNote read={photoRead} withTags={withTags} oneLine={brief} />}
     </div>
   );
 }

@@ -10,6 +10,8 @@ interface PhotoReadNoteProps {
   className?: string;
   /** The tags that would come along, as chips under the reason. Today leaves them out: the sheet shows them. */
   withTags?: boolean;
+  /** The reason on one line, cut short (a card in the phone's sideways row of prints: the sheet has it whole). */
+  oneLine?: boolean;
 }
 
 /**
@@ -17,7 +19,7 @@ interface PhotoReadNoteProps {
  * reads (a pulse, not a spinner), then why, with the tags it would pick. It is subordinate to the photo and to the
  * person's own choice, so it is small, faint and never asks for anything.
  */
-export function PhotoReadNote({ read, className, withTags = true }: PhotoReadNoteProps) {
+export function PhotoReadNote({ read, className, withTags = true, oneLine = false }: PhotoReadNoteProps) {
   if (read.status === "reading") {
     return (
       <ClaudeLine working className={cn("px-0.5", className)}>
@@ -27,7 +29,11 @@ export function PhotoReadNote({ read, className, withTags = true }: PhotoReadNot
   }
   const tags = withTags ? suggestedTagWords(read) : [];
   if (!tags.length) {
-    return <ClaudeLine className={cn("items-start px-0.5", className)}>{read.reason}</ClaudeLine>;
+    return (
+      <ClaudeLine className={cn(!oneLine && "items-start", "px-0.5", className)}>
+        {oneLine ? <span className="min-w-0 truncate">{read.reason}</span> : read.reason}
+      </ClaudeLine>
+    );
   }
   return (
     <div className={cn("text-small text-ink-faint flex items-start gap-1.5 px-0.5", className)}>

@@ -1,8 +1,8 @@
 import { actionsFor, nudgeMessage } from "@shared/push";
 import type { ReactNode } from "react";
 import { cn } from "@/lib/cn";
-import { Button } from "./Button";
-import { BellIcon } from "./icons";
+import { Button, IconButton } from "./Button";
+import { BellIcon, CloseIcon } from "./icons";
 import { NotificationPreview } from "./NotificationPreview";
 
 interface NotificationOfferProps {
@@ -12,6 +12,11 @@ interface NotificationOfferProps {
   busy?: boolean;
   /** What is in it for them, one sentence. */
   children?: ReactNode;
+  /**
+   * `line`: one quiet row, as tall as the lines beside it (the bell, the promise, "Turn on" and a close for "Not now"),
+   * for the phone's Now block, where the notebook should start on the first screen. `card` (default): the soft card.
+   */
+  layout?: "card" | "line";
   className?: string;
 }
 
@@ -23,7 +28,28 @@ const example = nudgeMessage("off_the_bed", { id: "example", itemId: "example" }
  * action) and "Not now". On a phone the buttons sit beside the words, so the card is about two rows tall; from md
  * the real nudge is drawn beside them, as the Notifications sheet shows it.
  */
-export function NotificationOffer({ onTurnOn, onDismiss, busy, children, className }: NotificationOfferProps) {
+export function NotificationOffer({
+  onTurnOn,
+  onDismiss,
+  busy,
+  children,
+  layout = "card",
+  className,
+}: NotificationOfferProps) {
+  if (layout === "line") {
+    return (
+      <section aria-label="Turn on notifications" className={cn("flex min-h-11 items-center gap-2", className)}>
+        <BellIcon size={16} className="text-ink-faint shrink-0" aria-hidden />
+        <p className="text-small text-ink-soft min-w-0 flex-1 truncate">
+          <span className="text-ink font-semibold">Hear when a print is done</span>
+        </p>
+        <Button variant="secondary" size="sm" loading={busy} onClick={onTurnOn} className="shrink-0">
+          Turn on
+        </Button>
+        <IconButton icon={CloseIcon} label="Not now" size="sm" onClick={onDismiss} className="-mr-1.5 shrink-0" />
+      </section>
+    );
+  }
   return (
     <section
       aria-label="Turn on notifications"

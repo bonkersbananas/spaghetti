@@ -22,7 +22,9 @@ export function SearchSection() {
     >
       <div className="grid gap-6 lg:grid-cols-2">
         <Panel className="flex min-w-0 flex-col gap-4">
-          <Label>ChipRow: scrolls sideways on phones, wraps on desktop</Label>
+          <Label>
+            ChipRow: scrolls sideways on phones, its ends fading while there is more that way; wraps on desktop
+          </Label>
           <ChipRow label="Filters">
             {[
               ["failures", "Only failures", Icons.LessonsIcon, "tomato"],

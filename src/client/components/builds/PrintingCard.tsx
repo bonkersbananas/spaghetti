@@ -53,6 +53,12 @@ interface PrintingCardProps {
    */
   lead?: "wide" | "short";
   /**
+   * Phones only, with `compact` and `lead`: one card of the Journal's sideways row of prints (Now). Each part keeps to
+   * one line (the name, "Off the bed at 10:42", Claude's reason), so the cards side by side come out about as tall and
+   * each ends where its own words end, rather than one leaving a block of blank beside a taller neighbour.
+   */
+  inRow?: boolean;
+  /**
    * From `lg`: `row` (Today's column: the picture on two fifths, the text beside it), `half` (one print across the
    * Builds list: the picture on half the card, 16:9), or the picture on top for prints side by side, `wide` (two
    * across, 16:9) or `stack` (three across, 4:3), so the focal cards' pictures are never smaller than the grid's below.
@@ -130,6 +136,7 @@ export function PrintingCard({
   via,
   compact = false,
   lead: leadAsked,
+  inRow = false,
   desktop = "row",
   unread = 0,
 }: PrintingCardProps) {
@@ -305,6 +312,14 @@ export function PrintingCard({
               )}
             />
           )}
+          {/* An answered print in the row (asking which build) says its answer on its picture, as a Journal card does,
+              so its words under it are only the question. */}
+          {answered && lead && (
+            <OutcomeChip
+              outcome={attempt.outcome}
+              className="shadow-soft pointer-events-none absolute bottom-2 left-2 z-20 md:hidden"
+            />
+          )}
           {offBed && lead && (
             <OutcomeChip
               outcome={null}
@@ -334,7 +349,8 @@ export function PrintingCard({
           <div className="flex items-start gap-3">
             <h3
               className={cn(
-                "font-display text-ink line-clamp-2 min-w-0 flex-1 break-words",
+                "font-display text-ink min-w-0 flex-1 break-words",
+                inRow ? "line-clamp-2 max-md:line-clamp-1" : "line-clamp-2",
                 compact ? "text-lead md:text-title" : "text-title",
               )}
             >
@@ -402,7 +418,7 @@ export function PrintingCard({
           )}
           {answered ? (
             // The outcome is in: only which build is left, and the question above says it.
-            <OutcomeChip outcome={attempt.outcome} className="self-start md:mt-auto" />
+            <OutcomeChip outcome={attempt.outcome} className={cn("self-start md:mt-auto", lead && "max-md:hidden")} />
           ) : offBed && attempt.endedAt !== null ? (
             // The printer says it stopped: no bar to draw, only the calm question and the three answers.
             <OffTheBed
@@ -411,6 +427,7 @@ export function PrintingCard({
               picked={picked}
               photoRead={attempt.photoRead}
               withTags={false}
+              brief={inRow}
               // Offline a saved build can't be changed (decision 0005), as in the attempt sheet: no photo then.
               snap={
                 readOnly ? undefined : (
@@ -493,7 +510,9 @@ export function PrintingCard({
                     size="md"
                     suggested={attempt.photoRead?.outcome ?? null}
                   />
-                  {attempt.photoRead?.status === "read" && <PhotoReadNote read={attempt.photoRead} withTags={false} />}
+                  {attempt.photoRead?.status === "read" && (
+                    <PhotoReadNote read={attempt.photoRead} withTags={false} oneLine={inRow} />
+                  )}
                 </div>
               )}
             </>

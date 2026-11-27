@@ -600,6 +600,52 @@
 }
 
 /*
+ * A row that scrolls sideways edge to edge (ChipRow on phones): its ends fade out over 2 rem while there is more to
+ * scroll that way, so a row cut by the screen's edge always says it goes on. Drawn by a scroll-driven animation, so it
+ * costs no script and a row that fits has no fade; a browser without them shows the plain cut. Reduced motion keeps it:
+ * nothing moves, it follows the scroll.
+ */
+@property --sg-fade-start {
+  syntax: "<length>";
+  inherits: false;
+  initial-value: 0px;
+}
+@property --sg-fade-end {
+  syntax: "<length>";
+  inherits: false;
+  initial-value: 0px;
+}
+@keyframes sg-fade-ends {
+  from {
+    --sg-fade-start: 0px;
+    --sg-fade-end: 2rem;
+  }
+  8%,
+  92% {
+    --sg-fade-start: 2rem;
+    --sg-fade-end: 2rem;
+  }
+  to {
+    --sg-fade-start: 2rem;
+    --sg-fade-end: 0px;
+  }
+}
+@utility fade-ends-x {
+  @supports (animation-timeline: scroll()) {
+    mask-image: linear-gradient(
+      to right,
+      transparent,
+      black var(--sg-fade-start),
+      black calc(100% - var(--sg-fade-end)),
+      transparent
+    );
+    animation: sg-fade-ends linear both;
+    animation-duration: auto !important;
+    animation-timeline: scroll(self inline);
+  }
+}
+
+/*
  * A column that stays in view beside a longer one (the build's story beside its attempts), from md up: it sticks at
  * --sticky-top, which lib/sticky-column.ts sets (1.5 rem, or negative for a column taller than the window so that
  * its end is what sticks).
