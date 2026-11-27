@@ -126,7 +126,7 @@ export function NoteFace({
             <p
               className={cn(
                 "font-display text-ink line-clamp-3 font-normal break-words whitespace-pre-line",
-                sizes[face],
+                compact === "fill" ? miniSizes[face] : sizes[face],
               )}
             >
               {keepUnits(text)}

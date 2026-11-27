@@ -3345,13 +3345,20 @@ export const shots: Shot[] = [
     },
   },
   {
-    // Scrolled down: the top bar says the borrowed name, as the heading does.
+    // Scrolled down (a short window, so the page scrolls): the top bar keeps its controls and no title of its own; the
+    // name is the heading's and the tab's.
     name: "idea-named-by-link-scrolled",
     path: `/ideas/${SEED_IDS.amsRoller}`,
     prepare: async (page) => {
+      const size = page.viewportSize();
+      if (size) await page.setViewportSize({ width: size.width, height: 560 });
       await page.getByRole("textbox", { name: "Title" }).waitFor();
       await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
       await page.waitForTimeout(400);
+    },
+    cleanup: async (page) => {
+      const size = page.viewportSize();
+      if (size) await page.setViewportSize({ width: size.width, height: size.width < 768 ? 844 : 900 });
     },
   },
   {
