@@ -5,7 +5,6 @@ import { lazy } from "react";
  * browser is idle or on the first press (Sidebar), and the change-password sheet, fetched when it is asked for.
  */
 export const loadAccountMenu = () => import("./AccountMenu");
-export const AccountMenu = lazy(loadAccountMenu);
 export const ChangePasswordSheet = lazy(() =>
   import("./ChangePasswordSheet").then((module) => ({ default: module.ChangePasswordSheet })),
 );

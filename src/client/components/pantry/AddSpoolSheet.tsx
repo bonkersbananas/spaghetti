@@ -6,7 +6,7 @@ import { colourNameOf } from "@shared/spool-lookup";
 import { BRANDS, colorsName, FINISHES, finishLabel, linesFor, SPOOL_MATERIALS, spoolColors } from "@shared/spools";
 import { useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
-import { useEffect, useId, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { ToggleChip } from "@/components/ui/Chip";
 import { TextField } from "@/components/ui/Field";
@@ -17,7 +17,7 @@ import { Sheet } from "@/components/ui/Sheet";
 import { SpoolColourField, withColourCount } from "@/components/ui/SpoolColourField";
 import { SpoolDisc } from "@/components/ui/SpoolDisc";
 import { cn } from "@/lib/cn";
-import { useLabelReadsEnabled } from "@/lib/label-read";
+import { labelReadsEnabled, useLabelReadsEnabled } from "@/lib/label-read";
 import { addSpool, type SpoolDraft } from "@/lib/pantry";
 import { sessionQuery } from "@/lib/queries";
 import { useIsDesktop } from "@/lib/use-media-query";
@@ -87,8 +87,18 @@ export function AddSpoolSheet({
   // What the person has set themselves: a label read may fill the rest, and the starting material and weight.
   const [touched, setTouched] = useState<ReadonlySet<string>>(new Set());
 
+  // Moves on at each open, close and save, and when the sheet goes (some callers unmount it rather than close it, and
+  // the page can go): a photo still waiting for the features knows the sheet it came from is gone.
+  const turn = useRef(0);
+  useEffect(
+    () => () => {
+      turn.current++;
+    },
+    [],
+  );
   // biome-ignore lint/correctness/useExhaustiveDependencies: only when it opens.
   useEffect(() => {
+    turn.current++;
     if (!open) return;
     setTapped(null);
     setAllProducts(false);
@@ -107,9 +117,18 @@ export function AddSpoolSheet({
   const pickPhoto = (files: File[]) => {
     const file = files[0];
     if (!file) return;
-    // With Claude's key, a photo here is the label to read: the spool is saved with it at once.
+    // With Claude's key, a photo here is the label to read: the spool is saved with it at once. One picked before the
+    // features answered waits for them, then saves with the sheet as it is by then.
     if (labelReads) save(file);
-    else setPhoto(file);
+    else {
+      // Unless, by then, the sheet closed or saved (the counter moves on both): the photo is then dropped.
+      const at = turn.current;
+      void labelReadsEnabled(queryClient).then((read) => {
+        if (turn.current !== at) return;
+        if (read) saveRef.current(file);
+        else setPhoto(file);
+      });
+    }
   };
   const camera = useFilePicker({ camera: true, onFiles: pickPhoto, testId: "spool-camera-input" });
   const library = useFilePicker({ onFiles: pickPhoto, testId: "spool-photo-input" });
@@ -156,6 +175,7 @@ export function AddSpoolSheet({
 
   function save(label?: File) {
     if (!user || (!label && !draft.material.trim())) return;
+    turn.current++;
     const read = label
       ? {
           placeholders: (["material", "netGrams"] as const).filter(
@@ -182,6 +202,8 @@ export function AddSpoolSheet({
     // On its own page the fields fill in, like the label jumping into the form.
     if (label && !stayPut) void navigate({ to: "/pantry/$spoolId", params: { spoolId: spool.id } });
   }
+  const saveRef = useRef(save);
+  saveRef.current = save;
 
   return (
     <Sheet

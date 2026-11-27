@@ -50,6 +50,37 @@ test.describe("on a laptop", () => {
     await expect(account).toBeFocused();
   });
 
+  test("the account button keeps focus, frame by frame, as the menu's code swaps in the real one", async ({ page }) => {
+    // The swap once went through a Suspense fallback: for a few hundred milliseconds a second look-alike stood there
+    // and focus sat on the page's body, so ⌘K pressed then had nothing to give focus back to (CI caught it now and
+    // then in the test above). Hold the code until the look-alike has focus, then watch every frame of the swap.
+    let release = () => {};
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    await page.route(/\/assets\/AccountMenu-[\w-]+\.js$/, async (route) => {
+      await held;
+      await route.continue();
+    });
+    await page.goto("/ideas");
+    const account = page.getByRole("button", { name: "Account menu" });
+    await expect(account).toBeVisible();
+    await account.focus();
+    await page.evaluate(() => {
+      const w = window as unknown as { lostFocus: boolean };
+      w.lostFocus = false;
+      const tick = () => {
+        if (!document.activeElement?.hasAttribute("data-account-button")) w.lostFocus = true;
+        requestAnimationFrame(tick);
+      };
+      requestAnimationFrame(tick);
+    });
+    release();
+    await expect(page.locator("[data-account-button][data-state]")).toHaveCount(1);
+    await expect(account).toBeFocused();
+    expect(await page.evaluate(() => (window as unknown as { lostFocus: boolean }).lostFocus)).toBe(false);
+  });
+
   test("the account button, swapped for the real one while the palette is open, still gets focus back", async ({
     page,
   }) => {

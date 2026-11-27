@@ -8,6 +8,16 @@ import { patchSpool, spoolsQuery } from "./pantry";
 /** Whether anything about reading spool labels shows at all: without the Worker's key nothing does. */
 export const useLabelReadsEnabled = () => useQuery(featuresQuery).data?.labelReads === true;
 
+/**
+ * The same, for a photo picked now: a photo can come in before the features have answered (a quick pick on a slow
+ * phone), and that label is still to be read, so wait for the answer rather than take "not yet known" as "no".
+ */
+export const labelReadsEnabled = (queryClient: QueryClient) =>
+  queryClient.fetchQuery(featuresQuery).then(
+    (features) => features.labelReads === true,
+    () => false,
+  );
+
 let polling: ReturnType<typeof setInterval> | undefined;
 
 /**
