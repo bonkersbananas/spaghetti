@@ -230,18 +230,21 @@ function Build({ item }: { item: ItemView }) {
   const cover = coverOf(item);
   const plate = cover.kind === "plate" ? cover.file : undefined;
   const [editingParts, setEditingParts] = useState(false);
-  const [photoId, setPhotoId] = useState((hero ?? gallery[0])?.id);
+  // The photo the page leads with: an attempt card that has it doesn't show it large again (AttemptEntry's heroId).
+  const leadPhotoId = (hero ?? gallery[0])?.id;
+  // A photo picked in the strip stays shown until the lead itself changes (Finish build picks the final print, an
+  // answer brings a better photo): then the page leads with the new one, as a reload would.
+  const [picked, setPicked] = useState<{ id: string; lead: string | undefined } | null>(null);
+  const photoId = picked && picked.lead === leadPhotoId ? picked.id : leadPhotoId;
   const photoIndex = Math.max(
     0,
     gallery.findIndex((photo) => photo.id === photoId),
   );
   const shownPhoto = gallery[photoIndex];
-  // The photo the page leads with: an attempt card that has it doesn't show it large again (AttemptEntry's heroId).
-  const leadPhotoId = (hero ?? gallery[0])?.id;
   const shownAttempt = shownPhoto?.attemptId ? item.attempts.find((a) => a.id === shownPhoto.attemptId) : undefined;
   const selectPhoto = (index: number) => {
     const photo = gallery[Math.max(0, Math.min(gallery.length - 1, index))];
-    if (photo) setPhotoId(photo.id);
+    if (photo) setPicked({ id: photo.id, lead: leadPhotoId });
   };
 
   // The story, newest first.
@@ -733,7 +736,7 @@ function Build({ item }: { item: ItemView }) {
                 attemptPhotos={attemptPhotos}
                 onCoverAttemptPhoto={(id) => setCover(queryClient, item.id, id)}
                 selectedId={gallery[photoIndex]?.id}
-                onSelect={setPhotoId}
+                onSelect={(id) => setPicked({ id, lead: leadPhotoId })}
                 fixedCover={item.stage === "done" && !!item.coverPhotoId}
                 coverId={item.coverPhotoId}
                 onClearCover={() => setCover(queryClient, item.id, null)}

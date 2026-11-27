@@ -11,6 +11,8 @@ let recent: HTMLElement | null = null;
  */
 export function useReturnFocus(open: boolean, inherit = false) {
   const opener = useRef<HTMLElement | null>(null);
+  /** The opener's containers, nearest first, up to the page's main area: where focus goes if the opener itself goes. */
+  const homes = useRef<HTMLElement[]>([]);
   const wasOpen = useRef(false);
   if (open && !wasOpen.current && typeof document !== "undefined") {
     const active = document.activeElement;
@@ -26,6 +28,7 @@ export function useReturnFocus(open: boolean, inherit = false) {
       if (opener.current?.closest("[data-palette]") && recent) opener.current = recent;
       else recent = opener.current;
     }
+    homes.current = containersOf(opener.current);
   }
   wasOpen.current = open;
   return (event: Event) => {
@@ -36,6 +39,10 @@ export function useReturnFocus(open: boolean, inherit = false) {
     if (target && !target.isConnected && target.hasAttribute("data-account-button")) {
       target = document.querySelector<HTMLElement>("[data-account-button]");
     }
+    // What the sheet did took its opener away (a "Which build?" answered by the sheet's move): the nearest thing still
+    // there that was around it takes focus instead (the card's next control), so the keyboard keeps its place.
+    if (target && !target.isConnected) target = nearestLeft(homes.current);
+    homes.current = [];
     if (!target?.isConnected) return;
     // Another sheet opened as this one closed (an action that opens the next step): leave focus there.
     if (document.activeElement?.closest("[role=dialog]")) return;
@@ -49,4 +56,28 @@ export function useReturnFocus(open: boolean, inherit = false) {
       }
     }, 60);
   };
+}
+
+const FOCUSABLE =
+  'a[href], button:not([disabled]), input:not([disabled]):not([type="hidden"]), [tabindex]:not([tabindex="-1"])';
+
+function containersOf(element: HTMLElement | null): HTMLElement[] {
+  const found: HTMLElement[] = [];
+  for (let at = element?.parentElement; at && at !== document.body; at = at.parentElement) {
+    if (at.tagName === "MAIN") break;
+    found.push(at);
+  }
+  return found;
+}
+
+/** The first control drawn in the nearest container still on the page. */
+function nearestLeft(containers: readonly HTMLElement[]): HTMLElement | null {
+  for (const container of containers) {
+    if (!container.isConnected) continue;
+    for (const candidate of container.querySelectorAll<HTMLElement>(FOCUSABLE)) {
+      if (candidate.closest("[role=dialog]") || !candidate.getClientRects().length) continue;
+      return candidate;
+    }
+  }
+  return null;
 }

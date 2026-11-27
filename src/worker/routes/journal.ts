@@ -6,7 +6,7 @@ import type { JournalKind } from "../../shared/journal.ts";
 import { items } from "../db/schema.ts";
 import type { AppEnv } from "../env.ts";
 import { apiError } from "../http.ts";
-import { creditedSql, itemCreditedSql } from "../prints.ts";
+import { creditedSql, itemCreditedSql, printerViaSql } from "../prints.ts";
 import { loadItems } from "./items.ts";
 import { attemptFilters, type Clause, filters } from "./search.ts";
 
@@ -77,7 +77,9 @@ function events(f: z.infer<typeof filters>): Clause {
         params,
       },
       {
-        sql: `SELECT CASE stage WHEN 'done' THEN 'finished' ELSE 'shelved' END, id, id, finished_at, ${RANK.finished}, ${by}, created_via
+        // The printer makes builds but never finishes or shelves one: a build it made doesn't end "via" it.
+        sql: `SELECT CASE stage WHEN 'done' THEN 'finished' ELSE 'shelved' END, id, id, finished_at, ${RANK.finished}, ${by},
+            CASE WHEN ${printerViaSql("items.created_via")} THEN NULL ELSE created_via END
           FROM items WHERE deleted_at IS NULL AND finished_at IS NOT NULL AND stage IN ('done', 'shelved')${person}`,
         params,
       },
