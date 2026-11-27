@@ -182,6 +182,15 @@ test("no screen's first load grows past its ceiling, and none loads the rarely u
         `${path} loads ${lazy}`,
       ).toEqual([]);
     }
+    // Push, the passkey offer and the sign-out's push step wait for their moment (the idle resync, a password sign-in, Sign out).
+    if (path !== "/sign-in") {
+      for (const lazy of ["/assets/push-", "/assets/passkeys-", "/assets/passkey-offer-show"]) {
+        expect(
+          files.filter((file) => file.includes(lazy)),
+          `${path} loads ${lazy}`,
+        ).toEqual([]);
+      }
+    }
     // zod is for the Worker; a route's validateSearch loads with the app, so the client checks search params by hand.
     expect(zod, `${path} loads zod`).toBe(false);
     // Held to the ceiling only where this change made the screen heavier (or with nothing to compare with).

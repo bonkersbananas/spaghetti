@@ -3,7 +3,6 @@ import { useNavigate } from "@tanstack/react-router";
 import { useCallback } from "react";
 import { api } from "./api";
 import { clearOfflineData } from "./offline";
-import { browserSubscription, thisDeviceEndpoint } from "./push";
 import { rememberUser, sessionQuery } from "./queries";
 
 /** The server-side sign-out still on its way; signing in again waits for it, so it can't end the new session. */
@@ -31,15 +30,19 @@ export function useSignOut() {
     // keepalive: the request still reaches the server if the page goes away (a reload) first.
     // This device stops getting notifications for the person who leaves it; the server forgets it with the session.
     leaving = true;
-    const pushEndpoint = await thisDeviceEndpoint();
+    // push.ts loads here, not with every screen: signing out is rare.
+    // A chunk that can't load (offline, a new build) must not stop the sign-out: it goes ahead without the push step.
+    const push = await import("./push").catch(() => null);
+    const pushEndpoint = (await push?.thisDeviceEndpoint()) ?? null;
     signingOut = api("/session", {
       method: "DELETE",
       keepalive: true,
       ...(pushEndpoint ? { json: { pushEndpoint } } : {}),
     }).catch(() => undefined);
     // The browser lets go of it too, so a subscription left on a device always means "on here" (resyncPush).
-    if (pushEndpoint)
-      await browserSubscription()
+    if (pushEndpoint && push)
+      await push
+        .browserSubscription()
         .then((s) => s?.unsubscribe())
         .catch(() => undefined);
     rememberUser(null);

@@ -6,7 +6,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "@tanstack/react-router";
 import { useEffect, useSyncExternalStore } from "react";
 import { toast } from "@/components/ui/Toast";
-import { agentsQuery } from "./agents";
+import { agentsQuery } from "./agents-query";
 import { api } from "./api";
 import { isOnline, subscribeConnection } from "./connection";
 import { itemKeys } from "./items";
