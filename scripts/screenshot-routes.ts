@@ -3070,6 +3070,29 @@ export const shots: Shot[] = [
     },
     cleanup: undoOffer,
   },
+  // Now's row swiped to its second card: the print off the bed that Claude has read, its suggestion on the answer.
+  {
+    name: "journal-now-row-middle",
+    path: "/journal",
+    width: 390,
+    prepare: async (page) => {
+      const bed = page.locator("section[aria-label='On the bed']");
+      await bed.waitFor();
+      await page.waitForTimeout(1500);
+      await bed
+        .locator("article")
+        .nth(1)
+        .evaluate((node) => {
+          const row = node.closest("section");
+          if (row)
+            row.scrollTo({
+              left: row.scrollLeft + node.getBoundingClientRect().left - row.getBoundingClientRect().left - 20,
+            });
+        });
+      await page.waitForTimeout(600);
+    },
+    cleanup: (page) => page.locator("section[aria-label='On the bed']").evaluate((node) => node.scrollTo({ left: 0 })),
+  },
   // Now's row swiped to its end: the answered print asking which build beside the print on the bed, each card as tall
   // as its own words.
   {

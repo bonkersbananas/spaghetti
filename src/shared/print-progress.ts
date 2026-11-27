@@ -93,6 +93,9 @@ export function offTheBedLabel(endedAt: number): string {
   return `Off the bed at ${clockTime(endedAt)}`;
 }
 
+/** Only when it came off ("11:45 AM"), where a badge over the picture already says "Off the bed". */
+export const offTheBedTime = (endedAt: number): string => clockTime(endedAt);
+
 /**
  * Where a print with no outcome sits among the prints on the bed, the same on every screen: off the bed and waiting
  * for "how did it go?" first (the one that ended last first), then the print that should be done by now, then the

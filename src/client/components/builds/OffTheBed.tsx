@@ -1,6 +1,6 @@
 import type { Outcome } from "@shared/attempts";
 import type { PhotoRead } from "@shared/photo-read";
-import { offTheBedLabel } from "@shared/print-progress";
+import { offTheBedLabel, offTheBedTime } from "@shared/print-progress";
 import { type ReactNode, useRef } from "react";
 import { Button } from "@/components/ui/Button";
 import { CameraIcon, FinishIcon } from "@/components/ui/icons";
@@ -29,10 +29,12 @@ interface OffTheBedProps {
   /** A camera button of the caller's own (the card's "Snap this print"), beside the sentence; it replaces "Take photo". */
   snap?: ReactNode;
   /**
-   * Phones: the sentence is only when it came off the bed, on one line, and Claude's reason is one line too: a card in
-   * Now's sideways row, as tall as the cards beside it. The three answers still ask how it went (their group's name).
+   * Phones, a card in Now's sideways row whose picture carries the "Off the bed" badge: the sentence is its time and the
+   * question on one line ("11:45 AM · how did it go?"), so the card is as tall as the cards beside it.
    */
   brief?: boolean;
+  /** Phones: Claude's reason is left for the sheet (Now's row), the suggested answer keeping its sparkle. */
+  reasonHidden?: boolean;
   /** The keys that open the attempt's sheet from the page ("A" on a build), shown after the question on desktop. */
   shortcut?: string[];
   className?: string;
@@ -52,6 +54,7 @@ export function OffTheBed({
   onPhotos,
   snap,
   brief = false,
+  reasonHidden = false,
   shortcut,
   className,
 }: OffTheBedProps) {
@@ -65,8 +68,15 @@ export function OffTheBed({
         <p className={cn("text-small text-ink-soft flex gap-2", snap ? "min-w-0 flex-1 items-start" : "items-center")}>
           <FinishIcon size={16} className={cn("text-ink-faint shrink-0", !!snap && "mt-0.5")} aria-hidden />
           <span className={cn(brief && "max-md:truncate")}>
-            <span className="text-ink font-semibold">{offTheBedLabel(endedAt)}</span>
-            <span className={cn(brief && "max-md:hidden")}> · how did it go?</span>
+            {brief ? (
+              <>
+                <span className="text-ink font-semibold md:hidden">{offTheBedTime(endedAt)}</span>
+                <span className="text-ink font-semibold max-md:hidden">{offTheBedLabel(endedAt)}</span>
+              </>
+            ) : (
+              <span className="text-ink font-semibold">{offTheBedLabel(endedAt)}</span>
+            )}{" "}
+            · how did it go?
           </span>
           {shortcut && <Kbd keys={shortcut} />}
         </p>
@@ -108,7 +118,9 @@ export function OffTheBed({
           suggested={photoRead?.outcome ?? null}
         />
       )}
-      {photoRead && <PhotoReadNote read={photoRead} withTags={withTags} oneLine={brief} />}
+      {photoRead && (
+        <PhotoReadNote read={photoRead} withTags={withTags} className={cn(reasonHidden && "max-md:hidden")} />
+      )}
     </div>
   );
 }

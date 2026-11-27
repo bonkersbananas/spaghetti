@@ -53,9 +53,11 @@ interface PrintingCardProps {
    */
   lead?: "wide" | "short";
   /**
-   * Phones only, with `compact` and `lead`: one card of the Journal's sideways row of prints (Now). Each part keeps to
-   * one line (the name, "Off the bed at 10:42", Claude's reason), so the cards side by side come out about as tall and
-   * each ends where its own words end, rather than one leaving a block of blank beside a taller neighbour.
+   * Phones only, with `compact`: one card of the Journal's sideways row of prints (Now). Each part keeps to one line
+   * (under a picture the name; "11:45 AM · how did it go?" beside the "Off the bed" badge; the attempt and its spools;
+   * "Which build?" and "Keep it as its own"), and Claude's reason is left for the sheet, so the cards side by side come
+   * out about as tall and each ends where its own words end, rather than one leaving a block of blank beside a taller
+   * neighbour.
    */
   inRow?: boolean;
   /**
@@ -382,15 +384,17 @@ export function PrintingCard({
           <div
             className={cn(
               "text-small text-ink-faint flex min-w-0 flex-col gap-0.5",
-              lead && "max-md:flex-row max-md:items-center max-md:gap-x-2",
+              // In Now's row the attempt and the spools share one line too (beside the small square, so the name
+              // keeps its two lines and the card its height).
+              (lead || inRow) && "max-md:flex-row max-md:items-center max-md:gap-x-2",
             )}
           >
-            <MetaList>
+            <MetaList className={cn(inRow && "max-md:shrink-0")}>
               <span className="whitespace-nowrap">Attempt {attempt.number}</span>
               {partsLabel && <span>{partsLabel}</span>}
             </MetaList>
             {/* One line for the spools, however many: the first named, "+1" for the rest, so every card has the same rhythm. */}
-            {lead && filaments.length > 0 && (
+            {(lead || inRow) && filaments.length > 0 && (
               <span aria-hidden className="md:hidden">
                 ·
               </span>
@@ -414,7 +418,7 @@ export function PrintingCard({
               kept while its code comes (the size of its line), so the card doesn't jump. */}
           {asking && (
             <Suspense fallback={<div aria-hidden className="bg-ink/4 h-12 rounded-md" />}>
-              <PrintPlace item={item} attempt={attempt} where="card" className="pointer-events-auto" />
+              <PrintPlace item={item} attempt={attempt} where="card" brief={inRow} className="pointer-events-auto" />
             </Suspense>
           )}
           {answered ? (
@@ -428,7 +432,8 @@ export function PrintingCard({
               picked={picked}
               photoRead={attempt.photoRead}
               withTags={false}
-              brief={inRow}
+              brief={inRow && !!lead}
+              reasonHidden={inRow}
               // Offline a saved build can't be changed (decision 0005), as in the attempt sheet: no photo then.
               snap={
                 readOnly ? undefined : (
@@ -511,8 +516,9 @@ export function PrintingCard({
                     size="md"
                     suggested={attempt.photoRead?.outcome ?? null}
                   />
+                  {/* Left for the sheet in Now's row: the suggested answer keeps its sparkle. */}
                   {attempt.photoRead?.status === "read" && (
-                    <PhotoReadNote read={attempt.photoRead} withTags={false} oneLine={inRow} />
+                    <PhotoReadNote read={attempt.photoRead} withTags={false} className={cn(inRow && "max-md:hidden")} />
                   )}
                 </div>
               )}

@@ -39,9 +39,10 @@ export default function CommentsLine({
   const search = { thread: 1, comment: thread.latestId } as never;
   const row = (
     <QuietRowContent icon={CommentIcon} iconClassName={counted ? undefined : "text-tomato-ink"}>
-      <span className={cn("md:block md:truncate", oneLine && "block truncate")}>
-        <span className="text-ink font-semibold">{line.lead}</span>
-        {line.quote && <span>: {line.quote}</span>}
+      <span className={cn("md:block md:truncate", oneLine && "flex min-w-0 md:flex")}>
+        {/* On one line who and where take at most half of it, so what they wrote keeps the rest. */}
+        <span className={cn("text-ink font-semibold", oneLine && "max-w-1/2 shrink-0 truncate")}>{line.lead}</span>
+        {line.quote && <span className={cn(oneLine && "min-w-0 flex-1 truncate")}>: {line.quote}</span>}
         {/* In the "needs you" strip there is no label to carry the count. */}
         {counted && line.total > 1 && <span className="text-ink-faint"> · {line.total} new</span>}
       </span>

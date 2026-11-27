@@ -46,7 +46,8 @@ export function NotificationOffer({
         <Button variant="secondary" size="sm" loading={busy} onClick={onTurnOn} className="shrink-0">
           Turn on
         </Button>
-        <IconButton icon={CloseIcon} label="Not now" size="sm" onClick={onDismiss} className="-mr-1.5 shrink-0" />
+        {/* A step apart from "Turn on", so a tap that just misses it doesn't wave the offer off for good. */}
+        <IconButton icon={CloseIcon} label="Not now" size="sm" onClick={onDismiss} className="-mr-1.5 ml-2 shrink-0" />
       </section>
     );
   }

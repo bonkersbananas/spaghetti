@@ -17,6 +17,11 @@ interface AskLineProps {
   actions?: ReactNode;
   /** The answer is on its way: the line keeps its room, words and buttons as bars, so the card doesn't jump. */
   loading?: boolean;
+  /**
+   * The answers alone, on one line, where the card around it already says what it asks (a "Which build?" card in the
+   * phone Journal's row: its outcome chip and "Which build?" say it). The words still name the region for screen readers.
+   */
+  wordsHidden?: boolean;
   className?: string;
 }
 
@@ -27,18 +32,28 @@ interface AskLineProps {
  * it reads as something waiting for you without a border; on a narrow card the answers go under the words instead
  * of squeezing them. A region named by its question.
  */
-export function AskLine({ icon: Glyph, children, detail, actions, loading, className }: AskLineProps) {
+export function AskLine({
+  icon: Glyph,
+  children,
+  detail,
+  actions,
+  loading,
+  wordsHidden = false,
+  className,
+}: AskLineProps) {
   const id = useId();
   return (
     <section
       aria-labelledby={loading ? undefined : id}
       aria-busy={loading || undefined}
       className={cn(
-        "sg-lifted-surface bg-ink/4 flex flex-wrap items-center justify-between gap-x-3 gap-y-2 rounded-md py-2 pr-2 pl-3",
+        "flex flex-wrap items-center justify-between gap-x-3 gap-y-2",
+        // The answers alone sit on the card itself: the secondary button is the cue, and the line has the card's width.
+        wordsHidden && !loading ? "max-md:flex-nowrap" : "sg-lifted-surface bg-ink/4 rounded-md py-2 pr-2 pl-3",
         className,
       )}
     >
-      <div className="flex min-w-0 flex-[1_1_12rem] items-start gap-2">
+      <div className={cn("flex min-w-0 flex-[1_1_12rem] items-start gap-2", wordsHidden && !loading && "sr-only")}>
         {Glyph && <Glyph size={16} aria-hidden className="text-ink-faint mt-0.5 shrink-0" />}
         {loading ? (
           <div aria-hidden className="flex flex-1 flex-col gap-1.5 py-0.5">
@@ -62,7 +77,11 @@ export function AskLine({ icon: Glyph, children, detail, actions, loading, class
       ) : (
         // Under the words on a narrow card, they start where the words do (past the glyph).
         actions && (
-          <div className={cn("flex max-w-full min-w-0 flex-wrap items-center gap-1.5", Glyph && "pl-6")}>{actions}</div>
+          <div
+            className={cn("flex max-w-full min-w-0 flex-wrap items-center gap-1.5", Glyph && !wordsHidden && "pl-6")}
+          >
+            {actions}
+          </div>
         )
       )}
     </section>
