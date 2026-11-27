@@ -47,9 +47,9 @@ function Ideas() {
   const after = useAfterPaint();
   const { items: all, isPending, error, refetch } = useIdeas();
   const { queue, rest: inbox } = splitQueue(all);
-  // All / "Has a model" / "Needs designing", beside The rest: one of the three is always picked, so the row reads as a
-  // filter; a picked one tapped again goes back to All. They narrow the inbox, not Up next (already picked), and are
-  // only offered once an idea there has a model.
+  // "Has a model" / "Needs designing", beside The rest: the shared filter row (ChipRow), one tap each, tap again to
+  // see everything; ink means a filter is narrowing the grid. They narrow the inbox, not Up next (already picked), and
+  // are only offered once an idea there has a model.
   const [modelFilter, setModelFilter] = useState<"model" | "design" | null>(null);
   const modelCount = inbox.filter((item) => modelOf(item)).length;
   const filter = modelCount > 0 ? modelFilter : null;
@@ -133,10 +133,8 @@ function Ideas() {
     />
   );
   const filters = modelCount > 0 && (
-    <ChipRow label="Filter ideas" className="min-w-0 flex-1">
-      <ToggleChip selected={!filter} count={inbox.length} onClick={() => setModelFilter(null)}>
-        All
-      </ToggleChip>
+    // No padding of its own from md, where the row sits on the heading's baseline as the old group did.
+    <ChipRow label="Filter ideas" className="min-w-0 flex-1 md:py-0">
       <ToggleChip
         selected={filter === "model"}
         count={modelCount}
@@ -159,8 +157,8 @@ function Ideas() {
         // The filter that emptied the inbox stays right above, so this says which one takes you back.
         <p className="text-body text-ink-soft">
           {filter === "model"
-            ? "Nothing here has a model yet. Tap All to see every idea."
-            : "Everything here has a model. Tap All to see every idea."}
+            ? "Nothing here has a model yet. Tap “Has a model” again to see every idea."
+            : "Everything here has a model. Tap “Needs designing” again to see every idea."}
         </p>
       )}
       <ul data-picks className={`${gridClass} relative`} aria-label="Ideas">

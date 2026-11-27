@@ -257,10 +257,8 @@ test("the model filters narrow the inbox beside its heading, not Up next", async
   await page.goto("/ideas");
   const rest = page.getByRole("region", { name: "The rest" });
   const inbox = page.getByRole("list", { name: "Ideas" });
-  // All is picked until another is: the row reads as a filter at a glance.
-  await expect(rest.getByRole("button", { name: /^All/ })).toHaveAttribute("aria-pressed", "true");
+  await expect(rest.getByRole("button", { name: /^Has a model/ })).toHaveAttribute("aria-pressed", "false");
   await rest.getByRole("button", { name: /^Has a model/ }).click();
-  await expect(rest.getByRole("button", { name: /^All/ })).toHaveAttribute("aria-pressed", "false");
   await expect(rest.getByRole("button", { name: /^Has a model/ })).toHaveAttribute("aria-pressed", "true");
   await expect(inbox.getByText("Bins")).toBeVisible();
   await expect(inbox.getByRole("heading", { name: "Loose idea" })).toHaveCount(0);
@@ -274,8 +272,10 @@ test("the model filters narrow the inbox beside its heading, not Up next", async
   await rest.getByRole("button", { name: /^Needs designing/ }).click();
   await page.getByRole("button", { name: "Options for Loose idea" }).click();
   await page.getByRole("button", { name: "Up next", exact: true }).click();
-  await expect(rest.getByText("Everything here has a model. Tap All to see every idea.")).toBeVisible();
-  await rest.getByRole("button", { name: /^All/ }).click();
+  await expect(
+    rest.getByText("Everything here has a model. Tap “Needs designing” again to see every idea."),
+  ).toBeVisible();
+  await rest.getByRole("button", { name: /^Needs designing/ }).click();
   await expect(inbox.getByText("Bins")).toBeVisible();
   await expect(rest.getByRole("button", { name: /^Needs designing/ })).toHaveAttribute("aria-pressed", "false");
 });

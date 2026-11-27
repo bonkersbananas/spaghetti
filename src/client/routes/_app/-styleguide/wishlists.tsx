@@ -47,6 +47,15 @@ export function WishlistsSection() {
           />
           <RankRow
             rank={3}
+            note="https://www.ikea.com/se/en/p/skadis-pegboard-white-20320802/"
+            letter="I"
+            title="Skadis pegboard white"
+            meta={["ikea.com", "Sep 2"]}
+            link={link}
+            actions={start("Skadis pegboard")}
+          />
+          <RankRow
+            rank={4}
             title="Hook for the bike helmet"
             meta={["3 weeks ago"]}
             link={link}

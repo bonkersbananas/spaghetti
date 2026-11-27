@@ -199,9 +199,9 @@ export function CardSection() {
           </Reflow>
         </ul>
         <Label>
-          Slim mini cards (`slim`), Up next on a phone: one line, a small square cover beside a two-line name, the menu
-          at the right end; a note-only idea's cover is NoteCardThumb, the index card with a pencil (as on wishlist
-          rows)
+          Slim mini cards (`slim`), Up next on a phone: one line, a 48 px cover beside a two-line name, the menu drawn
+          small at the right end; a note-only idea's cover is NoteCardThumb, the note card in miniature, and a link-only
+          idea's is LinkCard's letter tile (as on wishlist rows)
         </Label>
         <ul className="no-scrollbar relative mb-6 flex snap-x snap-proximity gap-3 overflow-x-auto py-1">
           <Reflow>
@@ -221,6 +221,13 @@ export function CardSection() {
               slim
               link={{ to: "/styleguide" }}
               note="Replacement knob for the oven, 6 mm D-shaft. Measure the old one before it breaks completely."
+            />
+            <MiniCard
+              slim
+              link={{ to: "/styleguide" }}
+              note="ikea.com/se/en/p/skadis-pegboard-white-20320802"
+              linkName="Skadis pegboard white"
+              letter="I"
             />
             <MiniCard slim link={{ to: "/styleguide" }} title="Untitled idea" standIn />
           </Reflow>

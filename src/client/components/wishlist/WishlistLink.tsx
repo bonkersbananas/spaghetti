@@ -1,7 +1,7 @@
 import type { Person } from "@shared/api";
 import { displayName } from "@shared/people";
 import { Link } from "@tanstack/react-router";
-import { WishIcon } from "@/components/ui/icons";
+import { NextIcon, WishIcon } from "@/components/ui/icons";
 import { Photo } from "@/components/ui/Photo";
 import { cn } from "@/lib/cn";
 import type { ItemView } from "@/lib/items";
@@ -52,7 +52,7 @@ export function WishlistLink({
   );
 }
 
-/** The pill itself: the covers (or a semolina star while none has a photo), then "Wishlists". */
+/** The pill itself: the covers (or a semolina star while none has a photo), "Wishlists" and a chevron. */
 export function WishlistPill({
   covers,
   counts,
@@ -69,7 +69,7 @@ export function WishlistPill({
     <Link
       to={to}
       className={cn(
-        "pressable focus-ring touch-target bg-cream shadow-soft hover:bg-lifted text-small text-ink relative flex h-9 items-center gap-2 rounded-full pr-3.5 pl-1 font-semibold",
+        "pressable focus-ring touch-target bg-cream shadow-soft hover:bg-lifted text-small text-ink relative flex h-9 items-center gap-2 rounded-full pr-2.5 pl-1 font-semibold",
         className,
       )}
     >
@@ -91,6 +91,8 @@ export function WishlistPill({
       )}
       Wishlists
       {counts && <span className="sr-only">, {counts}</span>}
+      {/* A way to another page, not a filter of this one: the chevron says it goes somewhere. */}
+      <NextIcon size={14} weight="bold" className="text-ink-faint -ml-1 shrink-0" aria-hidden />
     </Link>
   );
 }

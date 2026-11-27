@@ -1,14 +1,58 @@
+import { type ModelMark, modelLetter } from "@shared/model-mark";
+import { cn } from "@/lib/cn";
+
 /**
- * A note-only idea's picture at thumbnail size, where its words would be too small to read: an index card with its
- * rule and a pencil. Fills its parent. On wishlist rows (RankRow) and Up next's slim cards on a phone (MiniCard).
- * The pencil is Phosphor's NotePencil (regular) drawn inline: the icon component would join the Ideas first load.
+ * The letter that stands for a note that is only a link, as LinkCard's tile has it: the model's place (M for
+ * MakerWorld, STL for a file) or the site's initial. Undefined for a note with words of its own.
  */
-export function NoteCardThumb({ size }: { size: number }) {
+export function linkLetter(note: string, model?: ModelMark | null): string | undefined {
+  const trimmed = note.trim();
+  if (!/^https?:\/\/\S+$/i.test(trimmed)) return undefined;
+  if (model) return modelLetter(model);
+  const host = trimmed
+    .replace(/^https?:\/\//i, "")
+    .replace(/^www\./i, "")
+    .split(/[/?#:]/)[0];
+  return host?.charAt(0).toUpperCase() || undefined;
+}
+
+/**
+ * A note-only idea's picture at thumbnail size, where its words would be too small to read: the note card itself, in
+ * miniature (the paper, its faint tomato rule and NoteFace's spaghetti strand), or, for a note that is only a link,
+ * LinkCard's letter tile (`letter`, from linkLetter). Fills its parent. On wishlist rows (RankRow) and Up next's slim
+ * cards on a phone (MiniCard `slim`).
+ */
+export function NoteCardThumb({ letter }: { letter?: string }) {
+  if (letter) {
+    return (
+      <span
+        className={cn(
+          "bg-ink/5 text-ink-soft font-display flex size-full items-center justify-center",
+          letter.length > 1 ? "text-small font-semibold" : "text-title",
+        )}
+      >
+        {letter}
+      </span>
+    );
+  }
   return (
-    <span className="paper-grain bg-note text-ink-faint relative flex size-full items-center justify-center">
+    <span className="paper-grain bg-note relative block size-full">
       <span className="bg-tomato/25 absolute inset-x-2 top-2.5 h-px md:inset-x-3 md:top-3.5" />
-      <svg width={size} height={size} viewBox="0 0 256 256" fill="currentColor" aria-hidden>
-        <path d="M229.66,58.34l-32-32a8,8,0,0,0-11.32,0l-96,96A8,8,0,0,0,88,128v32a8,8,0,0,0,8,8h32a8,8,0,0,0,5.66-2.34l96-96A8,8,0,0,0,229.66,58.34ZM124.69,152H104V131.31l64-64L188.69,88ZM200,76.69,179.31,56,192,43.31,212.69,64ZM224,128v80a16,16,0,0,1-16,16H48a16,16,0,0,1-16-16V48A16,16,0,0,1,48,32h80a8,8,0,0,1,0,16H48V208H208V128a8,8,0,0,1,16,0Z" />
+      {/* NoteFace's strand (the note-strand mask's path), drawn with a stroke that stays fine at any tile size. */}
+      <svg
+        aria-hidden
+        viewBox="0 0 100 44"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth={1.5}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        className="text-tomato/40 absolute bottom-2 left-2 w-3/5 md:bottom-3 md:left-3"
+      >
+        <path
+          vectorEffect="non-scaling-stroke"
+          d="M3 34C14 36 20 24 28 14 34 6 44 8 42 18 40 28 28 32 28 22 28 10 46 4 58 10 70 16 66 32 56 30 48 28 54 14 68 18 80 22 84 34 98 30"
+        />
       </svg>
     </span>
   );

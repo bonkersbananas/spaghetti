@@ -1,8 +1,10 @@
+import { modelOf } from "@shared/model-mark";
 import { relativeTime } from "@shared/time";
 import { useQuery } from "@tanstack/react-query";
 import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { NextIcon, PreviousIcon } from "@/components/ui/icons";
 import { MiniCard, type MiniDrag } from "@/components/ui/MiniCard";
+import { linkLetter } from "@/components/ui/NoteCardThumb";
 import { Reflow } from "@/components/ui/Reflow";
 import { cn } from "@/lib/cn";
 import { itemName } from "@/lib/item-name";
@@ -93,6 +95,7 @@ export function UpNextStrip({ queue, menuFor, landed, dragFor }: UpNextStripProp
                 id={item.id}
                 gridScale
                 slim={slim}
+                letter={slim && !cover && !plate ? linkLetter(item.note, modelOf(item)) : undefined}
                 unread={unread?.some((thread) => thread.itemId === item.id)}
                 landing={landed?.(item)}
                 drag={dragFor?.(item)}

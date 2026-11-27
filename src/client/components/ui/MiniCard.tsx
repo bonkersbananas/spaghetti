@@ -53,6 +53,8 @@ interface MiniCardProps {
    * so the strip keeps to one slim row and the grid under it starts high. Pass it on phones only.
    */
   slim?: boolean;
+  /** On a `slim` card, a note that is only a link: its site's letter (linkLetter), LinkCard's tile for a cover. */
+  letter?: string;
   /** The other person wrote here and you haven't read it: one quiet dot on the picture's corner (no count; the page has the thread). */
   unread?: boolean;
   /** Laid over the photo's top-right corner (the card's menu button). A link can't hold a button, so it is a sibling. */
@@ -81,6 +83,7 @@ export function MiniCard({
   fill,
   gridScale,
   slim,
+  letter,
   unread,
   corner,
   landing,
@@ -98,6 +101,7 @@ export function MiniCard({
         link={link}
         photo={photo}
         name={title || linkName || note || meta || ""}
+        letter={letter}
         look={standIn ? "stand-in" : title ? "title" : "words"}
         unread={unread}
         corner={corner}
@@ -234,6 +238,7 @@ function SlimCard({
   link,
   photo,
   name,
+  letter,
   look,
   unread,
   corner,
@@ -244,6 +249,7 @@ function SlimCard({
   link: LinkComponentProps<"a">;
   photo?: MiniCardProps["photo"];
   name: string;
+  letter?: string;
   /** A title in semibold; a note's own words, or a stand-in ("Untitled idea", quiet), in plain Figtree, as on Card. */
   look: "title" | "words" | "stand-in";
   unread?: boolean;
@@ -253,12 +259,12 @@ function SlimCard({
   className?: string;
 }) {
   return (
-    <m.li {...reflow} ref={ref} className={cn("group/mini relative w-48 shrink-0 snap-start list-none", className)}>
+    <m.li {...reflow} ref={ref} className={cn("group/mini relative w-56 shrink-0 snap-start list-none", className)}>
       <Link
         {...link}
         className={cn(
           "group pressable focus-ring bg-cream shadow-soft hover:bg-lifted flex h-14 w-full items-center gap-2.5 rounded-lg p-1",
-          corner ? "pr-9" : "pr-3",
+          corner ? "pr-8" : "pr-3",
         )}
       >
         <span className="relative size-12 shrink-0 overflow-hidden rounded-md">
@@ -268,12 +274,12 @@ function SlimCard({
               alt={photo.alt}
               color={photo.color}
               fit={photo.fit}
-              frame={photo.fit === "contain" ? "render" : undefined}
+              frame={photo.fit === "contain" ? "render-tile" : undefined}
               className={cn("size-full", photo.fit === "contain" && "p-1")}
             />
           ) : (
             <span aria-hidden className="block size-full">
-              <NoteCardThumb size={18} />
+              <NoteCardThumb letter={letter} />
             </span>
           )}
           {unread && <UnreadDot label="New comment" ring="ring-on-veil" className="absolute top-1 left-1 size-2" />}

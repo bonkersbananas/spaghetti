@@ -13,6 +13,8 @@ interface RankRowProps {
   /** The picture: a photo, else the note on a small index card, else the idea glyph. */
   photo?: { src: string; color?: string };
   note?: string;
+  /** A note that is only a link: its site's letter (linkLetter), drawn as LinkCard's tile instead of the note card. */
+  letter?: string;
   title: string;
   /** Short pieces for the line under the name ("for Mila", "2 days ago"), wrapped by MetaList. */
   meta?: string[];
@@ -31,7 +33,19 @@ interface RankRowProps {
  * shows a small index card with a pencil: its words would be too small), the name and a meta line as one link, then the row's actions and its drag handle. The top place wears a small semolina
  * medal. A lifted row floats on `shadow-float` while it moves.
  */
-export function RankRow({ rank, photo, note, title, meta, link, actions, handle, lifted, className }: RankRowProps) {
+export function RankRow({
+  rank,
+  photo,
+  note,
+  letter,
+  title,
+  meta,
+  link,
+  actions,
+  handle,
+  lifted,
+  className,
+}: RankRowProps) {
   return (
     <div
       data-lifted={lifted || undefined}
@@ -60,8 +74,8 @@ export function RankRow({ rank, photo, note, title, meta, link, actions, handle,
               imgClassName="pointer-events-none"
             />
           ) : note ? (
-            // Too small for the note's words: an index card with its rule and a pencil says "a note" instead.
-            <NoteCardThumb size={22} />
+            // Too small for the note's words: the note card in miniature says "a note" instead (a link's letter tile).
+            <NoteCardThumb letter={letter} />
           ) : (
             <span className="text-ink-faint flex size-full items-center justify-center">
               <IdeasIcon size={22} />
